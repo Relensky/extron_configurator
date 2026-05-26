@@ -32,35 +32,58 @@ class SetupWizardView extends StatelessWidget {
           children: [
             Expanded(
               flex: 2,
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Building (gve_bldg)', border: OutlineInputBorder()),
-                value: provider.buildings.containsValue(systemSetup['gve_bldg']) 
-                    ? systemSetup['gve_bldg'] 
-                    : null,
-                items: () {
-                  // 1. Deduplicate the buildings to prevent Flutter crash
+              child: Builder(
+                builder: (context) {
+                  // 1. Deduplicate the buildings
                   final Map<String, String> uniqueBuildings = {};
                   provider.buildings.forEach((key, value) {
-                    // Keep the entry with the longest key name (Full name over abbreviation)
                     if (!uniqueBuildings.containsKey(value) || key.length > uniqueBuildings[value]!.length) {
                       uniqueBuildings[value] = key; 
                     }
                   });
 
-                  // 2. Map the deduplicated list to DropdownMenuItems
-                  return uniqueBuildings.entries.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: entry.key, // The abbreviation (e.g., "AJH")
-                      child: Text("${entry.value} (${entry.key})"),
-                    );
-                  }).toList();
-                }(),
-                onChanged: (val) {
-                  if (val != null) {
-                    systemSetup['gve_bldg'] = val;
-                    provider.updateFullRoomName();
+                  final buildingEntries = uniqueBuildings.entries.toList();
+                  
+                  // Determine initial value string for the text box
+                  String currentBldg = systemSetup['gve_bldg'] ?? '';
+                  String initialText = currentBldg;
+                  if (uniqueBuildings.containsKey(currentBldg)) {
+                    initialText = '${uniqueBuildings[currentBldg]} ($currentBldg)';
                   }
-                },
+
+                  return Autocomplete<MapEntry<String, String>>(
+                    initialValue: TextEditingValue(text: initialText),
+                    displayStringForOption: (option) => '${option.value} (${option.key})',
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) return buildingEntries;
+                      return buildingEntries.where((entry) {
+                        final search = textEditingValue.text.toLowerCase();
+                        return entry.key.toLowerCase().contains(search) || 
+                                entry.value.toLowerCase().contains(search);
+                      });
+                    },
+                    onSelected: (MapEntry<String, String> selection) {
+                      systemSetup['gve_bldg'] = selection.key; // Save the abbreviation
+                      provider.updateFullRoomName();
+                    },
+                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Search Building (gve_bldg)', 
+                          border: OutlineInputBorder(),
+                          suffixIcon: Icon(Icons.search),
+                        ),
+                        onChanged: (val) {
+                          // Allow manual overriding if they type an unlisted building
+                          systemSetup['gve_bldg'] = val;
+                          provider.updateFullRoomName();
+                        },
+                      );
+                    },
+                  );
+                }
               ),
             ),
             const SizedBox(width: 20),
@@ -71,7 +94,7 @@ class SetupWizardView extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Room Number', border: OutlineInputBorder()),
                 onChanged: (val) {
                   systemSetup['gve_room'] = val;
-                  provider.updateFullRoomName(); // Recalculate full name
+                  provider.updateFullRoomName(); 
                 },
               ),
             ),
