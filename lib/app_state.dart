@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as path; // Add 'path: ^1.8.3' to pubspec.yaml
+import 'package:path/path.dart' as path;
 import 'app_logger.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Core State Manager for the Room Configuration Application
 class AppStateProvider extends ChangeNotifier {
@@ -11,6 +12,7 @@ class AppStateProvider extends ChangeNotifier {
   String processorsFilePath = '';
   String rootFolderPath = ''; 
   String buildingsFilePath = '';
+  String templateFilePath = '';
   
   // --- Data State ---
   List<dynamic> processors = [];
@@ -20,6 +22,54 @@ class AppStateProvider extends ChangeNotifier {
   
   // Cache for parsed python module commands to prevent repetitive disk I/O
   final Map<String, List<String>> _moduleCommandsCache = {};
+
+  // --- Constructor triggers auto-load on startup ---
+  AppStateProvider() {
+    _loadSavedSettings();
+  }
+
+  /// Loads saved paths from the OS and automatically parses the files
+  Future<void> _loadSavedSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    modulesPath = prefs.getString('modulesPath') ?? '';
+    processorsFilePath = prefs.getString('processorsFilePath') ?? '';
+    rootFolderPath = prefs.getString('rootFolderPath') ?? '';
+    buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
+    templateFilePath = prefs.getString('templateFilePath') ?? '';
+
+    // Automatically load data if the paths exist from a previous session
+    if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
+    if (processorsFilePath.isNotEmpty) await loadProcessorsList();
+    if (templateFilePath.isNotEmpty) await loadConfigTemplate(templateFilePath);
+
+    notifyListeners();
+  }
+
+  /// Updates a setting in memory and saves it to the OS simultaneously
+  Future<void> updateSetting(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
+
+    switch (key) {
+      case 'modulesPath': 
+        modulesPath = value; 
+        break;
+      case 'processorsFilePath': 
+        processorsFilePath = value; 
+        break;
+      case 'rootFolderPath': 
+        rootFolderPath = value; 
+        break;
+      case 'buildingsFilePath': 
+        buildingsFilePath = value; 
+        break;
+      case 'templateFilePath': 
+        templateFilePath = value; 
+        break;
+    }
+    notifyListeners();
+  }
 
   /// Loads the initial config.json template into memory
   Future<void> loadConfigTemplate(String templatePath) async {

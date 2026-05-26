@@ -121,6 +121,7 @@ class AppSettingsView extends StatelessWidget {
         Text('Application Configuration', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 30),
         
+        // Python Modules Path
         TextFormField(
           decoration: const InputDecoration(
             labelText: 'Python Modules Path',
@@ -129,10 +130,11 @@ class AppSettingsView extends StatelessWidget {
             suffixIcon: Icon(Icons.folder),
           ),
           initialValue: provider.modulesPath,
-          onChanged: (val) => provider.modulesPath = val,
+          onChanged: (val) => provider.updateSetting('modulesPath', val),
         ),
         const SizedBox(height: 20),
         
+        // Buildings JSON Path
         TextFormField(
           decoration: const InputDecoration(
             labelText: 'Buildings JSON File Path',
@@ -142,31 +144,51 @@ class AppSettingsView extends StatelessWidget {
           ),
           initialValue: provider.buildingsFilePath,
           onChanged: (val) {
-            provider.buildingsFilePath = val;
-            provider.loadBuildingsList(); // Load on change
+            provider.updateSetting('buildingsFilePath', val);
+            provider.loadBuildingsList(); 
           },
         ),
         const SizedBox(height: 20),
 
-        TextFormField(
-          decoration: const InputDecoration(
-            labelText: 'Default config.json Template Path',
-            hintText: r'C:\workspace\ControlScript-Template\config.json',
-            border: OutlineInputBorder(),
-            suffixIcon: Icon(Icons.file_open),
-            helperText: 'Press Enter to load this template into memory',
+
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Default config.json Template Path (Inside the Row we made last time)
+        Expanded(
+          child: TextFormField(
+            decoration: const InputDecoration(
+              labelText: 'Default config.json Template Path',
+              hintText: r'C:\workspace\ControlScript-Template\config.json',
+              border: OutlineInputBorder(),
+              suffixIcon: Icon(Icons.file_open),
+            ),
+            initialValue: provider.templateFilePath,
+            onChanged: (val) => provider.updateSetting('templateFilePath', val),
           ),
-          onFieldSubmitted: (val) {
-            if (val.isNotEmpty) {
-              provider.loadConfigTemplate(val);
-              ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Attempting to load template from $val...'))
-              );
-            }
-          },
+        ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56, // Matches the height of the TextFormField
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Load Template'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700),
+                onPressed: () {
+                  if (provider.templateFilePath.isNotEmpty) {
+                    provider.loadConfigTemplate(provider.templateFilePath);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Loading template...'))
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
 
+        // Processors JSON Path
         TextFormField(
           decoration: const InputDecoration(
             labelText: 'Processors JSON File Path',
@@ -175,9 +197,12 @@ class AppSettingsView extends StatelessWidget {
             suffixIcon: Icon(Icons.file_present),
           ),
           initialValue: provider.processorsFilePath,
-          onChanged: (val) => provider.processorsFilePath = val,
+          onChanged: (val) {
+              provider.updateSetting('processorsFilePath', val);
+              provider.loadProcessorsList();
+          },
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 20),
         
         Align(
           alignment: Alignment.centerLeft,
@@ -189,6 +214,7 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // Template Root Path
         TextFormField(
           decoration: const InputDecoration(
             labelText: 'Template Output Root Path',
@@ -197,9 +223,9 @@ class AppSettingsView extends StatelessWidget {
             suffixIcon: Icon(Icons.account_tree),
           ),
           initialValue: provider.rootFolderPath,
-          onChanged: (val) => provider.rootFolderPath = val,
+          onChanged: (val) => provider.updateSetting('rootFolderPath', val),
         ),
-        const Divider(height: 60, thickness: 2),
+        const SizedBox(height: 20),
 
         Text('Active Deployment Target', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),

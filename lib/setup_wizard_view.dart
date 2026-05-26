@@ -37,16 +37,28 @@ class SetupWizardView extends StatelessWidget {
                 value: provider.buildings.containsValue(systemSetup['gve_bldg']) 
                     ? systemSetup['gve_bldg'] 
                     : null,
-                items: provider.buildings.entries.map((entry) {
-                  return DropdownMenuItem<String>(
-                    value: entry.value, // The abbreviation (e.g., "ARTS")
-                    child: Text("${entry.key} (${entry.value})"),
-                  );
-                }).toList(),
+                items: () {
+                  // 1. Deduplicate the buildings to prevent Flutter crash
+                  final Map<String, String> uniqueBuildings = {};
+                  provider.buildings.forEach((key, value) {
+                    // Keep the entry with the longest key name (Full name over abbreviation)
+                    if (!uniqueBuildings.containsKey(value) || key.length > uniqueBuildings[value]!.length) {
+                      uniqueBuildings[value] = key; 
+                    }
+                  });
+
+                  // 2. Map the deduplicated list to DropdownMenuItems
+                  return uniqueBuildings.entries.map((entry) {
+                    return DropdownMenuItem<String>(
+                      value: entry.key, // The abbreviation (e.g., "AJH")
+                      child: Text("${entry.value} (${entry.key})"),
+                    );
+                  }).toList();
+                }(),
                 onChanged: (val) {
                   if (val != null) {
                     systemSetup['gve_bldg'] = val;
-                    provider.updateFullRoomName(); // Recalculate full name
+                    provider.updateFullRoomName();
                   }
                 },
               ),
