@@ -42,28 +42,35 @@ class SetupWizardView extends StatelessWidget {
                     }
                   });
 
-                  final buildingEntries = uniqueBuildings.entries.toList();
-                  
-                  // Determine initial value string for the text box
+                  // 2. Format as a clean List of Strings for the Autocomplete to easily search
+                  // Format: "Full Building Name (ABBR)"
+                  final List<String> formattedBuildings = uniqueBuildings.entries
+                      .map((e) => '${e.value} (${e.key})')
+                      .toList();
+
+                  // 3. Determine initial value text
                   String currentBldg = systemSetup['gve_bldg'] ?? '';
                   String initialText = currentBldg;
                   if (uniqueBuildings.containsKey(currentBldg)) {
                     initialText = '${uniqueBuildings[currentBldg]} ($currentBldg)';
                   }
 
-                  return Autocomplete<MapEntry<String, String>>(
+                  // 4. Use Autocomplete<String> which is much more stable in Flutter
+                  return Autocomplete<String>(
                     initialValue: TextEditingValue(text: initialText),
-                    displayStringForOption: (option) => '${option.value} (${option.key})',
                     optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.isEmpty) return buildingEntries;
-                      return buildingEntries.where((entry) {
-                        final search = textEditingValue.text.toLowerCase();
-                        return entry.key.toLowerCase().contains(search) || 
-                                entry.value.toLowerCase().contains(search);
-                      });
+                      if (textEditingValue.text.isEmpty) return formattedBuildings;
+                      return formattedBuildings.where((bldg) => 
+                          bldg.toLowerCase().contains(textEditingValue.text.toLowerCase()));
                     },
-                    onSelected: (MapEntry<String, String> selection) {
-                      systemSetup['gve_bldg'] = selection.key; // Save the abbreviation
+                    onSelected: (String selection) {
+                      // Extract the abbreviation from between the parentheses
+                      final match = RegExp(r'\((.*?)\)').firstMatch(selection);
+                      if (match != null) {
+                        systemSetup['gve_bldg'] = match.group(1);
+                      } else {
+                        systemSetup['gve_bldg'] = selection; // Fallback
+                      }
                       provider.updateFullRoomName();
                     },
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {

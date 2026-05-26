@@ -12,6 +12,8 @@ class SystemSettingsView extends StatelessWidget {
     'gui_routing_available': ['Yes', 'No'],
     'gui_routing_mode': ['Normal', 'Conference', 'Extended'],
     'gui_tab': ['2_Cam_Dev', '2_Mic_Dev', '3_Cam_Mic_Dev', '3_Cams_Dev', '4_Cams_Mic_Dev', 'Conference'],
+    'gui_capture_source_available': ['Yes', 'No'],
+    'gui_usb_or_vga': ['USB', 'VGA'],
   };
 
   // Define the combined options for Inputs & Tab Type

@@ -118,22 +118,60 @@ class AppStateProvider extends ChangeNotifier {
     _loadSavedSettings();
   }
 
-  /// Loads saved paths from the OS and automatically parses the files
+  /// Loads saved paths from the OS and automatically parses the files.
+  /// Generates a default config.json if one is missing to prevent empty states.
   Future<void> _loadSavedSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    modulesPath = prefs.getString('modulesPath') ?? '';
-    processorsFilePath = prefs.getString('processorsFilePath') ?? '';
-    rootFolderPath = prefs.getString('rootFolderPath') ?? '';
-    buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
-    templateFilePath = prefs.getString('templateFilePath') ?? '';
+    // 1. Give the UI a moment to render the first frame to prevent startup freezes
+    await Future.delayed(const Duration(milliseconds: 200));
 
-    // Automatically load data if the paths exist from a previous session
-    if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
-    if (processorsFilePath.isNotEmpty) await loadProcessorsList();
-    if (templateFilePath.isNotEmpty) await loadConfigTemplate(templateFilePath);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      modulesPath = prefs.getString('modulesPath') ?? '';
+      processorsFilePath = prefs.getString('processorsFilePath') ?? '';
+      rootFolderPath = prefs.getString('rootFolderPath') ?? '';
+      buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
+      templateFilePath = prefs.getString('templateFilePath') ?? '';
 
-    notifyListeners();
+      // 2. AUTO-GENERATE DEFAULT CONFIG IF MISSING OR EMPTY
+      if (templateFilePath.isEmpty || !await File(templateFilePath).exists()) {
+        AppLogger.logInfo("No valid template found. Generating default_config.json");
+        
+        // Create a default file in the current execution directory
+        templateFilePath = path.join(Directory.current.path, 'default_config.json');
+        final file = File(templateFilePath);
+        
+        if (!await file.exists()) {
+          const String defaultTemplate = '''{
+    "SYSTEM_SETUP": {
+        "gve_bldg": "UNKNOWN",
+        "gve_room": "000",
+        "gui_full_room_name": "New Room Configuration",
+        "dev_cameras": "0",
+        "dev_projectors": "0",
+        "dev_switchers": "0",
+        "dev_dsps": "0",
+        "dev_power_controllers": "0"
+    }
+}''';
+          await file.writeAsString(defaultTemplate);
+        }
+        
+        // Save this new path to the OS preferences so it loads automatically next time
+        await prefs.setString('templateFilePath', templateFilePath);
+      }
+
+      // 3. Load files into memory safely
+      if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
+      if (processorsFilePath.isNotEmpty) await loadProcessorsList();
+      if (templateFilePath.isNotEmpty) await loadConfigTemplate(templateFilePath);
+
+    } catch (e, stack) {
+      AppLogger.logError("Startup Initialization Error", e, stack);
+    } finally {
+      // 4. Update the UI once all heavy lifting is done
+      notifyListeners(); 
+    }
   }
 
   /// Updates a setting in memory and saves it to the OS simultaneously
@@ -192,6 +230,16 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// Helper method to convert a string to Title Case (e.g., "arts and humanities" -> "Arts And Humanities")
+  String _toTitleCase(String text) {
+    if (text.isEmpty) return text;
+    return text.split(' ').map((word) {
+      if (word.isEmpty) return word;
+      // You can expand this logic to skip small words like 'and', 'the', 'of' if preferred
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+  }
+
   /// Automatically updates the gui_full_room_name in SYSTEM_SETUP
   void updateFullRoomName() {
     if (roomConfig.containsKey('SYSTEM_SETUP')) {
@@ -204,7 +252,10 @@ class AppStateProvider extends ChangeNotifier {
         if (value == bldgCode) fullBldgName = key;
       });
 
-      roomConfig['SYSTEM_SETUP']['gui_full_room_name'] = '$fullBldgName $roomNum'.trim();
+      // Apply the Title Case formatting
+      String titleCaseBldgName = _toTitleCase(fullBldgName);
+
+      roomConfig['SYSTEM_SETUP']['gui_full_room_name'] = '$titleCaseBldgName $roomNum'.trim();
       notifyListeners();
     }
   }
