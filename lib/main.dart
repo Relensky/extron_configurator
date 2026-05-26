@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
@@ -44,12 +45,23 @@ class _MainDashboardState extends State<MainDashboard> {
         title: const Text('Room Config Builder'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.cloud_upload), // New Upload Button
+            tooltip: 'Upload to Processor (SFTP)',
+            onPressed: () {
+              showDialog(
+                context: context,
+                barrierDismissible: false, // Prevent closing by tapping outside during upload
+                builder: (context) => const UploadConfigDialog(),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.save_alt),
-            tooltip: 'Export Config to Tree',
+            tooltip: 'Export Config Locally',
             onPressed: () {
               context.read<AppStateProvider>().exportRoomConfig();
               ScaffoldMessenger.of(context).showSnackBar(
-                 const SnackBar(content: Text('Building and saving config.json...'))
+                  const SnackBar(content: Text('Building and saving config.json...'))
               );
             },
           )
@@ -123,11 +135,21 @@ class AppSettingsView extends StatelessWidget {
         
         // Python Modules Path
         TextFormField(
-          decoration: const InputDecoration(
+          key: ValueKey(provider.modulesPath), // Forces UI to refresh when picked via dialog
+          decoration: InputDecoration(
             labelText: 'Python Modules Path',
             hintText: r'C:\workspace\modules',
-            border: OutlineInputBorder(),
-            suffixIcon: Icon(Icons.folder),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                String? selectedDirectory = await FilePicker.getDirectoryPath();
+                if (selectedDirectory != null) {
+                  provider.updateSetting('modulesPath', selectedDirectory);
+                }
+              },
+            ),
           ),
           initialValue: provider.modulesPath,
           onChanged: (val) => provider.updateSetting('modulesPath', val),
@@ -136,11 +158,25 @@ class AppSettingsView extends StatelessWidget {
         
         // Buildings JSON Path
         TextFormField(
-          decoration: const InputDecoration(
+          key: ValueKey(provider.buildingsFilePath),
+          decoration: InputDecoration(
             labelText: 'Buildings JSON File Path',
             hintText: r'C:\workspace\buildings.json',
-            border: OutlineInputBorder(),
-            suffixIcon: Icon(Icons.location_city),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.file_open),
+              tooltip: 'Select JSON File',
+              onPressed: () async {
+                FilePickerResult? result = await FilePicker.pickFiles(
+                  type: FileType.custom, 
+                  allowedExtensions: ['json']
+                );
+                if (result != null) {
+                  provider.updateSetting('buildingsFilePath', result.files.single.path!);
+                  provider.loadBuildingsList(); 
+                }
+              },
+            ),
           ),
           initialValue: provider.buildingsFilePath,
           onChanged: (val) {
@@ -150,23 +186,35 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Default config.json Template Path (Inside the Row we made last time)
-        Expanded(
-          child: TextFormField(
-            decoration: const InputDecoration(
-              labelText: 'Default config.json Template Path',
-              hintText: r'C:\workspace\ControlScript-Template\config.json',
-              border: OutlineInputBorder(),
-              suffixIcon: Icon(Icons.file_open),
+            // Default config.json Template Path
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(provider.templateFilePath),
+                decoration: InputDecoration(
+                  labelText: 'Default config.json Template Path',
+                  hintText: r'C:\workspace\ControlScript-Template\config.json',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await FilePicker.pickFiles(
+                        type: FileType.custom, 
+                        allowedExtensions: ['json']
+                      );
+                      if (result != null) {
+                        provider.updateSetting('templateFilePath', result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.templateFilePath,
+                onChanged: (val) => provider.updateSetting('templateFilePath', val),
+              ),
             ),
-            initialValue: provider.templateFilePath,
-            onChanged: (val) => provider.updateSetting('templateFilePath', val),
-          ),
-        ),
             const SizedBox(width: 16),
             SizedBox(
               height: 56, // Matches the height of the TextFormField
@@ -190,11 +238,25 @@ class AppSettingsView extends StatelessWidget {
 
         // Processors JSON Path
         TextFormField(
-          decoration: const InputDecoration(
+          key: ValueKey(provider.processorsFilePath),
+          decoration: InputDecoration(
             labelText: 'Processors JSON File Path',
             hintText: r'C:\workspace\processors.json',
-            border: OutlineInputBorder(),
-            suffixIcon: Icon(Icons.file_present),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.file_open),
+              tooltip: 'Select JSON File',
+              onPressed: () async {
+                FilePickerResult? result = await FilePicker.pickFiles(
+                  type: FileType.custom, 
+                  allowedExtensions: ['json']
+                );
+                if (result != null) {
+                  provider.updateSetting('processorsFilePath', result.files.single.path!);
+                  provider.loadProcessorsList();
+                }
+              },
+            ),
           ),
           initialValue: provider.processorsFilePath,
           onChanged: (val) {
@@ -216,11 +278,21 @@ class AppSettingsView extends StatelessWidget {
 
         // Template Root Path
         TextFormField(
-          decoration: const InputDecoration(
+          key: ValueKey(provider.rootFolderPath),
+          decoration: InputDecoration(
             labelText: 'Template Output Root Path',
             hintText: r'C:\workspace\ControlScript-Template',
-            border: OutlineInputBorder(),
-            suffixIcon: Icon(Icons.account_tree),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                String? selectedDirectory = await FilePicker.getDirectoryPath();
+                if (selectedDirectory != null) {
+                  provider.updateSetting('rootFolderPath', selectedDirectory);
+                }
+              },
+            ),
           ),
           initialValue: provider.rootFolderPath,
           onChanged: (val) => provider.updateSetting('rootFolderPath', val),
@@ -255,6 +327,126 @@ class AppSettingsView extends StatelessWidget {
               }
             }
           },
+        ),
+      ],
+    );
+  }
+}
+
+/// A dialog that collects network credentials and displays real-time SFTP upload status
+class UploadConfigDialog extends StatefulWidget {
+  const UploadConfigDialog({Key? key}) : super(key: key);
+
+  @override
+  State<UploadConfigDialog> createState() => _UploadConfigDialogState();
+}
+
+class _UploadConfigDialogState extends State<UploadConfigDialog> {
+  final TextEditingController _ipController = TextEditingController();
+  final TextEditingController _passController = TextEditingController();
+  
+  String _statusText = 'Enter processor details to upload config.json';
+  bool _isUploading = false;
+
+  @override
+  void dispose() {
+    _ipController.dispose();
+    _passController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startUpload() async {
+    // Basic validation
+    if (_ipController.text.isEmpty || _passController.text.isEmpty) {
+      setState(() => _statusText = "Error: IP and Password are required.");
+      return;
+    }
+
+    setState(() {
+      _isUploading = true;
+      _statusText = "Initializing...";
+    });
+
+    final provider = context.read<AppStateProvider>();
+    
+    // Trigger the upload and pass a callback to update the UI with status strings
+    final success = await provider.uploadConfigToProcessor(
+      ipAddress: _ipController.text.trim(),
+      password: _passController.text,
+      onStatusUpdate: (status) {
+        // Use setState to reflect the SFTP client's status in the dialog
+        setState(() => _statusText = status);
+      },
+    );
+
+    setState(() => _isUploading = false);
+
+    if (success) {
+      // Automatically close the dialog after a brief delay on success
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) Navigator.of(context).pop();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Direct SFTP Upload'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _ipController,
+              decoration: const InputDecoration(
+                labelText: 'Processor IP / Hostname',
+                border: OutlineInputBorder(),
+              ),
+              enabled: !_isUploading,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Admin Password',
+                border: OutlineInputBorder(),
+              ),
+              enabled: !_isUploading,
+            ),
+            const SizedBox(height: 24),
+            
+            // Status read-out container
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.black26,
+              height: 80,
+              alignment: Alignment.centerLeft,
+              child: _isUploading && _statusText.contains("Connecting")
+                  ? Row(
+                      children: [
+                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                        const SizedBox(width: 16),
+                        Expanded(child: Text(_statusText, style: const TextStyle(fontFamily: 'monospace'))),
+                      ],
+                    )
+                  : Text(_statusText, style: const TextStyle(fontFamily: 'monospace')),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isUploading ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.cloud_upload),
+          label: const Text('Upload'),
+          onPressed: _isUploading ? null : _startUpload,
         ),
       ],
     );

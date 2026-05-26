@@ -102,6 +102,10 @@ class SetupWizardView extends StatelessWidget {
         _buildCountDropdown(context, provider, 'DSPs', 'dev_dsps', 'DSPDEVICE_'),
         _buildCountDropdown(context, provider, 'USB Switchers', 'dev_usb_switchers', 'USBDEVICE_'),
         _buildCountDropdown(context, provider, 'Power Controllers', 'dev_power_controllers', 'POWERDEVICE_'),
+        _buildCountDropdown(context, provider, 'MediaPorts', 'dev_media_ports', 'MEDIAPORTDEVICE_'),
+        _buildCountDropdown(context, provider, 'Wireless (ShareLink)', 'dev_wireless', 'WIRELESSDEVICE_'),
+        _buildCountDropdown(context, provider, 'Recorders', 'dev_recorders', 'RECORDERDEVICE_'),
+        _buildCountDropdown(context, provider, 'Screens (Relays/Network)', 'dev_screens', 'SCREENDEVICE_'),
         
       ],
     );

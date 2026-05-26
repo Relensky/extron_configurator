@@ -7,3 +7,14 @@
 [2026-05-25T21:59:21.090994] INFO: Room configuration updated from raw JSON editor.
 [2026-05-25T22:00:40.128525] INFO: Room configuration updated from raw JSON editor.
 [2026-05-25T22:02:03.092220] INFO: Config successfully saved to C:\Users\derek\Desktop\Test\rooms\FAP1\12\code\config.json
+[2026-05-25T23:09:38.262286] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json
+[2026-05-25T23:09:48.665252] INFO: Template loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\config.json
+[2026-05-25T23:32:10.284561] INFO: Buildings list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\buildings.json
+[2026-05-25T23:32:10.297567] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json
+[2026-05-25T23:32:10.300570] INFO: Template loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\config.json
+[2026-05-25T23:45:32.148964] INFO: Buildings list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\buildings.json
+[2026-05-25T23:45:32.160962] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json
+[2026-05-25T23:45:32.166965] INFO: Template loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\config.json
+[2026-05-26T00:03:05.456909] INFO: Buildings list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\buildings.json
+[2026-05-26T00:03:05.471483] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json
+[2026-05-26T00:03:05.477486] INFO: Template loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\config.json

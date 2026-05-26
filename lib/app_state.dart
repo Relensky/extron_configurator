@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'sftp_client.dart';
 
 /// Core State Manager for the Room Configuration Application
 class AppStateProvider extends ChangeNotifier {
@@ -22,6 +23,65 @@ class AppStateProvider extends ChangeNotifier {
   
   // Cache for parsed python module commands to prevent repetitive disk I/O
   final Map<String, List<String>> _moduleCommandsCache = {};
+
+  Future<bool> uploadConfigToProcessor({
+    required String ipAddress,
+    required String password,
+    required Function(String) onStatusUpdate,
+  }) async {
+    if (roomConfig.isEmpty) {
+      onStatusUpdate("Error: No configuration loaded to upload.");
+      return false;
+    }
+
+    try {
+      onStatusUpdate("System: Preparing configuration data...");
+
+      // 1. Clean out unused devices and format as a clean JSON string
+      Map<String, dynamic> exportData = _pruneConfig(roomConfig);
+      final encoder = const JsonEncoder.withIndent('    ');
+      final jsonString = encoder.convert(exportData);
+
+      // 2. Create a temporary directory and file
+      // SftpLogger expects a physical file path, so we write the JSON string to a temp file
+      final tempDir = await Directory.systemTemp.createTemp('deployment_app_');
+      final tempFile = File(path.join(tempDir.path, 'config.json'));
+      await tempFile.writeAsString(jsonString);
+
+      // 3. Instantiate your existing SftpLogger and trigger the upload
+      final sftpClient = SftpLogger();
+      final success = await sftpClient.uploadFileToProcessor(
+        ipAddress: ipAddress,
+        password: password,
+        inputPath: tempFile.path,
+        remoteFilename: '/config.json', // The target path on the Extron processor
+        onStatusUpdate: onStatusUpdate,
+      );
+
+      if (success) {
+        AppLogger.logInfo("Successfully uploaded config.json to $ipAddress");
+      } else {
+        AppLogger.logError("Failed SFTP upload of config.json to $ipAddress");
+      }
+
+      // 4. Clean up the temporary file immediately so we don't clutter the OS
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      
+      // Also delete the temp directory itself
+      if (await tempDir.exists()) {
+        await tempDir.delete();
+      }
+
+      return success;
+      
+    } catch (e, stack) {
+      AppLogger.logError("Failed to upload config directly to processor", e, stack);
+      onStatusUpdate("System Error: Failed to prepare upload. $e");
+      return false;
+    }
+  }
 
   // --- Constructor triggers auto-load on startup ---
   AppStateProvider() {
@@ -295,17 +355,33 @@ class AppStateProvider extends ChangeNotifier {
   /// Internal helper to remove unused devices based on the `dev_` settings
   Map<String, dynamic> _pruneConfig(Map<String, dynamic> configToPrune) {
     Map<String, dynamic> data = Map.from(configToPrune);
+    
+    // Add requested hardware prefixes based on the config.json template if new devices added
     final deviceMap = {
       'dev_projectors': 'PROJECTORDEVICE_',
       'dev_cameras': 'CAMERADEVICE_',
       'dev_switchers': 'SWITCHERDEVICE_',
       'dev_dsps': 'DSPDEVICE_',
       'dev_usb_switchers': 'USBDEVICE_',
+      'dev_media_ports': 'MEDIAPORTDEVICE_',
+      'dev_wireless': 'WIRELESSDEVICE_',
+      'dev_recorders': 'RECORDERDEVICE_',
+      'dev_screens': 'SCREENDEVICE_',
+      'dev_power_controllers': 'POWERDEVICE_',
     };
 
     deviceMap.forEach((countKey, prefix) {
       if (data.containsKey(countKey)) {
-        int count = int.tryParse(data[countKey].toString()) ?? 0;
+        var countVal = data[countKey];
+        int count = 0;
+        
+        // Handle values like "Yes" in your dev_wireless setup
+        if (countVal.toString().toLowerCase() == 'yes') {
+          count = 1;
+        } else {
+          count = int.tryParse(countVal.toString()) ?? 0;
+        }
+
         final keysToRemove = data.keys.where((k) {
           if (k.startsWith(prefix)) {
             int id = int.tryParse(k.replaceFirst(prefix, '')) ?? 999;
