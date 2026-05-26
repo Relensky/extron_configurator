@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
+
 import 'app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sftp_client.dart';
@@ -23,6 +24,35 @@ class AppStateProvider extends ChangeNotifier {
   
   // Cache for parsed python module commands to prevent repetitive disk I/O
   final Map<String, List<String>> _moduleCommandsCache = {};
+
+  /// Attempts to find commonly named inputs inside the Python module for the autocomplete field
+  Future<List<String>> getInputsForModule(String moduleFileName) async {
+    final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
+    final fullPath = path.join(modulesPath, relativePath);
+
+    try {
+      final file = File(fullPath);
+      // If no file exists, return some default Extron input strings
+      if (!await file.exists()) return ['HDMI 1', 'HDMI 2', 'VGA', 'HDBaseT', 'DisplayPort']; 
+      
+      final content = await file.readAsString();
+      
+      // Look for common Extron string literals that represent inputs
+      final RegExp inputRegex = RegExp(r"['""](HDMI\s*\d*|HDBaseT|VGA|DisplayPort|DVI|SDI|Composite|Component|Video\s*\d*|RGB|Type-C|USB-C)['""]", caseSensitive: false);
+      
+      final Set<String> inputs = {};
+      for (final match in inputRegex.allMatches(content)) {
+        if (match.group(1) != null) {
+          inputs.add(match.group(1)!);
+        }
+      }
+      
+      if (inputs.isEmpty) return ['HDMI 1', 'HDMI 2', 'VGA', 'HDBaseT', 'DisplayPort'];
+      return inputs.toList()..sort();
+    } catch (e) {
+      return ['HDMI 1', 'HDMI 2', 'VGA', 'HDBaseT'];
+    }
+  }
 
   Future<bool> uploadConfigToProcessor({
     required String ipAddress,

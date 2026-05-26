@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'app_state.dart';
+import 'config_dictionary.dart';
 
 class DynamicDevicesTabsView extends StatefulWidget {
   const DynamicDevicesTabsView({Key? key}) : super(key: key);
@@ -97,33 +98,65 @@ class DeviceConfigurationForm extends StatelessWidget {
 
   const DeviceConfigurationForm({Key? key, required this.deviceKey}) : super(key: key);
 
+  // Helper method to wrap fields with Info buttons
+  Widget _wrapWithInfo(BuildContext context, String key, Widget field) {
+    final desc = ConfigDictionary.descriptions[key];
+    if (desc == null) return field;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: field),
+        IconButton(
+          icon: const Icon(Icons.info_outline, color: Colors.blueAccent),
+          tooltip: desc,
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text(key),
+                content: Text(desc),
+                actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+              )
+            );
+          },
+        )
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
     final deviceData = provider.roomConfig[deviceKey];
     final moduleName = deviceData['module'] as String? ?? '';
 
-    // Elements we render manually (Name, Module, KeepAlive)
-    final skipKeys = ['name', 'module', 'keep_alive_command'];
+    // Notice we REMOVED 'name' from this list, so it will now generate as a field you can edit!
+    final skipKeys = ['module', 'keep_alive_command', 'input'];
     
-    // Auto-generate fields based on the config.json template
     List<Widget> dynamicFormFields = [];
     deviceData.forEach((key, value) {
       if (skipKeys.contains(key)) return;
 
-      dynamicFormFields.add(
-        TextFormField(
+      Widget field;
+      if (value is bool) {
+        field = SwitchListTile(
+          title: Text(key),
+          value: value,
+          onChanged: (val) => provider.updateDeviceValue(deviceKey, key, val),
+        );
+      } else {
+        field = TextFormField(
           initialValue: value?.toString() ?? '',
           decoration: InputDecoration(labelText: key, border: const OutlineInputBorder()),
           onChanged: (val) {
-            // Keep types clean based on the original JSON template types
             dynamic parsedVal = val;
-            if (value is bool) parsedVal = val.toLowerCase() == 'true';
-            else if (value is int) parsedVal = int.tryParse(val) ?? 0;
+            if (value is int) parsedVal = int.tryParse(val) ?? 0;
             provider.updateDeviceValue(deviceKey, key, parsedVal);
           },
-        ),
-      );
+        );
+      }
+
+      dynamicFormFields.add(_wrapWithInfo(context, key, field));
       dynamicFormFields.add(const SizedBox(height: 16));
     });
 
@@ -134,11 +167,11 @@ class DeviceConfigurationForm extends StatelessWidget {
         const SizedBox(height: 20),
 
         // --- PYTHON MODULE SELECTOR ---
-        Row(
+        _wrapWithInfo(context, 'module', Row(
           children: [
             Expanded(
               child: TextFormField(
-                key: ValueKey(deviceData['module']), // Force rebuild when picker updates it
+                key: ValueKey(deviceData['module']), 
                 initialValue: deviceData['module']?.toString() ?? '',
                 decoration: const InputDecoration(labelText: 'Python Module (e.g. modules.device.xyz)', border: OutlineInputBorder()),
                 onChanged: (val) => provider.updateDeviceValue(deviceKey, 'module', val),
@@ -153,13 +186,11 @@ class DeviceConfigurationForm extends StatelessWidget {
                 if (result != null) {
                   String fullPath = result.files.single.path!;
                   String modPath = fullPath;
-                  
-                  // Try to translate the hard path into Extron dot-notation if it's inside modulesPath
                   if (provider.modulesPath.isNotEmpty && fullPath.startsWith(provider.modulesPath)) {
                     modPath = fullPath.replaceFirst(provider.modulesPath, '');
                     modPath = modPath.replaceAll(RegExp(r'^[\\\/]'), ''); 
                     modPath = modPath.replaceAll('.py', '');
-                    modPath = modPath.replaceAll(RegExp(r'[\\\/]'), '.'); // slashes to dots
+                    modPath = modPath.replaceAll(RegExp(r'[\\\/]'), '.'); 
                   } else {
                     modPath = result.files.single.name.replaceAll('.py', '');
                   }
@@ -168,55 +199,73 @@ class DeviceConfigurationForm extends StatelessWidget {
               },
             ),
           ],
-        ),
+        )),
         const SizedBox(height: 20),
 
         // --- DYNAMIC KEEP ALIVE DROPDOWN ---
         if (moduleName.isNotEmpty)
-          FutureBuilder<List<String>>(
+          _wrapWithInfo(context, 'keep_alive_command', FutureBuilder<List<String>>(
             future: provider.getCommandsForModule(moduleName),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator());
-              }
-              
-              // 1. Grab the parsed commands and force a final deduplication pass just in case
+              if (snapshot.connectionState == ConnectionState.waiting) return const CircularProgressIndicator();
               List<String> commands = snapshot.data?.toSet().toList() ?? [];
               String currentValue = deviceData['keep_alive_command']?.toString() ?? '';
               
-              // 2. Ensure the current config.json value exists in the dropdown list 
-              // so the UI doesn't crash if the template has a command the python file doesn't
-              if (currentValue.isNotEmpty && !commands.contains(currentValue)) {
-                commands.insert(0, currentValue);
-              }
-
-              // 3. Add an empty option at the top so users can clear the keep alive
-              if (!commands.contains('')) {
-                commands.insert(0, ''); 
-              }
+              if (currentValue.isNotEmpty && !commands.contains(currentValue)) commands.insert(0, currentValue);
+              if (!commands.contains('')) commands.insert(0, ''); 
 
               return DropdownButtonFormField<String>(
-                value: currentValue, // Using '' instead of null for empty states
+                value: currentValue, 
                 decoration: InputDecoration(
                   labelText: 'Keep Alive Command',
                   helperText: 'Parsed from $moduleName.py',
                   border: const OutlineInputBorder(),
                 ),
-                items: commands.map((cmd) {
-                  return DropdownMenuItem(
-                    value: cmd,
-                    child: Text(cmd.isEmpty ? '-- None --' : cmd),
-                  );
-                }).toList(),
+                items: commands.map((cmd) => DropdownMenuItem(value: cmd, child: Text(cmd.isEmpty ? '-- None --' : cmd))).toList(),
                 onChanged: (val) {
-                  if (val != null) {
-                    provider.updateDeviceValue(deviceKey, 'keep_alive_command', val);
-                  }
+                  if (val != null) provider.updateDeviceValue(deviceKey, 'keep_alive_command', val);
                 },
               );
             },
-          ),
-        
+          )),
+        const SizedBox(height: 20),
+
+        // --- DYNAMIC INPUT AUTOCOMPLETE ---
+        if (deviceData.containsKey('input'))
+          _wrapWithInfo(context, 'input', FutureBuilder<List<String>>(
+            future: provider.getInputsForModule(moduleName),
+            builder: (context, snapshot) {
+              List<String> inputs = snapshot.data ?? [];
+              String currentValue = deviceData['input']?.toString() ?? '';
+
+              return Autocomplete<String>(
+                initialValue: TextEditingValue(text: currentValue),
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text == '') return inputs;
+                  return inputs.where((String option) => option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                },
+                onSelected: (String selection) {
+                  provider.updateDeviceValue(deviceKey, 'input', selection);
+                },
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Input (Type manually or select)',
+                      helperText: 'Parsed hints from $moduleName.py',
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (val) {
+                      // Allows manual typing to be saved to state even if not selected from dropdown
+                      provider.updateDeviceValue(deviceKey, 'input', val);
+                    },
+                  );
+                },
+              );
+            },
+          )),
+
         const Divider(height: 50, thickness: 2),
         Text('Standard Configuration', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),

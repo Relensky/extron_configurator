@@ -5,6 +5,7 @@ import 'app_state.dart';
 import 'dynamic_devices_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
+import 'system_settings_view.dart';
 
 void main() {
   runApp(
@@ -76,22 +77,11 @@ class _MainDashboardState extends State<MainDashboard> {
             },
             labelType: NavigationRailLabelType.all,
             destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.auto_awesome),
-                label: Text('Wizard'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.router),
-                label: Text('Devices'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.data_object),
-                label: Text('Raw JSON'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.build_circle),
-                label: Text('App Config'),
-              ),
+              NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
+              NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
+              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
+              NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
+              NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
             ],
           ),
           const VerticalDivider(thickness: 1, width: 1),
@@ -110,8 +100,10 @@ class _MainDashboardState extends State<MainDashboard> {
       case 1:
         return const DynamicDevicesTabsView(); 
       case 2:
-        return const JsonEditorView();
+        return const SystemSettingsView(); // <-- Add this case
       case 3:
+        return const JsonEditorView();
+      case 4:
         return const AppSettingsView();
       default:
         return const Center(child: Text("Select a category"));
