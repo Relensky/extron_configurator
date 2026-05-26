@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sftp_client.dart';
+import 'package:file_picker/file_picker.dart';
 
 /// Core State Manager for the Room Configuration Application
 class AppStateProvider extends ChangeNotifier {
@@ -21,6 +22,7 @@ class AppStateProvider extends ChangeNotifier {
   Map<String, dynamic> buildings = {}; // NEW: Store building abbreviations
   Map<String, dynamic>? selectedProcessor;
   Map<String, dynamic> roomConfig = {};
+  bool isDarkMode = true;
   
   // Cache for parsed python module commands to prevent repetitive disk I/O
   final Map<String, List<String>> _moduleCommandsCache = {};
@@ -121,7 +123,6 @@ class AppStateProvider extends ChangeNotifier {
   /// Loads saved paths from the OS and automatically parses the files.
   /// Generates a default config.json if one is missing to prevent empty states.
   Future<void> _loadSavedSettings() async {
-    // 1. Give the UI a moment to render the first frame to prevent startup freezes
     await Future.delayed(const Duration(milliseconds: 200));
 
     try {
@@ -132,6 +133,7 @@ class AppStateProvider extends ChangeNotifier {
       rootFolderPath = prefs.getString('rootFolderPath') ?? '';
       buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
       templateFilePath = prefs.getString('templateFilePath') ?? '';
+      isDarkMode = prefs.getBool('isDarkMode') ?? true;
 
       // 2. AUTO-GENERATE DEFAULT CONFIG IF MISSING OR EMPTY
       if (templateFilePath.isEmpty || !await File(templateFilePath).exists()) {
@@ -278,12 +280,19 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  // Toggle theme and save to OS preferences
+  Future<void> toggleTheme() async {
+    isDarkMode = !isDarkMode;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isDarkMode', isDarkMode);
+  }
+
   /// Sets the active room context
-  void selectProcessor(Map<String, dynamic> processor) {
+  void selectProcessor(Map<String, dynamic>? processor) { // <-- UPDATED: Allow null
     selectedProcessor = processor;
     notifyListeners();
   }
-
   /// Update a specific nested property for a device (e.g., changing keep_alive_command)
   void updateDeviceValue(String deviceKey, String property, dynamic value) {
     if (roomConfig.containsKey(deviceKey)) {
@@ -375,37 +384,44 @@ class AppStateProvider extends ChangeNotifier {
     };
   }
 
-  /// Exports the pruned config.json to the correct folder structure
-  Future<void> exportRoomConfig() async {
-    if (selectedProcessor == null || rootFolderPath.isEmpty) {
-      AppLogger.logError("Cannot export: Missing processor selection or root folder path.");
-      return;
+  /// Exports the pruned config.json using a user-prompted save dialog
+  Future<bool> exportRoomConfig() async { // <-- UPDATED: Returns a bool for UI feedback
+    if (roomConfig.isEmpty) {
+      AppLogger.logError("Cannot export: Config is empty.");
+      return false;
     }
 
     try {
-      // Fetch details directly from SYSTEM_SETUP
+      // Fetch details to generate a default file name
       final systemSetup = roomConfig['SYSTEM_SETUP'] ?? {};
       final gveBldg = systemSetup['gve_bldg'] ?? 'UNKNOWN_BLDG';
       final gveRoom = systemSetup['gve_room'] ?? 'UNKNOWN_ROOM';
+      final defaultFileName = '${gveBldg}_${gveRoom}_config.json';
 
-      // Construct output path: Root\rooms\gve_bldg\gve_room\code\
-      final targetDirectory = Directory(path.join(rootFolderPath, 'rooms', gveBldg, gveRoom, 'code'));
+      // Prompt the user for a save location
+      String? outputFile = await FilePicker.saveFile(
+        dialogTitle: 'Save Room Configuration',
+        fileName: defaultFileName,
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
 
-      if (!await targetDirectory.exists()) {
-        await targetDirectory.create(recursive: true);
-      }
+      // User cancelled the picker
+      if (outputFile == null) return false; 
 
-      final targetFile = File(path.join(targetDirectory.path, 'config.json'));
-      final encoder = JsonEncoder.withIndent('    ');
+      final targetFile = File(outputFile);
+      final encoder = const JsonEncoder.withIndent('    ');
       
       // Clean out unused devices before saving
       Map<String, dynamic> exportData = _pruneConfig(roomConfig);
       
       await targetFile.writeAsString(encoder.convert(exportData));
       AppLogger.logInfo("Config successfully saved to ${targetFile.path}");
+      return true;
 
     } catch (e, stack) {
       AppLogger.logError("Failed to export room configuration", e, stack);
+      return false;
     }
   }
 

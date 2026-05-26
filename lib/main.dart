@@ -21,9 +21,11 @@ class RoomConfigApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+
     return MaterialApp(
       title: 'Deployment Configurator',
-      theme: ThemeData.dark(), // Fits developer environments like VS Code
+      theme: provider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
       home: const MainDashboard(),
     );
   }
@@ -46,12 +48,17 @@ class _MainDashboardState extends State<MainDashboard> {
         title: const Text('Room Config Builder'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.cloud_upload), // New Upload Button
+            icon: Icon(context.watch<AppStateProvider>().isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            tooltip: 'Toggle Theme',
+            onPressed: () => context.read<AppStateProvider>().toggleTheme(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.cloud_upload),
             tooltip: 'Upload to Processor (SFTP)',
             onPressed: () {
               showDialog(
                 context: context,
-                barrierDismissible: false, // Prevent closing by tapping outside during upload
+                barrierDismissible: false, 
                 builder: (context) => const UploadConfigDialog(),
               );
             },
@@ -59,11 +66,14 @@ class _MainDashboardState extends State<MainDashboard> {
           IconButton(
             icon: const Icon(Icons.save_alt),
             tooltip: 'Export Config Locally',
-            onPressed: () {
-              context.read<AppStateProvider>().exportRoomConfig();
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Building and saving config.json...'))
-              );
+            onPressed: () async {
+              // <-- UPDATED: Await the save prompt and only show SnackBar on success
+              bool saved = await context.read<AppStateProvider>().exportRoomConfig();
+              if (saved && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Config saved successfully!'))
+                );
+              }
             },
           )
         ],
@@ -294,31 +304,45 @@ class AppSettingsView extends StatelessWidget {
         Text('Active Deployment Target', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),
         
-        DropdownButtonFormField<String>(
-          decoration: const InputDecoration(
-            labelText: 'Select Room Deployment',
-            border: OutlineInputBorder(),
-          ),
-          // Use the roomId string as the unique identifier
-          value: provider.selectedProcessor?['roomId']?.toString(),
-          items: provider.processors.map((proc) {
-            return DropdownMenuItem<String>(
-              value: proc['roomId']?.toString(),
-              child: Text("${proc['roomName']} (ID: ${proc['roomId']})"),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) {
-              // Look up the full map based on the selected ID
-              final selected = provider.processors.firstWhere(
-                (p) => p['roomId']?.toString() == val,
-                orElse: () => <String, dynamic>{},
-              );
-              if (selected.isNotEmpty) {
-                provider.selectProcessor(selected);
-              }
-            }
-          },
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Select Room Deployment',
+                  border: OutlineInputBorder(),
+                ),
+                value: provider.selectedProcessor?['roomId']?.toString(),
+                items: provider.processors.map((proc) {
+                  return DropdownMenuItem<String>(
+                    value: proc['roomId']?.toString(),
+                    child: Text("${proc['roomName']} (ID: ${proc['roomId']})"),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    final selected = provider.processors.firstWhere(
+                      (p) => p['roomId']?.toString() == val,
+                      orElse: () => <String, dynamic>{},
+                    );
+                    if (selected.isNotEmpty) {
+                      provider.selectProcessor(selected);
+                    }
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear Active Room',
+                onPressed: () => provider.selectProcessor(null), 
+              ),
+            ),
+          ],
         ),
       ],
     );

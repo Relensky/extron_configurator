@@ -30,3 +30,7 @@ ssors.json
 [2026-05-26T09:42:40.671987] INFO: Buildings list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\buildings.json
 [2026-05-26T09:42:40.722362] INFO: Processors list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\processors.json
 [2026-05-26T09:42:40.752503] INFO: Template loaded from C:\Users\dstanley\Desktop\extron_configurator_test\config.json
+[2026-05-26T10:51:14.700823] INFO: Buildings list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\buildings.json
+[2026-05-26T10:51:14.819234] INFO: Processors list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\processors.json
+[2026-05-26T10:51:14.869233] INFO: Template loaded from C:\Users\dstanley\Desktop\extron_configurator_test\config.json
+[2026-05-26T10:52:39.755520] INFO: Config successfully saved to C:\Users\dstanley\Desktop\extron_configurator_test\Test_Room_config.json
