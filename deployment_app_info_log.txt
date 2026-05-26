@@ -1,0 +1,4 @@
+[2026-05-25T20:52:38.759755] INFO: Processors list loaded from C:\Users\derek\Desktop\Test_Extron_Debug\processors.json
+[2026-05-25T20:53:10.563268] INFO: Config successfully saved to C:\Users\derek\Documents\ControlScript\ControlScript-Template\rooms\rooms\HOLT352\code\config.json
+[2026-05-25T21:47:43.122908] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json
+[2026-05-25T21:48:36.495617] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json

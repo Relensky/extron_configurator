@@ -1,0 +1,4223 @@
+[
+  {
+    "roomName": "AGYM 129",
+    "ipAddress": "10.248.129.8",
+    "webLink": "https://10.248.129.8/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 4,
+    "macAddress": "00-05-A6-0C-EB-1C",
+    "touchPanelIp": "10.248.129.6",
+    "pcNames": [
+      "SC-AGYM129"
+    ]
+  },
+  {
+    "roomName": "AGYM 205",
+    "ipAddress": "10.248.129.13",
+    "webLink": "https://10.248.129.13/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 5,
+    "macAddress": "00-05-A6-0D-55-A0",
+    "touchPanelIp": "10.248.128.165",
+    "pcNames": [
+      "SC-AGYM205"
+    ]
+  },
+  {
+    "roomName": "AJH 108",
+    "ipAddress": "10.248.128.67",
+    "webLink": "https://10.248.128.67/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 6,
+    "macAddress": "00-05-A6-15-F0-2F",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-AJH108"
+    ]
+  },
+  {
+    "roomName": "AJH 110C",
+    "ipAddress": "10.248.132.139",
+    "webLink": "https://10.248.132.139/api/login?NortxeSession=r.6Lcn6gYVuppuFic9Lbv1LuNX.c&redirect=https://10.248.132.139/web/vtlp/110c7a6e-2f74-4b03-9474-57579daee946/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 458,
+    "macAddress": "00-05-A6-26-4D-7F",
+    "touchPanelIp": "10.248.132.140",
+    "pcNames": [
+      "SC-AJH110C-1",
+      "SC-AJH110C-2",
+      "SC-AJH110C-3"
+    ]
+  },
+  {
+    "roomName": "AJH 125A",
+    "ipAddress": "10.248.131.1",
+    "webLink": "https://10.248.131.1/api/login?NortxeSession=r.WcGEEMJc9TX5vhOQSGL9b9pL.a&redirect=https://10.248.131.1/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 381,
+    "macAddress": "00-05-A6-1D-AF-A4",
+    "touchPanelIp": "10.248.131.68",
+    "pcNames": [
+      "SC-AJH125A"
+    ]
+  },
+  {
+    "roomName": "AJH 125B",
+    "ipAddress": "10.248.131.2",
+    "webLink": "https://10.248.131.2/api/login?NortxeSession=r.HXuRfDEhKgqrfO1iJFBxR1Kd.a&redirect=https://10.248.131.2/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 382,
+    "macAddress": "00-05-A6-1D-73-E5",
+    "touchPanelIp": "10.248.131.69",
+    "pcNames": [
+      "SC-AJH125B"
+    ]
+  },
+  {
+    "roomName": "ARTS 105",
+    "ipAddress": "10.248.129.18",
+    "webLink": "https://10.248.129.18/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 9,
+    "macAddress": "00-05-A6-0E-9E-BC",
+    "touchPanelIp": "10.248.129.17",
+    "pcNames": [
+      "SC-ARTS105"
+    ]
+  },
+  {
+    "roomName": "ARTS 106",
+    "ipAddress": "10.248.129.19",
+    "webLink": "https://10.248.129.19/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 10,
+    "macAddress": "00-05-A6-0E-9E-A2",
+    "touchPanelIp": "10.248.129.21",
+    "pcNames": [
+      "SC-ARTS106"
+    ]
+  },
+  {
+    "roomName": "ARTS 107",
+    "ipAddress": "10.248.129.20",
+    "webLink": "https://10.248.129.20/api/login?NortxeSession=r.z5Of6Uh1hFyLhqoob4AznaSV.bu&redirect=https://10.248.129.20/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 370,
+    "macAddress": "00-05-A6-0E-9E-AB",
+    "touchPanelIp": "10.248.129.16",
+    "pcNames": [
+      "SC-ARTS107"
+    ]
+  },
+  {
+    "roomName": "ARTS 108",
+    "ipAddress": "10.248.134.6",
+    "webLink": "https://10.248.134.6/api/login?NortxeSession=r.8M8HWEibn51WS9xGjFW7f43E.b&redirect=https://10.248.134.6/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": true,
+    "roomId": 532,
+    "macAddress": "00-05-A6-2E-2C-19",
+    "touchPanelIp": "10.248.134.34",
+    "pcNames": [
+      "SC-ARTS108"
+    ]
+  },
+  {
+    "roomName": "ARTS 111",
+    "ipAddress": "10.248.129.14",
+    "webLink": "https://10.248.129.14/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 12,
+    "macAddress": "00-05-A6-0E-9E-ED",
+    "touchPanelIp": "10.248.132.13",
+    "pcNames": [
+      "SC-ARTS111"
+    ]
+  },
+  {
+    "roomName": "ARTS 112",
+    "ipAddress": "10.248.129.15",
+    "webLink": "https://10.248.129.15/web/vtlp/839a628d-3bc8-4945-8009-a2d073030cef/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 14,
+    "macAddress": "00-05-A6-0E-9E-DB",
+    "touchPanelIp": "10.248.129.24",
+    "pcNames": [
+      "SC-ARTS112"
+    ]
+  },
+  {
+    "roomName": "ARTS 115",
+    "ipAddress": "10.248.132.246",
+    "webLink": "https://10.248.132.246/api/login?NortxeSession=r.y6A2N2JrgO45NQsirv8hUlpq.a&redirect=https://10.248.132.246/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": true,
+    "roomId": 520,
+    "macAddress": "00-05-A6-2D-DE-AD",
+    "touchPanelIp": "10.248.133.1",
+    "pcNames": [
+      "SC-ARTS115"
+    ]
+  },
+  {
+    "roomName": "ARTS 116",
+    "ipAddress": "10.248.128.4",
+    "webLink": "https://10.248.128.4/api/login?NortxeSession=r.ITJncKd4ZZ20okZsk6AQEXBF.a&redirect=https://10.248.128.4/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": true,
+    "roomId": 521,
+    "macAddress": "00-05-A6-2D-DE-37",
+    "touchPanelIp": "10.248.128.5",
+    "pcNames": [
+      "SC-ARTS116"
+    ]
+  },
+  {
+    "roomName": "ARTS 206A",
+    "ipAddress": "10.248.129.26",
+    "webLink": "https://10.248.129.26/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 16,
+    "macAddress": "00-05-A6-0E-9F-7B",
+    "touchPanelIp": "10.248.129.27",
+    "pcNames": [
+      "SC-ARTS206A"
+    ]
+  },
+  {
+    "roomName": "ARTS 206B",
+    "ipAddress": "10.248.129.28",
+    "webLink": "https://10.248.129.28/api/login?NortxeSession=r.80AixA3afpRvpQfQkzKJcWNc.c&redirect=https://10.248.129.28/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 372,
+    "macAddress": "00-05-A6-0E-9E-93",
+    "touchPanelIp": "10.248.129.29",
+    "pcNames": [
+      "SC-ARTS206B"
+    ]
+  },
+  {
+    "roomName": "ARTS 208",
+    "ipAddress": "10.248.132.178",
+    "webLink": "https://10.248.132.178/api/login?NortxeSession=r.g0fPUkRvidHNc1m49QcaNyJM.b&redirect=https://10.248.132.178/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": true,
+    "touchPanelIp": "10.248.132.205",
+    "macAddress": "00-05-A6-2B-ED-5D",
+    "roomId": 519,
+    "pcNames": [
+      "SC-ARTS208"
+    ]
+  },
+  {
+    "roomName": "ARTS 209",
+    "ipAddress": "10.248.131.193",
+    "webLink": "https://10.248.131.193/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 3,
+    "macAddress": "00-05-A6-19-BD-FE",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "ARTS 227",
+    "ipAddress": "10.248.129.32",
+    "webLink": "https://10.248.129.32/web/vtlp/560a41cc-469a-46e7-9159-8094cfbecf26/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 17,
+    "macAddress": "00-05-A6-0E-E8-CB",
+    "touchPanelIp": "10.248.129.33",
+    "pcNames": []
+  },
+  {
+    "roomName": "ARTS 227B",
+    "ipAddress": "10.248.131.194",
+    "webLink": "https://10.248.131.194/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 395,
+    "macAddress": "00-05-A6-19-BE-1F",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "ARTS 228",
+    "ipAddress": "10.248.128.186",
+    "webLink": "https://10.248.128.186/web/vtlp/227f8641-2c79-4b43-91cb-49d12c83aed2/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 337,
+    "macAddress": "00-05-A6-11-0D-2F",
+    "touchPanelIp": "10.248.129.35",
+    "pcNames": [
+      "CONF-ARTS228"
+    ]
+  },
+  {
+    "roomName": "ARTS 229",
+    "ipAddress": "10.248.128.11",
+    "webLink": "https://10.248.128.11/web/vtlp/227f8641-2c79-4b43-91cb-49d12c83aed2/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 338,
+    "macAddress": "00-05-A6-19-BE-11",
+    "touchPanelIp": "10.248.129.37",
+    "pcNames": [
+      "CONF-ARTS229"
+    ]
+  },
+  {
+    "roomName": "ARTS 306A",
+    "ipAddress": "10.248.129.39",
+    "webLink": "https://10.248.129.39/api/login?NortxeSession=r.tpqaNomOJogh2pKll6IKnYug.b&redirect=https://10.248.129.39/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 371,
+    "macAddress": "00-05-A6-0E-9E-67",
+    "touchPanelIp": "10.248.129.40",
+    "pcNames": [
+      "SC-ARTS306A"
+    ]
+  },
+  {
+    "roomName": "ARTS 306B",
+    "ipAddress": "10.248.129.41",
+    "webLink": "https://10.248.129.41/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 21,
+    "macAddress": "00-05-A6-0E-9F-64",
+    "touchPanelIp": "10.248.129.42",
+    "pcNames": [
+      "SC-ARTS306B"
+    ]
+  },
+  {
+    "roomName": "ARTS 309",
+    "ipAddress": "10.248.129.43",
+    "webLink": "https://10.248.129.43/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 523,
+    "macAddress": "00-05-A6-0E-9F-67",
+    "touchPanelIp": "10.248.129.44",
+    "pcNames": [
+      "SC-ARTS309"
+    ]
+  },
+  {
+    "roomName": "AYRS 106",
+    "ipAddress": "10.248.128.170",
+    "webLink": "https://10.248.128.170/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 23,
+    "macAddress": "00-05-A6-11-A9-D3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-AYRS106"
+    ]
+  },
+  {
+    "roomName": "AYRS 120",
+    "ipAddress": "10.248.132.121",
+    "webLink": "https://10.248.132.121/api/login?NortxeSession=r.vNc4xAmwgrO80IucpCh8B2jP.b&redirect=https://10.248.132.121/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 380,
+    "macAddress": "00-05-A6-25-CB-3D",
+    "touchPanelIp": "10.248.132.123",
+    "pcNames": [
+      "SC-AYRS120"
+    ]
+  },
+  {
+    "roomName": "AYRS 201",
+    "ipAddress": "10.248.128.43",
+    "webLink": "https://10.248.128.43/api/login?NortxeSession=r.mC2zqdvqsaTuPJgSVWGgAAKA.c&redirect=https://10.248.128.43/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 503,
+    "macAddress": "00-05-A6-0E-9F-65",
+    "touchPanelIp": "10.248.128.19",
+    "pcNames": [
+      "SC-AYRS201"
+    ]
+  },
+  {
+    "roomName": "AYRS 214",
+    "ipAddress": "10.248.129.77",
+    "webLink": "https://10.248.129.77/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 439,
+    "macAddress": "00-05-A6-17-FA-6B",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BMU 203",
+    "ipAddress": "10.248.128.224",
+    "webLink": "https://10.248.128.224/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 28,
+    "macAddress": "00-05-A6-0B-BB-50",
+    "touchPanelIp": "10.248.128.227",
+    "pcNames": []
+  },
+  {
+    "roomName": "BMU 205",
+    "ipAddress": "10.248.129.47",
+    "webLink": "http://10.248.129.47/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 27,
+    "macAddress": "00-05-A6-07-9F-B3",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BMU 309",
+    "ipAddress": "10.248.132.157",
+    "webLink": "https://10.248.132.157/api/login?NortxeSession=r.FQJ8Utlvc3SrTSRpooTvO0e3.a&redirect=https://10.248.132.157/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 443,
+    "macAddress": "00-05-A6-24-B1-01",
+    "touchPanelIp": "10.248.132.161",
+    "pcNames": []
+  },
+  {
+    "roomName": "BSS 101",
+    "ipAddress": "10.248.132.195",
+    "webLink": "https://10.248.132.195/api/login?NortxeSession=r.Nxl1VU3h7bV6PvV57e1P5xUY.a&redirect=https://10.248.132.195/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 490,
+    "macAddress": "00-05-A6-28-87-68",
+    "touchPanelIp": "10.248.132.198",
+    "pcNames": [
+      "CONF-BSS101-JB",
+      "SC-BSS101"
+    ]
+  },
+  {
+    "roomName": "BSS 103",
+    "ipAddress": "10.248.132.204",
+    "webLink": "https://10.248.132.204/api/login?NortxeSession=r.3yVr2o8ybYRDeNlItsL9OMfV.a&redirect=https://10.248.132.204/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 475,
+    "macAddress": "00-05-A6-27-AB-FD",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS103"
+    ]
+  },
+  {
+    "roomName": "BSS 104",
+    "ipAddress": "10.248.132.212",
+    "webLink": "https://10.248.132.212/api/login?NortxeSession=r.Hv4zrwZfderpv3bIDMVxVdv1.b&redirect=https://10.248.132.212/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 469,
+    "macAddress": "00-05-A6-28-CC-00",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS104"
+    ]
+  },
+  {
+    "roomName": "BSS 106",
+    "ipAddress": "10.248.132.221",
+    "webLink": "https://10.248.132.221/api/login?NortxeSession=r.4Cb0lMgeYAOVkY2Sgd0OCOJQ.a&redirect=https://10.248.132.221/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 474,
+    "macAddress": "00-05-A6-28-CC-5C",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS106"
+    ]
+  },
+  {
+    "roomName": "BSS 107",
+    "ipAddress": "10.248.132.229",
+    "webLink": "https://10.248.132.229/api/login?NortxeSession=r.KazOb1HzkcyHXq7oZgrDtIfH.b&redirect=https://10.248.132.229/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 461,
+    "macAddress": "00-05-A6-28-CC-56",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS107"
+    ]
+  },
+  {
+    "roomName": "BSS 108",
+    "ipAddress": "10.248.132.237",
+    "webLink": "https://10.248.132.237/api/login?NortxeSession=r.e0aXlfAAMpTRmZixhtF5MCf1.a&redirect=https://10.248.132.237/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 463,
+    "macAddress": "00-05-A6-28-CB-D6",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS108"
+    ]
+  },
+  {
+    "roomName": "BSS 109",
+    "ipAddress": "10.248.132.245",
+    "webLink": "https://10.248.132.245/api/login?NortxeSession=r.AZyQcb0gJ0FixkPFC1AxnOXG.b&redirect=https://10.248.132.245/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 465,
+    "macAddress": "00-05-A6-28-CB-AC",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS109"
+    ]
+  },
+  {
+    "roomName": "BSS 110",
+    "ipAddress": "10.248.133.0",
+    "webLink": "https://10.248.133.0/api/login?NortxeSession=r.ody3Qj3ulb97XQMIxk77xhaq.c&redirect=https://10.248.133.0/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 460,
+    "macAddress": "00-05-A6-28-87-D4",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS110"
+    ]
+  },
+  {
+    "roomName": "BSS 111A",
+    "ipAddress": "10.248.133.3",
+    "webLink": "https://10.248.133.3/api/login?NortxeSession=r.gGIJIRYKMxZw5fCoRW2g7XkF.a&redirect=https://10.248.133.3/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 494,
+    "macAddress": "00-05-A6-27-E4-7C",
+    "touchPanelIp": "10.248.133.5",
+    "pcNames": [
+      "SC-BSS111A"
+    ]
+  },
+  {
+    "roomName": "BSS 112",
+    "ipAddress": "10.248.133.14",
+    "webLink": "https://10.248.133.14/api/login?NortxeSession=r.lqGJV4YtwJIBvttm5Zz9epSh.c&redirect=https://10.248.133.14/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 464,
+    "macAddress": "00-05-A6-25-6A-03",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS112"
+    ]
+  },
+  {
+    "roomName": "BSS 121B",
+    "ipAddress": "10.248.133.16",
+    "webLink": "https://10.248.133.16/api/login?NortxeSession=r.GaUv3Aw0jsDG1qrLwRqmRFXD.a&redirect=https://10.248.133.16/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 495,
+    "macAddress": "00-05-A6-27-E4-75",
+    "touchPanelIp": "10.248.133.18",
+    "pcNames": [
+      "SC-BSS121B"
+    ]
+  },
+  {
+    "roomName": "BSS 121F",
+    "ipAddress": "10.248.133.20",
+    "webLink": "https://10.248.133.20/api/login?NortxeSession=r.mWrWUoTFbvDmcCpd2bOpE26g.a&redirect=https://10.248.133.20/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 496,
+    "macAddress": "00-05-A6-27-E5-37",
+    "touchPanelIp": "10.248.133.22",
+    "pcNames": [
+      "CONF-BSS121F",
+      "SC-BSS121F"
+    ]
+  },
+  {
+    "roomName": "BSS 122",
+    "ipAddress": "10.248.133.29",
+    "webLink": "https://10.248.133.29/api/login?NortxeSession=r.g3UYgMvabz3NsIwBO2j2bvpj.j&redirect=https://10.248.133.29/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 489,
+    "macAddress": "00-05-A6-26-8B-01",
+    "touchPanelIp": "10.248.132.136",
+    "pcNames": [
+      "SC-BSS122",
+      "SC-BSS122-TV1",
+      "SC-BSS122-TV2",
+      "SC-BSS122-TV3",
+      "SC-BSS122-TV4",
+      "SC-BSS122-TV5",
+      "SC-BSS122-TV6",
+      "SC-BSS122-TV7"
+    ]
+  },
+  {
+    "roomName": "BSS 237",
+    "ipAddress": "10.248.133.52",
+    "webLink": "https://10.248.133.52/api/login?NortxeSession=r.I2jUbqCH4KPZZYKad4VPLodu.b&redirect=https://10.248.133.52/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 478,
+    "macAddress": "00-05-A6-28-F9-93",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS237"
+    ]
+  },
+  {
+    "roomName": "BSS 238",
+    "ipAddress": "10.248.133.66",
+    "webLink": "https://10.248.133.66/api/login?NortxeSession=r.awh67nqcYg9K1LL5aTz2YA4v.a&redirect=https://10.248.133.66/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 480,
+    "macAddress": "00-05-A6-27-EA-9E",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS238"
+    ]
+  },
+  {
+    "roomName": "BSS 239",
+    "ipAddress": "10.248.133.81",
+    "webLink": "https://10.248.133.81/api/login?NortxeSession=r.FvRrGsmcUIedgn60fSXuMC5W.a&redirect=https://10.248.133.81/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": true,
+    "touchPanelIp": "",
+    "macAddress": "00:05:A6:28:CC:44",
+    "roomId": 476,
+    "pcNames": [
+      "SC-BSS239"
+    ]
+  },
+  {
+    "roomName": "BSS 240",
+    "ipAddress": "10.248.133.91",
+    "webLink": "https://10.248.133.91/api/login?NortxeSession=r.mILkjvsY0XZGnboWPSBCmi32.f&redirect=https://10.248.133.91/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 481,
+    "macAddress": "00-05-A6-28-87-52",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS240"
+    ]
+  },
+  {
+    "roomName": "BSS 241",
+    "ipAddress": "10.248.133.101",
+    "webLink": "https://10.248.133.101/api/login?NortxeSession=r.aKiVgyhNmgco64anFldoJk7O.a&redirect=https://10.248.133.101/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 477,
+    "macAddress": "00-05-A6-27-EA-DE",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS241"
+    ]
+  },
+  {
+    "roomName": "BSS 242",
+    "ipAddress": "10.248.133.116",
+    "webLink": "https://10.248.133.116/api/login?NortxeSession=r.hLqDAUW4ukFwL6fFtCq4dD9s.b&redirect=https://10.248.133.116/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 482,
+    "macAddress": "00-05-A6-28-87-CA",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS242"
+    ]
+  },
+  {
+    "roomName": "BSS 243",
+    "ipAddress": "10.248.133.124",
+    "webLink": "https://10.248.133.124/api/login?NortxeSession=r.3InmQS3qc35GmkamI1xqWBOc.a&redirect=https://10.248.133.124/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 491,
+    "macAddress": "00-05-A6-28-CC-3E",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS243"
+    ]
+  },
+  {
+    "roomName": "BSS 244",
+    "ipAddress": "10.248.133.132",
+    "webLink": "https://10.248.133.132/api/login?NortxeSession=r.kodxdDkWx3nGE7Vr4si2qSPQ.a&redirect=https://10.248.133.132/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 485,
+    "macAddress": "00-05-A6-28-CC-12",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS244"
+    ]
+  },
+  {
+    "roomName": "BSS 245",
+    "ipAddress": "10.248.133.140",
+    "webLink": "https://10.248.133.140/api/login?NortxeSession=r.Q8Derr73ezUIxzywg2B5yxOi.b&redirect=https://10.248.133.140/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 483,
+    "macAddress": "00-05-A6-28-87-7C",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS245"
+    ]
+  },
+  {
+    "roomName": "BSS 246",
+    "ipAddress": "10.248.133.147",
+    "webLink": "https://10.248.133.147/api/login?NortxeSession=r.oSzTVbNz6sHBHSIR7otxcTaM.a&redirect=https://10.248.133.147/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 500,
+    "macAddress": "00-05-A6-27-E4-76",
+    "touchPanelIp": "10.248.133.150",
+    "pcNames": []
+  },
+  {
+    "roomName": "BSS 247",
+    "ipAddress": "10.248.133.153",
+    "webLink": "https://10.248.133.153/api/login?NortxeSession=r.8BZBEEE44F8QozTEX4PZi8nM.b&redirect=https://10.248.133.153/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 487,
+    "macAddress": "00-05-A6-26-97-BC",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS247"
+    ]
+  },
+  {
+    "roomName": "BSS 248",
+    "ipAddress": "",
+    "webLink": "",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 484,
+    "macAddress": "00-05-A6-28-87-AA",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS248"
+    ]
+  },
+  {
+    "roomName": "BSS 249",
+    "ipAddress": "10.248.133.175",
+    "webLink": "https://10.248.133.175/api/login?NortxeSession=r.6NywV8TXcovV18qgHWHAptEU.a&redirect=https://10.248.133.175/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 486,
+    "macAddress": "00-05-A6-27-AB-01",
+    "touchPanelIp": "10.248.129.196",
+    "pcNames": [
+      "SC-BSS249"
+    ]
+  },
+  {
+    "roomName": "BSS 251",
+    "ipAddress": "10.248.133.187",
+    "webLink": "https://10.248.133.187/api/login?NortxeSession=r.cZzgxQNbXf4J1vEydDNgYxPM.b&redirect=https://10.248.133.187/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 488,
+    "macAddress": "00-05-A6-28-87-D0",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS251"
+    ]
+  },
+  {
+    "roomName": "BSS 258",
+    "ipAddress": "10.248.133.196",
+    "webLink": "https://10.248.133.196/api/login?NortxeSession=r.GMWx3UZOwQPFBAtoCfsJkbbI.b&redirect=https://10.248.133.196/web/vtlp/ui/index.html#/main",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 498,
+    "macAddress": "00-05-A6-27-E5-42",
+    "touchPanelIp": "10.248.133.199",
+    "pcNames": [
+      "SC-BSS258"
+    ]
+  },
+  {
+    "roomName": "BSS 259",
+    "ipAddress": "10.248.133.200",
+    "webLink": "https://10.248.133.200/api/login?NortxeSession=r.kLw20AkpPrm0riV6c4NfuLgN.b&redirect=https://10.248.133.200/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 497,
+    "macAddress": "00-05-A6-27-E4-CF",
+    "touchPanelIp": "10.248.133.203",
+    "pcNames": [
+      "SC-BSS259"
+    ]
+  },
+  {
+    "roomName": "BSS 261",
+    "ipAddress": "10.248.133.206",
+    "webLink": "https://10.248.133.206/api/login?NortxeSession=r.xJKAjuxabwWoXDhTmZQgeIen.a&redirect=https://10.248.133.206/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 473,
+    "macAddress": "00-05-A6-26-98-7A",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS261"
+    ]
+  },
+  {
+    "roomName": "BSS 333",
+    "ipAddress": "10.248.133.217",
+    "webLink": "https://10.248.133.217/api/login?NortxeSession=r.Wdw80hzYPLWKUBOMpW1z9ryf.a&redirect=https://10.248.133.217/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 470,
+    "macAddress": "00-05-A6-26-98-4E",
+    "touchPanelIp": "10.248.132.135",
+    "pcNames": [
+      "SC-BSS333"
+    ]
+  },
+  {
+    "roomName": "BSS 356",
+    "ipAddress": "10.248.133.228",
+    "webLink": "https://10.248.133.228/api/login?NortxeSession=r.tiu6Is4mnAH3VagEkBXU9KoO.b&redirect=https://10.248.133.228/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 466,
+    "macAddress": "00-05-A6-28-CC-20",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS356"
+    ]
+  },
+  {
+    "roomName": "BSS 357",
+    "ipAddress": "10.248.133.236",
+    "webLink": "https://10.248.133.236/api/login?NortxeSession=r.xx68rmptzIWmFUJvEJmsT0vm.b&redirect=https://10.248.133.236/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 468,
+    "macAddress": "00-05-A6-28-87-F2",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS357"
+    ]
+  },
+  {
+    "roomName": "BSS 358",
+    "ipAddress": "10.248.133.244",
+    "webLink": "https://10.248.133.244/api/login?NortxeSession=r.X6s5fQMD7X1NMOVUO6l00s7R.b&redirect=https://10.248.133.244/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 467,
+    "macAddress": "00-05-A6-28-88-02",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS358"
+    ]
+  },
+  {
+    "roomName": "BSS 359",
+    "ipAddress": "10.248.133.254",
+    "webLink": "https://10.248.133.254/api/login?NortxeSession=r.ykJ9203NWoTpfrH6heNWYhip.c&redirect=https://10.248.133.254/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 492,
+    "macAddress": "00-05-A6-28-88-1C",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS359"
+    ]
+  },
+  {
+    "roomName": "BSS 365",
+    "ipAddress": "10.248.134.8",
+    "webLink": "https://10.248.134.8/api/login?NortxeSession=r.aqhenAgEKHyHesjwI6tL9YAA.b&redirect=https://10.248.134.8/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 462,
+    "macAddress": "00-05-A6-28-87-8E",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BSS365"
+    ]
+  },
+  {
+    "roomName": "BSS 371",
+    "ipAddress": "10.248.134.19",
+    "webLink": "https://10.248.134.19/api/login?NortxeSession=r.eMbMwCxC5fohIcB7uZxPWO0X.b&redirect=https://10.248.134.19/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 501,
+    "macAddress": "00-05-A6-27-E4-79",
+    "touchPanelIp": "10.248.134.21",
+    "pcNames": [
+      "SC-BSS371"
+    ]
+  },
+  {
+    "roomName": "BSS 372",
+    "ipAddress": "10.248.134.15",
+    "webLink": "https://10.248.134.15/api/login?NortxeSession=r.jWm1Yi8Xnglp5dVnizBcB9Xh.b&redirect=https://10.248.134.15/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 502,
+    "macAddress": "00-05-A6-27-E5-84",
+    "touchPanelIp": "10.248.134.17",
+    "pcNames": []
+  },
+  {
+    "roomName": "BSS 375",
+    "ipAddress": "10.248.134.24",
+    "webLink": "https://10.248.134.24/api/login?NortxeSession=r.ZFkHnldsUGQYxChlflMqMthV.c&redirect=https://10.248.134.24/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 479,
+    "macAddress": "00-05-A6-28-7B-BC",
+    "touchPanelIp": "10.248.134.27",
+    "pcNames": [
+      "SC-BSS375"
+    ]
+  },
+  {
+    "roomName": "BUTE 101",
+    "ipAddress": "10.248.131.3",
+    "webLink": "https://10.248.131.3/api/login?NortxeSession=r.GfGRS3GGdHnfjRsTHXXNjfJD.k&redirect=https://10.248.131.3/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 383,
+    "macAddress": "00-05-A6-1D-73-70",
+    "touchPanelIp": "10.248.131.70",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 102",
+    "ipAddress": "10.248.131.195",
+    "webLink": "https://10.248.131.195/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 30,
+    "macAddress": "00-05-A6-18-71-11",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 103",
+    "ipAddress": "10.248.131.4",
+    "webLink": "https://10.248.131.4/api/login?NortxeSession=r.0PcJgonzMRye59RG0qEhAX7c.e&redirect=https://10.248.131.4/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 384,
+    "macAddress": "00-05-A6-1D-AF-B9",
+    "touchPanelIp": "10.248.131.71",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 104",
+    "ipAddress": "10.248.131.196",
+    "webLink": "https://10.248.131.196/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 335,
+    "macAddress": "00-05-A6-19-BE-05",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 109",
+    "ipAddress": "10.248.131.5",
+    "webLink": "https://10.248.131.5/api/login?NortxeSession=r.zt75U4KceQUdvov4Kz6qYwFQ.g&redirect=https://10.248.131.5/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 385,
+    "macAddress": "00-05-A6-1D-73-EE",
+    "touchPanelIp": "10.248.131.72",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 113",
+    "ipAddress": "10.248.129.158",
+    "webLink": "https://10.248.129.158/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 471,
+    "macAddress": "00-05-A6-11-AA-75",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 201",
+    "ipAddress": "10.248.131.6",
+    "webLink": "https://10.248.131.6/api/login?NortxeSession=r.rbmwhxibYDLFi7h88ELwBcJd.d&redirect=https://10.248.131.6/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 386,
+    "macAddress": "00-05-A6-1D-AF-97",
+    "touchPanelIp": "10.248.131.73",
+    "pcNames": [
+      "SC-BUTE201"
+    ]
+  },
+  {
+    "roomName": "BUTE 203",
+    "ipAddress": "10.248.128.20",
+    "webLink": "http://10.248.128.20/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 42,
+    "macAddress": "00-05-A6-03-EB-AB",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE203"
+    ]
+  },
+  {
+    "roomName": "BUTE 205",
+    "ipAddress": "10.248.128.21",
+    "webLink": "https://10.248.128.21/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 40,
+    "macAddress": "00-05-A6-01-87-5A",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 209",
+    "ipAddress": "10.248.128.140",
+    "webLink": "https://10.248.128.140/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 37,
+    "macAddress": "00-05-A6-14-EC-F2",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE209"
+    ]
+  },
+  {
+    "roomName": "BUTE 211",
+    "ipAddress": "10.248.129.61",
+    "webLink": "https://10.248.129.61/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 38,
+    "macAddress": "00-05-A6-11-AA-50",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 219",
+    "ipAddress": "10.248.131.199",
+    "webLink": "https://10.248.131.199/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 34,
+    "macAddress": "00-05-A6-14-EC-BB",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE219"
+    ]
+  },
+  {
+    "roomName": "BUTE 221",
+    "ipAddress": "10.248.131.7",
+    "webLink": "https://10.248.131.7/api/login?NortxeSession=r.Qkm7uUeh1E3iAopexschsJO3.a&redirect=https://10.248.131.7/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 389,
+    "macAddress": "00-05-A6-1D-73-E7",
+    "touchPanelIp": "10.248.131.74",
+    "pcNames": [
+      "SC-BUTE221"
+    ]
+  },
+  {
+    "roomName": "BUTE 223",
+    "ipAddress": "10.248.128.199",
+    "webLink": "https://10.248.128.199/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 43,
+    "macAddress": "00-05-A6-07-8F-36",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE223"
+    ]
+  },
+  {
+    "roomName": "BUTE 225",
+    "ipAddress": "10.248.128.201",
+    "webLink": "https://10.248.128.201/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 44,
+    "macAddress": "00-05-A6-07-91-AF",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 227",
+    "ipAddress": "10.248.128.146",
+    "webLink": "https://10.248.128.146/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 48,
+    "macAddress": "00-05-A6-14-EC-EA",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 229",
+    "ipAddress": "10.248.129.62",
+    "webLink": "https://10.248.129.62/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 387,
+    "macAddress": "00-05-A6-1D-73-73",
+    "touchPanelIp": "10.248.131.75",
+    "pcNames": [
+      "SC-BUTE229"
+    ]
+  },
+  {
+    "roomName": "BUTE 301",
+    "ipAddress": "10.248.129.63",
+    "webLink": "https://10.248.129.63/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 50,
+    "macAddress": "00-05-A6-11-A8-AD",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE301"
+    ]
+  },
+  {
+    "roomName": "BUTE 307",
+    "ipAddress": "10.248.131.9",
+    "webLink": "https://10.248.131.9/api/login?NortxeSession=r.szxwO3wbVlbsQBzgn8xfrH9c.c&redirect=https://10.248.131.9/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 388,
+    "macAddress": "00-05-A6-1D-73-EB",
+    "touchPanelIp": "10.248.131.76",
+    "pcNames": [
+      "SC-BUTE307"
+    ]
+  },
+  {
+    "roomName": "BUTE 309",
+    "ipAddress": "10.248.128.203",
+    "webLink": "https://10.248.128.203/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 45,
+    "macAddress": "00-05-A6-07-91-C3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE309"
+    ]
+  },
+  {
+    "roomName": "BUTE 319",
+    "ipAddress": "10.248.131.203",
+    "webLink": "https://10.248.131.203/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 52,
+    "macAddress": "00-05-A6-19-BE-07",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE319"
+    ]
+  },
+  {
+    "roomName": "BUTE 321",
+    "ipAddress": "10.248.128.147",
+    "webLink": "https://10.248.128.147/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 53,
+    "macAddress": "00-05-A6-14-EC-FD",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE321"
+    ]
+  },
+  {
+    "roomName": "BUTE 323",
+    "ipAddress": "10.248.131.10",
+    "webLink": "https://10.248.131.10/api/login?NortxeSession=r.VRfOnNXT2ydPdzD4veXQxKvh.a&redirect=https://10.248.131.10/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 390,
+    "macAddress": "00-05-A6-1D-AF-E9",
+    "touchPanelIp": "10.248.131.77",
+    "pcNames": [
+      "SC-BUTE323"
+    ]
+  },
+  {
+    "roomName": "BUTE 325",
+    "ipAddress": "10.248.128.205",
+    "webLink": "https://10.248.128.205/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 46,
+    "macAddress": "00-05-A6-07-95-FE",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 327",
+    "ipAddress": "10.248.128.151",
+    "webLink": "https://10.248.128.151/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 55,
+    "macAddress": "00-05-A6-14-ED-04",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE327"
+    ]
+  },
+  {
+    "roomName": "BUTE 329",
+    "ipAddress": "10.248.128.153",
+    "webLink": "https://10.248.128.153/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 56,
+    "macAddress": "00-05-A6-14-ED-03",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-BUTE329"
+    ]
+  },
+  {
+    "roomName": "BUTE 503",
+    "ipAddress": "10.248.128.32",
+    "webLink": "https://10.248.128.32/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 41,
+    "macAddress": "00-05-A6-06-87-7E",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "BUTE 505",
+    "ipAddress": "10.248.131.11",
+    "webLink": "https://10.248.131.11/api/login?NortxeSession=r.HL8wBQwhsZ7PCrzppztqrQuh.c&redirect=https://10.248.131.11/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 391,
+    "macAddress": "00-05-A6-1D-AF-94",
+    "touchPanelIp": "10.248.131.78",
+    "pcNames": [
+      "SC-BUTE505"
+    ]
+  },
+  {
+    "roomName": "BUTE 601",
+    "ipAddress": "10.248.128.173",
+    "webLink": "https://10.248.128.173/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 47,
+    "macAddress": "00-05-A6-06-60-E4",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-BUTE601"
+    ]
+  },
+  {
+    "roomName": "CLSA 100A",
+    "ipAddress": "10.248.129.128",
+    "webLink": "https://10.248.129.128/web/vtlp/ca441afd-92da-4a52-8824-c82b8eb4ced1/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 58,
+    "subRoomId": 12,
+    "macAddress": "00-05-A6-1A-AA-FF",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-CLSA100A"
+    ]
+  },
+  {
+    "roomName": "CLSA 100B",
+    "ipAddress": "10.248.129.128",
+    "webLink": "https://10.248.129.128/web/vtlp/ca441afd-92da-4a52-8824-c82b8eb4ced1/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 58,
+    "subRoomId": 13,
+    "macAddress": "00-05-A6-1A-AA-FF",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-CLSA100B"
+    ]
+  },
+  {
+    "roomName": "FAEC 111",
+    "ipAddress": "10.248.134.86",
+    "webLink": "https://10.248.134.86/api/login?NortxeSession=r.ECac5BuT6BvhLk0NTYxusBTU.o&redirect=https://10.248.134.86/web/vtlp/ui111/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 515,
+    "subRoomId": 1,
+    "macAddress": "00-05-A6-2D-A8-B3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-FALC111",
+      "SC-FALC116"
+    ]
+  },
+  {
+    "roomName": "FAEC 112",
+    "ipAddress": "10.248.134.86",
+    "webLink": "https://10.248.134.86/api/login?NortxeSession=r.ECac5BuT6BvhLk0NTYxusBTU.o&redirect=https://10.248.134.86/web/vtlp/ui112/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 515,
+    "subRoomId": 2,
+    "macAddress": "00-05-A6-2D-A8-B3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-FALC112",
+      "SC-FALC116"
+    ]
+  },
+  {
+    "roomName": "FAEC 113",
+    "ipAddress": "10.248.134.86",
+    "webLink": "https://10.248.134.86/api/login?NortxeSession=r.ECac5BuT6BvhLk0NTYxusBTU.o&redirect=https://10.248.134.86/web/vtlp/ui113/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 515,
+    "subRoomId": 3,
+    "macAddress": "00-05-A6-2D-A8-B3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-FALC113",
+      "SC-FALC116"
+    ]
+  },
+  {
+    "roomName": "FAEC 114",
+    "ipAddress": "10.248.134.86",
+    "webLink": "https://10.248.134.86/api/login?NortxeSession=r.ECac5BuT6BvhLk0NTYxusBTU.o&redirect=https://10.248.134.86/web/vtlp/ui114/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 515,
+    "subRoomId": 4,
+    "macAddress": "00-05-A6-2D-A8-B3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-FALC114",
+      "SC-FALC116"
+    ]
+  },
+  {
+    "roomName": "FAEC 117",
+    "ipAddress": "10.248.134.86",
+    "webLink": "https://10.248.134.86/api/login?NortxeSession=r.ECac5BuT6BvhLk0NTYxusBTU.o&redirect=https://10.248.134.86/web/vtlp/ui117/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 515,
+    "subRoomId": 5,
+    "macAddress": "00-05-A6-2D-A8-B3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-FALC117",
+      "SC-FALC116"
+    ]
+  },
+  {
+    "roomName": "FAMC 006",
+    "ipAddress": "10.248.129.1",
+    "webLink": "http://10.248.129.1/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 68,
+    "macAddress": "00-05-A6-0D-F8-D3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-FAMC106",
+      "SC-FAMC006"
+    ]
+  },
+  {
+    "roomName": "FAMC 007",
+    "ipAddress": "10.248.129.0",
+    "webLink": "https://10.248.129.0/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 69,
+    "macAddress": "00-05-A6-0D-F6-F3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-FAMC107"
+    ]
+  },
+  {
+    "roomName": "FAMC 101",
+    "ipAddress": "10.248.131.14",
+    "webLink": "https://10.248.131.14/api/login?NortxeSession=r.7pjdSeG5AF1aIPPimCMlDdb8.d&redirect=https://10.248.131.14/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 392,
+    "macAddress": "00-05-A6-1D-AF-BE",
+    "touchPanelIp": "10.248.135.161",
+    "pcNames": [
+      "SC-FAMC101"
+    ]
+  },
+  {
+    "roomName": "FAMC 102",
+    "ipAddress": "10.248.131.12",
+    "webLink": "https://10.248.131.12/api/login?NortxeSession=r.pqT1VN2ooyfjdO5AnqUu47Uf.a&redirect=https://10.248.131.12/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 393,
+    "macAddress": "00-05-A6-1D-73-E1",
+    "touchPanelIp": "10.248.131.79",
+    "pcNames": [
+      "SC-FAMC102"
+    ]
+  },
+  {
+    "roomName": "FAMC 103",
+    "ipAddress": "10.248.131.13",
+    "webLink": "https://10.248.131.13/api/login?NortxeSession=r.14VIhlbBGUhWw8oFuFTFGA7t.a&redirect=https://10.248.131.13/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 394,
+    "macAddress": "00-05-A6-1D-73-7F",
+    "touchPanelIp": "10.248.131.80",
+    "pcNames": [
+      "SC-FAMC103"
+    ]
+  },
+  {
+    "roomName": "GLNN 102",
+    "ipAddress": "10.248.131.15",
+    "webLink": "https://10.248.131.15/api/login?NortxeSession=r.3pUXK1iIhvXqWlLs1D7SQgcu.b&redirect=https://10.248.131.15/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 343,
+    "macAddress": "00-05-A6-1D-73-49",
+    "touchPanelIp": "10.248.131.82",
+    "pcNames": [
+      "SC-GLNN102"
+    ]
+  },
+  {
+    "roomName": "GLNN 112",
+    "ipAddress": "10.248.132.81",
+    "webLink": "https://10.248.132.81/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 304,
+    "macAddress": "00-05-A6-1B-02-85",
+    "touchPanelIp": "10.248.132.68",
+    "pcNames": [
+      "SC-GLNN112"
+    ]
+  },
+  {
+    "roomName": "GLNN 123",
+    "ipAddress": "10.248.131.16",
+    "webLink": "https://10.248.131.16/api/login?NortxeSession=r.s6Q5ncqy3cWUc6ARhUiZkrXB.b&redirect=https://10.248.131.16/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 344,
+    "macAddress": "00-05-A6-1D-AF-E7",
+    "touchPanelIp": "10.248.131.83",
+    "pcNames": [
+      "SC-GLNN123"
+    ]
+  },
+  {
+    "roomName": "GLNN 125",
+    "ipAddress": "10.248.131.17",
+    "webLink": "https://10.248.131.17/api/login?NortxeSession=r.8vf7QmRe78JDe0ps72O2esR4.b&redirect=https://10.248.131.17/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 345,
+    "macAddress": "00-05-A6-1D-73-5F",
+    "touchPanelIp": "10.248.131.84",
+    "pcNames": [
+      "SC-GLNN125"
+    ]
+  },
+  {
+    "roomName": "GLNN 210",
+    "ipAddress": "10.248.129.160",
+    "webLink": "https://10.248.129.160/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 73,
+    "macAddress": "00-05-A6-11-AA-6E",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-GLNN210"
+    ]
+  },
+  {
+    "roomName": "GLNN 212",
+    "ipAddress": "10.248.131.18",
+    "webLink": "https://10.248.131.18/api/login?NortxeSession=r.empT1nUYZ69PsBtFUUFBEr6d.b&redirect=https://10.248.131.18/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 346,
+    "macAddress": "00-05-A6-1D-AF-ED",
+    "touchPanelIp": "10.248.131.85",
+    "pcNames": [
+      "SC-GLNN212"
+    ]
+  },
+  {
+    "roomName": "GLNN 214",
+    "ipAddress": "10.248.131.19",
+    "webLink": "https://10.248.131.19/api/login?NortxeSession=r.WnX29XnIwSWAu0gMhBeH2CuY.b&redirect=https://10.248.131.19/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 355,
+    "macAddress": "00-05-A6-1D-73-27",
+    "touchPanelIp": "10.248.131.86",
+    "pcNames": [
+      "SC-GLNN214"
+    ]
+  },
+  {
+    "roomName": "GLNN 216",
+    "ipAddress": "10.248.131.20",
+    "webLink": "https://10.248.131.20/api/login?NortxeSession=r.4U8fkTez6ezEBkbcbef6bo7K.g&redirect=https://10.248.131.20/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 347,
+    "macAddress": "00-05-A6-1E-3E-DE",
+    "touchPanelIp": "10.248.131.87",
+    "pcNames": [
+      "SC-GLNN216"
+    ]
+  },
+  {
+    "roomName": "GLNN 223",
+    "ipAddress": "10.248.128.92",
+    "webLink": "https://10.248.128.92/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 77,
+    "macAddress": "00-05-A6-14-EC-F4",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-GLNN223"
+    ]
+  },
+  {
+    "roomName": "GLNN 225",
+    "ipAddress": "10.248.131.21",
+    "webLink": "https://10.248.131.21/api/login?NortxeSession=r.XEReNngMOzJnSYhmuB9PPGyW.b&redirect=https://10.248.131.21/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 348,
+    "macAddress": "00-05-A6-1D-73-65",
+    "touchPanelIp": "10.248.131.88",
+    "pcNames": [
+      "SC-GLNN225"
+    ]
+  },
+  {
+    "roomName": "GLNN 302",
+    "ipAddress": "10.248.131.22",
+    "webLink": "https://10.248.131.22/api/login?NortxeSession=r.ZpPnexndzMDUwdoXp28ux9t5.b&redirect=https://10.248.131.22/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 354,
+    "macAddress": "00-05-A6-1D-73-43",
+    "touchPanelIp": "10.248.131.89",
+    "pcNames": [
+      "SC-GLNN302"
+    ]
+  },
+  {
+    "roomName": "GLNN 304",
+    "ipAddress": "10.248.131.23",
+    "webLink": "https://10.248.131.23/api/login?NortxeSession=r.4VdM7Yt83WPFSlSSMwtaB8IX.b&redirect=https://10.248.131.23/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 353,
+    "macAddress": "00-05-A6-1D-73-6A",
+    "touchPanelIp": "10.248.131.90",
+    "pcNames": [
+      "SC-GLNN304"
+    ]
+  },
+  {
+    "roomName": "GLNN 306",
+    "ipAddress": "10.248.128.76",
+    "webLink": "https://10.248.128.76/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 352,
+    "macAddress": "00-05-A6-1D-73-64",
+    "touchPanelIp": "10.248.128.76",
+    "pcNames": [
+      "SC-GLNN306"
+    ]
+  },
+  {
+    "roomName": "GLNN 308",
+    "ipAddress": "10.248.128.73",
+    "webLink": "https://10.248.128.73/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 472,
+    "macAddress": "00-05-A6-14-EC-FF",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-GLNN308"
+    ]
+  },
+  {
+    "roomName": "GLNN 310",
+    "ipAddress": "10.248.131.24",
+    "webLink": "https://10.248.131.24/api/login?NortxeSession=r.86Ej3aKjGdi83Oxx6DmA9mFV.b&redirect=https://10.248.131.24/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 351,
+    "macAddress": "00-05-A6-1E-3E-97",
+    "touchPanelIp": "10.248.131.91",
+    "pcNames": [
+      "SC-GLNN310"
+    ]
+  },
+  {
+    "roomName": "GLNN 312",
+    "ipAddress": "10.248.131.25",
+    "webLink": "https://10.248.131.25/api/login?NortxeSession=r.2WvVxszifEcsXpKWguLV9ZfY.b&redirect=https://10.248.131.25/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 350,
+    "macAddress": "00-05-A6-1D-73-31",
+    "touchPanelIp": "10.248.131.92",
+    "pcNames": [
+      "SC-GLNN312"
+    ]
+  },
+  {
+    "roomName": "GLNN 314",
+    "ipAddress": "10.248.131.26",
+    "webLink": "https://10.248.131.26/api/login?NortxeSession=r.pBV9esGb39SjbEYKgUT9bisT.j&redirect=https://10.248.131.26/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 342,
+    "macAddress": "00-05-A6-1D-73-21",
+    "touchPanelIp": "10.248.131.93",
+    "pcNames": [
+      "SC-GLNN314"
+    ]
+  },
+  {
+    "roomName": "GLNN 327",
+    "ipAddress": "10.248.131.27",
+    "webLink": "https://10.248.131.27/api/login?NortxeSession=r.080qqGcKfvz5QJ13VPgHxETE.b&redirect=https://10.248.131.27/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 349,
+    "macAddress": "00-05-A6-1E-3E-B3",
+    "touchPanelIp": "10.248.131.94",
+    "pcNames": [
+      "SC-GLNN327"
+    ]
+  },
+  {
+    "roomName": "GSCI 109",
+    "ipAddress": "10.248.132.37",
+    "webLink": "https://10.248.132.37/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 375,
+    "macAddress": "00-05-A6-25-DA-B0",
+    "touchPanelIp": "10.248.132.85",
+    "pcNames": []
+  },
+  {
+    "roomName": "HOLT 111",
+    "ipAddress": "10.248.128.27",
+    "webLink": "https://10.248.128.27/api/login?NortxeSession=r.d84TrjFunSHOFavS0lFbYTpV.a&redirect=https://10.248.128.27/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 396,
+    "macAddress": "00-05-A6-1E-3E-99",
+    "touchPanelIp": "10.248.128.16",
+    "pcNames": [
+      "SC-HOLT111"
+    ]
+  },
+  {
+    "roomName": "HOLT 113",
+    "ipAddress": "10.248.128.37",
+    "webLink": "https://10.248.128.37/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 88,
+    "macAddress": "00-05-A6-14-EC-E6",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-HOLT113"
+    ]
+  },
+  {
+    "roomName": "HOLT 155",
+    "ipAddress": "10.248.131.172",
+    "webLink": "https://10.248.131.172/api/login?NortxeSession=r.hR8QYtfBCDlNfLdm0GVke10r.h&redirect=https://10.248.131.172/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 448,
+    "macAddress": "00-05-A6-1D-DD-66",
+    "touchPanelIp": "10.248.131.173",
+    "pcNames": [
+      "SC-HOLT155"
+    ]
+  },
+  {
+    "roomName": "HOLT 170",
+    "ipAddress": "10.248.131.29",
+    "webLink": "https://10.248.131.29/api/login?NortxeSession=r.Pge94LLlInE8EYZBuG6Lvn2d.b&redirect=https://10.248.131.29/web/vtlp/ui/index.html#/main",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 442,
+    "macAddress": "00-05-A6-24-7D-72",
+    "touchPanelIp": "10.248.131.96",
+    "pcNames": [
+      "SC-HOLT170"
+    ]
+  },
+  {
+    "roomName": "HOLT 171",
+    "ipAddress": "10.248.129.56",
+    "webLink": "https://10.248.129.56/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 522,
+    "macAddress": "00-05-A6-22-F0-2F",
+    "touchPanelIp": "10.248.129.55",
+    "pcNames": [
+      "SC-HOLT171"
+    ]
+  },
+  {
+    "roomName": "HOLT 173",
+    "ipAddress": "10.248.129.163",
+    "webLink": "https://10.248.129.163/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 94,
+    "macAddress": "00-05-A6-11-A9-E3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-HOLT173"
+    ]
+  },
+  {
+    "roomName": "HOLT 175",
+    "ipAddress": "10.248.129.54",
+    "webLink": "https://10.248.129.54/web/vtlp/93dabc07-f72b-4364-8fc2-280e275566fb/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 95,
+    "macAddress": "00-05-A6-0C-E0-DD",
+    "touchPanelIp": "10.248.129.53",
+    "pcNames": [
+      "SC-HOLT175"
+    ]
+  },
+  {
+    "roomName": "HOLT 185",
+    "ipAddress": "10.248.130.232",
+    "webLink": "https://10.248.130.232/api/login?NortxeSession=r.wLWE8akP7C4RLK6pgkB010jf.a&redirect=https://10.248.130.232/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 397,
+    "macAddress": "00-05-A6-1D-73-F3",
+    "touchPanelIp": "10.248.130.233",
+    "pcNames": [
+      "SC-HOLT185"
+    ]
+  },
+  {
+    "roomName": "HOLT 187",
+    "ipAddress": "10.248.131.31",
+    "webLink": "https://10.248.131.31/api/login?NortxeSession=r.FopXzzvIjQgfyYVrlJDEPhGX.a&redirect=https://10.248.131.31/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 399,
+    "macAddress": "00-05-A6-1D-73-E4",
+    "touchPanelIp": "10.248.131.98",
+    "pcNames": [
+      "SC-HOLT187"
+    ]
+  },
+  {
+    "roomName": "HOLT 257",
+    "ipAddress": "10.248.131.32",
+    "webLink": "https://10.248.131.32/api/login?NortxeSession=r.nKA2jHhDZ7G18mBYzvNmD5fp.g&redirect=https://10.248.131.32/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 400,
+    "macAddress": "00-05-A6-1D-DD-8C",
+    "touchPanelIp": "10.248.131.99",
+    "pcNames": [
+      "SC-HOLT257"
+    ]
+  },
+  {
+    "roomName": "HOLT 261",
+    "ipAddress": "10.248.132.97",
+    "webLink": "https://10.248.132.97/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 294,
+    "macAddress": "00-05-A6-22-EF-EB",
+    "touchPanelIp": "10.248.132.51",
+    "pcNames": [
+      "SC-HOLT261"
+    ]
+  },
+  {
+    "roomName": "HOLT 266",
+    "ipAddress": "10.248.129.189",
+    "webLink": "https://10.248.129.189/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 99,
+    "macAddress": "00-05-A6-14-EC-EB",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-HOLT266"
+    ]
+  },
+  {
+    "roomName": "HOLT 268",
+    "ipAddress": "10.248.128.52",
+    "webLink": "https://10.248.128.52/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 91,
+    "macAddress": "00-05-A6-00-6D-95",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-HOLT268"
+    ]
+  },
+  {
+    "roomName": "HOLT 277",
+    "ipAddress": "10.248.130.234",
+    "webLink": "https://10.248.130.234/api/login?NortxeSession=r.GKgGKwBDF797KvFtefb0jLqd.b&redirect=https://10.248.130.234/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 401,
+    "macAddress": "00-05-A6-1D-73-55",
+    "touchPanelIp": "10.248.130.235",
+    "pcNames": [
+      "SC-HOLT277"
+    ]
+  },
+  {
+    "roomName": "HOLT 291",
+    "ipAddress": "10.248.130.236",
+    "webLink": "https://10.248.130.236/api/login?NortxeSession=r.tuSbwdytCidw62fEnhdTQWnY.a&redirect=https://10.248.130.236/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 402,
+    "macAddress": "00-05-A6-1D-73-E9",
+    "touchPanelIp": "10.248.130.237",
+    "pcNames": [
+      "SC-HOLT291"
+    ]
+  },
+  {
+    "roomName": "HOLT 307",
+    "ipAddress": "10.248.132.90",
+    "webLink": "https://10.248.132.90/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 324,
+    "macAddress": "00-05-A6-22-F0-6D",
+    "touchPanelIp": "10.248.132.52",
+    "pcNames": [
+      "SC-HOLT307"
+    ]
+  },
+  {
+    "roomName": "HOLT 329",
+    "ipAddress": "10.248.132.33",
+    "webLink": "https://10.248.132.33/api/login?NortxeSession=r.eP1ETs0EZU7qQWoRxZU8GOVQ.a&redirect=https://10.248.132.33/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 450,
+    "macAddress": "00-05-A6-0B-49-47",
+    "touchPanelIp": "10.248.132.53",
+    "pcNames": [
+      "SC-HOLT329"
+    ]
+  },
+  {
+    "roomName": "HOLT 337",
+    "ipAddress": "10.248.132.29",
+    "webLink": "https://10.248.132.29/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 297,
+    "macAddress": "00-05-A6-1D-DD-5E",
+    "touchPanelIp": "10.248.132.54",
+    "pcNames": [
+      "SC-HOLT337"
+    ]
+  },
+  {
+    "roomName": "HOLT 350",
+    "ipAddress": "10.248.128.167",
+    "webLink": "https://10.248.128.167/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 102,
+    "macAddress": "00-05-A6-11-0E-A3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-HOLT350"
+    ]
+  },
+  {
+    "roomName": "HOLT 352",
+    "ipAddress": "10.248.131.210",
+    "webLink": "https://10.248.131.210/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 328,
+    "macAddress": "00-05-A6-19-BE-18",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-HOLT352"
+    ]
+  },
+  {
+    "roomName": "HOLT 357",
+    "ipAddress": "10.248.131.174",
+    "webLink": "https://10.248.131.174/web/vtlp/9dcd80a7-fca6-46dd-8a27-0941c7c77577/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 285,
+    "macAddress": "00-05-A6-1D-DD-60",
+    "touchPanelIp": "10.248.131.175",
+    "pcNames": [
+      "SC-HOLT357"
+    ]
+  },
+  {
+    "roomName": "HOLT 363",
+    "ipAddress": "10.248.131.169",
+    "webLink": "https://10.248.131.169/web/vtlp/9dcd80a7-fca6-46dd-8a27-0941c7c77577/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 104,
+    "macAddress": "00-05-A6-18-66-11",
+    "touchPanelIp": "10.248.131.170",
+    "pcNames": [
+      "SC-HOLT363"
+    ]
+  },
+  {
+    "roomName": "KNDL 103",
+    "ipAddress": "10.248.129.130",
+    "webLink": "https://10.248.129.130/web/vtlp/2f8b32e2-26e7-448e-833c-2f9c6c5c196e/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 332,
+    "macAddress": "00-05-A6-18-65-BA",
+    "touchPanelIp": "10.248.129.129",
+    "pcNames": []
+  },
+  {
+    "roomName": "KNDL 105B",
+    "ipAddress": "10.248.128.232",
+    "webLink": "https://10.248.128.232/web/vtlp/560a41cc-469a-46e7-9159-8094cfbecf26/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 107,
+    "macAddress": "00-05-A6-10-29-F7",
+    "touchPanelIp": "10.248.128.210",
+    "pcNames": [
+      "CONF-KNDL105B"
+    ]
+  },
+  {
+    "roomName": "KNDL 106C",
+    "ipAddress": "10.248.128.215",
+    "webLink": "http://10.248.128.215/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 105,
+    "macAddress": "00-05-A6-08-1E-EC",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "KNDL 207",
+    "ipAddress": "10.248.128.104",
+    "webLink": "https://10.248.128.104/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 302,
+    "macAddress": "00-05-A6-13-F5-9E",
+    "touchPanelIp": "10.248.132.55",
+    "pcNames": [
+      "CONF-KNDL207"
+    ]
+  },
+  {
+    "roomName": "KONK 70",
+    "ipAddress": "10.248.128.57",
+    "webLink": "http://10.248.128.57/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 109,
+    "macAddress": "00-05-A6-01-5C-6A",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "LANG 104",
+    "ipAddress": "10.248.131.35",
+    "webLink": "https://10.248.131.35/api/login?NortxeSession=r.Z0FOj8i1vudypBoKhh2CCXe9.a&redirect=https://10.248.131.35/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 361,
+    "macAddress": "00-05-A6-1D-AF-A8",
+    "touchPanelIp": "10.248.131.101",
+    "pcNames": [
+      "SC-LANG104"
+    ]
+  },
+  {
+    "roomName": "LANG 105",
+    "ipAddress": "10.248.131.36",
+    "webLink": "https://10.248.131.36/api/login?NortxeSession=r.4NswXF5XToBFm4l6F0tscke0.a&redirect=https://10.248.131.36/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 362,
+    "macAddress": "00-05-A6-1D-73-E6",
+    "touchPanelIp": "10.248.131.102",
+    "pcNames": [
+      "SC-LANG105"
+    ]
+  },
+  {
+    "roomName": "LANG 106",
+    "ipAddress": "10.248.131.37",
+    "webLink": "https://10.248.131.37/api/login?NortxeSession=r.rhFRmwldPcedCYwGJqUdkXuw.b&redirect=https://10.248.131.37/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 363,
+    "macAddress": "00-05-A6-1D-AF-A0",
+    "touchPanelIp": "10.248.131.103",
+    "pcNames": [
+      "SC-LANG106"
+    ]
+  },
+  {
+    "roomName": "LANG 107",
+    "ipAddress": "10.248.131.38",
+    "webLink": "https://10.248.131.38/api/login?NortxeSession=r.M5SnUUFiiXpydiSdhBHsKymy.a&redirect=https://10.248.131.38/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 364,
+    "macAddress": "00-05-A6-1D-73-4C",
+    "touchPanelIp": "10.248.131.104",
+    "pcNames": [
+      "SC-LANG107"
+    ]
+  },
+  {
+    "roomName": "LANG 117A",
+    "ipAddress": "10.248.128.18",
+    "webLink": "https://10.248.128.18/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 113,
+    "macAddress": "00-05-A6-15-35-70",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-LANG117A"
+    ]
+  },
+  {
+    "roomName": "LANG 119B",
+    "ipAddress": "10.248.129.82",
+    "webLink": "https://10.248.129.82/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 114,
+    "macAddress": "00-05-A6-11-AA-51",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-LANG119B"
+    ]
+  },
+  {
+    "roomName": "LANG 200",
+    "ipAddress": "10.248.131.239",
+    "webLink": "https://10.248.131.239/api/login?NortxeSession=r.iHhPnz639UxEk8WqdJVubYAd.i&redirect=https://10.248.131.239/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 366,
+    "macAddress": "00-05-A6-13-AA-2D",
+    "touchPanelIp": "10.248.131.240",
+    "pcNames": [
+      "SC-LANG200"
+    ]
+  },
+  {
+    "roomName": "LANG 204",
+    "ipAddress": "10.248.132.72",
+    "webLink": "https://10.248.132.72/api/login?NortxeSession=r.il4LJhUZ1b0O3xOMIz4r5Eul.b&redirect=https://10.248.132.72/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 447,
+    "macAddress": "00-05-A6-14-00-6B",
+    "touchPanelIp": "10.248.131.243",
+    "pcNames": [
+      "SC-LANG204"
+    ]
+  },
+  {
+    "roomName": "LANG 205",
+    "ipAddress": "10.248.132.14",
+    "webLink": "https://10.248.132.14/api/login?NortxeSession=r.zT9Ldhxx7ZEjloTqhVLAMO6Z.b&redirect=https://10.248.132.14/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 378,
+    "macAddress": "00-05-A6-25-69-B1",
+    "touchPanelIp": "10.248.130.165",
+    "pcNames": [
+      "SC-LANG205"
+    ]
+  },
+  {
+    "roomName": "LANG 300",
+    "ipAddress": "10.248.128.33",
+    "webLink": "https://10.248.128.33/web/vtlp/9dcd80a7-fca6-46dd-8a27-0941c7c77577/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 116,
+    "macAddress": "00-05-A6-13-F5-49",
+    "touchPanelIp": "10.248.128.24",
+    "pcNames": [
+      "SC-LANG300"
+    ]
+  },
+  {
+    "roomName": "LANG 302",
+    "ipAddress": "10.248.128.35",
+    "webLink": "https://10.248.128.35/web/vtlp/9dcd80a7-fca6-46dd-8a27-0941c7c77577/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 117,
+    "macAddress": "00-05-A6-13-F6-52",
+    "touchPanelIp": "10.248.128.36",
+    "pcNames": [
+      "SC-LANG302"
+    ]
+  },
+  {
+    "roomName": "LANG 303",
+    "ipAddress": "10.248.131.39",
+    "webLink": "https://10.248.131.39/api/login?NortxeSession=r.dqeuePh9xc1cXWfVLPG2ZqVM.a&redirect=https://10.248.131.39/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 403,
+    "macAddress": "00-05-A6-1D-73-37",
+    "touchPanelIp": "10.248.131.105",
+    "pcNames": [
+      "SC-LANG303"
+    ]
+  },
+  {
+    "roomName": "MLIB 027B",
+    "ipAddress": "10.248.129.114",
+    "webLink": "https://10.248.129.114/web/vtlp/962b8bf0-a36b-408e-9bd3-e51e35b4b5fc/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 119,
+    "macAddress": "00-05-A6-10-FB-A5",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-MLIB027B"
+    ]
+  },
+  {
+    "roomName": "MLIB 045",
+    "ipAddress": "10.248.128.244",
+    "webLink": "https://10.248.128.244/web/vtlp/eae9e795-80b4-49f7-bf87-4895973ad993/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 454,
+    "macAddress": "00-05-A6-0C-A3-30",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-MLIB045"
+    ]
+  },
+  {
+    "roomName": "MLIB 226",
+    "ipAddress": "10.248.129.157",
+    "webLink": "https://10.248.129.157/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 127,
+    "macAddress": "00-05-A6-1A-35-5E",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "MLIB 252",
+    "ipAddress": "10.248.129.57",
+    "webLink": "https://10.248.129.57/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 124,
+    "macAddress": "00-05-A6-0B-12-4F",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-MLIB252"
+    ]
+  },
+  {
+    "roomName": "MLIB 332",
+    "ipAddress": "10.248.128.213",
+    "webLink": "https://10.248.128.213/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 123,
+    "macAddress": "00-05-A6-07-94-AB",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-MLIB332"
+    ]
+  },
+  {
+    "roomName": "MLIB 336",
+    "ipAddress": "10.248.128.80",
+    "webLink": "https://10.248.128.80/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 121,
+    "macAddress": "00-05-A6-01-88-17",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "MODC 114",
+    "ipAddress": "10.248.130.212",
+    "webLink": "https://10.248.130.212/api/login?NortxeSession=r.YFrLh1IwwI155mHyDmc51xsM.a&redirect=https://10.248.130.212/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 404,
+    "macAddress": "00-05-A6-1D-AF-B4",
+    "touchPanelIp": "10.248.130.213",
+    "pcNames": [
+      "SC-MODC114"
+    ]
+  },
+  {
+    "roomName": "MODC 116",
+    "ipAddress": "10.248.131.218",
+    "webLink": "https://10.248.131.218/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 290,
+    "macAddress": "00-05-A6-19-BE-00",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-MODC116"
+    ]
+  },
+  {
+    "roomName": "MODC 118",
+    "ipAddress": "10.248.130.224",
+    "webLink": "https://10.248.130.224/api/login?NortxeSession=r.DodV1T5VoOXxbHZrMhcis55f.b&redirect=https://10.248.130.224/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 405,
+    "macAddress": "00-05-A6-1D-73-62",
+    "touchPanelIp": "10.248.130.225",
+    "pcNames": [
+      "SC-MODC118"
+    ]
+  },
+  {
+    "roomName": "MODC 120",
+    "ipAddress": "10.248.129.83",
+    "webLink": "https://10.248.129.83/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 406,
+    "macAddress": "00-05-A6-1E-3E-93",
+    "touchPanelIp": "10.248.130.229",
+    "pcNames": [
+      "SC-MODC120"
+    ]
+  },
+  {
+    "roomName": "MODC 123",
+    "ipAddress": "10.248.130.226",
+    "webLink": "https://10.248.130.226/api/login?NortxeSession=r.Aj8GrpBQLDDwgJAuUnFYyGMg.a&redirect=https://10.248.130.226/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 407,
+    "macAddress": "00-05-A6-1D-AF-BD",
+    "touchPanelIp": "10.248.130.227",
+    "pcNames": [
+      "SC-MODC123"
+    ]
+  },
+  {
+    "roomName": "MODC 129C",
+    "ipAddress": "10.248.129.205",
+    "webLink": "https://10.248.129.205/web/vtlp/15a79219-5863-459d-b626-2c0fce836cf5/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 135,
+    "macAddress": "00-05-A6-10-FB-B6",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "MODC 217",
+    "ipAddress": "10.248.130.217",
+    "webLink": "https://10.248.130.217/api/login?NortxeSession=r.DDFYce8ubhaWEFpB0sotSPms.a&redirect=https://10.248.130.217/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 408,
+    "macAddress": "00-05-A6-1D-AF-9A",
+    "touchPanelIp": "10.248.130.216",
+    "pcNames": [
+      "SC-MODC217"
+    ]
+  },
+  {
+    "roomName": "MODC 218",
+    "ipAddress": "10.248.130.221",
+    "webLink": "https://10.248.130.221/api/login?NortxeSession=r.lU6T59NJpgDXAETMk4wpxjV8.a&redirect=https://10.248.130.221/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 409,
+    "macAddress": "00-05-A6-1E-3E-BA",
+    "touchPanelIp": "10.248.130.220",
+    "pcNames": [
+      "SC-MODC218"
+    ]
+  },
+  {
+    "roomName": "MODC 220",
+    "ipAddress": "10.248.130.222",
+    "webLink": "https://10.248.130.222/api/login?NortxeSession=r.P4niZahrQAEhSnLKWEi6TnZt.a&redirect=https://10.248.130.222/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 410,
+    "macAddress": "00-05-A6-1D-AF-AB",
+    "touchPanelIp": "10.248.130.223",
+    "pcNames": [
+      "SC-MODC220"
+    ]
+  },
+  {
+    "roomName": "MODC 221",
+    "ipAddress": "10.248.128.89",
+    "webLink": "http://10.248.128.89/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 130,
+    "macAddress": "00-05-A6-01-9B-E9",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-MODC221"
+    ]
+  },
+  {
+    "roomName": "MODC 222",
+    "ipAddress": "10.248.130.218",
+    "webLink": "https://10.248.130.218/api/login?NortxeSession=r.VqpJ2hKn9IITceiGV42Bvybe.a&redirect=https://10.248.130.218/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 411,
+    "macAddress": "00-05-A6-1D-AF-99",
+    "touchPanelIp": "10.248.130.219",
+    "pcNames": [
+      "SC-MODC222"
+    ]
+  },
+  {
+    "roomName": "MODC 224",
+    "ipAddress": "10.248.131.167",
+    "webLink": "https://10.248.131.167/api/login?NortxeSession=r.Ifb6q99PfaJpjoxFJEYvWDLY.f&redirect=https://10.248.131.167/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 368,
+    "macAddress": "00-05-A6-1D-DD-7C",
+    "touchPanelIp": "10.248.131.168",
+    "pcNames": [
+      "SC-MODC224"
+    ]
+  },
+  {
+    "roomName": "OCNL 120",
+    "ipAddress": "10.248.129.187",
+    "webLink": "https://10.248.129.187/api/login?NortxeSession=r.8ZWlu3uTYPPZiQ4hthZ6TWur.a&redirect=https://10.248.129.187/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 358,
+    "macAddress": "00-05-A6-12-71-DA",
+    "touchPanelIp": "10.248.129.65",
+    "pcNames": [
+      "SC-OCNL120"
+    ]
+  },
+  {
+    "roomName": "OCNL 121",
+    "ipAddress": "10.248.131.41",
+    "webLink": "https://10.248.131.41/api/login?NortxeSession=r.mRRF3rAZbSgYT2lCiQFSsh21.a&redirect=https://10.248.131.41/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 359,
+    "macAddress": "00-05-A6-1D-AF-C4",
+    "touchPanelIp": "10.248.131.107",
+    "pcNames": [
+      "SC-OCNL121"
+    ]
+  },
+  {
+    "roomName": "OCNL 123",
+    "ipAddress": "10.248.131.42",
+    "webLink": "https://10.248.131.42/api/login?NortxeSession=r.otBetLreudBFfO3bayYtDFvA.a&redirect=https://10.248.131.42/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 360,
+    "macAddress": "00-05-A6-1D-73-6D",
+    "touchPanelIp": "10.248.131.108",
+    "pcNames": [
+      "SC-OCNL123"
+    ]
+  },
+  {
+    "roomName": "OCNL 124",
+    "ipAddress": "10.248.128.55",
+    "webLink": "https://10.248.128.55/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 144,
+    "macAddress": "00-05-A6-22-71-56",
+    "touchPanelIp": "10.248.131.241",
+    "pcNames": [
+      "SC-OCNL124"
+    ]
+  },
+  {
+    "roomName": "OCNL 127",
+    "ipAddress": "10.248.129.191",
+    "webLink": "https://10.248.129.191/web/vtlp/3265512a-3b5b-4a50-84d2-3aa828b3baed/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 145,
+    "macAddress": "00-05-A6-16-CE-7E",
+    "touchPanelIp": "10.248.129.193",
+    "pcNames": [
+      "SC-OCNL127"
+    ]
+  },
+  {
+    "roomName": "OCNL 237",
+    "ipAddress": "10.248.131.43",
+    "webLink": "https://10.248.131.43/api/login?NortxeSession=r.ELSqAn74dEAlYfBSHrUdgOZo.d&redirect=https://10.248.131.43/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 356,
+    "macAddress": "00-05-A6-1D-73-34",
+    "touchPanelIp": "10.248.131.109",
+    "pcNames": [
+      "SC-OCNL237"
+    ]
+  },
+  {
+    "roomName": "OCNL 239",
+    "ipAddress": "10.248.131.44",
+    "webLink": "https://10.248.131.44/api/login?NortxeSession=r.7bEQdxr7bG9cGdKCpPWtBGlf.a&redirect=https://10.248.131.44/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 357,
+    "macAddress": "00-05-A6-1E-3E-A2",
+    "touchPanelIp": "10.248.131.110",
+    "pcNames": [
+      "SC-OCNL239"
+    ]
+  },
+  {
+    "roomName": "OCNL 244",
+    "ipAddress": "10.248.128.230",
+    "webLink": "https://10.248.128.230/web/vtlp/fab275f2-405d-4070-83d1-636b442e5795/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 148,
+    "macAddress": "00-05-A6-14-EC-F5",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "OCNL 254",
+    "ipAddress": "10.248.131.33",
+    "webLink": "https://10.248.131.33/web/vtlp/9dcd80a7-fca6-46dd-8a27-0941c7c77577/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 140,
+    "macAddress": "00-05-A6-1D-73-12",
+    "touchPanelIp": "10.248.131.34",
+    "pcNames": [
+      "SC-OCNL254"
+    ]
+  },
+  {
+    "roomName": "OCNL 334",
+    "ipAddress": "10.248.132.15",
+    "webLink": "https://10.248.132.15/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 367,
+    "macAddress": "00-05-A6-22-75-42",
+    "touchPanelIp": "AV 172.16.0.3",
+    "pcNames": [
+      "SC-OCNL334"
+    ]
+  },
+  {
+    "roomName": "OCNL 340",
+    "ipAddress": "10.248.131.156",
+    "webLink": "https://10.248.131.156/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 306,
+    "macAddress": "00-05-A6-1D-73-EC",
+    "touchPanelIp": "10.248.132.56",
+    "pcNames": [
+      "SC-OCNL340"
+    ]
+  },
+  {
+    "roomName": "OCNL 346",
+    "ipAddress": "10.248.129.195",
+    "webLink": "https://10.248.129.195/web/vtlp/5be6e3f3-575d-40da-a486-72106358ef29/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 504,
+    "macAddress": "00-05-A6-17-E7-6B",
+    "touchPanelIp": "10.248.129.194",
+    "pcNames": [
+      "SC-OCNL346"
+    ]
+  },
+  {
+    "roomName": "OCNL 431",
+    "ipAddress": "10.248.132.2",
+    "webLink": "https://10.248.132.2/api/login?NortxeSession=r.E3uLL5IWVNbxvCXdHYz5R44a.b&redirect=https://10.248.132.2/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 365,
+    "macAddress": "00-05-A6-28-88-14",
+    "touchPanelIp": "10.248.132.3",
+    "pcNames": [
+      "SC-OCNL431"
+    ]
+  },
+  {
+    "roomName": "OCNL 434",
+    "ipAddress": "10.248.132.42",
+    "webLink": "https://10.248.132.42/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 308,
+    "macAddress": "00-05-A6-0D-55-C3",
+    "touchPanelIp": "10.248.132.57",
+    "pcNames": [
+      "SC-OCNL434"
+    ]
+  },
+  {
+    "roomName": "OCNL 438",
+    "ipAddress": "10.248.128.229",
+    "webLink": "https://10.248.128.229/web/vtlp/19a969ce-faa2-4b84-a0c8-8f83406f144e/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 151,
+    "macAddress": "00-05-A6-14-ED-09",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "PAC 114",
+    "ipAddress": "10.248.129.84",
+    "webLink": "https://10.248.129.84/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 152,
+    "macAddress": "00-05-A6-11-AA-7B",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "PAC 116",
+    "ipAddress": "10.248.130.214",
+    "webLink": "https://10.248.130.214/api/login?NortxeSession=r.2zs94A0fnsRAfKBfuBMPIR1C.f&redirect=https://10.248.130.214/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 413,
+    "macAddress": "00-05-A6-1D-73-F1",
+    "touchPanelIp": "10.248.130.215",
+    "pcNames": [
+      "SC-PAC116"
+    ]
+  },
+  {
+    "roomName": "PAC 134",
+    "ipAddress": "10.248.128.231",
+    "webLink": "https://10.248.128.231/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 154,
+    "macAddress": "00-05-A6-14-6E-DA",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-PAC134"
+    ]
+  },
+  {
+    "roomName": "PAC 144",
+    "ipAddress": "10.248.128.25",
+    "webLink": "https://10.248.128.25/web/vtlp/9dcd80a7-fca6-46dd-8a27-0941c7c77577/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 155,
+    "macAddress": "00-05-A6-13-C9-F1",
+    "touchPanelIp": "10.248.128.38",
+    "pcNames": [
+      "SC-PAC144",
+      "SC-PAC144-BOOTH"
+    ]
+  },
+  {
+    "roomName": "PAC 206",
+    "ipAddress": "10.248.130.231",
+    "webLink": "https://10.248.130.231/api/login?NortxeSession=r.beEwPf7g2QthHtV6oOGCr1rM.a&redirect=https://10.248.130.231/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 412,
+    "macAddress": "00-05-A6-1D-AF-CD",
+    "touchPanelIp": "10.248.130.230",
+    "pcNames": [
+      "SC-PAC206"
+    ]
+  },
+  {
+    "roomName": "PAC 210",
+    "ipAddress": "10.248.131.221",
+    "webLink": "https://10.248.131.221/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 319,
+    "macAddress": "00-05-A6-17-FA-46",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-PAC210"
+    ]
+  },
+  {
+    "roomName": "PARK 119A",
+    "ipAddress": "10.248.129.51",
+    "webLink": "http://10.248.129.51/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 157,
+    "macAddress": "00-05-A6-08-25-43",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "PLMS 106",
+    "ipAddress": "10.248.131.46",
+    "webLink": "https://10.248.131.46/api/login?NortxeSession=r.z28Pan5eKLkYfwaOIlzzJFYo.a&redirect=https://10.248.131.46/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 415,
+    "macAddress": "00-05-A6-1D-AF-E3",
+    "touchPanelIp": "10.248.131.112",
+    "pcNames": [
+      "SC-PLMS106"
+    ]
+  },
+  {
+    "roomName": "PLMS 112",
+    "ipAddress": "10.248.128.172",
+    "webLink": "https://10.248.128.172/web/vtlp/77469850-0bfd-49df-b50f-0373343b6795/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 320,
+    "macAddress": "00-05-A6-18-40-72",
+    "touchPanelIp": "10.248.128.81",
+    "pcNames": [
+      "SC-PLMS112"
+    ]
+  },
+  {
+    "roomName": "PLMS 117",
+    "ipAddress": "10.248.128.188",
+    "webLink": "https://10.248.128.188/web/vtlp/plms117/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 336,
+    "macAddress": "00-05-A6-24-31-2C",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-PLMS117"
+    ]
+  },
+  {
+    "roomName": "PLMS 201",
+    "ipAddress": "10.248.131.47",
+    "webLink": "https://10.248.131.47/api/login?NortxeSession=r.RHvbAkcrpzRQFLeniHX3E5Ha.a&redirect=https://10.248.131.47/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 416,
+    "macAddress": "00-05-A6-1E-3E-CC",
+    "touchPanelIp": "10.248.128.50",
+    "pcNames": [
+      "SC-PLMS201"
+    ]
+  },
+  {
+    "roomName": "PLMS 203B",
+    "ipAddress": "10.248.129.139",
+    "webLink": "https://10.248.129.139/web/vtlp/7c18d81c-14a3-482f-abbd-a9f2cfa01380/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 161,
+    "macAddress": "00-05-A6-13-74-11",
+    "touchPanelIp": "10.248.129.140",
+    "pcNames": []
+  },
+  {
+    "roomName": "PLMS 205",
+    "ipAddress": "10.248.131.48",
+    "webLink": "https://10.248.131.48/api/login?NortxeSession=r.RL0B0veQ05ZeY4vQRApyvebS.a&redirect=https://10.248.131.48/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 417,
+    "macAddress": "00-05-A6-1D-73-24",
+    "touchPanelIp": "10.248.131.114",
+    "pcNames": [
+      "SC-PLMS205"
+    ]
+  },
+  {
+    "roomName": "PLMS 303",
+    "ipAddress": "10.248.130.207",
+    "webLink": "https://10.248.130.207/api/login?NortxeSession=r.BEzhqreQYOw3VoWXnONPzaGy.c&redirect=https://10.248.130.207/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 418,
+    "macAddress": "00-05-A6-1D-73-E0",
+    "touchPanelIp": "10.248.130.209",
+    "pcNames": [
+      "SC-PLMS303"
+    ]
+  },
+  {
+    "roomName": "PLMS 312",
+    "ipAddress": "10.248.129.71",
+    "webLink": "https://10.248.129.71/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 164,
+    "macAddress": "00-05-A6-11-A9-D7",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-PLMS312"
+    ]
+  },
+  {
+    "roomName": "PLMS 315",
+    "ipAddress": "10.248.129.48",
+    "webLink": "https://10.248.129.48/api/login?NortxeSession=r.mJp8X4MpkBLlhSbbimOqZ4ES.c&redirect=https://10.248.129.48/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 449,
+    "macAddress": "00-05-A6-17-63-22",
+    "touchPanelIp": "10.248.132.58",
+    "pcNames": [
+      "SC-PLMS315"
+    ]
+  },
+  {
+    "roomName": "PLMS 329",
+    "ipAddress": "10.248.131.49",
+    "webLink": "https://10.248.131.49/api/login?NortxeSession=r.bVzhNqfXOJCipPFhPb6ymgZX.a&redirect=https://10.248.131.49/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 419,
+    "macAddress": "00-05-A6-1D-73-3D",
+    "touchPanelIp": "10.248.131.115",
+    "pcNames": [
+      "SC-PLMS329"
+    ]
+  },
+  {
+    "roomName": "PLMS 333",
+    "ipAddress": "10.248.132.47",
+    "webLink": "https://10.248.132.47/api/login?NortxeSession=r.ulccckjKE5JlJfAfn6RhtV6P.a&redirect=https://10.248.132.47/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 456,
+    "macAddress": "00-05-A6-1D-73-5C",
+    "touchPanelIp": "10.248.132.62",
+    "pcNames": [
+      "SC-PLMS333"
+    ]
+  },
+  {
+    "roomName": "SCI 124",
+    "ipAddress": "10.248.129.62",
+    "webLink": "https://10.248.129.62/web/vtlp/aee9903c-7f57-4a57-b8c8-173fcdc99fe1/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 524,
+    "macAddress": "00-05-A6-1B-0D-F4",
+    "touchPanelIp": "10.248.129.64",
+    "pcNames": []
+  },
+  {
+    "roomName": "SCI 125",
+    "ipAddress": "10.248.130.179",
+    "webLink": "https://10.248.130.179/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 167,
+    "macAddress": "00-05-A6-1A-AB-47",
+    "touchPanelIp": "10.248.130.175",
+    "pcNames": [
+      "SC-SCI125"
+    ]
+  },
+  {
+    "roomName": "SCI 126A",
+    "ipAddress": "10.248.131.150",
+    "webLink": "https://10.248.131.150/web/vtlp/aa369df8-1bdd-42f0-94af-e3e981a34f03/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 525,
+    "subRoomId": 6,
+    "macAddress": "00-05-A6-1A-AA-C9",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI126A"
+    ]
+  },
+  {
+    "roomName": "SCI 126B",
+    "ipAddress": "10.248.131.140",
+    "webLink": "https://10.248.131.150/web/vtlp/1c6e72ed-a04f-4616-8e82-8fccc940c5bc/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 525,
+    "subRoomId": 7,
+    "macAddress": "00-05-A6-1A-AA-D3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI126B"
+    ]
+  },
+  {
+    "roomName": "SCI 130",
+    "ipAddress": "10.248.130.253",
+    "webLink": "https://10.248.130.253/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 169,
+    "macAddress": "00-05-A6-1A-AA-CF",
+    "touchPanelIp": "10.248.129.79",
+    "pcNames": [
+      "SC-SCI130"
+    ]
+  },
+  {
+    "roomName": "SCI 131",
+    "ipAddress": "10.248.129.210",
+    "webLink": "https://10.248.129.210/web/vtlp/ebe21d03-caa2-4ad3-9656-68a395b70e9c/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 170,
+    "macAddress": "00-05-A6-1A-AB-1B",
+    "touchPanelIp": "10.248.129.206",
+        "pcNames": [
+      "SC-SCI131N",
+      "SC-SCI131S"
+    ]
+  },
+  {
+    "roomName": "SCI 140",
+    "ipAddress": "10.248.130.67",
+    "webLink": "https://10.248.130.67/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 171,
+    "macAddress": "00-05-A6-18-7B-DD",
+    "touchPanelIp": "10.248.130.66",
+    "pcNames": [
+      "SC-SCI140"
+    ]
+  },
+  {
+    "roomName": "SCI 141",
+    "ipAddress": "10.248.130.74",
+    "webLink": "https://10.248.130.74/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 172,
+    "macAddress": "00-05-A6-16-E3-20",
+    "touchPanelIp": "10.248.130.73",
+    "pcNames": [
+      "SC-SCI141"
+    ]
+  },
+  {
+    "roomName": "SCI 142",
+    "ipAddress": "10.248.129.228",
+    "webLink": "https://10.248.129.228/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 173,
+    "macAddress": "00-05-A6-18-7C-93",
+    "touchPanelIp": "10.248.129.232",
+    "pcNames": [
+      "SC-SCI142"
+    ]
+  },
+  {
+    "roomName": "SCI 201C",
+    "ipAddress": "10.248.128.145",
+    "webLink": "https://10.248.128.145/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 174,
+    "macAddress": "00-05-A6-1B-03-1E",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI201C"
+    ]
+  },
+  {
+    "roomName": "SCI 201D ",
+    "ipAddress": "10.248.128.122",
+    "webLink": "https://10.248.128.122/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 175,
+    "macAddress": "00-05-A6-1B-02-AD",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "SCI 212",
+    "ipAddress": "10.248.131.180",
+    "webLink": "https://10.248.131.180/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 176,
+    "macAddress": "00-05-A6-1B-02-AE",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI212"
+    ]
+  },
+  {
+    "roomName": "SCI 216",
+    "ipAddress": "10.248.131.164",
+    "webLink": "https://10.248.131.164/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 315,
+    "macAddress": "00-05-A6-1B-0E-0F",
+    "touchPanelIp": "10.248.131.166",
+    "pcNames": [
+      "CONF-SCI216"
+    ]
+  },
+  {
+    "roomName": "SCI 240",
+    "ipAddress": "10.248.128.175",
+    "webLink": "https://10.248.128.175/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 178,
+    "macAddress": "00-05-A6-1B-02-8E",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI240"
+    ]
+  },
+  {
+    "roomName": "SCI 241",
+    "ipAddress": "10.248.129.238",
+    "webLink": "https://10.248.129.238/web/vtlp/6f26d277-3757-4dcb-87ee-be27e63aae50/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 531,
+    "macAddress": "00-05-A6-1B-02-DF",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "SCI 242",
+    "ipAddress": "10.248.129.244",
+    "webLink": "https://10.248.129.244/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 180,
+    "macAddress": "00-05-A6-1A-AB-45",
+    "touchPanelIp": "10.248.129.245",
+    "pcNames": [
+      "SC-SCI242"
+    ]
+  },
+  {
+    "roomName": "SCI 243",
+    "ipAddress": "10.248.129.253",
+    "webLink": "https://10.248.129.253/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 181,
+    "macAddress": "00-05-A6-17-65-3A",
+    "touchPanelIp": "10.248.129.255",
+    "pcNames": [
+      "SC-SCI243"
+    ]
+  },
+  {
+    "roomName": "SCI 244",
+    "ipAddress": "10.248.130.6",
+    "webLink": "https://10.248.130.6/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 182,
+    "macAddress": "00-05-A6-18-7C-29",
+    "touchPanelIp": "10.248.130.7",
+    "pcNames": [
+      "SC-SCI244"
+    ]
+  },
+  {
+    "roomName": "SCI 245",
+    "ipAddress": "10.248.130.14",
+    "webLink": "https://10.248.130.14/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 183,
+    "macAddress": "00-05-A6-16-EC-9A",
+    "touchPanelIp": "10.248.130.15",
+    "pcNames": [
+      "SC-SCI245"
+    ]
+  },
+  {
+    "roomName": "SCI 247",
+    "ipAddress": "10.248.130.23",
+    "webLink": "https://10.248.130.23/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 184,
+    "macAddress": "00-05-A6-1A-AA-C3",
+    "touchPanelIp": "10.248.130.24",
+    "pcNames": [
+      "SC-SCI247"
+    ]
+  },
+  {
+    "roomName": "SCI 248",
+    "ipAddress": "10.248.130.82",
+    "webLink": "https://10.248.130.82/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 185,
+    "macAddress": "00-05-A6-16-EC-EE",
+    "touchPanelIp": "10.248.130.83",
+    "pcNames": [
+      "SC-SCI248"
+    ]
+  },
+  {
+    "roomName": "SCI 250",
+    "ipAddress": "10.248.130.187",
+    "webLink": "https://10.248.130.187/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 186,
+    "macAddress": "00-05-A6-1A-AB-2F",
+    "touchPanelIp": "10.248.130.90",
+    "pcNames": [
+      "SC-SCI250"
+    ]
+  },
+  {
+    "roomName": "SCI 260",
+    "ipAddress": "10.248.129.200",
+    "webLink": "https://10.248.129.200/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 187,
+    "macAddress": "00-05-A6-1B-02-CA",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI260"
+    ]
+  },
+  {
+    "roomName": "SCI 300H ",
+    "ipAddress": "10.248.128.105",
+    "webLink": "https://10.248.128.105/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 188,
+    "macAddress": "00-05-A6-1B-02-21",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI300H"
+    ]
+  },
+  {
+    "roomName": "SCI 301C ",
+    "ipAddress": "10.248.128.56",
+    "webLink": "https://10.248.128.56/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 189,
+    "macAddress": "00-05-A6-1B-02-65",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI301C"
+    ]
+  },
+  {
+    "roomName": "SCI 312",
+    "ipAddress": "10.248.130.33",
+    "webLink": "https://10.248.130.33/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 190,
+    "macAddress": "00-05-A6-1A-AB-2D",
+    "touchPanelIp": "10.248.130.34",
+    "pcNames": [
+      "SC-SCI312"
+    ]
+  },
+  {
+    "roomName": "SCI 314",
+    "ipAddress": "10.248.130.98",
+    "webLink": "https://10.248.130.98/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 191,
+    "macAddress": "00-05-A6-1A-AB-95",
+    "touchPanelIp": "10.248.130.99",
+    "pcNames": [
+      "SC-SCI314"
+    ]
+  },
+  {
+    "roomName": "SCI 316",
+    "ipAddress": "10.248.129.162",
+    "webLink": "https://10.248.129.162/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 316,
+    "macAddress": "00-05-A6-1B-0E-79",
+    "touchPanelIp": "10.248.129.168",
+    "pcNames": [
+      "SC-SCI316"
+    ]
+  },
+  {
+    "roomName": "SCI 341",
+    "ipAddress": "10.248.130.103",
+    "webLink": "https://10.248.130.103/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 193,
+    "macAddress": "00-05-A6-18-7C-17",
+    "touchPanelIp": "10.248.130.106",
+    "pcNames": [
+      "SC-SCI341"
+    ]
+  },
+  {
+    "roomName": "SCI 345",
+    "ipAddress": "10.248.130.109",
+    "webLink": "https://10.248.130.109/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 195,
+    "macAddress": "00-05-A6-18-7B-D9",
+    "touchPanelIp": "10.248.130.113",
+    "pcNames": [
+      "SC-SCI345"
+    ]
+  },
+  {
+    "roomName": "SCI 349",
+    "ipAddress": "10.248.130.120",
+    "webLink": "https://10.248.130.120/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 196,
+    "macAddress": "00-05-A6-1A-AA-E3",
+    "touchPanelIp": "10.248.130.121",
+    "pcNames": [
+      "SC-SCI349"
+    ]
+  },
+  {
+    "roomName": "SCI 350",
+    "ipAddress": "10.248.130.125",
+    "webLink": "https://10.248.130.125/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 197,
+    "macAddress": "00-05-A6-18-7C-2D",
+    "touchPanelIp": "10.248.130.129",
+    "pcNames": [
+      "SC-SCI350"
+    ]
+  },
+  {
+    "roomName": "SCI 351",
+    "ipAddress": "10.248.131.177",
+    "webLink": "https://10.248.131.177/web/vtlp/6f26d277-3757-4dcb-87ee-be27e63aae50/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 529,
+    "macAddress": "00-05-A6-1B-02-05",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI351"
+    ]
+  },
+  {
+    "roomName": "SCI 354",
+    "ipAddress": "10.248.130.131",
+    "webLink": "https://10.248.130.131/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 198,
+    "macAddress": "00-05-A6-18-7B-D1",
+    "touchPanelIp": "10.248.130.135",
+    "pcNames": [
+      "SC-SCI354"
+    ]
+  },
+  {
+    "roomName": "SCI 361",
+    "ipAddress": "10.248.130.199",
+    "webLink": "https://10.248.130.199/web/vtlp/0563e6d6-f4df-4a67-b77e-fd55e62900e9/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 526,
+    "macAddress": "00-05-A6-1A-AA-F3",
+    "touchPanelIp": "10.248.130.202",
+    "pcNames": [
+      "SC-SCI361"
+    ]
+  },
+  {
+    "roomName": "SCI 400H ",
+    "ipAddress": "10.248.128.28",
+    "webLink": "https://10.248.128.28/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 201,
+    "macAddress": "00-05-A6-1B-02-B5",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "SCI 401B",
+    "ipAddress": "10.248.130.238",
+    "webLink": "https://10.248.130.238/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 202,
+    "macAddress": "00-05-A6-1B-02-86",
+    "touchPanelIp": "10.248.132.0",
+    "pcNames": [
+      "SC-SCI401B"
+    ]
+  },
+  {
+    "roomName": "SCI 416",
+    "ipAddress": "10.248.131.187",
+    "webLink": "https://10.248.131.187/web/vtlp/0563e6d6-f4df-4a67-b77e-fd55e62900e9/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 528,
+    "macAddress": "00-05-A6-1B-0E-FB",
+    "touchPanelIp": "10.248.131.188",
+    "pcNames": [
+      "SC-SCI416"
+    ]
+  },
+  {
+    "roomName": "SCI 420",
+    "ipAddress": "10.248.128.216",
+    "webLink": "https://10.248.128.216/web/vtlp/0563e6d6-f4df-4a67-b77e-fd55e62900e9/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 527,
+    "macAddress": "00-05-A6-1B-0E-04",
+    "touchPanelIp": "10.248.128.197",
+    "pcNames": []
+  },
+  {
+    "roomName": "SCI 425",
+    "ipAddress": "10.248.131.159",
+    "webLink": "https://10.248.131.159/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 317,
+    "macAddress": "00-05-A6-1B-0E-EF",
+    "touchPanelIp": "10.248.131.162",
+    "pcNames": [
+      "SC-SCI425"
+    ]
+  },
+  {
+    "roomName": "SCI 426",
+    "ipAddress": "10.248.130.146",
+    "webLink": "https://10.248.130.146/web/vtlp/6128fa69-8f9e-44ec-b99e-2672f152d868/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 206,
+    "macAddress": "00-05-A6-18-7C-15",
+    "touchPanelIp": "10.248.130.150",
+    "pcNames": [
+      "SC-SCI426"
+    ]
+  },
+  {
+    "roomName": "SCI 451",
+    "ipAddress": "10.248.130.141",
+    "webLink": "https://10.248.130.141/web/vtlp/2df62bd2-8404-405f-9bd5-a303f7b73fe0/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 207,
+    "macAddress": "00-05-A6-1A-AB-0F",
+    "touchPanelIp": "10.248.130.142",
+    "pcNames": [
+      "SC-SCI451"
+    ]
+  },
+  {
+    "roomName": "SCI 453",
+    "ipAddress": "10.248.130.44",
+    "webLink": "https://10.248.130.44/web/vtlp/aa369df8-1bdd-42f0-94af-e3e981a34f03/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 323,
+    "subRoomId": 8,
+    "macAddress": "00-05-A6-1A-AB-11",
+    "touchPanelIp": "10.248.130.45",
+    "pcNames": [
+      "SC-SCI453"
+    ]
+  },
+  {
+    "roomName": "SCI 455",
+    "ipAddress": "10.248.130.56",
+    "webLink": "https://10.248.130.44/web/vtlp/1c6e72ed-a04f-4616-8e82-8fccc940c5bc/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 323,
+    "subRoomId": 9,
+    "macAddress": "00-05-A6-1A-AB-23",
+    "touchPanelIp": "10.248.130.57",
+    "pcNames": [
+      "SC-SCI455"
+    ]
+  },
+  {
+    "roomName": "SCI 457 ",
+    "ipAddress": "10.248.131.0",
+    "webLink": "https://10.248.131.0/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 288,
+    "macAddress": "00-05-A6-19-FD-93",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SCI457"
+    ]
+  },
+  {
+    "roomName": "SCI 458",
+    "ipAddress": "10.248.130.157",
+    "webLink": "https://10.248.130.157/web/vtlp/aa369df8-1bdd-42f0-94af-e3e981a34f03/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 322,
+    "subRoomId": 10,
+    "macAddress": "00-05-A6-1A-AB-29",
+    "touchPanelIp": "10.248.130.158",
+    "pcNames": [
+      "SC-SCI458"
+    ]
+  },
+  {
+    "roomName": "SCI 460",
+    "ipAddress": "10.248.130.168",
+    "webLink": "https://10.248.130.157/web/vtlp/1c6e72ed-a04f-4616-8e82-8fccc940c5bc/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 322,
+    "subRoomId": 11,
+    "macAddress": "00-05-A6-1A-AA-A5",
+    "touchPanelIp": "10.248.130.169",
+    "pcNames": [
+      "SC-SCI460"
+    ]
+  },
+  {
+    "roomName": "SCI 342 ",
+    "ipAddress": "10.248.129.170",
+    "webLink": "https://10.248.129.170/web/vtlp/ad3a2fdb-89b9-452d-a8b6-63525ebe3355/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 194,
+    "macAddress": "00-05-A6-17-FC-71",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "SCI 360",
+    "ipAddress": "10.248.129.172",
+    "webLink": "https://10.248.129.172/web/vtlp/6f26d277-3757-4dcb-87ee-be27e63aae50/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 530,
+    "macAddress": "00-05-A6-1B-02-64",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "SELV 100",
+    "ipAddress": "10.248.132.103",
+    "webLink": "https://10.248.132.103/api/login?NortxeSession=r.zF4fpkbWcb8cOBZEWDNV3p39.e&redirect=https://10.248.132.103/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 341,
+    "macAddress": "00-05-A6-22-74-DA",
+    "touchPanelIp": "10.248.132.101",
+    "pcNames": [
+      "CONF-SELV100"
+    ]
+  },
+  {
+    "roomName": "SELV 104",
+    "ipAddress": "10.248.130.206",
+    "webLink": "https://10.248.130.206/api/login?NortxeSession=r.h4vv7OUazuHsTkFWY8ZeplJ0.e&redirect=https://10.248.130.206/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 340,
+    "macAddress": "00-05-A6-22-75-2C",
+    "touchPanelIp": "10.248.130.30",
+    "pcNames": [
+      "CONF-SELV104"
+    ]
+  },
+  {
+    "roomName": "SGYM 101",
+    "ipAddress": "10.248.129.85",
+    "webLink": "https://10.248.129.85/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 455,
+    "macAddress": "00-05-A6-11-A9-B4",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SGYM101"
+    ]
+  },
+  {
+    "roomName": "SSC 122",
+    "ipAddress": "10.248.128.112",
+    "webLink": "https://10.248.128.112/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 212,
+    "macAddress": "00-05-A6-03-01-C5",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-SSC122"
+    ]
+  },
+  {
+    "roomName": "SSC 140",
+    "ipAddress": "10.248.131.224",
+    "webLink": "https://10.248.131.224/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 374,
+    "macAddress": "00-05-A6-18-70-D3",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "SSC 150",
+    "ipAddress": "10.248.130.250",
+    "webLink": "https://10.248.130.250/api/login?NortxeSession=r.4mZEfOXif5ve0rLbjDGXze0J.a&redirect=https://10.248.130.250/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 420,
+    "macAddress": "00-05-A6-1D-73-3A",
+    "touchPanelIp": "10.248.131.132",
+    "pcNames": [
+      "CONF-SSC150"
+    ]
+  },
+  {
+    "roomName": "SSC 206",
+    "ipAddress": "10.248.128.115",
+    "webLink": "https://10.248.128.115/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 223,
+    "macAddress": "00-05-A6-02-FD-96",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SSC206"
+    ]
+  },
+  {
+    "roomName": "SSC 280",
+    "ipAddress": "10.248.128.116",
+    "webLink": "https://10.248.128.116/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 215,
+    "macAddress": "00-05-A6-02-A0-C3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-SSC280"
+    ]
+  },
+  {
+    "roomName": "SSC 304",
+    "ipAddress": "10.248.131.228",
+    "webLink": "https://10.248.131.228/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 506,
+    "macAddress": "00-05-A6-19-BE-06",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-SSC304"
+    ]
+  },
+  {
+    "roomName": "SSC 306",
+    "ipAddress": "10.248.128.119",
+    "webLink": "https://10.248.128.119/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 217,
+    "macAddress": "00-05-A6-03-18-C0",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-SSC306"
+    ]
+  },
+  {
+    "roomName": "SSC 376",
+    "ipAddress": "10.248.128.120",
+    "webLink": "https://10.248.128.120/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 219,
+    "macAddress": "00-05-A6-03-12-A4",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SSC376"
+    ]
+  },
+  {
+    "roomName": "SSC 390",
+    "ipAddress": "10.248.128.121",
+    "webLink": "https://10.248.128.121/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 220,
+    "macAddress": "00-05-A6-03-A7-37",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-SSC390"
+    ]
+  },
+  {
+    "roomName": "SSC 426",
+    "ipAddress": "10.248.131.225",
+    "webLink": "https://10.248.131.225/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 508,
+    "macAddress": "00-05-A6-19-BE-38",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-SSC426"
+    ]
+  },
+  {
+    "roomName": "SSC 490",
+    "ipAddress": "10.248.128.124",
+    "webLink": "https://10.248.128.124/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 222,
+    "macAddress": "00-05-A6-03-1E-D0",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-SSC490"
+    ]
+  },
+  {
+    "roomName": "THMA 106",
+    "ipAddress": "10.248.128.131",
+    "webLink": "https://10.248.128.131/web/vtlp/7d7df812-8b54-4c4c-b19f-526e125d9a5d/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 224,
+    "macAddress": "00-05-A6-14-EC-F6",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-THMA106"
+    ]
+  },
+  {
+    "roomName": "THMA 107",
+    "ipAddress": "10.248.129.72",
+    "webLink": "https://10.248.129.72/web/vtlp/7c58a62a-3a05-43ab-93cc-0236c6be5f0b/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 225,
+    "macAddress": "00-05-A6-11-A9-CF",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-THMA107"
+    ]
+  },
+  {
+    "roomName": "THMA 108",
+    "ipAddress": "10.248.131.234",
+    "webLink": "https://10.248.131.234/web/vtlp/ad2b548d-df92-4500-94d1-fc56767acc22/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 453,
+    "macAddress": "00-05-A6-19-BE-25",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-THMA108"
+    ]
+  },
+  {
+    "roomName": "THMA 113",
+    "ipAddress": "10.248.131.50",
+    "webLink": "https://10.248.131.50/api/login?NortxeSession=r.zbdCWEgV80V3aLTPh6juUfX8.a&redirect=https://10.248.131.50/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 421,
+    "macAddress": "00-05-A6-1D-73-EF",
+    "touchPanelIp": "10.248.131.117",
+    "pcNames": [
+      "SC-THMA113"
+    ]
+  },
+  {
+    "roomName": "THMA 115",
+    "ipAddress": "10.248.131.51",
+    "webLink": "https://10.248.131.51/api/login?NortxeSession=r.oBsWm9K1pZBMychSc5G2gVjt.a&redirect=https://10.248.131.51/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 422,
+    "macAddress": "00-05-A6-1D-AF-EB",
+    "touchPanelIp": "10.248.131.118",
+    "pcNames": [
+      "SC-THMA115"
+    ]
+  },
+  {
+    "roomName": "THMA 116",
+    "ipAddress": "10.248.131.134",
+    "webLink": "https://10.248.131.134/web/vtlp/2d9d5704-c7f1-4021-a768-dc00bbc08daf/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 229,
+    "macAddress": "00-05-A6-17-CF-00",
+    "touchPanelIp": "10.248.128.31",
+    "pcNames": [
+      "SC-THMA116-01",
+      "SC-THMA116-02",
+      "SC-THMA116-03",
+      "SC-THMA116-04",
+      "SC-THMA116-05",
+      "SC-THMA116-06",
+      "SC-THMA116-07",
+      "SC-THMA116-08",
+      "SC-THMA116-09",
+      "SC-THMA116-10",
+      "SC-THMA116-11",
+      "SC-THMA116-12",
+      "SC-THMA116-13"
+    ]
+  },
+  {
+    "roomName": "THMA 117",
+    "ipAddress": "10.248.131.52",
+    "webLink": "https://10.248.131.52/api/login?NortxeSession=r.84kfxVY2F6g3PSdzSKVmIyHt.a&redirect=https://10.248.131.52/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 423,
+    "macAddress": "00-05-A6-1D-73-82",
+    "touchPanelIp": "10.248.131.119",
+    "pcNames": [
+      "SC-THMA117"
+    ]
+  },
+  {
+    "roomName": "THMA 119",
+    "ipAddress": "10.248.131.53",
+    "webLink": "https://10.248.131.53/api/login?NortxeSession=r.cXUhDb0rwj5p64Ix6P4ZlW4B.a&redirect=https://10.248.131.53/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 424,
+    "macAddress": "00-05-A6-1D-73-1E",
+    "touchPanelIp": "10.248.131.120",
+    "pcNames": [
+      "SC-THMA119"
+    ]
+  },
+  {
+    "roomName": "THMA 121",
+    "ipAddress": "10.248.131.54",
+    "webLink": "https://10.248.131.54/api/login?NortxeSession=r.Y4sKYQsjgZyj2C09wafAv9Vm.a&redirect=https://10.248.131.54/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 425,
+    "macAddress": "00-05-A6-1D-73-58",
+    "touchPanelIp": "10.248.131.121",
+    "pcNames": [
+      "SC-THMA121"
+    ]
+  },
+  {
+    "roomName": "THMA 130",
+    "ipAddress": "10.248.131.55",
+    "webLink": "https://10.248.131.55/api/login?NortxeSession=r.84ehEwaDO6Mf96qP5HZAwnOE.a&redirect=https://10.248.131.55/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": true,
+    "touchPanelIp": "10.248.131.122",
+    "roomId": 426,
+    "macAddress": "00-05-A6-1D-73-4A",
+    "pcNames": [
+      "SC-THMA130"
+    ]
+  },
+  {
+    "roomName": "THMA 134",
+    "ipAddress": "10.248.131.56",
+    "webLink": "https://10.248.131.56/api/login?NortxeSession=r.90tXa4tzsHJ4Ck6HyXjgGlNY.a&redirect=https://10.248.131.56/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 427,
+    "macAddress": "00-05-A6-1D-73-4D",
+    "touchPanelIp": "10.248.131.123",
+    "pcNames": [
+      "SC-THMA134"
+    ]
+  },
+  {
+    "roomName": "THMA 210",
+    "ipAddress": "10.248.131.57",
+    "webLink": "https://10.248.131.57/api/login?NortxeSession=r.8IQHfxMNypWzH9CUzYYSRXiN.b&redirect=https://10.248.131.57/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 428,
+    "macAddress": "00-05-A6-1D-73-46",
+    "touchPanelIp": "10.248.131.124",
+    "pcNames": [
+      "SC-THMA210"
+    ]
+  },
+  {
+    "roomName": "THMA 214",
+    "ipAddress": "10.248.132.9",
+    "webLink": "https://10.248.132.9/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 314,
+    "macAddress": "00-05-A6-21-53-10",
+    "touchPanelIp": "10.248.132.61",
+    "pcNames": [
+      "CONF-THMA214",
+      "SC-THMA214"
+    ]
+  },
+  {
+    "roomName": "THMA 224",
+    "ipAddress": "10.248.131.58",
+    "webLink": "https://10.248.131.58/api/login?NortxeSession=r.Fsmxmioq2LPhI0MJwNYJpPX5.a&redirect=https://10.248.131.58/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 429,
+    "macAddress": "00-05-A6-1D-73-7C",
+    "touchPanelIp": "10.248.131.125",
+    "pcNames": []
+  },
+  {
+    "roomName": "THMA 226",
+    "ipAddress": "10.248.128.235",
+    "webLink": "http://10.248.128.235/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 507,
+    "macAddress": "00-05-A6-0C-36-16",
+    "touchPanelIp": "10.248.128.237",
+    "pcNames": []
+  },
+  {
+    "roomName": "THMA 230",
+    "ipAddress": "10.248.129.184",
+    "webLink": "https://10.248.129.184/web/vtlp/77469850-0bfd-49df-b50f-0373343b6795/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 452,
+    "macAddress": "00-05-A6-14-E1-3E",
+    "touchPanelIp": "10.248.129.183",
+    "pcNames": [
+      "SC-THMA230",
+      "SC-THMA230-BACK",
+      "SC-THMA230-SIDE"
+    ]
+  },
+  {
+    "roomName": "THMA 303",
+    "ipAddress": "10.248.131.251",
+    "webLink": "https://10.248.131.251/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 301,
+    "macAddress": "00-05-A6-21-4F-9A",
+    "touchPanelIp": "10.248.132.60",
+    "pcNames": []
+  },
+  {
+    "roomName": "THMA 346",
+    "ipAddress": "10.248.128.209",
+    "webLink": "http://10.248.128.209/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 239,
+    "macAddress": "00-05-A6-07-AA-8C",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "TRBL 107",
+    "ipAddress": "10.248.132.133",
+    "webLink": "https://10.248.132.133/api/login?NortxeSession=r.Z6vDH4BCJRXZEcCfhwzNJqim.a&redirect=https://10.248.132.133/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 441,
+    "macAddress": "00-05-A6-24-4D-9A",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-TRBL107"
+    ]
+  },
+  {
+    "roomName": "UHFS 119",
+    "ipAddress": "10.248.128.193",
+    "webLink": "http://10.248.128.193/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 518,
+    "macAddress": "00-05-A6-06-86-59",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "USB 132",
+    "ipAddress": "10.248.130.72",
+    "webLink": "https://10.248.130.72/api/login?NortxeSession=r.PntM9tUZneCj1easI5v7Wamp.d&redirect=https://10.248.130.72/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 511,
+    "macAddress": "00-05-A6-2D-28-4D",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-USB132"
+    ]
+  },
+  {
+    "roomName": "USB 140",
+    "ipAddress": "10.248.134.49",
+    "webLink": "https://10.248.134.49/api/login?NortxeSession=r.fSaVbNkzpIOokGTtaZIqPOiv.e&redirect=https://10.248.134.49/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 510,
+    "macAddress": "00-05-A6-2D-27-DB",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-USB140"
+    ]
+  },
+  {
+    "roomName": "USB 209",
+    "ipAddress": "10.248.132.147",
+    "webLink": "https://10.248.132.147/api/login?NortxeSession=r.5lw0KmhI1or0D946SR5B27AU.g&redirect=https://10.248.132.147/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 514,
+    "macAddress": "00-05-A6-2A-07-84",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-USB209"
+    ]
+  },
+  {
+    "roomName": "USB 221",
+    "ipAddress": "10.248.134.55",
+    "webLink": "https://10.248.134.55/api/login?NortxeSession=r.G00AiUQElps8BekgQugPAfoW.b&redirect=https://10.248.134.55/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 513,
+    "macAddress": "00-05-A6-2D-28-0D",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-USB221"
+    ]
+  },
+  {
+    "roomName": "USB 232",
+    "ipAddress": "10.248.134.51",
+    "webLink": "https://10.248.134.51/api/login?NortxeSession=r.bIKdXESbJxb08jvJKTSMQL1h.a&redirect=https://10.248.134.51/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 512,
+    "macAddress": "00-05-A6-2D-27-B3",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-USB232"
+    ]
+  },
+  {
+    "roomName": "WREC 166",
+    "ipAddress": "10.248.128.141",
+    "webLink": "http://10.248.128.141/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 248,
+    "macAddress": "00-05-A6-01-6C-55",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "WREC 250",
+    "ipAddress": "10.248.128.142",
+    "webLink": "https://10.248.128.142/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 247,
+    "macAddress": "00-05-A6-03-7C-37",
+    "touchPanelIp": "",
+    "pcNames": []
+  },
+  {
+    "roomName": "YOLO 109",
+    "ipAddress": "",
+    "webLink": "",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 499,
+    "macAddress": "00-05-A6-1D-DD-83",
+    "touchPanelIp": "10.248.131.95",
+    "pcNames": [
+      "SC-YOLO109"
+    ]
+  },
+  {
+    "roomName": "YOLO 119",
+    "ipAddress": "10.248.131.59",
+    "webLink": "https://10.248.131.59/api/login?NortxeSession=r.Rh6gGDUNg7zWOP3HgXuHhmpa.a&redirect=https://10.248.131.59/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 430,
+    "macAddress": "00-05-A6-1D-73-18",
+    "touchPanelIp": "10.248.131.126",
+    "pcNames": [
+      "SC-YOLO119"
+    ]
+  },
+  {
+    "roomName": "YOLO 124",
+    "ipAddress": "10.248.128.107",
+    "webLink": "https://10.248.128.107/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 245,
+    "macAddress": "00-05-A6-14-ED-01",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-YOLO124"
+    ]
+  },
+  {
+    "roomName": "YOLO 132",
+    "ipAddress": "10.248.128.108",
+    "webLink": "https://10.248.128.108/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 246,
+    "macAddress": "00-05-A6-14-EC-EC",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-YOLO132"
+    ]
+  },
+  {
+    "roomName": "YOLO 142",
+    "ipAddress": "10.248.128.72",
+    "webLink": "https://10.248.128.72/api/login?NortxeSession=r.tZn6uPBDeDW6d7qXb9yrGzpB.a&redirect=https://10.248.128.72/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 431,
+    "macAddress": "00-05-A6-1D-73-1B",
+    "touchPanelIp": "10.248.128.77",
+    "pcNames": [
+      "SC-YOLO142"
+    ]
+  },
+  {
+    "roomName": "YOLO 143",
+    "ipAddress": "10.248.131.60",
+    "webLink": "https://10.248.131.60/api/login?NortxeSession=r.Isrya37fE41E6wH5Jl5HTxVQ.b&redirect=https://10.248.131.60/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 432,
+    "macAddress": "00-05-A6-1D-73-67",
+    "touchPanelIp": "10.248.131.127",
+    "pcNames": [
+      "SC-YOLO143"
+    ]
+  },
+  {
+    "roomName": "YOLO 145",
+    "ipAddress": "10.248.132.77",
+    "webLink": "https://10.248.132.77/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 310,
+    "macAddress": "00-05-A6-22-52-9D",
+    "touchPanelIp": "10.248.132.69",
+    "pcNames": [
+      "SC-YOLO145"
+    ]
+  },
+  {
+    "roomName": "YOLO 146",
+    "ipAddress": "10.248.131.61",
+    "webLink": "https://10.248.131.61/api/login?NortxeSession=r.6IApX3LHYcnDDr1HKYU91Lch.a&redirect=https://10.248.131.61/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 433,
+    "macAddress": "00-05-A6-1D-73-E2",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-YOLO146"
+    ]
+  },
+  {
+    "roomName": "YOLO 171",
+    "ipAddress": "10.248.131.62",
+    "webLink": "https://10.248.131.62/api/login?NortxeSession=r.GQZWJFEyZALi5b8zMm6NlyBC.a&redirect=https://10.248.131.62/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 434,
+    "macAddress": "00-05-A6-1D-AF-B2",
+    "touchPanelIp": "10.248.131.129",
+    "pcNames": [
+      "SC-YOLO171"
+    ]
+  },
+  {
+    "roomName": "YOLO 178",
+    "ipAddress": "10.248.131.63",
+    "webLink": "https://10.248.131.63/api/login?NortxeSession=r.Pc4DcIesxqt1adZDNJy3bGfb.a&redirect=https://10.248.131.63/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 435,
+    "macAddress": "00-05-A6-1D-73-85",
+    "touchPanelIp": "10.248.131.130",
+    "pcNames": [
+      "SC-YOLO178"
+    ]
+  },
+  {
+    "roomName": "YOLO 206",
+    "ipAddress": "10.248.131.64",
+    "webLink": "https://10.248.131.64/api/login?NortxeSession=r.XBHVxJ3veDiz5uOVdqQAMf5c.c&redirect=https://10.248.131.64/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 436,
+    "macAddress": "00-05-A6-1D-73-E3",
+    "touchPanelIp": "10.248.131.131",
+    "pcNames": [
+      "SC-YOLO206"
+    ]
+  },
+  {
+    "roomName": "YOLO 213",
+    "ipAddress": "10.248.130.210",
+    "webLink": "https://10.248.130.210/web/vtlp/b57166d1-8a98-43a1-aa60-2ec3152169a3/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 312,
+    "macAddress": "00-05-A6-13-CA-67",
+    "touchPanelIp": "10.248.132.59",
+    "pcNames": [
+      "SC-YOLO213"
+    ]
+  },
+  {
+    "roomName": "YOLO 217",
+    "ipAddress": "10.248.129.59",
+    "webLink": "https://10.248.129.59/api/login?NortxeSession=r.IvbYvswWvlNXmafSidxumbRU.c&redirect=https://10.248.129.59/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 437,
+    "macAddress": "00-05-A6-1D-73-E8",
+    "touchPanelIp": "10.248.129.52",
+    "pcNames": [
+      "SC-YOLO217"
+    ]
+  },
+  {
+    "roomName": "YOLO 218",
+    "ipAddress": "10.248.131.66",
+    "webLink": "https://10.248.131.66/api/login?NortxeSession=r.jSymYoX2jyJBlGORdmh5b84u.a&redirect=https://10.248.131.66/web/vtlp/ui/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 438,
+    "macAddress": "00-05-A6-1D-73-2E",
+    "touchPanelIp": "10.248.131.133",
+    "pcNames": [
+      "SC-YOLO218"
+    ]
+  },
+  {
+    "roomName": "YOLO 224",
+    "ipAddress": "10.248.128.127",
+    "webLink": "https://10.248.128.127/web/vtlp/edd0cb07-e1b6-44b4-934a-611283b39107/index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 257,
+    "macAddress": "00-05-A6-14-EC-F1",
+    "touchPanelIp": "",
+    "pcNames": [
+      "SC-YOLO224"
+    ]
+  },
+  {
+    "roomName": "YOLO 234",
+    "ipAddress": "10.248.128.250",
+    "webLink": "http://10.248.128.250/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 258,
+    "macAddress": "00-05-A6-0C-36-20",
+    "touchPanelIp": "10.248.128.254",
+    "pcNames": [
+      "SC-YOLO234-01",
+      "SC-YOLO234-02",
+      "SC-YOLO234-03",
+      "SC-YOLO234-04",
+      "SC-YOLO234-05",
+      "SC-YOLO234-06",
+      "SC-YOLO234-07"
+    ]
+  },
+  {
+    "roomName": "YOLO 259",
+    "ipAddress": "10.248.128.152",
+    "webLink": "http://10.248.128.152/gc2/gv-index.html",
+    "password": "ATEC2007",
+    "supportsLogging": false,
+    "roomId": 242,
+    "macAddress": "00-05-A6-03-0A-A4",
+    "touchPanelIp": "",
+    "pcNames": [
+      "CONF-YOLO259"
+    ]
+  }
+]

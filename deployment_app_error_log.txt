@@ -1,0 +1,58 @@
+[2026-05-25T20:47:28.788980] ERROR: Cannot export: Missing processor selection or root folder path.
+--------------------------------------------------
+[2026-05-25T20:50:34.917016] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-05-25T20:51:49.243685] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-05-25T20:51:49.805993] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-05-25T20:51:49.965386] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-05-25T20:52:21.733824] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-05-25T20:52:22.819936] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-05-25T20:52:23.022937] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-05-25T20:52:23.189420] ERROR: Failed to load processors.json
+Details: Exception: Processors file not found at path.
+StackTrace:
+#0      AppStateProvider.loadProcessorsList (package:extron_configurator/app_state.dart:48:9)
+<asynchronous suspension>
+
+--------------------------------------------------
