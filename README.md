@@ -1,3 +1,3 @@
 # extron_configurator
 
-A new Flutter project.
+Edit and build JSON files for processors
