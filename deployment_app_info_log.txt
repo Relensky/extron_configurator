@@ -18,3 +18,6 @@
 [2026-05-26T00:03:05.456909] INFO: Buildings list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\buildings.json
 [2026-05-26T00:03:05.471483] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json
 [2026-05-26T00:03:05.477486] INFO: Template loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\config.json
+[2026-05-26T00:20:43.251749] INFO: Buildings list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\buildings.json
+[2026-05-26T00:20:43.275309] INFO: Template loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\config.json
+ssors.json

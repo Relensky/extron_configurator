@@ -176,21 +176,42 @@ class DeviceConfigurationForm extends StatelessWidget {
           FutureBuilder<List<String>>(
             future: provider.getCommandsForModule(moduleName),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const CircularProgressIndicator();
-              List<String> commands = snapshot.data ?? [];
-              String currentValue = deviceData['keep_alive_command'] ?? '';
-              if (currentValue.isNotEmpty && !commands.contains(currentValue)) commands.insert(0, currentValue);
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator());
+              }
+              
+              // 1. Grab the parsed commands and force a final deduplication pass just in case
+              List<String> commands = snapshot.data?.toSet().toList() ?? [];
+              String currentValue = deviceData['keep_alive_command']?.toString() ?? '';
+              
+              // 2. Ensure the current config.json value exists in the dropdown list 
+              // so the UI doesn't crash if the template has a command the python file doesn't
+              if (currentValue.isNotEmpty && !commands.contains(currentValue)) {
+                commands.insert(0, currentValue);
+              }
+
+              // 3. Add an empty option at the top so users can clear the keep alive
+              if (!commands.contains('')) {
+                commands.insert(0, ''); 
+              }
 
               return DropdownButtonFormField<String>(
-                value: currentValue.isEmpty ? null : currentValue,
+                value: currentValue, // Using '' instead of null for empty states
                 decoration: InputDecoration(
                   labelText: 'Keep Alive Command',
                   helperText: 'Parsed from $moduleName.py',
                   border: const OutlineInputBorder(),
                 ),
-                items: commands.map((cmd) => DropdownMenuItem(value: cmd, child: Text(cmd))).toList(),
+                items: commands.map((cmd) {
+                  return DropdownMenuItem(
+                    value: cmd,
+                    child: Text(cmd.isEmpty ? '-- None --' : cmd),
+                  );
+                }).toList(),
                 onChanged: (val) {
-                  if (val != null) provider.updateDeviceValue(deviceKey, 'keep_alive_command', val);
+                  if (val != null) {
+                    provider.updateDeviceValue(deviceKey, 'keep_alive_command', val);
+                  }
                 },
               );
             },

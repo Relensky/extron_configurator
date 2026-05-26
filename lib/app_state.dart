@@ -214,7 +214,6 @@ class AppStateProvider extends ChangeNotifier {
   /// Parses an Extron Python module file to extract valid keep-alive commands.
   Future<List<String>> getCommandsForModule(String moduleFileName) async {
     // Construct the full local path based on the app settings and the json module string
-    // e.g., 'modules.device.epsn_vp_Powerlite' -> 'modules/device/epsn_vp_Powerlite.py'
     final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
     final fullPath = path.join(modulesPath, relativePath);
 
@@ -228,16 +227,21 @@ class AppStateProvider extends ChangeNotifier {
       
       final content = await file.readAsString();
       
-      // Regex to find python methods that start with "Update" (e.g., def UpdatePower(self...))
+      // Regex to find python methods that start with "Update"
       final updateMethodRegExp = RegExp(r"def\s+Update([A-Za-z0-9_]+)\s*\(");
-      final commands = <String>[];
+      
+      // USE A SET INSTEAD OF A LIST TO PREVENT DUPLICATES
+      final Set<String> uniqueCommands = {};
 
       for (final match in updateMethodRegExp.allMatches(content)) {
         final cmd = match.group(1);
         if (cmd != null) {
-          commands.add(cmd); // e.g., grabs 'Power' from 'def UpdatePower'
+          uniqueCommands.add(cmd); // Sets automatically ignore duplicates
         }
       }
+
+      // Convert back to a list and sort alphabetically for a better UI experience
+      final commands = uniqueCommands.toList()..sort();
 
       _moduleCommandsCache[fullPath] = commands;
       return commands;
