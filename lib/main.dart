@@ -43,14 +43,27 @@ class _MainDashboardState extends State<MainDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final hasConfig = provider.roomConfig.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Room Config Builder'),
         actions: [
           IconButton(
-            icon: Icon(context.watch<AppStateProvider>().isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
             tooltip: 'Toggle Theme',
-            onPressed: () => context.read<AppStateProvider>().toggleTheme(),
+            onPressed: () => provider.toggleTheme(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.folder_open),
+            tooltip: 'Open Existing Config',
+            onPressed: () async {
+              bool loaded = await provider.loadExistingConfig();
+              if (loaded && provider.systemLogs.isNotEmpty && context.mounted) {
+                _showMigrationLogDialog(context, provider.systemLogs);
+              }
+            },
           ),
           IconButton(
             icon: const Icon(Icons.cloud_upload),
@@ -67,8 +80,7 @@ class _MainDashboardState extends State<MainDashboard> {
             icon: const Icon(Icons.save_alt),
             tooltip: 'Export Config Locally',
             onPressed: () async {
-              // <-- UPDATED: Await the save prompt and only show SnackBar on success
-              bool saved = await context.read<AppStateProvider>().exportRoomConfig();
+              bool saved = await provider.exportRoomConfig();
               if (saved && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Config saved successfully!'))
@@ -96,7 +108,72 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
-            child: _buildMainContent(),
+            child: (!hasConfig && _selectedIndex != 4) ? _buildLandingScreen(context, provider) : _buildMainContent(),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandingScreen(BuildContext context, AppStateProvider provider) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.account_tree, size: 80, color: Theme.of(context).disabledColor),
+          const SizedBox(height: 24),
+          Text("No Configuration Loaded", style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 40),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                height: 60,
+                width: 250,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.add_box),
+                  label: const Text("Create New Config\n(From base config.json)", textAlign: TextAlign.center),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade700,
+                    foregroundColor: Colors.white, // Forces readable text in light mode
+                  ),
+                  onPressed: () async {
+                    if (provider.rootFolderPath.isEmpty) {
+                       setState(() => _selectedIndex = 4); // Route to App Config
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Please set the Template Root Path first."), backgroundColor: Colors.red)
+                        );
+                    } else {
+                      bool success = await provider.createNewConfig();
+                      if (!success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Failed to load base config.json from root folder."), backgroundColor: Colors.red)
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 20),
+              SizedBox(
+                height: 60,
+                width: 250,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text("Open Existing Config"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey.shade700,
+                    foregroundColor: Colors.white, // Forces readable text in light mode
+                  ),
+                  onPressed: () async {
+                    bool loaded = await provider.loadExistingConfig();
+                    if (loaded && provider.systemLogs.isNotEmpty && context.mounted) {
+                      _showMigrationLogDialog(context, provider.systemLogs);
+                    }
+                  },
+                ),
+              ),
+            ],
           )
         ],
       ),
@@ -110,7 +187,7 @@ class _MainDashboardState extends State<MainDashboard> {
       case 1:
         return const DynamicDevicesTabsView(); 
       case 2:
-        return const SystemSettingsView(); // <-- Add this case
+        return const SystemSettingsView();
       case 3:
         return const JsonEditorView();
       case 4:
@@ -119,6 +196,71 @@ class _MainDashboardState extends State<MainDashboard> {
         return const Center(child: Text("Select a category"));
     }
   }
+}
+
+/// Displays a scrollable log of actions taken to make an older config compatible
+void _showMigrationLogDialog(BuildContext context, List<String> logs) {
+  showDialog(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            const SizedBox(width: 10),
+            const Text('Legacy Config Updated'),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          height: 300,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("The loaded file was missing required fields for the current template. The following defaults were injected into memory:"),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black87, // Dark background for terminal feel
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: ListView.builder(
+                    itemCount: logs.length,
+                    itemBuilder: (context, index) {
+                      bool isHeader = index == 0;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6.0),
+                        child: Text(
+                          logs[index],
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                            color: isHeader ? Colors.orangeAccent : Colors.greenAccent,
+                            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text("Note: These changes are currently only in memory. Save the config to make them permanent.", 
+                style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Acknowledge'),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 /// View for mapping application paths and selecting the active deployment room

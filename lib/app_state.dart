@@ -23,6 +23,7 @@ class AppStateProvider extends ChangeNotifier {
   Map<String, dynamic>? selectedProcessor;
   Map<String, dynamic> roomConfig = {};
   bool isDarkMode = true;
+  List<String> systemLogs = []; // NEW: Store user-facing session logs
   
   // Cache for parsed python module commands to prevent repetitive disk I/O
   final Map<String, List<String>> _moduleCommandsCache = {};
@@ -120,8 +121,7 @@ class AppStateProvider extends ChangeNotifier {
     _loadSavedSettings();
   }
 
-  /// Loads saved paths from the OS and automatically parses the files.
-  /// Generates a default config.json if one is missing to prevent empty states.
+  /// Loads saved paths from the OS. No longer auto-loads the config.
   Future<void> _loadSavedSettings() async {
     await Future.delayed(const Duration(milliseconds: 200));
 
@@ -132,47 +132,175 @@ class AppStateProvider extends ChangeNotifier {
       processorsFilePath = prefs.getString('processorsFilePath') ?? '';
       rootFolderPath = prefs.getString('rootFolderPath') ?? '';
       buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
-      templateFilePath = prefs.getString('templateFilePath') ?? '';
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
 
-      // 2. AUTO-GENERATE DEFAULT CONFIG IF MISSING OR EMPTY
-      if (templateFilePath.isEmpty || !await File(templateFilePath).exists()) {
-        AppLogger.logInfo("No valid template found. Generating default_config.json");
-        
-        // Create a default file in the current execution directory
-        templateFilePath = path.join(Directory.current.path, 'default_config.json');
-        final file = File(templateFilePath);
-        
-        if (!await file.exists()) {
-          const String defaultTemplate = '''{
-    "SYSTEM_SETUP": {
-        "gve_bldg": "UNKNOWN",
-        "gve_room": "000",
-        "gui_full_room_name": "New Room Configuration",
-        "dev_cameras": "0",
-        "dev_projectors": "0",
-        "dev_switchers": "0",
-        "dev_dsps": "0",
-        "dev_power_controllers": "0"
-    }
-}''';
-          await file.writeAsString(defaultTemplate);
-        }
-        
-        // Save this new path to the OS preferences so it loads automatically next time
-        await prefs.setString('templateFilePath', templateFilePath);
-      }
-
-      // 3. Load files into memory safely
+      // Load files into memory safely
       if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
       if (processorsFilePath.isNotEmpty) await loadProcessorsList();
-      if (templateFilePath.isNotEmpty) await loadConfigTemplate(templateFilePath);
 
     } catch (e, stack) {
       AppLogger.logError("Startup Initialization Error", e, stack);
     } finally {
-      // 4. Update the UI once all heavy lifting is done
+      // Update the UI once all heavy lifting is done
       notifyListeners(); 
+    }
+  }
+
+  /// Prompts the user to pick an existing config file and loads it.
+  /// Automatically creates a backup of the original file if migration is needed.
+  Future<bool> loadExistingConfig() async {
+    try {
+      FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.custom, 
+        allowedExtensions: ['json']
+      );
+      if (result != null) {
+        systemLogs.clear(); // Clear old logs on new load
+
+        final file = File(result.files.single.path!);
+        final originalContents = await file.readAsString();
+        final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
+
+        // --- AUTOMATIC BACKUP LOGIC ---
+        try {
+          // Extract identifiers for the filename
+          String bldg = "UNKNOWN";
+          String room = "000";
+          if (parsedConfig.containsKey('SYSTEM_SETUP')) {
+            bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
+            room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
+          }
+
+          // Build the path: Save it in the exact same folder they opened it from
+          final backupFileName = '${bldg}_${room}_old_config.json';
+          final directoryPath = file.parent.path;
+          final backupFilePath = path.join(directoryPath, backupFileName);
+          final backupFile = File(backupFilePath);
+
+          // Write the exact original string to disk so no formatting is lost
+          await backupFile.writeAsString(originalContents);
+          
+          AppLogger.logInfo("Created backup of legacy config at $backupFilePath");
+          systemLogs.add("BACKUP SAVED: Original file preserved as '$backupFileName'");
+          systemLogs.add("--------------------------------------------------");
+          
+        } catch (backupError) {
+          AppLogger.logError("Failed to create backup file", backupError);
+          systemLogs.add("WARNING: Failed to generate local backup file.");
+        }
+        // ------------------------------
+
+        roomConfig = parsedConfig;
+        
+        // Check for missing keys and patch them
+        _validateAndMigrateConfig();
+        
+        notifyListeners();
+        AppLogger.logInfo("Loaded existing config from ${file.path}");
+        return true;
+      }
+      return false;
+    } catch (e, stack) {
+      AppLogger.logError("Failed to load existing config", e, stack);
+      return false;
+    }
+  }
+
+  /// Scans the loaded configuration against baseline defaults and patches missing keys.
+  void _validateAndMigrateConfig() {
+    // If SYSTEM_SETUP is entirely missing, create it
+    if (!roomConfig.containsKey('SYSTEM_SETUP')) {
+      roomConfig['SYSTEM_SETUP'] = <String, dynamic>{};
+      systemLogs.add("CRITICAL: Added missing 'SYSTEM_SETUP' root block.");
+    }
+
+    final systemSetup = roomConfig['SYSTEM_SETUP'] as Map<String, dynamic>;
+
+    // Define the baseline schema needed for the current template to function
+    final Map<String, dynamic> baselineDefaults = {
+      "gve_bldg": "UNKNOWN",
+      "gve_room": "000",
+      "gui_full_room_name": "Legacy Room Update",
+      "dev_projectors": "0",
+      "dev_cameras": "0",
+      "dev_switchers": "0",
+      "dev_dsps": "0",
+      "dev_usb_switchers": "0",
+      "dev_media_ports": "0",
+      "dev_wireless": "0",
+      "dev_recorders": "0",
+      "dev_screens": "0",
+      "dev_power_controllers": "0",
+      "gui_mic_mix": "No",
+      "gui_routing_available": "No",
+      "gui_routing_mode": "Normal",
+      "gui_tab": "2_Cam_Dev",
+      "gui_capture_source_available": "No",
+      "gui_usb_or_vga": "USB",
+    };
+
+    int additions = 0;
+
+    // Check existing keys against the baseline
+    baselineDefaults.forEach((key, defaultValue) {
+      if (!systemSetup.containsKey(key)) {
+        systemSetup[key] = defaultValue;
+        systemLogs.add("-> Added missing property: '$key' (Default: '$defaultValue')");
+        additions++;
+      }
+    });
+
+    if (additions > 0) {
+      String summary = "SYSTEM MIGRATION: Added $additions missing schema properties to match current template standards.";
+      systemLogs.insert(2, summary); // Insert summary right below the backup notification
+      AppLogger.logInfo(summary);
+    }
+  }
+
+  /// Creates a new config from the base config.json in the root folder, setting devices to 0.
+  Future<bool> createNewConfig() async {
+    if (rootFolderPath.isEmpty) {
+      AppLogger.logError("Cannot create new config: Root Folder Path is not set.");
+      return false;
+    }
+
+    try {
+      final baseConfigPath = path.join(rootFolderPath, 'config.json');
+      final file = File(baseConfigPath);
+      
+      if (!await file.exists()) {
+        AppLogger.logError("Base config.json not found in $rootFolderPath");
+        return false;
+      }
+
+      final contents = await file.readAsString();
+      roomConfig = jsonDecode(contents);
+
+      // Default all hardware counts to 0
+      if (roomConfig.containsKey('SYSTEM_SETUP')) {
+        final setup = roomConfig['SYSTEM_SETUP'];
+        final deviceKeys = [
+          'dev_projectors', 'dev_cameras', 'dev_switchers', 'dev_dsps', 
+          'dev_usb_switchers', 'dev_media_ports', 'dev_wireless', 
+          'dev_recorders', 'dev_screens', 'dev_power_controllers'
+        ];
+        
+        for (var key in deviceKeys) {
+          if (setup.containsKey(key)) {
+            setup[key] = "0";
+          }
+        }
+      }
+
+      // Prune existing devices based on the new 0 counts
+      roomConfig = _pruneConfig(roomConfig);
+      
+      notifyListeners();
+      AppLogger.logInfo("New config created from base template.");
+      return true;
+    } catch (e, stack) {
+      AppLogger.logError("Failed to create new config", e, stack);
+      return false;
     }
   }
 
@@ -364,12 +492,16 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Helper to grab a default template for a device if the user increases the count
   /// Falls back to a basic map if a template (like PROJECTORDEVICE_1) isn't loaded.
+  /// Synthesizes a module path to instantly trigger Python parsing.
   Map<String, dynamic> getDefaultDeviceBlock(String devicePrefix) {
     // Try to find an existing device of this type to use as a template (e.g. CAMERADEVICE_1)
     final templateKey = '${devicePrefix}1';
     if (roomConfig.containsKey(templateKey)) {
       return jsonDecode(jsonEncode(roomConfig[templateKey])); // Deep copy
     }
+    
+    // Synthesize a likely python module path based on the prefix (e.g. PROJECTORDEVICE_ -> modules.projectordevice)
+    String cleanPrefix = devicePrefix.replaceAll('_', '').toLowerCase();
     
     // Fallback basic schema if no template is loaded
     return {
@@ -381,6 +513,7 @@ class AppStateProvider extends ChangeNotifier {
       "keep_alive_command": "",
       "keep_alive_interval": 30,
       "name": "New $devicePrefix",
+      "module": "modules.$cleanPrefix", // <-- Triggers instant file loading
     };
   }
 

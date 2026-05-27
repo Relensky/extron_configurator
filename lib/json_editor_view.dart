@@ -127,7 +127,10 @@ class _JsonEditorViewState extends State<JsonEditorView> {
               ElevatedButton.icon(
                 icon: const Icon(Icons.check),
                 label: const Text('Apply Changes'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade700,
+                  foregroundColor: Colors.white, // Force readable text in light mode
+                ),
                 onPressed: _applyJson,
               )
             ],
