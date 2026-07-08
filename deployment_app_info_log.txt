@@ -34,3 +34,9 @@ ssors.json
 [2026-05-26T10:51:14.819234] INFO: Processors list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\processors.json
 [2026-05-26T10:51:14.869233] INFO: Template loaded from C:\Users\dstanley\Desktop\extron_configurator_test\config.json
 [2026-05-26T10:52:39.755520] INFO: Config successfully saved to C:\Users\dstanley\Desktop\extron_configurator_test\Test_Room_config.json
+[2026-07-07T18:27:42.701648] INFO: Buildings list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\buildings.json
+[2026-07-07T18:27:42.827166] INFO: Processors list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\processors.json
+[2026-07-07T18:28:04.748632] INFO: Loaded existing config from \\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\GCP\BSS\BSS239\BSS239_Vscode\BSS239.json
+WN_000_old_config.json
+[2026-07-07T18:28:45.556818] INFO: Loaded existing config from \\doit-files\ATEC\CTS\StaffFiles\Classroom Technology\GCP\BSS\BSS239\BSS239_Vscode\upload_to_root\config.json
+39_old_config.json
