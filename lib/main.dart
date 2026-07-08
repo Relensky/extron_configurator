@@ -462,6 +462,59 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // Legacy Key Map (key_map.json) Path
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(provider.keyMapPath),
+                decoration: InputDecoration(
+                  labelText: 'Legacy Key Map File Path (key_map.json)',
+                  hintText: r'C:\workspace\key_map.json  (blank = look next to the app)',
+                  helperText: 'Active map: ${provider.keyMap.source} — ${provider.keyMap.ruleCount} rules. '
+                      'Applied automatically when a config is loaded.',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await FilePicker.pickFiles(
+                        type: FileType.custom,
+                        allowedExtensions: ['json'],
+                      );
+                      if (result != null) {
+                        provider.updateSetting('keyMapPath', result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.keyMapPath,
+                onChanged: (val) => provider.updateSetting('keyMapPath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56, // Matches the height of the TextFormField
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload Key Map'),
+                onPressed: () async {
+                  // Pull in edits made to key_map.json without restarting
+                  await provider.loadKeyMap();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Key map reloaded: ${provider.keyMap.source} '
+                          '(${provider.keyMap.ruleCount} rules)'),
+                    ));
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
         // Processors JSON Path
         TextFormField(
           key: ValueKey(provider.processorsFilePath),

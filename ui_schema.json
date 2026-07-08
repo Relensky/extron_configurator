@@ -2,7 +2,7 @@
   "schema_version": 1,
   "__readme": [
     "This file drives the GUI of the Room Config Builder. Edit it and press",
-    "'Reload Schema' in App Config (or restart the app) - no rebuild needed.",
+    "'Reload Schema' in App Config (or restart the app) - no compile needed.",
     "Each entry under 'fields' is keyed by a config.json property name and supports:",
     "  label:       Field label shown in the editor (defaults to the raw key).",
     "  description: Text behind the (i) info button.",
@@ -21,7 +21,13 @@
       "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."
     },
     "com_type": {
-      "description": "Type of connection as a string (Serial, SerialOverEthernet, Network)."
+      "description": "Type of connection as a string (Serial, SerialOverEthernet, Network).",
+      "type": "dropdown",
+      "options": [
+        "Serial",
+        "SerialOverEthernet",
+        "Network"
+      ]
     },
     "host": {
       "description": "The processor or spdevice in use for serial connections."
@@ -45,7 +51,8 @@
       "description": "Command as a string to send to the device once connected. Chosen from the dictionary of commands in the module."
     },
     "keep_alive_interval": {
-      "description": "Timing for sending the keep_alive_command as an integer."
+      "description": "Timing for sending the keep_alive_command as an integer.",
+      "type": "int"
     },
     "keep_alive_qualifier": {
       "description": "Only needed if the command requires a qualifier (Example checking an audio group such as '1' as the qualifier)."
@@ -103,16 +110,24 @@
       "description": "Name of the device as it will appear in the logger."
     },
     "net_port": {
-      "description": "Network Port used to send communications on network connected devices."
+      "description": "Network Port used to send communications on network connected devices.",
+      "type": "int"
     },
     "protocol": {
-      "description": "Protocol in use for network connections (TCP or SSH)."
+      "description": "Protocol in use for network connections (TCP, SSH, or UDP).",
+      "type": "dropdown",
+      "options": [
+        "TCP",
+        "SSH",
+        "UDP"
+      ]
     },
     "serial_port": {
       "description": "Serial port in use if using Serial as the com type."
     },
     "service_port": {
-      "description": "Port for the response from the device. 0 is automatically assigned by the processor."
+      "description": "Port for the response from the device. 0 is automatically assigned by the processor.",
+      "type": "int"
     },
     "use_device_mute": {
       "description": "Boolean for whether a mute command will also call to the device when video mute is pressed."
@@ -503,16 +518,20 @@
       "description": "You can set the full room name that appears on the gui pages."
     },
     "mic_max_volume": {
-      "description": "Volume settings for the project."
+      "description": "Volume settings for the project.",
+      "type": "int"
     },
     "mic_min_volume": {
-      "description": "Volume settings for the project."
+      "description": "Volume settings for the project.",
+      "type": "int"
     },
     "switch_max_volume": {
-      "description": "Volume settings for the project."
+      "description": "Volume settings for the project.",
+      "type": "int"
     },
     "switch_min_volume": {
-      "description": "Volume settings for the project."
+      "description": "Volume settings for the project.",
+      "type": "int"
     },
     "teams_webhook": {
       "description": "The teams notifications that are sent out are set through the webhook link."
@@ -531,6 +550,21 @@
     "power1_outlet_*_action": {
       "description": "If you need to have the outlet set to reboot, use this action command to have the outlet only allow that action.",
       "__comment": "More specific pattern listed after the generic one, so it wins for the _action keys."
+    },
+    "relay_port_*": {
+      "description": "Relay port on the processor used for screen control (e.g. RLY1). _up raises the screen, _down lowers it, _stop halts travel."
+    },
+    "group_*": {
+      "description": "Audio group number on the switcher/DSP. Set these in DSP Configurator / PCS, or the third-party device's software (e.g. Yamaha MTX Editor).",
+      "__comment": "Wildcard fallback: exact group_ entries above still win where defined."
+    },
+    "auto_reconnect": {
+      "type": "bool",
+      "description": "Automatically re-establish the connection to the device (e.g. ShareLink) if it drops."
+    },
+    "startup_watchdog_stage": {
+      "type": "int",
+      "description": "Top-level counter used by the processor's startup watchdog to track boot progress/retries. Managed by the running system - normally leave at 0."
     },
     "__example_new_key": {
       "__comment": [

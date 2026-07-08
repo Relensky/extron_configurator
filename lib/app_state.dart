@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
+import 'config_key_mapper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sftp_client.dart';
 import 'ui_schema.dart';
@@ -18,10 +19,15 @@ class AppStateProvider extends ChangeNotifier {
   String buildingsFilePath = '';
   String templateFilePath = '';
   String uiSchemaPath = ''; // Optional path to ui_schema.json (GUI field definitions)
+  String keyMapPath = '';   // Optional path to key_map.json (legacy key translation)
 
   // --- UI Schema (drives labels, descriptions, dropdowns for config keys) ---
   // Starts with built-in defaults so the editor works before/without a file.
   UiSchema uiSchema = UiSchema.builtIn();
+
+  // --- Key Map (translates legacy config key names on load) ---
+  // Built-in map is empty, so with no key_map.json loading behaves as before.
+  ConfigKeyMap keyMap = ConfigKeyMap.builtIn();
   
   // --- Data State ---
   List<dynamic> processors = [];
@@ -217,10 +223,13 @@ class AppStateProvider extends ChangeNotifier {
       buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
       templateFilePath = prefs.getString('templateFilePath') ?? ''; // FIX: was never restored, so the default config path reset on every restart
       uiSchemaPath = prefs.getString('uiSchemaPath') ?? '';
+      keyMapPath = prefs.getString('keyMapPath') ?? '';
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
 
       // Load the GUI field schema (falls back to built-in defaults on any error)
       await loadUiSchema();
+      // Load the legacy key translation map (empty/no-op when no file exists)
+      await loadKeyMap();
 
       // Load files into memory safely
       if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
@@ -377,7 +386,23 @@ class AppStateProvider extends ChangeNotifier {
     // ------------------------------
 
     roomConfig = parsedConfig;
-    
+
+    // --- LEGACY KEY MAPPING (key_map.json) ---
+    // Translate old section/property names (e.g. CAMERA1DEVICE.IPADDRESS ->
+    // CAMERADEVICE_1.ip_address) BEFORE the template migration runs, so the
+    // rest of the pipeline only ever sees current-schema keys. The original
+    // file was already backed up above, so nothing is lost.
+    if (keyMap.ruleCount > 0) {
+      final result = keyMap.apply(roomConfig);
+      if (result.changed) {
+        roomConfig = result.config;
+        systemLogs.add("KEY MAPPING: Translated ${result.changes.length} legacy item(s) using ${keyMap.source}");
+        systemLogs.addAll(result.changes);
+        systemLogs.add("--------------------------------------------------");
+        AppLogger.logInfo("Key map applied ${result.changes.length} change(s) to loaded config.");
+      }
+    }
+
     // Check for missing keys and patch them
     _validateAndMigrateConfig();
 
@@ -608,7 +633,22 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadUiSchema(); // Re-resolve the GUI field definitions from the new path
         break;
+      case 'keyMapPath':
+        keyMapPath = value;
+        // ignore: unawaited_futures
+        loadKeyMap(); // Re-resolve the legacy key translation rules
+        break;
     }
+    notifyListeners();
+  }
+
+  /// (Re)loads key_map.json — the legacy config key translation rules that
+  /// run automatically on every config load. If keyMapPath is empty,
+  /// key_map.json is searched for next to the executable / working directory.
+  /// With no file (or a broken one), mapping is a no-op and loading behaves
+  /// exactly as before.
+  Future<void> loadKeyMap() async {
+    keyMap = await ConfigKeyMap.load(explicitPath: keyMapPath);
     notifyListeners();
   }
 
