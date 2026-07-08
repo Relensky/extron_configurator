@@ -27,11 +27,21 @@ class AppStateProvider extends ChangeNotifier {
   
   // Cache for parsed python module commands to prevent repetitive disk I/O
   final Map<String, List<String>> _moduleCommandsCache = {};
+  // Cache for parsed python module inputs (previously re-read from disk on every rebuild)
+  final Map<String, List<String>> _moduleInputsCache = {};
+  // All python modules discovered under modulesPath (dot notation), for the
+  // module selection dropdown/autocomplete on device tabs.
+  List<String> availableModules = [];
 
   /// Attempts to find commonly named inputs inside the Python module for the autocomplete field
   Future<List<String>> getInputsForModule(String moduleFileName) async {
     final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
     final fullPath = path.join(modulesPath, relativePath);
+
+    // Serve from cache when the module was already parsed (startup preload or prior visit)
+    if (_moduleInputsCache.containsKey(fullPath)) {
+      return _moduleInputsCache[fullPath]!;
+    }
 
     try {
       final file = File(fullPath);
@@ -50,11 +60,78 @@ class AppStateProvider extends ChangeNotifier {
         }
       }
       
-      if (inputs.isEmpty) return ['HDMI 1', 'HDMI 2', 'VGA', 'HDBaseT', 'DisplayPort'];
-      return inputs.toList()..sort();
+      final result = inputs.isEmpty
+          ? ['HDMI 1', 'HDMI 2', 'VGA', 'HDBaseT', 'DisplayPort']
+          : (inputs.toList()..sort());
+      _moduleInputsCache[fullPath] = result;
+      return result;
     } catch (e) {
       return ['HDMI 1', 'HDMI 2', 'VGA', 'HDBaseT'];
     }
+  }
+
+  /// Scans the entire modules directory at startup (or when the path changes)
+  /// and parses every .py file into the command/input caches up front.
+  /// Fault-tolerant: one unreadable file or folder no longer aborts the scan.
+  Future<void> preloadAllModules() async {
+    if (modulesPath.isEmpty) return;
+    final List<String> discovered = [];
+    try {
+      final dir = Directory(modulesPath);
+      if (!await dir.exists()) {
+        AppLogger.logError("Modules path does not exist: $modulesPath");
+        return;
+      }
+
+      // Collect entries first, tolerating unreadable folders/links mid-scan
+      final List<FileSystemEntity> entities = [];
+      await for (final entity in dir
+          .list(recursive: true, followLinks: false)
+          .handleError((err) => AppLogger.logError("Skipped unreadable entry while scanning modules", err))) {
+        entities.add(entity);
+      }
+
+      for (final entity in entities) {
+        try {
+          if (entity is! File) continue;
+          final p = entity.path;
+          if (!p.toLowerCase().endsWith('.py')) continue;
+          if (p.contains('__pycache__')) continue; // Compiled/cache dirs are never modules
+
+          // Convert the file path back into the dot-notation used by the config
+          String rel = path.relative(p, from: modulesPath);
+          String moduleName = rel
+              .replaceAll(RegExp(r'\.py$', caseSensitive: false), '')
+              .replaceAll(RegExp(r'[\\/]'), '.');
+          discovered.add(moduleName);
+          await getCommandsForModule(moduleName);
+          await getInputsForModule(moduleName);
+        } catch (e) {
+          // Skip this one file, keep parsing the rest
+          AppLogger.logError("Skipped unparseable module ${entity.path}", e);
+        }
+      }
+      AppLogger.logInfo("Preloaded ${discovered.length} python module dictionaries from $modulesPath");
+    } catch (e, stack) {
+      AppLogger.logError("Failed to preload python module dictionaries", e, stack);
+    } finally {
+      // Publish whatever was found, even after a partial failure, so the
+      // module dropdown and keep-alive lists work with the successful portion.
+      availableModules = discovered..sort();
+      notifyListeners();
+    }
+  }
+
+  /// Warms the parser caches for every module referenced by the active config.
+  /// Called after any config is loaded so device tabs open instantly.
+  void _preloadModulesFromConfig() {
+    roomConfig.forEach((key, value) {
+      if (value is Map && value['module'] is String && (value['module'] as String).isNotEmpty) {
+        // Fire-and-forget: results land in the caches used by the FutureBuilders
+        getCommandsForModule(value['module']);
+        getInputsForModule(value['module']);
+      }
+    });
   }
 
   Future<bool> uploadConfigToProcessor({
@@ -132,11 +209,19 @@ class AppStateProvider extends ChangeNotifier {
       processorsFilePath = prefs.getString('processorsFilePath') ?? '';
       rootFolderPath = prefs.getString('rootFolderPath') ?? '';
       buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
+      templateFilePath = prefs.getString('templateFilePath') ?? ''; // FIX: was never restored, so the default config path reset on every restart
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
 
       // Load files into memory safely
       if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
       if (processorsFilePath.isNotEmpty) await loadProcessorsList();
+
+      // Warm the python module caches in the background so the keep-alive /
+      // input dropdowns are instant the first time a device tab is opened.
+      if (modulesPath.isNotEmpty) {
+        // ignore: unawaited_futures
+        preloadAllModules();
+      }
 
     } catch (e, stack) {
       AppLogger.logError("Startup Initialization Error", e, stack);
@@ -155,47 +240,16 @@ class AppStateProvider extends ChangeNotifier {
         allowedExtensions: ['json']
       );
       if (result != null) {
-        systemLogs.clear(); // Clear old logs on new load
-
         final file = File(result.files.single.path!);
         final originalContents = await file.readAsString();
         final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
 
-        // --- AUTOMATIC BACKUP LOGIC ---
-        try {
-          // Extract identifiers for the filename
-          String bldg = "UNKNOWN";
-          String room = "000";
-          if (parsedConfig.containsKey('SYSTEM_SETUP')) {
-            bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
-            room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
-          }
-
-          // Build the path: Save it in the exact same folder they opened it from
-          final backupFileName = '${bldg}_${room}_old_config.json';
-          final directoryPath = file.parent.path;
-          final backupFilePath = path.join(directoryPath, backupFileName);
-          final backupFile = File(backupFilePath);
-
-          // Write the exact original string to disk so no formatting is lost
-          await backupFile.writeAsString(originalContents);
-          
-          AppLogger.logInfo("Created backup of legacy config at $backupFilePath");
-          systemLogs.add("BACKUP SAVED: Original file preserved as '$backupFileName'");
-          systemLogs.add("--------------------------------------------------");
-          
-        } catch (backupError) {
-          AppLogger.logError("Failed to create backup file", backupError);
-          systemLogs.add("WARNING: Failed to generate local backup file.");
-        }
-        // ------------------------------
-
-        roomConfig = parsedConfig;
-        
-        // Check for missing keys and patch them
-        _validateAndMigrateConfig();
-        
-        notifyListeners();
+        await _processLoadedConfig(
+          originalContents: originalContents,
+          parsedConfig: parsedConfig,
+          backupDirectory: file.parent.path,
+          sourceLabel: file.path,
+        );
         AppLogger.logInfo("Loaded existing config from ${file.path}");
         return true;
       }
@@ -203,6 +257,205 @@ class AppStateProvider extends ChangeNotifier {
     } catch (e, stack) {
       AppLogger.logError("Failed to load existing config", e, stack);
       return false;
+    }
+  }
+
+  /// Downloads /config.json from the processor's root folder over SFTP,
+  /// prompts the user for a NEW working file location, writes a backup of the
+  /// exact downloaded original, and loads the config into memory for editing.
+  Future<bool> downloadConfigFromProcessor({
+    required String ipAddress,
+    required String password,
+    required Function(String) onStatusUpdate,
+  }) async {
+    Directory? tempDir;
+    try {
+      tempDir = await Directory.systemTemp.createTemp('deployment_app_dl_');
+      final tempPath = path.join(tempDir.path, 'config.json');
+
+      final sftpClient = SftpLogger();
+      final ok = await sftpClient.downloadProcessorFile(
+        ipAddress: ipAddress,
+        password: password,
+        remoteFilename: '/config.json',
+        outputPath: tempPath,
+        onStatusUpdate: onStatusUpdate,
+      );
+      if (!ok) return false;
+
+      final originalContents = await File(tempPath).readAsString();
+      final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
+
+      // Prompt for where the NEW (editable) working copy should live
+      String bldg = "UNKNOWN";
+      String room = "000";
+      if (parsedConfig.containsKey('SYSTEM_SETUP')) {
+        bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
+        room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
+      }
+      onStatusUpdate('System: Choose where to save the new working copy...');
+      String? savePath = await FilePicker.saveFile(
+        dialogTitle: 'Save Downloaded Config As (new working file)',
+        fileName: '${bldgAbbreviation(bldg)}_${room}_config.json',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (savePath == null) {
+        onStatusUpdate('System: Download cancelled (no save location chosen).');
+        return false;
+      }
+
+      // Write the working copy exactly as downloaded; your edits are exported later
+      await File(savePath).writeAsString(originalContents);
+
+      // Backup the pristine download next to the working copy, then load it
+      await _processLoadedConfig(
+        originalContents: originalContents,
+        parsedConfig: parsedConfig,
+        backupDirectory: File(savePath).parent.path,
+        sourceLabel: 'SFTP download from $ipAddress -> $savePath',
+      );
+
+      onStatusUpdate('System: Config downloaded, backed up, and loaded for editing.');
+      return true;
+    } catch (e, stack) {
+      AppLogger.logError("Failed to download config from processor $ipAddress", e, stack);
+      onStatusUpdate('System Error: Failed to process downloaded config - $e');
+      return false;
+    } finally {
+      try { if (tempDir != null && await tempDir.exists()) await tempDir.delete(recursive: true); } catch (_) {}
+    }
+  }
+
+  /// Shared pipeline for any incoming config (local file or SFTP download):
+  /// backs up the original, migrates missing keys, flags non-template items,
+  /// writes the migration log file, and warms the module caches.
+  Future<void> _processLoadedConfig({
+    required String originalContents,
+    required Map<String, dynamic> parsedConfig,
+    required String backupDirectory,
+    required String sourceLabel,
+  }) async {
+    systemLogs.clear(); // Clear old logs on new load
+
+    // --- AUTOMATIC BACKUP LOGIC ---
+    try {
+      // Extract identifiers for the filename
+      String bldg = "UNKNOWN";
+      String room = "000";
+      if (parsedConfig.containsKey('SYSTEM_SETUP')) {
+        bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
+        room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
+      }
+
+      // Use the short abbreviation for the filename even when gve_bldg holds the full name
+      final backupFileName = '${bldgAbbreviation(bldg)}_${room}_old_config.json';
+      final backupFilePath = path.join(backupDirectory, backupFileName);
+      final backupFile = File(backupFilePath);
+
+      // Write the exact original string to disk so no formatting is lost
+      await backupFile.writeAsString(originalContents);
+      
+      AppLogger.logInfo("Created backup of original config at $backupFilePath");
+      systemLogs.add("BACKUP SAVED: Original file preserved as '$backupFileName'");
+      systemLogs.add("--------------------------------------------------");
+      
+    } catch (backupError) {
+      AppLogger.logError("Failed to create backup file", backupError);
+      systemLogs.add("WARNING: Failed to generate local backup file.");
+    }
+    // ------------------------------
+
+    roomConfig = parsedConfig;
+    
+    // Check for missing keys and patch them
+    _validateAndMigrateConfig();
+
+    // Flag anything in the loaded config that does not exist in the default template
+    final template = await _readDefaultTemplate();
+    if (template != null) {
+      _flagUnknownKeys(template);
+    } else {
+      systemLogs.add("NOTE: No default template available to audit against (set one in App Config).");
+    }
+
+    // Persist a permanent record of every change added/flagged during the
+    // load so there is an audit trail beyond the in-memory dialog.
+    await AppLogger.logMigration(sourceLabel, List<String>.from(systemLogs));
+
+    _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
+    notifyListeners();
+  }
+
+  /// Reads the default template config (the file set via 'Load Template',
+  /// falling back to config.json in the root folder) without touching state.
+  Future<Map<String, dynamic>?> _readDefaultTemplate() async {
+    String tplPath = '';
+    if (templateFilePath.isNotEmpty) {
+      tplPath = templateFilePath;
+    } else if (rootFolderPath.isNotEmpty) {
+      tplPath = path.join(rootFolderPath, 'config.json');
+    }
+    if (tplPath.isEmpty) return null;
+    try {
+      final f = File(tplPath);
+      if (!await f.exists()) return null;
+      return jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+    } catch (e, stack) {
+      AppLogger.logError("Failed to read default template for audit", e, stack);
+      return null;
+    }
+  }
+
+  /// Flags any sections/properties in the loaded config that are NOT part of
+  /// the default template, so leftovers and custom keys show up in the log.
+  void _flagUnknownKeys(Map<String, dynamic> templateConfig) {
+    // Strip trailing digits so PROJECTORDEVICE_2 compares against PROJECTORDEVICE_1
+    String normalize(String key) => key.replaceFirst(RegExp(r'\d+$'), '');
+    final Set<String> templateFamilies = templateConfig.keys.map(normalize).toSet();
+    int flagged = 0;
+
+    // 1. Top-level sections unknown to the template
+    roomConfig.forEach((key, value) {
+      if (!templateFamilies.contains(normalize(key))) {
+        systemLogs.add("FLAGGED: Section '$key' does not exist in the default config template.");
+        flagged++;
+      }
+    });
+
+    // 2. SYSTEM_SETUP properties unknown to the template
+    if (roomConfig['SYSTEM_SETUP'] is Map && templateConfig['SYSTEM_SETUP'] is Map) {
+      final tplSetup = templateConfig['SYSTEM_SETUP'] as Map;
+      (roomConfig['SYSTEM_SETUP'] as Map).forEach((key, value) {
+        if (!tplSetup.containsKey(key)) {
+          systemLogs.add("FLAGGED: SYSTEM_SETUP property '$key' is not in the default config template.");
+          flagged++;
+        }
+      });
+    }
+
+    // 3. Device block properties unknown to the template's matching device family
+    roomConfig.forEach((key, value) {
+      if (key == 'SYSTEM_SETUP' || value is! Map) return;
+      final family = normalize(key);
+      final tplBlockKey = templateConfig.keys.firstWhere(
+        (k) => normalize(k) == family && templateConfig[k] is Map,
+        orElse: () => '',
+      );
+      if (tplBlockKey.isEmpty) return; // Whole section already flagged above
+      final tplBlock = templateConfig[tplBlockKey] as Map;
+      value.forEach((prop, _) {
+        if (!tplBlock.containsKey(prop)) {
+          systemLogs.add("FLAGGED: '$key.$prop' is not in the default config template.");
+          flagged++;
+        }
+      });
+    });
+
+    if (flagged > 0) {
+      systemLogs.add("TEMPLATE AUDIT: $flagged item(s) in this config are not part of the default template.");
+    } else {
+      systemLogs.add("TEMPLATE AUDIT: All items match the default config template.");
     }
   }
 
@@ -254,22 +507,30 @@ class AppStateProvider extends ChangeNotifier {
       String summary = "SYSTEM MIGRATION: Added $additions missing schema properties to match current template standards.";
       systemLogs.insert(2, summary); // Insert summary right below the backup notification
       AppLogger.logInfo(summary);
+    } else {
+      systemLogs.add("OK: Loaded config already matches the current template schema. No changes required.");
     }
   }
 
-  /// Creates a new config from the base config.json in the root folder, setting devices to 0.
+  /// Creates a new config from the default template (set via 'Load Template'),
+  /// falling back to the base config.json in the root folder. Devices set to 0.
+  /// This is the ONLY point where the template file is actually read into memory.
   Future<bool> createNewConfig() async {
-    if (rootFolderPath.isEmpty) {
-      AppLogger.logError("Cannot create new config: Root Folder Path is not set.");
+    String baseConfigPath = '';
+    if (templateFilePath.isNotEmpty) {
+      baseConfigPath = templateFilePath;
+    } else if (rootFolderPath.isNotEmpty) {
+      baseConfigPath = path.join(rootFolderPath, 'config.json');
+    } else {
+      AppLogger.logError("Cannot create new config: No template file or Root Folder Path is set.");
       return false;
     }
 
     try {
-      final baseConfigPath = path.join(rootFolderPath, 'config.json');
       final file = File(baseConfigPath);
       
       if (!await file.exists()) {
-        AppLogger.logError("Base config.json not found in $rootFolderPath");
+        AppLogger.logError("Template config not found at $baseConfigPath");
         return false;
       }
 
@@ -295,8 +556,9 @@ class AppStateProvider extends ChangeNotifier {
       // Prune existing devices based on the new 0 counts
       roomConfig = _pruneConfig(roomConfig);
       
+      _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
       notifyListeners();
-      AppLogger.logInfo("New config created from base template.");
+      AppLogger.logInfo("New config created from template: $baseConfigPath");
       return true;
     } catch (e, stack) {
       AppLogger.logError("Failed to create new config", e, stack);
@@ -312,6 +574,12 @@ class AppStateProvider extends ChangeNotifier {
     switch (key) {
       case 'modulesPath': 
         modulesPath = value; 
+        // Path changed: stale caches are invalid; rebuild them in the background
+        _moduleCommandsCache.clear();
+        _moduleInputsCache.clear();
+        availableModules = [];
+        // ignore: unawaited_futures
+        preloadAllModules();
         break;
       case 'processorsFilePath': 
         processorsFilePath = value; 
@@ -329,18 +597,24 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Loads the initial config.json template into memory
-  Future<void> loadConfigTemplate(String templatePath) async {
+  /// Validates the template file and registers it as the default WITHOUT
+  /// loading its contents into the active room config. The file is only
+  /// actually read when 'Create New Config' is selected.
+  Future<bool> validateConfigTemplate(String templatePath) async {
     try {
       final file = File(templatePath);
-      if (await file.exists()) {
-        final contents = await file.readAsString();
-        roomConfig = jsonDecode(contents);
-        notifyListeners();
-        AppLogger.logInfo("Template loaded from $templatePath");
+      if (!await file.exists()) {
+        AppLogger.logError("Template file not found at $templatePath");
+        return false;
       }
+      // Parse once to confirm it's valid JSON, but do NOT assign to roomConfig
+      jsonDecode(await file.readAsString());
+      await updateSetting('templateFilePath', templatePath); // persists to SharedPreferences
+      AppLogger.logInfo("Template validated and set as default: $templatePath");
+      return true;
     } catch (e, stack) {
-      AppLogger.logError("Error loading config template", e, stack);
+      AppLogger.logError("Error validating config template (invalid JSON?)", e, stack);
+      return false;
     }
   }
 
@@ -360,32 +634,59 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Helper method to convert a string to Title Case (e.g., "arts and humanities" -> "Arts And Humanities")
+  /// True when the current gve_bldg matches buildings.json — either as the
+  /// ALL CAPS full name (new style) or a legacy abbreviation (old configs).
+  /// Drives whether gui_full_room_name is auto-generated or manually typed.
+  bool get isKnownBuilding {
+    final val = roomConfig['SYSTEM_SETUP']?['gve_bldg']?.toString() ?? '';
+    if (val.isEmpty) return false;
+    return buildings.containsKey(val) || buildings.values.contains(val);
+  }
+
+  /// Resolves a building value to its short abbreviation for FILE NAMES only
+  /// (so gve_bldg holding 'ARTS & HUMANITIES BUILDING' still yields
+  /// 'ARTS_208_config.json'). Falls back to the raw value when unknown.
+  String bldgAbbreviation(String bldgValue) {
+    if (buildings.containsKey(bldgValue)) return buildings[bldgValue].toString();
+    return bldgValue;
+  }
+
+  /// Helper method to convert a string to Title Case (e.g., "ARTS & HUMANITIES" -> "Arts & Humanities")
   String _toTitleCase(String text) {
     if (text.isEmpty) return text;
     return text.split(' ').map((word) {
       if (word.isEmpty) return word;
-      // You can expand this logic to skip small words like 'and', 'the', 'of' if preferred
       return word[0].toUpperCase() + word.substring(1).toLowerCase();
     }).join(' ');
   }
 
-  /// Automatically updates the gui_full_room_name in SYSTEM_SETUP
+  /// Automatically updates the gui_full_room_name in SYSTEM_SETUP.
+  /// gve_bldg stores the ALL CAPS building name from buildings.json, while the
+  /// generated full room name is Title Case ('Arts & Humanities Building 208').
+  /// If the building is not in buildings.json, the name is left untouched so
+  /// the user can type the full room name manually in the wizard.
   void updateFullRoomName() {
     if (roomConfig.containsKey('SYSTEM_SETUP')) {
-      String bldgCode = roomConfig['SYSTEM_SETUP']['gve_bldg'] ?? '';
+      String bldgValue = roomConfig['SYSTEM_SETUP']['gve_bldg'] ?? '';
       String roomNum = roomConfig['SYSTEM_SETUP']['gve_room'] ?? '';
       
-      // Find the full building name from the JSON keys matching the value
-      String fullBldgName = bldgCode;
-      buildings.forEach((key, value) {
-        if (value == bldgCode) fullBldgName = key;
-      });
+      // Resolve the ALL CAPS full name: gve_bldg may hold the full name (new
+      // style) or a legacy abbreviation (older configs). Longest key wins when
+      // several names share one code, matching the wizard's dedupe rule.
+      String fullBldgName = '';
+      if (buildings.containsKey(bldgValue)) {
+        fullBldgName = bldgValue;
+      } else {
+        buildings.forEach((key, value) {
+          if (value == bldgValue && key.length > fullBldgName.length) fullBldgName = key;
+        });
+      }
 
-      // Apply the Title Case formatting
-      String titleCaseBldgName = _toTitleCase(fullBldgName);
-
-      roomConfig['SYSTEM_SETUP']['gui_full_room_name'] = '$titleCaseBldgName $roomNum'.trim();
+      if (fullBldgName.isNotEmpty) {
+        roomConfig['SYSTEM_SETUP']['gui_full_room_name'] =
+            '${_toTitleCase(fullBldgName)} $roomNum'.trim();
+      }
+      // Unknown building: leave gui_full_room_name for manual entry
       notifyListeners();
     }
   }
@@ -421,10 +722,25 @@ class AppStateProvider extends ChangeNotifier {
     selectedProcessor = processor;
     notifyListeners();
   }
+
+  /// Resolves the IP/hostname of the Active Deployment Target for SFTP
+  /// transfers. Returns '' when no room is selected (UI falls back to prompting).
+  String get selectedProcessorIp {
+    final p = selectedProcessor;
+    if (p == null) return '';
+    return (p['ip'] ?? p['ipAddress'] ?? p['ip_address'] ?? p['address'] ?? p['host'] ?? '')
+        .toString();
+  }
   /// Update a specific nested property for a device (e.g., changing keep_alive_command)
   void updateDeviceValue(String deviceKey, String property, dynamic value) {
     if (roomConfig.containsKey(deviceKey)) {
       roomConfig[deviceKey][property] = value;
+      // A new python module was just selected: parse it right away (if it isn't
+      // already cached) so its command/input dictionaries are ready instantly.
+      if (property == 'module' && value is String && value.isNotEmpty) {
+        getCommandsForModule(value);
+        getInputsForModule(value);
+      }
       notifyListeners();
     }
   }
@@ -475,6 +791,7 @@ class AppStateProvider extends ChangeNotifier {
     try {
       final parsed = jsonDecode(rawJson) as Map<String, dynamic>;
       roomConfig = parsed;
+      _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
       notifyListeners();
       AppLogger.logInfo("Room configuration updated from raw JSON editor.");
     } catch (e, stack) {
@@ -483,11 +800,14 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns a formatted JSON string of the current config for the editor
+  /// Returns a formatted JSON string of the current config for the editor.
+  /// Rendered PRUNED: devices beyond the dev_ counts (e.g. a family set to 0
+  /// in the wizard) are hidden, so the raw view always matches what export
+  /// and SFTP upload will actually write.
   String getPrettyConfigString() {
     if (roomConfig.isEmpty) return "{}";
     final encoder = const JsonEncoder.withIndent('    ');
-    return encoder.convert(roomConfig);
+    return encoder.convert(_pruneConfig(roomConfig));
   }
 
   /// Helper to grab a default template for a device if the user increases the count
@@ -529,7 +849,7 @@ class AppStateProvider extends ChangeNotifier {
       final systemSetup = roomConfig['SYSTEM_SETUP'] ?? {};
       final gveBldg = systemSetup['gve_bldg'] ?? 'UNKNOWN_BLDG';
       final gveRoom = systemSetup['gve_room'] ?? 'UNKNOWN_ROOM';
-      final defaultFileName = '${gveBldg}_${gveRoom}_config.json';
+      final defaultFileName = '${bldgAbbreviation(gveBldg.toString())}_${gveRoom}_config.json';
 
       // Prompt the user for a save location
       String? outputFile = await FilePicker.saveFile(
@@ -569,6 +889,7 @@ class AppStateProvider extends ChangeNotifier {
     roomConfig.removeWhere((key, value) => key.startsWith(devicePrefix));
 
     // 2. Generate new blocks based on the count
+    final List<String> newKeys = [];
     for (int i = 1; i <= count; i++) {
       String newDeviceKey = '$devicePrefix$i';
       
@@ -581,9 +902,52 @@ class AppStateProvider extends ChangeNotifier {
       newDevice['name'] = '${newDevice['name'].split('-').first.trim()} $i - Custom Model';
       
       roomConfig[newDeviceKey] = newDevice;
+      newKeys.add(newDeviceKey);
     }
     
     notifyListeners();
+
+    // 3. Immediately verify each new device's module against the .py file in
+    // the modules folder and load a valid keep-alive command from it.
+    // ignore: unawaited_futures
+    _applyKeepAliveDefaults(newKeys);
+  }
+
+  /// For freshly added devices: parses the module's .py file (instant when
+  /// preloaded) and ensures keep_alive_command is a command that actually
+  /// exists in that module. Prefers 'Power'-style commands as the default.
+  Future<void> _applyKeepAliveDefaults(List<String> deviceKeys) async {
+    bool changed = false;
+    for (final key in deviceKeys) {
+      final device = roomConfig[key];
+      if (device is! Map) continue;
+      final moduleName = device['module']?.toString() ?? '';
+      if (moduleName.isEmpty) continue;
+
+      final commands = await getCommandsForModule(moduleName);
+      if (commands.isEmpty) {
+        // Module .py not found in the modules folder (or has no Update methods)
+        AppLogger.logInfo("No matching .py commands for '$moduleName' on $key; keep-alive left as-is.");
+        continue;
+      }
+
+      final current = device['keep_alive_command']?.toString() ?? '';
+      if (current.isNotEmpty && commands.contains(current)) continue; // Already valid for this module
+
+      // Load a sensible default from the module: 'Power' if it exists, then
+      // anything containing 'power' (typical Extron poll), else the first command.
+      final chosen = commands.firstWhere(
+        (c) => c == 'Power',
+        orElse: () => commands.firstWhere(
+          (c) => c.toLowerCase().contains('power'),
+          orElse: () => commands.first,
+        ),
+      );
+      device['keep_alive_command'] = chosen;
+      changed = true;
+      AppLogger.logInfo("Loaded keep_alive_command '$chosen' for $key from $moduleName.py");
+    }
+    if (changed) notifyListeners();
   }
 
   /// Internal helper to remove unused devices based on the `dev_` settings
@@ -604,9 +968,20 @@ class AppStateProvider extends ChangeNotifier {
       'dev_power_controllers': 'POWERDEVICE_',
     };
 
+    // FIX: the dev_ count keys live inside SYSTEM_SETUP, not at the config
+    // root — the old root lookup meant pruning silently never happened.
+    final systemSetup = data['SYSTEM_SETUP'];
+
     deviceMap.forEach((countKey, prefix) {
-      if (data.containsKey(countKey)) {
-        var countVal = data[countKey];
+      // Prefer SYSTEM_SETUP, fall back to root for any legacy config layout
+      dynamic countVal;
+      if (systemSetup is Map && systemSetup.containsKey(countKey)) {
+        countVal = systemSetup[countKey];
+      } else if (data.containsKey(countKey)) {
+        countVal = data[countKey];
+      }
+
+      if (countVal != null) {
         int count = 0;
         
         // Handle values like "Yes" in your dev_wireless setup

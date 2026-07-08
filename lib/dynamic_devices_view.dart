@@ -98,6 +98,60 @@ class DeviceConfigurationForm extends StatelessWidget {
 
   const DeviceConfigurationForm({Key? key, required this.deviceKey}) : super(key: key);
 
+  /// A guaranteed-working dropdown: a searchable dialog listing every python
+  /// module discovered under the Python Modules Path.
+  Future<String?> _showModulePicker(BuildContext context, List<String> modules) {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String filter = '';
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final visible = filter.isEmpty
+                ? modules
+                : modules.where((m) => m.toLowerCase().contains(filter.toLowerCase())).toList();
+            return AlertDialog(
+              title: const Text('Select Python Module'),
+              content: SizedBox(
+                width: 500,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Search modules',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => setDialogState(() => filter = val),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: modules.isEmpty
+                          ? const Center(child: Text('No modules found.\nCheck the Python Modules Path in App Config.', textAlign: TextAlign.center))
+                          : ListView.builder(
+                              itemCount: visible.length,
+                              itemBuilder: (ctx, i) => ListTile(
+                                dense: true,
+                                title: Text(visible[i]),
+                                onTap: () => Navigator.of(ctx).pop(visible[i]),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   // Helper method to wrap fields with Info buttons
   Widget _wrapWithInfo(BuildContext context, String key, Widget field) {
     final desc = ConfigDictionary.descriptions[key];
@@ -129,6 +183,9 @@ class DeviceConfigurationForm extends StatelessWidget {
     final provider = context.watch<AppStateProvider>();
     final deviceData = provider.roomConfig[deviceKey];
     final moduleName = deviceData['module'] as String? ?? '';
+
+    // Captured from the module Autocomplete so 'Pick .py File' can push text into it
+    TextEditingController? moduleFieldController;
 
     // Notice we REMOVED 'name' from this list, so it will now generate as a field you can edit!
     final skipKeys = ['module', 'keep_alive_command', 'input'];
@@ -166,15 +223,52 @@ class DeviceConfigurationForm extends StatelessWidget {
         Text(deviceData['name'] ?? deviceKey, style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 20),
 
-        // --- PYTHON MODULE SELECTOR ---
+        // --- PYTHON MODULE SELECTOR (fill-in or pick from modules path) ---
         _wrapWithInfo(context, 'module', Row(
           children: [
             Expanded(
-              child: TextFormField(
-                key: ValueKey(deviceData['module']), 
-                initialValue: deviceData['module']?.toString() ?? '',
-                decoration: const InputDecoration(labelText: 'Python Module (e.g. modules.device.xyz)', border: OutlineInputBorder()),
-                onChanged: (val) => provider.updateDeviceValue(deviceKey, 'module', val),
+              child: Autocomplete<String>(
+                initialValue: TextEditingValue(text: deviceData['module']?.toString() ?? ''),
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  final modules = provider.availableModules;
+                  final text = textEditingValue.text;
+                  // Show the FULL list when the field is empty or still holds the
+                  // saved value — otherwise a pre-filled field filters itself down
+                  // to one entry and the dropdown appears to do nothing.
+                  if (text.isEmpty || text == deviceData['module']?.toString()) return modules;
+                  return modules.where((m) => m.toLowerCase().contains(text.toLowerCase()));
+                },
+                onSelected: (String selection) {
+                  provider.updateDeviceValue(deviceKey, 'module', selection);
+                },
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  moduleFieldController = controller; // Expose to the picker button & dialog
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Python Module (type or select)',
+                      helperText: provider.availableModules.isEmpty
+                          ? 'No modules found — check the Python Modules Path in App Config'
+                          : '${provider.availableModules.length} modules found under modules path',
+                      border: const OutlineInputBorder(),
+                      // A real button: opens a searchable list of every module
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.arrow_drop_down),
+                        tooltip: 'Browse modules',
+                        onPressed: () async {
+                          final selected = await _showModulePicker(context, provider.availableModules);
+                          if (selected != null) {
+                            provider.updateDeviceValue(deviceKey, 'module', selected);
+                            controller.text = selected; // Keep the visible field in sync
+                          }
+                        },
+                      ),
+                    ),
+                    // Allows manual fill-in to be saved even if not selected from the list
+                    onChanged: (val) => provider.updateDeviceValue(deviceKey, 'module', val),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -195,6 +289,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                     modPath = result.files.single.name.replaceAll('.py', '');
                   }
                   provider.updateDeviceValue(deviceKey, 'module', modPath);
+                  moduleFieldController?.text = modPath; // Keep the visible field in sync
                 }
               },
             ),

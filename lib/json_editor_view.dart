@@ -2,14 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 
-// --- CUSTOM CONTROLLER FOR SYNTAX HIGHLIGHTING ---
+// --- CUSTOM CONTROLLER FOR SYNTAX HIGHLIGHTING (theme-aware) ---
 class JsonSyntaxController extends TextEditingController {
   JsonSyntaxController({String? text}) : super(text: text);
+
+  /// Updated by the view whenever the app theme changes
+  bool isDark = true;
 
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
     final List<TextSpan> lineSpans = [];
     final lines = text.split('\n');
+
+    // Pick a syntax palette that stays readable on the active background
+    final Color keyColor     = isDark ? Colors.lightBlueAccent : Colors.blue.shade800;
+    final Color stringColor  = isDark ? Colors.greenAccent     : Colors.green.shade800;
+    final Color numberColor  = isDark ? Colors.orangeAccent    : Colors.deepOrange.shade800;
+    final Color booleanColor = isDark ? Colors.pinkAccent      : Colors.purple.shade700;
+    final Color zebraColor   = isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03);
 
     // Regex to match JSON components
     final RegExp syntaxRegex = RegExp(
@@ -22,8 +32,8 @@ class JsonSyntaxController extends TextEditingController {
       
       // 1. Alternating background colors per line
       final lineStyle = style?.copyWith(
-        backgroundColor: isEven ? Colors.white.withOpacity(0.03) : Colors.transparent,
-      ) ?? TextStyle(backgroundColor: isEven ? Colors.white.withOpacity(0.03) : Colors.transparent);
+        backgroundColor: isEven ? zebraColor : Colors.transparent,
+      ) ?? TextStyle(backgroundColor: isEven ? zebraColor : Colors.transparent);
 
       final List<TextSpan> syntaxSpans = [];
       int start = 0;
@@ -36,13 +46,13 @@ class JsonSyntaxController extends TextEditingController {
 
         TextStyle matchedStyle = lineStyle;
         if (match.namedGroup('key') != null) {
-          matchedStyle = matchedStyle.copyWith(color: Colors.lightBlueAccent); // Keys
+          matchedStyle = matchedStyle.copyWith(color: keyColor); // Keys
         } else if (match.namedGroup('string') != null) {
-          matchedStyle = matchedStyle.copyWith(color: Colors.greenAccent); // Strings
+          matchedStyle = matchedStyle.copyWith(color: stringColor); // Strings
         } else if (match.namedGroup('number') != null) {
-          matchedStyle = matchedStyle.copyWith(color: Colors.orangeAccent); // Numbers
+          matchedStyle = matchedStyle.copyWith(color: numberColor); // Numbers
         } else if (match.namedGroup('boolean') != null) {
-          matchedStyle = matchedStyle.copyWith(color: Colors.pinkAccent); // Booleans/Null
+          matchedStyle = matchedStyle.copyWith(color: booleanColor); // Booleans/Null
         }
 
         syntaxSpans.add(TextSpan(text: match.group(0), style: matchedStyle));
@@ -115,6 +125,12 @@ class _JsonEditorViewState extends State<JsonEditorView> {
 
   @override
   Widget build(BuildContext context) {
+    // Follow the app theme: dark editor in dark mode, paper-white in light mode
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    _controller.isDark = isDark;
+    final Color editorFill = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F7F7);
+    final Color editorText = isDark ? Colors.white70 : Colors.black87;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -149,12 +165,12 @@ class _JsonEditorViewState extends State<JsonEditorView> {
               maxLines: null,
               expands: true,
               keyboardType: TextInputType.multiline,
-              // Dark background to let the syntax colors pop
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 14, color: Colors.white70),
-              decoration: const InputDecoration(
+              // Background & text adapt to light/dark mode; syntax colors follow
+              style: TextStyle(fontFamily: 'monospace', fontSize: 14, color: editorText),
+              decoration: InputDecoration(
                 filled: true,
-                fillColor: Color(0xFF1E1E1E), // Similar to VS Code standard dark
-                border: OutlineInputBorder(),
+                fillColor: editorFill,
+                border: const OutlineInputBorder(),
                 hintText: 'Paste or edit your config.json here...',
               ),
             ),
