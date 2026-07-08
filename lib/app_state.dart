@@ -800,11 +800,14 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns a formatted JSON string of the current config for the editor
+  /// Returns a formatted JSON string of the current config for the editor.
+  /// Rendered PRUNED: devices beyond the dev_ counts (e.g. a family set to 0
+  /// in the wizard) are hidden, so the raw view always matches what export
+  /// and SFTP upload will actually write.
   String getPrettyConfigString() {
     if (roomConfig.isEmpty) return "{}";
     final encoder = const JsonEncoder.withIndent('    ');
-    return encoder.convert(roomConfig);
+    return encoder.convert(_pruneConfig(roomConfig));
   }
 
   /// Helper to grab a default template for a device if the user increases the count
@@ -886,6 +889,7 @@ class AppStateProvider extends ChangeNotifier {
     roomConfig.removeWhere((key, value) => key.startsWith(devicePrefix));
 
     // 2. Generate new blocks based on the count
+    final List<String> newKeys = [];
     for (int i = 1; i <= count; i++) {
       String newDeviceKey = '$devicePrefix$i';
       
@@ -898,9 +902,52 @@ class AppStateProvider extends ChangeNotifier {
       newDevice['name'] = '${newDevice['name'].split('-').first.trim()} $i - Custom Model';
       
       roomConfig[newDeviceKey] = newDevice;
+      newKeys.add(newDeviceKey);
     }
     
     notifyListeners();
+
+    // 3. Immediately verify each new device's module against the .py file in
+    // the modules folder and load a valid keep-alive command from it.
+    // ignore: unawaited_futures
+    _applyKeepAliveDefaults(newKeys);
+  }
+
+  /// For freshly added devices: parses the module's .py file (instant when
+  /// preloaded) and ensures keep_alive_command is a command that actually
+  /// exists in that module. Prefers 'Power'-style commands as the default.
+  Future<void> _applyKeepAliveDefaults(List<String> deviceKeys) async {
+    bool changed = false;
+    for (final key in deviceKeys) {
+      final device = roomConfig[key];
+      if (device is! Map) continue;
+      final moduleName = device['module']?.toString() ?? '';
+      if (moduleName.isEmpty) continue;
+
+      final commands = await getCommandsForModule(moduleName);
+      if (commands.isEmpty) {
+        // Module .py not found in the modules folder (or has no Update methods)
+        AppLogger.logInfo("No matching .py commands for '$moduleName' on $key; keep-alive left as-is.");
+        continue;
+      }
+
+      final current = device['keep_alive_command']?.toString() ?? '';
+      if (current.isNotEmpty && commands.contains(current)) continue; // Already valid for this module
+
+      // Load a sensible default from the module: 'Power' if it exists, then
+      // anything containing 'power' (typical Extron poll), else the first command.
+      final chosen = commands.firstWhere(
+        (c) => c == 'Power',
+        orElse: () => commands.firstWhere(
+          (c) => c.toLowerCase().contains('power'),
+          orElse: () => commands.first,
+        ),
+      );
+      device['keep_alive_command'] = chosen;
+      changed = true;
+      AppLogger.logInfo("Loaded keep_alive_command '$chosen' for $key from $moduleName.py");
+    }
+    if (changed) notifyListeners();
   }
 
   /// Internal helper to remove unused devices based on the `dev_` settings
@@ -921,9 +968,20 @@ class AppStateProvider extends ChangeNotifier {
       'dev_power_controllers': 'POWERDEVICE_',
     };
 
+    // FIX: the dev_ count keys live inside SYSTEM_SETUP, not at the config
+    // root — the old root lookup meant pruning silently never happened.
+    final systemSetup = data['SYSTEM_SETUP'];
+
     deviceMap.forEach((countKey, prefix) {
-      if (data.containsKey(countKey)) {
-        var countVal = data[countKey];
+      // Prefer SYSTEM_SETUP, fall back to root for any legacy config layout
+      dynamic countVal;
+      if (systemSetup is Map && systemSetup.containsKey(countKey)) {
+        countVal = systemSetup[countKey];
+      } else if (data.containsKey(countKey)) {
+        countVal = data[countKey];
+      }
+
+      if (countVal != null) {
         int count = 0;
         
         // Handle values like "Yes" in your dev_wireless setup
