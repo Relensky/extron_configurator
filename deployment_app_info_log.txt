@@ -34,3 +34,5 @@ ssors.json
 [2026-05-26T10:51:14.819234] INFO: Processors list loaded from C:\Users\dstanley\Desktop\extron_configurator_test\processors.json
 [2026-05-26T10:51:14.869233] INFO: Template loaded from C:\Users\dstanley\Desktop\extron_configurator_test\config.json
 [2026-05-26T10:52:39.755520] INFO: Config successfully saved to C:\Users\dstanley\Desktop\extron_configurator_test\Test_Room_config.json
+[2026-05-27T22:30:38.209419] INFO: Buildings list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\buildings.json
+[2026-05-27T22:30:38.268418] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json

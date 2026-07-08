@@ -48,10 +48,14 @@ class SetupWizardView extends StatelessWidget {
                       .map((e) => '${e.value} (${e.key})')
                       .toList();
 
-                  // 3. Determine initial value text
+                  // 3. Determine initial value text.
+                  // gve_bldg may hold the ALL CAPS full name (new style) or a
+                  // legacy abbreviation (older configs) — display both correctly.
                   String currentBldg = systemSetup['gve_bldg'] ?? '';
                   String initialText = currentBldg;
-                  if (uniqueBuildings.containsKey(currentBldg)) {
+                  if (provider.buildings.containsKey(currentBldg)) {
+                    initialText = '$currentBldg (${provider.buildings[currentBldg]})';
+                  } else if (uniqueBuildings.containsKey(currentBldg)) {
                     initialText = '${uniqueBuildings[currentBldg]} ($currentBldg)';
                   }
 
@@ -64,13 +68,11 @@ class SetupWizardView extends StatelessWidget {
                           bldg.toLowerCase().contains(textEditingValue.text.toLowerCase()));
                     },
                     onSelected: (String selection) {
-                      // Extract the abbreviation from between the parentheses
-                      final match = RegExp(r'\((.*?)\)').firstMatch(selection);
-                      if (match != null) {
-                        systemSetup['gve_bldg'] = match.group(1);
-                      } else {
-                        systemSetup['gve_bldg'] = selection; // Fallback
-                      }
+                      // Store the ALL CAPS full building name from buildings.json.
+                      // Strip only the trailing " (ABBR)" so names that contain
+                      // their own parentheses (e.g. SIMMS CENTER) stay intact.
+                      final match = RegExp(r'^(.*)\s\(([^()]*)\)$').firstMatch(selection);
+                      systemSetup['gve_bldg'] = match != null ? match.group(1) : selection;
                       provider.updateFullRoomName();
                     },
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -109,15 +111,33 @@ class SetupWizardView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         
-        TextFormField(
-          key: ValueKey(systemSetup['gui_full_room_name']), // Forces rebuild when updated via code
-          initialValue: systemSetup['gui_full_room_name'] ?? '',
-          decoration: const InputDecoration(
-            labelText: 'Generated Full Room Name', 
-            border: OutlineInputBorder(),
-            filled: true,
-          ),
-          readOnly: true, // Let the app handle this based on Building + Room
+        Builder(
+          builder: (context) {
+            final bool isKnown = provider.isKnownBuilding;
+            return TextFormField(
+              // Auto mode rebuilds when the generated name changes; manual mode
+              // uses a stable key so typing doesn't reset the field.
+              key: ValueKey(isKnown ? 'auto_${systemSetup['gui_full_room_name']}' : 'manual_room_name'),
+              initialValue: systemSetup['gui_full_room_name'] ?? '',
+              decoration: InputDecoration(
+                labelText: isKnown
+                    ? 'Generated Full Room Name (from buildings.json)'
+                    : 'Full Room Name (type manually)',
+                border: const OutlineInputBorder(),
+                filled: isKnown,
+                helperText: isKnown
+                    ? 'Auto-generated: Title Case building name + room number'
+                    : 'Building not found in buildings.json — enter the full room name yourself',
+              ),
+              readOnly: isKnown, // Auto for known buildings, editable otherwise
+              onChanged: (val) {
+                if (!isKnown) {
+                  // Silent write (no notify) so the cursor isn't reset while typing
+                  systemSetup['gui_full_room_name'] = val;
+                }
+              },
+            );
+          },
         ),
 
         const Divider(height: 60, thickness: 2),

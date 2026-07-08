@@ -71,6 +71,12 @@ class SystemSettingsView extends StatelessWidget {
       return const Center(child: Text("No SYSTEM_SETUP found in the current config."));
     }
 
+    // Used in widget keys so every row (and the title) is rebuilt fresh when
+    // the theme flips; otherwise Flutter reuses keyless element slots and the
+    // header/fields can render with stale styling after a light<->dark toggle.
+    final theme = Theme.of(context);
+    final brightness = theme.brightness;
+
     final List<String> configKeys = systemSetup.keys.where((k) => !k.startsWith('dev_')).toList();
     configKeys.sort();
 
@@ -80,8 +86,16 @@ class SystemSettingsView extends StatelessWidget {
       itemBuilder: (context, index) {
         if (index == 0) {
           return Padding(
+            key: ValueKey('sys_settings_title_$brightness'),
             padding: const EdgeInsets.only(bottom: 20.0),
-            child: Text('System Settings', style: Theme.of(context).textTheme.headlineMedium),
+            child: Text(
+              'System Settings',
+              // Explicitly derive the color from the ACTIVE theme so the
+              // header stays readable in both light and dark mode.
+              style: theme.textTheme.headlineMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
           );
         }
 
@@ -165,6 +179,10 @@ class SystemSettingsView extends StatelessWidget {
         }
 
         return Padding(
+          // Keyed on the config key AND brightness: guarantees a clean rebuild
+          // of every row when the theme toggles, and prevents index-based slot
+          // reuse from ever displaying a neighboring field's stale state.
+          key: ValueKey('${key}_$brightness'),
           padding: const EdgeInsets.only(bottom: 16.0),
           child: _wrapWithInfo(context, key, field),
         );

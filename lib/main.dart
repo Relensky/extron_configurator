@@ -66,13 +66,28 @@ class _MainDashboardState extends State<MainDashboard> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.cloud_download),
+            tooltip: 'Download config.json from Processor (SFTP)',
+            onPressed: () async {
+              final result = await showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const ProcessorSftpDialog(isUpload: false),
+              );
+              // On a successful download, show the migration/audit log like a local load does
+              if (result == true && provider.systemLogs.isNotEmpty && context.mounted) {
+                _showMigrationLogDialog(context, provider.systemLogs);
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.cloud_upload),
             tooltip: 'Upload to Processor (SFTP)',
             onPressed: () {
               showDialog(
                 context: context,
                 barrierDismissible: false, 
-                builder: (context) => const UploadConfigDialog(),
+                builder: (context) => const ProcessorSftpDialog(isUpload: true),
               );
             },
           ),
@@ -132,22 +147,23 @@ class _MainDashboardState extends State<MainDashboard> {
                 width: 250,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.add_box),
-                  label: const Text("Create New Config\n(From base config.json)", textAlign: TextAlign.center),
+                  label: const Text("Create New Config\n(From default template)", textAlign: TextAlign.center),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue.shade700,
                     foregroundColor: Colors.white, // Forces readable text in light mode
                   ),
                   onPressed: () async {
-                    if (provider.rootFolderPath.isEmpty) {
+                    // Needs either a validated template file OR a root folder with config.json
+                    if (provider.templateFilePath.isEmpty && provider.rootFolderPath.isEmpty) {
                        setState(() => _selectedIndex = 4); // Route to App Config
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Please set the Template Root Path first."), backgroundColor: Colors.red)
+                          const SnackBar(content: Text("Please set a Template file or Root Path first (App Config tab)."), backgroundColor: Colors.red)
                         );
                     } else {
                       bool success = await provider.createNewConfig();
                       if (!success && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Failed to load base config.json from root folder."), backgroundColor: Colors.red)
+                          const SnackBar(content: Text("Failed to load the template config.json."), backgroundColor: Colors.red)
                         );
                       }
                     }
@@ -365,13 +381,27 @@ class AppSettingsView extends StatelessWidget {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.upload_file),
                 label: const Text('Load Template'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700),
-                onPressed: () {
-                  if (provider.templateFilePath.isNotEmpty) {
-                    provider.loadConfigTemplate(provider.templateFilePath);
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white, // FIX: label/icon were unreadable in light mode
+                ),
+                onPressed: () async {
+                  if (provider.templateFilePath.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Loading template...'))
+                      const SnackBar(content: Text('Set a template file path first.'), backgroundColor: Colors.red),
                     );
+                    return;
+                  }
+                  // Validates & registers the template only. The file is not
+                  // opened into the editor until 'Create New Config' is pressed.
+                  bool valid = await provider.validateConfigTemplate(provider.templateFilePath);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(valid
+                          ? 'Template validated & saved as default. Use "Create New Config" to start from it.'
+                          : 'Template file is missing or contains invalid JSON.'),
+                      backgroundColor: valid ? Colors.green : Colors.red,
+                    ));
                   }
                 },
               ),
@@ -491,20 +521,41 @@ class AppSettingsView extends StatelessWidget {
   }
 }
 
-/// A dialog that collects network credentials and displays real-time SFTP upload status
-class UploadConfigDialog extends StatefulWidget {
-  const UploadConfigDialog({Key? key}) : super(key: key);
+/// A dialog that handles both SFTP directions with the processor:
+///  - Upload:   pushes the in-memory config to /config.json on the processor
+///  - Download: pulls /config.json, backs it up, prompts for a new working file
+/// The IP is pre-filled from the Active Deployment Target (App Config tab);
+/// when no room is selected, the user is prompted for it as before.
+class ProcessorSftpDialog extends StatefulWidget {
+  final bool isUpload;
+  const ProcessorSftpDialog({Key? key, required this.isUpload}) : super(key: key);
 
   @override
-  State<UploadConfigDialog> createState() => _UploadConfigDialogState();
+  State<ProcessorSftpDialog> createState() => _ProcessorSftpDialogState();
 }
 
-class _UploadConfigDialogState extends State<UploadConfigDialog> {
+class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
   final TextEditingController _ipController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
   
-  String _statusText = 'Enter processor details to upload config.json';
-  bool _isUploading = false;
+  String _statusText = '';
+  bool _isBusy = false;
+  String _targetRoomName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill from the Active Deployment Target if one is selected
+    final provider = context.read<AppStateProvider>();
+    final ip = provider.selectedProcessorIp;
+    if (ip.isNotEmpty) {
+      _ipController.text = ip;
+      _targetRoomName = provider.selectedProcessor?['roomName']?.toString() ?? '';
+    }
+    _statusText = widget.isUpload
+        ? 'Enter processor details to upload config.json'
+        : 'Enter processor details to download config.json';
+  }
 
   @override
   void dispose() {
@@ -513,7 +564,7 @@ class _UploadConfigDialogState extends State<UploadConfigDialog> {
     super.dispose();
   }
 
-  Future<void> _startUpload() async {
+  Future<void> _startTransfer() async {
     // Basic validation
     if (_ipController.text.isEmpty || _passController.text.isEmpty) {
       setState(() => _statusText = "Error: IP and Password are required.");
@@ -521,49 +572,70 @@ class _UploadConfigDialogState extends State<UploadConfigDialog> {
     }
 
     setState(() {
-      _isUploading = true;
+      _isBusy = true;
       _statusText = "Initializing...";
     });
 
     final provider = context.read<AppStateProvider>();
     
-    // Trigger the upload and pass a callback to update the UI with status strings
-    final success = await provider.uploadConfigToProcessor(
-      ipAddress: _ipController.text.trim(),
-      password: _passController.text,
-      onStatusUpdate: (status) {
-        // Use setState to reflect the SFTP client's status in the dialog
-        setState(() => _statusText = status);
-      },
-    );
+    bool success;
+    if (widget.isUpload) {
+      success = await provider.uploadConfigToProcessor(
+        ipAddress: _ipController.text.trim(),
+        password: _passController.text,
+        onStatusUpdate: (status) => setState(() => _statusText = status),
+      );
+    } else {
+      success = await provider.downloadConfigFromProcessor(
+        ipAddress: _ipController.text.trim(),
+        password: _passController.text,
+        onStatusUpdate: (status) {
+          if (mounted) setState(() => _statusText = status);
+        },
+      );
+    }
 
-    setState(() => _isUploading = false);
+    if (!mounted) return;
+    setState(() => _isBusy = false);
 
     if (success) {
-      // Automatically close the dialog after a brief delay on success
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) Navigator.of(context).pop();
-      });
+      if (widget.isUpload) {
+        // Automatically close the dialog after a brief delay on success
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) Navigator.of(context).pop();
+        });
+      } else {
+        // Close immediately and signal success so the audit dialog can be shown
+        Navigator.of(context).pop(true);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Direct SFTP Upload'),
+      title: Text(widget.isUpload ? 'Direct SFTP Upload' : 'Download Config from Processor'),
       content: SizedBox(
         width: 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_targetRoomName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  'Active Deployment Target: $_targetRoomName',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             TextFormField(
               controller: _ipController,
               decoration: const InputDecoration(
                 labelText: 'Processor IP / Hostname',
                 border: OutlineInputBorder(),
               ),
-              enabled: !_isUploading,
+              enabled: !_isBusy,
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -573,7 +645,7 @@ class _UploadConfigDialogState extends State<UploadConfigDialog> {
                 labelText: 'Admin Password',
                 border: OutlineInputBorder(),
               ),
-              enabled: !_isUploading,
+              enabled: !_isBusy,
             ),
             const SizedBox(height: 24),
             
@@ -583,7 +655,7 @@ class _UploadConfigDialogState extends State<UploadConfigDialog> {
               color: Colors.black26,
               height: 80,
               alignment: Alignment.centerLeft,
-              child: _isUploading && _statusText.contains("Connecting")
+              child: _isBusy && _statusText.contains("Connecting")
                   ? Row(
                       children: [
                         const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -598,13 +670,13 @@ class _UploadConfigDialogState extends State<UploadConfigDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isUploading ? null : () => Navigator.of(context).pop(),
+          onPressed: _isBusy ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         ElevatedButton.icon(
-          icon: const Icon(Icons.cloud_upload),
-          label: const Text('Upload'),
-          onPressed: _isUploading ? null : _startUpload,
+          icon: Icon(widget.isUpload ? Icons.cloud_upload : Icons.cloud_download),
+          label: Text(widget.isUpload ? 'Upload' : 'Download'),
+          onPressed: _isBusy ? null : _startTransfer,
         ),
       ],
     );

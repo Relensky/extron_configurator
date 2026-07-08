@@ -26,6 +26,31 @@ class AppLogger {
     }
   }
 
+  /// Writes a dedicated audit-trail entry every time a config is loaded,
+  /// recording all schema changes that were added or flagged to make the
+  /// file match the current template.
+  static Future<void> logMigration(String configPath, List<String> changes) async {
+    try {
+      final file = File('deployment_app_migration_log.txt');
+      final timestamp = DateTime.now().toIso8601String();
+
+      final buffer = StringBuffer();
+      buffer.writeln('[$timestamp] CONFIG LOADED: $configPath');
+      if (changes.isEmpty) {
+        buffer.writeln('  No schema changes required. Config matches current template.');
+      } else {
+        for (final change in changes) {
+          buffer.writeln('  $change');
+        }
+      }
+      buffer.writeln('--------------------------------------------------');
+
+      await file.writeAsString(buffer.toString(), mode: FileMode.append);
+    } catch (e) {
+      print("Failed to write migration log: $e");
+    }
+  }
+
   /// Writes standard operational events to an info log file.
   static Future<void> logInfo(String message) async {
     try {
