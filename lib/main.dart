@@ -410,6 +410,58 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // UI Schema (GUI field definitions) Path
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(provider.uiSchemaPath),
+                decoration: InputDecoration(
+                  labelText: 'UI Schema File Path (ui_schema.json)',
+                  hintText: r'C:\workspace\ui_schema.json  (blank = look next to the app)',
+                  helperText: 'Active schema: ${provider.uiSchema.source} — ${provider.uiSchema.fieldCount} field definitions',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await FilePicker.pickFiles(
+                        type: FileType.custom,
+                        allowedExtensions: ['json'],
+                      );
+                      if (result != null) {
+                        provider.updateSetting('uiSchemaPath', result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.uiSchemaPath,
+                onChanged: (val) => provider.updateSetting('uiSchemaPath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56, // Matches the height of the TextFormField
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload Schema'),
+                onPressed: () async {
+                  // Pull in edits made to ui_schema.json without restarting
+                  await provider.loadUiSchema();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Schema reloaded: ${provider.uiSchema.source} '
+                          '(${provider.uiSchema.fieldCount} field definitions)'),
+                    ));
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
         // Processors JSON Path
         TextFormField(
           key: ValueKey(provider.processorsFilePath),

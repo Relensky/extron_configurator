@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sftp_client.dart';
+import 'ui_schema.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// Core State Manager for the Room Configuration Application
@@ -16,6 +17,11 @@ class AppStateProvider extends ChangeNotifier {
   String rootFolderPath = ''; 
   String buildingsFilePath = '';
   String templateFilePath = '';
+  String uiSchemaPath = ''; // Optional path to ui_schema.json (GUI field definitions)
+
+  // --- UI Schema (drives labels, descriptions, dropdowns for config keys) ---
+  // Starts with built-in defaults so the editor works before/without a file.
+  UiSchema uiSchema = UiSchema.builtIn();
   
   // --- Data State ---
   List<dynamic> processors = [];
@@ -210,7 +216,11 @@ class AppStateProvider extends ChangeNotifier {
       rootFolderPath = prefs.getString('rootFolderPath') ?? '';
       buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
       templateFilePath = prefs.getString('templateFilePath') ?? ''; // FIX: was never restored, so the default config path reset on every restart
+      uiSchemaPath = prefs.getString('uiSchemaPath') ?? '';
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
+
+      // Load the GUI field schema (falls back to built-in defaults on any error)
+      await loadUiSchema();
 
       // Load files into memory safely
       if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
@@ -593,7 +603,21 @@ class AppStateProvider extends ChangeNotifier {
       case 'templateFilePath': 
         templateFilePath = value; 
         break;
+      case 'uiSchemaPath':
+        uiSchemaPath = value;
+        // ignore: unawaited_futures
+        loadUiSchema(); // Re-resolve the GUI field definitions from the new path
+        break;
     }
+    notifyListeners();
+  }
+
+  /// (Re)loads ui_schema.json so new/changed field definitions appear in the
+  /// editor WITHOUT a rebuild. If uiSchemaPath is empty, ui_schema.json is
+  /// searched for next to the executable / working directory. On any failure
+  /// the built-in defaults stay active and the error is logged.
+  Future<void> loadUiSchema() async {
+    uiSchema = await UiSchema.load(explicitPath: uiSchemaPath);
     notifyListeners();
   }
 

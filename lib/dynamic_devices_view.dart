@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'app_state.dart';
 import 'config_dictionary.dart';
+import 'schema_field_builder.dart';
 
 class DynamicDevicesTabsView extends StatefulWidget {
   const DynamicDevicesTabsView({Key? key}) : super(key: key);
@@ -152,9 +153,12 @@ class DeviceConfigurationForm extends StatelessWidget {
     );
   }
 
-  // Helper method to wrap fields with Info buttons
+  // Helper method to wrap fields with Info buttons.
+  // Descriptions come from the loaded ui_schema.json first, then fall back to
+  // the legacy built-in ConfigDictionary.
   Widget _wrapWithInfo(BuildContext context, String key, Widget field) {
-    final desc = ConfigDictionary.descriptions[key];
+    final desc = context.read<AppStateProvider>().uiSchema.descriptionFor(key)
+        ?? ConfigDictionary.descriptions[key];
     if (desc == null) return field;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -194,26 +198,19 @@ class DeviceConfigurationForm extends StatelessWidget {
     deviceData.forEach((key, value) {
       if (skipKeys.contains(key)) return;
 
-      Widget field;
-      if (value is bool) {
-        field = SwitchListTile(
-          title: Text(key),
-          value: value,
-          onChanged: (val) => provider.updateDeviceValue(deviceKey, key, val),
-        );
-      } else {
-        field = TextFormField(
-          initialValue: value?.toString() ?? '',
-          decoration: InputDecoration(labelText: key, border: const OutlineInputBorder()),
-          onChanged: (val) {
-            dynamic parsedVal = val;
-            if (value is int) parsedVal = int.tryParse(val) ?? 0;
-            provider.updateDeviceValue(deviceKey, key, parsedVal);
-          },
-        );
-      }
+      // SCHEMA-DRIVEN: labels, descriptions, dropdowns, and widget types now
+      // come from ui_schema.json (with type inference as the fallback), so a
+      // new device property can get a full editor UI without a rebuild.
+      final Widget? field = SchemaFieldBuilder.buildField(
+        context: context,
+        provider: provider,
+        sectionKey: deviceKey,
+        fieldKey: key,
+        value: value,
+      );
+      if (field == null) return; // Schema marked the key "hidden"
 
-      dynamicFormFields.add(_wrapWithInfo(context, key, field));
+      dynamicFormFields.add(field);
       dynamicFormFields.add(const SizedBox(height: 16));
     });
 

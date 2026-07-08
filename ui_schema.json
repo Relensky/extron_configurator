@@ -1,0 +1,551 @@
+{
+  "schema_version": 1,
+  "__readme": [
+    "This file drives the GUI of the Room Config Builder. Edit it and press",
+    "'Reload Schema' in App Config (or restart the app) - no rebuild needed.",
+    "Each entry under 'fields' is keyed by a config.json property name and supports:",
+    "  label:       Field label shown in the editor (defaults to the raw key).",
+    "  description: Text behind the (i) info button.",
+    "  helperText:  Small grey hint line under the field.",
+    "  type:        auto | text | int | double | bool | dropdown | combo | hidden.",
+    "               'auto' (default) infers from the JSON value type.",
+    "  options:     For dropdown/combo. Plain strings, or objects with value/label.",
+    "  writes:      For combo only - the list of config keys the one dropdown writes.",
+    "               Combo options use 'values' (one entry per key in 'writes').",
+    "Keys may contain '*' wildcards (e.g. 'power1_outlet_*') to cover a whole",
+    "family of properties. Exact keys always win over wildcard matches.",
+    "Keys starting with '__' are ignored (use them for comments)."
+  ],
+  "fields": {
+    "btn_name": {
+      "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."
+    },
+    "com_type": {
+      "description": "Type of connection as a string (Serial, SerialOverEthernet, Network)."
+    },
+    "host": {
+      "description": "The processor or spdevice in use for serial connections."
+    },
+    "relay_host": {
+      "description": "The processor in use for the relay power control."
+    },
+    "device_id": {
+      "description": "The ID to be sent to the device if it is required."
+    },
+    "gve_id": {
+      "description": "String that identifies the device in GVE. Needs to be created when you add the room devices to GVE."
+    },
+    "input": {
+      "description": "Input for the device. The subscribe status will change to this input. (Examples: HDBaseT, HDMI 1, Digital Link)."
+    },
+    "ip_address": {
+      "description": "IP address for the device as a string."
+    },
+    "keep_alive_command": {
+      "description": "Command as a string to send to the device once connected. Chosen from the dictionary of commands in the module."
+    },
+    "keep_alive_interval": {
+      "description": "Timing for sending the keep_alive_command as an integer."
+    },
+    "keep_alive_qualifier": {
+      "description": "Only needed if the command requires a qualifier (Example checking an audio group such as '1' as the qualifier)."
+    },
+    "lbl_name": {
+      "description": "Name for the GUI object that will be written for connection status."
+    },
+    "manual_disconnect": {
+      "description": "Flag to disconnect the item. Used if a projector or item is temporarily removed from a room."
+    },
+    "model": {
+      "description": "Model of the device as a string."
+    },
+    "keep_alive_trigger": {
+      "description": "Delay the keep_alive_command until the trigger is received such as the APC needing to complete the login before polling."
+    },
+    "default_cc_aud_cam": {
+      "description": "Make the system show the audience camera as the capture source on startup."
+    },
+    "gui_capture_source_available": {
+      "type": "dropdown",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "description": "Determine if the user can change the capture source on the touch panel."
+    },
+    "gui_usb_or_vga": {
+      "type": "dropdown",
+      "options": [
+        "USB",
+        "VGA"
+      ],
+      "description": "Set the GUI and metrics to send over the USB or VGA depending on the age of the room."
+    },
+    "ntp_primary": {
+      "description": "Network Time Protocol (NTP) primary server address in use for the processor."
+    },
+    "ntp_secondary": {
+      "description": "Network Time Protocol (NTP) secondary server address in use for the processor."
+    },
+    "output_audio_ald": {
+      "description": "Output for the Assisted Listening Device in use for the room."
+    },
+    "pcmac": {
+      "description": "Future use for the mac address on the local PC."
+    },
+    "gui_demo_mode": {
+      "description": "Operate the touch panel while not connecting to any device."
+    },
+    "module": {
+      "description": "File path to the module as a string."
+    },
+    "name": {
+      "description": "Name of the device as it will appear in the logger."
+    },
+    "net_port": {
+      "description": "Network Port used to send communications on network connected devices."
+    },
+    "protocol": {
+      "description": "Protocol in use for network connections (TCP or SSH)."
+    },
+    "serial_port": {
+      "description": "Serial port in use if using Serial as the com type."
+    },
+    "service_port": {
+      "description": "Port for the response from the device. 0 is automatically assigned by the processor."
+    },
+    "use_device_mute": {
+      "description": "Boolean for whether a mute command will also call to the device when video mute is pressed."
+    },
+    "user": {
+      "description": "Username for the device when using a network connection."
+    },
+    "password": {
+      "description": "Password in use while using a network connection that requires authentication."
+    },
+    "group_mic_ceiling_mute": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_mic_in_room_mute": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_mic_master_gain": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_mic_master_mute": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_pc_mic_input_gain": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_pc_output_gain": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_pc_output_mute": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_pc_record_mute": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_prog_gain": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_prog_mute": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "group_voice_lift_mute": {
+      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    },
+    "processor1": {
+      "description": "Device alias for import from the room's Extron json file. These can be used to set the host on serial devices."
+    },
+    "processor2": {
+      "description": "Device alias for import from the room's Extron json file. These can be used to set the host on serial devices."
+    },
+    "spdevice1": {
+      "description": "Device alias for import from the room's Extron json file. These can be used to set the host on serial devices."
+    },
+    "spdevice2": {
+      "description": "Device alias for import from the room's Extron json file. These can be used to set the host on serial devices."
+    },
+    "active_debug_server": {
+      "description": "Event space timer (6hrs for inactivity shutdown, default is 3hrs) and the debug server can be enabled with this boolean."
+    },
+    "active_event_space": {
+      "description": "Event space timer (6hrs for inactivity shutdown, default is 3hrs) and the debug server can be enabled with this boolean."
+    },
+    "active_notifications": {
+      "description": "Notifications can be enabled with true or disabled with false."
+    },
+    "api_proxy_server": {
+      "description": "Set the API proxy (metrics) server address with this line."
+    },
+    "dev_cameras": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_dsps": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_media_ports": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_power_controllers": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_projectors": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_recorders": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_relay_power": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_screen_control": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_screens": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_switchers": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_usb_switchers": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "dev_wireless": {
+      "description": "Use the dev_devices to set the number of devices in the room."
+    },
+    "gve_bldg": {
+      "description": "Building name for GVE. Set the IDs from the room after it is created in GVE."
+    },
+    "gve_room": {
+      "description": "Room name for GVE. Set the IDs from the room after it is created in GVE."
+    },
+    "gve_id_processor": {
+      "description": "Set the IDs from the room after it is created in GVE."
+    },
+    "gve_id_room_1": {
+      "description": "Set the IDs from the room after it is created in GVE."
+    },
+    "gve_id_room_2": {
+      "description": "Set the IDs from the room after it is created in GVE."
+    },
+    "gve_id_tlp_1": {
+      "description": "Set the IDs from the room after it is created in GVE."
+    },
+    "gve_ip": {
+      "description": "DNS or IP for the GVE module to connect to the instance of GVE. Example: gve.csuchico.edu"
+    },
+    "input_aud_cam": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_blu_ray": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_doc_cam": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_dvd": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_hdmi": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_inst_cam": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_pc": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_pc_extended": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_usb": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "input_wireless": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_audio": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_cc": {
+      "description": "Used for the capture card or USB interface for Zoom meetings."
+    },
+    "output_cc2": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_monitor_1": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_monitor_2": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_proj_1": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_proj_2": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_proj_3": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "output_proj_4": {
+      "description": "Inputs and Outputs are assigned in the config."
+    },
+    "conf_display_1": {
+      "description": "Set the Conference display outputs."
+    },
+    "conf_display_2": {
+      "description": "Set the Conference display outputs."
+    },
+    "gui_routing_mode": {
+      "type": "dropdown",
+      "options": [
+        "Normal",
+        "Conference",
+        "Extended"
+      ],
+      "description": "Normal, Conference, or Extended"
+    },
+    "gui_tab": {
+      "type": "dropdown",
+      "options": [
+        "2_Cam_Dev",
+        "2_Mic_Dev",
+        "3_Cam_Mic_Dev",
+        "3_Cams_Dev",
+        "4_Cams_Mic_Dev",
+        "Conference"
+      ],
+      "description": "Options: 2_Cam_Dev, 2_Mic_Dev, 3_Cam_Mic_Dev, 3_Cams_Dev, 4_Cams_Mic_Dev, Conference"
+    },
+    "gui_routing_available": {
+      "type": "dropdown",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "description": "Yes or No option for showing the video matrix button and routing pages."
+    },
+    "gui_inputs": {
+      "type": "combo",
+      "label": "Sources & Routing Config (gui_inputs + gui_tab_type)",
+      "writes": [
+        "gui_inputs",
+        "gui_tab_type"
+      ],
+      "options": [
+        {
+          "values": [
+            "3",
+            "WL"
+          ],
+          "label": "3 Sources: PC, HDMI, & Wireless"
+        },
+        {
+          "values": [
+            "4",
+            "DOC_USB"
+          ],
+          "label": "4 Sources: PC, HDMI, Doc Cam, & USB"
+        },
+        {
+          "values": [
+            "4",
+            "DOC_VGA"
+          ],
+          "label": "4 Sources: PC, HDMI, Doc Cam, & VGA"
+        },
+        {
+          "values": [
+            "4",
+            "DOC_WL"
+          ],
+          "label": "4 Sources: PC, HDMI, Doc Cam, & Wireless"
+        },
+        {
+          "values": [
+            "4",
+            "DVD_USB"
+          ],
+          "label": "4 Sources: PC, HDMI, DVD, & USB"
+        },
+        {
+          "values": [
+            "4",
+            "DVD_VGA"
+          ],
+          "label": "4 Sources: PC, HDMI, DVD, & VGA"
+        },
+        {
+          "values": [
+            "5",
+            "BR_DOC_USB"
+          ],
+          "label": "5 Sources: PC, HDMI, Doc Cam, BluRay, & USB"
+        },
+        {
+          "values": [
+            "5",
+            "BR_DOC_VGA"
+          ],
+          "label": "5 Sources: PC, HDMI, Doc Cam, BluRay, & VGA"
+        },
+        {
+          "values": [
+            "5",
+            "DOC_DVD_USB"
+          ],
+          "label": "5 Sources: PC, HDMI, Doc Cam, DVD, & USB"
+        },
+        {
+          "values": [
+            "5",
+            "DOC_DVD_VGA"
+          ],
+          "label": "5 Sources: PC, HDMI, Doc Cam, DVD, & VGA"
+        },
+        {
+          "values": [
+            "5",
+            "DOC_USB_WL"
+          ],
+          "label": "5 Sources: PC, HDMI, Doc Cam, USB, & Wireless"
+        },
+        {
+          "values": [
+            "5",
+            "DOC_VGA_WL"
+          ],
+          "label": "5 Sources: PC, HDMI, Doc Cam, VGA, & Wireless"
+        },
+        {
+          "values": [
+            "6",
+            "BR_DOC_USB_WL"
+          ],
+          "label": "6 Sources: PC, HDMI, BluRay, Doc Cam, USB, & Wireless"
+        },
+        {
+          "values": [
+            "6",
+            "BR_DOC_VGA_WL"
+          ],
+          "label": "6 Sources: PC, HDMI, BluRay, Doc Cam, VGA, & Wireless"
+        },
+        {
+          "values": [
+            "6",
+            "DOC_DVD_USB_WL"
+          ],
+          "label": "6 Sources: PC, HDMI, DVD, Doc Cam, USB, & Wireless"
+        },
+        {
+          "values": [
+            "6",
+            "DOC_DVD_VGA_WL"
+          ],
+          "label": "6 Sources: PC, HDMI, DVD, Doc Cam, VGA, & Wireless"
+        }
+      ],
+      "description": "Used in conjunction with gui_tab_type to set the sources in the room for the source and routing pages."
+    },
+    "gui_tab_type": {
+      "type": "hidden",
+      "__comment": "Written by the gui_inputs combo dropdown; never shown directly.",
+      "description": "Used in conjunction with gui_inputs to set the sources. (Examples: 3_WL, 4_DOC_USB, 6_DOC_DVD_VGA_WL, etc)."
+    },
+    "gui_mic_mix": {
+      "type": "dropdown",
+      "options": [
+        {
+          "value": "Yes",
+          "label": "Yes (Single Mic w/ Ducking)"
+        },
+        {
+          "value": "No",
+          "label": "No (Single Mic w/ Mute)"
+        },
+        {
+          "value": "Ceiling",
+          "label": "Ceiling (Voicelift & Mute)"
+        }
+      ],
+      "description": "Specify the Microphone sub page: 'Yes' (Single Mic w/ Ducking), 'No' (Single Mic w/ Mute), 'Ceiling' (Ceiling Mic w/ Voicelift)."
+    },
+    "gui_preset_name_aud_1": {
+      "description": "Set the audience camera preset names."
+    },
+    "gui_preset_name_aud_2": {
+      "description": "Set the audience camera preset names."
+    },
+    "gui_preset_name_aud_3": {
+      "description": "Set the audience camera preset names."
+    },
+    "gui_preset_name_aud_4": {
+      "description": "Set the audience camera preset names."
+    },
+    "gui_preset_name_inst_1": {
+      "description": "Set the instructor camera preset names."
+    },
+    "gui_preset_name_inst_2": {
+      "description": "Set the instructor camera preset names."
+    },
+    "gui_preset_name_inst_3": {
+      "description": "Set the instructor camera preset names."
+    },
+    "gui_preset_name_inst_4": {
+      "description": "Set the instructor camera preset names."
+    },
+    "gui_full_room_name": {
+      "description": "You can set the full room name that appears on the gui pages."
+    },
+    "mic_max_volume": {
+      "description": "Volume settings for the project."
+    },
+    "mic_min_volume": {
+      "description": "Volume settings for the project."
+    },
+    "switch_max_volume": {
+      "description": "Volume settings for the project."
+    },
+    "switch_min_volume": {
+      "description": "Volume settings for the project."
+    },
+    "teams_webhook": {
+      "description": "The teams notifications that are sent out are set through the webhook link."
+    },
+    "sub_switch_CC": {
+      "description": "Used when another switcher is used for the capture card routing."
+    },
+    "tv_videomute": {
+      "description": "Addon for Arts 208 to only mute the secondary output on the switcher and then mute the display from the TV. Un-needed in other rooms."
+    },
+    "power1_outlet_*": {
+      "description": "Set the GUI names for the power controller (APC). 23 character limitation.",
+      "helperText": "Max 23 characters",
+      "__comment": "One wildcard entry covers power1_outlet_1 through power1_outlet_8."
+    },
+    "power1_outlet_*_action": {
+      "description": "If you need to have the outlet set to reboot, use this action command to have the outlet only allow that action.",
+      "__comment": "More specific pattern listed after the generic one, so it wins for the _action keys."
+    },
+    "__example_new_key": {
+      "__comment": [
+        "TEMPLATE: to support a new config.json property, copy this block,",
+        "rename '__example_new_key' to your new key (remove the leading __),",
+        "then Reload Schema. It will render on the System/Device tabs as soon",
+        "as the key exists in the loaded config."
+      ],
+      "label": "My New Feature",
+      "type": "dropdown",
+      "options": [
+        "Enabled",
+        "Disabled"
+      ],
+      "description": "Explain what this new key does here."
+    }
+  }
+}
