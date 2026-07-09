@@ -1,19 +1,31 @@
 {
-  "map_version": 1,
+  "map_version": 2,
   "__readme": [
     "Legacy config.json key mapping. Applied automatically every time a config",
     "is loaded (local open or SFTP download), BEFORE template migration. Every",
-    "rename and injected default appears in the migration dialog and audit log.",
-    "Edit this file and reload \u2014 no application rebuild needed.",
+    "change appears in the migration dialog and audit log. Edit + Reload Key",
+    "Map (App Config tab) - no application rebuild needed.",
     "",
-    "sections:   top-level section renames. 'match' is a regex that must match",
-    "            the whole section name; $1..$9 insert capture groups.",
+    "Processing order: sections -> properties -> auto-normalization ->",
+    "value_map -> moves -> defaults.",
+    "",
+    "auto_case_normalization: when true, a legacy property automatically",
+    "  renames to any current key that matches after lowercasing and removing",
+    "  underscores (e.g. Output_Proj1 -> output_proj_1, GVE_BLDG -> gve_bldg,",
+    "  COMTYPE -> com_type). Explicit 'properties' entries always win.",
+    "sections: top-level renames. 'match' is a whole-name regex; $1..$9",
+    "  insert capture groups.",
     "properties: flat OLDNAME -> new_name map applied inside every section.",
-    "value_map:  optional per-property value normalization, e.g.",
-    "            { \"com_type\": { \"NETWORK\": \"Network\" } }.",
-    "defaults:   per section family (wildcard *), keys injected when missing.",
+    "value_map: per-property value normalization AFTER rename. New values keep",
+    "  their JSON type ('True' -> true, 'Yes' -> '1').",
+    "moves: relocate a property to another section, e.g. the legacy SYSTEM",
+    "  per-device GVE IDs into each device block's gve_id.",
+    "defaults: per section family (wildcard *), keys injected only when",
+    "  missing. '{n}' becomes the device number. Existing values are never",
+    "  overwritten.",
     "Keys starting with '__' anywhere are ignored (use them for comments)."
   ],
+  "auto_case_normalization": true,
   "sections": [
     {
       "match": "CAMERA(\\d+)DEVICE",
@@ -136,12 +148,12 @@
       "rename_to": "SCREENDEVICE_1"
     },
     {
-      "match": "SYSTEMSETUP|SYSTEM SETUP",
+      "match": "SYSTEM|SYSTEMSETUP|SYSTEM SETUP",
       "rename_to": "SYSTEM_SETUP"
     }
   ],
   "properties": {
-    "__comment": "Legacy property name -> current name. Auto-derived rule: legacy = UPPERCASE with underscores removed (COMTYPE -> com_type). Add/edit entries for any legacy spellings that differ.",
+    "__comment": "Explicit legacy -> current property renames. These always run first. Simple case/underscore variants (Output_Proj1 -> output_proj_1, COMTYPE -> com_type) are ALSO caught automatically by auto_case_normalization, so only spellings that differ structurally need entries here.",
     "AUTORECONNECT": "auto_reconnect",
     "BTNNAME": "btn_name",
     "COMTYPE": "com_type",
@@ -184,10 +196,88 @@
     "SERIALPORT": "serial_port",
     "SERVICEPORT": "service_port",
     "USEDEVICEMUTE": "use_device_mute",
-    "USER": "user"
+    "USER": "user",
+    "PowerOutlet1": "power1_outlet_1",
+    "PowerOutlet2": "power1_outlet_2",
+    "PowerOutlet3": "power1_outlet_3",
+    "PowerOutlet4": "power1_outlet_4",
+    "PowerOutlet5": "power1_outlet_5",
+    "PowerOutlet6": "power1_outlet_6",
+    "PowerOutlet7": "power1_outlet_7",
+    "PowerOutlet8": "power1_outlet_8",
+    "gui_TABTYPE": "gui_tab_type",
+    "Input_AudCam": "input_aud_cam",
+    "Input_BluRay": "input_blu_ray",
+    "Input_DocCam": "input_doc_cam",
+    "Input_InstCam": "input_inst_cam",
+    "dev_DSP": "dev_dsps",
+    "dev_MediaPort_Available": "dev_media_ports",
+    "dev_Power_Control": "dev_power_controllers",
+    "dev_Recorder_Installed": "dev_recorders",
+    "dev_USB_Switcher": "dev_usb_switchers",
+    "gui_CaptureSource_Available": "gui_capture_source_available"
   },
   "value_map": {
-    "__comment": "Add entries here to normalize legacy values, e.g. \"com_type\": {\"NETWORK\": \"Network\", \"SERIAL\": \"Serial\"}",
+    "__comment": "Applied AFTER renaming, keyed by the NEW property name. Mapped values keep their JSON type, so string 'True' can become boolean true.",
+    "active_notifications": {
+      "True": true,
+      "False": false,
+      "true": true,
+      "false": false
+    },
+    "active_debug_server": {
+      "True": true,
+      "False": false,
+      "true": true,
+      "false": false
+    },
+    "active_event_space": {
+      "True": true,
+      "False": false,
+      "true": true,
+      "false": false
+    },
+    "gui_demo_mode": {
+      "True": true,
+      "False": false,
+      "true": true,
+      "false": false
+    },
+    "manual_disconnect": {
+      "True": true,
+      "False": false,
+      "true": true,
+      "false": false
+    },
+    "use_device_mute": {
+      "True": true,
+      "False": false,
+      "true": true,
+      "false": false
+    },
+    "dev_dsps": {
+      "Yes": "1",
+      "No": "0"
+    },
+    "dev_media_ports": {
+      "Yes": "1",
+      "No": "0"
+    },
+    "dev_power_controllers": {
+      "Yes": "1",
+      "No": "0"
+    },
+    "dev_recorders": {
+      "Yes": "1",
+      "No": "0"
+    },
+    "dev_usb_switchers": {
+      "Yes": "1",
+      "No": "0"
+    },
+    "gui_routing_mode": {
+      "": "Normal"
+    },
     "com_type": {
       "NETWORK": "Network",
       "SERIAL": "Serial",
@@ -200,7 +290,68 @@
       "ssh": "SSH"
     }
   },
-  "__defaults_note": "Injected ONLY when the key is missing after mapping \u2014 existing values are never overwritten. '{n}' becomes the device number from the section name.",
+  "moves": [
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_Camera_(\\d+)",
+      "to_section": "CAMERADEVICE_$1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_Projector_(\\d+)",
+      "to_section": "PROJECTORDEVICE_$1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_Switcher_(\\d+)",
+      "to_section": "SWITCHERDEVICE_$1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_Screen_(\\d+)",
+      "to_section": "SCREENDEVICE_$1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_DSP_(\\d+)",
+      "to_section": "DSPDEVICE_$1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_USB_(\\d+)",
+      "to_section": "USBDEVICE_$1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_Wireless_(\\d+)",
+      "to_section": "WIRELESSDEVICE_$1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_MediaPort(?:_(\\d+))?",
+      "to_section": "MEDIAPORTDEVICE_1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_Power(?:_(\\d+))?",
+      "to_section": "POWERDEVICE_1",
+      "to_key": "gve_id"
+    },
+    {
+      "from_section": "SYSTEM_SETUP",
+      "key_match": "GVE_ID_Recorder(?:_(\\d+))?",
+      "to_section": "RECORDERDEVICE_1",
+      "to_key": "gve_id"
+    }
+  ],
   "defaults": {
     "CAMERADEVICE_*": {
       "btn_name": "Btn_Con_Cam{n}",

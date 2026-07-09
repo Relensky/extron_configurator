@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
+import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sftp_client.dart';
@@ -305,17 +306,18 @@ class AppStateProvider extends ChangeNotifier {
       final originalContents = await File(tempPath).readAsString();
       final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
 
-      // Prompt for where the NEW (editable) working copy should live
-      String bldg = "UNKNOWN";
-      String room = "000";
-      if (parsedConfig.containsKey('SYSTEM_SETUP')) {
-        bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
-        room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
-      }
+      // Backup base name comes from the Active Deployment Target dropdown
+      // (e.g. roomName 'BSS103' or 'BSS 103' -> 'BSS103_old_config.json').
+      // Sanitized for filesystem safety; blank when no room is selected.
+      final String backupBase = (selectedProcessor?['roomName']?.toString() ?? '')
+          .replaceAll(RegExp(r'[\\/:*?"<>|\s]+'), '');
+
+      // Prompt for where the NEW (editable) working copy should live.
+      // Per convention, the working file is always plain config.json.
       onStatusUpdate('System: Choose where to save the new working copy...');
       String? savePath = await FilePicker.saveFile(
         dialogTitle: 'Save Downloaded Config As (new working file)',
-        fileName: '${bldgAbbreviation(bldg)}_${room}_config.json',
+        fileName: 'config.json',
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
@@ -333,6 +335,7 @@ class AppStateProvider extends ChangeNotifier {
         parsedConfig: parsedConfig,
         backupDirectory: File(savePath).parent.path,
         sourceLabel: 'SFTP download from $ipAddress -> $savePath',
+        backupBaseName: backupBase.isNotEmpty ? backupBase : null,
       );
 
       onStatusUpdate('System: Config downloaded, backed up, and loaded for editing.');
@@ -354,21 +357,28 @@ class AppStateProvider extends ChangeNotifier {
     required Map<String, dynamic> parsedConfig,
     required String backupDirectory,
     required String sourceLabel,
+    String? backupBaseName, // e.g. 'BSS103' from the Active Deployment Target
   }) async {
     systemLogs.clear(); // Clear old logs on new load
 
     // --- AUTOMATIC BACKUP LOGIC ---
     try {
-      // Extract identifiers for the filename
-      String bldg = "UNKNOWN";
-      String room = "000";
-      if (parsedConfig.containsKey('SYSTEM_SETUP')) {
-        bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
-        room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
+      String backupFileName;
+      if (backupBaseName != null && backupBaseName.isNotEmpty) {
+        // Caller supplied a name (SFTP download: the processor dropdown's
+        // room name), e.g. BSS103_old_config.json
+        backupFileName = '${backupBaseName}_old_config.json';
+      } else {
+        // Fall back to identifiers inside the config file itself
+        String bldg = "UNKNOWN";
+        String room = "000";
+        if (parsedConfig.containsKey('SYSTEM_SETUP')) {
+          bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
+          room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
+        }
+        // Use the short abbreviation for the filename even when gve_bldg holds the full name
+        backupFileName = '${bldgAbbreviation(bldg)}_${room}_old_config.json';
       }
-
-      // Use the short abbreviation for the filename even when gve_bldg holds the full name
-      final backupFileName = '${bldgAbbreviation(bldg)}_${room}_old_config.json';
       final backupFilePath = path.join(backupDirectory, backupFileName);
       final backupFile = File(backupFilePath);
 
@@ -393,7 +403,14 @@ class AppStateProvider extends ChangeNotifier {
     // rest of the pipeline only ever sees current-schema keys. The original
     // file was already backed up above, so nothing is lost.
     if (keyMap.ruleCount > 0) {
-      final result = keyMap.apply(roomConfig);
+      // Canonical key list powers auto-case-normalization: any legacy
+      // property whose lowercased/underscore-stripped form matches a current
+      // key gets renamed without needing an explicit rule for every variant.
+      final canonicalKeys = <String>{
+        ...ConfigDictionary.descriptions.keys,
+        ...uiSchema.exactKeys,
+      }.toList();
+      final result = keyMap.apply(roomConfig, canonicalKeys: canonicalKeys);
       if (result.changed) {
         roomConfig = result.config;
         systemLogs.add("KEY MAPPING: Translated ${result.changes.length} legacy item(s) using ${keyMap.source}");
@@ -405,6 +422,11 @@ class AppStateProvider extends ChangeNotifier {
 
     // Check for missing keys and patch them
     _validateAndMigrateConfig();
+
+    // Warn (never auto-change) when more device blocks exist than the dev_
+    // counts allow — extra blocks are hidden in tabs and pruned on export,
+    // which is normal for templates but surprising for migrated legacy rooms.
+    _auditDeviceCounts();
 
     // Flag anything in the loaded config that does not exist in the default template
     final template = await _readDefaultTemplate();
@@ -1015,6 +1037,57 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Internal helper to remove unused devices based on the `dev_` settings
+  /// Logs a warning for every device family where MORE numbered blocks exist
+  /// in the loaded config than the SYSTEM_SETUP dev_ count allows. This is
+  /// informational only — counts are never changed automatically, because
+  /// template files intentionally carry every possible block. It exists so a
+  /// migrated legacy room (e.g. dev_projectors "1" with 4 projector blocks)
+  /// doesn't silently lose blocks at export time.
+  void _auditDeviceCounts() {
+    final systemSetup = roomConfig['SYSTEM_SETUP'];
+    if (systemSetup is! Map) return;
+
+    final deviceMap = {
+      'dev_projectors': 'PROJECTORDEVICE_',
+      'dev_cameras': 'CAMERADEVICE_',
+      'dev_switchers': 'SWITCHERDEVICE_',
+      'dev_dsps': 'DSPDEVICE_',
+      'dev_usb_switchers': 'USBDEVICE_',
+      'dev_media_ports': 'MEDIAPORTDEVICE_',
+      'dev_wireless': 'WIRELESSDEVICE_',
+      'dev_recorders': 'RECORDERDEVICE_',
+      'dev_screens': 'SCREENDEVICE_',
+      'dev_power_controllers': 'POWERDEVICE_',
+    };
+
+    bool warned = false;
+    deviceMap.forEach((countKey, prefix) {
+      // Parse the configured count the same way pruning does
+      final raw = systemSetup[countKey]?.toString().toLowerCase() ?? '';
+      int count = raw == 'yes' ? 1 : (raw == 'no' ? 0 : (int.tryParse(raw) ?? 0));
+
+      // Highest numbered block actually present in the config
+      int highest = 0;
+      for (final key in roomConfig.keys) {
+        if (key.startsWith(prefix)) {
+          final n = int.tryParse(key.substring(prefix.length)) ?? 0;
+          if (n > highest) highest = n;
+        }
+      }
+
+      if (highest > count) {
+        systemLogs.add(
+            "COUNT WARNING: $highest ${prefix}x blocks exist but $countKey is '$raw'. "
+            "Blocks above $count are hidden in the tabs and PRUNED on export — "
+            "raise the count in the Setup Wizard if this room really has them.");
+        warned = true;
+      }
+    });
+    if (warned) {
+      systemLogs.add("--------------------------------------------------");
+    }
+  }
+
   Map<String, dynamic> _pruneConfig(Map<String, dynamic> configToPrune) {
     Map<String, dynamic> data = Map.from(configToPrune);
     

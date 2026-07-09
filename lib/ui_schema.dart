@@ -126,6 +126,10 @@ class UiSchema {
 
   int get fieldCount => _exact.length + _patterns.length;
 
+  /// All exact (non-wildcard) config keys the schema knows about. Used by the
+  /// key mapper's auto-case-normalization as the canonical vocabulary.
+  List<String> get exactKeys => _exact.keys.toList();
+
   void _add(FieldSpec spec) {
     if (spec.isPattern) {
       // Later additions override earlier ones (file overrides built-in)
