@@ -52,7 +52,8 @@ import 'app_logger.dart';
 ///                  current-style names.
 ///
 ///  Processing order: sections -> properties -> auto-normalization ->
-///  value_map -> moves -> unused-device removal -> defaults.
+///  value_map -> moves -> unused-device removal -> carriage-return escaping ->
+///  smart device defaults (name/btn/lbl/model matching) -> defaults.
 /// ============================================================================
 
 /// One top-level section rename rule ("CAMERA(\d+)DEVICE" -> "CAMERADEVICE_$1").
@@ -121,6 +122,21 @@ class ConfigKeyMap {
   /// "SWITCHERDEVICE_"). Used by [removeUnusedDevices].
   final Map<String, String> deviceCounts = {};
 
+  /// When true, real carriage-return control characters inside string values
+  /// (\r\n or \r) are converted to the literal two-character sequence \r that
+  /// the processor GUI expects (e.g. "Intake<CR><LF>Fans" -> "Intake\rFans").
+  bool escapeCarriageReturns = false;
+
+  /// Device prefix -> friendly label used to generate device names
+  /// ("CAMERADEVICE_" -> "Camera" -> "Camera 2 - Cam570").
+  final Map<String, String> deviceLabels = {};
+
+  /// Reference device blocks from the current template, keyed by section name
+  /// ("CAMERADEVICE_2" -> {btn_name, lbl_name, model, module, ...}). Used to
+  /// carry over btn/lbl names by device NUMBER and module/keep_alive_trigger
+  /// by matching MODEL when converting legacy files.
+  final Map<String, Map<String, dynamic>> deviceTemplates = {};
+
   /// Where this map came from, for display in App Config.
   String source = 'Built-in (no mapping rules)';
 
@@ -142,6 +158,27 @@ class ConfigKeyMap {
       (doc['device_counts'] as Map).forEach((k, v) {
         if (k.toString().startsWith('__')) return;
         deviceCounts[k.toString()] = v.toString();
+      });
+    }
+
+    escapeCarriageReturns = doc['escape_carriage_returns'] == true;
+
+    // Prefix -> friendly label for generated device names
+    if (doc['device_labels'] is Map) {
+      (doc['device_labels'] as Map).forEach((k, v) {
+        if (k.toString().startsWith('__')) return;
+        deviceLabels[k.toString()] = v.toString();
+      });
+    }
+
+    // Template reference blocks for number/model matched carry-over
+    if (doc['device_templates'] is Map) {
+      (doc['device_templates'] as Map).forEach((k, v) {
+        if (k.toString().startsWith('__')) return;
+        if (v is Map) {
+          deviceTemplates[k.toString()] =
+              v.map((key, value) => MapEntry(key.toString(), value));
+        }
       });
     }
 
@@ -425,7 +462,111 @@ class ConfigKeyMap {
       }
     }
 
-    // --- 5. Inject defaults for keys still missing after mapping -----------
+    // --- 5. Escape carriage returns in string values ------------------------
+    // Legacy files contain REAL \r\n / \r control characters inside GUI names
+    // (e.g. "Intake<CR><LF>Fans"); the current format stores the literal
+    // two-character sequence \r instead ("Intake\rFans"). CRLF collapses to
+    // one literal \r; lone \n is left untouched.
+    if (escapeCarriageReturns) {
+      config.forEach((sectionName, block) {
+        if (block is! Map) return;
+        final Map<String, dynamic> section = block as Map<String, dynamic>;
+        for (final key in section.keys.toList()) {
+          final v = section[key];
+          if (v is String && v.contains('\r')) {
+            final cleaned = v.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
+            section[key] = cleaned;
+            changes.add(
+                "KEYMAP: escaped carriage return(s) in '$sectionName.$key' -> '$cleaned'");
+          }
+        }
+      });
+    }
+
+    // --- 6. Smart device defaults (name / btn / lbl / model matching) ------
+    // (a) Generates 'name' as '<Label> - <model>', numbered ONLY when the
+    //     family has multiple units after removal: 'Camera 2 - Cam570' vs
+    //     'Camera - Cam570'.
+    // (b) btn_name / lbl_name carry over from the SAME-NUMBER template block.
+    // (c) When the legacy model matches a template block's model in the same
+    //     family, module and keep_alive_trigger carry over from it.
+    // All of these only fill keys that are missing — never overwrite.
+    if (deviceLabels.isNotEmpty || deviceTemplates.isNotEmpty) {
+      config.forEach((sectionName, block) {
+        if (block is! Map) return;
+        final Map<String, dynamic> section = block as Map<String, dynamic>;
+
+        // Resolve the device family prefix ('CAMERADEVICE_') and number ('2')
+        String? matchedPrefix;
+        for (final p in deviceLabels.keys) {
+          if (sectionName.startsWith(p) &&
+              int.tryParse(sectionName.substring(p.length)) != null) {
+            matchedPrefix = p;
+            break;
+          }
+        }
+        if (matchedPrefix == null) return;
+        final String pfx = matchedPrefix;
+        final String n = sectionName.substring(pfx.length);
+
+        // (a) Friendly generated name
+        if (!section.containsKey('name')) {
+          final String label = deviceLabels[pfx]!;
+          final int familyCount = config.keys
+              .where((k) =>
+                  k.startsWith(pfx) &&
+                  int.tryParse(k.substring(pfx.length)) != null)
+              .length;
+          final String model = section['model']?.toString().trim() ?? '';
+          String name = label;
+          if (familyCount > 1) name += ' $n';
+          if (model.isNotEmpty) name += ' - $model';
+          section['name'] = name;
+          changes.add("KEYMAP: generated '$sectionName.name' = '$name'");
+        }
+
+        // (b) btn_name / lbl_name from the template block with the SAME number
+        final Map<String, dynamic>? exactTmpl = deviceTemplates['$pfx$n'];
+        if (exactTmpl != null) {
+          for (final key in const ['btn_name', 'lbl_name']) {
+            if (!section.containsKey(key) && exactTmpl.containsKey(key)) {
+              section[key] = exactTmpl[key];
+              changes.add(
+                  "KEYMAP: set '$sectionName.$key' = '${exactTmpl[key]}' (from template $pfx$n)");
+            }
+          }
+        }
+
+        // (c) module + keep_alive_trigger from a MODEL-matched template block
+        final String model =
+            section['model']?.toString().trim().toLowerCase() ?? '';
+        if (model.isNotEmpty) {
+          Map<String, dynamic>? modelTmpl;
+          String modelTmplName = '';
+          for (final entry in deviceTemplates.entries) {
+            if (!entry.key.startsWith(pfx)) continue;
+            final tModel =
+                entry.value['model']?.toString().trim().toLowerCase() ?? '';
+            if (tModel.isNotEmpty && tModel == model) {
+              modelTmpl = entry.value;
+              modelTmplName = entry.key;
+              break;
+            }
+          }
+          if (modelTmpl != null) {
+            for (final key in const ['module', 'keep_alive_trigger']) {
+              if (!section.containsKey(key) && modelTmpl.containsKey(key)) {
+                section[key] = modelTmpl[key];
+                changes.add(
+                    "KEYMAP: set '$sectionName.$key' = '${modelTmpl[key]}' (model '${section['model']}' matched template $modelTmplName)");
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // --- 7. Inject defaults for keys still missing after mapping -----------
     config.forEach((sectionName, block) {
       if (block is! Map) return;
       final Map<String, dynamic> section = block as Map<String, dynamic>;
