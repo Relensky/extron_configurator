@@ -50,10 +50,22 @@ import 'app_logger.dart';
 ///                  No/0 (or below their number) are REMOVED instead of
 ///                  converted. Never touches blocks that already had
 ///                  current-style names.
+///    "companion_keys": list of { "key_match", "ensure_key", "value",
+///                  optional "section" } rules. For every property matching
+///                  key_match, the ensure_key (with $1..$9 capture groups)
+///                  is created in the same section when missing, e.g.
+///                  power1_outlet_(\d+) -> power1_outlet_$1_action = null.
+///
+///  NOTE on carriage returns: escape_carriage_returns stores the value in
+///  memory as the two-character sequence backslash+r. When the config is
+///  saved, the JSON encoder escapes the backslash, so the file on disk
+///  contains \\r — e.g. "TLP\\rPoE" — which is the form the processor
+///  code reads.
 ///
 ///  Processing order: sections -> properties -> auto-normalization ->
 ///  value_map -> moves -> unused-device removal -> carriage-return escaping ->
-///  smart device defaults (name/btn/lbl/model matching) -> defaults.
+///  smart device defaults (name/btn/lbl/model matching) -> companion keys ->
+///  defaults.
 /// ============================================================================
 
 /// One top-level section rename rule ("CAMERA(\d+)DEVICE" -> "CAMERADEVICE_$1").
@@ -86,6 +98,22 @@ class MoveRule {
   }) : keyMatch = RegExp('^(?:$pattern)\$');
 }
 
+/// One companion-key rule: for every property matching [keyMatch], make sure
+/// a partner key (built from capture groups) also exists in the same section,
+/// e.g. power1_outlet_(\d+) -> ensure power1_outlet_$1_action (null).
+class CompanionRule {
+  final RegExp keyMatch;
+  final String ensureKey;      // may contain $1..$9 from keyMatch
+  final dynamic value;         // injected value (kept as-is, may be null)
+  final String? sectionPattern; // optional '*' wildcard section filter
+  CompanionRule({
+    required String pattern,
+    required this.ensureKey,
+    this.value,
+    this.sectionPattern,
+  }) : keyMatch = RegExp('^(?:$pattern)\$');
+}
+
 /// Replaces $1..$9 in [template] with the capture groups of [m].
 String _substituteGroups(String template, RegExpMatch m) {
   String out = template;
@@ -109,6 +137,12 @@ class ConfigKeyMap {
   final Map<String, Map<String, dynamic>> valueMap = {};
   final List<MoveRule> moves = [];
   final Map<String, Map<String, dynamic>> defaults = {};
+
+  /// Companion-key rules ("companion_keys" in key_map.json): for every key
+  /// matching a pattern, guarantee a partner key exists in the same section
+  /// (e.g. every power1_outlet_N gets a power1_outlet_N_action of null).
+  final List<CompanionRule> companions = [];
+
   bool autoCaseNormalization = false;
 
   /// When true, LEGACY-named device blocks whose family count in SYSTEM_SETUP
@@ -123,7 +157,7 @@ class ConfigKeyMap {
   final Map<String, String> deviceCounts = {};
 
   /// When true, real carriage-return control characters inside string values
-  /// (\r\n or \r) are converted to the literal two-character sequence \\r that
+  /// (\r\n or \r) are converted to the literal two-character sequence \r that
   /// the processor GUI expects (e.g. "Intake<CR><LF>Fans" -> "Intake\rFans").
   bool escapeCarriageReturns = false;
 
@@ -142,7 +176,7 @@ class ConfigKeyMap {
 
   int get ruleCount =>
       sections.length + properties.length + valueMap.length + moves.length +
-      defaults.length + deviceCounts.length;
+      defaults.length + deviceCounts.length + companions.length;
 
   /// The built-in map is intentionally EMPTY: legacy naming is site-specific,
   /// so all rules come from key_map.json. With no file present, loading a
@@ -223,6 +257,21 @@ class ConfigKeyMap {
             pattern: item['key_match'].toString(),
             toSection: item['to_section'].toString(),
             toKey: item['to_key'].toString(),
+          ));
+        }
+      }
+    }
+    // Companion keys (ensure a partner key exists per matching property)
+    if (doc['companion_keys'] is List) {
+      for (final item in doc['companion_keys'] as List) {
+        if (item is Map &&
+            item['key_match'] != null &&
+            item['ensure_key'] != null) {
+          companions.add(CompanionRule(
+            pattern: item['key_match'].toString(),
+            ensureKey: item['ensure_key'].toString(),
+            value: item['value'], // absent -> null, which is a valid injected value
+            sectionPattern: item['section']?.toString(),
           ));
         }
       }
@@ -463,8 +512,12 @@ class ConfigKeyMap {
     }
 
     // --- 5. Escape carriage returns in string values ------------------------
-    // Legacy files contain REAL \r\n / \r control characters inside GUI names.
-    // Convert them to the literal \\r sequence.
+    // Legacy files contain REAL \r\n / \r control characters inside GUI names
+    // (e.g. "Intake<CR><LF>Fans"); the new style stores the two-character
+    // sequence backslash+r in memory. On save, the JSON encoder escapes the
+    // backslash so the config.json ON DISK contains \\r — "TLP\\rPoE" — the
+    // form the processor code reads. CRLF collapses to one marker; lone \n is
+    // left untouched.
     if (escapeCarriageReturns) {
       config.forEach((sectionName, block) {
         if (block is! Map) return;
@@ -472,10 +525,13 @@ class ConfigKeyMap {
         for (final key in section.keys.toList()) {
           final v = section[key];
           if (v is String && v.contains('\r')) {
-            final cleaned = v.replaceAll('\r\n', r'\\r').replaceAll('\r', r'\\r');
+            final cleaned = v.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
             section[key] = cleaned;
+            // Show the value as it will appear in the SAVED file (\\r), so the
+            // audit log matches what you see when you open config.json.
             changes.add(
-                "KEYMAP: escaped carriage return(s) in '$sectionName.$key' -> '$cleaned'");
+                "KEYMAP: escaped carriage return(s) in '$sectionName.$key' -> "
+                "'${cleaned.replaceAll(r'\', r'\\')}' (as saved on disk)");
           }
         }
       });
@@ -564,7 +620,36 @@ class ConfigKeyMap {
       });
     }
 
-    // --- 7. Inject defaults for keys still missing after mapping -----------
+    // --- 7. Companion keys ---------------------------------------------------
+    // For every property matching a companion rule, guarantee its partner key
+    // exists in the same section. The partner name is built from the matched
+    // capture groups, so "power1_outlet_(\d+)" -> "power1_outlet_$1_action"
+    // creates power1_outlet_4_action ONLY when power1_outlet_4 exists — the
+    // number always matches the outlet that is actually present. Existing
+    // values are never overwritten.
+    if (companions.isNotEmpty) {
+      config.forEach((sectionName, block) {
+        if (block is! Map) return;
+        final Map<String, dynamic> section = block as Map<String, dynamic>;
+        for (final rule in companions) {
+          if (rule.sectionPattern != null &&
+              !_wildcardMatch(rule.sectionPattern!, sectionName)) {
+            continue;
+          }
+          for (final key in section.keys.toList()) {
+            final m = rule.keyMatch.firstMatch(key);
+            if (m == null) continue;
+            final targetKey = _substituteGroups(rule.ensureKey, m);
+            if (targetKey == key || section.containsKey(targetKey)) continue;
+            section[targetKey] = rule.value;
+            changes.add(
+                "KEYMAP: added companion '$sectionName.$targetKey' = ${jsonEncode(rule.value)} (for '$key')");
+          }
+        }
+      });
+    }
+
+    // --- 8. Inject defaults for keys still missing after mapping -----------
     config.forEach((sectionName, block) {
       if (block is! Map) return;
       final Map<String, dynamic> section = block as Map<String, dynamic>;

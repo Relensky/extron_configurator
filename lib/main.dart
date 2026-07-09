@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as path; // Added for hintText path joining
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'dynamic_devices_view.dart';
@@ -156,19 +155,16 @@ class _MainDashboardState extends State<MainDashboard> {
                     foregroundColor: Colors.white, // Forces readable text in light mode
                   ),
                   onPressed: () async {
-                    // Needs either a validated template file OR a root folder with config.json
-                    if (provider.templateFilePath.isEmpty && provider.rootFolderPath.isEmpty) {
-                       setState(() => _selectedIndex = 4); // Route to App Config
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Please set a Template file or Root Path first (App Config tab)."), backgroundColor: Colors.red)
-                        );
-                    } else {
-                      bool success = await provider.createNewConfig();
-                      if (!success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Failed to load the template config.json."), backgroundColor: Colors.red)
-                        );
-                      }
+                    // The template path always resolves now (explicit file, else
+                    // config.json in the Root Folder / working directory), so just
+                    // attempt the create and report the resolved location on failure.
+                    bool success = await provider.createNewConfig();
+                    if (!success && context.mounted) {
+                      setState(() => _selectedIndex = 4); // Route to App Config
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
+                            "Place config.json there or set a Template file in App Config."), backgroundColor: Colors.red)
+                      );
                     }
                   },
                 ),
@@ -324,10 +320,9 @@ class AppSettingsView extends StatelessWidget {
           key: ValueKey(provider.modulesPath), // Forces UI to refresh when picked via dialog
           decoration: InputDecoration(
             labelText: 'Python Modules Path',
-            hintText: provider.rootFolderPath.isNotEmpty 
-                ? path.join(provider.rootFolderPath, 'modules') 
-                : r'C:\workspace\modules',
-            helperText: provider.modulesPath.isEmpty ? 'Using automatic fallback path' : null,
+            // Blank = the "devices" sub-folder of the Root Folder
+            hintText: provider.effectiveModulesPath,
+            helperText: 'Blank = "devices" sub-folder of the Root Folder',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.folder),
@@ -350,10 +345,9 @@ class AppSettingsView extends StatelessWidget {
           key: ValueKey(provider.buildingsFilePath),
           decoration: InputDecoration(
             labelText: 'Buildings JSON File Path',
-            hintText: provider.rootFolderPath.isNotEmpty 
-                ? path.join(provider.rootFolderPath, 'buildings.json') 
-                : r'C:\workspace\buildings.json',
-            helperText: provider.buildingsFilePath.isEmpty ? 'Using automatic fallback path' : null,
+            // Blank = buildings.json in the Root Folder
+            hintText: provider.effectiveBuildingsFilePath,
+            helperText: 'Blank = buildings.json in the Root Folder',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.file_open),
@@ -364,17 +358,15 @@ class AppSettingsView extends StatelessWidget {
                   allowedExtensions: ['json']
                 );
                 if (result != null) {
+                  // updateSetting reloads the buildings list itself
                   provider.updateSetting('buildingsFilePath', result.files.single.path!);
-                  provider.loadBuildingsList(); 
                 }
               },
             ),
           ),
           initialValue: provider.buildingsFilePath,
-          onChanged: (val) {
-            provider.updateSetting('buildingsFilePath', val);
-            provider.loadBuildingsList(); 
-          },
+          // updateSetting reloads the buildings list itself
+          onChanged: (val) => provider.updateSetting('buildingsFilePath', val),
         ),
         const SizedBox(height: 20),
 
@@ -387,7 +379,9 @@ class AppSettingsView extends StatelessWidget {
                 key: ValueKey(provider.templateFilePath),
                 decoration: InputDecoration(
                   labelText: 'Default config.json Template Path',
-                  hintText: r'C:\workspace\ControlScript-Template\config.json',
+                  // Blank = config.json in the Root Folder
+                  hintText: provider.effectiveTemplateFilePath,
+                  helperText: 'Blank = config.json in the Root Folder',
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.file_open),
@@ -418,20 +412,17 @@ class AppSettingsView extends StatelessWidget {
                   foregroundColor: Colors.white, // FIX: label/icon were unreadable in light mode
                 ),
                 onPressed: () async {
-                  if (provider.templateFilePath.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Set a template file path first.'), backgroundColor: Colors.red),
-                    );
-                    return;
-                  }
                   // Validates & registers the template only. The file is not
                   // opened into the editor until 'Create New Config' is pressed.
-                  bool valid = await provider.validateConfigTemplate(provider.templateFilePath);
+                  // A blank field validates the default: config.json in the
+                  // Root Folder / working directory.
+                  bool valid = await provider
+                      .validateConfigTemplate(provider.effectiveTemplateFilePath);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(valid
                           ? 'Template validated & saved as default. Use "Create New Config" to start from it.'
-                          : 'Template file is missing or contains invalid JSON.'),
+                          : 'No valid template at ${provider.effectiveTemplateFilePath} (missing or invalid JSON).'),
                       backgroundColor: valid ? Colors.green : Colors.red,
                     ));
                   }
@@ -451,7 +442,7 @@ class AppSettingsView extends StatelessWidget {
                 key: ValueKey(provider.uiSchemaPath),
                 decoration: InputDecoration(
                   labelText: 'UI Schema File Path (ui_schema.json)',
-                  hintText: r'C:\workspace\ui_schema.json  (blank = look next to the app)',
+                  hintText: 'Blank = ui_schema.json in the Root Folder / next to the app',
                   helperText: 'Active schema: ${provider.uiSchema.source} — ${provider.uiSchema.fieldCount} field definitions',
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
@@ -503,7 +494,7 @@ class AppSettingsView extends StatelessWidget {
                 key: ValueKey(provider.keyMapPath),
                 decoration: InputDecoration(
                   labelText: 'Legacy Key Map File Path (key_map.json)',
-                  hintText: r'C:\workspace\key_map.json  (blank = look next to the app)',
+                  hintText: 'Blank = key_map.json in the Root Folder / next to the app',
                   helperText: 'Active map: ${provider.keyMap.source} — ${provider.keyMap.ruleCount} rules. '
                       'Applied automatically when a config is loaded.',
                   border: const OutlineInputBorder(),
@@ -552,10 +543,9 @@ class AppSettingsView extends StatelessWidget {
           key: ValueKey(provider.processorsFilePath),
           decoration: InputDecoration(
             labelText: 'Processors JSON File Path',
-            hintText: provider.rootFolderPath.isNotEmpty 
-                ? path.join(provider.rootFolderPath, 'processors.json') 
-                : r'C:\workspace\processors.json',
-            helperText: provider.processorsFilePath.isEmpty ? 'Using automatic fallback path' : null,
+            // Blank = processors.json in the Root Folder; read automatically on boot
+            hintText: provider.effectiveProcessorsFilePath,
+            helperText: 'Blank = processors.json in the Root Folder. Read automatically on startup.',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.file_open),
@@ -566,17 +556,15 @@ class AppSettingsView extends StatelessWidget {
                   allowedExtensions: ['json']
                 );
                 if (result != null) {
+                  // updateSetting reloads the processors list itself
                   provider.updateSetting('processorsFilePath', result.files.single.path!);
-                  provider.loadProcessorsList();
                 }
               },
             ),
           ),
           initialValue: provider.processorsFilePath,
-          onChanged: (val) {
-              provider.updateSetting('processorsFilePath', val);
-              provider.loadProcessorsList();
-          },
+          // updateSetting reloads the processors list itself
+          onChanged: (val) => provider.updateSetting('processorsFilePath', val),
         ),
         const SizedBox(height: 20),
         
@@ -594,8 +582,11 @@ class AppSettingsView extends StatelessWidget {
         TextFormField(
           key: ValueKey(provider.rootFolderPath),
           decoration: InputDecoration(
-            labelText: 'Template Output Root Path',
-            hintText: r'C:\workspace\ControlScript-Template',
+            labelText: 'Root Folder Path (default base for all blank paths above)',
+            hintText: provider.effectiveRootFolder,
+            helperText: 'Blank = the app\'s working directory. Blank paths above default to files in this folder '
+                '(config.json, processors.json, buildings.json, ui_schema.json, key_map.json, and the "devices" modules sub-folder).',
+            helperMaxLines: 3,
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.folder),
