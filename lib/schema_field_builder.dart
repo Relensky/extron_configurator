@@ -144,23 +144,44 @@ class SchemaFieldBuilder {
     // SAFETY: if the config holds a value the schema doesn't list, show it
     // (marked) instead of blanking the field — no silent data loss.
     final bool listed = options.any((o) => o.value == current);
-    if (current.isNotEmpty && !listed) {
+    final bool valueMismatch = current.isNotEmpty && !listed;
+    if (valueMismatch) {
       options.insert(0, OptionSpec(value: current, label: '$current (not in schema)'));
     }
 
     return DropdownButtonFormField<String>(
       value: current.isNotEmpty ? current : null,
-      decoration: InputDecoration(
-        labelText: label,
-        helperText: spec.helperText,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: _decoration(label, spec.helperText,
+          mismatch: valueMismatch,
+          mismatchText: 'Value "$current" is not in the schema options — pick a valid option'),
       items: options
           .map((o) => DropdownMenuItem(value: o.value, child: Text(o.label)))
           .toList(),
       onChanged: (val) {
         if (val != null) provider.updateDeviceValue(sectionKey, fieldKey, val);
       },
+    );
+  }
+
+  /// Shared InputDecoration: normal grey outline, or red in every state (with
+  /// a red helper line) when the current value doesn't match the schema.
+  static InputDecoration _decoration(String label, String? helperText,
+      {bool mismatch = false, String? mismatchText}) {
+    final OutlineInputBorder? red = mismatch
+        ? OutlineInputBorder(
+            borderSide: BorderSide(color: Colors.red.shade400, width: 1.5))
+        : null;
+    return InputDecoration(
+      labelText: label,
+      helperText: mismatch ? mismatchText : helperText,
+      helperStyle: mismatch ? TextStyle(color: Colors.red.shade400) : null,
+      helperMaxLines: 2,
+      border: red ?? const OutlineInputBorder(),
+      enabledBorder: red,
+      focusedBorder: mismatch
+          ? OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.red.shade400, width: 2))
+          : null,
     );
   }
 
@@ -179,7 +200,9 @@ class SchemaFieldBuilder {
 
     final List<OptionSpec> options = List.of(spec.options);
     final bool listed = options.any((o) => o.comboKey == currentComboKey);
-    if (!listed && currentComboKey.replaceAll('_', '').isNotEmpty) {
+    final bool hasValue = currentComboKey.replaceAll('_', '').isNotEmpty;
+    final bool valueMismatch = hasValue && !listed;
+    if (valueMismatch) {
       options.insert(
           0,
           OptionSpec(
@@ -188,12 +211,11 @@ class SchemaFieldBuilder {
     }
 
     return DropdownButtonFormField<String>(
-      value: currentComboKey.replaceAll('_', '').isNotEmpty ? currentComboKey : null,
-      decoration: InputDecoration(
-        labelText: label,
-        helperText: spec.helperText,
-        border: const OutlineInputBorder(),
-      ),
+      value: hasValue ? currentComboKey : null,
+      decoration: _decoration(label, spec.helperText,
+          mismatch: valueMismatch,
+          mismatchText:
+              'Combined value "$currentComboKey" (${writes.join(' + ')}) is not in the schema options — pick a valid option'),
       items: options
           .map((o) => DropdownMenuItem(value: o.comboKey, child: Text(o.label)))
           .toList(),

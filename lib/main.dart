@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -647,6 +649,10 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
   bool _isBusy = false;
   String _targetRoomName = '';
 
+  /// Optional additional file to push alongside config.json (upload mode
+  /// only). Stays blank unless the user picks one — e.g. Whereused.csv.
+  String _extraFilePath = '';
+
   @override
   void initState() {
     super.initState();
@@ -689,6 +695,8 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
         ipAddress: _ipController.text.trim(),
         password: _passController.text,
         onStatusUpdate: (status) => setState(() => _statusText = status),
+        // Blank = upload only config.json (the default behavior)
+        extraFilePath: _extraFilePath.isNotEmpty ? _extraFilePath : null,
       );
     } else {
       success = await provider.downloadConfigFromProcessor(
@@ -752,6 +760,69 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
               ),
               enabled: !_isBusy,
             ),
+
+            // --- ADDITIONAL FILE (upload only, optional) ---
+            // Leave blank to upload just config.json. Typically used to push
+            // a Whereused.csv along with the config in one connection.
+            if (widget.isUpload) ...[
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade600),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Additional File (optional)',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      _extraFilePath.isEmpty
+                          ? 'None selected — only config.json will be uploaded.'
+                          : 'Will also upload: ${_extraFilePath.split(Platform.pathSeparator).last}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _extraFilePath.isEmpty ? Colors.grey : null,
+                        fontStyle: _extraFilePath.isEmpty ? FontStyle.italic : null,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.attach_file, size: 18),
+                          label: Text(_extraFilePath.isEmpty ? 'Add File' : 'Change File'),
+                          onPressed: _isBusy
+                              ? null
+                              : () async {
+                                  // Any file type: Whereused.csv is typical,
+                                  // but module .py files etc. work too.
+                                  final result = await FilePicker.pickFiles();
+                                  if (result != null && mounted) {
+                                    setState(() => _extraFilePath =
+                                        result.files.single.path ?? '');
+                                  }
+                                },
+                        ),
+                        if (_extraFilePath.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          TextButton.icon(
+                            icon: const Icon(Icons.clear, size: 18),
+                            label: const Text('Clear'),
+                            onPressed: _isBusy
+                                ? null
+                                : () => setState(() => _extraFilePath = ''),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             
             // Status read-out container

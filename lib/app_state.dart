@@ -156,10 +156,20 @@ class AppStateProvider extends ChangeNotifier {
     required String ipAddress,
     required String password,
     required Function(String) onStatusUpdate,
+    String? extraFilePath, // Optional additional file (e.g. Whereused.csv)
   }) async {
     if (roomConfig.isEmpty) {
       onStatusUpdate("Error: No configuration loaded to upload.");
       return false;
+    }
+
+    // Validate the optional attachment up front so we don't push a config
+    // and THEN discover the second file is missing.
+    if (extraFilePath != null && extraFilePath.isNotEmpty) {
+      if (!await File(extraFilePath).exists()) {
+        onStatusUpdate("Error: Additional file not found: $extraFilePath");
+        return false;
+      }
     }
 
     try {
@@ -178,7 +188,7 @@ class AppStateProvider extends ChangeNotifier {
 
       // 3. Instantiate your existing SftpLogger and trigger the upload
       final sftpClient = SftpLogger();
-      final success = await sftpClient.uploadFileToProcessor(
+      bool success = await sftpClient.uploadFileToProcessor(
         ipAddress: ipAddress,
         password: password,
         inputPath: tempFile.path,
@@ -190,6 +200,30 @@ class AppStateProvider extends ChangeNotifier {
         AppLogger.logInfo("Successfully uploaded config.json to $ipAddress");
       } else {
         AppLogger.logError("Failed SFTP upload of config.json to $ipAddress");
+      }
+
+      // 3b. Upload the optional additional file (e.g. Whereused.csv) to the
+      // processor root, keeping its own file name. Only attempted after a
+      // successful config upload; overall success requires BOTH.
+      if (success && extraFilePath != null && extraFilePath.isNotEmpty) {
+        final extraName = path.basename(extraFilePath);
+        onStatusUpdate("System: Uploading additional file $extraName...");
+        final extraOk = await sftpClient.uploadFileToProcessor(
+          ipAddress: ipAddress,
+          password: password,
+          inputPath: extraFilePath,
+          remoteFilename: '/$extraName',
+          onStatusUpdate: onStatusUpdate,
+        );
+        if (extraOk) {
+          AppLogger.logInfo("Successfully uploaded $extraName to $ipAddress");
+          onStatusUpdate("System: Upload complete. Wrote /config.json and /$extraName");
+        } else {
+          AppLogger.logError("Failed SFTP upload of $extraName to $ipAddress");
+          onStatusUpdate(
+              "System Error: config.json uploaded, but $extraName FAILED. Retry the additional file.");
+          success = false;
+        }
       }
 
       // 4. Clean up the temporary file immediately so we don't clutter the OS
@@ -886,6 +920,11 @@ class AppStateProvider extends ChangeNotifier {
   /// Update a specific nested property for a device (e.g., changing keep_alive_command)
   void updateDeviceValue(String deviceKey, String property, dynamic value) {
     if (roomConfig.containsKey(deviceKey)) {
+      // Pasted multiline text can carry real CR control characters — store
+      // the literal \r sequence instead, same as every other write path.
+      if (value is String && value.contains('\r')) {
+        value = value.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
+      }
       roomConfig[deviceKey][property] = value;
       // A new python module was just selected: parse it right away (if it isn't
       // already cached) so its command/input dictionaries are ready instantly.
@@ -942,6 +981,17 @@ class AppStateProvider extends ChangeNotifier {
   void updateConfigFromRawJson(String rawJson) {
     try {
       final parsed = jsonDecode(rawJson) as Map<String, dynamic>;
+
+      // JSON "\r" escapes decode into REAL control characters — normalize
+      // them to the literal two-character \r the processor GUI expects, so
+      // preset names etc. stay correct even when edited via the raw editor
+      // (the key mapper only covers the file/SFTP load path).
+      final fixed = _normalizeCarriageReturnsIn(parsed);
+      if (fixed > 0) {
+        AppLogger.logInfo(
+            "Normalized carriage returns in $fixed value(s) from raw JSON editor.");
+      }
+
       roomConfig = parsed;
       _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
       notifyListeners();
@@ -950,6 +1000,28 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logError("Failed to parse raw JSON from editor", e, stack);
       rethrow; // Pass error to UI for user feedback
     }
+  }
+
+  /// Replaces REAL carriage-return control characters (\r\n or \r) in every
+  /// string value of [cfg] with the literal two-character sequence \r used by
+  /// the processor GUI (e.g. gui_preset_name "Whiteboard<CR>Left" ->
+  /// "Whiteboard\rLeft"). Lone \n is left untouched. Returns how many values
+  /// were changed. Mirrors the key mapper's escape_carriage_returns step so
+  /// EVERY write path produces the same clean representation.
+  int _normalizeCarriageReturnsIn(Map<String, dynamic> cfg) {
+    int changed = 0;
+    cfg.forEach((sectionName, block) {
+      if (block is! Map) return;
+      final Map<String, dynamic> section = block as Map<String, dynamic>;
+      for (final key in section.keys.toList()) {
+        final v = section[key];
+        if (v is String && v.contains('\r')) {
+          section[key] = v.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
+          changed++;
+        }
+      }
+    });
+    return changed;
   }
 
   /// Writes the CURRENT in-memory config to the active working file (the file
