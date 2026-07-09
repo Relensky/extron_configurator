@@ -123,7 +123,7 @@ class ConfigKeyMap {
   final Map<String, String> deviceCounts = {};
 
   /// When true, real carriage-return control characters inside string values
-  /// (\r\n or \r) are converted to the literal two-character sequence \r that
+  /// (\r\n or \r) are converted to the literal two-character sequence \\r that
   /// the processor GUI expects (e.g. "Intake<CR><LF>Fans" -> "Intake\rFans").
   bool escapeCarriageReturns = false;
 

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path; // Added for hintText path joining
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'dynamic_devices_view.dart';
@@ -323,7 +324,10 @@ class AppSettingsView extends StatelessWidget {
           key: ValueKey(provider.modulesPath), // Forces UI to refresh when picked via dialog
           decoration: InputDecoration(
             labelText: 'Python Modules Path',
-            hintText: r'C:\workspace\modules',
+            hintText: provider.rootFolderPath.isNotEmpty 
+                ? path.join(provider.rootFolderPath, 'modules') 
+                : r'C:\workspace\modules',
+            helperText: provider.modulesPath.isEmpty ? 'Using automatic fallback path' : null,
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.folder),
@@ -346,7 +350,10 @@ class AppSettingsView extends StatelessWidget {
           key: ValueKey(provider.buildingsFilePath),
           decoration: InputDecoration(
             labelText: 'Buildings JSON File Path',
-            hintText: r'C:\workspace\buildings.json',
+            hintText: provider.rootFolderPath.isNotEmpty 
+                ? path.join(provider.rootFolderPath, 'buildings.json') 
+                : r'C:\workspace\buildings.json',
+            helperText: provider.buildingsFilePath.isEmpty ? 'Using automatic fallback path' : null,
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.file_open),
@@ -545,7 +552,10 @@ class AppSettingsView extends StatelessWidget {
           key: ValueKey(provider.processorsFilePath),
           decoration: InputDecoration(
             labelText: 'Processors JSON File Path',
-            hintText: r'C:\workspace\processors.json',
+            hintText: provider.rootFolderPath.isNotEmpty 
+                ? path.join(provider.rootFolderPath, 'processors.json') 
+                : r'C:\workspace\processors.json',
+            helperText: provider.processorsFilePath.isEmpty ? 'Using automatic fallback path' : null,
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.file_open),

@@ -277,8 +277,10 @@ class DeviceConfigurationForm extends StatelessWidget {
                 if (result != null) {
                   String fullPath = result.files.single.path!;
                   String modPath = fullPath;
-                  if (provider.modulesPath.isNotEmpty && fullPath.startsWith(provider.modulesPath)) {
-                    modPath = fullPath.replaceFirst(provider.modulesPath, '');
+                  String activeModulesPath = provider.effectiveModulesPath; // <-- UPDATED
+                  
+                  if (activeModulesPath.isNotEmpty && fullPath.startsWith(activeModulesPath)) {
+                    modPath = fullPath.replaceFirst(activeModulesPath, '');
                     modPath = modPath.replaceAll(RegExp(r'^[\\\/]'), ''); 
                     modPath = modPath.replaceAll('.py', '');
                     modPath = modPath.replaceAll(RegExp(r'[\\\/]'), '.'); 

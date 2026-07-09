@@ -51,10 +51,19 @@ class AppStateProvider extends ChangeNotifier {
   // module selection dropdown/autocomplete on device tabs.
   List<String> availableModules = [];
 
+  /// Resolves the active python modules directory. Uses the explicitly set
+  /// path first, then falls back to a 'modules' folder inside the root folder,
+  /// and finally looks in the current working directory.
+  String get effectiveModulesPath {
+    if (modulesPath.isNotEmpty) return modulesPath;
+    if (rootFolderPath.isNotEmpty) return path.join(rootFolderPath, 'modules');
+    return path.join(Directory.current.path, 'modules');
+  }
+
   /// Attempts to find commonly named inputs inside the Python module for the autocomplete field
   Future<List<String>> getInputsForModule(String moduleFileName) async {
     final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
-    final fullPath = path.join(modulesPath, relativePath);
+    final fullPath = path.join(effectiveModulesPath, relativePath);
 
     // Serve from cache when the module was already parsed (startup preload or prior visit)
     if (_moduleInputsCache.containsKey(fullPath)) {
@@ -92,12 +101,14 @@ class AppStateProvider extends ChangeNotifier {
   /// and parses every .py file into the command/input caches up front.
   /// Fault-tolerant: one unreadable file or folder no longer aborts the scan.
   Future<void> preloadAllModules() async {
-    if (modulesPath.isEmpty) return;
+    final activePath = effectiveModulesPath;
+    if (activePath.isEmpty) return;
+
     final List<String> discovered = [];
     try {
-      final dir = Directory(modulesPath);
+      final dir = Directory(activePath);
       if (!await dir.exists()) {
-        AppLogger.logError("Modules path does not exist: $modulesPath");
+        AppLogger.logError("Modules path does not exist: $activePath");
         return;
       }
 
@@ -117,7 +128,7 @@ class AppStateProvider extends ChangeNotifier {
           if (p.contains('__pycache__')) continue; // Compiled/cache dirs are never modules
 
           // Convert the file path back into the dot-notation used by the config
-          String rel = path.relative(p, from: modulesPath);
+          String rel = path.relative(p, from: activePath);
           String moduleName = rel
               .replaceAll(RegExp(r'\.py$', caseSensitive: false), '')
               .replaceAll(RegExp(r'[\\/]'), '.');
@@ -129,7 +140,7 @@ class AppStateProvider extends ChangeNotifier {
           AppLogger.logError("Skipped unparseable module ${entity.path}", e);
         }
       }
-      AppLogger.logInfo("Preloaded ${discovered.length} python module dictionaries from $modulesPath");
+      AppLogger.logInfo("Preloaded ${discovered.length} python module dictionaries from $activePath");
     } catch (e, stack) {
       AppLogger.logError("Failed to preload python module dictionaries", e, stack);
     } finally {
@@ -261,7 +272,7 @@ class AppStateProvider extends ChangeNotifier {
       processorsFilePath = prefs.getString('processorsFilePath') ?? '';
       rootFolderPath = prefs.getString('rootFolderPath') ?? '';
       buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
-      templateFilePath = prefs.getString('templateFilePath') ?? ''; // FIX: was never restored, so the default config path reset on every restart
+      templateFilePath = prefs.getString('templateFilePath') ?? ''; 
       uiSchemaPath = prefs.getString('uiSchemaPath') ?? '';
       keyMapPath = prefs.getString('keyMapPath') ?? '';
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
@@ -271,16 +282,14 @@ class AppStateProvider extends ChangeNotifier {
       // Load the legacy key translation map (empty/no-op when no file exists)
       await loadKeyMap();
 
-      // Load files into memory safely
-      if (buildingsFilePath.isNotEmpty) await loadBuildingsList();
-      if (processorsFilePath.isNotEmpty) await loadProcessorsList();
+      // Load files into memory safely using the new fallback paths
+      await loadBuildingsList();
+      await loadProcessorsList();
 
       // Warm the python module caches in the background so the keep-alive /
       // input dropdowns are instant the first time a device tab is opened.
-      if (modulesPath.isNotEmpty) {
-        // ignore: unawaited_futures
-        preloadAllModules();
-      }
+      // ignore: unawaited_futures
+      preloadAllModules();
 
     } catch (e, stack) {
       AppLogger.logError("Startup Initialization Error", e, stack);
@@ -452,11 +461,11 @@ class AppStateProvider extends ChangeNotifier {
         backupFileName = '${backupBaseName}_old_config.json';
       } else {
         String bldg = "UNKNOWN";
-        String room = "000";
+        String room = "ROOM";
         final setup = roomConfig['SYSTEM_SETUP'];
         if (setup is Map) {
           bldg = setup['gve_bldg']?.toString() ?? "UNKNOWN";
-          room = setup['gve_room']?.toString() ?? "000";
+          room = setup['gve_room']?.toString() ?? "ROOM";
         }
         // Short abbreviation + room, sanitized for the filesystem: BSS103
         final base = '${bldgAbbreviation(bldg)}$room'
@@ -749,6 +758,15 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'rootFolderPath': 
         rootFolderPath = value; 
+        // If no explicit module path is set, changing the root folder changes
+        // the effective module path, so we must wipe and rebuild the caches.
+        if (modulesPath.isEmpty) {
+          _moduleCommandsCache.clear();
+          _moduleInputsCache.clear();
+          availableModules = [];
+          // ignore: unawaited_futures
+          preloadAllModules();
+        }
         break;
       case 'buildingsFilePath': 
         buildingsFilePath = value; 
@@ -810,19 +828,38 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Loads the buildings.json file to resolve building names
+  /// Loads the buildings.json file to resolve building names.
+  /// If buildingsFilePath is empty, it attempts to find it in the root folder or app directory.
   Future<void> loadBuildingsList() async {
-    if (buildingsFilePath.isEmpty) return;
-    try {
-      final file = File(buildingsFilePath);
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        buildings = jsonDecode(content);
-        notifyListeners();
-        AppLogger.logInfo("Buildings list loaded from $buildingsFilePath");
+    List<String> candidates = [];
+
+    if (buildingsFilePath.isNotEmpty) {
+      candidates.add(buildingsFilePath);
+    } else {
+      if (rootFolderPath.isNotEmpty) {
+        candidates.add(path.join(rootFolderPath, 'buildings.json'));
       }
-    } catch (e, stack) {
-      AppLogger.logError("Failed to load buildings.json", e, stack);
+      candidates.add(path.join(Directory.current.path, 'buildings.json'));
+      candidates.add(path.join(File(Platform.resolvedExecutable).parent.path, 'buildings.json'));
+    }
+
+    for (final candidate in candidates) {
+      try {
+        final file = File(candidate);
+        if (await file.exists()) {
+          final content = await file.readAsString();
+          buildings = jsonDecode(content);
+          notifyListeners();
+          AppLogger.logInfo("Buildings list loaded from $candidate");
+          return; // Stop searching once successfully loaded
+        }
+      } catch (e, stack) {
+        AppLogger.logError("Failed to load buildings.json from $candidate", e, stack);
+      }
+    }
+    
+    if (buildingsFilePath.isNotEmpty) {
+      AppLogger.logError("Buildings file not found at the explicitly set path: $buildingsFilePath");
     }
   }
 
@@ -940,6 +977,7 @@ class AppStateProvider extends ChangeNotifier {
     return (p['ip'] ?? p['ipAddress'] ?? p['ip_address'] ?? p['address'] ?? p['host'] ?? '')
         .toString();
   }
+  
   /// Update a specific nested property for a device (e.g., changing keep_alive_command)
   void updateDeviceValue(String deviceKey, String property, dynamic value) {
     if (roomConfig.containsKey(deviceKey)) {
@@ -963,7 +1001,7 @@ class AppStateProvider extends ChangeNotifier {
   Future<List<String>> getCommandsForModule(String moduleFileName) async {
     // Construct the full local path based on the app settings and the json module string
     final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
-    final fullPath = path.join(modulesPath, relativePath);
+    final fullPath = path.join(effectiveModulesPath, relativePath);
 
     if (_moduleCommandsCache.containsKey(fullPath)) {
       return _moduleCommandsCache[fullPath]!;
@@ -1006,7 +1044,7 @@ class AppStateProvider extends ChangeNotifier {
       final parsed = jsonDecode(rawJson) as Map<String, dynamic>;
 
       // JSON "\r" escapes decode into REAL control characters — normalize
-      // them to the literal two-character \r the processor GUI expects, so
+      // them to the literal two-character \\r the processor GUI expects, so
       // preset names etc. stay correct even when edited via the raw editor
       // (the key mapper only covers the file/SFTP load path).
       final fixed = _normalizeCarriageReturnsIn(parsed);
@@ -1026,11 +1064,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Replaces REAL carriage-return control characters (\r\n or \r) in every
-  /// string value of [cfg] with the literal two-character sequence \r used by
-  /// the processor GUI (e.g. gui_preset_name "Whiteboard<CR>Left" ->
-  /// "Whiteboard\rLeft"). Lone \n is left untouched. Returns how many values
-  /// were changed. Mirrors the key mapper's escape_carriage_returns step so
-  /// EVERY write path produces the same clean representation.
+  /// string value of [cfg] with the literal sequence \\r
   int _normalizeCarriageReturnsIn(Map<String, dynamic> cfg) {
     int changed = 0;
     cfg.forEach((sectionName, block) {
@@ -1104,7 +1138,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Exports the pruned config.json using a user-prompted save dialog
-  Future<bool> exportRoomConfig() async { // <-- UPDATED: Returns a bool for UI feedback
+  Future<bool> exportRoomConfig() async { // Returns a bool for UI feedback
     if (roomConfig.isEmpty) {
       AppLogger.logError("Cannot export: Config is empty.");
       return false;
