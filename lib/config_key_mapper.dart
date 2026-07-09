@@ -45,9 +45,14 @@ import 'app_logger.dart';
 ///                  of the above, any listed key still MISSING from a
 ///                  matching section is injected. "{n}" in a string value
 ///                  becomes the section's trailing device number.
+///    "remove_unused_devices" + "device_counts": when true, legacy-named
+///                  device blocks whose family count in SYSTEM_SETUP is
+///                  No/0 (or below their number) are REMOVED instead of
+///                  converted. Never touches blocks that already had
+///                  current-style names.
 ///
 ///  Processing order: sections -> properties -> auto-normalization ->
-///  value_map -> moves -> defaults.
+///  value_map -> moves -> unused-device removal -> defaults.
 /// ============================================================================
 
 /// One top-level section rename rule ("CAMERA(\d+)DEVICE" -> "CAMERADEVICE_$1").
@@ -105,11 +110,23 @@ class ConfigKeyMap {
   final Map<String, Map<String, dynamic>> defaults = {};
   bool autoCaseNormalization = false;
 
+  /// When true, LEGACY-named device blocks whose family count in SYSTEM_SETUP
+  /// says they're not in use (No / 0 / above the count) are REMOVED instead
+  /// of converted. Only blocks renamed by a section rule are eligible, so
+  /// new-style template files that intentionally carry every block with low
+  /// counts are never stripped.
+  bool removeUnusedDevices = false;
+
+  /// SYSTEM_SETUP count key -> device section prefix ("dev_switchers" ->
+  /// "SWITCHERDEVICE_"). Used by [removeUnusedDevices].
+  final Map<String, String> deviceCounts = {};
+
   /// Where this map came from, for display in App Config.
   String source = 'Built-in (no mapping rules)';
 
   int get ruleCount =>
-      sections.length + properties.length + valueMap.length + moves.length + defaults.length;
+      sections.length + properties.length + valueMap.length + moves.length +
+      defaults.length + deviceCounts.length;
 
   /// The built-in map is intentionally EMPTY: legacy naming is site-specific,
   /// so all rules come from key_map.json. With no file present, loading a
@@ -118,6 +135,15 @@ class ConfigKeyMap {
 
   void _applyJsonMap(Map<String, dynamic> doc) {
     autoCaseNormalization = doc['auto_case_normalization'] == true;
+    removeUnusedDevices = doc['remove_unused_devices'] == true;
+
+    // Count key -> section prefix mapping for unused-device removal
+    if (doc['device_counts'] is Map) {
+      (doc['device_counts'] as Map).forEach((k, v) {
+        if (k.toString().startsWith('__')) return;
+        deviceCounts[k.toString()] = v.toString();
+      });
+    }
 
     // Section rename rules
     if (doc['sections'] is List) {
@@ -241,6 +267,9 @@ class ConfigKeyMap {
         jsonDecode(jsonEncode(original)) as Map<String, dynamic>;
 
     // --- 1. Rename top-level sections (preserve original ordering) ---------
+    // Track the NEW names of renamed sections: only these legacy-origin
+    // blocks are eligible for unused-device removal in step 4.
+    final Set<String> legacyRenamedSections = {};
     final Map<String, dynamic> renamed = {};
     config.forEach((sectionName, block) {
       String newName = sectionName;
@@ -252,6 +281,7 @@ class ConfigKeyMap {
                 "KEYMAP SKIPPED: section '$sectionName' maps to '$candidate' which already exists.");
           } else {
             newName = candidate;
+            legacyRenamedSections.add(newName);
             changes.add("KEYMAP: renamed section '$sectionName' -> '$newName'");
           }
           break; // first matching rule wins
@@ -358,7 +388,44 @@ class ConfigKeyMap {
       }
     }
 
-    // --- 4. Inject defaults for keys still missing after mapping -----------
+    // --- 4. Remove LEGACY device blocks that are not in use ----------------
+    // A legacy room declares its hardware via the dev_ counts, so blocks
+    // above the count (or families set to No/0) are dead data and should be
+    // dropped rather than converted. Runs AFTER value_map (so 'Yes'/'No'
+    // counts are already normalized) and AFTER moves (so a GVE ID moved into
+    // an unused block is removed along with it). Only sections renamed from
+    // legacy names in step 1 are eligible — new-style files keep every block.
+    if (removeUnusedDevices && deviceCounts.isNotEmpty) {
+      final setup = config['SYSTEM_SETUP'];
+      if (setup is Map) {
+        deviceCounts.forEach((countKey, prefix) {
+          final raw = setup[countKey]?.toString().toLowerCase() ?? '';
+          // Parse counts the same way pruning does; unknown -> never remove
+          int count;
+          if (raw == 'yes') {
+            count = 1;
+          } else if (raw == 'no') {
+            count = 0;
+          } else {
+            count = int.tryParse(raw) ?? -1;
+          }
+          if (count < 0) return; // count missing/unparseable: leave blocks alone
+
+          for (final key in config.keys.toList()) {
+            if (!key.startsWith(prefix)) continue;
+            if (!legacyRenamedSections.contains(key)) continue;
+            final n = int.tryParse(key.substring(prefix.length)) ?? 0;
+            if (n > count) {
+              config.remove(key);
+              changes.add(
+                  "KEYMAP: removed unused legacy device block '$key' ($countKey is '${setup[countKey]}').");
+            }
+          }
+        });
+      }
+    }
+
+    // --- 5. Inject defaults for keys still missing after mapping -----------
     config.forEach((sectionName, block) {
       if (block is! Map) return;
       final Map<String, dynamic> section = block as Map<String, dynamic>;
