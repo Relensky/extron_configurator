@@ -32,8 +32,14 @@
     "Keys starting with '__' anywhere are ignored (use them for comments).",
     "",
     "escape_carriage_returns: real CR/CRLF control characters in string values",
-    "  become the literal two-character sequence \\r ('Intake<CR><LF>Fans' ->",
-    "  'Intake\\rFans').",
+    "  become the two-character backslash+r sequence in memory. The JSON",
+    "  encoder escapes the backslash on save, so the config.json ON DISK",
+    "  contains \\\\r ('Intake<CR><LF>Fans' -> \"Intake\\\\rFans\" in the saved",
+    "  file) - the new style the processor code reads.",
+    "companion_keys: for every property matching key_match, ensure_key (with",
+    "  $1..$9 capture groups) is created in the same section when missing,",
+    "  set to 'value'. E.g. every converted power1_outlet_N gets a matching",
+    "  power1_outlet_N_action of null. Existing values are never overwritten.",
     "device_labels + device_templates: legacy device blocks get a generated",
     "  name '<Label> - <model>' (numbered only when the family has multiple",
     "  units), btn_name/lbl_name from the same-numbered template block, and",
@@ -55,6 +61,14 @@
     "dev_power_controllers": "POWERDEVICE_"
   },
   "escape_carriage_returns": true,
+  "companion_keys": [
+    {
+      "__comment": "Every power1_outlet_N present after conversion gets a matching power1_outlet_N_action (null) - the number always follows the outlet that exists.",
+      "key_match": "power1_outlet_(\\d+)",
+      "ensure_key": "power1_outlet_$1_action",
+      "value": null
+    }
+  ],
   "device_labels": {
     "CAMERADEVICE_": "Camera",
     "PROJECTORDEVICE_": "Projector",
