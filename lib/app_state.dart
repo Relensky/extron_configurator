@@ -883,21 +883,38 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Loads the external processors.json file to populate the room selection dropdown
+  /// Loads the external processors.json file to populate the room selection dropdown.
+  /// If processorsFilePath is empty, it attempts to find it in the root folder or app directory.
   Future<void> loadProcessorsList() async {
-    if (processorsFilePath.isEmpty) return;
-    try {
-      final file = File(processorsFilePath);
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        processors = jsonDecode(content);
-        notifyListeners();
-        AppLogger.logInfo("Processors list loaded from $processorsFilePath");
-      } else {
-        throw Exception("Processors file not found at path.");
+    List<String> candidates = [];
+    
+    if (processorsFilePath.isNotEmpty) {
+      candidates.add(processorsFilePath);
+    } else {
+      if (rootFolderPath.isNotEmpty) {
+        candidates.add(path.join(rootFolderPath, 'processors.json'));
       }
-    } catch (e, stack) {
-      AppLogger.logError("Failed to load processors.json", e, stack);
+      candidates.add(path.join(Directory.current.path, 'processors.json'));
+      candidates.add(path.join(File(Platform.resolvedExecutable).parent.path, 'processors.json'));
+    }
+
+    for (final candidate in candidates) {
+      try {
+        final file = File(candidate);
+        if (await file.exists()) {
+          final content = await file.readAsString();
+          processors = jsonDecode(content);
+          notifyListeners();
+          AppLogger.logInfo("Processors list loaded from $candidate");
+          return; // Stop searching once successfully loaded
+        }
+      } catch (e, stack) {
+        AppLogger.logError("Failed to load processors.json from $candidate", e, stack);
+      }
+    }
+    
+    if (processorsFilePath.isNotEmpty) {
+      AppLogger.logError("Processors file not found at the explicitly set path: $processorsFilePath");
     }
   }
 
@@ -927,9 +944,9 @@ class AppStateProvider extends ChangeNotifier {
   void updateDeviceValue(String deviceKey, String property, dynamic value) {
     if (roomConfig.containsKey(deviceKey)) {
       // Pasted multiline text can carry real CR control characters — store
-      // the literal \r sequence instead, same as every other write path.
+      // the literal \\r sequence instead, same as every other write path.
       if (value is String && value.contains('\r')) {
-        value = value.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
+        value = value.replaceAll('\r\n', r'\\r').replaceAll('\r', r'\\r');
       }
       roomConfig[deviceKey][property] = value;
       // A new python module was just selected: parse it right away (if it isn't
@@ -1022,7 +1039,7 @@ class AppStateProvider extends ChangeNotifier {
       for (final key in section.keys.toList()) {
         final v = section[key];
         if (v is String && v.contains('\r')) {
-          section[key] = v.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
+          section[key] = v.replaceAll('\r\n', r'\\r').replaceAll('\r', r'\\r');
           changed++;
         }
       }

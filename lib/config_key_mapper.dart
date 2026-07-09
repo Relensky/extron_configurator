@@ -463,10 +463,8 @@ class ConfigKeyMap {
     }
 
     // --- 5. Escape carriage returns in string values ------------------------
-    // Legacy files contain REAL \r\n / \r control characters inside GUI names
-    // (e.g. "Intake<CR><LF>Fans"); the current format stores the literal
-    // two-character sequence \r instead ("Intake\rFans"). CRLF collapses to
-    // one literal \r; lone \n is left untouched.
+    // Legacy files contain REAL \r\n / \r control characters inside GUI names.
+    // Convert them to the literal \\r sequence.
     if (escapeCarriageReturns) {
       config.forEach((sectionName, block) {
         if (block is! Map) return;
@@ -474,7 +472,7 @@ class ConfigKeyMap {
         for (final key in section.keys.toList()) {
           final v = section[key];
           if (v is String && v.contains('\r')) {
-            final cleaned = v.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
+            final cleaned = v.replaceAll('\r\n', r'\\r').replaceAll('\r', r'\\r');
             section[key] = cleaned;
             changes.add(
                 "KEYMAP: escaped carriage return(s) in '$sectionName.$key' -> '$cleaned'");
