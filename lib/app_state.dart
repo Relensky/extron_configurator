@@ -413,47 +413,14 @@ class AppStateProvider extends ChangeNotifier {
   }) async {
     systemLogs.clear(); // Clear old logs on new load
 
-    // --- AUTOMATIC BACKUP LOGIC ---
-    try {
-      String backupFileName;
-      if (backupBaseName != null && backupBaseName.isNotEmpty) {
-        // Caller supplied a name (SFTP download: the processor dropdown's
-        // room name), e.g. BSS103_old_config.json
-        backupFileName = '${backupBaseName}_old_config.json';
-      } else {
-        // Fall back to identifiers inside the config file itself
-        String bldg = "UNKNOWN";
-        String room = "000";
-        if (parsedConfig.containsKey('SYSTEM_SETUP')) {
-          bldg = parsedConfig['SYSTEM_SETUP']['gve_bldg']?.toString() ?? "UNKNOWN";
-          room = parsedConfig['SYSTEM_SETUP']['gve_room']?.toString() ?? "000";
-        }
-        // Use the short abbreviation for the filename even when gve_bldg holds the full name
-        backupFileName = '${bldgAbbreviation(bldg)}_${room}_old_config.json';
-      }
-      final backupFilePath = path.join(backupDirectory, backupFileName);
-      final backupFile = File(backupFilePath);
-
-      // Write the exact original string to disk so no formatting is lost
-      await backupFile.writeAsString(originalContents);
-      
-      AppLogger.logInfo("Created backup of original config at $backupFilePath");
-      systemLogs.add("BACKUP SAVED: Original file preserved as '$backupFileName'");
-      systemLogs.add("--------------------------------------------------");
-      
-    } catch (backupError) {
-      AppLogger.logError("Failed to create backup file", backupError);
-      systemLogs.add("WARNING: Failed to generate local backup file.");
-    }
-    // ------------------------------
-
     roomConfig = parsedConfig;
 
     // --- LEGACY KEY MAPPING (key_map.json) ---
     // Translate old section/property names (e.g. CAMERA1DEVICE.IPADDRESS ->
     // CAMERADEVICE_1.ip_address) BEFORE the template migration runs, so the
-    // rest of the pipeline only ever sees current-schema keys. The original
-    // file was already backed up above, so nothing is lost.
+    // rest of the pipeline only ever sees current-schema keys. The pristine
+    // original text is backed up right after this step (naming the backup
+    // needs the mapped room identity).
     if (keyMap.ruleCount > 0) {
       // Canonical key list powers auto-case-normalization: any legacy
       // property whose lowercased/underscore-stripped form matches a current
@@ -471,6 +438,45 @@ class AppStateProvider extends ChangeNotifier {
         AppLogger.logInfo("Key map applied ${result.changes.length} change(s) to loaded config.");
       }
     }
+
+    // --- AUTOMATIC BACKUP (pristine original text) ---
+    // Runs AFTER key mapping so the file name can use the room identity that
+    // is now inside the config: gve_bldg abbreviation + gve_room, e.g.
+    // 'BSS103_old_config.json' — even for legacy files that stored them as
+    // SYSTEM.GVE_BLDG / GVE_ROOM. The CONTENT is still the untouched original.
+    try {
+      String backupFileName;
+      if (backupBaseName != null && backupBaseName.isNotEmpty) {
+        // Caller supplied a name (SFTP download: the processor dropdown's
+        // room name), e.g. BSS103_old_config.json
+        backupFileName = '${backupBaseName}_old_config.json';
+      } else {
+        String bldg = "UNKNOWN";
+        String room = "000";
+        final setup = roomConfig['SYSTEM_SETUP'];
+        if (setup is Map) {
+          bldg = setup['gve_bldg']?.toString() ?? "UNKNOWN";
+          room = setup['gve_room']?.toString() ?? "000";
+        }
+        // Short abbreviation + room, sanitized for the filesystem: BSS103
+        final base = '${bldgAbbreviation(bldg)}$room'
+            .replaceAll(RegExp(r'[\\/:*?"<>|\s]+'), '');
+        backupFileName = '${base}_old_config.json';
+      }
+      final backupFilePath = path.join(backupDirectory, backupFileName);
+
+      // Write the exact original string to disk so no formatting is lost
+      await File(backupFilePath).writeAsString(originalContents);
+
+      AppLogger.logInfo("Created backup of original config at $backupFilePath");
+      // Keep the backup notice at the TOP of the acknowledgement
+      systemLogs.insert(0, "BACKUP SAVED: Original file preserved as '$backupFileName'");
+      systemLogs.insert(1, "--------------------------------------------------");
+    } catch (backupError) {
+      AppLogger.logError("Failed to create backup file", backupError);
+      systemLogs.insert(0, "WARNING: Failed to generate local backup file.");
+    }
+    // ------------------------------
 
     // Check for missing keys and patch them
     _validateAndMigrateConfig();

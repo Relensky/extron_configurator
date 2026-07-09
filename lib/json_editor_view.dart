@@ -191,6 +191,9 @@ class _JsonEditorViewState extends State<JsonEditorView> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: editorFill,
+                // Filled fields get a Material hover overlay that shifts the
+                // editor background on mouse-over — disable it entirely.
+                hoverColor: Colors.transparent,
                 border: const OutlineInputBorder(),
                 hintText: 'Paste or edit your config.json here...',
               ),

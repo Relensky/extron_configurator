@@ -221,6 +221,26 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
   showDialog(
     context: context,
     builder: (ctx) {
+      // Theme-aware palette: keep the dark terminal feel in dark mode, use a
+      // bordered light panel with high-contrast text in light mode.
+      final bool isDark = Theme.of(ctx).brightness == Brightness.dark;
+      final Color panelColor = isDark ? Colors.black87 : const Color(0xFFF5F5F5);
+      final Color normalText = isDark ? Colors.greenAccent : Colors.green.shade800;
+      final Color headerText = isDark ? Colors.orangeAccent : Colors.deepOrange.shade700;
+      final Color warnText = isDark ? Colors.redAccent.shade100 : Colors.red.shade700;
+
+      // Severity color per line so warnings stand out in the acknowledgement
+      Color lineColor(String line, bool isHeader) {
+        if (line.startsWith('WARNING') ||
+            line.startsWith('CRITICAL') ||
+            line.startsWith('COUNT WARNING') ||
+            line.startsWith('FLAGGED') ||
+            line.contains('SKIPPED')) {
+          return warnText;
+        }
+        return isHeader ? headerText : normalText;
+      }
+
       return AlertDialog(
         title: Row(
           children: [
@@ -241,8 +261,11 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.black87, // Dark background for terminal feel
+                    color: panelColor,
                     borderRadius: BorderRadius.circular(4),
+                    border: isDark
+                        ? null
+                        : Border.all(color: Colors.grey.shade400), // Define the panel in light mode
                   ),
                   child: ListView.builder(
                     itemCount: logs.length,
@@ -255,7 +278,7 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
                           style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 13,
-                            color: isHeader ? Colors.orangeAccent : Colors.greenAccent,
+                            color: lineColor(logs[index], isHeader),
                             fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
@@ -825,22 +848,34 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
             ],
             const SizedBox(height: 24),
             
-            // Status read-out container
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.black26,
-              height: 80,
-              alignment: Alignment.centerLeft,
-              child: _isBusy && _statusText.contains("Connecting")
-                  ? Row(
-                      children: [
-                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                        const SizedBox(width: 16),
-                        Expanded(child: Text(_statusText, style: const TextStyle(fontFamily: 'monospace'))),
-                      ],
-                    )
-                  : Text(_statusText, style: const TextStyle(fontFamily: 'monospace')),
-            ),
+            // Status read-out container (contrast-safe in both themes)
+            Builder(builder: (context) {
+              final bool isDark = Theme.of(context).brightness == Brightness.dark;
+              final Color boxColor = isDark ? Colors.black26 : const Color(0xFFF0F0F0);
+              final TextStyle statusStyle = TextStyle(
+                fontFamily: 'monospace',
+                color: isDark ? Colors.white70 : Colors.black87,
+              );
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: boxColor,
+                  borderRadius: BorderRadius.circular(4),
+                  border: isDark ? null : Border.all(color: Colors.grey.shade400),
+                ),
+                height: 80,
+                alignment: Alignment.centerLeft,
+                child: _isBusy && _statusText.contains("Connecting")
+                    ? Row(
+                        children: [
+                          const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                          const SizedBox(width: 16),
+                          Expanded(child: Text(_statusText, style: statusStyle)),
+                        ],
+                      )
+                    : Text(_statusText, style: statusStyle),
+              );
+            }),
           ],
         ),
       ),
