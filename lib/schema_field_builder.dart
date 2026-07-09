@@ -30,6 +30,12 @@ class SchemaFieldBuilder {
 
     if (type == 'hidden') return null;
 
+    // UNKNOWN KEY: no schema entry (exact or wildcard) AND no legacy
+    // dictionary description. Rendered with a red outline + warning icon so
+    // unrecognized config items stand out for schema maintenance.
+    final bool isUnknown =
+        spec == null && schema.descriptionFor(fieldKey) == null;
+
     final String label = spec?.label ?? fieldKey;
     Widget field;
 
@@ -47,16 +53,27 @@ class SchemaFieldBuilder {
           value: value == true,
           onChanged: (val) => provider.updateDeviceValue(sectionKey, fieldKey, val),
         );
+        if (isUnknown) {
+          // Switches have no InputDecoration, so outline the whole tile
+          field = Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.red.shade400, width: 1.5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: field,
+          );
+        }
         break;
       case 'int':
       case 'double':
       case 'text':
       default:
-        field = _buildTextField(provider, sectionKey, fieldKey, spec, label, type, value);
+        field = _buildTextField(
+            provider, sectionKey, fieldKey, spec, label, type, value, isUnknown);
         break;
     }
 
-    return _wrapWithInfo(context, schema, fieldKey, field);
+    return _wrapWithInfo(context, schema, fieldKey, field, isUnknown: isUnknown);
   }
 
   /// Schema type wins; 'auto' (or no spec) falls back to inferring from the
@@ -71,8 +88,21 @@ class SchemaFieldBuilder {
   }
 
   // --- TEXT / INT / DOUBLE -------------------------------------------------
-  static Widget _buildTextField(AppStateProvider provider, String sectionKey,
-      String fieldKey, FieldSpec? spec, String label, String type, dynamic value) {
+  static Widget _buildTextField(
+      AppStateProvider provider,
+      String sectionKey,
+      String fieldKey,
+      FieldSpec? spec,
+      String label,
+      String type,
+      dynamic value,
+      bool isUnknown) {
+    // Unknown keys get a red outline in every state + a red helper line
+    final OutlineInputBorder? redBorder = isUnknown
+        ? OutlineInputBorder(
+            borderSide: BorderSide(color: Colors.red.shade400, width: 1.5))
+        : null;
+
     return TextFormField(
       initialValue: value?.toString() ?? '',
       keyboardType: (type == 'int' || type == 'double')
@@ -80,8 +110,16 @@ class SchemaFieldBuilder {
           : null,
       decoration: InputDecoration(
         labelText: label,
-        helperText: spec?.helperText,
-        border: const OutlineInputBorder(),
+        helperText: isUnknown
+            ? 'Not in UI schema — add "$fieldKey" to ui_schema.json'
+            : spec?.helperText,
+        helperStyle: isUnknown ? TextStyle(color: Colors.red.shade400) : null,
+        border: redBorder ?? const OutlineInputBorder(),
+        enabledBorder: redBorder,
+        focusedBorder: isUnknown
+            ? OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.red.shade400, width: 2))
+            : null,
       ),
       onChanged: (val) {
         dynamic parsedVal = val;
@@ -184,9 +222,48 @@ class SchemaFieldBuilder {
 
   // --- INFO (i) BUTTON --------------------------------------------------------
   /// Wraps a field with the info button when a description exists in the
-  /// schema (falling back to the legacy built-in ConfigDictionary).
+  /// schema (falling back to the legacy built-in ConfigDictionary). Unknown
+  /// keys get a red warning icon instead, explaining how to add them.
   static Widget _wrapWithInfo(
-      BuildContext context, UiSchema schema, String key, Widget field) {
+      BuildContext context, UiSchema schema, String key, Widget field,
+      {bool isUnknown = false}) {
+    if (isUnknown) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(child: field),
+          IconButton(
+            icon: Icon(Icons.warning_amber_rounded, color: Colors.red.shade400),
+            tooltip: 'This key is not defined in the UI schema',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Row(children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.red.shade400),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(key)),
+                  ]),
+                  content: Text(
+                      'The key "$key" is not defined in ui_schema.json (or the '
+                      'built-in dictionary), so it is rendered as a plain field '
+                      'with no description or validation.\n\n'
+                      'To fix: add an entry for "$key" under "fields" in '
+                      'ui_schema.json (label, description, type, options...), '
+                      'then press Reload Schema in the App Config tab.'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Close'))
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      );
+    }
+
     final desc = schema.descriptionFor(key);
     if (desc == null) return field;
 

@@ -51,6 +51,33 @@ class AppLogger {
     }
   }
 
+  /// Writes a standalone, human-readable change log for ONE config load,
+  /// saved alongside that config's backup (e.g. BSS103_backup_log.txt).
+  /// Contains the same details shown in the load acknowledgement dialog.
+  static Future<void> writeChangeLog(
+      String filePath, String sourceLabel, List<String> lines) async {
+    try {
+      final file = File(filePath);
+      final timestamp = DateTime.now().toIso8601String();
+
+      final buffer = StringBuffer();
+      buffer.writeln('==================================================');
+      buffer.writeln('CONFIG LOAD CHANGE LOG');
+      buffer.writeln('Loaded:  $timestamp');
+      buffer.writeln('Source:  $sourceLabel');
+      buffer.writeln('==================================================');
+      for (final line in lines) {
+        buffer.writeln(line);
+      }
+      buffer.writeln();
+
+      // Append so repeated loads of the same room build a history in one file
+      await file.writeAsString(buffer.toString(), mode: FileMode.append);
+    } catch (e) {
+      print("Failed to write change log to $filePath: $e");
+    }
+  }
+
   /// Writes standard operational events to an info log file.
   static Future<void> logInfo(String message) async {
     try {

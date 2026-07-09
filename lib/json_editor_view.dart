@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
@@ -107,16 +109,35 @@ class _JsonEditorViewState extends State<JsonEditorView> {
     }
   }
 
-  void _applyJson() {
+  Future<void> _applyJson() async {
     final provider = context.read<AppStateProvider>();
     try {
       provider.updateConfigFromRawJson(_controller.text);
+
+      // Also write straight to the working file (the file that was opened or
+      // the working copy chosen during an SFTP download), so Apply = save.
+      String? savedPath;
+      String saveNote = '';
+      try {
+        savedPath = await provider.saveCurrentConfigToFile();
+        saveNote = savedPath != null
+            ? ' Saved to ${savedPath.split(Platform.pathSeparator).last}.'
+            : ' No working file loaded — use Export to save to disk.';
+      } catch (e) {
+        saveNote = ' WARNING: could not write working file ($e).';
+      }
+
+      if (!mounted) return;
       setState(() {
         _errorMessage = '';
         _lastKnownStateString = provider.getPrettyConfigString(); // Sync baseline
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('JSON Config successfully applied to memory.'), backgroundColor: Colors.green),
+        SnackBar(
+          content: Text('JSON Config applied to memory.$saveNote'),
+          backgroundColor:
+              saveNote.startsWith(' WARNING') ? Colors.orange.shade800 : Colors.green,
+        ),
       );
     } catch (e) {
       setState(() => _errorMessage = e.toString());

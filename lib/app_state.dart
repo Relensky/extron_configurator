@@ -29,6 +29,11 @@ class AppStateProvider extends ChangeNotifier {
   // --- Key Map (translates legacy config key names on load) ---
   // Built-in map is empty, so with no key_map.json loading behaves as before.
   ConfigKeyMap keyMap = ConfigKeyMap.builtIn();
+
+  /// The active working file on disk: the file opened locally, or the working
+  /// copy chosen during an SFTP download. Empty when the session started from
+  /// 'Create New' and hasn't been saved anywhere yet.
+  String currentConfigPath = '';
   
   // --- Data State ---
   List<dynamic> processors = [];
@@ -264,11 +269,17 @@ class AppStateProvider extends ChangeNotifier {
         final originalContents = await file.readAsString();
         final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
 
+        // Remember the working file so 'Apply Changes' in the raw editor can
+        // save back to it directly.
+        currentConfigPath = file.path;
+
         await _processLoadedConfig(
           originalContents: originalContents,
           parsedConfig: parsedConfig,
           backupDirectory: file.parent.path,
           sourceLabel: file.path,
+          // Change log named after the opened file: <name>_backup_log.txt
+          changeLogBaseName: path.basenameWithoutExtension(file.path),
         );
         AppLogger.logInfo("Loaded existing config from ${file.path}");
         return true;
@@ -329,6 +340,10 @@ class AppStateProvider extends ChangeNotifier {
       // Write the working copy exactly as downloaded; your edits are exported later
       await File(savePath).writeAsString(originalContents);
 
+      // Remember the working file so 'Apply Changes' in the raw editor can
+      // save back to it directly.
+      currentConfigPath = savePath;
+
       // Backup the pristine download next to the working copy, then load it
       await _processLoadedConfig(
         originalContents: originalContents,
@@ -336,6 +351,8 @@ class AppStateProvider extends ChangeNotifier {
         backupDirectory: File(savePath).parent.path,
         sourceLabel: 'SFTP download from $ipAddress -> $savePath',
         backupBaseName: backupBase.isNotEmpty ? backupBase : null,
+        // Change log matches the backup name: e.g. BSS103_backup_log.txt
+        changeLogBaseName: backupBase.isNotEmpty ? backupBase : null,
       );
 
       onStatusUpdate('System: Config downloaded, backed up, and loaded for editing.');
@@ -358,6 +375,7 @@ class AppStateProvider extends ChangeNotifier {
     required String backupDirectory,
     required String sourceLabel,
     String? backupBaseName, // e.g. 'BSS103' from the Active Deployment Target
+    String? changeLogBaseName, // base for the per-load change log file name
   }) async {
     systemLogs.clear(); // Clear old logs on new load
 
@@ -423,6 +441,22 @@ class AppStateProvider extends ChangeNotifier {
     // Check for missing keys and patch them
     _validateAndMigrateConfig();
 
+    // Auto-generate the Title Case full room name when gve_bldg (full name OR
+    // legacy abbreviation like 'BSS') resolves against buildings.json — so a
+    // converted legacy file lands with 'Behavioral and Social Sciences 103'
+    // instead of the 'Legacy Room Update' placeholder.
+    final String? nameBefore =
+        roomConfig['SYSTEM_SETUP']?['gui_full_room_name']?.toString();
+    if (isKnownBuilding) {
+      updateFullRoomName();
+      final String? nameAfter =
+          roomConfig['SYSTEM_SETUP']?['gui_full_room_name']?.toString();
+      if (nameAfter != null && nameAfter != nameBefore) {
+        systemLogs.add(
+            "AUTO-NAME: gui_full_room_name set to '$nameAfter' (gve_bldg matched buildings.json).");
+      }
+    }
+
     // Warn (never auto-change) when more device blocks exist than the dev_
     // counts allow — extra blocks are hidden in tabs and pruned on export,
     // which is normal for templates but surprising for migrated legacy rooms.
@@ -439,6 +473,34 @@ class AppStateProvider extends ChangeNotifier {
     // Persist a permanent record of every change added/flagged during the
     // load so there is an audit trail beyond the in-memory dialog.
     await AppLogger.logMigration(sourceLabel, List<String>.from(systemLogs));
+
+    // --- PER-LOAD CHANGE LOG FILE ---
+    // When this load actually changed or flagged anything, write the full
+    // acknowledgement next to the backup, named to match it:
+    //   SFTP download -> BSS103_backup_log.txt (processor dropdown room)
+    //   local open    -> <original file name>_backup_log.txt
+    final bool hasChanges = systemLogs.any((l) =>
+        l.startsWith('KEY MAPPING') ||
+        l.startsWith('KEYMAP') ||
+        l.startsWith('->') ||
+        l.startsWith('SYSTEM MIGRATION') ||
+        l.startsWith('CRITICAL') ||
+        l.startsWith('FLAGGED') ||
+        l.startsWith('COUNT WARNING') ||
+        l.startsWith('AUTO-NAME'));
+    if (hasChanges) {
+      String logBase = changeLogBaseName ?? backupBaseName ?? '';
+      if (logBase.isEmpty) {
+        // Fall back to the same identifiers the backup name uses
+        final bldg = roomConfig['SYSTEM_SETUP']?['gve_bldg']?.toString() ?? 'UNKNOWN';
+        final room = roomConfig['SYSTEM_SETUP']?['gve_room']?.toString() ?? '000';
+        logBase = '${bldgAbbreviation(bldg)}_$room';
+      }
+      final changeLogPath = path.join(backupDirectory, '${logBase}_backup_log.txt');
+      await AppLogger.writeChangeLog(
+          changeLogPath, sourceLabel, List<String>.from(systemLogs));
+      systemLogs.add("CHANGE LOG: Details saved to '${logBase}_backup_log.txt'");
+    }
 
     _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
     notifyListeners();
@@ -593,6 +655,10 @@ class AppStateProvider extends ChangeNotifier {
 
       final contents = await file.readAsString();
       roomConfig = jsonDecode(contents);
+
+      // Fresh session: no working file yet, so the raw editor's Apply won't
+      // overwrite the previously opened file (or the template) by mistake.
+      currentConfigPath = '';
 
       // Default all hardware counts to 0
       if (roomConfig.containsKey('SYSTEM_SETUP')) {
@@ -883,6 +949,25 @@ class AppStateProvider extends ChangeNotifier {
     } catch (e, stack) {
       AppLogger.logError("Failed to parse raw JSON from editor", e, stack);
       rethrow; // Pass error to UI for user feedback
+    }
+  }
+
+  /// Writes the CURRENT in-memory config to the active working file (the file
+  /// opened locally, or the working copy chosen during an SFTP download).
+  /// Saves the FULL un-pruned config so no device blocks are ever lost on
+  /// disk — export and SFTP upload still produce the pruned version.
+  /// Returns the path written, or null when no working file is associated
+  /// with this session (e.g. 'Create New' that hasn't been exported yet).
+  Future<String?> saveCurrentConfigToFile() async {
+    if (currentConfigPath.isEmpty) return null;
+    try {
+      const encoder = JsonEncoder.withIndent('    ');
+      await File(currentConfigPath).writeAsString(encoder.convert(roomConfig));
+      AppLogger.logInfo("Saved current config to working file $currentConfigPath");
+      return currentConfigPath;
+    } catch (e, stack) {
+      AppLogger.logError("Failed to save working file $currentConfigPath", e, stack);
+      rethrow; // Surface to the UI so the user knows the save failed
     }
   }
 
