@@ -18,7 +18,7 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
     List<String> activeKeys = [];
     final systemSetup = config['SYSTEM_SETUP'] ?? {};
     
-    // UPDATED: Included all new hardware maps
+    //hardware maps
     final map = {
       'dev_projectors': 'PROJECTORDEVICE_',
       'dev_cameras': 'CAMERADEVICE_',
@@ -191,14 +191,13 @@ class DeviceConfigurationForm extends StatelessWidget {
     // Captured from the module Autocomplete so 'Pick .py File' can push text into it
     TextEditingController? moduleFieldController;
 
-    // Notice we REMOVED 'name' from this list, so it will now generate as a field you can edit!
     final skipKeys = ['module', 'keep_alive_command', 'input'];
     
     List<Widget> dynamicFormFields = [];
     deviceData.forEach((key, value) {
       if (skipKeys.contains(key)) return;
 
-      // SCHEMA-DRIVEN: labels, descriptions, dropdowns, and widget types now
+      // SCHEMA-DRIVEN: labels, descriptions, dropdowns, and widget types 
       // come from ui_schema.json (with type inference as the fallback), so a
       // new device property can get a full editor UI without a rebuild.
       final Widget? field = SchemaFieldBuilder.buildField(
