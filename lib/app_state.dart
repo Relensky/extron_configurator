@@ -67,6 +67,53 @@ class AppStateProvider extends ChangeNotifier {
     return '';
   }
 
+  /// Display-oriented resolved locations for the setup dialog / App Config
+  /// hints (explicit choice, else the root-folder default location).
+  String get effectiveUiSchemaPath => uiSchemaPath.isNotEmpty
+      ? uiSchemaPath
+      : path.join(effectiveRootFolder, 'ui_schema.json');
+  String get effectiveKeyMapPath => keyMapPath.isNotEmpty
+      ? keyMapPath
+      : path.join(effectiveRootFolder, 'key_map.json');
+
+  // ---------------------------------------------------------------------
+  //  FIRST-RUN SETUP
+  //  On the very first launch (no saved settings yet) the UI shows a
+  //  one-time dialog asking where each file is located. Once the user
+  //  finishes (or skips) the dialog, 'initialSetupComplete' is persisted
+  //  and the check is bypassed on every later launch.
+  // ---------------------------------------------------------------------
+
+  /// True while the one-time setup dialog should be shown.
+  bool firstRunSetupNeeded = false;
+
+  /// True once _loadSavedSettings has finished reading SharedPreferences,
+  /// so the UI doesn't flash the setup dialog before the answer is known.
+  bool settingsLoaded = false;
+
+  /// Marks first-run setup as done (persisted), then loads everything from
+  /// the chosen/default locations so the app is immediately usable.
+  Future<void> completeFirstRunSetup() async {
+    firstRunSetupNeeded = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('initialSetupComplete', true);
+
+    await loadUiSchema();
+    await loadKeyMap();
+    await loadBuildingsList();
+    await loadProcessorsList();
+    // ignore: unawaited_futures
+    preloadAllModules();
+    notifyListeners();
+    AppLogger.logInfo("First-run setup completed. Paths saved; check bypassed on future launches.");
+  }
+
+  /// Lets App Config re-open the setup dialog at any time.
+  void requestFirstRunSetup() {
+    firstRunSetupNeeded = true;
+    notifyListeners();
+  }
+
   // --- UI Schema (drives labels, descriptions, dropdowns for config keys) ---
   // Starts with built-in defaults so the editor works before/without a file.
   UiSchema uiSchema = UiSchema.builtIn();
@@ -319,6 +366,26 @@ class AppStateProvider extends ChangeNotifier {
       keyMapPath = prefs.getString('keyMapPath') ?? '';
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
 
+      // FIRST-RUN CHECK: only ask for file locations when setup was never
+      // completed. Once 'initialSetupComplete' is saved, this is bypassed
+      // on every later launch. (Existing installs that already have any
+      // path saved are treated as set up — no nagging after an update.)
+      final bool setupDone = prefs.getBool('initialSetupComplete') ?? false;
+      final bool hasAnySavedPath = rootFolderPath.isNotEmpty ||
+          modulesPath.isNotEmpty ||
+          processorsFilePath.isNotEmpty ||
+          buildingsFilePath.isNotEmpty ||
+          templateFilePath.isNotEmpty;
+      if (setupDone || hasAnySavedPath) {
+        firstRunSetupNeeded = false;
+        if (!setupDone) {
+          // Grandfather existing installs in so they're never asked.
+          await prefs.setBool('initialSetupComplete', true);
+        }
+      } else {
+        firstRunSetupNeeded = true;
+      }
+
       // Load the GUI field schema (falls back to built-in defaults on any error)
       await loadUiSchema();
       // Load the legacy key translation map (empty/no-op when no file exists)
@@ -342,6 +409,7 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logError("Startup Initialization Error", e, stack);
     } finally {
       // Update the UI once all heavy lifting is done
+      settingsLoaded = true; // Safe for the UI to show (or skip) first-run setup
       notifyListeners(); 
     }
   }

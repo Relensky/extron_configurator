@@ -42,11 +42,29 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> {
   int _selectedIndex = 0;
+  bool _setupDialogShown = false; // Prompt at most once per app session
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
     final hasConfig = provider.roomConfig.isNotEmpty;
+
+    // FIRST-RUN CHECK: once the saved settings have been read, show the
+    // one-time setup dialog asking where each file is located. When setup
+    // was completed on an earlier launch this is bypassed entirely.
+    if (provider.settingsLoaded &&
+        provider.firstRunSetupNeeded &&
+        !_setupDialogShown) {
+      _setupDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const FirstRunSetupDialog(),
+        );
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -312,7 +330,23 @@ class AppSettingsView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(32.0),
       children: [
-        Text('Application Configuration', style: Theme.of(context).textTheme.headlineMedium),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Application Configuration', style: Theme.of(context).textTheme.headlineMedium),
+            // Re-opens the same dialog shown on the very first launch, for
+            // fixing paths guided-style instead of field by field.
+            OutlinedButton.icon(
+              icon: const Icon(Icons.tune),
+              label: const Text('Run First-Time Setup'),
+              onPressed: () => showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const FirstRunSetupDialog(),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 30),
         
         // Python Modules Path
@@ -891,6 +925,188 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
           onPressed: _isBusy ? null : _startTransfer,
         ),
       ],
+    );
+  }
+}
+
+/// ============================================================================
+///  FIRST-RUN SETUP DIALOG
+/// ============================================================================
+///  Shown ONCE on the very first launch (before any settings are saved),
+///  asking where each external file is located. Finishing (or skipping)
+///  persists 'initialSetupComplete', so the check is bypassed on every
+///  later launch. Can be re-opened any time from the App Config tab.
+///
+///  Pick the Root Folder first: every file found inside it is detected
+///  automatically (green check). Browse individually only for files that
+///  live somewhere else. Every Browse choice is saved immediately.
+/// ============================================================================
+class FirstRunSetupDialog extends StatelessWidget {
+  const FirstRunSetupDialog({Key? key}) : super(key: key);
+
+  Future<void> _finish(BuildContext context, AppStateProvider provider) async {
+    await provider.completeFirstRunSetup();
+    if (context.mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // watch: rows refresh live as paths are picked (updateSetting notifies)
+    final provider = context.watch<AppStateProvider>();
+
+    final bool rootExists = Directory(provider.effectiveRootFolder).existsSync();
+    final bool templateExists = File(provider.effectiveTemplateFilePath).existsSync();
+    final bool processorsExists = File(provider.effectiveProcessorsFilePath).existsSync();
+    final bool buildingsExists = File(provider.effectiveBuildingsFilePath).existsSync();
+    final bool schemaExists = File(provider.effectiveUiSchemaPath).existsSync();
+    final bool keyMapExists = File(provider.effectiveKeyMapPath).existsSync();
+    final bool modulesExists = Directory(provider.effectiveModulesPath).existsSync();
+
+    return AlertDialog(
+      title: Row(
+        children: const [
+          Icon(Icons.tune),
+          SizedBox(width: 10),
+          Expanded(child: Text('First-Time Setup — Locate Your Files')),
+        ],
+      ),
+      content: SizedBox(
+        width: 680,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pick the Root Folder first — every file found inside it is detected '
+                'automatically. Use Browse on any row where a file lives somewhere else. '
+                'Green = found at the shown location, red = not found (you can still '
+                'finish and set it later in App Config). Choices are saved immediately, '
+                'and this dialog will not appear again after you finish.',
+              ),
+              const SizedBox(height: 18),
+              _pathRow(context, provider,
+                  label: 'Root Folder (default base for everything below)',
+                  value: provider.effectiveRootFolder,
+                  exists: rootExists,
+                  isDirectory: true,
+                  settingKey: 'rootFolderPath'),
+              const Divider(height: 18),
+              _pathRow(context, provider,
+                  label: 'Template config.json',
+                  value: provider.effectiveTemplateFilePath,
+                  exists: templateExists,
+                  settingKey: 'templateFilePath'),
+              _pathRow(context, provider,
+                  label: 'processors.json (deployment targets — read on startup)',
+                  value: provider.effectiveProcessorsFilePath,
+                  exists: processorsExists,
+                  settingKey: 'processorsFilePath'),
+              _pathRow(context, provider,
+                  label: 'buildings.json (building names & abbreviations)',
+                  value: provider.effectiveBuildingsFilePath,
+                  exists: buildingsExists,
+                  settingKey: 'buildingsFilePath'),
+              _pathRow(context, provider,
+                  label: 'ui_schema.json (GUI field definitions — optional)',
+                  value: provider.effectiveUiSchemaPath,
+                  exists: schemaExists,
+                  settingKey: 'uiSchemaPath'),
+              _pathRow(context, provider,
+                  label: 'key_map.json (legacy key translation — optional)',
+                  value: provider.effectiveKeyMapPath,
+                  exists: keyMapExists,
+                  settingKey: 'keyMapPath'),
+              _pathRow(context, provider,
+                  label: 'Python modules folder (default: "devices" sub-folder)',
+                  value: provider.effectiveModulesPath,
+                  exists: modulesExists,
+                  isDirectory: true,
+                  settingKey: 'modulesPath'),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          // Skipping also completes setup, so the app never nags again;
+          // everything runs on the defaults shown above.
+          onPressed: () => _finish(context, provider),
+          child: const Text('Skip — use the defaults shown'),
+        ),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.check),
+          label: const Text('Finish Setup'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green.shade700,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () => _finish(context, provider),
+        ),
+      ],
+    );
+  }
+
+  /// One row: found/missing icon, label, resolved path, Browse button.
+  Widget _pathRow(BuildContext context, AppStateProvider provider,
+      {required String label,
+      required String value,
+      required bool exists,
+      bool isDirectory = false,
+      required String settingKey}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            exists ? Icons.check_circle : Icons.error_outline,
+            color: exists ? Colors.green : Colors.red.shade400,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            icon: Icon(isDirectory ? Icons.folder_open : Icons.file_open,
+                size: 18),
+            label: const Text('Browse'),
+            onPressed: () async {
+              if (isDirectory) {
+                String? dir = await FilePicker.getDirectoryPath();
+                if (dir != null) {
+                  // Persisted immediately; updateSetting also reloads
+                  // whatever depends on this path.
+                  provider.updateSetting(settingKey, dir);
+                }
+              } else {
+                FilePickerResult? result = await FilePicker.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['json'],
+                );
+                if (result != null) {
+                  provider.updateSetting(
+                      settingKey, result.files.single.path!);
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }

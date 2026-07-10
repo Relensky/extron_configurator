@@ -130,7 +130,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                     const SizedBox(height: 12),
                     Expanded(
                       child: modules.isEmpty
-                          ? const Center(child: Text('No modules found.\nCheck the Python Modules Path in App Config.', textAlign: TextAlign.center))
+                          ? const Center(child: Text('No modules found.\nDefault location is the "devices" sub-folder of the Root Folder.\nCheck the Python Modules Path in App Config.', textAlign: TextAlign.center))
                           : ListView.builder(
                               itemCount: visible.length,
                               itemBuilder: (ctx, i) => ListTile(
@@ -246,8 +246,8 @@ class DeviceConfigurationForm extends StatelessWidget {
                     decoration: InputDecoration(
                       labelText: 'Python Module (type or select)',
                       helperText: provider.availableModules.isEmpty
-                          ? 'No modules found — check the Python Modules Path in App Config'
-                          : '${provider.availableModules.length} modules found under modules path',
+                          ? 'No modules found in ${provider.effectiveModulesPath} — check the Python Modules Path in App Config'
+                          : '${provider.availableModules.length} modules found under ${provider.effectiveModulesPath}',
                       border: const OutlineInputBorder(),
                       // A real button: opens a searchable list of every module
                       suffixIcon: IconButton(
@@ -277,8 +277,12 @@ class DeviceConfigurationForm extends StatelessWidget {
                 if (result != null) {
                   String fullPath = result.files.single.path!;
                   String modPath = fullPath;
-                  if (provider.modulesPath.isNotEmpty && fullPath.startsWith(provider.modulesPath)) {
-                    modPath = fullPath.replaceFirst(provider.modulesPath, '');
+                  // Use the EFFECTIVE modules path so files picked from the
+                  // default "<root>/devices" folder (Modules Path left blank
+                  // in App Config) still convert to dot notation correctly.
+                  final String modulesBase = provider.effectiveModulesPath;
+                  if (fullPath.startsWith(modulesBase)) {
+                    modPath = fullPath.replaceFirst(modulesBase, '');
                     modPath = modPath.replaceAll(RegExp(r'^[\\\/]'), ''); 
                     modPath = modPath.replaceAll('.py', '');
                     modPath = modPath.replaceAll(RegExp(r'[\\\/]'), '.'); 
