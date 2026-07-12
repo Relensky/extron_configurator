@@ -110,16 +110,35 @@ class SchemaFieldBuilder {
             borderSide: BorderSide(color: Colors.red.shade400, width: 1.5))
         : null;
 
+    // TOUCH-PANEL LINE BREAKS: config values store panel line breaks as the
+    // two-character sequence \r (written to disk as \\r). Show them as REAL
+    // line breaks so the field reads the way the panel will render it, and
+    // convert typed line breaks back to the \r sequence when storing. The
+    // load-time conversion (key mapper / raw editor) is unchanged.
+    final bool isNumeric = type == 'int' || type == 'double' ||
+        value is int || value is double;
+    final String raw = value?.toString() ?? '';
+    final String displayValue = isNumeric ? raw : raw.replaceAll(r'\r', '\n');
+
+    String? helper = isUnknown
+        ? 'Not in UI schema — add "$fieldKey" to ui_schema.json'
+        : spec?.helperText;
+    if (!isUnknown && displayValue.contains('\n')) {
+      helper = helper == null
+          ? r'Line breaks are saved as \r for the touch panel'
+          : '$helper — line breaks are saved as \\r';
+    }
+
     return TextFormField(
-      initialValue: value?.toString() ?? '',
-      keyboardType: (type == 'int' || type == 'double')
+      initialValue: displayValue,
+      // Text fields grow to show every \r line; numeric fields stay one line
+      maxLines: isNumeric ? 1 : null,
+      keyboardType: isNumeric
           ? const TextInputType.numberWithOptions(decimal: true)
-          : null,
+          : TextInputType.multiline,
       decoration: InputDecoration(
         labelText: label,
-        helperText: isUnknown
-            ? 'Not in UI schema — add "$fieldKey" to ui_schema.json'
-            : spec?.helperText,
+        helperText: helper,
         helperStyle: isUnknown ? TextStyle(color: Colors.red.shade400) : null,
         border: redBorder ?? const OutlineInputBorder(),
         enabledBorder: redBorder,
@@ -129,13 +148,19 @@ class SchemaFieldBuilder {
             : null,
       ),
       onChanged: (val) {
-        dynamic parsedVal = val;
+        dynamic parsedVal;
         // Respect the declared schema type first, then the live value's type,
         // so config.json keeps clean numeric types either way.
         if (type == 'int' || value is int) {
           parsedVal = int.tryParse(val) ?? 0;
         } else if (type == 'double' || value is double) {
           parsedVal = double.tryParse(val) ?? 0.0;
+        } else {
+          // Store visual line breaks as the literal \r the processor expects
+          parsedVal = val
+              .replaceAll('\r\n', '\n')
+              .replaceAll('\r', '\n')
+              .replaceAll('\n', r'\r');
         }
         provider.updateDeviceValue(sectionKey, fieldKey, parsedVal);
       },
