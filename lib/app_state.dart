@@ -149,6 +149,13 @@ class AppStateProvider extends ChangeNotifier {
   /// swatch picker in App Config. Default: the package's canonical amber.
   String aurisColor = 'F0A500';
 
+  /// Secondary element color for each style (RRGGBB hex, or '' = Auto —
+  /// let the theme derive it). Classic feeds it into flex_color_scheme
+  /// (navigation highlight, chips, toggles); Auris overrides the color
+  /// scheme's secondary/tertiary slots used by standard Material elements.
+  String classicSecondary = '';
+  String aurisSecondary = '';
+
   /// App-wide text scale factor (1.0 = normal). Chosen from the Text Size
   /// dropdown in App Config and applied to every view via a MediaQuery
   /// text scaler around the whole MaterialApp.
@@ -402,6 +409,8 @@ class AppStateProvider extends ChangeNotifier {
       themeStyle = prefs.getString('themeStyle') ?? 'classic';
       classicColor = prefs.getString('classicColor') ?? '2196F3';
       aurisColor = prefs.getString('aurisColor') ?? 'F0A500';
+      classicSecondary = prefs.getString('classicSecondary') ?? '';
+      aurisSecondary = prefs.getString('aurisSecondary') ?? '';
       textScale = double.tryParse(prefs.getString('textScale') ?? '') ?? 1.0;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
@@ -982,6 +991,12 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'aurisColor':
         aurisColor = value; // RRGGBB hex from the Auris swatch picker
+        break;
+      case 'classicSecondary':
+        classicSecondary = value; // RRGGBB hex, or '' = Auto
+        break;
+      case 'aurisSecondary':
+        aurisSecondary = value; // RRGGBB hex, or '' = Auto
         break;
       case 'textScale':
         textScale = double.tryParse(value) ?? 1.0;
