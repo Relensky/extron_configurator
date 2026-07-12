@@ -160,3 +160,8 @@ s).
 [2026-07-12T02:30:32.911471] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
 [2026-07-12T02:30:32.914473] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
 [2026-07-12T02:30:33.215159] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Documents\ControlScript\ControlScript-Template\base\assets\src\modules\device
+[2026-07-12T02:51:31.996132] INFO: Key map loaded from C:\Users\derek\Desktop\Configurator\key_map.json (138 rules).
+d definitions).
+[2026-07-12T02:51:32.063656] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
+[2026-07-12T02:51:32.066658] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
+[2026-07-12T02:51:32.406696] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Documents\ControlScript\ControlScript-Template\base\assets\src\modules\device

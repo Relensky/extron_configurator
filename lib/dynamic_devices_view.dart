@@ -191,23 +191,25 @@ class DeviceConfigurationForm extends StatelessWidget {
     // Captured from the module Autocomplete so 'Pick .py File' can push text into it
     TextEditingController? moduleFieldController;
 
-    // 'input' is handled by the legacy hardcoded block below UNLESS a
-    // "device_fields" entry in ui_schema.json overrides it for this device
-    // type (e.g. projector input -> module_states) — then the schema-driven
-    // builder renders it with the rest of the fields.
+    // 'input' always renders in its own slot near the top (under Keep
+    // Alive): the schema-driven field when a "device_fields" entry overrides
+    // it for this device type (e.g. projector input -> module_states),
+    // otherwise the legacy autocomplete block. Never in the list below —
+    // that kept it visible only after a save re-sorted the keys.
     final bool inputHasSchemaOverride =
         provider.uiSchema.deviceSpecFor(deviceKey, 'input') != null;
-    final skipKeys = [
-      'module',
-      'keep_alive_command',
-      if (!inputHasSchemaOverride) 'input',
-    ];
+    final skipKeys = ['module', 'keep_alive_command', 'input'];
+
+    // Alphabetical, matching how the config is sorted on save — so a field's
+    // position doesn't move after Apply Changes / export re-orders the JSON.
+    final List<String> sortedKeys =
+        (deviceData as Map).keys.map((k) => k.toString()).toList()..sort();
 
     List<Widget> dynamicFormFields = [];
-    deviceData.forEach((key, value) {
-      if (skipKeys.contains(key)) return;
+    for (final key in sortedKeys) {
+      if (skipKeys.contains(key)) continue;
 
-      // SCHEMA-DRIVEN: labels, descriptions, dropdowns, and widget types 
+      // SCHEMA-DRIVEN: labels, descriptions, dropdowns, and widget types
       // come from ui_schema.json (with type inference as the fallback), so a
       // new device property can get a full editor UI without a rebuild.
       final Widget? field = SchemaFieldBuilder.buildField(
@@ -215,22 +217,21 @@ class DeviceConfigurationForm extends StatelessWidget {
         provider: provider,
         sectionKey: deviceKey,
         fieldKey: key,
-        value: value,
+        value: deviceData[key],
       );
-      if (field == null) return; // Schema marked the key "hidden"
+      if (field == null) continue; // Schema marked the key "hidden"
 
       dynamicFormFields.add(field);
       dynamicFormFields.add(const SizedBox(height: 16));
-    });
+    }
 
     // DEVICE-TYPE-ONLY FIELDS: "device_fields" entries flagged addIfMissing
     // render even before the key exists in this device block — the first
     // edit writes the key into config.json. Lets a new device-type setting
-    // (e.g. a projector-only option) ship via ui_schema.json alone.
-    final existingKeys =
-        (deviceData as Map).keys.map((k) => k.toString());
+    // (e.g. a projector-only option) ship via ui_schema.json alone. ('input'
+    // is handled by its own dedicated slot above and is skipped here.)
     for (final spec
-        in provider.uiSchema.missingFieldsFor(deviceKey, existingKeys)) {
+        in provider.uiSchema.missingFieldsFor(deviceKey, sortedKeys)) {
       if (skipKeys.contains(spec.key)) continue;
       final Widget? field = SchemaFieldBuilder.buildField(
         context: context,
@@ -356,10 +357,23 @@ class DeviceConfigurationForm extends StatelessWidget {
           )),
         const SizedBox(height: 20),
 
-        // --- DYNAMIC INPUT AUTOCOMPLETE (legacy string-scrape fallback) ---
-        // Skipped when ui_schema.json device_fields overrides 'input' for
-        // this device type — the schema-driven field renders it instead.
-        if (deviceData.containsKey('input') && !inputHasSchemaOverride)
+        // --- INPUT (fixed slot, under Keep Alive) ---
+        // Rendered here so it appears the instant a device is created and
+        // never shifts position when Apply Changes re-sorts the JSON keys.
+        //  - device_fields override (e.g. projector -> module_states): the
+        //    schema-driven field, shown even before 'input' exists in the
+        //    block (addIfMissing) so a new projector has it right away.
+        //  - otherwise: the legacy autocomplete, when the block has 'input'.
+        if (inputHasSchemaOverride)
+          SchemaFieldBuilder.buildField(
+                context: context,
+                provider: provider,
+                sectionKey: deviceKey,
+                fieldKey: 'input',
+                value: deviceData['input'], // may be null before first edit
+              ) ??
+              const SizedBox.shrink()
+        else if (deviceData.containsKey('input'))
           _wrapWithInfo(context, 'input', FutureBuilder<List<String>>(
             future: provider.getInputsForModule(moduleName),
             builder: (context, snapshot) {
@@ -393,6 +407,8 @@ class DeviceConfigurationForm extends StatelessWidget {
               );
             },
           )),
+        if (inputHasSchemaOverride || deviceData.containsKey('input'))
+          const SizedBox(height: 20),
 
         const Divider(height: 50, thickness: 2),
         Text('Standard Configuration', style: Theme.of(context).textTheme.titleLarge),
