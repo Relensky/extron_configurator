@@ -133,6 +133,28 @@ class AppStateProvider extends ChangeNotifier {
   Map<String, dynamic>? selectedProcessor;
   Map<String, dynamic> roomConfig = {};
   bool isDarkMode = true;
+
+  /// Visual style selected in App Config. 'classic' (the default) is a
+  /// Material theme built with flex_color_scheme around [classicColor];
+  /// 'amber' | 'teal' | 'magenta' are Auris accent variants. Dark/light
+  /// stays a separate toggle that works with every style.
+  String themeStyle = 'classic';
+
+  /// Accent color for the Classic theme, stored as a 6-digit RRGGBB hex
+  /// string. Chosen from the color picker in App Config (or the first-run
+  /// setup dialog). Default: Material blue.
+  String classicColor = '2196F3';
+
+  /// The navigation rail tab currently shown (0 = Wizard ... 4 = App Config).
+  /// Lives in the provider — above the MaterialApp — so it survives the full
+  /// remount that switching between the Auris and Classic theme families
+  /// forces (see the MaterialApp key in main.dart). Session-only by design.
+  int selectedTabIndex = 0;
+
+  void selectTab(int index) {
+    selectedTabIndex = index;
+    notifyListeners();
+  }
   List<String> systemLogs = []; // NEW: Store user-facing session logs
   
   // Cache for parsed python module commands to prevent repetitive disk I/O
@@ -278,10 +300,10 @@ class AppStateProvider extends ChangeNotifier {
     try {
       onStatusUpdate("System: Preparing configuration data...");
 
-      // 1. Clean out unused devices and format as a clean JSON string
+      // 1. Clean out unused devices, sort keys, and format as a clean JSON string
       Map<String, dynamic> exportData = _pruneConfig(roomConfig);
       final encoder = const JsonEncoder.withIndent('    ');
-      final jsonString = encoder.convert(exportData);
+      final jsonString = encoder.convert(_sortJson(exportData));
 
       // 2. Create a temporary directory and file
       // SftpLogger expects a physical file path, so we write the JSON string to a temp file
@@ -368,6 +390,8 @@ class AppStateProvider extends ChangeNotifier {
       uiSchemaPath = prefs.getString('uiSchemaPath') ?? '';
       keyMapPath = prefs.getString('keyMapPath') ?? '';
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
+      themeStyle = prefs.getString('themeStyle') ?? 'classic';
+      classicColor = prefs.getString('classicColor') ?? '2196F3';
 
       // FIRST-RUN CHECK: only ask for file locations when setup was never
       // completed. Once 'initialSetupComplete' is saved, this is bypassed
@@ -925,6 +949,12 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadKeyMap(); // Re-resolve the legacy key translation rules
         break;
+      case 'themeStyle':
+        themeStyle = value; // 'classic' | 'amber' | 'teal' | 'magenta'
+        break;
+      case 'classicColor':
+        classicColor = value; // RRGGBB hex from the color picker
+        break;
     }
     notifyListeners();
   }
@@ -1371,7 +1401,8 @@ class AppStateProvider extends ChangeNotifier {
     if (currentConfigPath.isEmpty) return null;
     try {
       const encoder = JsonEncoder.withIndent('    ');
-      await File(currentConfigPath).writeAsString(encoder.convert(roomConfig));
+      await File(currentConfigPath)
+          .writeAsString(encoder.convert(_sortJson(roomConfig)));
       AppLogger.logInfo("Saved current config to working file $currentConfigPath");
       return currentConfigPath;
     } catch (e, stack) {
@@ -1387,7 +1418,7 @@ class AppStateProvider extends ChangeNotifier {
   String getPrettyConfigString() {
     if (roomConfig.isEmpty) return "{}";
     final encoder = const JsonEncoder.withIndent('    ');
-    return encoder.convert(_pruneConfig(roomConfig));
+    return encoder.convert(_sortJson(_pruneConfig(roomConfig)));
   }
 
   /// Helper to grab a default template for a device if the user increases the count
@@ -1445,10 +1476,10 @@ class AppStateProvider extends ChangeNotifier {
       final targetFile = File(outputFile);
       final encoder = const JsonEncoder.withIndent('    ');
       
-      // Clean out unused devices before saving
+      // Clean out unused devices and sort keys before saving
       Map<String, dynamic> exportData = _pruneConfig(roomConfig);
-      
-      await targetFile.writeAsString(encoder.convert(exportData));
+
+      await targetFile.writeAsString(encoder.convert(_sortJson(exportData)));
       AppLogger.logInfo("Config successfully saved to ${targetFile.path}");
       return true;
 
@@ -1580,6 +1611,36 @@ class AppStateProvider extends ChangeNotifier {
     if (warned) {
       systemLogs.add("--------------------------------------------------");
     }
+  }
+
+  /// Returns a copy of [node] with every object's keys sorted alphabetically
+  /// (natural order, so PROJECTORDEVICE_2 sorts before PROJECTORDEVICE_10).
+  /// Applied to every write/display path — the raw editor, Apply/save,
+  /// Export, and SFTP upload — so config.json is always stored sorted.
+  static dynamic _sortJson(dynamic node) {
+    if (node is Map) {
+      final keys = node.keys.map((k) => k.toString()).toList()
+        ..sort(_naturalCompare);
+      return <String, dynamic>{for (final k in keys) k: _sortJson(node[k])};
+    }
+    if (node is List) return node.map(_sortJson).toList();
+    return node;
+  }
+
+  /// Case-insensitive compare that treats digit runs as numbers.
+  static int _naturalCompare(String a, String b) {
+    final re = RegExp(r'\d+|\D+');
+    final aParts = re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+    final bParts = re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+    for (int i = 0; i < aParts.length && i < bParts.length; i++) {
+      final an = int.tryParse(aParts[i]);
+      final bn = int.tryParse(bParts[i]);
+      final c = (an != null && bn != null)
+          ? an.compareTo(bn)
+          : aParts[i].compareTo(bParts[i]);
+      if (c != 0) return c;
+    }
+    return aParts.length.compareTo(bParts.length);
   }
 
   Map<String, dynamic> _pruneConfig(Map<String, dynamic> configToPrune) {

@@ -10,6 +10,7 @@ dependencies:
   auris: ^0.2.0
   dartssh2: ^2.17.1
   file_picker: ^11.0.2
+  flex_color_scheme: ^8.4.0
   flutter:
     sdk: flutter
   path: ^1.9.1
