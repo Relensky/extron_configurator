@@ -191,8 +191,18 @@ class DeviceConfigurationForm extends StatelessWidget {
     // Captured from the module Autocomplete so 'Pick .py File' can push text into it
     TextEditingController? moduleFieldController;
 
-    final skipKeys = ['module', 'keep_alive_command', 'input'];
-    
+    // 'input' is handled by the legacy hardcoded block below UNLESS a
+    // "device_fields" entry in ui_schema.json overrides it for this device
+    // type (e.g. projector input -> module_states) — then the schema-driven
+    // builder renders it with the rest of the fields.
+    final bool inputHasSchemaOverride =
+        provider.uiSchema.deviceSpecFor(deviceKey, 'input') != null;
+    final skipKeys = [
+      'module',
+      'keep_alive_command',
+      if (!inputHasSchemaOverride) 'input',
+    ];
+
     List<Widget> dynamicFormFields = [];
     deviceData.forEach((key, value) {
       if (skipKeys.contains(key)) return;
@@ -212,6 +222,27 @@ class DeviceConfigurationForm extends StatelessWidget {
       dynamicFormFields.add(field);
       dynamicFormFields.add(const SizedBox(height: 16));
     });
+
+    // DEVICE-TYPE-ONLY FIELDS: "device_fields" entries flagged addIfMissing
+    // render even before the key exists in this device block — the first
+    // edit writes the key into config.json. Lets a new device-type setting
+    // (e.g. a projector-only option) ship via ui_schema.json alone.
+    final existingKeys =
+        (deviceData as Map).keys.map((k) => k.toString());
+    for (final spec
+        in provider.uiSchema.missingFieldsFor(deviceKey, existingKeys)) {
+      if (skipKeys.contains(spec.key)) continue;
+      final Widget? field = SchemaFieldBuilder.buildField(
+        context: context,
+        provider: provider,
+        sectionKey: deviceKey,
+        fieldKey: spec.key,
+        value: null,
+      );
+      if (field == null) continue;
+      dynamicFormFields.add(field);
+      dynamicFormFields.add(const SizedBox(height: 16));
+    }
 
     return ListView(
       padding: const EdgeInsets.all(24.0),
@@ -325,8 +356,10 @@ class DeviceConfigurationForm extends StatelessWidget {
           )),
         const SizedBox(height: 20),
 
-        // --- DYNAMIC INPUT AUTOCOMPLETE ---
-        if (deviceData.containsKey('input'))
+        // --- DYNAMIC INPUT AUTOCOMPLETE (legacy string-scrape fallback) ---
+        // Skipped when ui_schema.json device_fields overrides 'input' for
+        // this device type — the schema-driven field renders it instead.
+        if (deviceData.containsKey('input') && !inputHasSchemaOverride)
           _wrapWithInfo(context, 'input', FutureBuilder<List<String>>(
             future: provider.getInputsForModule(moduleName),
             builder: (context, snapshot) {

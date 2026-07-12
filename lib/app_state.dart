@@ -139,6 +139,9 @@ class AppStateProvider extends ChangeNotifier {
   final Map<String, List<String>> _moduleCommandsCache = {};
   // Cache for parsed python module inputs (previously re-read from disk on every rebuild)
   final Map<String, List<String>> _moduleInputsCache = {};
+  // Cache for per-command state lists ("<module path>::<command>"), used by
+  // the schema-driven "module_states" field type.
+  final Map<String, List<String>> _moduleStatesCache = {};
   // All python modules discovered under modulesPath (dot notation), for the
   // module selection dropdown/autocomplete on device tabs.
   List<String> availableModules = [];
@@ -605,9 +608,26 @@ class AppStateProvider extends ChangeNotifier {
     // Check for missing keys and patch them
     _validateAndMigrateConfig();
 
-    // Auto-generate the Title Case full room name when gve_bldg (full name OR
-    // legacy abbreviation like 'BSS') resolves against buildings.json — so a
-    // converted legacy file lands with 'Behavioral and Social Sciences 103'
+    // --- BUILDING CODE NORMALIZATION ---
+    // gve_bldg holds the building CODE (e.g. 'BSS'). Older configs stored the
+    // ALL CAPS full name — convert it via buildings.json and log the change.
+    final setupBlock = roomConfig['SYSTEM_SETUP'];
+    if (setupBlock is Map) {
+      final bldgVal = setupBlock['gve_bldg']?.toString() ?? '';
+      if (bldgVal.isNotEmpty && buildings.containsKey(bldgVal)) {
+        final code = buildings[bldgVal].toString();
+        // Some codes equal their name (e.g. GSCI) — nothing to convert then
+        if (code != bldgVal) {
+          setupBlock['gve_bldg'] = code;
+          systemLogs.add(
+              "BUILDING CODE: gve_bldg '$bldgVal' converted to building code '$code' (from buildings.json).");
+        }
+      }
+    }
+
+    // Auto-generate the Title Case full room name when gve_bldg (code like
+    // 'BSS' OR a legacy full name) resolves against buildings.json — so a
+    // converted legacy file lands with 'Behavioral And Social Science 103'
     // instead of the 'Legacy Room Update' placeholder.
     final String? nameBefore =
         roomConfig['SYSTEM_SETUP']?['gui_full_room_name']?.toString();
@@ -651,6 +671,7 @@ class AppStateProvider extends ChangeNotifier {
         l.startsWith('CRITICAL') ||
         l.startsWith('FLAGGED') ||
         l.startsWith('COUNT WARNING') ||
+        l.startsWith('BUILDING CODE') ||
         l.startsWith('AUTO-NAME'));
     if (hasChanges) {
       String logBase = changeLogBaseName ?? backupBaseName ?? '';
@@ -849,11 +870,12 @@ class AppStateProvider extends ChangeNotifier {
     await prefs.setString(key, value);
 
     switch (key) {
-      case 'modulesPath': 
-        modulesPath = value; 
+      case 'modulesPath':
+        modulesPath = value;
         // Path changed: stale caches are invalid; rebuild them in the background
         _moduleCommandsCache.clear();
         _moduleInputsCache.clear();
+        _moduleStatesCache.clear();
         availableModules = [];
         // ignore: unawaited_futures
         preloadAllModules();
@@ -879,6 +901,7 @@ class AppStateProvider extends ChangeNotifier {
           // Default modules folder (<root>/devices) moved with the root
           _moduleCommandsCache.clear();
           _moduleInputsCache.clear();
+          _moduleStatesCache.clear();
           availableModules = [];
           // ignore: unawaited_futures
           preloadAllModules();
@@ -1003,18 +1026,19 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Automatically updates the gui_full_room_name in SYSTEM_SETUP.
-  /// gve_bldg stores the ALL CAPS building name from buildings.json, while the
-  /// generated full room name is Title Case ('Arts & Humanities Building 208').
+  /// gve_bldg stores the building CODE from buildings.json (e.g. 'BSS'), and
+  /// the generated full room name is the Title Case full building name plus
+  /// the room number ('Behavioral And Social Science 103').
   /// If the building is not in buildings.json, the name is left untouched so
   /// the user can type the full room name manually in the wizard.
   void updateFullRoomName() {
     if (roomConfig.containsKey('SYSTEM_SETUP')) {
       String bldgValue = roomConfig['SYSTEM_SETUP']['gve_bldg'] ?? '';
       String roomNum = roomConfig['SYSTEM_SETUP']['gve_room'] ?? '';
-      
-      // Resolve the ALL CAPS full name: gve_bldg may hold the full name (new
-      // style) or a legacy abbreviation (older configs). Longest key wins when
-      // several names share one code, matching the wizard's dedupe rule.
+
+      // Resolve the ALL CAPS full name: gve_bldg holds the code (new style,
+      // e.g. 'BSS') or a legacy full name (older configs). Longest key wins
+      // when several names share one code, matching the wizard's dedupe rule.
       String fullBldgName = '';
       if (buildings.containsKey(bldgValue)) {
         fullBldgName = bldgValue;
@@ -1138,6 +1162,153 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logError("Error parsing python module at $fullPath", e, stack);
       return [];
     }
+  }
+
+  /// Returns the valid STATES of one command in an Extron Python module, for
+  /// the schema-driven "module_states" field type (e.g. ui_schema.json says a
+  /// projector's 'input' options come from the module's 'Input' command).
+  /// Looks, in order, at:
+  ///   1. self.Commands = { '<command>': { 'AllowedValues': [...] } }
+  ///   2. def Set<command>:     the KEYS of its ValueStateValues dict
+  ///   3. def __Match<command>: the VALUES of its ValueStateValues dict
+  ///   4. the self.<dict>[value] lookup inside Set<command> (per-model dicts
+  ///      like self.InputStateValues / self.set_input_states); the union of
+  ///      every model's keys is returned
+  /// Returns [] when the module file or the command can't be resolved, so the
+  /// field falls back to free text entry.
+  Future<List<String>> getStatesForModuleCommand(
+      String moduleFileName, String command) async {
+    if (moduleFileName.isEmpty || command.isEmpty) return [];
+    final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
+    final fullPath = path.join(effectiveModulesPath, relativePath);
+    final cacheKey = '$fullPath::$command';
+
+    if (_moduleStatesCache.containsKey(cacheKey)) {
+      return _moduleStatesCache[cacheKey]!;
+    }
+
+    try {
+      final file = File(fullPath);
+      if (!await file.exists()) return [];
+      final content = await file.readAsString();
+      final states = _parseCommandStates(content, command);
+      _moduleStatesCache[cacheKey] = states;
+      return states;
+    } catch (e, stack) {
+      AppLogger.logError(
+          "Error parsing states for command '$command' in $fullPath", e, stack);
+      return [];
+    }
+  }
+
+  /// Extracts the state list for [command] from a module's source text.
+  static List<String> _parseCommandStates(String content, String command) {
+    final escaped = RegExp.escape(command);
+
+    // 1. self.Commands entry: '<command>': { ... 'AllowedValues': [...] ... }
+    final entryMatch =
+        RegExp("['\"]$escaped['\"]\\s*:\\s*\\{").firstMatch(content);
+    if (entryMatch != null) {
+      final block = _bracedBlockAt(content, entryMatch.end - 1);
+      if (block != null) {
+        final allowedMatch =
+            RegExp("['\"]AllowedValues['\"]\\s*:\\s*\\[").firstMatch(block);
+        if (allowedMatch != null) {
+          final listEnd = block.indexOf(']', allowedMatch.end);
+          if (listEnd != -1) {
+            final listText = block.substring(allowedMatch.end, listEnd);
+            final values = RegExp("['\"]([^'\"]+)['\"]")
+                .allMatches(listText)
+                .map((m) => m.group(1)!)
+                .toList();
+            if (values.isNotEmpty) return values;
+          }
+        }
+      }
+    }
+
+    // 2. def Set<command>: keys of its ValueStateValues dict are the states
+    final setStates = _valueStateValuesIn(content, 'Set$command', keys: true);
+    if (setStates.isNotEmpty) return setStates;
+
+    // 3. def __Match<command>: dict is inverted, so the VALUES are the states
+    final matchStates =
+        _valueStateValuesIn(content, '__Match$command', keys: false);
+    if (matchStates.isNotEmpty) return matchStates;
+
+    // 4. Set<command> may index a per-model dict, e.g.
+    //    self.InputStateValues[value] / self.set_input_states[value].
+    //    Find the attribute(s) it indexes, then union the keys of every
+    //    assignment of that attribute in the file (one per supported model).
+    final defMatch =
+        RegExp('def\\s+Set$escaped\\s*\\(').firstMatch(content);
+    if (defMatch != null) {
+      final nextDef = content.indexOf(RegExp(r'\n\s*def\s'), defMatch.end);
+      final body = content.substring(
+          defMatch.end, nextDef == -1 ? content.length : nextDef);
+      final attrs = RegExp(r'self\.([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*value\s*\]')
+          .allMatches(body)
+          .map((m) => m.group(1)!)
+          .toSet();
+      final Set<String> union = <String>{};
+      for (final attr in attrs) {
+        for (final m in RegExp('self\\.${RegExp.escape(attr)}\\s*=\\s*\\{')
+            .allMatches(content)) {
+          final block = _bracedBlockAt(content, m.end - 1);
+          if (block == null) continue;
+          union.addAll(RegExp("['\"]([^'\"]+)['\"]\\s*:")
+              .allMatches(block)
+              .map((mm) => mm.group(1)!));
+        }
+      }
+      if (union.isNotEmpty) return union.toList();
+    }
+
+    return [];
+  }
+
+  /// Finds `def [methodName](` and returns the entries of the first local
+  /// `...StateValues = { ... }` dict inside it (usually named
+  /// ValueStateValues, sometimes e.g. InputStateValues) — dict keys when
+  /// [keys], else dict values. Returns [] when the method or dict is absent.
+  static List<String> _valueStateValuesIn(String content, String methodName,
+      {required bool keys}) {
+    final defMatch =
+        RegExp('def\\s+${RegExp.escape(methodName)}\\s*\\(').firstMatch(content);
+    if (defMatch == null) return [];
+
+    // Method body: up to the next 'def ' so we never read another method's dict
+    final nextDef = content.indexOf(RegExp(r'\n\s*def\s'), defMatch.end);
+    final body = content.substring(
+        defMatch.end, nextDef == -1 ? content.length : nextDef);
+
+    final dictMatch =
+        RegExp(r'[A-Za-z_]*StateValues\s*=\s*\{').firstMatch(body);
+    if (dictMatch == null) return [];
+    final block = _bracedBlockAt(body, dictMatch.end - 1);
+    if (block == null) return [];
+
+    // Entries look like 'Name' : 'code' — capture left or right side
+    final pattern = keys
+        ? RegExp("['\"]([^'\"]+)['\"]\\s*:")
+        : RegExp(":\\s*['\"]([^'\"]+)['\"]");
+    return pattern.allMatches(block).map((m) => m.group(1)!).toList();
+  }
+
+  /// Returns the text of the balanced {...} block whose opening brace is at
+  /// [openIndex] in [text] (braces inside quotes are rare in these dicts and
+  /// treated as structural). Null when the block never closes.
+  static String? _bracedBlockAt(String text, int openIndex) {
+    int depth = 0;
+    for (int i = openIndex; i < text.length; i++) {
+      final ch = text[i];
+      if (ch == '{') depth++;
+      if (ch == '}') {
+        depth--;
+        if (depth == 0) return text.substring(openIndex, i + 1);
+      }
+    }
+    return null;
   }
 
   /// Attempts to parse raw string JSON and update the global state.

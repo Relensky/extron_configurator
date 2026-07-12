@@ -25,7 +25,9 @@ class SchemaFieldBuilder {
     required dynamic value,
   }) {
     final schema = provider.uiSchema;
-    final FieldSpec? spec = schema.specFor(fieldKey);
+    // Device-scoped entries (ui_schema.json "device_fields") win for keys
+    // inside a matching device block, then the global "fields" entries.
+    final FieldSpec? spec = schema.specFor(fieldKey, sectionKey: sectionKey);
     final String type = _resolveType(spec, value);
 
     if (type == 'hidden') return null;
@@ -33,8 +35,8 @@ class SchemaFieldBuilder {
     // UNKNOWN KEY: no schema entry (exact or wildcard) AND no legacy
     // dictionary description. Rendered with a red outline + warning icon so
     // unrecognized config items stand out for schema maintenance.
-    final bool isUnknown =
-        spec == null && schema.descriptionFor(fieldKey) == null;
+    final bool isUnknown = spec == null &&
+        schema.descriptionFor(fieldKey, sectionKey: sectionKey) == null;
 
     final String label = spec?.label ?? fieldKey;
     Widget field;
@@ -45,6 +47,10 @@ class SchemaFieldBuilder {
         break;
       case 'dropdown':
         field = _buildDropdown(context, provider, sectionKey, fieldKey, spec!, label, value);
+        break;
+      case 'module_states':
+        field = _buildModuleStates(
+            context, provider, sectionKey, fieldKey, spec!, label, value);
         break;
       case 'bool':
         field = SwitchListTile(
@@ -73,7 +79,8 @@ class SchemaFieldBuilder {
         break;
     }
 
-    return _wrapWithInfo(context, schema, fieldKey, field, isUnknown: isUnknown);
+    return _wrapWithInfo(context, schema, fieldKey, field,
+        isUnknown: isUnknown, sectionKey: sectionKey);
   }
 
   /// Schema type wins; 'auto' (or no spec) falls back to inferring from the
@@ -185,6 +192,70 @@ class SchemaFieldBuilder {
     );
   }
 
+  // --- MODULE STATES (options parsed live from the device's .py module) ------
+  /// Autocomplete whose options are the states of ONE command in the device's
+  /// selected Python module (spec.moduleCommand, e.g. 'Input'), parsed from
+  /// self.Commands' AllowedValues / the Set method's ValueStateValues dict.
+  /// Manual typing is always allowed, so an unlisted state is never blocked.
+  static Widget _buildModuleStates(
+      BuildContext context,
+      AppStateProvider provider,
+      String sectionKey,
+      String fieldKey,
+      FieldSpec spec,
+      String label,
+      dynamic value) {
+    final section = provider.roomConfig[sectionKey];
+    final String moduleName =
+        (section is Map ? section['module'] : null)?.toString() ?? '';
+    final String command = spec.moduleCommand ?? fieldKey;
+    final String current = value?.toString() ?? '';
+
+    return FutureBuilder<List<String>>(
+      future: provider.getStatesForModuleCommand(moduleName, command),
+      builder: (context, snapshot) {
+        final List<String> states = snapshot.data ?? [];
+        final String helper;
+        if (moduleName.isEmpty) {
+          helper = "Select a Python module first — options come from its '$command' command";
+        } else if (states.isNotEmpty) {
+          helper = "${states.length} states from '$command' in $moduleName.py";
+        } else if (snapshot.connectionState == ConnectionState.waiting) {
+          helper = 'Parsing $moduleName.py...';
+        } else {
+          helper = "Command '$command' not found in $moduleName.py — type the value manually";
+        }
+
+        return Autocomplete<String>(
+          // Remount when the module changes so initialValue re-applies; a
+          // stable key while typing keeps the cursor from resetting.
+          key: ValueKey('$sectionKey.$fieldKey.$moduleName'),
+          initialValue: TextEditingValue(text: current),
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            // Show the FULL list while the field still holds the saved value,
+            // otherwise it filters itself down to one entry (same pattern as
+            // the module picker).
+            final text = textEditingValue.text;
+            if (text.isEmpty || text == current) return states;
+            return states.where(
+                (s) => s.toLowerCase().contains(text.toLowerCase()));
+          },
+          onSelected: (String selection) =>
+              provider.updateDeviceValue(sectionKey, fieldKey, selection),
+          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+            return TextFormField(
+              controller: controller,
+              focusNode: focusNode,
+              decoration: _decoration('$label (type or select)', helper),
+              onChanged: (val) =>
+                  provider.updateDeviceValue(sectionKey, fieldKey, val),
+            );
+          },
+        );
+      },
+    );
+  }
+
   // --- COMBO (one dropdown -> multiple config keys) --------------------------
   static Widget _buildCombo(BuildContext context, AppStateProvider provider,
       String sectionKey, String fieldKey, FieldSpec spec, String label) {
@@ -248,7 +319,7 @@ class SchemaFieldBuilder {
   /// keys get a red warning icon instead, explaining how to add them.
   static Widget _wrapWithInfo(
       BuildContext context, UiSchema schema, String key, Widget field,
-      {bool isUnknown = false}) {
+      {bool isUnknown = false, String? sectionKey}) {
     if (isUnknown) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -286,7 +357,7 @@ class SchemaFieldBuilder {
       );
     }
 
-    final desc = schema.descriptionFor(key);
+    final desc = schema.descriptionFor(key, sectionKey: sectionKey);
     if (desc == null) return field;
 
     return Row(

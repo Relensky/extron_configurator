@@ -49,8 +49,8 @@ class SetupWizardView extends StatelessWidget {
                       .toList();
 
                   // 3. Determine initial value text.
-                  // gve_bldg may hold the ALL CAPS full name (new style) or a
-                  // legacy abbreviation (older configs) — display both correctly.
+                  // gve_bldg holds the building CODE (new style, e.g. 'BSS')
+                  // or a legacy ALL CAPS full name — display both correctly.
                   String currentBldg = systemSetup['gve_bldg'] ?? '';
                   String initialText = currentBldg;
                   if (provider.buildings.containsKey(currentBldg)) {
@@ -68,11 +68,12 @@ class SetupWizardView extends StatelessWidget {
                           bldg.toLowerCase().contains(textEditingValue.text.toLowerCase()));
                     },
                     onSelected: (String selection) {
-                      // Store the ALL CAPS full building name from buildings.json.
-                      // Strip only the trailing " (ABBR)" so names that contain
-                      // their own parentheses (e.g. SIMMS CENTER) stay intact.
+                      // Store the building CODE from buildings.json — e.g.
+                      // 'BEHAVIORAL AND SOCIAL SCIENCE (BSS)' -> gve_bldg 'BSS'.
+                      // gui_full_room_name is generated from the FULL name by
+                      // updateFullRoomName (Title Case + room number).
                       final match = RegExp(r'^(.*)\s\(([^()]*)\)$').firstMatch(selection);
-                      systemSetup['gve_bldg'] = match != null ? match.group(1) : selection;
+                      systemSetup['gve_bldg'] = match != null ? match.group(2) : selection;
                       provider.updateFullRoomName();
                     },
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {

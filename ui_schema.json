@@ -7,15 +7,44 @@
     "  label:       Field label shown in the editor (defaults to the raw key).",
     "  description: Text behind the (i) info button.",
     "  helperText:  Small grey hint line under the field.",
-    "  type:        auto | text | int | double | bool | dropdown | combo | hidden.",
+    "  type:        auto | text | int | double | bool | dropdown | combo | hidden | module_states.",
     "               'auto' (default) infers from the JSON value type.",
     "  options:     For dropdown/combo. Plain strings, or objects with value/label.",
     "  writes:      For combo only - the list of config keys the one dropdown writes.",
     "               Combo options use 'values' (one entry per key in 'writes').",
+    "  moduleCommand: For module_states only - the command in the device's Python",
+    "               module whose states become the options. Parsed live from the",
+    "               module's self.Commands dictionary ('AllowedValues'), falling",
+    "               back to the Set<Command> / __Match<Command> ValueStateValues.",
+    "  addIfMissing: device_fields only - render the field on matching device tabs",
+    "               even when the key does not exist in that device block yet;",
+    "               the first edit writes it into config.json.",
     "Keys may contain '*' wildcards (e.g. 'power1_outlet_*') to cover a whole",
     "family of properties. Exact keys always win over wildcard matches.",
-    "Keys starting with '__' are ignored (use them for comments)."
+    "Keys starting with '__' are ignored (use them for comments).",
+    "",
+    "DEVICE-TYPE SCOPING: the top-level 'device_fields' object holds entries that",
+    "apply ONLY to matching config sections, keyed by a section pattern like",
+    "'PROJECTORDEVICE_*'. Scoped entries override the global 'fields' entries for",
+    "those device tabs - so a projector-only setting (or a projector-specific take",
+    "on a shared key like 'input') ships by editing this file, no recompile."
   ],
+  "device_fields": {
+    "__readme": [
+      "Field definitions scoped to one device type. The outer key is a pattern",
+      "matched against the config section name (e.g. PROJECTORDEVICE_1); the",
+      "inner entries use exactly the same properties as 'fields' above."
+    ],
+    "PROJECTORDEVICE_*": {
+      "input": {
+        "type": "module_states",
+        "moduleCommand": "Input",
+        "label": "Input",
+        "addIfMissing": true,
+        "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed)."
+      }
+    }
+  },
   "fields": {
     "btn_name": {
       "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."
@@ -232,7 +261,7 @@
       "description": "Use the dev_devices to set the number of devices in the room."
     },
     "gve_bldg": {
-      "description": "Building name for GVE. Set the IDs from the room after it is created in GVE."
+      "description": "Building CODE for GVE (e.g. 'BSS' for Behavioral and Social Science), from buildings.json. The Setup Wizard stores the code here and generates gui_full_room_name from the full building name."
     },
     "gve_room": {
       "description": "Room name for GVE. Set the IDs from the room after it is created in GVE."

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +28,9 @@ class RoomConfigApp extends StatelessWidget {
 
     return MaterialApp(
       title: 'Deployment Configurator',
-      theme: provider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
+      // Auris theme package: warm amber-on-near-black Material 3 look.
+      // The existing sun/moon toggle still switches dark <-> light.
+      theme: provider.isDarkMode ? AurisTheme.dark() : AurisTheme.light(),
       home: const MainDashboard(),
     );
   }

@@ -26,9 +26,21 @@ import 'config_dictionary.dart';
 ///               ("writes" array + "options" with a "values" array per option)
 ///    "hidden"   never render this key (e.g. keys managed by a combo or wizard)
 ///
+///    "module_states" dropdown/autocomplete whose options are parsed LIVE from
+///               the device's selected Python module: the states of one
+///               command in the module's `self.Commands` dictionary
+///               ("moduleCommand" names the command, e.g. "Input")
+///
 ///  Keys may contain a `*` wildcard (e.g. "power1_outlet_*") so one schema
 ///  entry covers a whole family of config keys. Exact matches always win
 ///  over wildcard matches.
+///
+///  DEVICE-TYPE SCOPING: a top-level "device_fields" object holds field
+///  definitions that apply ONLY to matching config sections (device blocks),
+///  keyed by a section pattern like "PROJECTORDEVICE_*". Scoped entries win
+///  over the global "fields" entries for those sections, and entries marked
+///  "addIfMissing": true are rendered on the device tab even when the key
+///  does not exist in the device block yet (the first edit writes it).
 /// ============================================================================
 
 /// A single selectable option for "dropdown" and "combo" fields.
@@ -76,6 +88,9 @@ class FieldSpec {
   final String? helperText;       // small grey helper line under the field
   final List<OptionSpec> options; // for dropdown / combo
   final List<String> writes;      // for combo: config keys this field writes
+  final String? moduleCommand;    // for module_states: command in self.Commands
+  final bool addIfMissing;        // device_fields only: render even when the
+                                  // key is absent from the device block
 
   RegExp? _patternRegex;
 
@@ -87,6 +102,8 @@ class FieldSpec {
     this.helperText,
     this.options = const [],
     this.writes = const [],
+    this.moduleCommand,
+    this.addIfMissing = false,
   });
 
   bool get isPattern => key.contains('*');
@@ -112,8 +129,57 @@ class FieldSpec {
       writes: (json['writes'] is List)
           ? (json['writes'] as List).map((e) => e.toString()).toList()
           : const [],
+      // Accept both camelCase (file convention) and snake_case spellings
+      moduleCommand:
+          (json['moduleCommand'] ?? json['module_command'])?.toString(),
+      addIfMissing:
+          (json['addIfMissing'] ?? json['add_if_missing']) == true,
     );
   }
+}
+
+/// One "device_fields" entry: field specs that apply only to config sections
+/// matching [sectionPattern] (e.g. "PROJECTORDEVICE_*").
+class DeviceScopedFields {
+  final String sectionPattern;
+  final Map<String, FieldSpec> _exact = {};
+  final List<FieldSpec> _patterns = [];
+
+  RegExp? _sectionRegex;
+
+  DeviceScopedFields(this.sectionPattern);
+
+  bool matchesSection(String sectionKey) {
+    if (!sectionPattern.contains('*')) return sectionPattern == sectionKey;
+    _sectionRegex ??= RegExp(
+        '^${RegExp.escape(sectionPattern).replaceAll(r'\*', '.*')}\$');
+    return _sectionRegex!.hasMatch(sectionKey);
+  }
+
+  void add(FieldSpec spec) {
+    if (spec.isPattern) {
+      _patterns.removeWhere((p) => p.key == spec.key);
+      _patterns.add(spec);
+    } else {
+      _exact[spec.key] = spec;
+    }
+  }
+
+  int get fieldCount => _exact.length + _patterns.length;
+
+  FieldSpec? specFor(String configKey) {
+    final exact = _exact[configKey];
+    if (exact != null) return exact;
+    for (final p in _patterns.reversed) {
+      if (p.matches(configKey)) return p;
+    }
+    return null;
+  }
+
+  /// Exact-key specs flagged addIfMissing, for rendering fields the device
+  /// block doesn't contain yet (wildcards can't synthesize a concrete key).
+  Iterable<FieldSpec> get addIfMissingSpecs =>
+      _exact.values.where((s) => s.addIfMissing);
 }
 
 /// The full loaded schema plus lookup helpers used by the views.
@@ -121,10 +187,17 @@ class UiSchema {
   final Map<String, FieldSpec> _exact = {};
   final List<FieldSpec> _patterns = [];
 
+  /// Device-type scoped definitions from "device_fields" (later additions —
+  /// i.e. the file — override earlier ones with the same section pattern).
+  final List<DeviceScopedFields> _deviceScoped = [];
+
   /// Where this schema came from, for display in App Config.
   String source = 'Built-in defaults';
 
-  int get fieldCount => _exact.length + _patterns.length;
+  int get fieldCount =>
+      _exact.length +
+      _patterns.length +
+      _deviceScoped.fold(0, (sum, d) => sum + d.fieldCount);
 
   /// All exact (non-wildcard) config keys the schema knows about. Used by the
   /// key mapper's auto-case-normalization as the canonical vocabulary.
@@ -140,8 +213,12 @@ class UiSchema {
     }
   }
 
-  /// Find the spec for a config key: exact match first, then wildcards.
-  FieldSpec? specFor(String configKey) {
+  /// Find the spec for a config key. When [sectionKey] is given (a device
+  /// block like 'PROJECTORDEVICE_1'), matching "device_fields" entries win
+  /// over the global "fields" entries. Exact match beats wildcard either way.
+  FieldSpec? specFor(String configKey, {String? sectionKey}) {
+    final scoped = deviceSpecFor(sectionKey, configKey);
+    if (scoped != null) return scoped;
     final exact = _exact[configKey];
     if (exact != null) return exact;
     for (final p in _patterns.reversed) { // last added (file) wins
@@ -150,10 +227,39 @@ class UiSchema {
     return null;
   }
 
+  /// ONLY the device-scoped spec for [configKey] in [sectionKey] (null when
+  /// no "device_fields" entry covers it). Lets views detect that a device
+  /// type explicitly overrides a field (e.g. projector 'input').
+  FieldSpec? deviceSpecFor(String? sectionKey, String configKey) {
+    if (sectionKey == null) return null;
+    for (final scoped in _deviceScoped.reversed) { // last added (file) wins
+      if (!scoped.matchesSection(sectionKey)) continue;
+      final spec = scoped.specFor(configKey);
+      if (spec != null) return spec;
+    }
+    return null;
+  }
+
+  /// Device-scoped specs marked addIfMissing for [sectionKey] whose keys are
+  /// NOT in [existingKeys] — the device tab renders these as extra fields so
+  /// a device-type-only setting appears before it exists in config.json.
+  List<FieldSpec> missingFieldsFor(
+      String sectionKey, Iterable<String> existingKeys) {
+    final existing = existingKeys.toSet();
+    final Map<String, FieldSpec> result = {};
+    for (final scoped in _deviceScoped) { // later (file) entries override
+      if (!scoped.matchesSection(sectionKey)) continue;
+      for (final spec in scoped.addIfMissingSpecs) {
+        if (!existing.contains(spec.key)) result[spec.key] = spec;
+      }
+    }
+    return result.values.toList();
+  }
+
   /// Description for the info (i) button: schema first, then the legacy
   /// built-in ConfigDictionary so nothing that worked before goes blank.
-  String? descriptionFor(String configKey) {
-    final desc = specFor(configKey)?.description;
+  String? descriptionFor(String configKey, {String? sectionKey}) {
+    final desc = specFor(configKey, sectionKey: sectionKey)?.description;
     if (desc != null && desc.isNotEmpty) return desc;
     return ConfigDictionary.descriptions[configKey];
   }
@@ -172,6 +278,27 @@ class UiSchema {
             value.map((k, v) => MapEntry(k.toString(), v))));
       }
     });
+
+    // Optional "device_fields": { "PROJECTORDEVICE_*": { "input": {...} } }
+    final deviceFields = doc['device_fields'];
+    if (deviceFields is Map) {
+      deviceFields.forEach((sectionPattern, fieldMap) {
+        if (sectionPattern.toString().startsWith('__')) return;
+        if (fieldMap is! Map) return;
+        // File entries replace any earlier definition of the same pattern
+        _deviceScoped
+            .removeWhere((d) => d.sectionPattern == sectionPattern.toString());
+        final scoped = DeviceScopedFields(sectionPattern.toString());
+        fieldMap.forEach((key, value) {
+          if (key.toString().startsWith('__')) return;
+          if (value is Map) {
+            scoped.add(FieldSpec.fromJson(key.toString(),
+                value.map((k, v) => MapEntry(k.toString(), v))));
+          }
+        });
+        if (scoped.fieldCount > 0) _deviceScoped.add(scoped);
+      });
+    }
   }
 
   /// The defaults that replicate the app's previous hardcoded behavior, so
