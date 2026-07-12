@@ -113,6 +113,14 @@ class RoomConfigApp extends StatelessWidget {
       theme: themeFor(provider.themeStyle, provider.isDarkMode,
           provider.classicColor, provider.aurisColor),
       themeAnimationDuration: Duration.zero,
+      // App-wide text size (App Config > Text Size): scale every text style
+      // by wrapping the whole app in a MediaQuery text scaler.
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(provider.textScale),
+        ),
+        child: child!,
+      ),
       home: const MainDashboard(),
     );
   }
@@ -254,7 +262,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 width: 250,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.add_box),
-                  label: const Text("Create New Config\n(From default template)", textAlign: TextAlign.center),
+                  label: const Text("Create New Config\n(From template)", textAlign: TextAlign.center),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue.shade700,
                     foregroundColor: Colors.white, // Forces readable text in light mode
@@ -552,6 +560,40 @@ class AppSettingsView extends StatelessWidget {
             : const AccentColorPicker(
                 settingKey: 'classicColor',
                 swatches: RoomConfigApp.classicSwatches),
+        const SizedBox(height: 20),
+
+        // --- TEXT SIZE ---
+        // App-wide text scale, applied via the MediaQuery text scaler that
+        // wraps the MaterialApp. Persisted like every other setting.
+        Builder(builder: (context) {
+          const Map<String, String> sizes = {
+            '0.85': 'Small (85%)',
+            '1.0': 'Normal (100%)',
+            '1.15': 'Large (115%)',
+            '1.3': 'Extra Large (130%)',
+            '1.5': 'Huge (150%)',
+          };
+          // Match the stored double back to an option key; null (no
+          // selection shown) if it was hand-set to something unlisted.
+          final String? current = sizes.keys.firstWhere(
+              (k) => double.parse(k) == provider.textScale,
+              orElse: () => '');
+          return DropdownButtonFormField<String>(
+            decoration: const InputDecoration(
+              labelText: 'Text Size',
+              helperText: 'Scales all text in the app.',
+              border: OutlineInputBorder(),
+            ),
+            initialValue: (current != null && current.isNotEmpty) ? current : null,
+            items: sizes.entries
+                .map((e) =>
+                    DropdownMenuItem(value: e.key, child: Text(e.value)))
+                .toList(),
+            onChanged: (val) {
+              if (val != null) provider.updateSetting('textScale', val);
+            },
+          );
+        }),
         const SizedBox(height: 20),
 
         // Python Modules Path

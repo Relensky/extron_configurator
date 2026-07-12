@@ -149,6 +149,11 @@ class AppStateProvider extends ChangeNotifier {
   /// swatch picker in App Config. Default: the package's canonical amber.
   String aurisColor = 'F0A500';
 
+  /// App-wide text scale factor (1.0 = normal). Chosen from the Text Size
+  /// dropdown in App Config and applied to every view via a MediaQuery
+  /// text scaler around the whole MaterialApp.
+  double textScale = 1.0;
+
   /// The navigation rail tab currently shown (0 = Wizard ... 4 = App Config).
   /// Lives in the provider — above the MaterialApp — so it survives the full
   /// remount that switching between the Auris and Classic theme families
@@ -397,6 +402,7 @@ class AppStateProvider extends ChangeNotifier {
       themeStyle = prefs.getString('themeStyle') ?? 'classic';
       classicColor = prefs.getString('classicColor') ?? '2196F3';
       aurisColor = prefs.getString('aurisColor') ?? 'F0A500';
+      textScale = double.tryParse(prefs.getString('textScale') ?? '') ?? 1.0;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
@@ -976,6 +982,9 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'aurisColor':
         aurisColor = value; // RRGGBB hex from the Auris swatch picker
+        break;
+      case 'textScale':
+        textScale = double.tryParse(value) ?? 1.0;
         break;
     }
     notifyListeners();
