@@ -136,7 +136,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Visual style selected in App Config. 'classic' (the default) is a
   /// Material theme built with flex_color_scheme around [classicColor];
-  /// 'amber' | 'teal' | 'magenta' are Auris accent variants. Dark/light
+  /// 'auris' is the sci-fi HUD look built around [aurisColor]. Dark/light
   /// stays a separate toggle that works with every style.
   String themeStyle = 'classic';
 
@@ -144,6 +144,10 @@ class AppStateProvider extends ChangeNotifier {
   /// string. Chosen from the color picker in App Config (or the first-run
   /// setup dialog). Default: Material blue.
   String classicColor = '2196F3';
+
+  /// Accent color for the Auris theme (RRGGBB hex), chosen from its own
+  /// swatch picker in App Config. Default: the package's canonical amber.
+  String aurisColor = 'F0A500';
 
   /// The navigation rail tab currently shown (0 = Wizard ... 4 = App Config).
   /// Lives in the provider — above the MaterialApp — so it survives the full
@@ -392,6 +396,21 @@ class AppStateProvider extends ChangeNotifier {
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
       themeStyle = prefs.getString('themeStyle') ?? 'classic';
       classicColor = prefs.getString('classicColor') ?? '2196F3';
+      aurisColor = prefs.getString('aurisColor') ?? 'F0A500';
+
+      // MIGRATION: the Auris style used to be stored as one value per accent
+      // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
+      const legacyAuris = {
+        'amber': 'F0A500',
+        'teal': '35E0C0',
+        'magenta': 'E0409A',
+      };
+      if (legacyAuris.containsKey(themeStyle)) {
+        aurisColor = legacyAuris[themeStyle]!;
+        themeStyle = 'auris';
+        await prefs.setString('themeStyle', themeStyle);
+        await prefs.setString('aurisColor', aurisColor);
+      }
 
       // FIRST-RUN CHECK: only ask for file locations when setup was never
       // completed. Once 'initialSetupComplete' is saved, this is bypassed
@@ -950,10 +969,13 @@ class AppStateProvider extends ChangeNotifier {
         loadKeyMap(); // Re-resolve the legacy key translation rules
         break;
       case 'themeStyle':
-        themeStyle = value; // 'classic' | 'amber' | 'teal' | 'magenta'
+        themeStyle = value; // 'classic' | 'auris'
         break;
       case 'classicColor':
         classicColor = value; // RRGGBB hex from the color picker
+        break;
+      case 'aurisColor':
+        aurisColor = value; // RRGGBB hex from the Auris swatch picker
         break;
     }
     notifyListeners();
