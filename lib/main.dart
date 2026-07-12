@@ -521,7 +521,7 @@ class AppSettingsView extends StatelessWidget {
         // --- THEME STYLE ---
         // Two styles, each with its own accent swatch picker below:
         // Classic (flex_color_scheme, the default) and Auris (sci-fi HUD).
-        // Dark/light stays on the toolbar toggle.
+        // Dark/light stays on thsdae toolbar toggle.
         DropdownButtonFormField<String>(
           decoration: const InputDecoration(
             labelText: 'Theme Style',
@@ -532,11 +532,11 @@ class AppSettingsView extends StatelessWidget {
           ),
           initialValue: provider.themeStyle,
           items: [
-            _themeStyleItem('classic', 'Classic (default)',
+            _themeStyleItem('classic', 'Classic (Default)',
                 RoomConfigApp.parseHexColor(provider.classicColor)),
             _themeStyleItem(
                 'auris',
-                'Auris (sci-fi HUD)',
+                'Auris (Sci-Fi)',
                 RoomConfigApp.parseHexColor(provider.aurisColor,
                     fallback: const Color(0xFFF0A500))),
           ],
@@ -1240,7 +1240,7 @@ class FirstRunSetupDialog extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 'Pick the color the app theme is built around. You can change '
-                'it (or switch to the Auris sci-fi styles) later in App Config.',
+                'it later in App Config.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 10),

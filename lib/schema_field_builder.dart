@@ -125,7 +125,7 @@ class SchemaFieldBuilder {
         : spec?.helperText;
     if (!isUnknown && displayValue.contains('\n')) {
       helper = helper == null
-          ? r'Line breaks are saved as \r for the touch panel'
+          ? r'Line breaks are converted for the touch panel'
           : '$helper — line breaks are saved as \\r';
     }
 
