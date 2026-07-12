@@ -160,6 +160,20 @@ class AppStateProvider extends ChangeNotifier {
   /// text scaler around the whole MaterialApp.
   double textScale = 1.0;
 
+  /// When true (default), loading a config also fills any device properties
+  /// missing from the schema's "device_defaults" (e.g. a DSP without its
+  /// audio group numbers). Additions are listed in the acknowledgement
+  /// dialog and change log like every other load-time migration. Toggle
+  /// lives in App Config.
+  bool fillDeviceDefaultsOnLoad = true;
+
+  Future<void> setFillDeviceDefaultsOnLoad(bool value) async {
+    fillDeviceDefaultsOnLoad = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('fillDeviceDefaultsOnLoad', value);
+  }
+
   /// The navigation rail tab currently shown (0 = Wizard ... 4 = App Config).
   /// Lives in the provider — above the MaterialApp — so it survives the full
   /// remount that switching between the Auris and Classic theme families
@@ -410,6 +424,8 @@ class AppStateProvider extends ChangeNotifier {
       aurisColor = prefs.getString('aurisColor') ?? 'F0A500';
       classicSecondary = prefs.getString('classicSecondary') ?? '';
       textScale = double.tryParse(prefs.getString('textScale') ?? '') ?? 1.0;
+      fillDeviceDefaultsOnLoad =
+          prefs.getBool('fillDeviceDefaultsOnLoad') ?? true;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
@@ -681,6 +697,18 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
 
+    // --- DEVICE DEFAULTS FILL (ui_schema.json "device_defaults") ---
+    // Optionally ensure every device block carries its type's baseline
+    // properties (e.g. a DSP without its audio group numbers). Existing
+    // values are never touched; each addition is reported below.
+    if (fillDeviceDefaultsOnLoad) {
+      final int filled = _fillDeviceDefaults();
+      if (filled > 0) {
+        systemLogs.add(
+            "DEFAULTS: Added $filled missing device propert${filled == 1 ? 'y' : 'ies'} from ui_schema.json device_defaults.");
+      }
+    }
+
     // Auto-generate the Title Case full room name when gve_bldg (code like
     // 'BSS' OR a legacy full name) resolves against buildings.json — so a
     // converted legacy file lands with 'Behavioral And Social Science 103'
@@ -728,6 +756,7 @@ class AppStateProvider extends ChangeNotifier {
         l.startsWith('FLAGGED') ||
         l.startsWith('COUNT WARNING') ||
         l.startsWith('BUILDING CODE') ||
+        l.startsWith('DEFAULTS') ||
         l.startsWith('AUTO-NAME'));
     if (hasChanges) {
       String logBase = changeLogBaseName ?? backupBaseName ?? '';
@@ -812,6 +841,27 @@ class AppStateProvider extends ChangeNotifier {
     } else {
       systemLogs.add("TEMPLATE AUDIT: All items match the default config template.");
     }
+  }
+
+  /// Fills device blocks with any missing properties from the schema's
+  /// "device_defaults" section (see UiSchema.defaultsFor). Existing values
+  /// always win. Logs one line per added property; returns how many were
+  /// added across the whole config.
+  int _fillDeviceDefaults() {
+    int filled = 0;
+    roomConfig.forEach((sectionKey, block) {
+      if (sectionKey == 'SYSTEM_SETUP' || block is! Map) return;
+      final defaults = uiSchema.defaultsFor(sectionKey);
+      defaults.forEach((prop, defaultValue) {
+        if (!block.containsKey(prop)) {
+          block[prop] = defaultValue;
+          systemLogs.add(
+              "-> Added missing device property: '$sectionKey.$prop' (Default: '$defaultValue')");
+          filled++;
+        }
+      });
+    });
+    return filled;
   }
 
   /// Scans the loaded configuration against baseline defaults and patches missing keys.

@@ -670,6 +670,21 @@ class AppSettingsView extends StatelessWidget {
         }),
         const SizedBox(height: 20),
 
+        // --- DEVICE DEFAULTS ON LOAD ---
+        // Load-time counterpart of ui_schema.json "device_defaults": also
+        // fill missing baseline properties when opening an existing config.
+        SwitchListTile(
+          title: const Text('Fill missing device defaults when loading'),
+          subtitle: const Text(
+              'Adds properties from ui_schema.json "device_defaults" that a '
+              'loaded config\'s devices are missing (e.g. DSP audio groups). '
+              'Additions are listed in the load acknowledgement — nothing is '
+              'saved until you export or apply.'),
+          value: provider.fillDeviceDefaultsOnLoad,
+          onChanged: (val) => provider.setFillDeviceDefaultsOnLoad(val),
+        ),
+        const SizedBox(height: 20),
+
         // Python Modules Path
         TextFormField(
           key: ValueKey(provider.modulesPath), // Forces UI to refresh when picked via dialog
