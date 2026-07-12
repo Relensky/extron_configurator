@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 
@@ -181,21 +182,44 @@ class _JsonEditorViewState extends State<JsonEditorView> {
             ),
           const SizedBox(height: 8),
           Expanded(
-            child: TextField(
-              controller: _controller,
-              maxLines: null,
-              expands: true,
-              keyboardType: TextInputType.multiline,
-              // Background & text adapt to light/dark mode; syntax colors follow
-              style: TextStyle(fontFamily: 'monospace', fontSize: 14, color: editorText),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: editorFill,
-                // Filled fields get a Material hover overlay that shifts the
-                // editor background on mouse-over — disable it entirely.
-                hoverColor: Colors.transparent,
-                border: const OutlineInputBorder(),
-                hintText: 'Paste or edit your config.json here...',
+            // TAB = INDENT (like VS Code): intercept the Tab key before the
+            // focus system moves to the next widget and insert four spaces at
+            // the caret instead (matching the file's indent width). Shift+Tab
+            // is left alone so keyboard users can still leave the editor.
+            child: Focus(
+              onKeyEvent: (node, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.tab &&
+                    !HardwareKeyboard.instance.isShiftPressed) {
+                  const String indent = '    ';
+                  final sel = _controller.selection;
+                  if (!sel.isValid) return KeyEventResult.ignored;
+                  final text = _controller.text;
+                  _controller.value = TextEditingValue(
+                    text: text.replaceRange(sel.start, sel.end, indent),
+                    selection: TextSelection.collapsed(
+                        offset: sel.start + indent.length),
+                  );
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
+                controller: _controller,
+                maxLines: null,
+                expands: true,
+                keyboardType: TextInputType.multiline,
+                // Background & text adapt to light/dark mode; syntax colors follow
+                style: TextStyle(fontFamily: 'monospace', fontSize: 14, color: editorText),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: editorFill,
+                  // Filled fields get a Material hover overlay that shifts the
+                  // editor background on mouse-over — disable it entirely.
+                  hoverColor: Colors.transparent,
+                  border: const OutlineInputBorder(),
+                  hintText: 'Paste or edit your config.json here...',
+                ),
               ),
             ),
           ),

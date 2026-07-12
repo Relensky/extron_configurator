@@ -149,12 +149,11 @@ class AppStateProvider extends ChangeNotifier {
   /// swatch picker in App Config. Default: the package's canonical amber.
   String aurisColor = 'F0A500';
 
-  /// Secondary element color for each style (RRGGBB hex, or '' = Auto —
-  /// let the theme derive it). Classic feeds it into flex_color_scheme
-  /// (navigation highlight, chips, toggles); Auris overrides the color
-  /// scheme's secondary/tertiary slots used by standard Material elements.
+  /// Secondary element color for the Classic style (RRGGBB hex, or '' =
+  /// Auto — let the theme derive it). Feeds into flex_color_scheme and
+  /// colors the navigation highlight, chips, and toggles. (Auris bakes its
+  /// own slate secondary, so it has no counterpart setting.)
   String classicSecondary = '';
-  String aurisSecondary = '';
 
   /// App-wide text scale factor (1.0 = normal). Chosen from the Text Size
   /// dropdown in App Config and applied to every view via a MediaQuery
@@ -410,7 +409,6 @@ class AppStateProvider extends ChangeNotifier {
       classicColor = prefs.getString('classicColor') ?? '2196F3';
       aurisColor = prefs.getString('aurisColor') ?? 'F0A500';
       classicSecondary = prefs.getString('classicSecondary') ?? '';
-      aurisSecondary = prefs.getString('aurisSecondary') ?? '';
       textScale = double.tryParse(prefs.getString('textScale') ?? '') ?? 1.0;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
@@ -995,9 +993,6 @@ class AppStateProvider extends ChangeNotifier {
       case 'classicSecondary':
         classicSecondary = value; // RRGGBB hex, or '' = Auto
         break;
-      case 'aurisSecondary':
-        aurisSecondary = value; // RRGGBB hex, or '' = Auto
-        break;
       case 'textScale':
         textScale = double.tryParse(value) ?? 1.0;
         break;
@@ -1557,7 +1552,23 @@ class AppStateProvider extends ChangeNotifier {
       newDevice['btn_name'] = newDevice['btn_name'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
       newDevice['gve_id'] = newDevice['gve_id'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
       newDevice['name'] = '${newDevice['name'].split('-').first.trim()} $i - Custom Model';
-      
+
+      // SCHEMA DEFAULTS (ui_schema.json "device_defaults"): make sure this
+      // device type's baseline properties exist — e.g. projectors always
+      // get input/relay_host, DSPs their audio group numbers. Values from
+      // the template block always win; only missing keys are added.
+      int addedDefaults = 0;
+      uiSchema.defaultsFor(newDeviceKey).forEach((prop, defaultValue) {
+        if (!newDevice.containsKey(prop)) {
+          newDevice[prop] = defaultValue;
+          addedDefaults++;
+        }
+      });
+      if (addedDefaults > 0) {
+        AppLogger.logInfo(
+            "Applied $addedDefaults schema default(s) from device_defaults to $newDeviceKey");
+      }
+
       roomConfig[newDeviceKey] = newDevice;
       newKeys.add(newDeviceKey);
     }

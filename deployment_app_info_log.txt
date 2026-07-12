@@ -150,3 +150,8 @@ json
 [2026-07-11T22:42:37.353927] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
 [2026-07-11T22:42:37.357969] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
 [2026-07-11T22:42:37.784212] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Documents\ControlScript\ControlScript-Template\base\assets\src\modules\device
+[2026-07-12T02:23:24.270400] INFO: UI schema loaded from C:\Users\derek\Desktop\Configurator\ui_schema.json (119 field definitions).
+[2026-07-12T02:23:24.338962] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
+s).
+[2026-07-12T02:23:24.371978] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
+[2026-07-12T02:23:24.665644] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Documents\ControlScript\ControlScript-Template\base\assets\src\modules\device

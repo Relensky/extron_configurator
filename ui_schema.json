@@ -27,8 +27,47 @@
     "apply ONLY to matching config sections, keyed by a section pattern like",
     "'PROJECTORDEVICE_*'. Scoped entries override the global 'fields' entries for",
     "those device tabs - so a projector-only setting (or a projector-specific take",
-    "on a shared key like 'input') ships by editing this file, no recompile."
+    "on a shared key like 'input') ships by editing this file, no recompile.",
+    "",
+    "DEVICE DEFAULTS: the top-level 'device_defaults' object maps section patterns",
+    "to property/value pairs merged into every NEWLY CREATED device block of that",
+    "type (when the Setup Wizard counts change). Existing/template values are",
+    "never overwritten - only missing keys are added. Exact section names (e.g.",
+    "'SWITCHERDEVICE_1') override wildcard patterns per property, so switcher 1",
+    "can carry the audio groups while extra switchers stay clean."
   ],
+  "device_defaults": {
+    "__readme": [
+      "Baseline properties per device type, applied when the wizard creates the",
+      "blocks. Edit the values here and press Reload Schema - no recompile."
+    ],
+    "PROJECTORDEVICE_*": {
+      "input": "",
+      "relay_host": "processor1"
+    },
+    "DSPDEVICE_*": {
+      "group_mic_ceiling_mute": "4",
+      "group_mic_in_room_mute": "2",
+      "group_mic_master_gain": "10",
+      "group_mic_master_mute": "6",
+      "group_pc_mic_input_gain": "7",
+      "group_pc_output_gain": "8",
+      "group_pc_output_mute": "9",
+      "group_pc_record_mute": "11",
+      "group_prog_gain": "1",
+      "group_prog_mute": "5",
+      "group_voice_lift_mute": "3"
+    },
+    "SWITCHERDEVICE_1": {
+      "group_ceil_mute": "4",
+      "group_mic_gain": "10",
+      "group_mic_mute": "2",
+      "group_prog_gain": "1",
+      "group_prog_mute": "5",
+      "group_room_mute": "3",
+      "group_voice_lift_mute": "7"
+    }
+  },
   "device_fields": {
     "__readme": [
       "Field definitions scoped to one device type. The outer key is a pattern",

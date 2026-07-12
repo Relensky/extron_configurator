@@ -41,6 +41,13 @@ import 'config_dictionary.dart';
 ///  over the global "fields" entries for those sections, and entries marked
 ///  "addIfMissing": true are rendered on the device tab even when the key
 ///  does not exist in the device block yet (the first edit writes it).
+///
+///  DEVICE DEFAULTS: a top-level "device_defaults" object maps section
+///  patterns to property/value pairs that are merged into every NEWLY
+///  CREATED device block of that type (Setup Wizard count changes) — e.g.
+///  projectors always get "input"/"relay_host", DSPs get their audio group
+///  numbers. Existing values are never overwritten; exact section names
+///  (e.g. "SWITCHERDEVICE_1") win over wildcard patterns.
 /// ============================================================================
 
 /// A single selectable option for "dropdown" and "combo" fields.
@@ -182,6 +189,26 @@ class DeviceScopedFields {
       _exact.values.where((s) => s.addIfMissing);
 }
 
+/// One "device_defaults" entry: property values merged into newly created
+/// device blocks whose section name matches [sectionPattern].
+class DeviceDefaults {
+  final String sectionPattern;
+  final Map<String, dynamic> values;
+
+  RegExp? _sectionRegex;
+
+  DeviceDefaults(this.sectionPattern, this.values);
+
+  bool get isPattern => sectionPattern.contains('*');
+
+  bool matchesSection(String sectionKey) {
+    if (!isPattern) return sectionPattern == sectionKey;
+    _sectionRegex ??= RegExp(
+        '^${RegExp.escape(sectionPattern).replaceAll(r'\*', '.*')}\$');
+    return _sectionRegex!.hasMatch(sectionKey);
+  }
+}
+
 /// The full loaded schema plus lookup helpers used by the views.
 class UiSchema {
   final Map<String, FieldSpec> _exact = {};
@@ -190,6 +217,10 @@ class UiSchema {
   /// Device-type scoped definitions from "device_fields" (later additions —
   /// i.e. the file — override earlier ones with the same section pattern).
   final List<DeviceScopedFields> _deviceScoped = [];
+
+  /// Baseline property values from "device_defaults", merged into newly
+  /// created device blocks (Setup Wizard) by AppStateProvider.setDeviceCount.
+  final List<DeviceDefaults> _deviceDefaults = [];
 
   /// Where this schema came from, for display in App Config.
   String source = 'Built-in defaults';
@@ -256,6 +287,22 @@ class UiSchema {
     return result.values.toList();
   }
 
+  /// Baseline property values for a newly created device block: the merge
+  /// of every matching "device_defaults" entry. Wildcard patterns apply
+  /// first, then exact section names (so "SWITCHERDEVICE_1" can override
+  /// "SWITCHERDEVICE_*" per property). The caller only fills keys that the
+  /// block doesn't already have, so template values always win.
+  Map<String, dynamic> defaultsFor(String sectionKey) {
+    final Map<String, dynamic> merged = {};
+    for (final d in _deviceDefaults) {
+      if (d.isPattern && d.matchesSection(sectionKey)) merged.addAll(d.values);
+    }
+    for (final d in _deviceDefaults) {
+      if (!d.isPattern && d.matchesSection(sectionKey)) merged.addAll(d.values);
+    }
+    return merged;
+  }
+
   /// Description for the info (i) button: schema first, then the legacy
   /// built-in ConfigDictionary so nothing that worked before goes blank.
   String? descriptionFor(String configKey, {String? sectionKey}) {
@@ -297,6 +344,27 @@ class UiSchema {
           }
         });
         if (scoped.fieldCount > 0) _deviceScoped.add(scoped);
+      });
+    }
+
+    // Optional "device_defaults": { "DSPDEVICE_*": { "group_prog_gain": "1" } }
+    final deviceDefaults = doc['device_defaults'];
+    if (deviceDefaults is Map) {
+      deviceDefaults.forEach((sectionPattern, valueMap) {
+        if (sectionPattern.toString().startsWith('__')) return;
+        if (valueMap is! Map) return;
+        // File entries replace any earlier definition of the same pattern
+        _deviceDefaults
+            .removeWhere((d) => d.sectionPattern == sectionPattern.toString());
+        final Map<String, dynamic> values = {};
+        valueMap.forEach((key, value) {
+          if (key.toString().startsWith('__')) return;
+          values[key.toString()] = value;
+        });
+        if (values.isNotEmpty) {
+          _deviceDefaults
+              .add(DeviceDefaults(sectionPattern.toString(), values));
+        }
       });
     }
   }
