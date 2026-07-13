@@ -147,17 +147,12 @@ class SetupWizardView extends StatelessWidget {
         Text('Hardware Quantities', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),
 
-        _buildCountDropdown(context, provider, 'Projectors / Displays', 'dev_projectors', 'PROJECTORDEVICE_'),
-        _buildCountDropdown(context, provider, 'Cameras', 'dev_cameras', 'CAMERADEVICE_'),
-        _buildCountDropdown(context, provider, 'Switchers', 'dev_switchers', 'SWITCHERDEVICE_'),
-        _buildCountDropdown(context, provider, 'DSPs', 'dev_dsps', 'DSPDEVICE_'),
-        _buildCountDropdown(context, provider, 'USB Switchers', 'dev_usb_switchers', 'USBDEVICE_'),
-        _buildCountDropdown(context, provider, 'Power Controllers', 'dev_power_controllers', 'POWERDEVICE_'),
-        _buildCountDropdown(context, provider, 'MediaPorts', 'dev_media_ports', 'MEDIAPORTDEVICE_'),
-        _buildCountDropdown(context, provider, 'Wireless (ShareLink)', 'dev_wireless', 'WIRELESSDEVICE_'),
-        _buildCountDropdown(context, provider, 'Recorders', 'dev_recorders', 'RECORDERDEVICE_'),
-        _buildCountDropdown(context, provider, 'Screens (Relays/Network)', 'dev_screens', 'SCREENDEVICE_'),
-        
+        // SCHEMA-DRIVEN: one count dropdown per family in the UI schema's
+        // "device_types" (file order). Adding a new dev_ key + section
+        // prefix in ui_schema.json adds a wizard row — no recompile.
+        ...provider.uiSchema.deviceTypes.map((t) =>
+            _buildCountDropdown(context, provider, t.label, t.countKey, t.prefix)),
+
       ],
     );
   }

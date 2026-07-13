@@ -34,8 +34,33 @@
     "type (when the Setup Wizard counts change). Existing/template values are",
     "never overwritten - only missing keys are added. Exact section names (e.g.",
     "'SWITCHERDEVICE_1') override wildcard patterns per property, so switcher 1",
-    "can carry the audio groups while extra switchers stay clean."
+    "can carry the audio groups while extra switchers stay clean.",
+    "",
+    "DEVICE TYPES: the top-level 'device_types' object lists the device families",
+    "the Setup Wizard manages - each SYSTEM_SETUP dev_ count key mapped to its",
+    "section 'prefix' (required) and wizard 'label'. This list REPLACES the",
+    "built-in one, so keep every family you want here; the order here is the",
+    "wizard's display order. Adding an entry gives the new family a wizard count",
+    "dropdown, device tabs, export pruning, count audits, and a '0' default on",
+    "load. Pair it with 'fields'/'device_fields' entries for its properties and",
+    "'device_defaults' for its baseline values."
   ],
+  "device_types": {
+    "__readme": [
+      "The wizard's device families. 'prefix' is the config section prefix the",
+      "numbered blocks use (PROJECTORDEVICE_1, ...); 'label' is the wizard text."
+    ],
+    "dev_projectors": { "prefix": "PROJECTORDEVICE_", "label": "Projectors / Displays" },
+    "dev_cameras": { "prefix": "CAMERADEVICE_", "label": "Cameras" },
+    "dev_switchers": { "prefix": "SWITCHERDEVICE_", "label": "Switchers" },
+    "dev_dsps": { "prefix": "DSPDEVICE_", "label": "DSPs" },
+    "dev_usb_switchers": { "prefix": "USBDEVICE_", "label": "USB Switchers" },
+    "dev_power_controllers": { "prefix": "POWERDEVICE_", "label": "Power Controllers" },
+    "dev_media_ports": { "prefix": "MEDIAPORTDEVICE_", "label": "MediaPorts" },
+    "dev_wireless": { "prefix": "WIRELESSDEVICE_", "label": "Wireless (ShareLink)" },
+    "dev_recorders": { "prefix": "RECORDERDEVICE_", "label": "Recorders" },
+    "dev_screens": { "prefix": "SCREENDEVICE_", "label": "Screens (Relays/Network)" }
+  },
   "device_defaults": {
     "__readme": [
       "Baseline properties per device type, applied when the wizard creates the",

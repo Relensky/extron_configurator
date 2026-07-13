@@ -48,6 +48,14 @@ import 'config_dictionary.dart';
 ///  projectors always get "input"/"relay_host", DSPs get their audio group
 ///  numbers. Existing values are never overwritten; exact section names
 ///  (e.g. "SWITCHERDEVICE_1") win over wildcard patterns.
+///
+///  DEVICE TYPES: a top-level "device_types" object lists the device
+///  families the Setup Wizard manages — each SYSTEM_SETUP dev_ count key
+///  mapped to its config section prefix and wizard label. Defining it in
+///  ui_schema.json REPLACES the built-in list, so a brand-new family (a new
+///  dev_ key + section prefix) can be added without recompiling: it gets a
+///  wizard count dropdown, device tabs, pruning, count audits, and the
+///  "0" migration default automatically.
 /// ============================================================================
 
 /// A single selectable option for "dropdown" and "combo" fields.
@@ -189,6 +197,19 @@ class DeviceScopedFields {
       _exact.values.where((s) => s.addIfMissing);
 }
 
+/// One wizard-managed device family: the SYSTEM_SETUP count key, the config
+/// section prefix its numbered blocks use, and the label shown in the
+/// Setup Wizard's count dropdown.
+class DeviceTypeSpec {
+  final String countKey; // e.g. 'dev_projectors'
+  final String prefix;   // e.g. 'PROJECTORDEVICE_'
+  final String label;    // e.g. 'Projectors / Displays'
+
+  const DeviceTypeSpec(
+      {required this.countKey, required this.prefix, String? label})
+      : label = label ?? countKey;
+}
+
 /// One "device_defaults" entry: property values merged into newly created
 /// device blocks whose section name matches [sectionPattern].
 class DeviceDefaults {
@@ -221,6 +242,32 @@ class UiSchema {
   /// Baseline property values from "device_defaults", merged into newly
   /// created device blocks (Setup Wizard) by AppStateProvider.setDeviceCount.
   final List<DeviceDefaults> _deviceDefaults = [];
+
+  /// The device families the Setup Wizard manages, in display order. Starts
+  /// as the built-in list (the previously hardcoded ten); a "device_types"
+  /// section in ui_schema.json replaces it entirely.
+  List<DeviceTypeSpec> _deviceTypes = List.of(_builtInDeviceTypes);
+
+  /// The previously hardcoded families, kept as the no-schema-file baseline.
+  static const List<DeviceTypeSpec> _builtInDeviceTypes = [
+    DeviceTypeSpec(countKey: 'dev_projectors', prefix: 'PROJECTORDEVICE_', label: 'Projectors / Displays'),
+    DeviceTypeSpec(countKey: 'dev_cameras', prefix: 'CAMERADEVICE_', label: 'Cameras'),
+    DeviceTypeSpec(countKey: 'dev_switchers', prefix: 'SWITCHERDEVICE_', label: 'Switchers'),
+    DeviceTypeSpec(countKey: 'dev_dsps', prefix: 'DSPDEVICE_', label: 'DSPs'),
+    DeviceTypeSpec(countKey: 'dev_usb_switchers', prefix: 'USBDEVICE_', label: 'USB Switchers'),
+    DeviceTypeSpec(countKey: 'dev_power_controllers', prefix: 'POWERDEVICE_', label: 'Power Controllers'),
+    DeviceTypeSpec(countKey: 'dev_media_ports', prefix: 'MEDIAPORTDEVICE_', label: 'MediaPorts'),
+    DeviceTypeSpec(countKey: 'dev_wireless', prefix: 'WIRELESSDEVICE_', label: 'Wireless (ShareLink)'),
+    DeviceTypeSpec(countKey: 'dev_recorders', prefix: 'RECORDERDEVICE_', label: 'Recorders'),
+    DeviceTypeSpec(countKey: 'dev_screens', prefix: 'SCREENDEVICE_', label: 'Screens (Relays/Network)'),
+  ];
+
+  /// Wizard display order (file order when "device_types" is defined).
+  List<DeviceTypeSpec> get deviceTypes => List.unmodifiable(_deviceTypes);
+
+  /// countKey -> section prefix, for tab building / pruning / audits.
+  Map<String, String> get deviceCountMap =>
+      {for (final t in _deviceTypes) t.countKey: t.prefix};
 
   /// Where this schema came from, for display in App Config.
   String source = 'Built-in defaults';
@@ -366,6 +413,26 @@ class UiSchema {
               .add(DeviceDefaults(sectionPattern.toString(), values));
         }
       });
+    }
+
+    // Optional "device_types": { "dev_projectors": { "prefix": ..., "label": ... } }
+    // Defining ANY entries replaces the built-in family list entirely, so the
+    // file controls order and can add/remove/rename families.
+    final deviceTypes = doc['device_types'];
+    if (deviceTypes is Map) {
+      final List<DeviceTypeSpec> parsed = [];
+      deviceTypes.forEach((countKey, spec) {
+        if (countKey.toString().startsWith('__')) return;
+        if (spec is! Map) return;
+        final prefix = spec['prefix']?.toString();
+        if (prefix == null || prefix.isEmpty) return; // prefix is required
+        parsed.add(DeviceTypeSpec(
+          countKey: countKey.toString(),
+          prefix: prefix,
+          label: spec['label']?.toString(),
+        ));
+      });
+      if (parsed.isNotEmpty) _deviceTypes = parsed;
     }
   }
 

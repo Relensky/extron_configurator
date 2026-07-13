@@ -874,21 +874,14 @@ class AppStateProvider extends ChangeNotifier {
 
     final systemSetup = roomConfig['SYSTEM_SETUP'] as Map<String, dynamic>;
 
-    // Define the baseline schema needed for the current template to function
+    // Define the baseline schema needed for the current template to function.
+    // The dev_ hardware counts come from the UI schema's device_types, so a
+    // family added there is injected as "0" on load like the built-in ones.
     final Map<String, dynamic> baselineDefaults = {
       "gve_bldg": "UNKNOWN",
       "gve_room": "000",
       "gui_full_room_name": "Legacy Room Update",
-      "dev_projectors": "0",
-      "dev_cameras": "0",
-      "dev_switchers": "0",
-      "dev_dsps": "0",
-      "dev_usb_switchers": "0",
-      "dev_media_ports": "0",
-      "dev_wireless": "0",
-      "dev_recorders": "0",
-      "dev_screens": "0",
-      "dev_power_controllers": "0",
+      for (final t in uiSchema.deviceTypes) t.countKey: "0",
       "gui_mic_mix": "No",
       "gui_routing_available": "No",
       "gui_routing_mode": "Normal",
@@ -941,15 +934,13 @@ class AppStateProvider extends ChangeNotifier {
       // overwrite the previously opened file (or the template) by mistake.
       currentConfigPath = '';
 
-      // Default all hardware counts to 0
+      // Default all hardware counts to 0 (families from the UI schema's
+      // device_types, so new dev_ keys added there are covered too)
       if (roomConfig.containsKey('SYSTEM_SETUP')) {
         final setup = roomConfig['SYSTEM_SETUP'];
-        final deviceKeys = [
-          'dev_projectors', 'dev_cameras', 'dev_switchers', 'dev_dsps', 
-          'dev_usb_switchers', 'dev_media_ports', 'dev_wireless', 
-          'dev_recorders', 'dev_screens', 'dev_power_controllers'
-        ];
-        
+        final deviceKeys =
+            uiSchema.deviceTypes.map((t) => t.countKey).toList();
+
         for (var key in deviceKeys) {
           if (setup.containsKey(key)) {
             setup[key] = "0";
@@ -1679,18 +1670,9 @@ class AppStateProvider extends ChangeNotifier {
     final systemSetup = roomConfig['SYSTEM_SETUP'];
     if (systemSetup is! Map) return;
 
-    final deviceMap = {
-      'dev_projectors': 'PROJECTORDEVICE_',
-      'dev_cameras': 'CAMERADEVICE_',
-      'dev_switchers': 'SWITCHERDEVICE_',
-      'dev_dsps': 'DSPDEVICE_',
-      'dev_usb_switchers': 'USBDEVICE_',
-      'dev_media_ports': 'MEDIAPORTDEVICE_',
-      'dev_wireless': 'WIRELESSDEVICE_',
-      'dev_recorders': 'RECORDERDEVICE_',
-      'dev_screens': 'SCREENDEVICE_',
-      'dev_power_controllers': 'POWERDEVICE_',
-    };
+    // Families come from the UI schema's device_types (built-in list when
+    // the file doesn't define any)
+    final deviceMap = uiSchema.deviceCountMap;
 
     bool warned = false;
     deviceMap.forEach((countKey, prefix) {
@@ -1752,20 +1734,10 @@ class AppStateProvider extends ChangeNotifier {
 
   Map<String, dynamic> _pruneConfig(Map<String, dynamic> configToPrune) {
     Map<String, dynamic> data = Map.from(configToPrune);
-    
-    // Add requested hardware prefixes based on the config.json template if new devices added
-    final deviceMap = {
-      'dev_projectors': 'PROJECTORDEVICE_',
-      'dev_cameras': 'CAMERADEVICE_',
-      'dev_switchers': 'SWITCHERDEVICE_',
-      'dev_dsps': 'DSPDEVICE_',
-      'dev_usb_switchers': 'USBDEVICE_',
-      'dev_media_ports': 'MEDIAPORTDEVICE_',
-      'dev_wireless': 'WIRELESSDEVICE_',
-      'dev_recorders': 'RECORDERDEVICE_',
-      'dev_screens': 'SCREENDEVICE_',
-      'dev_power_controllers': 'POWERDEVICE_',
-    };
+
+    // Families come from the UI schema's device_types (built-in list when
+    // the file doesn't define any)
+    final deviceMap = uiSchema.deviceCountMap;
 
     // FIX: the dev_ count keys live inside SYSTEM_SETUP, not at the config
     // root — the old root lookup meant pruning silently never happened.

@@ -14,24 +14,13 @@ class DynamicDevicesTabsView extends StatefulWidget {
 }
 
 class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
-  List<String> getActiveDeviceKeys(Map<String, dynamic> config) {
+  List<String> getActiveDeviceKeys(
+      Map<String, dynamic> config, Map<String, String> map) {
     List<String> activeKeys = [];
     final systemSetup = config['SYSTEM_SETUP'] ?? {};
-    
-    //hardware maps
-    final map = {
-      'dev_projectors': 'PROJECTORDEVICE_',
-      'dev_cameras': 'CAMERADEVICE_',
-      'dev_switchers': 'SWITCHERDEVICE_',
-      'dev_dsps': 'DSPDEVICE_',
-      'dev_usb_switchers': 'USBDEVICE_',
-      'dev_media_ports': 'MEDIAPORTDEVICE_',
-      'dev_wireless': 'WIRELESSDEVICE_',
-      'dev_recorders': 'RECORDERDEVICE_',
-      'dev_screens': 'SCREENDEVICE_',
-      'dev_power_controllers': 'POWERDEVICE_',
-    };
 
+    // hardware map comes from the UI schema's "device_types" so families
+    // added in ui_schema.json get their tabs without a recompile
     map.forEach((countKey, prefix) {
       if (systemSetup.containsKey(countKey)) {
         var countVal = systemSetup[countKey];
@@ -52,7 +41,8 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
     final config = provider.roomConfig;
     if (config.isEmpty) return const Center(child: Text("No configuration template loaded."));
 
-    final activeKeys = getActiveDeviceKeys(config);
+    final activeKeys =
+        getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
     if (activeKeys.isEmpty) return const Center(child: Text("No devices found based on dev_ parameters."));
 
     return DefaultTabController(
