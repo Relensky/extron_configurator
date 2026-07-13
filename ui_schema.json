@@ -371,7 +371,13 @@
     },
     "dev_screen_control": {
       "label": "Screen Control Method (dev_screen_control)",
-      "description": "How the projection screens are controlled, e.g. 'Network' or relay-based (not a device count). Edited under Hardware Options in the Setup Wizard."
+      "type": "dropdown",
+      "options": [
+        "Relay",
+        "Serial",
+        "Serial over Ethernet"
+      ],
+      "description": "How the projection screens are controlled: 'Relay' (processor relay ports), 'Serial' (direct RS-232), or 'Serial over Ethernet' (not a device count). Edited under Hardware Options in the Setup Wizard."
     },
     "dev_screens": {
       "description": "Use the dev_devices to set the number of devices in the room."

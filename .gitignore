@@ -45,3 +45,7 @@ app.*.map.json
 /android/app/release
 pubspec.lock
 deployment_app_info_log.txt
+
+# Local application settings (machine-specific paths; auto-created on launch)
+app_config.json
+app_config.json.invalid

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -86,11 +87,104 @@ class AppStateProvider extends ChangeNotifier {
       : path.join(effectiveRootFolder, 'key_map.json');
 
   // ---------------------------------------------------------------------
+  //  SETTINGS PERSISTENCE (app_config.json)
+  //  Every application setting (file paths, SFTP connection, theme,
+  //  toggles) lives in a plain app_config.json in the app's root folder —
+  //  the working directory, or the folder next to the executable — so the
+  //  settings travel with the app and can be inspected or hand-edited.
+  //  The file is created automatically with defaults on the very first
+  //  launch, so startup never depends on the user picking a folder or
+  //  location. Settings saved by older versions in the OS store
+  //  (SharedPreferences) are imported into the file once.
+  // ---------------------------------------------------------------------
+
+  /// Absolute path of the app_config.json in use (shown in App Config).
+  String settingsFilePath = '';
+
+  /// True once first-run setup has been completed (persisted in the file).
+  bool _initialSetupComplete = false;
+
+  /// Where app_config.json lives: an existing file in the working directory
+  /// wins, then one next to the executable; with neither present, a new file
+  /// is created in the working directory (= the app's default Root Folder).
+  static String _resolveSettingsFilePath() {
+    final inWorkingDir = path.join(Directory.current.path, 'app_config.json');
+    if (File(inWorkingDir).existsSync()) return inWorkingDir;
+    try {
+      final besideExe = path.join(
+          File(Platform.resolvedExecutable).parent.path, 'app_config.json');
+      if (File(besideExe).existsSync()) return besideExe;
+    } catch (_) {}
+    return inWorkingDir;
+  }
+
+  /// Serializes every setting to app_config.json. Failures are logged but
+  /// never thrown — a read-only folder must not break the running app.
+  Future<void> _persistSettings() async {
+    if (settingsFilePath.isEmpty) settingsFilePath = _resolveSettingsFilePath();
+    final Map<String, dynamic> data = {
+      '__readme':
+          'Application settings for the Room Config Builder. File paths may '
+          'be edited by hand while the app is closed; blank paths fall back '
+          'to files in the Root Folder (blank root = the app folder).',
+      'initialSetupComplete': _initialSetupComplete,
+      'rootFolderPath': rootFolderPath,
+      'modulesPath': modulesPath,
+      'processorsFilePath': processorsFilePath,
+      'buildingsFilePath': buildingsFilePath,
+      'templateFilePath': templateFilePath,
+      'uiSchemaPath': uiSchemaPath,
+      'keyMapPath': keyMapPath,
+      'sftpUsername': sftpUsername,
+      'sftpPort': sftpPort,
+      'sftpRemoteConfigPath': sftpRemoteConfigPath,
+      'isDarkMode': isDarkMode,
+      'themeStyle': themeStyle,
+      'classicColor': classicColor,
+      'aurisColor': aurisColor,
+      'classicSecondary': classicSecondary,
+      'textScale': textScale,
+      'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
+    };
+    try {
+      const encoder = JsonEncoder.withIndent('    ');
+      await File(settingsFilePath).writeAsString(encoder.convert(data));
+    } catch (e, stack) {
+      AppLogger.logError(
+          'Failed to save settings to $settingsFilePath', e, stack);
+    }
+  }
+
+  /// One-time import of settings saved by older versions in the OS store
+  /// (SharedPreferences). Only runs when no app_config.json exists yet; the
+  /// result is written to the file right afterwards. Bounded by a timeout so
+  /// a hung OS store can never freeze startup.
+  Future<Map<String, dynamic>> _migrateFromSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance()
+          .timeout(const Duration(seconds: 5));
+      final keys = prefs.getKeys();
+      if (keys.isEmpty) return {};
+      final Map<String, dynamic> saved = {
+        for (final key in keys) key: prefs.get(key),
+      };
+      AppLogger.logInfo(
+          'Imported ${saved.length} setting(s) from the OS store into app_config.json.');
+      return saved;
+    } catch (e) {
+      AppLogger.logError('Skipped OS-store settings migration', e);
+      return {};
+    }
+  }
+
+  // ---------------------------------------------------------------------
   //  FIRST-RUN SETUP
   //  On the very first launch (no saved settings yet) the UI shows a
   //  one-time dialog asking where each file is located. Once the user
   //  finishes (or skips) the dialog, 'initialSetupComplete' is persisted
-  //  and the check is bypassed on every later launch.
+  //  and the check is bypassed on every later launch. The app is fully
+  //  usable either way — every path has a working default, so nothing
+  //  blocks if no folder is ever selected.
   // ---------------------------------------------------------------------
 
   /// True while the one-time setup dialog should be shown.
@@ -104,8 +198,8 @@ class AppStateProvider extends ChangeNotifier {
   /// the chosen/default locations so the app is immediately usable.
   Future<void> completeFirstRunSetup() async {
     firstRunSetupNeeded = false;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('initialSetupComplete', true);
+    _initialSetupComplete = true;
+    await _persistSettings();
 
     await loadUiSchema();
     await loadKeyMap();
@@ -179,8 +273,7 @@ class AppStateProvider extends ChangeNotifier {
   Future<void> setFillDeviceDefaultsOnLoad(bool value) async {
     fillDeviceDefaultsOnLoad = value;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('fillDeviceDefaultsOnLoad', value);
+    await _persistSettings();
   }
 
   /// The navigation rail tab currently shown (0 = Wizard ... 4 = App Config).
@@ -418,32 +511,59 @@ class AppStateProvider extends ChangeNotifier {
     _loadSavedSettings();
   }
 
-  /// Loads saved paths from the OS. No longer auto-loads the config.
+  /// Loads saved settings from app_config.json in the root folder. The file
+  /// is (re)written with the resolved values on every startup, so it exists
+  /// with working defaults from the very first launch — the app starts even
+  /// when no folder or location has ever been selected. Settings saved by
+  /// older versions in the OS store are imported once.
   Future<void> _loadSavedSettings() async {
-    await Future.delayed(const Duration(milliseconds: 200));
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      modulesPath = prefs.getString('modulesPath') ?? '';
-      processorsFilePath = prefs.getString('processorsFilePath') ?? '';
-      rootFolderPath = prefs.getString('rootFolderPath') ?? '';
-      buildingsFilePath = prefs.getString('buildingsFilePath') ?? '';
-      templateFilePath = prefs.getString('templateFilePath') ?? ''; // FIX: was never restored, so the default config path reset on every restart
-      uiSchemaPath = prefs.getString('uiSchemaPath') ?? '';
-      keyMapPath = prefs.getString('keyMapPath') ?? '';
-      sftpUsername = prefs.getString('sftpUsername') ?? 'admin';
-      sftpPort = prefs.getString('sftpPort') ?? '22022';
-      sftpRemoteConfigPath =
-          prefs.getString('sftpRemoteConfigPath') ?? '/config.json';
-      isDarkMode = prefs.getBool('isDarkMode') ?? true;
-      themeStyle = prefs.getString('themeStyle') ?? 'classic';
-      classicColor = prefs.getString('classicColor') ?? '2196F3';
-      aurisColor = prefs.getString('aurisColor') ?? 'F0A500';
-      classicSecondary = prefs.getString('classicSecondary') ?? '';
-      textScale = double.tryParse(prefs.getString('textScale') ?? '') ?? 1.0;
-      fillDeviceDefaultsOnLoad =
-          prefs.getBool('fillDeviceDefaultsOnLoad') ?? true;
+      settingsFilePath = _resolveSettingsFilePath();
+      Map<String, dynamic> saved = {};
+      final file = File(settingsFilePath);
+      if (await file.exists()) {
+        try {
+          final decoded = jsonDecode(await file.readAsString());
+          if (decoded is Map<String, dynamic>) saved = decoded;
+        } catch (e, stack) {
+          // Broken JSON (hand-edit typo): keep a copy for inspection and
+          // continue on defaults; the rewrite below recreates a valid file.
+          AppLogger.logError(
+              'app_config.json is not valid JSON — starting with defaults '
+              '(original kept as app_config.json.invalid)', e, stack);
+          try {
+            await file.copy('$settingsFilePath.invalid');
+          } catch (_) {}
+        }
+      } else {
+        // No app_config.json yet: import settings from older versions
+        saved = await _migrateFromSharedPreferences();
+      }
+
+      String str(String key, String fallback) {
+        final v = saved[key]?.toString() ?? '';
+        return v.isEmpty ? fallback : v;
+      }
+
+      modulesPath = str('modulesPath', '');
+      processorsFilePath = str('processorsFilePath', '');
+      rootFolderPath = str('rootFolderPath', '');
+      buildingsFilePath = str('buildingsFilePath', '');
+      templateFilePath = str('templateFilePath', '');
+      uiSchemaPath = str('uiSchemaPath', '');
+      keyMapPath = str('keyMapPath', '');
+      sftpUsername = str('sftpUsername', 'admin');
+      sftpPort = str('sftpPort', '22022');
+      sftpRemoteConfigPath = str('sftpRemoteConfigPath', '/config.json');
+      isDarkMode = saved['isDarkMode'] is bool ? saved['isDarkMode'] : true;
+      themeStyle = str('themeStyle', 'classic');
+      classicColor = str('classicColor', '2196F3');
+      aurisColor = str('aurisColor', 'F0A500');
+      classicSecondary = str('classicSecondary', '');
+      textScale = double.tryParse(str('textScale', '')) ?? 1.0;
+      fillDeviceDefaultsOnLoad = saved['fillDeviceDefaultsOnLoad'] is bool
+          ? saved['fillDeviceDefaultsOnLoad']
+          : true;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
@@ -455,15 +575,13 @@ class AppStateProvider extends ChangeNotifier {
       if (legacyAuris.containsKey(themeStyle)) {
         aurisColor = legacyAuris[themeStyle]!;
         themeStyle = 'auris';
-        await prefs.setString('themeStyle', themeStyle);
-        await prefs.setString('aurisColor', aurisColor);
       }
 
       // FIRST-RUN CHECK: only ask for file locations when setup was never
       // completed. Once 'initialSetupComplete' is saved, this is bypassed
       // on every later launch. (Existing installs that already have any
       // path saved are treated as set up — no nagging after an update.)
-      final bool setupDone = prefs.getBool('initialSetupComplete') ?? false;
+      final bool setupDone = saved['initialSetupComplete'] == true;
       final bool hasAnySavedPath = rootFolderPath.isNotEmpty ||
           modulesPath.isNotEmpty ||
           processorsFilePath.isNotEmpty ||
@@ -471,13 +589,15 @@ class AppStateProvider extends ChangeNotifier {
           templateFilePath.isNotEmpty;
       if (setupDone || hasAnySavedPath) {
         firstRunSetupNeeded = false;
-        if (!setupDone) {
-          // Grandfather existing installs in so they're never asked.
-          await prefs.setBool('initialSetupComplete', true);
-        }
+        // Grandfather existing installs in so they're never asked.
+        _initialSetupComplete = true;
       } else {
         firstRunSetupNeeded = true;
       }
+
+      // Write the file back immediately so app_config.json exists in the
+      // root folder (with defaults or the imported values) from now on.
+      await _persistSettings();
 
       // Load the GUI field schema (falls back to built-in defaults on any error)
       await loadUiSchema();
@@ -975,11 +1095,8 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Updates a setting in memory and saves it to the OS simultaneously
+  /// Updates a setting in memory and saves app_config.json simultaneously
   Future<void> updateSetting(String key, String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(key, value);
-
     switch (key) {
       case 'modulesPath':
         modulesPath = value;
@@ -1063,6 +1180,7 @@ class AppStateProvider extends ChangeNotifier {
         break;
     }
     notifyListeners();
+    await _persistSettings();
   }
 
   /// (Re)loads key_map.json — the legacy config key translation rules that
@@ -1102,7 +1220,7 @@ class AppStateProvider extends ChangeNotifier {
       }
       // Parse once to confirm it's valid JSON, but do NOT assign to roomConfig
       jsonDecode(await file.readAsString());
-      await updateSetting('templateFilePath', templatePath); // persists to SharedPreferences
+      await updateSetting('templateFilePath', templatePath); // persists to app_config.json
       AppLogger.logInfo("Template validated and set as default: $templatePath");
       return true;
     } catch (e, stack) {
@@ -1142,6 +1260,21 @@ class AppStateProvider extends ChangeNotifier {
     final val = roomConfig['SYSTEM_SETUP']?['gve_bldg']?.toString() ?? '';
     if (val.isEmpty) return false;
     return buildings.containsKey(val) || buildings.values.contains(val);
+  }
+
+  /// Resolves a building CODE (e.g. 'BSS') to its Title Case full name from
+  /// buildings.json ('Behavioral And Social Science'). Longest name wins when
+  /// several names share one code (same dedupe rule as the Setup Wizard).
+  /// Returns '' when the code is unknown, so callers can fall back cleanly.
+  String fullBuildingNameForCode(String code) {
+    if (code.isEmpty) return '';
+    String fullName = '';
+    buildings.forEach((name, c) {
+      if (c.toString() == code && name.length > fullName.length) {
+        fullName = name;
+      }
+    });
+    return fullName.isEmpty ? '' : _toTitleCase(fullName);
   }
 
   /// Resolves a building value to its short abbreviation for FILE NAMES only
@@ -1218,12 +1351,11 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  // Toggle theme and save to OS preferences
+  // Toggle theme and save it like every other setting
   Future<void> toggleTheme() async {
     isDarkMode = !isDarkMode;
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isDarkMode', isDarkMode);
+    await _persistSettings();
   }
 
   /// Sets the active room context

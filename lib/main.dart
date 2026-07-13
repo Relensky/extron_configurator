@@ -145,6 +145,54 @@ class MainDashboard extends StatefulWidget {
 class _MainDashboardState extends State<MainDashboard> {
   bool _setupDialogShown = false; // Prompt at most once per app session
 
+  /// Creates a new config from the template. Shared by the toolbar button
+  /// (always available) and the landing screen button: asks for confirmation
+  /// first when a config is already loaded, and routes to App Config with an
+  /// explanation when no template can be found.
+  Future<void> _createNewConfig(
+      BuildContext context, AppStateProvider provider) async {
+    if (provider.roomConfig.isNotEmpty) {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Create New Config?'),
+          content: const Text(
+              'This replaces the currently loaded configuration with a fresh '
+              'one from the template. Unsaved changes will be lost.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Create New'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    if (!context.mounted) return;
+
+    // The template path always resolves (explicit file, else config.json in
+    // the Root Folder / working directory), so just attempt the create and
+    // report the resolved location on failure.
+    final bool success = await provider.createNewConfig();
+    if (!context.mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New config created from template.')),
+      );
+    } else {
+      provider.selectTab(4); // Route to App Config
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
+              "Place config.json there or set a Template file in App Config."),
+          backgroundColor: Colors.red));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
@@ -178,6 +226,11 @@ class _MainDashboardState extends State<MainDashboard> {
             icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
             tooltip: 'Toggle Theme',
             onPressed: () => provider.toggleTheme(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.note_add),
+            tooltip: 'New Config (from template)',
+            onPressed: () => _createNewConfig(context, provider),
           ),
           IconButton(
             icon: const Icon(Icons.folder_open),
@@ -276,19 +329,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     backgroundColor: Colors.blue.shade700,
                     foregroundColor: Colors.white, // Forces readable text in light mode
                   ),
-                  onPressed: () async {
-                    // The template path always resolves now (explicit file, else
-                    // config.json in the Root Folder / working directory), so just
-                    // attempt the create and report the resolved location on failure.
-                    bool success = await provider.createNewConfig();
-                    if (!success && context.mounted) {
-                      provider.selectTab(4); // Route to App Config
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
-                            "Place config.json there or set a Template file in App Config."), backgroundColor: Colors.red)
-                      );
-                    }
-                  },
+                  onPressed: () => _createNewConfig(context, provider),
                 ),
               ),
               const SizedBox(width: 20),
@@ -544,6 +585,106 @@ DropdownMenuItem<String> _themeStyleItem(
   );
 }
 
+/// ============================================================================
+///  SEARCHABLE ROOM / BUILDING PICKER
+/// ============================================================================
+///  One searchable dropdown over the rooms in processors.json, with the full
+///  building name resolved from buildings.json — so 'AGYM 129' is found by
+///  typing 'acker', 'AGYM', '129', or its IP address. Used everywhere a room
+///  is selected: App Config (Active Deployment Target) and both the SFTP
+///  Upload and Download dialogs.
+/// ============================================================================
+class ProcessorSearchField extends StatelessWidget {
+  final String label;
+  final String? helperText;
+  final void Function(Map<String, dynamic> processor) onSelected;
+  /// Room shown when the field opens (usually the Active Deployment Target).
+  final Map<String, dynamic>? initialProcessor;
+  final bool enabled;
+
+  const ProcessorSearchField({
+    Key? key,
+    required this.label,
+    required this.onSelected,
+    this.helperText,
+    this.initialProcessor,
+    this.enabled = true,
+  }) : super(key: key);
+
+  /// IP/hostname of one processors.json entry (same fallbacks as the
+  /// provider's selectedProcessorIp).
+  static String ipOf(Map<String, dynamic> p) =>
+      (p['ip'] ?? p['ipAddress'] ?? p['ip_address'] ?? p['address'] ?? p['host'] ?? '')
+          .toString();
+
+  /// Display line for one room: "AGYM 129 — Acker Gymnasium (10.248.129.8)".
+  /// The building code is the first word of roomName; unknown codes just
+  /// show the room name and IP.
+  static String displayFor(AppStateProvider provider, Map<String, dynamic> p) {
+    final String roomName = p['roomName']?.toString() ?? '';
+    final String code = roomName.split(' ').first;
+    final String fullName = provider.fullBuildingNameForCode(code);
+    final String ip = ipOf(p);
+    final String suffix = ip.isEmpty ? '' : ' ($ip)';
+    return fullName.isEmpty
+        ? '$roomName$suffix'
+        : '$roomName — $fullName$suffix';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+
+    // Display string -> processor entry, in processors.json order
+    final Map<String, Map<String, dynamic>> byDisplay = {};
+    for (final proc in provider.processors) {
+      if (proc is Map) {
+        final p = Map<String, dynamic>.from(proc);
+        byDisplay[displayFor(provider, p)] = p;
+      }
+    }
+
+    final String initialText = initialProcessor == null
+        ? ''
+        : displayFor(provider, Map<String, dynamic>.from(initialProcessor!));
+
+    return Autocomplete<String>(
+      // Remount when the selection changes elsewhere (e.g. Clear button)
+      // so initialValue re-applies; stable while typing.
+      key: ValueKey('procsearch_${initialProcessor?['roomId']}_${byDisplay.length}'),
+      initialValue: TextEditingValue(text: initialText),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final String text = textEditingValue.text.toLowerCase();
+        // Show the FULL list while the field still holds the current
+        // selection, otherwise it filters itself down to one entry.
+        if (text.isEmpty || textEditingValue.text == initialText) {
+          return byDisplay.keys;
+        }
+        return byDisplay.keys
+            .where((d) => d.toLowerCase().contains(text));
+      },
+      onSelected: (String selection) {
+        final p = byDisplay[selection];
+        if (p != null) onSelected(p);
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: enabled,
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: helperText,
+            helperMaxLines: 2,
+            border: const OutlineInputBorder(),
+            suffixIcon: const Icon(Icons.search),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// View for mapping application paths and selecting the active deployment room
 class AppSettingsView extends StatelessWidget {
   const AppSettingsView({Key? key}) : super(key: key);
@@ -572,7 +713,14 @@ class AppSettingsView extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 8),
+        // All settings on this tab persist to a plain JSON file that travels
+        // with the app, replacing the old hidden OS preference store.
+        Text(
+          'Settings are saved automatically to ${provider.settingsFilePath}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 22),
 
         // --- THEME STYLE ---
         // Two styles, each with its own accent swatch picker below:
@@ -1030,29 +1178,13 @@ class AppSettingsView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
-                  labelText: 'Select Room Deployment',
-                  border: OutlineInputBorder(),
-                ),
-                value: provider.selectedProcessor?['roomId']?.toString(),
-                items: provider.processors.map((proc) {
-                  return DropdownMenuItem<String>(
-                    value: proc['roomId']?.toString(),
-                    child: Text("${proc['roomName']} (ID: ${proc['roomId']})"),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    final selected = provider.processors.firstWhere(
-                      (p) => p['roomId']?.toString() == val,
-                      orElse: () => <String, dynamic>{},
-                    );
-                    if (selected.isNotEmpty) {
-                      provider.selectProcessor(selected);
-                    }
-                  }
-                },
+              child: ProcessorSearchField(
+                label: 'Select Room Deployment',
+                helperText:
+                    'Search by building name, code, room number, or IP — '
+                    'rooms from processors.json, names from buildings.json.',
+                initialProcessor: provider.selectedProcessor,
+                onSelected: (proc) => provider.selectProcessor(proc),
               ),
             ),
             const SizedBox(width: 16),
@@ -1092,6 +1224,10 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
   bool _isBusy = false;
   String _targetRoomName = '';
 
+  /// Room chosen in this dialog's searchable picker (pre-filled from the
+  /// Active Deployment Target). Feeds the IP field and backup naming.
+  Map<String, dynamic>? _selectedProcessor;
+
   /// Optional additional file to push alongside config.json (upload mode
   /// only). Stays blank unless the user picks one — e.g. Whereused.csv.
   String _extraFilePath = '';
@@ -1104,6 +1240,7 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
     final ip = provider.selectedProcessorIp;
     if (ip.isNotEmpty) {
       _ipController.text = ip;
+      _selectedProcessor = provider.selectedProcessor;
       _targetRoomName = provider.selectedProcessor?['roomName']?.toString() ?? '';
     }
     _statusText = widget.isUpload
@@ -1185,6 +1322,28 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
+
+            // --- SEARCHABLE ROOM PICKER ---
+            // Same searchable building/room dropdown as App Config: rooms
+            // from processors.json, full building names from buildings.json.
+            // Selecting a room fills the IP below and becomes the Active
+            // Deployment Target (drives backup naming on download). Typing
+            // an IP manually still works exactly as before.
+            ProcessorSearchField(
+              label: 'Search Room / Building',
+              helperText: 'Search by building name, code, room number, or IP.',
+              initialProcessor: _selectedProcessor,
+              enabled: !_isBusy,
+              onSelected: (proc) {
+                setState(() {
+                  _selectedProcessor = proc;
+                  _ipController.text = ProcessorSearchField.ipOf(proc);
+                  _targetRoomName = proc['roomName']?.toString() ?? '';
+                });
+                context.read<AppStateProvider>().selectProcessor(proc);
+              },
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _ipController,
               decoration: const InputDecoration(
