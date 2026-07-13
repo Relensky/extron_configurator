@@ -375,9 +375,10 @@
       "options": [
         "Relay",
         "Serial",
-        "Serial over Ethernet"
+        "Serial over Ethernet",
+        "Network"
       ],
-      "description": "How the projection screens are controlled: 'Relay' (processor relay ports), 'Serial' (direct RS-232), or 'Serial over Ethernet' (not a device count). Edited under Hardware Options in the Setup Wizard."
+      "description": "How the projection screens are controlled: 'Relay' (processor relay ports), 'Serial' (direct RS-232), 'Serial over Ethernet', or 'Network' (not a device count). Edited under Hardware Options in the Setup Wizard."
     },
     "dev_screens": {
       "description": "Use the dev_devices to set the number of devices in the room."
