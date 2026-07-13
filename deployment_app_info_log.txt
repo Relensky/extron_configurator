@@ -165,3 +165,13 @@ d definitions).
 [2026-07-12T02:51:32.063656] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
 [2026-07-12T02:51:32.066658] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
 [2026-07-12T02:51:32.406696] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Documents\ControlScript\ControlScript-Template\base\assets\src\modules\device
+[2026-07-12T16:54:26.543363] INFO: UI schema loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\ui_schema.json (120 field definitions).
+[2026-07-12T16:54:26.687952] INFO: Key map loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\key_map.json (138 rules).
+[2026-07-12T16:54:26.689945] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
+[2026-07-12T16:54:26.693951] INFO: Processors list loaded from C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\processors.json
+[2026-07-12T16:54:27.179722] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Desktop\Configurator\device
+[2026-07-12T16:54:55.787483] INFO: UI schema loaded from C:\Users\derek\Desktop\Configurator\ui_schema.json (120 field definitions).
+[2026-07-12T16:55:01.872541] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Desktop\Configurator\device
+[2026-07-12T16:55:08.968374] INFO: Key map loaded from C:\Users\derek\Desktop\Configurator\key_map.json (138 rules).
+[2026-07-12T16:55:13.942009] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
+[2026-07-12T16:55:19.884711] INFO: UI schema loaded from C:\Users\derek\Desktop\Configurator\ui_schema.json (120 fiel[2026-07-12T16:5[2026-07-12T16:55:19.885709] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
