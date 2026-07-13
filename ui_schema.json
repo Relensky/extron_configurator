@@ -231,38 +231,13 @@
     "password": {
       "description": "Password in use while using a network connection that requires authentication."
     },
-    "group_mic_ceiling_mute": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_mic_in_room_mute": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_mic_master_gain": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_mic_master_mute": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_pc_mic_input_gain": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_pc_output_gain": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_pc_output_mute": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_pc_record_mute": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_prog_gain": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_prog_mute": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
-    },
-    "group_voice_lift_mute": {
-      "description": "Set these in DSP configurator / PCS / or if a third party device such as Yamaha's MTX editor."
+    "__group_keys_note": {
+      "__comment": [
+        "The individual group_ entries were removed: the 'group_*' wildcard",
+        "further down covers every audio group key (DSP and switcher alike)",
+        "with one description. Add an exact group_ entry back only when one",
+        "key needs its own label/description/type."
+      ]
     },
     "processor1": {
       "description": "Device alias for import from the room's Extron json file. These can be used to set the host on serial devices."
@@ -307,10 +282,17 @@
       "description": "Use the dev_devices to set the number of devices in the room."
     },
     "dev_relay_power": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "label": "Relay Power Control (dev_relay_power)",
+      "type": "dropdown",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "description": "Whether the room uses processor relay ports for power control (not a device count). Edited under Hardware Options in the Setup Wizard."
     },
     "dev_screen_control": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "label": "Screen Control Method (dev_screen_control)",
+      "description": "How the projection screens are controlled, e.g. 'Network' or relay-based (not a device count). Edited under Hardware Options in the Setup Wizard."
     },
     "dev_screens": {
       "description": "Use the dev_devices to set the number of devices in the room."

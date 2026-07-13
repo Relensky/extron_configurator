@@ -180,3 +180,8 @@ d definitions).
 [2026-07-13T00:24:45.836973] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
 [2026-07-13T00:24:45.840976] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
 [2026-07-13T00:24:46.245107] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Desktop\Configurator\device
+[2026-07-13T00:45:09.183479] INFO: UI schema loaded from C:\Users\derek\Desktop\Configurator\ui_schema.json (120 field definitions).
+[2026-07-13T00:45:09.249997] INFO: Key map loaded from C:\Users\derek\Desktop\Configurator\key_map.json (138 rules).
+[2026-07-13T00:45:09.272513] INFO: Buildings list loaded from C:\Users\derek\Desktop\Configurator\buildings.json
+[2026-07-13T00:45:09.275512] INFO: Processors list loaded from C:\Users\derek\Desktop\Configurator\processors.json
+[2026-07-13T00:45:09.546604] INFO: Preloaded 65 python module dictionaries from C:\Users\derek\Desktop\Configurator\device

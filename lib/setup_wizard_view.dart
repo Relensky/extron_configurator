@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
+import 'schema_field_builder.dart';
 
 class SetupWizardView extends StatelessWidget {
   const SetupWizardView({Key? key}) : super(key: key);
@@ -153,8 +154,56 @@ class SetupWizardView extends StatelessWidget {
         ...provider.uiSchema.deviceTypes.map((t) =>
             _buildCountDropdown(context, provider, t.label, t.countKey, t.prefix)),
 
+        // --- Hardware Options ---
+        // dev_ settings that are NOT family counts (e.g. dev_relay_power,
+        // dev_screen_control). The System tab hides every dev_ key and the
+        // count dropdowns above only cover device_types, so anything else
+        // dev_-prefixed renders here, schema-driven. Empty when a config
+        // has no such keys.
+        ..._buildHardwareOptions(context, provider, systemSetup),
+
       ],
     );
+  }
+
+  /// Schema-driven editors for every SYSTEM_SETUP dev_ key that is not a
+  /// device_types count key. Returns an empty list (no section header) when
+  /// the loaded config has none.
+  List<Widget> _buildHardwareOptions(
+      BuildContext context, AppStateProvider provider, dynamic systemSetup) {
+    final Set<String> countKeys =
+        provider.uiSchema.deviceTypes.map((t) => t.countKey).toSet();
+    final List<String> optionKeys = (systemSetup as Map)
+        .keys
+        .map((k) => k.toString())
+        .where((k) => k.startsWith('dev_') && !countKeys.contains(k))
+        .toList()
+      ..sort();
+    if (optionKeys.isEmpty) return const [];
+
+    final List<Widget> widgets = [
+      const Divider(height: 60, thickness: 2),
+      Text('Hardware Options', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      const Text(
+          'Room hardware settings that are not device counts. Rendered from '
+          'the UI schema like the System tab fields.'),
+      const SizedBox(height: 20),
+    ];
+
+    for (final key in optionKeys) {
+      final Widget? field = SchemaFieldBuilder.buildField(
+        context: context,
+        provider: provider,
+        sectionKey: 'SYSTEM_SETUP',
+        fieldKey: key,
+        value: systemSetup[key],
+      );
+      if (field == null) continue; // Schema marked the key "hidden"
+      widgets.add(field);
+      widgets.add(const SizedBox(height: 16));
+    }
+    return widgets;
   }
 
   Widget _buildCountDropdown(BuildContext context, AppStateProvider provider, String label, String systemKey, String devicePrefix) {
