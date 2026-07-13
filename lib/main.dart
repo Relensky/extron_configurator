@@ -974,6 +974,55 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        Text('Processor Connection', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        const Text(
+            'SFTP settings used for every processor transfer. The defaults are '
+            'the Extron standards — only change them for nonstandard hardware.'),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'SFTP Username',
+                  helperText: 'Default: admin',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.sftpUsername,
+                onChanged: (val) => provider.updateSetting('sftpUsername', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'SFTP Port',
+                  helperText: 'Default: 22022 (Extron secure file transfer)',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.sftpPort,
+                keyboardType: TextInputType.number,
+                onChanged: (val) => provider.updateSetting('sftpPort', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Remote config path',
+                  helperText: 'Default: /config.json',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.sftpRemoteConfigPath,
+                onChanged: (val) =>
+                    provider.updateSetting('sftpRemoteConfigPath', val),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 30),
+
         Text('Active Deployment Target', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),
         

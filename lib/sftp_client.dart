@@ -30,15 +30,17 @@ class SftpLogger {
     DateTime? endDate,
     LogFileType logType = LogFileType
         .debug, // [LOGIC - CONFIG]: Defaults to existing CSV debug log behavior
+    String username = 'admin', // Extron standards; overridable in App Config
+    int port = 22022,
   }) async {
     try {
-      onStatusUpdate('System: Connecting to SFTP on $ipAddress:22022...');
+      onStatusUpdate('System: Connecting to SFTP on $ipAddress:$port...');
 
       // [LOGIC - NETWORK]: Establishes the underlying SSH socket. Extron uses port 22022 for secure file transfer.
       final client = SSHClient(
-        await SSHSocket.connect(ipAddress, 22022,
+        await SSHSocket.connect(ipAddress, port,
             timeout: const Duration(seconds: 10)),
-        username: 'admin', // [LOGIC - AUTH]: Standard Extron admin user
+        username: username, // [LOGIC - AUTH]: Standard Extron admin user
         onPasswordRequest: () => password,
 
         // [LOGIC - AUTH]: Extron processors often use "keyboard-interactive" authentication.
@@ -178,12 +180,14 @@ class SftpLogger {
     required String remoteFilename, // e.g., '/config.json'
     required String outputPath,
     required Function(String) onStatusUpdate,
+    String username = 'admin', // Extron standards; overridable in App Config
+    int port = 22022,
   }) async {
     try {
-      onStatusUpdate('System: Connecting to SFTP on $ipAddress:22022...');
+      onStatusUpdate('System: Connecting to SFTP on $ipAddress:$port...');
       final client = SSHClient(
-        await SSHSocket.connect(ipAddress, 22022, timeout: const Duration(seconds: 10)),
-        username: 'admin',
+        await SSHSocket.connect(ipAddress, port, timeout: const Duration(seconds: 10)),
+        username: username,
         onPasswordRequest: () => password,
         onUserInfoRequest: (request) => request.prompts.map((_) => password).toList(),
       );
@@ -209,12 +213,14 @@ class SftpLogger {
     required String inputPath,
     required String remoteFilename, // e.g., '/Whereused.csv' or '/config.json'
     required Function(String) onStatusUpdate,
+    String username = 'admin', // Extron standards; overridable in App Config
+    int port = 22022,
   }) async {
     try {
-      onStatusUpdate('System: Connecting to SFTP on $ipAddress:22022...');
+      onStatusUpdate('System: Connecting to SFTP on $ipAddress:$port...');
       final client = SSHClient(
-        await SSHSocket.connect(ipAddress, 22022, timeout: const Duration(seconds: 10)),
-        username: 'admin',
+        await SSHSocket.connect(ipAddress, port, timeout: const Duration(seconds: 10)),
+        username: username,
         onPasswordRequest: () => password,
         onUserInfoRequest: (request) => request.prompts.map((_) => password).toList(),
       );
@@ -244,12 +250,14 @@ class SftpLogger {
     required String password,
     required String remoteFilename, // e.g., '/config.json'
     required Function(String) onStatusUpdate,
+    String username = 'admin', // Extron standards; overridable in App Config
+    int port = 22022,
   }) async {
     try {
-      onStatusUpdate('System: Connecting to SFTP on $ipAddress:22022...');
+      onStatusUpdate('System: Connecting to SFTP on $ipAddress:$port...');
       final client = SSHClient(
-        await SSHSocket.connect(ipAddress, 22022, timeout: const Duration(seconds: 10)),
-        username: 'admin',
+        await SSHSocket.connect(ipAddress, port, timeout: const Duration(seconds: 10)),
+        username: username,
         onPasswordRequest: () => password,
         onUserInfoRequest: (request) => request.prompts.map((_) => password).toList(),
       );

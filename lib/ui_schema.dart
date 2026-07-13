@@ -199,15 +199,29 @@ class DeviceScopedFields {
 
 /// One wizard-managed device family: the SYSTEM_SETUP count key, the config
 /// section prefix its numbered blocks use, and the label shown in the
-/// Setup Wizard's count dropdown.
+/// Setup Wizard's count dropdown. Optional extras (all schema-editable):
+///   max:                 highest count the wizard dropdown offers (default 8)
+///   keepAlivePreference: command names tried in order when auto-picking a
+///                        new device's keep_alive_command from its module
+///   template:            the full block used for new devices when the
+///                        config has no <PREFIX>1 block to copy (overrides
+///                        the built-in synthesized fallback)
 class DeviceTypeSpec {
   final String countKey; // e.g. 'dev_projectors'
   final String prefix;   // e.g. 'PROJECTORDEVICE_'
   final String label;    // e.g. 'Projectors / Displays'
+  final int maxCount;    // wizard dropdown offers 0..maxCount
+  final List<String> keepAlivePreference;
+  final Map<String, dynamic>? template;
 
-  const DeviceTypeSpec(
-      {required this.countKey, required this.prefix, String? label})
-      : label = label ?? countKey;
+  const DeviceTypeSpec({
+    required this.countKey,
+    required this.prefix,
+    String? label,
+    this.maxCount = 8,
+    this.keepAlivePreference = const [],
+    this.template,
+  }) : label = label ?? countKey;
 }
 
 /// One "device_defaults" entry: property values merged into newly created
@@ -268,6 +282,36 @@ class UiSchema {
   /// countKey -> section prefix, for tab building / pruning / audits.
   Map<String, String> get deviceCountMap =>
       {for (final t in _deviceTypes) t.countKey: t.prefix};
+
+  /// The device family whose section prefix [sectionKey] starts with
+  /// (e.g. 'PROJECTORDEVICE_2' -> the dev_projectors family), or null.
+  DeviceTypeSpec? deviceTypeForSection(String sectionKey) {
+    for (final t in _deviceTypes) {
+      if (sectionKey.startsWith(t.prefix)) return t;
+    }
+    return null;
+  }
+
+  /// Baseline SYSTEM_SETUP values injected into loaded configs that are
+  /// missing them (the migration step). Starts as the previously hardcoded
+  /// set; a "system_defaults" section in ui_schema.json replaces it.
+  /// The dev_ count keys are NOT included here — they always come from
+  /// device_types so the two stay in sync.
+  Map<String, dynamic> _systemDefaults = Map.of(_builtInSystemDefaults);
+
+  static const Map<String, dynamic> _builtInSystemDefaults = {
+    "gve_bldg": "UNKNOWN",
+    "gve_room": "000",
+    "gui_full_room_name": "Legacy Room Update",
+    "gui_mic_mix": "No",
+    "gui_routing_available": "No",
+    "gui_routing_mode": "Normal",
+    "gui_tab": "2_Cam_Dev",
+    "gui_capture_source_available": "No",
+    "gui_usb_or_vga": "USB",
+  };
+
+  Map<String, dynamic> get systemDefaults => Map.unmodifiable(_systemDefaults);
 
   /// Where this schema came from, for display in App Config.
   String source = 'Built-in defaults';
@@ -430,9 +474,33 @@ class UiSchema {
           countKey: countKey.toString(),
           prefix: prefix,
           label: spec['label']?.toString(),
+          maxCount: (spec['max'] is num)
+              ? (spec['max'] as num).toInt()
+              : int.tryParse(spec['max']?.toString() ?? '') ?? 8,
+          keepAlivePreference: (spec['keepAlivePreference'] is List)
+              ? (spec['keepAlivePreference'] as List)
+                  .map((e) => e.toString())
+                  .toList()
+              : const [],
+          template: (spec['template'] is Map)
+              ? (spec['template'] as Map)
+                  .map((k, v) => MapEntry(k.toString(), v))
+              : null,
         ));
       });
       if (parsed.isNotEmpty) _deviceTypes = parsed;
+    }
+
+    // Optional "system_defaults": SYSTEM_SETUP values injected on load when
+    // missing. Defining ANY entries replaces the built-in set entirely.
+    final systemDefaults = doc['system_defaults'];
+    if (systemDefaults is Map) {
+      final Map<String, dynamic> parsedDefaults = {};
+      systemDefaults.forEach((key, value) {
+        if (key.toString().startsWith('__')) return;
+        parsedDefaults[key.toString()] = value;
+      });
+      if (parsedDefaults.isNotEmpty) _systemDefaults = parsedDefaults;
     }
   }
 

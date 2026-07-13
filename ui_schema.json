@@ -43,23 +43,102 @@
     "wizard's display order. Adding an entry gives the new family a wizard count",
     "dropdown, device tabs, export pruning, count audits, and a '0' default on",
     "load. Pair it with 'fields'/'device_fields' entries for its properties and",
-    "'device_defaults' for its baseline values."
+    "'device_defaults' for its baseline values. Optional per-family extras:",
+    "  max:                 highest count the wizard offers (default 8).",
+    "  keepAlivePreference: command names tried in order when auto-picking a",
+    "                       new device's keep_alive_command from its module.",
+    "  template:            full block for new devices when the config has no",
+    "                       <PREFIX>1 block to copy (else a basic one is built).",
+    "",
+    "SYSTEM DEFAULTS: the top-level 'system_defaults' object holds the",
+    "SYSTEM_SETUP values injected into loaded configs that are missing them",
+    "(the migration step). Defining it REPLACES the built-in set. The dev_",
+    "counts are NOT listed here - every device_types family is always",
+    "injected as '0' automatically."
   ],
   "device_types": {
     "__readme": [
       "The wizard's device families. 'prefix' is the config section prefix the",
-      "numbered blocks use (PROJECTORDEVICE_1, ...); 'label' is the wizard text."
+      "numbered blocks use (PROJECTORDEVICE_1, ...); 'label' is the wizard text.",
+      "'max' caps the wizard count dropdown. 'keepAlivePreference' lists the",
+      "keep-alive commands to try (in order) when a new device's module is",
+      "parsed; if none match, 'Power'-style commands are used as before."
     ],
-    "dev_projectors": { "prefix": "PROJECTORDEVICE_", "label": "Projectors / Displays" },
-    "dev_cameras": { "prefix": "CAMERADEVICE_", "label": "Cameras" },
-    "dev_switchers": { "prefix": "SWITCHERDEVICE_", "label": "Switchers" },
-    "dev_dsps": { "prefix": "DSPDEVICE_", "label": "DSPs" },
-    "dev_usb_switchers": { "prefix": "USBDEVICE_", "label": "USB Switchers" },
-    "dev_power_controllers": { "prefix": "POWERDEVICE_", "label": "Power Controllers" },
-    "dev_media_ports": { "prefix": "MEDIAPORTDEVICE_", "label": "MediaPorts" },
-    "dev_wireless": { "prefix": "WIRELESSDEVICE_", "label": "Wireless (ShareLink)" },
-    "dev_recorders": { "prefix": "RECORDERDEVICE_", "label": "Recorders" },
-    "dev_screens": { "prefix": "SCREENDEVICE_", "label": "Screens (Relays/Network)" }
+    "dev_projectors": {
+      "prefix": "PROJECTORDEVICE_",
+      "label": "Projectors / Displays",
+      "max": 8,
+      "keepAlivePreference": [ "Power" ]
+    },
+    "dev_cameras": {
+      "prefix": "CAMERADEVICE_",
+      "label": "Cameras",
+      "max": 8,
+      "keepAlivePreference": [ "Power" ]
+    },
+    "dev_switchers": {
+      "prefix": "SWITCHERDEVICE_",
+      "label": "Switchers",
+      "max": 8,
+      "keepAlivePreference": [ "RefreshMatrix", "Power" ]
+    },
+    "dev_dsps": {
+      "prefix": "DSPDEVICE_",
+      "label": "DSPs",
+      "max": 8,
+      "keepAlivePreference": [ "RefreshMatrix", "Power" ]
+    },
+    "dev_usb_switchers": {
+      "prefix": "USBDEVICE_",
+      "label": "USB Switchers",
+      "max": 8,
+      "keepAlivePreference": [ "Input", "Power" ]
+    },
+    "dev_power_controllers": {
+      "prefix": "POWERDEVICE_",
+      "label": "Power Controllers",
+      "max": 8,
+      "keepAlivePreference": [ "SerialNumber", "Power" ]
+    },
+    "dev_media_ports": {
+      "prefix": "MEDIAPORTDEVICE_",
+      "label": "MediaPorts",
+      "max": 8,
+      "keepAlivePreference": [ "USBHostStatus", "Power" ]
+    },
+    "dev_wireless": {
+      "prefix": "WIRELESSDEVICE_",
+      "label": "Wireless (ShareLink)",
+      "max": 8,
+      "keepAlivePreference": [ "ConfirmationCode", "Power" ]
+    },
+    "dev_recorders": {
+      "prefix": "RECORDERDEVICE_",
+      "label": "Recorders",
+      "max": 8,
+      "keepAlivePreference": [ "Power" ]
+    },
+    "dev_screens": {
+      "prefix": "SCREENDEVICE_",
+      "label": "Screens (Relays/Network)",
+      "max": 8,
+      "keepAlivePreference": [ "Power" ]
+    }
+  },
+  "system_defaults": {
+    "__readme": [
+      "SYSTEM_SETUP values injected on load when missing (shown in the",
+      "acknowledgement dialog). Edit values here and press Reload Schema."
+    ],
+    "gve_bldg": "UNKNOWN",
+    "gve_room": "000",
+    "gui_full_room_name": "Legacy Room Update",
+    "gui_mic_mix": "No",
+    "gui_routing_available": "No",
+    "gui_routing_mode": "Normal",
+    "gui_tab": "2_Cam_Dev",
+    "gui_capture_source_available": "No",
+    "gui_usb_or_vga": "USB"
   },
   "device_defaults": {
     "__readme": [

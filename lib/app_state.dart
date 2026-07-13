@@ -22,6 +22,15 @@ class AppStateProvider extends ChangeNotifier {
   String uiSchemaPath = ''; // Optional path to ui_schema.json (GUI field definitions)
   String keyMapPath = '';   // Optional path to key_map.json (legacy key translation)
 
+  // --- Processor connection settings (App Config > Processor Connection) ---
+  // Defaults are the Extron standards; editable for nonstandard processors.
+  String sftpUsername = 'admin';
+  String sftpPort = '22022';
+  String sftpRemoteConfigPath = '/config.json';
+
+  /// Parsed SFTP port with the Extron default as the fallback.
+  int get effectiveSftpPort => int.tryParse(sftpPort) ?? 22022;
+
   // ---------------------------------------------------------------------
   //  DEFAULT PATH RESOLUTION
   //  Every external file falls back to the Root Folder when no explicit
@@ -346,7 +355,10 @@ class AppStateProvider extends ChangeNotifier {
         ipAddress: ipAddress,
         password: password,
         inputPath: tempFile.path,
-        remoteFilename: '/config.json', // The target path on the Extron processor
+        // Target path / credentials from App Config > Processor Connection
+        remoteFilename: sftpRemoteConfigPath,
+        username: sftpUsername,
+        port: effectiveSftpPort,
         onStatusUpdate: onStatusUpdate,
       );
 
@@ -367,6 +379,8 @@ class AppStateProvider extends ChangeNotifier {
           password: password,
           inputPath: extraFilePath,
           remoteFilename: '/$extraName',
+          username: sftpUsername,
+          port: effectiveSftpPort,
           onStatusUpdate: onStatusUpdate,
         );
         if (extraOk) {
@@ -418,6 +432,10 @@ class AppStateProvider extends ChangeNotifier {
       templateFilePath = prefs.getString('templateFilePath') ?? ''; // FIX: was never restored, so the default config path reset on every restart
       uiSchemaPath = prefs.getString('uiSchemaPath') ?? '';
       keyMapPath = prefs.getString('keyMapPath') ?? '';
+      sftpUsername = prefs.getString('sftpUsername') ?? 'admin';
+      sftpPort = prefs.getString('sftpPort') ?? '22022';
+      sftpRemoteConfigPath =
+          prefs.getString('sftpRemoteConfigPath') ?? '/config.json';
       isDarkMode = prefs.getBool('isDarkMode') ?? true;
       themeStyle = prefs.getString('themeStyle') ?? 'classic';
       classicColor = prefs.getString('classicColor') ?? '2196F3';
@@ -541,8 +559,11 @@ class AppStateProvider extends ChangeNotifier {
       final ok = await sftpClient.downloadProcessorFile(
         ipAddress: ipAddress,
         password: password,
-        remoteFilename: '/config.json',
+        // Remote path / credentials from App Config > Processor Connection
+        remoteFilename: sftpRemoteConfigPath,
         outputPath: tempPath,
+        username: sftpUsername,
+        port: effectiveSftpPort,
         onStatusUpdate: onStatusUpdate,
       );
       if (!ok) return false;
@@ -875,19 +896,12 @@ class AppStateProvider extends ChangeNotifier {
     final systemSetup = roomConfig['SYSTEM_SETUP'] as Map<String, dynamic>;
 
     // Define the baseline schema needed for the current template to function.
-    // The dev_ hardware counts come from the UI schema's device_types, so a
-    // family added there is injected as "0" on load like the built-in ones.
+    // Values come from the UI schema: "system_defaults" for the SYSTEM_SETUP
+    // properties, plus a "0" for every device_types dev_ count key — so both
+    // lists are editable in ui_schema.json without a rebuild.
     final Map<String, dynamic> baselineDefaults = {
-      "gve_bldg": "UNKNOWN",
-      "gve_room": "000",
-      "gui_full_room_name": "Legacy Room Update",
+      ...uiSchema.systemDefaults,
       for (final t in uiSchema.deviceTypes) t.countKey: "0",
-      "gui_mic_mix": "No",
-      "gui_routing_available": "No",
-      "gui_routing_mode": "Normal",
-      "gui_tab": "2_Cam_Dev",
-      "gui_capture_source_available": "No",
-      "gui_usb_or_vga": "USB",
     };
 
     int additions = 0;
@@ -1021,6 +1035,16 @@ class AppStateProvider extends ChangeNotifier {
         keyMapPath = value;
         // ignore: unawaited_futures
         loadKeyMap(); // Re-resolve the legacy key translation rules
+        break;
+      case 'sftpUsername':
+        sftpUsername = value.trim().isEmpty ? 'admin' : value.trim();
+        break;
+      case 'sftpPort':
+        sftpPort = value.trim().isEmpty ? '22022' : value.trim();
+        break;
+      case 'sftpRemoteConfigPath':
+        sftpRemoteConfigPath =
+            value.trim().isEmpty ? '/config.json' : value.trim();
         break;
       case 'themeStyle':
         themeStyle = value; // 'classic' | 'auris'
@@ -1503,16 +1527,23 @@ class AppStateProvider extends ChangeNotifier {
     return encoder.convert(_sortJson(_pruneConfig(roomConfig)));
   }
 
-  /// Helper to grab a default template for a device if the user increases the count
-  /// Falls back to a basic map if a template (like PROJECTORDEVICE_1) isn't loaded.
-  /// Synthesizes a module path to instantly trigger Python parsing.
+  /// Helper to grab a default template for a device if the user increases the count.
+  /// Priority: 1) the config's own <PREFIX>1 block, 2) the family's "template"
+  /// from ui_schema.json device_types, 3) a basic synthesized map.
   Map<String, dynamic> getDefaultDeviceBlock(String devicePrefix) {
     // Try to find an existing device of this type to use as a template (e.g. CAMERADEVICE_1)
     final templateKey = '${devicePrefix}1';
     if (roomConfig.containsKey(templateKey)) {
       return jsonDecode(jsonEncode(roomConfig[templateKey])); // Deep copy
     }
-    
+
+    // Schema-defined template for this family (device_types "template")
+    final familyTemplate =
+        uiSchema.deviceTypeForSection(templateKey)?.template;
+    if (familyTemplate != null && familyTemplate.isNotEmpty) {
+      return jsonDecode(jsonEncode(familyTemplate)); // Deep copy
+    }
+
     // Synthesize a likely python module path based on the prefix (e.g. PROJECTORDEVICE_ -> modules.projectordevice)
     String cleanPrefix = devicePrefix.replaceAll('_', '').toLowerCase();
     
@@ -1589,10 +1620,18 @@ class AppStateProvider extends ChangeNotifier {
       // Deep copy the template block so they don't share memory references
       Map<String, dynamic> newDevice = jsonDecode(jsonEncode(defaultTemplateBlock));
       
-      // Update specific enumerations inside the newly created block
-      newDevice['btn_name'] = newDevice['btn_name'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
-      newDevice['gve_id'] = newDevice['gve_id'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
-      newDevice['name'] = '${newDevice['name'].split('-').first.trim()} $i - Custom Model';
+      // Update specific enumerations inside the newly created block.
+      // Guarded so a schema-provided template missing one of these keys
+      // (device_types "template") doesn't produce "null" strings.
+      if (newDevice['btn_name'] != null) {
+        newDevice['btn_name'] = newDevice['btn_name'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
+      }
+      if (newDevice['gve_id'] != null) {
+        newDevice['gve_id'] = newDevice['gve_id'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
+      }
+      if (newDevice['name'] != null) {
+        newDevice['name'] = '${newDevice['name'].toString().split('-').first.trim()} $i - Custom Model';
+      }
 
       // SCHEMA DEFAULTS (ui_schema.json "device_defaults"): make sure this
       // device type's baseline properties exist — e.g. projectors always
@@ -1643,15 +1682,28 @@ class AppStateProvider extends ChangeNotifier {
       final current = device['keep_alive_command']?.toString() ?? '';
       if (current.isNotEmpty && commands.contains(current)) continue; // Already valid for this module
 
-      // Load a sensible default from the module: 'Power' if it exists, then
+      // Load a sensible default from the module. The family's schema-defined
+      // preference list (device_types "keepAlivePreference") is tried first,
+      // in order; then the built-in heuristic: 'Power' if it exists, then
       // anything containing 'power' (typical Extron poll), else the first command.
-      final chosen = commands.firstWhere(
-        (c) => c == 'Power',
-        orElse: () => commands.firstWhere(
-          (c) => c.toLowerCase().contains('power'),
-          orElse: () => commands.first,
-        ),
-      );
+      String chosen = '';
+      final family = uiSchema.deviceTypeForSection(key);
+      for (final pref in family?.keepAlivePreference ?? const <String>[]) {
+        chosen = commands.firstWhere(
+          (c) => c.toLowerCase() == pref.toLowerCase(),
+          orElse: () => '',
+        );
+        if (chosen.isNotEmpty) break;
+      }
+      if (chosen.isEmpty) {
+        chosen = commands.firstWhere(
+          (c) => c == 'Power',
+          orElse: () => commands.firstWhere(
+            (c) => c.toLowerCase().contains('power'),
+            orElse: () => commands.first,
+          ),
+        );
+      }
       device['keep_alive_command'] = chosen;
       changed = true;
       AppLogger.logInfo("Loaded keep_alive_command '$chosen' for $key from $moduleName.py");

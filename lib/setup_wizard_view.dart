@@ -151,8 +151,8 @@ class SetupWizardView extends StatelessWidget {
         // SCHEMA-DRIVEN: one count dropdown per family in the UI schema's
         // "device_types" (file order). Adding a new dev_ key + section
         // prefix in ui_schema.json adds a wizard row — no recompile.
-        ...provider.uiSchema.deviceTypes.map((t) =>
-            _buildCountDropdown(context, provider, t.label, t.countKey, t.prefix)),
+        ...provider.uiSchema.deviceTypes.map((t) => _buildCountDropdown(
+            context, provider, t.label, t.countKey, t.prefix, t.maxCount)),
 
         // --- Hardware Options ---
         // dev_ settings that are NOT family counts (e.g. dev_relay_power,
@@ -206,19 +206,26 @@ class SetupWizardView extends StatelessWidget {
     return widgets;
   }
 
-  Widget _buildCountDropdown(BuildContext context, AppStateProvider provider, String label, String systemKey, String devicePrefix) {
+  Widget _buildCountDropdown(BuildContext context, AppStateProvider provider,
+      String label, String systemKey, String devicePrefix, int maxCount) {
     final systemSetup = provider.roomConfig['SYSTEM_SETUP'];
     String currentValue = systemSetup[systemKey]?.toString() ?? '0';
-    
-    // Safety check: if current value isn't a simple int string 0-10, default to 0 in UI
+
+    // Safety check: if current value isn't a simple int string, default to 0 in UI
     if (int.tryParse(currentValue) == null) currentValue = '0';
+
+    // 0..max from the family's device_types "max" (default 8). A loaded
+    // config already ABOVE the max still shows its value so nothing blanks.
+    final List<String> counts =
+        List.generate(maxCount + 1, (index) => index.toString());
+    if (!counts.contains(currentValue)) counts.add(currentValue);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: DropdownButtonFormField<String>(
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         value: currentValue,
-        items: List.generate(9, (index) => index.toString()).map((count) {
+        items: counts.map((count) {
           return DropdownMenuItem(value: count, child: Text(count));
         }).toList(),
         onChanged: (val) {
