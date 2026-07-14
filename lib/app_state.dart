@@ -36,14 +36,66 @@ class AppStateProvider extends ChangeNotifier {
   //  DEFAULT PATH RESOLUTION
   //  Every external file falls back to the Root Folder when no explicit
   //  path has been chosen in App Config. The Root Folder itself falls back
-  //  to the app's working directory. Python modules default to the
-  //  "devices" sub-folder of the root. The UI should always read these
-  //  effective* getters instead of the raw fields.
+  //  to the app's base directory (see _appBaseDir). Python modules default
+  //  to the "devices" sub-folder of the root. The UI should always read
+  //  these effective* getters instead of the raw fields.
   // ---------------------------------------------------------------------
 
-  /// Root Folder setting, falling back to the app's working directory.
+  /// Cached result of [_appBaseDir]; the base directory never changes during
+  /// a run, and resolving it touches the disk, so it is computed once.
+  static String? _cachedAppBaseDir;
+
+  /// The default base folder for every blank path AND for app_config.json.
+  ///
+  /// It must be a STABLE, WRITABLE location: the process working directory
+  /// ([Directory.current]) is neither. When a packaged Windows app is
+  /// launched from a shortcut or the Start menu, the working directory is
+  /// often C:\Windows\System32 — the wrong place to look for the shipped
+  /// config.json / processors.json, and one the app cannot write settings
+  /// to. So this resolves, in order:
+  ///   1. A directory that already holds our own app_config.json — keeps
+  ///      settings continuity across launches regardless of how the app was
+  ///      started (checks the working dir, then the executable's folder).
+  ///   2. A directory that holds the app's shipped data files (config.json,
+  ///      ui_schema.json, processors.json, buildings.json, or a devices/
+  ///      folder) — the real root the user drops files into. In dev
+  ///      (`flutter run`) that is the project root = the working directory.
+  ///   3. True first run with nothing placed yet: the executable's own
+  ///      folder, because it is stable and writable no matter how the app
+  ///      was launched. Falls back to the working directory only when the
+  ///      executable path can't be resolved.
+  static String _appBaseDir() {
+    if (_cachedAppBaseDir != null) return _cachedAppBaseDir!;
+
+    final List<String> candidates = [Directory.current.path];
+    try {
+      candidates.add(File(Platform.resolvedExecutable).parent.path);
+    } catch (_) {}
+
+    // 1. Prefer wherever our settings file already lives.
+    for (final d in candidates) {
+      if (File(path.join(d, 'app_config.json')).existsSync()) {
+        return _cachedAppBaseDir = d;
+      }
+    }
+    // 2. Otherwise a directory that clearly holds the app's data files.
+    bool looksLikeData(String d) =>
+        File(path.join(d, 'config.json')).existsSync() ||
+        File(path.join(d, 'ui_schema.json')).existsSync() ||
+        File(path.join(d, 'processors.json')).existsSync() ||
+        File(path.join(d, 'buildings.json')).existsSync() ||
+        Directory(path.join(d, 'devices')).existsSync();
+    for (final d in candidates) {
+      if (looksLikeData(d)) return _cachedAppBaseDir = d;
+    }
+    // 3. Nothing placed yet — use the executable's folder when known.
+    return _cachedAppBaseDir =
+        candidates.length > 1 ? candidates[1] : candidates[0];
+  }
+
+  /// Root Folder setting, falling back to the app's base directory.
   String get effectiveRootFolder =>
-      rootFolderPath.isNotEmpty ? rootFolderPath : Directory.current.path;
+      rootFolderPath.isNotEmpty ? rootFolderPath : _appBaseDir();
 
   /// Python modules folder: explicit choice, else "<root>/devices".
   String get effectiveModulesPath => modulesPath.isNotEmpty
@@ -104,19 +156,12 @@ class AppStateProvider extends ChangeNotifier {
   /// True once first-run setup has been completed (persisted in the file).
   bool _initialSetupComplete = false;
 
-  /// Where app_config.json lives: an existing file in the working directory
-  /// wins, then one next to the executable; with neither present, a new file
-  /// is created in the working directory (= the app's default Root Folder).
-  static String _resolveSettingsFilePath() {
-    final inWorkingDir = path.join(Directory.current.path, 'app_config.json');
-    if (File(inWorkingDir).existsSync()) return inWorkingDir;
-    try {
-      final besideExe = path.join(
-          File(Platform.resolvedExecutable).parent.path, 'app_config.json');
-      if (File(besideExe).existsSync()) return besideExe;
-    } catch (_) {}
-    return inWorkingDir;
-  }
+  /// app_config.json lives in the app's base directory, so the settings file
+  /// and the default Root Folder always agree (see [_appBaseDir]). That base
+  /// is a stable, writable location, so settings persist across launches even
+  /// when the app is started from a shortcut (working dir = System32).
+  static String _resolveSettingsFilePath() =>
+      path.join(_appBaseDir(), 'app_config.json');
 
   /// Serializes every setting to app_config.json. Failures are logged but
   /// never thrown — a read-only folder must not break the running app.
