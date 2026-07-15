@@ -18,14 +18,44 @@ DEVICE_INFO = {
         "DMP 64 Plus C AT",
         "DMP 64 Plus C V AT"
     ],
+    # Connection properties. "ip_address", "serial_port" are site-specific, so
+    # they are left blank — the installer fills them per room.
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",
-        "net_port": 22023
+        "net_port": 22023,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",
+        "serial_port": "",
     },
+    # Remaining device properties. "model" and "module" are set by the model
+    # picker itself, so they are not listed here. "password" is site-specific
+    # and left blank. The "group_*" values are the audio group numbers this
+    # DSP is wired to.
     "defaults": {
+        "btn_name": "Btn_Con_DSP1",
+        "lbl_name": "Lbl_DSP_Name_Status",
+        "gve_id": "DSP1",
+        "name": "DSP - DMP 64 Plus C AT",
+        "device_id": None,
         "keep_alive_command": "RefreshMatrix",
-        "keep_alive_interval": 30
+        "keep_alive_interval": 30,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "admin",
+        "password": "",
+        "group_prog_gain": "1",
+        "group_mic_in_room_mute": "2",
+        "group_voice_lift_mute": "3",
+        "group_mic_ceiling_mute": "4",
+        "group_prog_mute": "5",
+        "group_mic_master_mute": "6",
+        "group_pc_mic_input_gain": "7",
+        "group_pc_output_gain": "8",
+        "group_pc_output_mute": "9",
+        "group_mic_master_gain": "10",
+        "group_pc_record_mute": "11",
     }
 }
 

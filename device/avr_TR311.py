@@ -11,8 +11,33 @@ from extronlib.interface import EthernetClientInterface, SerialInterface
 DEVICE_INFO = {
     "device_type": "camera",
     "models": ["TR311HW", "TR311", "TR211"],
-    "connection": {"com_type": "Network", "protocol": "UDP", "net_port": 52381},
-    "defaults": {"keep_alive_command": "Power", "keep_alive_interval": 10},
+    # Connection properties. "ip_address", "serial_port" are site-specific, so
+    # they are left blank — the installer fills them per room.
+    "connection": {
+        "com_type": "Network",
+        "protocol": "UDP",
+        "net_port": 52381,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",
+        "serial_port": "",
+    },
+    # Remaining device properties. "model" and "module" are set by the model
+    # picker itself, so they are not listed here. "password" is site-specific
+    # and left blank.
+    "defaults": {
+        "btn_name": "Btn_Con_Cam1",
+        "lbl_name": "Lbl_InstCam_Model",
+        "gve_id": "Cam1",
+        "name": "Camera - Instructor TR311HW",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "main",
+        "password": "",
+    },
 }
 
 

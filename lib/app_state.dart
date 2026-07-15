@@ -1776,16 +1776,76 @@ class AppStateProvider extends ChangeNotifier {
         .toList();
   }
 
-  /// Applies a Model-dropdown selection to a device: sets 'model', switches
-  /// 'module' to the model's default file, and writes that module's
-  /// DEVICE_INFO connection + standard defaults (keep-alive, input, ...)
-  /// into the device block (adding keys the block doesn't have yet).
-  /// Returns "key = value" strings describing what was applied, for the
-  /// acknowledgement snackbar.
-  List<String> applyModelSelection(String deviceKey, String model) {
-    final List<String> applied = [];
-    if (!roomConfig.containsKey(deviceKey)) return applied;
+  /// Substitutes the device's trailing index into the index-bearing property
+  /// values (btn_name, gve_id) of [map], mutating and returning it. e.g. for
+  /// deviceKey CAMERADEVICE_3, a btn_name ending in "Cam1" becomes "Cam3".
+  /// Values without a trailing digit (or an empty value) are left alone.
+  Map<String, dynamic> _indexSubstitute(
+      Map<String, dynamic> map, String deviceKey) {
+    final idxMatch = RegExp(r'(\d+)$').firstMatch(deviceKey);
+    if (idxMatch == null) return map;
+    final idx = idxMatch.group(1)!;
+    for (final key in const ['btn_name', 'gve_id']) {
+      final v = map[key];
+      if (v != null && v.toString().isNotEmpty) {
+        map[key] = v.toString().replaceFirst(RegExp(r'\d+$'), idx);
+      }
+    }
+    return map;
+  }
+
+  /// Treats null and '' as the same "empty" value so a blank module default
+  /// (e.g. ip_address: "") doesn't read as different from an absent key.
+  static bool _valuesEqual(dynamic a, dynamic b) {
+    final na = (a == null || a == '') ? '' : a;
+    final nb = (b == null || b == '') ? '' : b;
+    return na == nb;
+  }
+
+  /// Computes what selecting [model] on [deviceKey] would do, WITHOUT mutating
+  /// the config. Feeds the Model-change dialog: whether the module changes, the
+  /// module's DEVICE_INFO defaults resolved for this device (trailing index
+  /// substituted; site-specific blanks kept), and the fields whose current
+  /// value differs from those defaults.
+  ModelChangePreview previewModelSelection(String deviceKey, String model) {
     final dev = roomConfig[deviceKey];
+    final entry = modelRegistry[model];
+    if (dev is! Map || entry == null) {
+      return ModelChangePreview(
+        known: entry != null,
+        newModule: entry?.module ?? '',
+        moduleChanged: false,
+        resolvedDefaults: const {},
+        diffs: const [],
+      );
+    }
+    final currentModule = dev['module']?.toString() ?? '';
+    final raw = moduleDefaults[entry.module] ?? const <String, dynamic>{};
+    final resolved =
+        _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey);
+    final diffs = <FieldDiff>[];
+    resolved.forEach((k, v) {
+      if (!_valuesEqual(dev[k], v)) {
+        diffs.add(FieldDiff(key: k, current: dev[k], moduleDefault: v));
+      }
+    });
+    return ModelChangePreview(
+      known: true,
+      newModule: entry.module,
+      moduleChanged: currentModule != entry.module,
+      resolvedDefaults: resolved,
+      diffs: diffs,
+    );
+  }
+
+  /// "Apply module defaults" action (a new/reset device): sets 'model' +
+  /// 'module' and writes every resolved DEVICE_INFO default onto the block,
+  /// overwriting existing values. Returns the "key = value" strings applied
+  /// (for the acknowledgement snackbar). An unknown model only saves the text.
+  List<String> applyModuleDefaults(String deviceKey, String model) {
+    final List<String> applied = [];
+    final dev = roomConfig[deviceKey];
+    if (dev is! Map) return applied;
     dev['model'] = model;
 
     final entry = modelRegistry[model];
@@ -1794,9 +1854,11 @@ class AppStateProvider extends ChangeNotifier {
         dev['module'] = entry.module;
         applied.add('module = ${entry.module}');
       }
-      final defaults = moduleDefaults[entry.module];
-      if (defaults != null) {
-        defaults.forEach((k, v) {
+      final raw = moduleDefaults[entry.module];
+      if (raw != null) {
+        final resolved =
+            _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey);
+        resolved.forEach((k, v) {
           dev[k] = v;
           applied.add('$k = $v');
         });
@@ -1806,10 +1868,31 @@ class AppStateProvider extends ChangeNotifier {
       getCommandsForModule(entry.module);
       getInputsForModule(entry.module);
       AppLogger.logInfo(
-          "Model '$model' selected on $deviceKey: ${applied.isEmpty ? 'no changes needed' : applied.join(', ')}");
+          "Model '$model' applied to $deviceKey with module defaults: ${applied.isEmpty ? 'no changes needed' : applied.join(', ')}");
     }
     notifyListeners();
     return applied;
+  }
+
+  /// "Keep current settings" action (a conversion): sets 'model' + 'module'
+  /// only, leaving every other device property untouched. An unknown model
+  /// just saves the model text.
+  void keepSettingsSwitchModule(String deviceKey, String model) {
+    final dev = roomConfig[deviceKey];
+    if (dev is! Map) return;
+    dev['model'] = model;
+
+    final entry = modelRegistry[model];
+    if (entry != null) {
+      dev['module'] = entry.module;
+      // Parse the newly selected module right away so the keep-alive /
+      // input dropdowns are ready the moment the form rebuilds.
+      getCommandsForModule(entry.module);
+      getInputsForModule(entry.module);
+      AppLogger.logInfo(
+          "Model '$model' set on $deviceKey (module ${entry.module}); existing settings kept.");
+    }
+    notifyListeners();
   }
 
   /// Opens the PDF manual for [moduleName]: "<module file name>.pdf" in the
@@ -2130,12 +2213,7 @@ class AppStateProvider extends ChangeNotifier {
       // Update specific enumerations inside the newly created block.
       // Guarded so a schema-provided template missing one of these keys
       // (device_types "template") doesn't produce "null" strings.
-      if (newDevice['btn_name'] != null) {
-        newDevice['btn_name'] = newDevice['btn_name'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
-      }
-      if (newDevice['gve_id'] != null) {
-        newDevice['gve_id'] = newDevice['gve_id'].toString().replaceFirst(RegExp(r'\d+$'), '$i');
-      }
+      _indexSubstitute(newDevice, newDeviceKey); // btn_name, gve_id trailing index
       if (newDevice['name'] != null) {
         newDevice['name'] = '${newDevice['name'].toString().split('-').first.trim()} $i - Custom Model';
       }
@@ -2353,4 +2431,43 @@ class ModelEntry {
       required this.module,
       required this.explicit,
       this.deviceTypes = const []});
+}
+
+/// The result of AppStateProvider.previewModelSelection: what selecting a
+/// model would do, computed without mutating the config, so the view can ask
+/// the user whether to apply the module defaults or keep the current settings.
+class ModelChangePreview {
+  /// True when the model is claimed by a module in the registry.
+  final bool known;
+
+  /// The module the selected model maps to ('' when unknown).
+  final String newModule;
+
+  /// True when applying would switch the device to a different module.
+  final bool moduleChanged;
+
+  /// The module's DEVICE_INFO defaults resolved for this device (trailing
+  /// index substituted; site-specific blanks kept). Excludes model/module.
+  final Map<String, dynamic> resolvedDefaults;
+
+  /// Fields whose current value differs from the resolved module default.
+  final List<FieldDiff> diffs;
+
+  const ModelChangePreview({
+    required this.known,
+    required this.newModule,
+    required this.moduleChanged,
+    required this.resolvedDefaults,
+    required this.diffs,
+  });
+}
+
+/// One field that differs between a device's current value and the module
+/// default, listed in the Model-change dialog.
+class FieldDiff {
+  final String key;
+  final dynamic current;
+  final dynamic moduleDefault;
+  const FieldDiff(
+      {required this.key, required this.current, required this.moduleDefault});
 }

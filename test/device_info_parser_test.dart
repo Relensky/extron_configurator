@@ -147,11 +147,55 @@ class DeviceClass:
     });
   });
 
-  group('AppStateProvider.applyModelSelection', () {
-    test('sets model, switches module, and applies connection defaults', () {
+  group('AppStateProvider model selection (preview / apply / keep)', () {
+    test('previewModelSelection reports module change + diffs and index '
+        'substitution, without mutating the config', () {
       final provider = AppStateProvider(autoLoadSettings: false);
-      // Real configs come from jsonDecode, so blocks are Map<String, dynamic>
-      provider.roomConfig['DSP_1'] = <String, dynamic>{
+      provider.roomConfig['DSPDEVICE_3'] = <String, dynamic>{
+        'model': '',
+        'module': 'old_module',
+        'protocol': 'SSH', // differs from module default TCP
+        'name': 'DSP - DMP 64 Plus C AT', // equal to default -> not a diff
+        'btn_name': 'Btn_Con_DSP3', // equal after index sub -> not a diff
+      };
+      provider.modelRegistry['DMP 64 Plus C'] = const ModelEntry(
+          model: 'DMP 64 Plus C',
+          module: 'extr_dsp_DMP_64_Plus_Series',
+          explicit: true);
+      provider.moduleDefaults['extr_dsp_DMP_64_Plus_Series'] = {
+        'protocol': 'TCP',
+        'net_port': 22023,
+        'name': 'DSP - DMP 64 Plus C AT',
+        'btn_name': 'Btn_Con_DSP1',
+        'gve_id': 'DSP1',
+        'ip_address': '', // blank default vs missing key -> not a diff
+      };
+
+      final preview =
+          provider.previewModelSelection('DSPDEVICE_3', 'DMP 64 Plus C');
+
+      expect(preview.known, isTrue);
+      expect(preview.moduleChanged, isTrue);
+      expect(preview.newModule, 'extr_dsp_DMP_64_Plus_Series');
+      // Trailing index substituted for device 3.
+      expect(preview.resolvedDefaults['btn_name'], 'Btn_Con_DSP3');
+      expect(preview.resolvedDefaults['gve_id'], 'DSP3');
+
+      final diffKeys = preview.diffs.map((d) => d.key).toSet();
+      expect(diffKeys, containsAll(<String>['protocol', 'net_port', 'gve_id']));
+      expect(diffKeys, isNot(contains('name')));
+      expect(diffKeys, isNot(contains('btn_name'))); // equal after sub
+      expect(diffKeys, isNot(contains('ip_address'))); // blank == missing
+
+      // Read-only: nothing changed on the device.
+      expect(provider.roomConfig['DSPDEVICE_3']['module'], 'old_module');
+      expect(provider.roomConfig['DSPDEVICE_3']['protocol'], 'SSH');
+    });
+
+    test('applyModuleDefaults sets model, switches module, and writes all '
+        'resolved defaults (index substituted)', () {
+      final provider = AppStateProvider(autoLoadSettings: false);
+      provider.roomConfig['DSPDEVICE_2'] = <String, dynamic>{
         'model': '',
         'module': 'old_module',
         'protocol': 'SSH',
@@ -166,19 +210,54 @@ class DeviceClass:
         'protocol': 'TCP',
         'net_port': 22023,
         'keep_alive_command': 'RefreshMatrix',
+        'btn_name': 'Btn_Con_DSP1',
+        'gve_id': 'DSP1',
       };
 
-      final applied = provider.applyModelSelection('DSP_1', 'DMP 64 Plus C');
+      final applied =
+          provider.applyModuleDefaults('DSPDEVICE_2', 'DMP 64 Plus C');
 
-      final dev = provider.roomConfig['DSP_1'];
+      final dev = provider.roomConfig['DSPDEVICE_2'];
       expect(dev['model'], 'DMP 64 Plus C');
       expect(dev['module'], 'extr_dsp_DMP_64_Plus_Series');
       expect(dev['protocol'], 'TCP');
       expect(dev['net_port'], 22023);
       expect(dev['com_type'], 'Network'); // added even though it was missing
-      expect(dev['keep_alive_command'], 'RefreshMatrix'); // "defaults" too
+      expect(dev['keep_alive_command'], 'RefreshMatrix');
+      expect(dev['btn_name'], 'Btn_Con_DSP2'); // index substituted
+      expect(dev['gve_id'], 'DSP2');
       expect(applied, contains('module = extr_dsp_DMP_64_Plus_Series'));
       expect(applied, contains('net_port = 22023'));
+    });
+
+    test('keepSettingsSwitchModule changes only model + module, preserving '
+        'every other field', () {
+      final provider = AppStateProvider(autoLoadSettings: false);
+      provider.roomConfig['DSPDEVICE_1'] = <String, dynamic>{
+        'model': 'Old Model',
+        'module': 'old_module',
+        'protocol': 'SSH',
+        'ip_address': '10.0.0.5',
+        'name': 'My DSP',
+      };
+      provider.modelRegistry['DMP 64 Plus C'] = const ModelEntry(
+          model: 'DMP 64 Plus C',
+          module: 'extr_dsp_DMP_64_Plus_Series',
+          explicit: true);
+      provider.moduleDefaults['extr_dsp_DMP_64_Plus_Series'] = {
+        'protocol': 'TCP',
+        'net_port': 22023,
+      };
+
+      provider.keepSettingsSwitchModule('DSPDEVICE_1', 'DMP 64 Plus C');
+
+      final dev = provider.roomConfig['DSPDEVICE_1'];
+      expect(dev['model'], 'DMP 64 Plus C');
+      expect(dev['module'], 'extr_dsp_DMP_64_Plus_Series'); // switched
+      expect(dev['protocol'], 'SSH'); // preserved
+      expect(dev['ip_address'], '10.0.0.5'); // preserved
+      expect(dev['name'], 'My DSP'); // preserved
+      expect(dev.containsKey('net_port'), isFalse); // default NOT applied
     });
 
     test(
@@ -195,13 +274,38 @@ class DeviceClass:
       expect(entry!.module, 'extr_dsp_DMP_64_Plus_Series');
       expect(entry.explicit, isTrue);
       expect(entry.deviceTypes, ['dsp']);
-      // "connection" and "defaults" arrive merged into one apply-map
+      // "connection" and "defaults" arrive merged into one apply-map — now the
+      // full field set (site-specific ip_address/serial_port/password blank).
       expect(provider.moduleDefaults['extr_dsp_DMP_64_Plus_Series'], {
         'com_type': 'Network',
         'protocol': 'TCP',
         'net_port': 22023,
+        'service_port': 0,
+        'host': 'processor1',
+        'ip_address': '',
+        'serial_port': '',
+        'btn_name': 'Btn_Con_DSP1',
+        'lbl_name': 'Lbl_DSP_Name_Status',
+        'gve_id': 'DSP1',
+        'name': 'DSP - DMP 64 Plus C AT',
+        'device_id': null,
         'keep_alive_command': 'RefreshMatrix',
         'keep_alive_interval': 30,
+        'keep_alive_trigger': null,
+        'manual_disconnect': false,
+        'user': 'admin',
+        'password': '',
+        'group_prog_gain': '1',
+        'group_mic_in_room_mute': '2',
+        'group_voice_lift_mute': '3',
+        'group_mic_ceiling_mute': '4',
+        'group_prog_mute': '5',
+        'group_mic_master_mute': '6',
+        'group_pc_mic_input_gain': '7',
+        'group_pc_output_gain': '8',
+        'group_pc_output_mute': '9',
+        'group_mic_master_gain': '10',
+        'group_pc_record_mute': '11',
       });
 
       // Fallback source: a module with NO DEVICE_INFO still contributes the
@@ -211,16 +315,19 @@ class DeviceClass:
       expect(fallback!.explicit, isFalse);
     });
 
-    test('unknown model only saves the model text', () {
+    test('unknown model: preview reports not-known, keep just saves the text',
+        () {
       final provider = AppStateProvider(autoLoadSettings: false);
       provider.roomConfig['PROJ_1'] =
           <String, dynamic>{'model': '', 'module': 'keep_me'};
 
-      final applied = provider.applyModelSelection('PROJ_1', 'Mystery 3000');
+      final preview =
+          provider.previewModelSelection('PROJ_1', 'Mystery 3000');
+      expect(preview.known, isFalse);
 
+      provider.keepSettingsSwitchModule('PROJ_1', 'Mystery 3000');
       expect(provider.roomConfig['PROJ_1']['model'], 'Mystery 3000');
       expect(provider.roomConfig['PROJ_1']['module'], 'keep_me');
-      expect(applied, isEmpty);
     });
   });
 }

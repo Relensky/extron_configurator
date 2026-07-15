@@ -172,24 +172,120 @@ class DeviceConfigurationForm extends StatelessWidget {
     );
   }
 
-  /// Writes a Model selection through the provider (sets 'model', switches
-  /// 'module', applies the module's DEVICE_INFO connection defaults) and
-  /// acknowledges what changed in a snackbar.
-  void _applyModel(BuildContext context, AppStateProvider provider,
-      String model, TextEditingController? moduleController) {
-    final applied = provider.applyModelSelection(deviceKey, model);
-    final module =
-        provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
-    moduleController?.text = module; // Keep the visible module field in sync
-    final String msg;
-    if (!provider.modelRegistry.containsKey(model)) {
-      msg = "Model '$model' saved — no module claims this model, so nothing else changed.";
-    } else if (applied.isEmpty) {
-      msg = "Model '$model' saved — module and connection defaults already in place.";
-    } else {
-      msg = "Model '$model': set ${applied.join(', ')}";
+  /// Writes a Model selection through the provider. When the pick switches the
+  /// device to a different module, the user is asked whether to apply the
+  /// module's DEVICE_INFO defaults (a new device) or keep the current settings
+  /// (a conversion), with the differing fields shown. The result is
+  /// acknowledged in a snackbar.
+  Future<void> _applyModel(BuildContext context, AppStateProvider provider,
+      String model, TextEditingController? moduleController) async {
+    final preview = provider.previewModelSelection(deviceKey, model);
+
+    // Unknown model: no module claims it — just save the text.
+    if (!preview.known) {
+      provider.keepSettingsSwitchModule(deviceKey, model);
+      moduleController?.text =
+          provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              "Model saved — no module claims this model, so nothing else changed.")));
+      return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+    // Module already matches: nothing to decide, keep everything as-is.
+    if (!preview.moduleChanged) {
+      provider.keepSettingsSwitchModule(deviceKey, model);
+      moduleController?.text = preview.newModule;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              "Model '$model' set — already using module ${preview.newModule}.")));
+      return;
+    }
+
+    // Module changes: ask apply-defaults (new) vs keep-settings (conversion).
+    final applyDefaults = await _showModelChangeDialog(context, model, preview);
+    if (applyDefaults == null || !context.mounted) return; // cancelled
+
+    moduleController?.text = preview.newModule;
+    if (applyDefaults) {
+      final applied = provider.applyModuleDefaults(deviceKey, model);
+      final msg = applied.isEmpty
+          ? "Model '$model' saved — module defaults already in place."
+          : "Model '$model': set ${applied.join(', ')}";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } else {
+      provider.keepSettingsSwitchModule(deviceKey, model);
+      final n = preview.diffs.length;
+      final msg = n == 0
+          ? "Kept current settings — switched to module ${preview.newModule}."
+          : "Kept current settings — $n field${n == 1 ? '' : 's'} differ from ${preview.newModule} defaults.";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  /// Prompt shown when a model pick switches the device to a different module.
+  /// Lists the fields that differ from the new module's defaults and lets the
+  /// user apply the module defaults or keep the current settings.
+  /// Returns true = apply defaults, false = keep settings, null = cancelled.
+  Future<bool?> _showModelChangeDialog(
+      BuildContext context, String model, ModelChangePreview preview) {
+    String fmt(dynamic v) => (v == null || v == '') ? '(blank)' : v.toString();
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('Apply ${preview.newModule} defaults?'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    "Switching $deviceKey to model '$model' (module ${preview.newModule})."),
+                const SizedBox(height: 12),
+                if (preview.diffs.isEmpty)
+                  const Text(
+                      "This device's settings already match the module defaults.")
+                else ...[
+                  Text(
+                      "${preview.diffs.length} field${preview.diffs.length == 1 ? '' : 's'} differ from the module defaults "
+                      "(current → module default):"),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final d in preview.diffs)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 2),
+                              child: Text(
+                                  '${d.key}:  ${fmt(d.current)}  →  ${fmt(d.moduleDefault)}'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Keep current settings')),
+            ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Apply module defaults')),
+          ],
+        );
+      },
+    );
   }
 
   /// A guaranteed-working dropdown: a searchable dialog listing every python
