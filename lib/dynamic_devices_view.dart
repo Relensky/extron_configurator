@@ -89,18 +89,23 @@ class DeviceConfigurationForm extends StatelessWidget {
 
   const DeviceConfigurationForm({Key? key, required this.deviceKey}) : super(key: key);
 
-  /// Searchable dialog of every model aggregated across the python modules
+  /// Searchable dialog of the models aggregated across the python modules
   /// (DEVICE_INFO "models" lists, falling back to each driver's self.Models
-  /// keys). The subtitle shows which module a model will switch the device to.
+  /// keys), pre-filtered to this device's family via DEVICE_INFO
+  /// "device_type" — with a toggle to list every model regardless of type.
+  /// The subtitle shows which module a model will switch the device to.
   Future<String?> _showModelPicker(
       BuildContext context, AppStateProvider provider) {
-    final models = provider.availableModels;
+    final allModels = provider.availableModels;
+    final typedModels = provider.availableModelsFor(deviceKey);
     return showDialog<String>(
       context: context,
       builder: (ctx) {
         String filter = '';
+        bool showAllTypes = false;
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
+            final models = showAllTypes ? allModels : typedModels;
             final visible = filter.isEmpty
                 ? models
                 : models.where((m) => m.toLowerCase().contains(filter.toLowerCase())).toList();
@@ -108,7 +113,7 @@ class DeviceConfigurationForm extends StatelessWidget {
               title: const Text('Select Device Model'),
               content: SizedBox(
                 width: 500,
-                height: 400,
+                height: 440,
                 child: Column(
                   children: [
                     TextField(
@@ -120,10 +125,23 @@ class DeviceConfigurationForm extends StatelessWidget {
                       ),
                       onChanged: (val) => setDialogState(() => filter = val),
                     ),
-                    const SizedBox(height: 12),
+                    // Escape hatch: only offered when the device_type filter
+                    // is actually hiding something.
+                    if (typedModels.length != allModels.length)
+                      CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                            'Show all device types (${allModels.length} models)'),
+                        value: showAllTypes,
+                        onChanged: (val) =>
+                            setDialogState(() => showAllTypes = val ?? false),
+                      ),
+                    const SizedBox(height: 8),
                     Expanded(
                       child: models.isEmpty
-                          ? const Center(child: Text('No models found in the python modules.\nAdd a DEVICE_INFO dict (or self.Models entries) to the .py files.', textAlign: TextAlign.center))
+                          ? const Center(child: Text('No models found for this device type.\nAdd a DEVICE_INFO dict (with "device_type" and "models") to the .py files,\nor tick "Show all device types".', textAlign: TextAlign.center))
                           : ListView.builder(
                               itemCount: visible.length,
                               itemBuilder: (ctx, i) {
@@ -337,7 +355,10 @@ class DeviceConfigurationForm extends StatelessWidget {
               child: Autocomplete<String>(
                 initialValue: TextEditingValue(text: deviceData['model']?.toString() ?? ''),
                 optionsBuilder: (TextEditingValue textEditingValue) {
-                  final models = provider.availableModels;
+                  // Only models whose DEVICE_INFO "device_type" matches this
+                  // tab's family (untyped models always show). The dialog
+                  // behind the dropdown arrow can still list every model.
+                  final models = provider.availableModelsFor(deviceKey);
                   final text = textEditingValue.text;
                   // Full list while the field is empty or unchanged (see the
                   // module autocomplete below for why).
@@ -355,7 +376,8 @@ class DeviceConfigurationForm extends StatelessWidget {
                       labelText: 'Model (type or select)',
                       helperText: provider.availableModels.isEmpty
                           ? 'No models found — add DEVICE_INFO dicts to the python modules'
-                          : '${provider.availableModels.length} models known; picking one sets the module + connection defaults',
+                          : '${provider.availableModelsFor(deviceKey).length} models for this device type '
+                              '(${provider.availableModels.length} total); picking one sets the module + defaults',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.arrow_drop_down),

@@ -3,11 +3,15 @@ from extronlib.system import Wait, ProgramLog
 from re import compile, search
 
 # --- Room Config Builder metadata (module level — read by the app, not by
-# the driver). "models" marks this file as the DEFAULT module for those
-# models in the app's Model dropdown; "connection" keys are config.json
-# device properties applied to the device when a model is picked. Keep the
-# values JSON-style (double quotes, numbers unquoted, no Python expressions).
+# the driver). "device_type" controls which device-family tab offers these
+# models (projector, display, camera, switcher, dsp, usb, power, mediaport,
+# wireless, recorder, screen — or a list of several). "models" marks this
+# file as the DEFAULT module for those models in the app's Model dropdown;
+# "connection" and "defaults" keys are config.json device properties applied
+# to the device when a model is picked. Keep the values JSON-style (double
+# quotes, numbers unquoted, no Python expressions).
 DEVICE_INFO = {
+    "device_type": "dsp",
     "models": [
         "DMP 64 Plus C",
         "DMP 64 Plus C V",
@@ -18,6 +22,10 @@ DEVICE_INFO = {
         "com_type": "Network",
         "protocol": "TCP",
         "net_port": 22023
+    },
+    "defaults": {
+        "keep_alive_command": "RefreshMatrix",
+        "keep_alive_interval": 30
     }
 }
 

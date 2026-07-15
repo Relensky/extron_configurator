@@ -5,10 +5,12 @@ import hashlib
 import binascii
 
 # --- Room Config Builder metadata (module level — read by the app, not by
-# the driver). "models" marks this file as the DEFAULT module for those
-# models in the app's Model dropdown; "connection" keys are config.json
-# device properties applied to the device when a model is picked.
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
+    "device_type": "projector",
     "models": [
         "VPL-PHZ50",
         "VPL-PHZ60"
@@ -17,6 +19,10 @@ DEVICE_INFO = {
         "com_type": "Network",
         "protocol": "TCP",
         "net_port": 53595
+    },
+    "defaults": {
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10
     }
 }
 

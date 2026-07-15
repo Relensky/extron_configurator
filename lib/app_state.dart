@@ -361,12 +361,54 @@ class AppStateProvider extends ChangeNotifier {
   //   2. the keys of the driver's own self.Models = {...} dict (fallback,
   //      so the dropdown works even before DEVICE_INFO is added)
   final Map<String, ModelEntry> modelRegistry = {};
-  // Per-module connection defaults from DEVICE_INFO["connection"]; keys are
-  // config.json device properties (protocol, net_port, com_type, baud, ...)
-  final Map<String, Map<String, dynamic>> moduleConnectionDefaults = {};
+  // Per-module property defaults: DEVICE_INFO["connection"] merged with
+  // DEVICE_INFO["defaults"] (two keys in the file purely for readability).
+  // Keys are config.json device properties (protocol, net_port, com_type,
+  // keep_alive_command, input, ...) applied when a model is picked.
+  final Map<String, Map<String, dynamic>> moduleDefaults = {};
 
-  /// Sorted model names for the device-tab Model dropdown.
+  /// Sorted model names for the device-tab Model dropdown (every model).
   List<String> get availableModels => modelRegistry.keys.toList()..sort();
+
+  /// Model names offered on [deviceKey]'s tab: models whose module declares
+  /// a matching "device_type" — plus untyped models (no device_type, e.g.
+  /// the self.Models fallbacks), which show everywhere.
+  List<String> availableModelsFor(String deviceKey) {
+    return modelRegistry.values
+        .where((e) => modelMatchesDevice(e, deviceKey))
+        .map((e) => e.model)
+        .toList()
+      ..sort();
+  }
+
+  /// True when [entry]'s device_type list matches [deviceKey]'s family.
+  /// Token-based against the family's section prefix, count key, and label
+  /// words, so "projector", "display", or "Projectors" all hit the
+  /// PROJECTORDEVICE_ family. No declared types — or a deviceKey outside
+  /// every known family — never filters.
+  bool modelMatchesDevice(ModelEntry entry, String deviceKey) {
+    if (entry.deviceTypes.isEmpty) return true;
+    final spec = uiSchema.deviceTypeForSection(deviceKey);
+    if (spec == null) return true;
+    final Set<String> familyTokens = {
+      _normalizeTypeToken(spec.prefix),
+      _normalizeTypeToken(spec.countKey.replaceFirst('dev_', '')),
+      for (final w in spec.label.split(RegExp(r'[^A-Za-z0-9]+')))
+        if (w.isNotEmpty) _normalizeTypeToken(w),
+    }..remove('');
+    return entry.deviceTypes
+        .any((t) => familyTokens.contains(_normalizeTypeToken(t)));
+  }
+
+  /// Lowercases, strips non-alphanumerics, and drops 'device' / plural-s
+  /// suffixes: 'PROJECTORDEVICE_', 'Projectors', 'projector' all become
+  /// 'projector'.
+  static String _normalizeTypeToken(String s) {
+    var t = s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (t.endsWith('device')) t = t.substring(0, t.length - 6);
+    if (t.endsWith('s') && t.length > 1) t = t.substring(0, t.length - 1);
+    return t;
+  }
 
   /// Attempts to find commonly named inputs inside the Python module for the autocomplete field
   Future<List<String>> getInputsForModule(String moduleFileName) async {
@@ -414,7 +456,7 @@ class AppStateProvider extends ChangeNotifier {
     final List<String> discovered = [];
     // Rebuilt from scratch on every scan so renamed/removed files drop out.
     modelRegistry.clear();
-    moduleConnectionDefaults.clear();
+    moduleDefaults.clear();
     try {
       final dir = Directory(mPath);
       if (!await dir.exists()) {
@@ -1560,18 +1602,28 @@ class AppStateProvider extends ChangeNotifier {
   //  Each driver .py may declare, at module level (outside any class):
   //
   //    DEVICE_INFO = {
+  //        "device_type": "dsp",
   //        "models": ["DMP 64 Plus C", "DMP 64 Plus C V"],
   //        "connection": {
   //            "com_type": "Network",
   //            "protocol": "TCP",
   //            "net_port": 22023
+  //        },
+  //        "defaults": {
+  //            "keep_alive_command": "RefreshMatrix",
+  //            "keep_alive_interval": 30
   //        }
   //    }
   //
+  //  "device_type" (string or list) restricts which device-family tabs
+  //  offer these models: projector, display, camera, switcher, dsp, usb,
+  //  power, mediaport, wireless, recorder, screen (matched against the
+  //  ui_schema device_types families; omit it to show everywhere).
   //  "models" marks this file as the DEFAULT module for those models;
-  //  "connection" keys are config.json device properties applied when a
-  //  model is picked. Files without DEVICE_INFO still contribute the keys
-  //  of their self.Models dict so the dropdown is populated everywhere.
+  //  "connection" and "defaults" keys are config.json device properties
+  //  applied when a model is picked (two keys purely for readability).
+  //  Files without DEVICE_INFO still contribute the keys of their
+  //  self.Models dict so the dropdown is populated everywhere.
   // ---------------------------------------------------------------------
 
   /// Parses one module's model list + connection defaults into the registry.
@@ -1584,6 +1636,7 @@ class AppStateProvider extends ChangeNotifier {
       final content = await file.readAsString();
 
       List<String> models = [];
+      List<String> deviceTypes = [];
       bool explicit = false;
       final info = parseDeviceInfo(fullPath, content);
       if (info != null) {
@@ -1592,11 +1645,25 @@ class AppStateProvider extends ChangeNotifier {
           models = m.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
           explicit = models.isNotEmpty;
         }
-        final conn = info['connection'];
-        if (conn is Map && conn.isNotEmpty) {
-          moduleConnectionDefaults[moduleName] =
-              conn.map((k, v) => MapEntry(k.toString(), v));
+        // "device_type": "projector"  or  ["projector", "display"]
+        final dt = info['device_type'] ?? info['device_types'];
+        if (dt is String && dt.trim().isNotEmpty) deviceTypes = [dt.trim()];
+        if (dt is List) {
+          deviceTypes = dt
+              .map((e) => e.toString().trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
         }
+        // "connection" + "defaults" are both device properties to apply —
+        // merged here; two keys in the file purely for readability.
+        final Map<String, dynamic> merged = {};
+        for (final section in ['connection', 'defaults']) {
+          final d = info[section];
+          if (d is Map) {
+            merged.addAll(d.map((k, v) => MapEntry(k.toString(), v)));
+          }
+        }
+        if (merged.isNotEmpty) moduleDefaults[moduleName] = merged;
       }
       // Fallback: the driver's own self.Models dict keys
       if (models.isEmpty) models = parseSelfModels(content);
@@ -1610,8 +1677,11 @@ class AppStateProvider extends ChangeNotifier {
             AppLogger.logInfo(
                 "Model '$model': default module is now $moduleName (DEVICE_INFO) instead of ${existing.module}");
           }
-          modelRegistry[model] =
-              ModelEntry(model: model, module: moduleName, explicit: explicit);
+          modelRegistry[model] = ModelEntry(
+              model: model,
+              module: moduleName,
+              explicit: explicit,
+              deviceTypes: deviceTypes);
         }
       }
     } catch (e, stack) {
@@ -1708,9 +1778,10 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Applies a Model-dropdown selection to a device: sets 'model', switches
   /// 'module' to the model's default file, and writes that module's
-  /// DEVICE_INFO connection defaults into the device block (adding keys the
-  /// block doesn't have yet). Returns "key = value" strings describing what
-  /// was applied, for the acknowledgement snackbar.
+  /// DEVICE_INFO connection + standard defaults (keep-alive, input, ...)
+  /// into the device block (adding keys the block doesn't have yet).
+  /// Returns "key = value" strings describing what was applied, for the
+  /// acknowledgement snackbar.
   List<String> applyModelSelection(String deviceKey, String model) {
     final List<String> applied = [];
     if (!roomConfig.containsKey(deviceKey)) return applied;
@@ -1723,7 +1794,7 @@ class AppStateProvider extends ChangeNotifier {
         dev['module'] = entry.module;
         applied.add('module = ${entry.module}');
       }
-      final defaults = moduleConnectionDefaults[entry.module];
+      final defaults = moduleDefaults[entry.module];
       if (defaults != null) {
         defaults.forEach((k, v) {
           dev[k] = v;
@@ -2265,12 +2336,21 @@ class AppStateProvider extends ChangeNotifier {
 }
 
 /// One entry of the model registry: which python module a model name maps
-/// to, and whether that mapping came from an explicit DEVICE_INFO dict
-/// (authoritative) or was only inferred from the driver's self.Models keys.
+/// to, whether that mapping came from an explicit DEVICE_INFO dict
+/// (authoritative) or was only inferred from the driver's self.Models keys,
+/// and which device-family tabs offer it (empty = every tab).
 class ModelEntry {
   final String model;
   final String module;
   final bool explicit;
+
+  /// Raw "device_type" strings from DEVICE_INFO (e.g. 'projector',
+  /// 'display'); matched against the ui_schema families at filter time.
+  final List<String> deviceTypes;
+
   const ModelEntry(
-      {required this.model, required this.module, required this.explicit});
+      {required this.model,
+      required this.module,
+      required this.explicit,
+      this.deviceTypes = const []});
 }
