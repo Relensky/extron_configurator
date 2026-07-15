@@ -673,6 +673,7 @@ class ProcessorSearchField extends StatelessWidget {
         ? ''
         : displayFor(provider, Map<String, dynamic>.from(initialProcessor!));
 
+    FocusNode? fieldFocus;
     return Autocomplete<String>(
       // Remount when the selection changes elsewhere (e.g. Clear button)
       // so initialValue re-applies; stable while typing.
@@ -689,10 +690,12 @@ class ProcessorSearchField extends StatelessWidget {
             .where((d) => d.toLowerCase().contains(text));
       },
       onSelected: (String selection) {
+        fieldFocus?.unfocus(); // Close the options overlay
         final p = byDisplay[selection];
         if (p != null) onSelected(p);
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        fieldFocus = focusNode;
         return TextFormField(
           controller: controller,
           focusNode: focusNode,

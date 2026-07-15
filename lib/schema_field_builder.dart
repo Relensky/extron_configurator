@@ -206,6 +206,7 @@ class SchemaFieldBuilder {
           helper = "Command '$command' not found in $moduleName.py — type the value manually";
         }
 
+        FocusNode? fieldFocus;
         return Autocomplete<String>(
           // Remount when the module changes so initialValue re-applies; a
           // stable key while typing keeps the cursor from resetting.
@@ -220,9 +221,12 @@ class SchemaFieldBuilder {
             return states.where(
                 (s) => s.toLowerCase().contains(text.toLowerCase()));
           },
-          onSelected: (String selection) =>
-              provider.updateDeviceValue(sectionKey, fieldKey, selection),
+          onSelected: (String selection) {
+            fieldFocus?.unfocus(); // Close the options overlay
+            provider.updateDeviceValue(sectionKey, fieldKey, selection);
+          },
           fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+            fieldFocus = focusNode;
             return TextFormField(
               controller: controller,
               focusNode: focusNode,

@@ -233,6 +233,44 @@ class DeviceClass:
       expect(applied, contains('net_port = 22023'));
     });
 
+    test('setDeviceCount numbers the synthesized template\'s trailing "_X" '
+        'placeholder per device (btn_name, gve_id)', () {
+      final provider = AppStateProvider(autoLoadSettings: false);
+      provider.roomConfig['SYSTEM_SETUP'] = <String, dynamic>{};
+
+      // getDefaultDeviceBlock falls back to the synthesized "..._X" template
+      // when the config has no PROJECTORDEVICE_1 and the schema no template.
+      final template = provider.getDefaultDeviceBlock('PROJECTORDEVICE_');
+      expect(template['btn_name'], 'Btn_Con_PROJECTORDEVICE_X');
+      expect(template['gve_id'], 'PROJECTORDEVICE_X');
+
+      provider.setDeviceCount(
+          'dev_projectors', 'PROJECTORDEVICE_', 2, template);
+
+      expect(provider.roomConfig['PROJECTORDEVICE_1']['btn_name'],
+          'Btn_Con_PROJECTORDEVICE_1');
+      expect(provider.roomConfig['PROJECTORDEVICE_1']['gve_id'],
+          'PROJECTORDEVICE_1');
+      expect(provider.roomConfig['PROJECTORDEVICE_2']['btn_name'],
+          'Btn_Con_PROJECTORDEVICE_2');
+      expect(provider.roomConfig['PROJECTORDEVICE_2']['gve_id'],
+          'PROJECTORDEVICE_2');
+    });
+
+    test('index substitution keeps a btn_name that legitimately ends in X '
+        '(no underscore before it)', () {
+      final provider = AppStateProvider(autoLoadSettings: false);
+      provider.roomConfig['SYSTEM_SETUP'] = <String, dynamic>{};
+
+      provider.setDeviceCount('dev_dsps', 'DSPDEVICE_', 2, {
+        'btn_name': 'Btn_Con_MTX', // ends in X but is not a placeholder
+        'gve_id': 'DSPDEVICE_X',
+      });
+
+      expect(provider.roomConfig['DSPDEVICE_2']['btn_name'], 'Btn_Con_MTX');
+      expect(provider.roomConfig['DSPDEVICE_2']['gve_id'], 'DSPDEVICE_2');
+    });
+
     test('keepSettingsSwitchModule changes only model + module, preserving '
         'every other field', () {
       final provider = AppStateProvider(autoLoadSettings: false);

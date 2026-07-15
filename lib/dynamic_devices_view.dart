@@ -380,6 +380,11 @@ class DeviceConfigurationForm extends StatelessWidget {
 
     // Captured from the module Autocomplete so 'Pick .py File' can push text into it
     TextEditingController? moduleFieldController;
+    // Captured so onSelected can unfocus the field — the optionsBuilders
+    // below return the full list while the text matches the saved value, so
+    // without dropping focus the options overlay stays open after a pick.
+    FocusNode? modelFieldFocus;
+    FocusNode? moduleFieldFocus;
 
     // 'input' always renders in its own slot near the top (under Keep
     // Alive): the schema-driven field when a "device_fields" entry overrides
@@ -464,9 +469,11 @@ class DeviceConfigurationForm extends StatelessWidget {
                   return models.where((m) => m.toLowerCase().contains(text.toLowerCase()));
                 },
                 onSelected: (String selection) {
+                  modelFieldFocus?.unfocus(); // Close the options overlay
                   _applyModel(context, provider, selection, moduleFieldController);
                 },
                 fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  modelFieldFocus = focusNode;
                   return TextFormField(
                     controller: controller,
                     focusNode: focusNode,
@@ -527,10 +534,12 @@ class DeviceConfigurationForm extends StatelessWidget {
                   return modules.where((m) => m.toLowerCase().contains(text.toLowerCase()));
                 },
                 onSelected: (String selection) {
+                  moduleFieldFocus?.unfocus(); // Close the options overlay
                   provider.updateDeviceValue(deviceKey, 'module', selection);
                 },
                 fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                   moduleFieldController = controller; // Expose to the picker button & dialog
+                  moduleFieldFocus = focusNode;
                   return TextFormField(
                     controller: controller,
                     focusNode: focusNode,
@@ -639,6 +648,7 @@ class DeviceConfigurationForm extends StatelessWidget {
             builder: (context, snapshot) {
               List<String> inputs = snapshot.data ?? [];
               String currentValue = deviceData['input']?.toString() ?? '';
+              FocusNode? inputFieldFocus;
 
               return Autocomplete<String>(
                 initialValue: TextEditingValue(text: currentValue),
@@ -647,9 +657,11 @@ class DeviceConfigurationForm extends StatelessWidget {
                   return inputs.where((String option) => option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
                 },
                 onSelected: (String selection) {
+                  inputFieldFocus?.unfocus(); // Close the options overlay
                   provider.updateDeviceValue(deviceKey, 'input', selection);
                 },
                 fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  inputFieldFocus = focusNode;
                   return TextFormField(
                     controller: controller,
                     focusNode: focusNode,

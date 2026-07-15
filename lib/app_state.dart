@@ -1781,7 +1781,9 @@ class AppStateProvider extends ChangeNotifier {
   /// Substitutes the device's trailing index into the index-bearing property
   /// values (btn_name, gve_id) of [map], mutating and returning it. e.g. for
   /// deviceKey CAMERADEVICE_3, a btn_name ending in "Cam1" becomes "Cam3".
-  /// Values without a trailing digit (or an empty value) are left alone.
+  /// A trailing "_X" placeholder (the synthesized template, e.g.
+  /// Btn_Con_PROJECTORDEVICE_X) becomes the index too. Values with neither
+  /// (or an empty value) are left alone.
   Map<String, dynamic> _indexSubstitute(
       Map<String, dynamic> map, String deviceKey) {
     final idxMatch = RegExp(r'(\d+)$').firstMatch(deviceKey);
@@ -1790,7 +1792,12 @@ class AppStateProvider extends ChangeNotifier {
     for (final key in const ['btn_name', 'gve_id']) {
       final v = map[key];
       if (v != null && v.toString().isNotEmpty) {
-        map[key] = v.toString().replaceFirst(RegExp(r'\d+$'), idx);
+        map[key] = v
+            .toString()
+            .replaceFirst(RegExp(r'\d+$'), idx)
+            // Only an X directly after an underscore is a placeholder — a
+            // btn_name legitimately ending in X (e.g. "..._MTX") is kept.
+            .replaceFirst(RegExp(r'(?<=_)X$'), idx);
       }
     }
     return map;
