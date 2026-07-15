@@ -3,12 +3,13 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'screenshot_tools.dart';
 
 /// Full-screen in-app viewer for a module manual PDF. Rendered with pdfrx
-/// (bundled pdfium), so scrolling, zooming and paging come for free. A small
-/// "Open externally" action falls back to the OS viewer via
-/// [AppStateProvider.openModuleDocumentation].
-class PdfViewerDialog extends StatelessWidget {
+/// (bundled pdfium), with a draggable scroll thumb down the right edge. The top
+/// bar offers a screenshot-and-annotate action, an "Open externally" fallback
+/// (via [AppStateProvider.openModuleDocumentation]) and Close.
+class PdfViewerDialog extends StatefulWidget {
   /// Absolute path to the .pdf file to display.
   final String filePath;
 
@@ -43,8 +44,25 @@ class PdfViewerDialog extends StatelessWidget {
   }
 
   @override
+  State<PdfViewerDialog> createState() => _PdfViewerDialogState();
+}
+
+class _PdfViewerDialogState extends State<PdfViewerDialog> {
+  final PdfViewerController _controller = PdfViewerController();
+
+  /// Wraps the rendered PDF so the top-bar camera button can capture it.
+  final GlobalKey _captureKey = GlobalKey();
+
+  void _screenshot() {
+    final base = widget.moduleName.split('.').last;
+    final dateToken = DateTime.now().toLocal().toIso8601String().split('T').first;
+    captureAndAnnotate(context, _captureKey,
+        defaultFileName: '${base}_manual_$dateToken.png');
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final title = '${moduleName.split('.').last}.pdf';
+    final title = '${widget.moduleName.split('.').last}.pdf';
     return Dialog(
       insetPadding: const EdgeInsets.all(24),
       clipBehavior: Clip.antiAlias,
@@ -64,12 +82,18 @@ class PdfViewerDialog extends StatelessWidget {
                       overflow: TextOverflow.ellipsis),
                 ),
                 IconButton(
+                  icon: const Icon(Icons.photo_camera),
+                  tooltip: 'Screenshot & annotate this page',
+                  onPressed: _screenshot,
+                ),
+                IconButton(
                   icon: const Icon(Icons.open_in_new),
                   tooltip: 'Open in external PDF viewer',
                   onPressed: () async {
                     final messenger = ScaffoldMessenger.of(context);
-                    final error =
-                        await context.read<AppStateProvider>().openModuleDocumentation(moduleName);
+                    final error = await context
+                        .read<AppStateProvider>()
+                        .openModuleDocumentation(widget.moduleName);
                     if (error != null) {
                       messenger.showSnackBar(SnackBar(content: Text(error)));
                     }
@@ -84,12 +108,36 @@ class PdfViewerDialog extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          // The PDF itself, filling the rest of the dialog.
+          // The PDF itself, filling the rest of the dialog, captured for the
+          // screenshot action and overlaid with a draggable scroll thumb.
           Expanded(
-            child: PdfViewer.file(
-              filePath,
-              params: const PdfViewerParams(
-                margin: 8,
+            child: RepaintBoundary(
+              key: _captureKey,
+              child: PdfViewer.file(
+                widget.filePath,
+                controller: _controller,
+                params: PdfViewerParams(
+                  margin: 8,
+                  // A visible, draggable scroll thumb down the right edge.
+                  viewerOverlayBuilder: (context, size, handleLinkTap) => [
+                    PdfViewerScrollThumb(
+                      controller: _controller,
+                      orientation: ScrollbarOrientation.right,
+                      thumbSize: const Size(12, 48),
+                      thumbBuilder:
+                          (context, thumbSize, pageNumber, controller) =>
+                              Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

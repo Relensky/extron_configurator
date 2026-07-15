@@ -1,17 +1,15 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'dynamic_devices_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
-import 'screenshot_annotator.dart';
+import 'screenshot_tools.dart';
 import 'system_settings_view.dart';
 
 void main() {
@@ -152,29 +150,16 @@ class _MainDashboardState extends State<MainDashboard> {
   /// screenshot annotator.
   final GlobalKey _captureKey = GlobalKey();
 
-  /// Grabs the current content area as a PNG and opens the annotator.
-  Future<void> _captureAndAnnotate(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-    try {
-      final boundary = _captureKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
-      if (boundary == null) {
-        messenger.showSnackBar(
-            const SnackBar(content: Text('Nothing to capture yet.')));
-        return;
-      }
-      final pixelRatio = MediaQuery.of(context).devicePixelRatio;
-      final image = await boundary.toImage(pixelRatio: pixelRatio);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (data == null) return;
-      final png = data.buffer.asUint8List();
-      navigator.push(MaterialPageRoute(
-        builder: (_) => ScreenshotAnnotatorView(imageBytes: png),
-      ));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Screenshot failed: $e')));
-    }
+  /// Captures the current content area and opens the annotation editor. The
+  /// default file name embeds the active tab + date.
+  void _takeScreenshot(BuildContext context, int selectedIndex) {
+    const tabNames = ['wizard', 'devices', 'system', 'raw_json', 'app_config'];
+    final tabToken = (selectedIndex >= 0 && selectedIndex < tabNames.length)
+        ? tabNames[selectedIndex]
+        : 'view';
+    final dateToken = DateTime.now().toLocal().toIso8601String().split('T').first;
+    captureAndAnnotate(context, _captureKey,
+        defaultFileName: '${tabToken}_screenshot_$dateToken.png');
   }
 
   /// Creates a new config from the template. Shared by the toolbar button
@@ -257,7 +242,7 @@ class _MainDashboardState extends State<MainDashboard> {
           IconButton(
             icon: const Icon(Icons.photo_camera),
             tooltip: 'Screenshot & annotate',
-            onPressed: () => _captureAndAnnotate(context),
+            onPressed: () => _takeScreenshot(context, selectedIndex),
           ),
           IconButton(
             icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),

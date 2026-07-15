@@ -2,14 +2,26 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 from extronlib.system import Wait, ProgramLog
 from re import compile, search
 
-# --- Room Config Builder metadata (module level — read by the app, not by
-# the driver). "device_type" controls which device-family tab offers these
-# models (projector, display, camera, switcher, dsp, usb, power, mediaport,
-# wireless, recorder, screen — or a list of several). "models" marks this
-# file as the DEFAULT module for those models in the app's Model dropdown;
-# "connection" and "defaults" keys are config.json device properties applied
-# to the device when a model is picked. Keep the values JSON-style (double
-# quotes, numbers unquoted, no Python expressions).
+# --- Room Config Builder metadata (module level — read by the app, not by the
+# driver). The app parses this DEVICE_INFO dict to drive the device tabs:
+#   "device_type"  Which device-family tab(s) list these models — one string or
+#                  a list. Case/plural-insensitive. A model with NO device_type
+#                  is hidden from the per-tab lists and shows only via the
+#                  picker's "Show all device types" checkbox. Valid values:
+#                    camera, projector (or display), switcher, dsp, usb, power,
+#                    mediaport, wireless (or sharelink), recorder,
+#                    screen (or relay / network)
+#   "models"       Marks this file as the DEFAULT module for those model names
+#                  in the Model dropdown (falls back to the driver's self.Models
+#                  keys when omitted).
+#   "connection" + "defaults"  config.json device properties (merged by the
+#                  app; split only for readability). May carry the FULL field
+#                  set; leave site-specific values (ip_address, serial_port,
+#                  password) blank and omit "model"/"module" (the picker sets
+#                  those). Picking a model on a NEW device applies these
+#                  defaults; on a CONVERSION (device already on another module)
+#                  it keeps the existing settings and lists what differs.
+# Keep the values JSON-style (double quotes, unquoted numbers, no Python code).
 DEVICE_INFO = {
     "device_type": "dsp",
     "models": [
