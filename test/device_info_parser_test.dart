@@ -104,19 +104,22 @@ class DeviceClass:
       return provider;
     }
 
-    test('projector tab lists projector + display + untyped models', () {
+    test('projector tab lists only typed projector + display models '
+        '(untyped hidden)', () {
       final provider = seeded();
+      // Mystery (untyped self.Models fallback) is excluded — checkbox-only.
       expect(provider.availableModelsFor('PROJECTORDEVICE_1'),
-          ['ME501', 'Mystery', 'VPL-PHZ60']);
+          ['ME501', 'VPL-PHZ60']);
     });
 
-    test('camera tab lists camera + untyped models only', () {
+    test('camera tab lists only typed camera models (untyped hidden)', () {
       final provider = seeded();
-      expect(provider.availableModelsFor('CAMERADEVICE_2'),
-          ['Mystery', 'TR311HW']);
+      // Mystery (untyped) no longer leaks into the camera tab.
+      expect(provider.availableModelsFor('CAMERADEVICE_2'), ['TR311HW']);
     });
 
-    test('a key outside every known family is never filtered', () {
+    test('a key outside every known family is never filtered '
+        '(untyped models still show)', () {
       final provider = seeded();
       expect(provider.availableModelsFor('SOMETHINGELSE_1').length, 4);
     });

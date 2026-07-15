@@ -370,9 +370,10 @@ class AppStateProvider extends ChangeNotifier {
   /// Sorted model names for the device-tab Model dropdown (every model).
   List<String> get availableModels => modelRegistry.keys.toList()..sort();
 
-  /// Model names offered on [deviceKey]'s tab: models whose module declares
-  /// a matching "device_type" — plus untyped models (no device_type, e.g.
-  /// the self.Models fallbacks), which show everywhere.
+  /// Model names offered on [deviceKey]'s tab: only models whose module's
+  /// DEVICE_INFO declares a matching "device_type". Untyped models (no
+  /// DEVICE_INFO device_type, e.g. the self.Models fallbacks) are left out —
+  /// they surface only through the picker's "Show all device types" checkbox.
   List<String> availableModelsFor(String deviceKey) {
     return modelRegistry.values
         .where((e) => modelMatchesDevice(e, deviceKey))
@@ -384,12 +385,13 @@ class AppStateProvider extends ChangeNotifier {
   /// True when [entry]'s device_type list matches [deviceKey]'s family.
   /// Token-based against the family's section prefix, count key, and label
   /// words, so "projector", "display", or "Projectors" all hit the
-  /// PROJECTORDEVICE_ family. No declared types — or a deviceKey outside
-  /// every known family — never filters.
+  /// PROJECTORDEVICE_ family. A model with NO declared device_type is filtered
+  /// OUT of a known family (checkbox-only); a deviceKey outside every known
+  /// family isn't filtered at all (nothing to match against).
   bool modelMatchesDevice(ModelEntry entry, String deviceKey) {
-    if (entry.deviceTypes.isEmpty) return true;
     final spec = uiSchema.deviceTypeForSection(deviceKey);
-    if (spec == null) return true;
+    if (spec == null) return true; // unknown family: no device_type to filter on
+    if (entry.deviceTypes.isEmpty) return false; // untyped: checkbox-only
     final Set<String> familyTokens = {
       _normalizeTypeToken(spec.prefix),
       _normalizeTypeToken(spec.countKey.replaceFirst('dev_', '')),
@@ -1895,19 +1897,30 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Opens the PDF manual for [moduleName]: "<module file name>.pdf" in the
-  /// Documentation folder (App Config; default <root>/documentation), shown
-  /// in the OS default PDF viewer. Returns null on success, else a
-  /// user-facing error message.
-  Future<String?> openModuleDocumentation(String moduleName) async {
+  /// Resolves the PDF manual for [moduleName]: "<module file name>.pdf" in the
+  /// Documentation folder (App Config; default <root>/documentation). Returns
+  /// the file path when it exists, otherwise a user-facing error message (never
+  /// both). Pure lookup — used by both the in-app viewer and the external-open
+  /// path so the resolution rules stay in one place.
+  ({String? path, String? error}) locateModuleManual(String moduleName) {
     if (moduleName.isEmpty) {
-      return 'Select a python module (or model) first.';
+      return (path: null, error: 'Select a python module (or model) first.');
     }
     final baseName = moduleName.split('.').last;
     final pdfPath = path.join(effectiveDocumentationPath, '$baseName.pdf');
-    if (!await File(pdfPath).exists()) {
-      return 'No manual found: $pdfPath';
+    if (!File(pdfPath).existsSync()) {
+      return (path: null, error: 'No manual found: $pdfPath');
     }
+    return (path: pdfPath, error: null);
+  }
+
+  /// Opens the PDF manual for [moduleName] in the OS default PDF viewer (the
+  /// in-app viewer's "Open externally" fallback). Returns null on success,
+  /// else a user-facing error message.
+  Future<String?> openModuleDocumentation(String moduleName) async {
+    final located = locateModuleManual(moduleName);
+    if (located.error != null) return located.error;
+    final pdfPath = located.path!;
     try {
       if (Platform.isWindows) {
         await Process.start('explorer.exe', [pdfPath],

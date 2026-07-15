@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'app_state.dart';
 import 'config_dictionary.dart';
+import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
 
 class DynamicDevicesTabsView extends StatefulWidget {
@@ -452,8 +453,9 @@ class DeviceConfigurationForm extends StatelessWidget {
                 initialValue: TextEditingValue(text: deviceData['model']?.toString() ?? ''),
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   // Only models whose DEVICE_INFO "device_type" matches this
-                  // tab's family (untyped models always show). The dialog
-                  // behind the dropdown arrow can still list every model.
+                  // tab's family; untyped (self.Models-only) models are hidden
+                  // here. The dialog behind the dropdown arrow can still list
+                  // every model via its "Show all device types" checkbox.
                   final models = provider.availableModelsFor(deviceKey);
                   final text = textEditingValue.text;
                   // Full list while the field is empty or unchanged (see the
@@ -497,14 +499,12 @@ class DeviceConfigurationForm extends StatelessWidget {
             ElevatedButton.icon(
               icon: const Icon(Icons.picture_as_pdf),
               label: const Text('Manual (PDF)'),
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
+              onPressed: () {
                 final currentModule =
                     provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
-                final error = await provider.openModuleDocumentation(currentModule);
-                if (error != null) {
-                  messenger.showSnackBar(SnackBar(content: Text(error)));
-                }
+                // Opens the manual in the in-app viewer (or a snackbar if it
+                // can't be resolved). The viewer itself offers "Open externally".
+                PdfViewerDialog.open(context, provider, currentModule);
               },
             ),
           ],

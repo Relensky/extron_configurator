@@ -95,6 +95,9 @@ class SchemaFieldBuilder {
   }
 
   // --- TEXT / INT / DOUBLE -------------------------------------------------
+  // Controller-backed so a value written programmatically (e.g. "Apply module
+  // defaults") shows up immediately, instead of the field keeping its stale
+  // mount-time text until a forced remount.
   static Widget _buildTextField(
       AppStateProvider provider,
       String sectionKey,
@@ -104,66 +107,18 @@ class SchemaFieldBuilder {
       String type,
       dynamic value,
       bool isUnknown) {
-    // Unknown keys get a red outline in every state + a red helper line
-    final OutlineInputBorder? redBorder = isUnknown
-        ? OutlineInputBorder(
-            borderSide: BorderSide(color: Colors.red.shade400, width: 1.5))
-        : null;
-
-    // TOUCH-PANEL LINE BREAKS: config values store panel line breaks as the
-    // two-character sequence \r (written to disk as \\r). Show them as REAL
-    // line breaks so the field reads the way the panel will render it, and
-    // convert typed line breaks back to the \r sequence when storing. The
-    // load-time conversion (key mapper / raw editor) is unchanged.
-    final bool isNumeric = type == 'int' || type == 'double' ||
-        value is int || value is double;
-    final String raw = value?.toString() ?? '';
-    final String displayValue = isNumeric ? raw : raw.replaceAll(r'\r', '\n');
-
-    String? helper = isUnknown
-        ? 'Not in UI schema — add "$fieldKey" to ui_schema.json'
-        : spec?.helperText;
-    if (!isUnknown && displayValue.contains('\n')) {
-      helper = helper == null
-          ? r'Line breaks are converted for the touch panel'
-          : '$helper — line breaks are saved as \\r';
-    }
-
-    return TextFormField(
-      initialValue: displayValue,
-      // Text fields grow to show every \r line; numeric fields stay one line
-      maxLines: isNumeric ? 1 : null,
-      keyboardType: isNumeric
-          ? const TextInputType.numberWithOptions(decimal: true)
-          : TextInputType.multiline,
-      decoration: InputDecoration(
-        labelText: label,
-        helperText: helper,
-        helperStyle: isUnknown ? TextStyle(color: Colors.red.shade400) : null,
-        border: redBorder ?? const OutlineInputBorder(),
-        enabledBorder: redBorder,
-        focusedBorder: isUnknown
-            ? OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.red.shade400, width: 2))
-            : null,
-      ),
-      onChanged: (val) {
-        dynamic parsedVal;
-        // Respect the declared schema type first, then the live value's type,
-        // so config.json keeps clean numeric types either way.
-        if (type == 'int' || value is int) {
-          parsedVal = int.tryParse(val) ?? 0;
-        } else if (type == 'double' || value is double) {
-          parsedVal = double.tryParse(val) ?? 0.0;
-        } else {
-          // Store visual line breaks as the literal \r the processor expects
-          parsedVal = val
-              .replaceAll('\r\n', '\n')
-              .replaceAll('\r', '\n')
-              .replaceAll('\n', r'\r');
-        }
-        provider.updateDeviceValue(sectionKey, fieldKey, parsedVal);
-      },
+    return _SyncedTextField(
+      // Remount when the field's identity changes (switching device tabs), so
+      // a fresh controller is seeded from the new device's value.
+      key: ValueKey('$sectionKey.$fieldKey'),
+      provider: provider,
+      sectionKey: sectionKey,
+      fieldKey: fieldKey,
+      spec: spec,
+      label: label,
+      type: type,
+      value: value,
+      isUnknown: isUnknown,
     );
   }
 
@@ -408,6 +363,144 @@ class SchemaFieldBuilder {
           },
         ),
       ],
+    );
+  }
+}
+
+/// The text/int/double editor. Holds its own TextEditingController and keeps
+/// it in sync with the stored value: when the value changes EXTERNALLY (an
+/// applied module default, a raw-JSON edit) the field updates right away, but
+/// the user's own typing never resets the cursor (the controller already
+/// holds that text, so no sync fires).
+class _SyncedTextField extends StatefulWidget {
+  final AppStateProvider provider;
+  final String sectionKey;
+  final String fieldKey;
+  final FieldSpec? spec;
+  final String label;
+  final String type;
+  final dynamic value;
+  final bool isUnknown;
+
+  const _SyncedTextField({
+    Key? key,
+    required this.provider,
+    required this.sectionKey,
+    required this.fieldKey,
+    required this.spec,
+    required this.label,
+    required this.type,
+    required this.value,
+    required this.isUnknown,
+  }) : super(key: key);
+
+  @override
+  State<_SyncedTextField> createState() => _SyncedTextFieldState();
+}
+
+class _SyncedTextFieldState extends State<_SyncedTextField> {
+  late final TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+
+  bool get _isNumeric =>
+      widget.type == 'int' ||
+      widget.type == 'double' ||
+      widget.value is int ||
+      widget.value is double;
+
+  // TOUCH-PANEL LINE BREAKS: config values store panel line breaks as the
+  // two-character sequence \r (written to disk as \\r). Show them as REAL line
+  // breaks so the field reads the way the panel will render it.
+  String _display(dynamic v) {
+    final raw = v?.toString() ?? '';
+    return _isNumeric ? raw : raw.replaceAll(r'\r', '\n');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _display(widget.value));
+  }
+
+  @override
+  void didUpdateWidget(covariant _SyncedTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Adopt an external write (an applied module default, a raw-JSON edit) as
+    // soon as it lands — but only while the user isn't editing this field, so
+    // their own typing (including a transient invalid numeric entry) is never
+    // reset out from under the cursor. Cursor goes to the end on adoption.
+    final incoming = _display(widget.value);
+    if (!_focusNode.hasFocus && incoming != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: incoming,
+        selection: TextSelection.collapsed(offset: incoming.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Unknown keys get a red outline in every state + a red helper line
+    final OutlineInputBorder? redBorder = widget.isUnknown
+        ? OutlineInputBorder(
+            borderSide: BorderSide(color: Colors.red.shade400, width: 1.5))
+        : null;
+
+    final String displayValue = _display(widget.value);
+    String? helper = widget.isUnknown
+        ? 'Not in UI schema — add "${widget.fieldKey}" to ui_schema.json'
+        : widget.spec?.helperText;
+    if (!widget.isUnknown && displayValue.contains('\n')) {
+      helper = helper == null
+          ? r'Line breaks are converted for the touch panel'
+          : '$helper — line breaks are saved as \\r';
+    }
+
+    return TextFormField(
+      controller: _controller,
+      focusNode: _focusNode,
+      // Text fields grow to show every \r line; numeric fields stay one line
+      maxLines: _isNumeric ? 1 : null,
+      keyboardType: _isNumeric
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : TextInputType.multiline,
+      decoration: InputDecoration(
+        labelText: widget.label,
+        helperText: helper,
+        helperStyle:
+            widget.isUnknown ? TextStyle(color: Colors.red.shade400) : null,
+        border: redBorder ?? const OutlineInputBorder(),
+        enabledBorder: redBorder,
+        focusedBorder: widget.isUnknown
+            ? OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.red.shade400, width: 2))
+            : null,
+      ),
+      onChanged: (val) {
+        dynamic parsedVal;
+        // Respect the declared schema type first, then the live value's type,
+        // so config.json keeps clean numeric types either way.
+        if (widget.type == 'int' || widget.value is int) {
+          parsedVal = int.tryParse(val) ?? 0;
+        } else if (widget.type == 'double' || widget.value is double) {
+          parsedVal = double.tryParse(val) ?? 0.0;
+        } else {
+          // Store visual line breaks as the literal \r the processor expects
+          parsedVal = val
+              .replaceAll('\r\n', '\n')
+              .replaceAll('\r', '\n')
+              .replaceAll('\n', r'\r');
+        }
+        widget.provider
+            .updateDeviceValue(widget.sectionKey, widget.fieldKey, parsedVal);
+      },
     );
   }
 }

@@ -1,14 +1,17 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'dynamic_devices_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
+import 'screenshot_annotator.dart';
 import 'system_settings_view.dart';
 
 void main() {
@@ -145,6 +148,35 @@ class MainDashboard extends StatefulWidget {
 class _MainDashboardState extends State<MainDashboard> {
   bool _setupDialogShown = false; // Prompt at most once per app session
 
+  /// Wraps the main content area so it can be captured to an image for the
+  /// screenshot annotator.
+  final GlobalKey _captureKey = GlobalKey();
+
+  /// Grabs the current content area as a PNG and opens the annotator.
+  Future<void> _captureAndAnnotate(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      final boundary = _captureKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Nothing to capture yet.')));
+        return;
+      }
+      final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+      final image = await boundary.toImage(pixelRatio: pixelRatio);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) return;
+      final png = data.buffer.asUint8List();
+      navigator.push(MaterialPageRoute(
+        builder: (_) => ScreenshotAnnotatorView(imageBytes: png),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Screenshot failed: $e')));
+    }
+  }
+
   /// Creates a new config from the template. Shared by the toolbar button
   /// (always available) and the landing screen button: asks for confirmation
   /// first when a config is already loaded, and routes to App Config with an
@@ -223,6 +255,11 @@ class _MainDashboardState extends State<MainDashboard> {
         title: const Text('Room Config Builder'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.photo_camera),
+            tooltip: 'Screenshot & annotate',
+            onPressed: () => _captureAndAnnotate(context),
+          ),
+          IconButton(
             icon: Icon(provider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
             tooltip: 'Toggle Theme',
             onPressed: () => provider.toggleTheme(),
@@ -300,7 +337,10 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
-            child: (!hasConfig && selectedIndex != 4) ? _buildLandingScreen(context, provider) : _buildMainContent(selectedIndex),
+            child: RepaintBoundary(
+              key: _captureKey,
+              child: (!hasConfig && selectedIndex != 4) ? _buildLandingScreen(context, provider) : _buildMainContent(selectedIndex),
+            ),
           )
         ],
       ),
