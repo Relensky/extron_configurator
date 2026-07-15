@@ -2,6 +2,25 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 from extronlib.system import Wait, ProgramLog
 from re import compile, search
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "models" marks this file as the DEFAULT module for those
+# models in the app's Model dropdown; "connection" keys are config.json
+# device properties applied to the device when a model is picked. Keep the
+# values JSON-style (double quotes, numbers unquoted, no Python expressions).
+DEVICE_INFO = {
+    "models": [
+        "DMP 64 Plus C",
+        "DMP 64 Plus C V",
+        "DMP 64 Plus C AT",
+        "DMP 64 Plus C V AT"
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 22023
+    }
+}
+
 class DeviceClass:
     def __init__(self):
 

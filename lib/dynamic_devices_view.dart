@@ -89,6 +89,91 @@ class DeviceConfigurationForm extends StatelessWidget {
 
   const DeviceConfigurationForm({Key? key, required this.deviceKey}) : super(key: key);
 
+  /// Searchable dialog of every model aggregated across the python modules
+  /// (DEVICE_INFO "models" lists, falling back to each driver's self.Models
+  /// keys). The subtitle shows which module a model will switch the device to.
+  Future<String?> _showModelPicker(
+      BuildContext context, AppStateProvider provider) {
+    final models = provider.availableModels;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String filter = '';
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final visible = filter.isEmpty
+                ? models
+                : models.where((m) => m.toLowerCase().contains(filter.toLowerCase())).toList();
+            return AlertDialog(
+              title: const Text('Select Device Model'),
+              content: SizedBox(
+                width: 500,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Search models',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => setDialogState(() => filter = val),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: models.isEmpty
+                          ? const Center(child: Text('No models found in the python modules.\nAdd a DEVICE_INFO dict (or self.Models entries) to the .py files.', textAlign: TextAlign.center))
+                          : ListView.builder(
+                              itemCount: visible.length,
+                              itemBuilder: (ctx, i) {
+                                final entry = provider.modelRegistry[visible[i]];
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(visible[i]),
+                                  subtitle: entry == null
+                                      ? null
+                                      : Text(entry.explicit
+                                          ? entry.module
+                                          : '${entry.module} (from self.Models)'),
+                                  onTap: () => Navigator.of(ctx).pop(visible[i]),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Writes a Model selection through the provider (sets 'model', switches
+  /// 'module', applies the module's DEVICE_INFO connection defaults) and
+  /// acknowledges what changed in a snackbar.
+  void _applyModel(BuildContext context, AppStateProvider provider,
+      String model, TextEditingController? moduleController) {
+    final applied = provider.applyModelSelection(deviceKey, model);
+    final module =
+        provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
+    moduleController?.text = module; // Keep the visible module field in sync
+    final String msg;
+    if (!provider.modelRegistry.containsKey(model)) {
+      msg = "Model '$model' saved — no module claims this model, so nothing else changed.";
+    } else if (applied.isEmpty) {
+      msg = "Model '$model' saved — module and connection defaults already in place.";
+    } else {
+      msg = "Model '$model': set ${applied.join(', ')}";
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   /// A guaranteed-working dropdown: a searchable dialog listing every python
   /// module discovered under the Python Modules Path.
   Future<String?> _showModulePicker(BuildContext context, List<String> modules) {
@@ -188,7 +273,9 @@ class DeviceConfigurationForm extends StatelessWidget {
     // that kept it visible only after a save re-sorted the keys.
     final bool inputHasSchemaOverride =
         provider.uiSchema.deviceSpecFor(deviceKey, 'input') != null;
-    final skipKeys = ['module', 'keep_alive_command', 'input'];
+    // 'model' renders in its own dedicated slot at the top (Model dropdown),
+    // like 'module' — never in the auto-generated list below.
+    final skipKeys = ['module', 'keep_alive_command', 'input', 'model'];
 
     // Alphabetical, matching how the config is sorted on save — so a field's
     // position doesn't move after Apply Changes / export re-orders the JSON.
@@ -239,6 +326,71 @@ class DeviceConfigurationForm extends StatelessWidget {
       padding: const EdgeInsets.all(24.0),
       children: [
         Text(deviceData['name'] ?? deviceKey, style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 20),
+
+        // --- MODEL SELECTOR (aggregated from every module's model dict) ---
+        // Picking a model switches 'module' to that model's default .py and
+        // applies the module's DEVICE_INFO connection defaults.
+        _wrapWithInfo(context, 'model', Row(
+          children: [
+            Expanded(
+              child: Autocomplete<String>(
+                initialValue: TextEditingValue(text: deviceData['model']?.toString() ?? ''),
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  final models = provider.availableModels;
+                  final text = textEditingValue.text;
+                  // Full list while the field is empty or unchanged (see the
+                  // module autocomplete below for why).
+                  if (text.isEmpty || text == deviceData['model']?.toString()) return models;
+                  return models.where((m) => m.toLowerCase().contains(text.toLowerCase()));
+                },
+                onSelected: (String selection) {
+                  _applyModel(context, provider, selection, moduleFieldController);
+                },
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Model (type or select)',
+                      helperText: provider.availableModels.isEmpty
+                          ? 'No models found — add DEVICE_INFO dicts to the python modules'
+                          : '${provider.availableModels.length} models known; picking one sets the module + connection defaults',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.arrow_drop_down),
+                        tooltip: 'Browse models',
+                        onPressed: () async {
+                          final selected = await _showModelPicker(context, provider);
+                          if (selected != null && context.mounted) {
+                            controller.text = selected; // Keep the visible field in sync
+                            _applyModel(context, provider, selected, moduleFieldController);
+                          }
+                        },
+                      ),
+                    ),
+                    // Manual fill-in still saves, without touching the module
+                    onChanged: (val) => provider.updateDeviceValue(deviceKey, 'model', val),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text('Manual (PDF)'),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final currentModule =
+                    provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
+                final error = await provider.openModuleDocumentation(currentModule);
+                if (error != null) {
+                  messenger.showSnackBar(SnackBar(content: Text(error)));
+                }
+              },
+            ),
+          ],
+        )),
         const SizedBox(height: 20),
 
         // --- PYTHON MODULE SELECTOR (fill-in or pick from modules path) ---

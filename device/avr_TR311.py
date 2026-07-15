@@ -2,6 +2,21 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 from struct import pack
 import time
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "models" marks this file as the DEFAULT module for those
+# models in the app's Model dropdown; "connection" keys are config.json
+# device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "models": [
+        "TR311HW"
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "UDP",
+        "net_port": 52381
+    }
+}
+
 class DeviceSerialClass:
     def __init__(self):
 

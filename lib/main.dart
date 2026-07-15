@@ -835,7 +835,11 @@ class AppSettingsView extends StatelessWidget {
 
         // Python Modules Path
         TextFormField(
-          key: ValueKey(provider.modulesPath), // Forces UI to refresh when picked via dialog
+          // Value in the key forces a refresh when the path is picked via the
+          // dialog. The field-name prefix keeps the key unique among this
+          // ListView's children: on a fresh install every path is blank, so
+          // the bare value alone made four siblings share a ValueKey('').
+          key: ValueKey('modulesPath_${provider.modulesPath}'),
           decoration: InputDecoration(
             labelText: 'Python Modules Path',
             // Blank = the "devices" sub-folder of the Root Folder
@@ -857,10 +861,36 @@ class AppSettingsView extends StatelessWidget {
           onChanged: (val) => provider.updateSetting('modulesPath', val),
         ),
         const SizedBox(height: 20),
-        
+
+        // Documentation Path (per-module PDF manuals)
+        TextFormField(
+          key: ValueKey('documentationPath_${provider.documentationPath}'),
+          decoration: InputDecoration(
+            labelText: 'Documentation Path (PDF manuals)',
+            // Blank = the "documentation" sub-folder of the Root Folder
+            hintText: provider.effectiveDocumentationPath,
+            helperText: 'Blank = "documentation" sub-folder of the Root Folder. '
+                'Each manual is named after its python module, e.g. extr_dsp_DMP_64_Plus_Series.pdf',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.folder),
+              tooltip: 'Select Directory',
+              onPressed: () async {
+                String? selectedDirectory = await FilePicker.getDirectoryPath();
+                if (selectedDirectory != null) {
+                  provider.updateSetting('documentationPath', selectedDirectory);
+                }
+              },
+            ),
+          ),
+          initialValue: provider.documentationPath,
+          onChanged: (val) => provider.updateSetting('documentationPath', val),
+        ),
+        const SizedBox(height: 20),
+
         // Buildings JSON Path
         TextFormField(
-          key: ValueKey(provider.buildingsFilePath),
+          key: ValueKey('buildingsFilePath_${provider.buildingsFilePath}'),
           decoration: InputDecoration(
             labelText: 'Buildings JSON File Path',
             // Blank = buildings.json in the Root Folder
@@ -894,7 +924,7 @@ class AppSettingsView extends StatelessWidget {
             // Default config.json Template Path
             Expanded(
               child: TextFormField(
-                key: ValueKey(provider.templateFilePath),
+                key: ValueKey('templateFilePath_${provider.templateFilePath}'),
                 decoration: InputDecoration(
                   labelText: 'Default config.json Template Path',
                   // Blank = config.json in the Root Folder
@@ -957,7 +987,7 @@ class AppSettingsView extends StatelessWidget {
           children: [
             Expanded(
               child: TextFormField(
-                key: ValueKey(provider.uiSchemaPath),
+                key: ValueKey('uiSchemaPath_${provider.uiSchemaPath}'),
                 decoration: InputDecoration(
                   labelText: 'UI Schema File Path (ui_schema.json)',
                   hintText: 'Blank = ui_schema.json in the Root Folder / next to the app',
@@ -1009,7 +1039,7 @@ class AppSettingsView extends StatelessWidget {
           children: [
             Expanded(
               child: TextFormField(
-                key: ValueKey(provider.keyMapPath),
+                key: ValueKey('keyMapPath_${provider.keyMapPath}'),
                 decoration: InputDecoration(
                   labelText: 'Legacy Key Map File Path (key_map.json)',
                   hintText: 'Blank = key_map.json in the Root Folder / next to the app',
@@ -1058,7 +1088,7 @@ class AppSettingsView extends StatelessWidget {
 
         // Processors JSON Path
         TextFormField(
-          key: ValueKey(provider.processorsFilePath),
+          key: ValueKey('processorsFilePath_${provider.processorsFilePath}'),
           decoration: InputDecoration(
             labelText: 'Processors JSON File Path',
             // Blank = processors.json in the Root Folder; read automatically on boot
@@ -1098,7 +1128,7 @@ class AppSettingsView extends StatelessWidget {
 
         // Template Root Path
         TextFormField(
-          key: ValueKey(provider.rootFolderPath),
+          key: ValueKey('rootFolderPath_${provider.rootFolderPath}'),
           decoration: InputDecoration(
             labelText: 'Root Folder Path (default base for all blank paths above)',
             hintText: provider.effectiveRootFolder,
@@ -1505,6 +1535,7 @@ class FirstRunSetupDialog extends StatelessWidget {
     final bool schemaExists = File(provider.effectiveUiSchemaPath).existsSync();
     final bool keyMapExists = File(provider.effectiveKeyMapPath).existsSync();
     final bool modulesExists = Directory(provider.effectiveModulesPath).existsSync();
+    final bool documentationExists = Directory(provider.effectiveDocumentationPath).existsSync();
 
     return AlertDialog(
       title: Row(
@@ -1592,6 +1623,12 @@ class FirstRunSetupDialog extends StatelessWidget {
                   exists: modulesExists,
                   isDirectory: true,
                   settingKey: 'modulesPath'),
+              _pathRow(context, provider,
+                  label: 'Documentation folder (PDF manuals — default: "documentation" sub-folder)',
+                  value: provider.effectiveDocumentationPath,
+                  exists: documentationExists,
+                  isDirectory: true,
+                  settingKey: 'documentationPath'),
             ],
           ),
         ),

@@ -22,6 +22,7 @@ class AppStateProvider extends ChangeNotifier {
   String templateFilePath = '';
   String uiSchemaPath = ''; // Optional path to ui_schema.json (GUI field definitions)
   String keyMapPath = '';   // Optional path to key_map.json (legacy key translation)
+  String documentationPath = ''; // Folder of per-module PDF manuals (blank = <root>/documentation)
 
   // --- Processor connection settings (App Config > Processor Connection) ---
   // Defaults are the Extron standards; editable for nonstandard processors.
@@ -102,6 +103,12 @@ class AppStateProvider extends ChangeNotifier {
       ? modulesPath
       : path.join(effectiveRootFolder, 'devices');
 
+  /// PDF manuals folder: explicit choice, else "<root>/documentation".
+  /// Each module's manual is "<module file name>.pdf" in this folder.
+  String get effectiveDocumentationPath => documentationPath.isNotEmpty
+      ? documentationPath
+      : path.join(effectiveRootFolder, 'documentation');
+
   /// processors.json: explicit choice, else "<root>/processors.json".
   String get effectiveProcessorsFilePath => processorsFilePath.isNotEmpty
       ? processorsFilePath
@@ -166,6 +173,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Serializes every setting to app_config.json. Failures are logged but
   /// never thrown — a read-only folder must not break the running app.
   Future<void> _persistSettings() async {
+    if (!_persistenceEnabled) return; // Test provider: leave the file alone
     if (settingsFilePath.isEmpty) settingsFilePath = _resolveSettingsFilePath();
     final Map<String, dynamic> data = {
       '__readme':
@@ -180,6 +188,7 @@ class AppStateProvider extends ChangeNotifier {
       'templateFilePath': templateFilePath,
       'uiSchemaPath': uiSchemaPath,
       'keyMapPath': keyMapPath,
+      'documentationPath': documentationPath,
       'sftpUsername': sftpUsername,
       'sftpPort': sftpPort,
       'sftpRemoteConfigPath': sftpRemoteConfigPath,
@@ -344,6 +353,21 @@ class AppStateProvider extends ChangeNotifier {
   // module selection dropdown/autocomplete on device tabs.
   List<String> availableModules = [];
 
+  // --- MODEL REGISTRY -------------------------------------------------
+  // Every model name found across the module files, mapped to the module
+  // that should be used for it. Sources, in order of authority:
+  //   1. a module-level DEVICE_INFO = { "models": [...] } dict (explicit —
+  //      marks that file as the DEFAULT module for those models)
+  //   2. the keys of the driver's own self.Models = {...} dict (fallback,
+  //      so the dropdown works even before DEVICE_INFO is added)
+  final Map<String, ModelEntry> modelRegistry = {};
+  // Per-module connection defaults from DEVICE_INFO["connection"]; keys are
+  // config.json device properties (protocol, net_port, com_type, baud, ...)
+  final Map<String, Map<String, dynamic>> moduleConnectionDefaults = {};
+
+  /// Sorted model names for the device-tab Model dropdown.
+  List<String> get availableModels => modelRegistry.keys.toList()..sort();
+
   /// Attempts to find commonly named inputs inside the Python module for the autocomplete field
   Future<List<String>> getInputsForModule(String moduleFileName) async {
     final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
@@ -388,6 +412,9 @@ class AppStateProvider extends ChangeNotifier {
     // Resolve once: explicit setting, else "<root>/devices" (see getters).
     final String mPath = effectiveModulesPath;
     final List<String> discovered = [];
+    // Rebuilt from scratch on every scan so renamed/removed files drop out.
+    modelRegistry.clear();
+    moduleConnectionDefaults.clear();
     try {
       final dir = Directory(mPath);
       if (!await dir.exists()) {
@@ -425,6 +452,7 @@ class AppStateProvider extends ChangeNotifier {
           discovered.add(moduleName);
           await getCommandsForModule(moduleName);
           await getInputsForModule(moduleName);
+          await _registerModuleModels(moduleName);
         } catch (e) {
           // Skip this one file, keep parsing the rest
           AppLogger.logError("Skipped unparseable module ${entity.path}", e);
@@ -552,9 +580,18 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   // --- Constructor triggers auto-load on startup ---
-  AppStateProvider() {
-    _loadSavedSettings();
+  // Tests pass autoLoadSettings: false — it disables BOTH the load and every
+  // later save. Widget tests drive real UI (theme toggles, updateSetting)
+  // whose saves would hit the developer's real app_config.json; worse, a
+  // write started inside a test's fake-async zone can be killed mid-flight
+  // at teardown, leaving a truncated 0-byte file.
+  AppStateProvider({bool autoLoadSettings = true}) {
+    _persistenceEnabled = autoLoadSettings;
+    if (autoLoadSettings) _loadSavedSettings();
   }
+
+  /// False on test-constructed providers: never touch app_config.json.
+  bool _persistenceEnabled = true;
 
   /// Loads saved settings from app_config.json in the root folder. The file
   /// is (re)written with the resolved values on every startup, so it exists
@@ -597,6 +634,7 @@ class AppStateProvider extends ChangeNotifier {
       templateFilePath = str('templateFilePath', '');
       uiSchemaPath = str('uiSchemaPath', '');
       keyMapPath = str('keyMapPath', '');
+      documentationPath = str('documentationPath', '');
       sftpUsername = str('sftpUsername', 'admin');
       sftpPort = str('sftpPort', '22022');
       sftpRemoteConfigPath = str('sftpRemoteConfigPath', '/config.json');
@@ -1198,6 +1236,9 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadKeyMap(); // Re-resolve the legacy key translation rules
         break;
+      case 'documentationPath':
+        documentationPath = value; // PDFs are resolved on demand — no reload
+        break;
       case 'sftpUsername':
         sftpUsername = value.trim().isEmpty ? 'admin' : value.trim();
         break;
@@ -1511,6 +1552,224 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logError(
           "Error parsing states for command '$command' in $fullPath", e, stack);
       return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  //  MODEL REGISTRY / DEVICE_INFO PARSING
+  //  Each driver .py may declare, at module level (outside any class):
+  //
+  //    DEVICE_INFO = {
+  //        "models": ["DMP 64 Plus C", "DMP 64 Plus C V"],
+  //        "connection": {
+  //            "com_type": "Network",
+  //            "protocol": "TCP",
+  //            "net_port": 22023
+  //        }
+  //    }
+  //
+  //  "models" marks this file as the DEFAULT module for those models;
+  //  "connection" keys are config.json device properties applied when a
+  //  model is picked. Files without DEVICE_INFO still contribute the keys
+  //  of their self.Models dict so the dropdown is populated everywhere.
+  // ---------------------------------------------------------------------
+
+  /// Parses one module's model list + connection defaults into the registry.
+  Future<void> _registerModuleModels(String moduleName) async {
+    final relativePath = '${moduleName.replaceAll('.', path.separator)}.py';
+    final fullPath = path.join(effectiveModulesPath, relativePath);
+    try {
+      final file = File(fullPath);
+      if (!await file.exists()) return;
+      final content = await file.readAsString();
+
+      List<String> models = [];
+      bool explicit = false;
+      final info = parseDeviceInfo(fullPath, content);
+      if (info != null) {
+        final m = info['models'];
+        if (m is List) {
+          models = m.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+          explicit = models.isNotEmpty;
+        }
+        final conn = info['connection'];
+        if (conn is Map && conn.isNotEmpty) {
+          moduleConnectionDefaults[moduleName] =
+              conn.map((k, v) => MapEntry(k.toString(), v));
+        }
+      }
+      // Fallback: the driver's own self.Models dict keys
+      if (models.isEmpty) models = parseSelfModels(content);
+
+      for (final model in models) {
+        final existing = modelRegistry[model];
+        // First module wins unless a later one declares the model EXPLICITLY
+        // (DEVICE_INFO) and the current holder was only a fallback match.
+        if (existing == null || (explicit && !existing.explicit)) {
+          if (existing != null && existing.module != moduleName) {
+            AppLogger.logInfo(
+                "Model '$model': default module is now $moduleName (DEVICE_INFO) instead of ${existing.module}");
+          }
+          modelRegistry[model] =
+              ModelEntry(model: model, module: moduleName, explicit: explicit);
+        }
+      }
+    } catch (e, stack) {
+      AppLogger.logError("Error parsing models from $fullPath", e, stack);
+    }
+  }
+
+  /// Extracts the module-level DEVICE_INFO dict (column 0) as a JSON map.
+  /// Tolerates Python syntax: single quotes, trailing commas, # comments,
+  /// True/False/None. Returns null when absent or unparsable (logged).
+  static Map<String, dynamic>? parseDeviceInfo(String fullPath, String content) {
+    final m =
+        RegExp(r'^DEVICE_INFO\s*=\s*\{', multiLine: true).firstMatch(content);
+    if (m == null) return null;
+    final block = _bracedBlockAt(content, m.end - 1);
+    if (block == null) {
+      AppLogger.logError("DEVICE_INFO in $fullPath never closes its braces");
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(pythonLiteralToJson(block));
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (e) {
+      AppLogger.logError(
+          "DEVICE_INFO in $fullPath is not a valid dict — use JSON-style values (strings, numbers, lists, dicts)", e);
+    }
+    return null;
+  }
+
+  /// Converts a Python dict/list literal to JSON text: strips # comments,
+  /// re-quotes single-quoted strings, maps True/False/None, drops trailing
+  /// commas. String contents (either quote style) pass through untouched.
+  static String pythonLiteralToJson(String src) {
+    final out = StringBuffer();
+    int i = 0;
+    while (i < src.length) {
+      final ch = src[i];
+      if (ch == '#') {
+        // Comment: skip to end of line (we are outside any string here)
+        while (i < src.length && src[i] != '\n') {
+          i++;
+        }
+        continue;
+      }
+      if (ch == "'" || ch == '"') {
+        final quote = ch;
+        i++;
+        final buf = StringBuffer();
+        while (i < src.length && src[i] != quote) {
+          if (src[i] == '\\' && i + 1 < src.length) {
+            buf.write(src[i]);
+            buf.write(src[i + 1]);
+            i += 2;
+            continue;
+          }
+          buf.write(src[i]);
+          i++;
+        }
+        i++; // closing quote
+        var s = buf.toString();
+        if (quote == "'") {
+          // Python-escaped apostrophes become literal; bare " needs escaping
+          s = s.replaceAll(r"\'", "'").replaceAll('"', r'\"');
+        }
+        out.write('"$s"');
+        continue;
+      }
+      out.write(ch);
+      i++;
+    }
+    var text = out.toString();
+    text = text
+        .replaceAll(RegExp(r'\bTrue\b'), 'true')
+        .replaceAll(RegExp(r'\bFalse\b'), 'false')
+        .replaceAll(RegExp(r'\bNone\b'), 'null');
+    // Trailing commas before a closing } or ] are legal Python, not JSON
+    text = text.replaceAllMapped(
+        RegExp(r',(\s*[}\]])'), (match) => match.group(1)!);
+    return text;
+  }
+
+  /// Keys of the driver's self.Models = {...} dict (fallback model source).
+  static List<String> parseSelfModels(String content) {
+    final m = RegExp(r'self\.Models\s*=\s*\{').firstMatch(content);
+    if (m == null) return [];
+    final block = _bracedBlockAt(content, m.end - 1);
+    if (block == null) return [];
+    return RegExp("['\"]([^'\"]+)['\"]\\s*:")
+        .allMatches(block)
+        .map((x) => x.group(1)!)
+        .toSet()
+        .toList();
+  }
+
+  /// Applies a Model-dropdown selection to a device: sets 'model', switches
+  /// 'module' to the model's default file, and writes that module's
+  /// DEVICE_INFO connection defaults into the device block (adding keys the
+  /// block doesn't have yet). Returns "key = value" strings describing what
+  /// was applied, for the acknowledgement snackbar.
+  List<String> applyModelSelection(String deviceKey, String model) {
+    final List<String> applied = [];
+    if (!roomConfig.containsKey(deviceKey)) return applied;
+    final dev = roomConfig[deviceKey];
+    dev['model'] = model;
+
+    final entry = modelRegistry[model];
+    if (entry != null) {
+      if (dev['module'] != entry.module) {
+        dev['module'] = entry.module;
+        applied.add('module = ${entry.module}');
+      }
+      final defaults = moduleConnectionDefaults[entry.module];
+      if (defaults != null) {
+        defaults.forEach((k, v) {
+          dev[k] = v;
+          applied.add('$k = $v');
+        });
+      }
+      // Parse the newly selected module right away so the keep-alive /
+      // input dropdowns are ready the moment the form rebuilds.
+      getCommandsForModule(entry.module);
+      getInputsForModule(entry.module);
+      AppLogger.logInfo(
+          "Model '$model' selected on $deviceKey: ${applied.isEmpty ? 'no changes needed' : applied.join(', ')}");
+    }
+    notifyListeners();
+    return applied;
+  }
+
+  /// Opens the PDF manual for [moduleName]: "<module file name>.pdf" in the
+  /// Documentation folder (App Config; default <root>/documentation), shown
+  /// in the OS default PDF viewer. Returns null on success, else a
+  /// user-facing error message.
+  Future<String?> openModuleDocumentation(String moduleName) async {
+    if (moduleName.isEmpty) {
+      return 'Select a python module (or model) first.';
+    }
+    final baseName = moduleName.split('.').last;
+    final pdfPath = path.join(effectiveDocumentationPath, '$baseName.pdf');
+    if (!await File(pdfPath).exists()) {
+      return 'No manual found: $pdfPath';
+    }
+    try {
+      if (Platform.isWindows) {
+        await Process.start('explorer.exe', [pdfPath],
+            mode: ProcessStartMode.detached);
+      } else if (Platform.isMacOS) {
+        await Process.start('open', [pdfPath],
+            mode: ProcessStartMode.detached);
+      } else {
+        await Process.start('xdg-open', [pdfPath],
+            mode: ProcessStartMode.detached);
+      }
+      AppLogger.logInfo('Opened documentation $pdfPath');
+      return null;
+    } catch (e, stack) {
+      AppLogger.logError('Failed to open documentation $pdfPath', e, stack);
+      return 'Could not open $pdfPath';
     }
   }
 
@@ -2003,4 +2262,15 @@ class AppStateProvider extends ChangeNotifier {
     });
     return data;
   }
+}
+
+/// One entry of the model registry: which python module a model name maps
+/// to, and whether that mapping came from an explicit DEVICE_INFO dict
+/// (authoritative) or was only inferred from the driver's self.Models keys.
+class ModelEntry {
+  final String model;
+  final String module;
+  final bool explicit;
+  const ModelEntry(
+      {required this.model, required this.module, required this.explicit});
 }

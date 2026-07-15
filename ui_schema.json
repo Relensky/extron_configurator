@@ -236,7 +236,7 @@
       "description": "Flag to disconnect the item. Used if a projector or item is temporarily removed from a room."
     },
     "model": {
-      "description": "Model of the device as a string."
+      "description": "Model of the device. Picking a model from the dropdown switches 'module' to that model's default python file and applies the module's DEVICE_INFO connection defaults (protocol, port, ...). The list is built from each module's DEVICE_INFO \"models\" list, falling back to its self.Models keys."
     },
     "keep_alive_trigger": {
       "description": "Delay the keep_alive_command until the trigger is received such as the APC needing to complete the login before polling."

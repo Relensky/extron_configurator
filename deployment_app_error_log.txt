@@ -81,3 +81,51 @@ StackTrace:
 --------------------------------------------------
 [2026-05-27T22:32:47.940012] ERROR: Base config.json not found in C:\Users\derek\Documents\ControlScript\extron_configurator\extron_configurator\device
 --------------------------------------------------
+[2026-07-14T10:07:02.548147] ERROR: app_config.json is not valid JSON — starting with defaults (original kept as app_config.json.invalid)
+Details: FormatException: Unexpected end of input (at character 1)
+
+^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.close (dart:convert-patch/convert_patch.dart:497:7)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:36:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      AppStateProvider._loadSavedSettings (package:extron_configurator/app_state.dart:571:27)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-07-14T19:51:44.193161] ERROR: app_config.json is not valid JSON — starting with defaults (original kept as app_config.json.invalid)
+Details: FormatException: Unexpected end of input (at character 1)
+
+^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.close (dart:convert-patch/convert_patch.dart:497:7)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:36:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      AppStateProvider._loadSavedSettings (package:extron_configurator/app_state.dart:598:27)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-07-14T19:51:44.213696] ERROR: app_config.json is not valid JSON — starting with defaults (original kept as app_config.json.invalid)
+Details: FormatException: Unexpected end of input (at character 1)
+
+^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.close (dart:convert-patch/convert_patch.dart:497:7)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:36:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      AppStateProvider._loadSavedSettings (package:extron_configurator/app_state.dart:598:27)
+<asynchronous suspension>
+
+--------------------------------------------------
