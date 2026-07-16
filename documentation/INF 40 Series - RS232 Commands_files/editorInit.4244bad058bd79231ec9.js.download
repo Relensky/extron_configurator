@@ -1,0 +1,248 @@
+/* $Id$ */
+function ZohoDeskEditor_Init() {}
+ZohoDeskEditor_Init.init = function(crmcsrfparam,crmcsrfValue,hookToOrganize) { // You can use this hook to organize the toolbar and other things
+    ZohoDeskEditor_Init.version = `EV${PortalInfo.editorVersion}`;
+    ZohoDeskEditor_Init.editorStaticPath = PortalInfo.nimbusEditorUrl;
+    ZohoDeskEditor_Init.inlineQuotes = true;
+    ZohoDeskEditor_Init.csrfCookieVal = crmcsrfparam;//SupportUI.CurrentPortal.getCSRFToken();
+    ZohoDeskEditor_Init.csrfParamVal = crmcsrfValue;//SupportUI.CurrentPortal.getCSRFParamName();
+    ZohoDeskEditor_Init.defaultFontSize = "12";
+    ZohoDeskEditor_Init.defaultFontFamily = "ProximaNovaRegular, Arial, Helvetica, sans-serif";
+    ZohoDeskEditor_Init.dropDownTopPadding = 11;
+    ZohoDeskEditor_Init.dropDownLeftPadding = 5;
+    ZohoDeskEditor_Init.slidebarClass = "KB_Editor_DropDown_Slidebar";
+    var agt = navigator.userAgent.toLowerCase();
+    ZohoDeskEditor_Init.is_ie = (agt.indexOf("ie") !== -1);
+    ZohoDeskEditor_Init.is_safari = (agt.indexOf("safari") !== -1);
+    ZohoDeskEditor_Init.is_opera = (agt.indexOf("opera") !== -1);
+    ZohoDeskEditor_Init.is_mac = (agt.indexOf("mac") !== -1);
+    ZohoDeskEditor_Init.loading = true;
+    ZohoDeskEditor_Init.changedTools = ["fontfamily"];
+    ZohoDeskEditor_Init.tabKeyHandling = true;
+    var loc_Protocol = window.location.protocol;
+    var serverNamePref = "";
+    var domain = "com";
+    var serverNameSuff = "";
+    var serverMiddile = ".zohostatic.";
+    var deploymentType= window.deploymentType || "US";
+    if(deploymentType.indexOf("SKY") > -1){
+        serverMiddile = ".skydeskstatic.";
+        domain = "jp";
+    }
+    if(deploymentType === "SKYSTAGE"){
+        serverNameSuff = ".stage";
+    }
+    if(deploymentType.indexOf("RO") > -1){
+        serverNameSuff = "-ro";
+    }
+    if(["LOC","DEV"].indexOf(deploymentType) > -1){
+        serverNamePref = "local";
+    }
+    if(deploymentType === "CN"){
+        domain += ".cn";
+    }
+    if(deploymentType === "EU"){
+        domain = "eu";
+    }
+        ZohoDeskEditor_Init.jsurl = loc_Protocol + "//" + serverNamePref + "js" + serverNameSuff + serverMiddile + domain + "/zde/" + ZohoDeskEditor_Init.version + "/js/";
+        ZohoDeskEditor_Init.cssurl = loc_Protocol + "//" + serverNamePref + "css" + serverNameSuff + serverMiddile + domain + "/zde/" + ZohoDeskEditor_Init.version + "/css/";
+        ZohoDeskEditor_Init.imgurl = loc_Protocol + "//" + serverNamePref + "img" + serverNameSuff + serverMiddile + domain + "/zde/" + ZohoDeskEditor_Init.version + "/images/";
+
+    if( ZohoDeskEditor_Init.editorStaticPath ){ // need to remove this check after cdn build move.
+        ZohoDeskEditor_Init.jsurl = loc_Protocol + "//" + ZohoDeskEditor_Init.editorStaticPath + "/"+ ZohoDeskEditor_Init.version + "/js/";
+        ZohoDeskEditor_Init.cssurl = loc_Protocol + "//" + ZohoDeskEditor_Init.editorStaticPath + "/"+ ZohoDeskEditor_Init.version + "/css/";
+        ZohoDeskEditor_Init.imgurl = loc_Protocol + "//" + ZohoDeskEditor_Init.editorStaticPath + "/"+ ZohoDeskEditor_Init.version + "/images/";
+    }
+
+    ZohoDeskEditor_Init.toolbarOrder = [
+            ["bold", "Bold (Ctrl+B)", "#KBEditortools_txtbold", "KBEditortools-txtbold"],
+            ["italic", "Italic (Ctrl+I)", "#KBEditortools_txtitalic", "KBEditortools-txtitalic"],
+            ["underline", "Underline (Ctrl+U)", "#KBEditortools_txtunderline", "KBEditortools-txtunderline"],
+            ["forecolor", "Font color", "#KBEditortools_clrpick", "KBEditortools-clrpick"],
+            ["backcolor", "Background color", "#KBEditortools_bgclr", "KBEditortools-bgclr"],
+            ["fontSize", "Font size", "#KBEditortools_block_down_arrow", "KB_Editor_Bdr_div TextSize_Type"],
+            ["alignoptions", "Align", "#KBEditortools_align_left", "KBEditortools-align-left"],
+            ["listoptions", "Lists", "#KBEditortools_list_round", "KBEditortools-list-round"],
+            ["indentoptions", "Indent", "#KBEditortools_increaseindent", "KBEditortools-increaseindent"],
+            ["attach", "Insert image", "#KBEditortools_insertimage", "KBEditortools-insertimage"],
+            ["removeFormat", "Clear formatting", "#KBEditortools_clr", "KBEditortools-clr"],
+            ["insertoptions", "Insert options", "#KBEditortools_block_down_arrow", "KB_Editor_Bdr_div Insert_Type"],
+            ["styletext", "Text Style", "#KBEditortools_txtbgclr", "KBEditortools-txtbgclr"],
+            ["plaintext", "Plain text", "#KBEditortools_arrow", "KB_Editor_PlainText KB_Editor_FullScreen"]
+    ];
+
+
+
+
+    ZohoDeskEditor_Init.heading = [{
+            "htm": "Heading 1",
+            "datAttr": "h1"
+        },
+        {
+            "htm": "Heading 2",
+            "datAttr": "h2"
+        },
+        {
+            "htm": "Heading 3",
+            "datAttr": "h3"
+        },
+        {
+            "htm": "Normal",
+            "datAttr": "p"
+        }
+    ];
+    ZohoDeskEditor_Init.insertoptions = [{
+            "htm": "Insert link",
+            "datAttr": "link",
+            "iconClass":"KBEditortools-insertlink",
+            "svgId" : "#KBEditortools_insertlink"
+        },
+        {
+            "htm": "Remove link",
+            "datAttr": "unlink",
+            "iconClass":"KBEditortools-removelink",
+            "svgId" : "#KBEditortools_removelink"
+
+        },
+        {
+            "htm": "Insert HTML",
+            "datAttr": "object",
+            "iconClass":"KBEditortools-embed2",
+            "svgId" : "#KBEditortools_embed_2"
+        },
+        {
+            "htm" : "Edit HTML",
+            "datAttr" : "edithtml",
+            "iconClass":"KBEditortools-embed2",
+            "svgId" : "#KBEditortools_embed_2"
+        },
+        {
+            "htm": "Insert table",
+            "datAttr": "table",
+            "iconClass":"KBEditortools-inserttable",
+            "svgId" : "#KBEditortools_inserttable"
+        },
+        {
+            "htm": "Insert horizontal rule",
+            "datAttr": "inserthorizontalrule",
+            "iconClass":"KBEditortools-hr",
+            "svgId" : "#KBEditortools_hr"
+        },
+        {
+            "htm": "Insert code",
+            "datAttr": "code",
+            "iconClass":"KBEditortools-code",
+            "svgId" : "#KBEditortools_code"
+        }
+    ];
+
+    ZohoDeskEditor_Init.align = [{
+            "htm": "Align left",
+            "datAttr": "justifyleft",
+            "iconClass":"KBEditortools-align-left",
+            "svgId" : "#KBEditortools_align_left"
+        },
+        {
+            "htm": "Align right",
+            "datAttr": "justifyright",
+            "iconClass":"KBEditortools-align-right",
+            "svgId" : "#KBEditortools_align_right"
+        },
+        {
+            "htm": "Align justify",
+            "datAttr": "justifyfull",
+            "iconClass":"KBEditortools-align-justify",
+            "svgId" : "#KBEditortools_align_justify"
+        },
+        {
+            "htm": "Align center",
+            "datAttr": "justifycenter",
+            "iconClass":"KBEditortools-align-center",
+            "svgId" : "#KBEditortools_align_center"
+        }
+    ];
+    ZohoDeskEditor_Init.list = [{
+            "htm": "Bullets",
+            "datAttr": "insertunorderedlist",
+            "iconClass":"KBEditortools-list-round",
+            "svgId" : "#KBEditortools_list_round"
+        },
+        {
+            "htm": "Numbering",
+            "datAttr": "insertorderedlist",
+            "iconClass":"KBEditortools-list-number",
+            "svgId" : "#KBEditortools_list_number"
+        }
+    ];
+
+    ZohoDeskEditor_Init.indent = [{
+            "htm": "Increase indent",
+            "datAttr": "indent",
+            "iconClass":"KBEditortools-increaseindent",
+            "svgId" : "#KBEditortools_increaseindent"
+        },
+        {
+            "htm": "Decrease indent",
+            "datAttr": "outdent",
+            "iconClass":"KBEditortools-decreaseindent",
+            "svgId" : "#KBEditortools_decreaseindent"
+        }
+    ];
+
+    ZohoDeskEditor_Init.attachDrop = [{
+            "clk": function(editor) {
+                editor.uploadImage("load");
+                if (ZohoDeskEditor_Init.needEditorStats) {
+                    editor.updateCount("image");
+                }
+            },
+            "htm": "Upload",
+            "iconClass" : "KBEditortools-upload",
+            "svgId" : "#KBEditortools_upload"
+        },
+        {
+            "clk": function(editor) {
+                editor.uploadImage("url");
+                if (ZohoDeskEditor_Init.needEditorStats) {
+                    editor.updateCount("image");
+                }
+            },
+            "htm": "URL",
+            "iconClass" : "KBEditortools-sphere",
+            "svgId" : "#KBEditortools_sphere"
+        }
+    ];
+
+    ZohoDeskEditor_Init.fontSize = [{
+            "htm": "8",
+            "datAttr": "1"
+        },
+        {
+            "htm": "10",
+            "datAttr": "2"
+        },
+        {
+            "htm": "12",
+            "datAttr": "3"
+        },
+        {
+            "htm": "14",
+            "datAttr": "4"
+        },
+        {
+            "htm": "18",
+            "datAttr": "5"
+        },
+        {
+            "htm": "24",
+            "datAttr": "6"
+        },
+        {
+            "htm": "36",
+            "datAttr": "7"
+        }
+    ];
+
+
+};
+ZohoDeskEditor_Init.init("crmcsrfparam","");

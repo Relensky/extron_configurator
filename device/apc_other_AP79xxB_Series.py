@@ -1,17 +1,51 @@
-from extronlib.interface import SerialInterface, EthernetClientInterface
-from extronlib.system import ProgramLog
 from re import compile, search
 import time
+
+from extronlib.interface import EthernetClientInterface, SerialInterface
+from extronlib.system import ProgramLog
+
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "power",
+    "models": ["AP7921B", "AP7922B"],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "UDP",
+        "net_port": 52381,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Cam1",
+        "lbl_name": "Lbl_InstCam_Model",
+        "gve_id": "Cam1",
+        "name": "Camera - TR311HW",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "averadmin",
+        "password": "",  # site-specific — blank
+    },
+}
+
 
 class DeviceClass:
     def __init__(self):
 
-        self.Unidirectional = 'False'
+        self.Unidirectional = "False"
         self.connectionCounter = 15
         self.DefaultResponseTimeout = 0.3
         self.Subscription = {}
         self.ReceiveData = self.__ReceiveData
-        self.__receiveBuffer = b''
+        self.__receiveBuffer = b""
         self.__maxBufferSize = 2048
         self.__matchStringDict = {}
         self.counter = 0
@@ -19,108 +53,137 @@ class DeviceClass:
         self.initializationChk = True
         self.Debug = False
         self.authenticated = False
-        self.deviceUsername = 'apc'
-        self.devicePassword = 'apc'
-        self.last_serial_time = 0 # Added for debounce logic
+        self.deviceUsername = "apc"
+        self.devicePassword = "apc"
+        self.last_serial_time = 0  # Added for debounce logic
         self.Models = {
-            'AP7921B': self.apc_31_2983_8,
-            'AP7922B': self.apc_31_2983_16,
-            }
-
-        self.Commands = {
-            'ConnectionStatus': {'Status': {}},
-            'PowerOutlet': {'Parameters': ['Number'], 'Status': {}, 'AllowedValues': ['On', 'Off', 'Reboot']},
-            'SerialNumber': { 'Status': {}},
-            'OutletName': {'Parameters': ['Number'], 'Status': {}},
+            "AP7921B": self.apc_31_2983_8,
+            "AP7922B": self.apc_31_2983_16,
         }
 
-        if self.Unidirectional == 'False':
-            self.AddMatchString(compile(b'User Name\s*:'), self.__MatchLoginUsername, None)
-            self.AddMatchString(compile(b'Password\s*:'), self.__MatchLoginPassword, None)
-            self.AddMatchString(compile(b'(?:\s*\d+:\s*[\S ]+:\s*(?:On|Off)\*?\s*)+'), self.__MatchPowerOutlet, None)
-            self.AddMatchString(compile(b'Serial Number:\s*([\S ]+)\s*'), self.__MatchSerialNumber, None)
-            self.AddMatchString(compile(b'(E(?:10[0-7]|20\d|210)):\s*([\S ]+)\s*'), self.__MatchError, None)
-            self.AddMatchString(compile(b'Schneider Electric'), self.__MatchLoginSuccessful, None)
-            self.AddMatchString(compile(b'Connection Closed - Bye'), self.__MatchLoginFailed, None)
+        self.Commands = {
+            "ConnectionStatus": {"Status": {}},
+            "PowerOutlet": {
+                "Parameters": ["Number"],
+                "Status": {},
+                "AllowedValues": ["On", "Off", "Reboot"],
+            },
+            "SerialNumber": {"Status": {}},
+            "OutletName": {"Parameters": ["Number"], "Status": {}},
+        }
 
-        self.PowerOutletRegEx = compile(b'\s*(\d+):\s*[\S ]+:\s*(On|Off)\*?\s*')
+        if self.Unidirectional == "False":
+            self.AddMatchString(
+                compile(b"User Name\s*:"), self.__MatchLoginUsername, None
+            )
+            self.AddMatchString(
+                compile(b"Password\s*:"), self.__MatchLoginPassword, None
+            )
+            self.AddMatchString(
+                compile(b"(?:\s*\d+:\s*[\S ]+:\s*(?:On|Off)\*?\s*)+"),
+                self.__MatchPowerOutlet,
+                None,
+            )
+            self.AddMatchString(
+                compile(b"Serial Number:\s*([\S ]+)\s*"), self.__MatchSerialNumber, None
+            )
+            self.AddMatchString(
+                compile(b"(E(?:10[0-7]|20\d|210)):\s*([\S ]+)\s*"),
+                self.__MatchError,
+                None,
+            )
+            self.AddMatchString(
+                compile(b"Schneider Electric"), self.__MatchLoginSuccessful, None
+            )
+            self.AddMatchString(
+                compile(b"Connection Closed - Bye"), self.__MatchLoginFailed, None
+            )
+
+        self.PowerOutletRegEx = compile(b"\s*(\d+):\s*[\S ]+:\s*(On|Off)\*?\s*")
 
     def __MatchLoginUsername(self, match, tag):
         self.SetUsername()
 
     def SetUsername(self):
         if self.deviceUsername:
-            self.Send('{0}\r\n'.format(self.deviceUsername))
+            self.Send("{0}\r\n".format(self.deviceUsername))
         else:
-            self.MissingCredentialsLog('Username')
+            self.MissingCredentialsLog("Username")
 
     def __MatchLoginPassword(self, match, tag):
         self.SetPassword()
 
     def SetPassword(self):
         if self.devicePassword:
-            self.Send('{0}\r\n'.format(self.devicePassword))
+            self.Send("{0}\r\n".format(self.devicePassword))
         else:
-            self.MissingCredentialsLog('Password')
+            self.MissingCredentialsLog("Password")
 
     def __MatchLoginFailed(self, match, tag):
         self.authenticated = False
-        self.Error(['Login procedure failed. Check Username and Password.'])
+        self.Error(["Login procedure failed. Check Username and Password."])
 
     def __MatchLoginSuccessful(self, match, tag):
         self.authenticated = True
 
     def SetOutletName(self, value, qualifier):
-        
-        outlet_number = qualifier['Number']
-        
+
+        outlet_number = qualifier["Number"]
+
         # Verify outlet number is valid
-        if (outlet_number.isdigit() and 1 <= int(outlet_number) <= self._power_outlet_max):
+        if (
+            outlet_number.isdigit()
+            and 1 <= int(outlet_number) <= self._power_outlet_max
+        ):
             # Enclose value in quotes to handle spaces
             OutletNameCmdString = 'olName {} "{}"\r\n'.format(outlet_number, value)
-            self.__SetHelper('OutletName', OutletNameCmdString, value, qualifier)
+            self.__SetHelper("OutletName", OutletNameCmdString, value, qualifier)
         else:
-            self.Discard('Invalid Command for SetOutletName')
+            self.Discard("Invalid Command for SetOutletName")
 
     def SetPowerOutlet(self, value, qualifier):
 
-        ValueStateValues = {
-            'On':  'olOn',
-            'Off': 'olOff',
-            'Reboot': 'olReboot'
-        }
+        ValueStateValues = {"On": "olOn", "Off": "olOff", "Reboot": "olReboot"}
 
-        outlet_number = qualifier['Number']
-        if (outlet_number == 'All') or (outlet_number.isdigit() and 1 <= int(outlet_number) <= self._power_outlet_max):
-            PowerOutletCmdString = '{} {}\r\n'.format(ValueStateValues[value], outlet_number.lower())
-            self.__SetHelper('PowerOutlet', PowerOutletCmdString, value, qualifier)
+        outlet_number = qualifier["Number"]
+        if (outlet_number == "All") or (
+            outlet_number.isdigit()
+            and 1 <= int(outlet_number) <= self._power_outlet_max
+        ):
+            PowerOutletCmdString = "{} {}\r\n".format(
+                ValueStateValues[value], outlet_number.lower()
+            )
+            self.__SetHelper("PowerOutlet", PowerOutletCmdString, value, qualifier)
         else:
-            self.Discard('Invalid Command for SetPowerOutlet')
+            self.Discard("Invalid Command for SetPowerOutlet")
 
     def UpdatePowerOutlet(self, value, qualifier):
 
-        outlet_number = qualifier['Number']
-        if (outlet_number == 'All') or (outlet_number.isdigit() and 1 <= int(outlet_number) <= self._power_outlet_max):
-            PowerOutletCmdString = 'olStatus all\r\n'
-            self.__UpdateHelper('PowerOutlet', PowerOutletCmdString, value, qualifier)
+        outlet_number = qualifier["Number"]
+        if (outlet_number == "All") or (
+            outlet_number.isdigit()
+            and 1 <= int(outlet_number) <= self._power_outlet_max
+        ):
+            PowerOutletCmdString = "olStatus all\r\n"
+            self.__UpdateHelper("PowerOutlet", PowerOutletCmdString, value, qualifier)
         else:
-            self.Discard('Invalid Command for UpdatePowerOutlet')
+            self.Discard("Invalid Command for UpdatePowerOutlet")
 
     def __MatchPowerOutlet(self, match, tag):
 
         for result in self.PowerOutletRegEx.findall(match.group(0)):
             qualifier = dict()
-            qualifier['Number'] = result[0].decode()
+            qualifier["Number"] = result[0].decode()
             value = result[1].decode()
-            self.WriteStatus('PowerOutlet', value, qualifier)
+            self.WriteStatus("PowerOutlet", value, qualifier)
 
     def UpdateSerialNumber(self, value, qualifier):
 
-        SerialNumberCmdString = 'about\r\n'
-        self.__UpdateHelper('SerialNumber', SerialNumberCmdString, value, qualifier)
+        SerialNumberCmdString = "about\r\n"
+        self.__UpdateHelper("SerialNumber", SerialNumberCmdString, value, qualifier)
 
     def __MatchSerialNumber(self, match, tag):
-        # Ignore duplicate serial numbers (Network Card) that arrive immediately 
+        # Ignore duplicate serial numbers (Network Card) that arrive immediately
         # after the primary (Hardware) serial number.
         current_time = time.monotonic()
         if (current_time - self.last_serial_time) < 2.0:
@@ -128,7 +191,7 @@ class DeviceClass:
 
         self.last_serial_time = current_time
         value = (match.group(1).decode()).strip()
-        self.WriteStatus('SerialNumber', value, None)
+        self.WriteStatus("SerialNumber", value, None)
 
     def __SetHelper(self, command, commandstring, value, qualifier):
         self.Debug = True
@@ -136,8 +199,8 @@ class DeviceClass:
 
     def __UpdateHelper(self, command, commandstring, value, qualifier):
         if self.authenticated:
-            if self.Unidirectional == 'True':
-                self.Discard('Inappropriate Command ' + command)
+            if self.Unidirectional == "True":
+                self.Discard("Inappropriate Command " + command)
             else:
                 if self.initializationChk:
                     self.OnConnected()
@@ -149,21 +212,21 @@ class DeviceClass:
 
                 self.Send(commandstring)
         else:
-            self.Discard('Device is not Authenticated')
+            self.Discard("Device is not Authenticated")
 
     def __MatchError(self, match, tag):
         self.counter = 0
         err_number = match.group(1).decode()
         err_message = match.group(2).decode()
-        self.Error(['An Error Occurred: {}: {}'.format(err_number, err_message)])
+        self.Error(["An Error Occurred: {}: {}".format(err_number, err_message)])
 
     def OnConnected(self):
         self.connectionFlag = True
-        self.WriteStatus('ConnectionStatus', 'Connected')
+        self.WriteStatus("ConnectionStatus", "Connected")
         self.counter = 0
 
     def OnDisconnected(self):
-        self.WriteStatus('ConnectionStatus', 'Disconnected')
+        self.WriteStatus("ConnectionStatus", "Disconnected")
         self.connectionFlag = False
         self.authenticated = False
 
@@ -173,41 +236,41 @@ class DeviceClass:
     def apc_31_2983_16(self):
         self._power_outlet_max = 16
 
-    ######################################################    
+    ######################################################
     # RECOMMENDED not to modify the code below this point
     ######################################################
 
     # Send Control Commands
     def Set(self, command, value, qualifier=None):
-        method = getattr(self, 'Set%s' % command, None)
+        method = getattr(self, "Set%s" % command, None)
         if method is not None and callable(method):
             method(value, qualifier)
         else:
-            raise AttributeError(command, 'does not support Set.')
+            raise AttributeError(command, "does not support Set.")
 
     # Send Update Commands
     def Update(self, command, qualifier=None):
-        method = getattr(self, 'Update%s' % command, None)
+        method = getattr(self, "Update%s" % command, None)
         if method is not None and callable(method):
             method(None, qualifier)
         else:
-            raise AttributeError(command, 'does not support Update.')
+            raise AttributeError(command, "does not support Update.")
 
     # This method is to tie an specific command with a parameter to a call back method
     # when its value is updated. It sets how often the command will be query, if the command
     # have the update method.
-    # If the command doesn't have the update feature then that command is only used for feedback 
+    # If the command doesn't have the update feature then that command is only used for feedback
     def SubscribeStatus(self, command, qualifier, callback):
         Command = self.Commands.get(command, None)
         if Command:
             if command not in self.Subscription:
-                self.Subscription[command] = {'method':{}}
-        
+                self.Subscription[command] = {"method": {}}
+
             Subscribe = self.Subscription[command]
-            Method = Subscribe['method']
-        
+            Method = Subscribe["method"]
+
             if qualifier:
-                for Parameter in Command['Parameters']:
+                for Parameter in Command["Parameters"]:
                     try:
                         Method = Method[qualifier[Parameter]]
                     except:
@@ -216,26 +279,26 @@ class DeviceClass:
                             Method = Method[qualifier[Parameter]]
                         else:
                             return
-        
-            Method['callback'] = callback
-            Method['qualifier'] = qualifier    
+
+            Method["callback"] = callback
+            Method["qualifier"] = qualifier
         else:
-            raise KeyError('Invalid command for SubscribeStatus ', command)
+            raise KeyError("Invalid command for SubscribeStatus ", command)
 
     # This method is to check the command with new status have a callback method then trigger the callback
     def NewStatus(self, command, value, qualifier):
-        if command in self.Subscription :
+        if command in self.Subscription:
             Subscribe = self.Subscription[command]
-            Method = Subscribe['method']
+            Method = Subscribe["method"]
             Command = self.Commands[command]
             if qualifier:
-                for Parameter in Command['Parameters']:
+                for Parameter in Command["Parameters"]:
                     try:
                         Method = Method[qualifier[Parameter]]
                     except:
                         break
-            if 'callback' in Method and Method['callback']:
-                Method['callback'](command, value, qualifier)  
+            if "callback" in Method and Method["callback"]:
+                Method["callback"](command, value, qualifier)
 
     # Save new status to the command
     def WriteStatus(self, command, value, qualifier=None):
@@ -243,9 +306,9 @@ class DeviceClass:
         if not self.connectionFlag:
             self.OnConnected()
         Command = self.Commands[command]
-        Status = Command['Status']
+        Status = Command["Status"]
         if qualifier:
-            for Parameter in Command['Parameters']:
+            for Parameter in Command["Parameters"]:
                 try:
                     Status = Status[qualifier[Parameter]]
                 except KeyError:
@@ -253,113 +316,146 @@ class DeviceClass:
                         Status[qualifier[Parameter]] = {}
                         Status = Status[qualifier[Parameter]]
                     else:
-                        return  
+                        return
         try:
-            if Status['Live'] != value:
-                Status['Live'] = value
+            if Status["Live"] != value:
+                Status["Live"] = value
                 self.NewStatus(command, value, qualifier)
         except:
-            Status['Live'] = value
+            Status["Live"] = value
             self.NewStatus(command, value, qualifier)
 
     # Read the value from a command.
     def ReadStatus(self, command, qualifier=None):
         Command = self.Commands.get(command, None)
         if Command:
-            Status = Command['Status']
+            Status = Command["Status"]
             if qualifier:
-                for Parameter in Command['Parameters']:
+                for Parameter in Command["Parameters"]:
                     try:
                         Status = Status[qualifier[Parameter]]
                     except KeyError:
                         return None
             try:
-                return Status['Live']
+                return Status["Live"]
             except:
                 return None
         else:
-            raise KeyError('Invalid command for ReadStatus: ', command)
+            raise KeyError("Invalid command for ReadStatus: ", command)
 
     def __ReceiveData(self, interface, data):
         # Handle incoming data
-        #print("APC Received Data: {}".format(data))
+        # print("APC Received Data: {}".format(data))
         self.__receiveBuffer += data
-        index = 0    # Start of possible good data
-        
-        #check incoming data if it matched any expected data from device module
+        index = 0  # Start of possible good data
+
+        # check incoming data if it matched any expected data from device module
         for regexString, CurrentMatch in self.__matchStringDict.items():
             while True:
                 result = search(regexString, self.__receiveBuffer)
                 if result:
                     index = result.start()
-                    CurrentMatch['callback'](result, CurrentMatch['para'])
-                    self.__receiveBuffer = self.__receiveBuffer[:result.start()] + self.__receiveBuffer[result.end():]
+                    CurrentMatch["callback"](result, CurrentMatch["para"])
+                    self.__receiveBuffer = (
+                        self.__receiveBuffer[: result.start()]
+                        + self.__receiveBuffer[result.end() :]
+                    )
                 else:
                     break
-                    
-        if index: 
+
+        if index:
             # Clear out any junk data that came in before any good matches.
             self.__receiveBuffer = self.__receiveBuffer[index:]
         else:
             # In rare cases, the buffer could be filled with garbage quickly.
             # Make sure the buffer is capped.  Max buffer size set in init.
-            self.__receiveBuffer = self.__receiveBuffer[-self.__maxBufferSize:]
+            self.__receiveBuffer = self.__receiveBuffer[-self.__maxBufferSize :]
 
     # Add regular expression so that it can be check on incoming data from device.
     def AddMatchString(self, regex_string, callback, arg):
         if regex_string not in self.__matchStringDict:
-            self.__matchStringDict[regex_string] = {'callback': callback, 'para':arg}
+            self.__matchStringDict[regex_string] = {"callback": callback, "para": arg}
 
     def MissingCredentialsLog(self, credential_type):
         if isinstance(self, EthernetClientInterface):
-            port_info = 'IP Address: {0}:{1}'.format(self.IPAddress, self.IPPort)
+            port_info = "IP Address: {0}:{1}".format(self.IPAddress, self.IPPort)
         elif isinstance(self, SerialInterface):
-            port_info = 'Host Alias: {0}\r\nPort: {1}'.format(self.Host.DeviceAlias, self.Port)
+            port_info = "Host Alias: {0}\r\nPort: {1}".format(
+                self.Host.DeviceAlias, self.Port
+            )
         else:
-            return 
-        ProgramLog("{0} module received a request from the device for a {1}, "
-                "but device{1} was not provided.\n Please provide a device{1} "
-                "and attempt again.\n Ex: dvInterface.device{1} = '{1}'\n Please "
-                "review the communication sheet.\n {2}"
-                .format(__name__, credential_type, port_info), 'warning') 
+            return
+        ProgramLog(
+            "{0} module received a request from the device for a {1}, "
+            "but device{1} was not provided.\n Please provide a device{1} "
+            "and attempt again.\n Ex: dvInterface.device{1} = '{1}'\n Please "
+            "review the communication sheet.\n {2}".format(
+                __name__, credential_type, port_info
+            ),
+            "warning",
+        )
+
 
 class SerialClass(SerialInterface, DeviceClass):
-
-    def __init__(self, Host, Port, Baud=9600, Data=8, Parity='None', Stop=1, FlowControl='Off', CharDelay=0, Mode='RS232', Model =None):
-        SerialInterface.__init__(self, Host, Port, Baud, Data, Parity, Stop, FlowControl, CharDelay, Mode)
-        self.ConnectionType = 'Serial'
+    def __init__(
+        self,
+        Host,
+        Port,
+        Baud=9600,
+        Data=8,
+        Parity="None",
+        Stop=1,
+        FlowControl="Off",
+        CharDelay=0,
+        Mode="RS232",
+        Model=None,
+    ):
+        SerialInterface.__init__(
+            self, Host, Port, Baud, Data, Parity, Stop, FlowControl, CharDelay, Mode
+        )
+        self.ConnectionType = "Serial"
         DeviceClass.__init__(self)
         # Check if Model belongs to a subclass
         if len(self.Models) > 0:
-            if Model not in self.Models: 
-                print('Model mismatch')              
+            if Model not in self.Models:
+                print("Model mismatch")
             else:
                 self.Models[Model]()
 
     def Error(self, message):
-        portInfo = 'Host Alias: {0}, Port: {1}'.format(self.Host.DeviceAlias, self.Port)
-        print('Module: {}'.format(__name__), portInfo, 'Error Message: {}'.format(message[0]), sep='\r\n')
-  
+        portInfo = "Host Alias: {0}, Port: {1}".format(self.Host.DeviceAlias, self.Port)
+        print(
+            "Module: {}".format(__name__),
+            portInfo,
+            "Error Message: {}".format(message[0]),
+            sep="\r\n",
+        )
+
     def Discard(self, message):
         self.Error([message])
 
-class SerialOverEthernetClass(EthernetClientInterface, DeviceClass):
 
-    def __init__(self, Hostname, IPPort, Protocol='TCP', ServicePort=0, Model=None):
+class SerialOverEthernetClass(EthernetClientInterface, DeviceClass):
+    def __init__(self, Hostname, IPPort, Protocol="TCP", ServicePort=0, Model=None):
         EthernetClientInterface.__init__(self, Hostname, IPPort, Protocol, ServicePort)
-        self.ConnectionType = 'Serial'
-        DeviceClass.__init__(self) 
-        # Check if Model belongs to a subclass       
+        self.ConnectionType = "Serial"
+        DeviceClass.__init__(self)
+        # Check if Model belongs to a subclass
         if len(self.Models) > 0:
-            if Model not in self.Models: 
-                print('Model mismatch')              
+            if Model not in self.Models:
+                print("Model mismatch")
             else:
                 self.Models[Model]()
 
     def Error(self, message):
-        portInfo = 'IP Address/Host: {0}:{1}'.format(self.Hostname, self.IPPort)
-        print('Module: {}'.format(__name__), portInfo, 'Error Message: {}'.format(message[0]), sep='\r\n')
-  
+        portInfo = "IP Address/Host: {0}:{1}".format(self.Hostname, self.IPPort)
+        print(
+            "Module: {}".format(__name__),
+            portInfo,
+            "Error Message: {}".format(message[0]),
+            sep="\r\n",
+        )
+
     def Discard(self, message):
         self.Error([message])
 
@@ -367,23 +463,28 @@ class SerialOverEthernetClass(EthernetClientInterface, DeviceClass):
         EthernetClientInterface.Disconnect(self)
         self.OnDisconnected()
 
-class EthernetClass(EthernetClientInterface, DeviceClass):
 
-    def __init__(self, Hostname, IPPort, Protocol='TCP', ServicePort=0, Model=None):
+class EthernetClass(EthernetClientInterface, DeviceClass):
+    def __init__(self, Hostname, IPPort, Protocol="TCP", ServicePort=0, Model=None):
         EthernetClientInterface.__init__(self, Hostname, IPPort, Protocol, ServicePort)
-        self.ConnectionType = 'Ethernet'
-        DeviceClass.__init__(self) 
-        # Check if Model belongs to a subclass       
+        self.ConnectionType = "Ethernet"
+        DeviceClass.__init__(self)
+        # Check if Model belongs to a subclass
         if len(self.Models) > 0:
-            if Model not in self.Models: 
-                print('Model mismatch')              
+            if Model not in self.Models:
+                print("Model mismatch")
             else:
                 self.Models[Model]()
 
     def Error(self, message):
-        portInfo = 'IP Address/Host: {0}:{1}'.format(self.Hostname, self.IPPort)
-        print('Module: {}'.format(__name__), portInfo, 'Error Message: {}'.format(message[0]), sep='\r\n')
-  
+        portInfo = "IP Address/Host: {0}:{1}".format(self.Hostname, self.IPPort)
+        print(
+            "Module: {}".format(__name__),
+            portInfo,
+            "Error Message: {}".format(message[0]),
+            sep="\r\n",
+        )
+
     def Discard(self, message):
         self.Error([message])
 

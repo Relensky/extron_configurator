@@ -1,0 +1,55 @@
+/*$Id$*/
+span#KB_Editor_Container:before {
+    left: 15px;
+    top: 12px;
+    font-size: 15px;
+    position: absolute;
+    font-family: 'zohodeskkbeditorinner' !important;
+}
+.KB_Editor_NotesBGclr,.KB_Editor_QuoteBGclr,.KB_Editor_WarningBGclr,.KB_Editor_AlertBGclr,.KB_Editor_InfoBGclr,.KB_Editor_IdeaBGclr{
+	margin: 10px 0;
+	position: relative;
+    display: inline-block;
+    padding: 10px 10px 10px 40px;
+    font: 15px/20px 'ProximaNovaRegular',Arial,Helvetica,sans-serif;
+}
+.KB_Editor_NotesBGclr{
+    background-color: #FCED9E;
+    border-right: 5px solid #F2DB68;
+}
+span.KB_Editor_NotesBGclr:before{content: "\e902"}
+.KB_Editor_WarningBGclr{
+    background-color: #FCB1B1;
+    border-right: 5px solid #FC8B8B;
+}
+span.KB_Editor_WarningBGclr:before{content: "\e900"}
+.KB_Editor_AlertBGclr{
+    background-color: #FFC697;
+    border-right: 5px solid #F9B480;
+}
+span.KB_Editor_AlertBGclr:before{content: "\e901"}
+.KB_Editor_InfoBGclr{
+    background-color: #C1E1F4;
+    border-right: 5px solid #A7D4EA;
+}
+span.KB_Editor_InfoBGclr:before{content: "\e903"}
+.KB_Editor_IdeaBGclr{
+    background-color: #BDE5D6;
+    border-right: 5px solid #88D1B5;
+}
+span.KB_Editor_IdeaBGclr:before{content: "\e904"}
+.KB_Editor_QuoteBGclr{
+    background-color: #E9F1F4;
+    border-right: 5px solid #D9E4E8;
+}
+span.KB_Editor_QuoteBGclr:before{content: "\e905"}
+.KB_Editor_ImageDiscBdr{
+	cursor : default;
+}
+#KB_Editor_Container h1,#KB_Editor_Container h2,#KB_Editor_Container h3,h1 #KB_Editor_Container,h2 #KB_Editor_Container,h3 #KB_Editor_Container {
+    line-height: normal;
+    margin: 0 !important;
+}
+h1 #KB_Editor_Container {font: bold 30px 'ProximaNovaRegular',Arial,Helvetica,sans-serif}
+h2 #KB_Editor_Container {font: bold 22px 'ProximaNovaRegular',Arial,Helvetica,sans-serif}
+h3 #KB_Editor_Container {font: bold 18px 'ProximaNovaRegular',Arial,Helvetica,sans-serif}

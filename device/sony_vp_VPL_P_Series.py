@@ -4,43 +4,6 @@ import re
 import hashlib
 import binascii
 
-# --- Room Config Builder metadata (module level — read by the app, not by the
-# driver). The app parses this DEVICE_INFO dict to drive the device tabs:
-#   "device_type"  Which device-family tab(s) list these models — one string or
-#                  a list. Case/plural-insensitive. A model with NO device_type
-#                  is hidden from the per-tab lists and shows only via the
-#                  picker's "Show all device types" checkbox. Valid values:
-#                    camera, projector (or display), switcher, dsp, usb, power,
-#                    mediaport, wireless (or sharelink), recorder,
-#                    screen (or relay / network)
-#   "models"       Marks this file as the DEFAULT module for those model names
-#                  in the Model dropdown (falls back to the driver's self.Models
-#                  keys when omitted).
-#   "connection" + "defaults"  config.json device properties (merged by the
-#                  app; split only for readability). May carry the FULL field
-#                  set; leave site-specific values (ip_address, serial_port,
-#                  password) blank and omit "model"/"module" (the picker sets
-#                  those). Picking a model on a NEW device applies these
-#                  defaults; on a CONVERSION (device already on another module)
-#                  it keeps the existing settings and lists what differs.
-# Keep the values JSON-style (double quotes, unquoted numbers, no Python code).
-DEVICE_INFO = {
-    "device_type": "projector",
-    "models": [
-        "VPL-PHZ50",
-        "VPL-PHZ60"
-    ],
-    "connection": {
-        "com_type": "Network",
-        "protocol": "TCP",
-        "net_port": 53595
-    },
-    "defaults": {
-        "keep_alive_command": "Power",
-        "keep_alive_interval": 10
-    }
-}
-
 
 class DeviceClass:
     def __init__(self):

@@ -1,57 +1,37 @@
-import time
 from struct import pack
+import time
 
 from extronlib.interface import EthernetClientInterface, SerialInterface
 
-# --- Room Config Builder metadata (module level — read by the app, not by the
-# driver). The app parses this DEVICE_INFO dict to drive the device tabs:
-#   "device_type"  Which device-family tab(s) list these models — one string or
-#                  a list. Case/plural-insensitive. A model with NO device_type
-#                  is hidden from the per-tab lists and shows only via the
-#                  picker's "Show all device types" checkbox. Valid values:
-#                    camera, projector (or display), switcher, dsp, usb, power,
-#                    mediaport, wireless (or sharelink), recorder,
-#                    screen (or relay / network)
-#   "models"       Marks this file as the DEFAULT module for those model names
-#                  in the Model dropdown (falls back to the driver's self.Models
-#                  keys when omitted).
-#   "connection" + "defaults"  config.json device properties (merged by the
-#                  app; split only for readability). May carry the FULL field
-#                  set; leave site-specific values (ip_address, serial_port,
-#                  password) blank and omit "model"/"module" (the picker sets
-#                  those). Picking a model on a NEW device applies these
-#                  defaults; on a CONVERSION (device already on another module)
-#                  it keeps the existing settings and lists what differs.
-# Keep the values JSON-style (double quotes, unquoted numbers, no Python code).
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "camera",
-    "models": ["TR311HW", "TR311", "TR211"],
-    # Connection properties. "ip_address", "serial_port" are site-specific, so
-    # they are left blank — the installer fills them per room.
+    "models": ["TR311HW", "TR311HWV2", "TR333", "TR311HN", "TR311", "TR211"],
     "connection": {
         "com_type": "Network",
         "protocol": "UDP",
         "net_port": 52381,
         "service_port": 0,
         "host": "processor1",
-        "ip_address": "",
-        "serial_port": "",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
     },
-    # Remaining device properties. "model" and "module" are set by the model
-    # picker itself, so they are not listed here. "password" is site-specific
-    # and left blank.
     "defaults": {
         "btn_name": "Btn_Con_Cam1",
         "lbl_name": "Lbl_InstCam_Model",
         "gve_id": "Cam1",
-        "name": "Camera - Instructor TR311HW",
+        "name": "Camera - TR311HW",
         "device_id": None,
         "keep_alive_command": "Power",
         "keep_alive_interval": 10,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
-        "user": "main",
-        "password": "",
+        "user": "averadmin",
+        "password": "",  # site-specific — blank
     },
 }
 
@@ -557,12 +537,8 @@ class DeviceSerialClass:
     def __SetHelper(self, command, commandstring, value, qualifier):
         self.Debug = True
 
-        if self.Unidirectional == "True":
-            self.Send(commandstring)
-        else:
-            res = self.SendAndWait(
-                commandstring, self.DefaultResponseTimeout, deliTag=b"\xff"
-            )
+        # PTZ/startup Set commands run from UI events, so do not block on ACKs.
+        self.Send(commandstring)
 
     def __UpdateHelper(self, command, commandstring, value, qualifier):
 
@@ -1229,17 +1205,9 @@ class DeviceEthernetClass:
         # print("Aver TR Cam Set helper, cmd: {}, cmdstring: {}, value: {}, qualifier: {}".format(command, commandstring, value, qualifier))
         self.Debug = True
 
-        if self.Unidirectional == "True":
-            self.Send(commandstring)
-        else:
-            res = self.SendAndWait(
-                commandstring, self.DefaultResponseTimeout, deliTag=b"\xff"
-            )
-            if not res:
-                self.Error(["{}: Invalid/unexpected response".format(command)])
-            else:
-                self.StartSequence = 1
-                res = self.__CheckResponseForErrors(command, res)
+        # PTZ/startup Set commands run from UI events, so do not block on ACKs.
+        self.Send(commandstring)
+        self.StartSequence = 1
 
     def __UpdateHelper(self, command, commandstring, value, qualifier):
         # print("Aver TR Cam Update helper, cmd: {}, cmdstring: {}, value: {}, qualifier: {}".format(command, commandstring, value, qualifier))

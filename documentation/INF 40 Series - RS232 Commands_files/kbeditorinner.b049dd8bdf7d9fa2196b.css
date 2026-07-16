@@ -1,0 +1,46 @@
+/*$Id$*/
+@font-face {
+  font-family: 'zohodeskkbeditorinner';
+  src:  url('../fonts/zohodeskkbeditorinner.eot?h18riq');
+  src:  url('../fonts/zohodeskkbeditorinner.eot?h18riq#iefix') format('embedded-opentype'),
+    url('../fonts/zohodeskkbeditorinner.ttf?h18riq') format('truetype'),
+    url('../fonts/zohodeskkbeditorinner.woff?h18riq') format('woff'),
+    url('../fonts/zohodeskkbeditorinner.svg?h18riq#zohodeskkbeditorinner') format('svg');
+  font-weight: normal;
+  font-style: normal;
+}
+
+[class^="icon-"], [class*=" icon-"] {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: 'zohodeskkbeditorinner' !important;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-KBEditor-caution-thick:before {
+  content: "\e900";
+}
+.icon-KBEditor-exclamation1:before {
+  content: "\e901";
+}
+.icon-KBEditor-file-text2:before {
+  content: "\e902";
+}
+.icon-KBEditor-info:before {
+  content: "\e903";
+}
+.icon-KBEditor-lights-thick:before {
+  content: "\e904";
+}
+.icon-KBEditor-quote:before {
+  content: "\e905";
+}
+
