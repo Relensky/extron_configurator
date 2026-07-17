@@ -6,6 +6,83 @@ import urllib.error
 import urllib.request
 
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "camera",
+    "models": [
+        "AW-HE100",
+        "AW-HE120",
+        "AW-HE38H",
+        "AW-HE38HK",
+        "AW-HE38HW",
+        "AW-HE40HKE",
+        "AW-HE40HKP",
+        "AW-HE40HWE",
+        "AW-HE40HWP",
+        "AW-HE40SKE",
+        "AW-HE40SKP",
+        "AW-HE40SWE",
+        "AW-HE40SWP",
+        "AW-HE50",
+        "AW-HE50H",
+        "AW-HE50S",
+        "AW-HE60",
+        "AW-HE60SE",
+        "AW-HE65HKMC",
+        "AW-HE65HWMC",
+        "AW-HE65SKMC",
+        "AW-HE65SWMC",
+        "AW-HE70HK",
+        "AW-HE70HW",
+        "AW-HE70SK",
+        "AW-HE70SW",
+        "AW-UE70",
+        "AW-UE70KE",
+        "AW-UE70KP",
+        "AW-UE70WE",
+        "AW-UE70WP",
+        "AW-HE40HWPJ9",
+        "AW-HE40SWPJ9",
+        "AW-HE40HWEJ9",
+        "AW-HE40SWEJ9",
+        "AW-HE40HKPJ9",
+        "AW-HE40SKPJ9",
+        "AW-HE40HKEJ9",
+        "AW-HE40SKEJ9",
+        "AW-UE150WP",
+        "AW-UE150KP",
+        "AW-UE150WE",
+        "AW-UE150KE",
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 80,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Cam1",
+        "lbl_name": "Lbl_InstCam_Model",
+        "gve_id": "Cam1",
+        "name": "Camera - AW-HE100",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "admin",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceSerialClass:
 
     def __init__(self):

@@ -1,5 +1,38 @@
 from extronlib.interface import SerialInterface, EthernetClientInterface
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "camera",
+    "models": ["PT30X-NDI-GY", "PT30X-NDI-WH"],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 5678,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Cam1",
+        "lbl_name": "Lbl_InstCam_Model",
+        "gve_id": "Cam1",
+        "name": "Camera - PT30X-NDI-GY",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "admin",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceClass:
     def __init__(self):
 

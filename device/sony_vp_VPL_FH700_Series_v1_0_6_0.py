@@ -3,6 +3,39 @@ import re
 from struct import unpack
 
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "projector",
+    "models": ["VPL-FHZ700", "VPL-FHZ700L"],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 53484,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Projector1",
+        "lbl_name": "Lbl_Proj_Model_Proj1",
+        "gve_id": "Proj1",
+        "name": "Projector - VPL-FHZ700",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceSerialClass:
 
     def __init__(self):

@@ -4,6 +4,49 @@ import re
 import binascii
 import hashlib
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "projector",
+    "models": [
+        "PT-VMZ51S",
+        "PT-BMZ51",
+        "PT-VMZ41",
+        "PT-VMZ71",
+        "PT-VMZ61",
+        "PT-VMW61",
+        "PT-VMW51",
+        "PT-VMZ50U",
+        "PT-VMZ50",
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 1024,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Projector1",
+        "lbl_name": "Lbl_Proj_Model_Proj1",
+        "gve_id": "Proj1",
+        "name": "Projector - PT-VMZ51S",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceSerialClass:
     def __init__(self):
         self.WarmUpTime = 15.0

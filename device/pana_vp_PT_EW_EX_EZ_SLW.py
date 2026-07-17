@@ -5,6 +5,69 @@ import hashlib
 from binascii import hexlify
 
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "projector",
+    "models": [
+        "PT-EZ770Z",
+        "PT-EW540L",
+        "PT-SLX80CL",
+        "PT-SLX75C",
+        "PT-SLX75CL",
+        "PT-SLW65C",
+        "PT-SLW65CL",
+        "PT-SLX62C",
+        "PT-SLX62CL",
+        "PT-EW730Z",
+        "PT-EW730ZL",
+        "PT-EX800ZL",
+        "PT-EZ580L",
+        "PT-EW640",
+        "PT-EW640L",
+        "PT-EW540",
+        "PT-EX610",
+        "PT-EX610L",
+        "PT-EX510",
+        "PT-EX510L",
+        "PT-SLZ77C",
+        "PT-SLZ77CL",
+        "PT-SLW83C",
+        "PT-SLW83CL",
+        "PT-SLX80C",
+        "PT-EZ580",
+        "PT-EZ770ZL",
+        "PT-EX800Z",
+        "PT-EW540E",
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 1024,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Projector1",
+        "lbl_name": "Lbl_Proj_Model_Proj1",
+        "gve_id": "Proj1",
+        "name": "Projector - PT-EZ770Z",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceSerialClass:
     def __init__(self):
         self.WarmUpTime = 45.0

@@ -2,6 +2,67 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 import re
 from extronlib.system import Wait, ProgramLog
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "projector",
+    "models": [
+        "BrightLink 695Wi",
+        "EB-695Wi",
+        "CB-695Wi",
+        "EB-685WT",
+        "BrightLink 685Wi",
+        "EB-685Wi",
+        "CB-685Wi",
+        "BrightLink 680Wi",
+        "EB-695WT",
+        "EB-680Wi",
+        "CB-680Wi",
+        "BrightLink 675Wi",
+        "EB-675Wi",
+        "CB-675Wi",
+        "EB-685W",
+        "PowerLite 685W",
+        "CB-685W",
+        "PowerLite 675W",
+        "EB-675W",
+        "CB-675W",
+        "EB-680",
+        "PowerLite 680",
+        "CB-680",
+        "PowerLite 670",
+        "EB-670",
+        "CB-670",
+        "EB-595Wi",
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 3629,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Projector1",
+        "lbl_name": "Lbl_Proj_Model_Proj1",
+        "gve_id": "Proj1",
+        "name": "Projector - BrightLink 695Wi",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceClass:
     def __init__(self):
         self.WarmUpTime = 45.0

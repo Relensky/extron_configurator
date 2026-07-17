@@ -2,6 +2,38 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 from extronlib.system import Wait, ProgramLog
 import re
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "recorder",
+    "models": ["SMP 351", "SMP 351 3G-SDI", "SMP 352", "SMP 352 3G-SDI"],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "SSH",
+        "net_port": 22023,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Recorder1",
+        "lbl_name": "Lbl_Recorder_Model",
+        "gve_id": "Record1",
+        "name": "Recorder - SMP 351",
+        "keep_alive_command": "InputStatus",
+        "keep_alive_interval": 30,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "admin",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceClass:
     def __init__(self):
 

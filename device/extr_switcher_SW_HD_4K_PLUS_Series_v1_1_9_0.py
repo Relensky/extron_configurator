@@ -2,6 +2,38 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 from extronlib.system import Wait, ProgramLog
 import re
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "switcher",
+    "models": ["SW2 HD 4K PLUS", "SW4 HD 4K PLUS", "SW6 HD 4K PLUS", "SW8 HD 4K PLUS"],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "SSH",
+        "net_port": 22023,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Switcher1",
+        "lbl_name": "Lbl_Switcher_Model",
+        "gve_id": "Switch1",
+        "name": "Switcher - SW2 HD 4K PLUS",
+        "keep_alive_command": "Input",
+        "keep_alive_interval": 30,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "admin",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceClass:
     def __init__(self):
 

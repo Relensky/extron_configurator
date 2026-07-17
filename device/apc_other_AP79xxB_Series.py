@@ -14,24 +14,24 @@ DEVICE_INFO = {
     "models": ["AP7921B", "AP7922B"],
     "connection": {
         "com_type": "Network",
-        "protocol": "UDP",
-        "net_port": 52381,
+        "protocol": "TCP",
+        "net_port": 23,
         "service_port": 0,
         "host": "processor1",
         "ip_address": "",  # site-specific — blank
         "serial_port": "",  # site-specific — blank
     },
     "defaults": {
-        "btn_name": "Btn_Con_Cam1",
-        "lbl_name": "Lbl_InstCam_Model",
-        "gve_id": "Cam1",
-        "name": "Camera - TR311HW",
+        "btn_name": "Btn_Con_Power1",
+        "lbl_name": "Lbl_Pwr_Connection",
+        "gve_id": "Power1",
+        "name": "Power Controller - AP7921B",
         "device_id": None,
-        "keep_alive_command": "Power",
+        "keep_alive_command": "SerialNumber",
         "keep_alive_interval": 10,
-        "keep_alive_trigger": None,
+        "keep_alive_trigger": "Schneider Electric",
         "manual_disconnect": False,
-        "user": "averadmin",
+        "user": "apc",
         "password": "",  # site-specific — blank
     },
 }

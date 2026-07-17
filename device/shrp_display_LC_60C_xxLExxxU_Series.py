@@ -2,6 +2,63 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 from struct import pack
 from re import compile, search
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "display",
+    "models": [
+        "LC-90LE657U",
+        "LC-60C6500U",
+        "LC-60C7500U",
+        "LC-60LE650U",
+        "LC-60LE655U",
+        "LC-60LE657U",
+        "LC-60LE755U",
+        "LC-60LE757U",
+        "LC-60LE857U",
+        "LC-70C6500U",
+        "LC-70C7500U",
+        "LC-70LE650U",
+        "LC-70LE655U",
+        "LC-70LE657U",
+        "LC-70LE755U",
+        "LC-70LE757U",
+        "LC-70LE857U",
+        "LC-80C6500U",
+        "LC-80LE650U",
+        "LC-80LE657U",
+        "LC-80LE757U",
+        "LC-80LE857U",
+        "LC-90LE650U",
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 10002,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Projector1",
+        "lbl_name": "Lbl_Proj_Model_Proj1",
+        "gve_id": "Proj1",
+        "name": "Display - LC-90LE657U",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 30,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceClass:
     def __init__(self):
         self.WarmUpTime = 10.0

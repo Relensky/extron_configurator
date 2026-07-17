@@ -1,6 +1,36 @@
 from extronlib.interface import SerialInterface, EthernetClientInterface
 import re
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "doccam",
+    "models": ["Ultra 8"],
+    "connection": {
+        "com_type": "Serial",
+        "protocol": "",
+        "host": "processor1",
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "",
+        "lbl_name": "",
+        "gve_id": "",
+        "name": "Document Camera - Ultra 8",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceClass:
 
     def __init__(self):

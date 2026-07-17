@@ -3,6 +3,53 @@ import re
 import hashlib
 from binascii import hexlify
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "projector",
+    "models": [
+        "PT-RW930",
+        "PT-RX110",
+        "PT-FRZ98C",
+        "PT-FRW93C",
+        "PT-FRX110C",
+        "PT-RZ770",
+        "PT-RW730",
+        "PT-FRZ78C",
+        "PT-FRW73C",
+        "PT-RZ660",
+        "PT-RW620",
+        "PT-FRZ67C",
+        "PT-FRW62C",
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 1024,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Projector1",
+        "lbl_name": "Lbl_Proj_Model_Proj1",
+        "gve_id": "Proj1",
+        "name": "Projector - PT-RW930",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceSerialClass:
 
 

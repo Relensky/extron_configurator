@@ -3,6 +3,67 @@ import re
 from extronlib.system import Wait, ProgramLog
 
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "projector",
+    "models": [
+        "EB-G7800",
+        "EB-G7805",
+        "Pro G7800",
+        "Pro G7805",
+        "CB-G7800",
+        "CB-G7805",
+        "EB-G7100",
+        "Pro G7100",
+        "CB-G7100",
+        "EB-G7200W",
+        "Pro G7200W",
+        "CB-G7200W",
+        "CB-G7000W",
+        "EB-G7000W",
+        "Pro G7000W",
+        "EB-G7900U",
+        "EB-G7905U",
+        "Pro G7900U",
+        "Pro G7905U",
+        "CB-G7900U",
+        "CB-G7905U",
+        "CB-G7500U",
+        "Pro G7500U",
+        "Pro G7400U",
+        "EB-G7400U",
+        "CB-G7400U",
+        "EB-G7500U",
+    ],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 3629,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Projector1",
+        "lbl_name": "Lbl_Proj_Model_Proj1",
+        "gve_id": "Proj1",
+        "name": "Projector - EB-G7800",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceClass:
     def __init__(self):
 

@@ -1,6 +1,39 @@
 from extronlib.interface import SerialInterface, EthernetClientInterface
 from struct import pack
 import re
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "camera",
+    "models": ["12X-USB-G2", "20X-SDI-G2", "20X-USB-G2", "12X-SDI-G2"],
+    "connection": {
+        "com_type": "Network",
+        "protocol": "TCP",
+        "net_port": 5678,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Cam1",
+        "lbl_name": "Lbl_InstCam_Model",
+        "gve_id": "Cam1",
+        "name": "Camera - 12X-USB-G2",
+        "device_id": None,
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 10,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "admin",
+        "password": "",  # site-specific — blank
+    },
+}
+
+
 class DeviceSerialClass:
 
 
