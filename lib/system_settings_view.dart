@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
+import 'config_maintenance.dart';
 import 'schema_field_builder.dart';
 
 /// SCHEMA-DRIVEN: every field on this tab is now rendered from the loaded
@@ -38,13 +39,26 @@ class SystemSettingsView extends StatelessWidget {
           return Padding(
             key: ValueKey('sys_settings_title_$brightness'),
             padding: const EdgeInsets.only(bottom: 20.0),
-            child: Text(
-              'System Settings',
-              // Explicitly derive the color from the ACTIVE theme so the
-              // header stays readable in both light and dark mode.
-              style: theme.textTheme.headlineMedium?.copyWith(
-                color: theme.colorScheme.onSurface,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'System Settings',
+                  // Explicitly derive the color from the ACTIVE theme so the
+                  // header stays readable in both light and dark mode.
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                // Diff SYSTEM_SETUP against the template + schema defaults
+                // and offer to add anything missing (e.g. a deleted input_).
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.playlist_add_check),
+                  label: const Text('Check Defaults'),
+                  onPressed: () => showCheckDefaultsDialog(
+                      context, provider, 'SYSTEM_SETUP'),
+                ),
+              ],
             ),
           );
         }
@@ -60,6 +74,10 @@ class SystemSettingsView extends StatelessWidget {
           sectionKey: 'SYSTEM_SETUP',
           fieldKey: key,
           value: value,
+          // Every system setting can be removed (confirmed); Check Defaults
+          // above adds it back later if needed.
+          onDelete: () => confirmRemoveConfigKey(
+              context, provider, 'SYSTEM_SETUP', key),
         );
 
         // Schema marked this key "hidden" (e.g. gui_tab_type, written by the

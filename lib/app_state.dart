@@ -357,6 +357,11 @@ class AppStateProvider extends ChangeNotifier {
   /// User-drawn lines: {'from': id, 'to': id, 'color': 'RRGGBB', 'label': s}.
   final List<Map<String, String>> schematicLinks = [];
 
+  /// Auto-generated lines the user has deleted or re-routed, identified as
+  /// "fromId>toId". Filtered out of the diagram; restorable from the edit
+  /// panel. Persisted in the sidecar with the rest of the layout.
+  final Set<String> schematicHiddenEdges = {};
+
   /// The config path the schematic state currently belongs to, so switching
   /// configs resets the layout instead of carrying stale node spots over.
   String _schematicSyncedPath = ' never';
@@ -375,6 +380,25 @@ class AppStateProvider extends ChangeNotifier {
   void removeSchematicLinkAt(int index) {
     if (index < 0 || index >= schematicLinks.length) return;
     schematicLinks.removeAt(index);
+    notifyListeners();
+  }
+
+  /// Rewrites a user-drawn line in place (the edit-line dialog).
+  void updateSchematicLinkAt(
+      int index, String from, String to, String colorHex, String label) {
+    if (index < 0 || index >= schematicLinks.length) return;
+    schematicLinks[index] =
+        {'from': from, 'to': to, 'color': colorHex, 'label': label};
+    notifyListeners();
+  }
+
+  void hideSchematicEdge(String edgeId) {
+    schematicHiddenEdges.add(edgeId);
+    notifyListeners();
+  }
+
+  void restoreSchematicEdge(String edgeId) {
+    schematicHiddenEdges.remove(edgeId);
     notifyListeners();
   }
 
@@ -401,6 +425,7 @@ class AppStateProvider extends ChangeNotifier {
     _schematicSyncedPath = currentConfigPath;
     schematicPositions.clear();
     schematicLinks.clear();
+    schematicHiddenEdges.clear();
     // Notify in every path — the tab has already built by the time this runs
     // (post-frame), so without it a loaded sidecar wouldn't show until the
     // next unrelated rebuild.
@@ -434,6 +459,10 @@ class AppStateProvider extends ChangeNotifier {
           }
         }
       }
+      final hidden = doc['hiddenEdges'];
+      if (hidden is List) {
+        schematicHiddenEdges.addAll(hidden.map((e) => e.toString()));
+      }
       AppLogger.logInfo('Schematic layout loaded from $sidecar '
           '(${schematicPositions.length} positions, ${schematicLinks.length} lines).');
     } catch (e) {
@@ -455,6 +484,7 @@ class AppStateProvider extends ChangeNotifier {
         'positions': schematicPositions
             .map((id, p) => MapEntry(id, [p.dx, p.dy])),
         'links': schematicLinks,
+        'hiddenEdges': schematicHiddenEdges.toList(),
       }));
       return sidecar;
     } catch (e, stack) {
@@ -1643,6 +1673,74 @@ class AppStateProvider extends ChangeNotifier {
       }
       notifyListeners();
     }
+  }
+
+  /// Removes one property from a section (device block or SYSTEM_SETUP).
+  /// The delete buttons on the Devices/System tabs land here; the key can be
+  /// re-added later via the Check Defaults dialog.
+  void removeConfigKey(String sectionKey, String property) {
+    final section = roomConfig[sectionKey];
+    if (section is Map && section.containsKey(property)) {
+      section.remove(property);
+      notifyListeners();
+    }
+  }
+
+  /// Adds one property to a section (the Check Defaults dialog's "+ Add").
+  /// Existing values are never overwritten.
+  void addConfigKey(String sectionKey, String property, dynamic value) {
+    final section = roomConfig[sectionKey];
+    if (section is Map && !section.containsKey(property)) {
+      section[property] = value;
+      notifyListeners();
+    }
+  }
+
+  /// Properties the current [sectionKey] block is missing compared to its
+  /// defaults, mapped to the default value that would be added. Sources:
+  ///   1. the template config's matching block — the exact section name, or
+  ///      the family's "<PREFIX>1" block with the index substituted in
+  ///   2. ui_schema.json "device_defaults" (devices) or "system_defaults"
+  ///      (SYSTEM_SETUP), filling anything the template doesn't cover
+  /// Returns {} when the section doesn't exist or nothing is missing.
+  Future<Map<String, dynamic>> missingDefaultsFor(String sectionKey) async {
+    final current = roomConfig[sectionKey];
+    if (current is! Map) return {};
+
+    final Map<String, dynamic> defaults = {};
+
+    // 1. Template block
+    try {
+      final file = File(effectiveTemplateFilePath);
+      if (await file.exists()) {
+        final template = jsonDecode(await file.readAsString());
+        if (template is Map) {
+          dynamic block = template[sectionKey];
+          if (block == null && sectionKey != 'SYSTEM_SETUP') {
+            final family = uiSchema.deviceTypeForSection(sectionKey);
+            if (family != null) block = template['${family.prefix}1'];
+          }
+          if (block is Map) {
+            final copy = block.map((k, v) => MapEntry(k.toString(), v));
+            defaults.addAll(sectionKey == 'SYSTEM_SETUP'
+                ? copy
+                : _indexSubstitute(copy, sectionKey));
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.logError(
+          'Check Defaults: could not read template $effectiveTemplateFilePath', e);
+    }
+
+    // 2. Schema defaults fill any gaps the template leaves
+    final schemaDefaults = sectionKey == 'SYSTEM_SETUP'
+        ? uiSchema.systemDefaults
+        : uiSchema.defaultsFor(sectionKey);
+    schemaDefaults.forEach((k, v) => defaults.putIfAbsent(k, () => v));
+
+    defaults.removeWhere((k, v) => current.containsKey(k));
+    return defaults;
   }
 
   /// Parses an Extron Python module file to extract valid keep-alive commands.

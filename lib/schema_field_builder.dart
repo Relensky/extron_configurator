@@ -17,12 +17,16 @@ class SchemaFieldBuilder {
   ///
   /// [sectionKey] is the top-level config block (e.g. 'SYSTEM_SETUP' or
   /// 'PROJECTORDEVICE_1'); writes go through provider.updateDeviceValue.
+  /// [onDelete], when given, adds a trash button after the field that lets
+  /// the user remove the key from the config block entirely (the caller
+  /// confirms and performs the removal). Check Defaults can re-add it later.
   static Widget? buildField({
     required BuildContext context,
     required AppStateProvider provider,
     required String sectionKey,
     required String fieldKey,
     required dynamic value,
+    VoidCallback? onDelete,
   }) {
     final schema = provider.uiSchema;
     // Device-scoped entries (ui_schema.json "device_fields") win for keys
@@ -80,7 +84,7 @@ class SchemaFieldBuilder {
     }
 
     return _wrapWithInfo(context, schema, fieldKey, field,
-        isUnknown: isUnknown, sectionKey: sectionKey);
+        isUnknown: isUnknown, sectionKey: sectionKey, onDelete: onDelete);
   }
 
   /// Schema type wins; 'auto' (or no spec) falls back to inferring from the
@@ -297,58 +301,50 @@ class SchemaFieldBuilder {
     );
   }
 
-  // --- INFO (i) BUTTON --------------------------------------------------------
-  /// Wraps a field with the info button when a description exists in the
-  /// schema (falling back to the legacy built-in ConfigDictionary). Unknown
-  /// keys get a red warning icon instead, explaining how to add them.
+  // --- INFO (i) / DELETE BUTTONS ---------------------------------------------
+  /// Wraps a field with its trailing buttons: the info button when a
+  /// description exists (falling back to the legacy built-in
+  /// ConfigDictionary), a red warning icon for unknown keys, and — when the
+  /// caller provides [onDelete] — a trash button that removes the key from
+  /// the config block.
   static Widget _wrapWithInfo(
       BuildContext context, UiSchema schema, String key, Widget field,
-      {bool isUnknown = false, String? sectionKey}) {
+      {bool isUnknown = false, String? sectionKey, VoidCallback? onDelete}) {
+    final List<Widget> trailing = [];
+
     if (isUnknown) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(child: field),
-          IconButton(
-            icon: Icon(Icons.warning_amber_rounded, color: Colors.red.shade400),
-            tooltip: 'This key is not defined in the UI schema',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: Row(children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.red.shade400),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(key)),
-                  ]),
-                  content: Text(
-                      'The key "$key" is not defined in ui_schema.json (or the '
-                      'built-in dictionary), so it is rendered as a plain field '
-                      'with no description or validation.\n\n'
-                      'To fix: add an entry for "$key" under "fields" in '
-                      'ui_schema.json (label, description, type, options...), '
-                      'then press Reload Schema in the App Config tab.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Close'))
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      );
-    }
-
-    final desc = schema.descriptionFor(key, sectionKey: sectionKey);
-    if (desc == null) return field;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(child: field),
-        IconButton(
+      trailing.add(IconButton(
+        icon: Icon(Icons.warning_amber_rounded, color: Colors.red.shade400),
+        tooltip: 'This key is not defined in the UI schema',
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Row(children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.red.shade400),
+                const SizedBox(width: 8),
+                Expanded(child: Text(key)),
+              ]),
+              content: Text(
+                  'The key "$key" is not defined in ui_schema.json (or the '
+                  'built-in dictionary), so it is rendered as a plain field '
+                  'with no description or validation.\n\n'
+                  'To fix: add an entry for "$key" under "fields" in '
+                  'ui_schema.json (label, description, type, options...), '
+                  'then press Reload Schema in the App Config tab.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Close'))
+              ],
+            ),
+          );
+        },
+      ));
+    } else {
+      final desc = schema.descriptionFor(key, sectionKey: sectionKey);
+      if (desc != null) {
+        trailing.add(IconButton(
           icon: const Icon(Icons.info_outline, color: Colors.blueAccent),
           tooltip: desc,
           onPressed: () {
@@ -365,8 +361,22 @@ class SchemaFieldBuilder {
               ),
             );
           },
-        ),
-      ],
+        ));
+      }
+    }
+
+    if (onDelete != null) {
+      trailing.add(IconButton(
+        icon: const Icon(Icons.delete_outline),
+        tooltip: 'Remove "$key" from the config',
+        onPressed: onDelete,
+      ));
+    }
+
+    if (trailing.isEmpty) return field;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [Expanded(child: field), ...trailing],
     );
   }
 }

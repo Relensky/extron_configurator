@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'app_state.dart';
 import 'config_dictionary.dart';
+import 'config_maintenance.dart';
 import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
 
@@ -415,6 +416,10 @@ class DeviceConfigurationForm extends StatelessWidget {
         sectionKey: deviceKey,
         fieldKey: key,
         value: deviceData[key],
+        // Any property can be removed (confirmed); the Check Defaults
+        // button in the header adds it back later if needed.
+        onDelete: () =>
+            confirmRemoveConfigKey(context, provider, deviceKey, key),
       );
       if (field == null) continue; // Schema marked the key "hidden"
 
@@ -445,7 +450,23 @@ class DeviceConfigurationForm extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24.0),
       children: [
-        Text(deviceData['name'] ?? deviceKey, style: Theme.of(context).textTheme.headlineMedium),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(deviceData['name'] ?? deviceKey,
+                  style: Theme.of(context).textTheme.headlineMedium),
+            ),
+            // Diff this device block against the template + schema defaults
+            // and offer to add anything missing (e.g. a deleted property).
+            OutlinedButton.icon(
+              icon: const Icon(Icons.playlist_add_check),
+              label: const Text('Check Defaults'),
+              onPressed: () =>
+                  showCheckDefaultsDialog(context, provider, deviceKey),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // --- MODEL SELECTOR (aggregated from every module's model dict) ---

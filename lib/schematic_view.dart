@@ -30,22 +30,22 @@ import 'xlsx_writer.dart';
 /// ============================================================================
 
 /// The built-in connection categories and their line colors (the legend).
-enum ConnType { network, serial, relay, touchpanel, trunk }
+enum ConnType { network, serial, soe, relay, touchpanel }
 
 const Map<ConnType, Color> kConnColors = {
   ConnType.network: Color(0xFF42A5F5), // blue
   ConnType.serial: Color(0xFFFFA726), // orange
+  ConnType.soe: Color(0xFFFDD835), // yellow
   ConnType.relay: Color(0xFFAB47BC), // purple
   ConnType.touchpanel: Color(0xFF26A69A), // teal
-  ConnType.trunk: Color(0xFF66BB6A), // green
 };
 
 const Map<ConnType, String> kConnLabels = {
   ConnType.network: 'Network (via IDF)',
   ConnType.serial: 'Serial (COM)',
+  ConnType.soe: 'Serial over Ethernet (via Switcher)',
   ConnType.relay: 'Relay',
   ConnType.touchpanel: 'Touch Panel',
-  ConnType.trunk: 'IDF Uplink',
 };
 
 /// Swatches offered when drawing a custom line.
@@ -87,9 +87,10 @@ class SchematicEdge {
   final String toId;
   final Color color;
   final String label;
-  final bool custom; // user-drawn (deletable from the edit panel)
+  final bool custom; // user-drawn (editable endpoints/color/label)
   final int customIndex; // index into provider.schematicLinks when custom
   final double width;
+  final ConnType? kind; // the built-in category for auto edges (legend name)
 
   const SchematicEdge({
     required this.fromId,
@@ -99,7 +100,11 @@ class SchematicEdge {
     this.custom = false,
     this.customIndex = -1,
     this.width = 2.5,
+    this.kind,
   });
+
+  /// Identity used to suppress an auto edge ("fromId>toId").
+  String get autoId => '$fromId>$toId';
 }
 
 /// The fully resolved diagram: nodes (with positions), edges, canvas size.
@@ -109,7 +114,11 @@ class SchematicModel {
   final Size canvasSize;
   final String roomTitle;
 
-  SchematicModel(this.nodes, this.edges, this.canvasSize, this.roomTitle);
+  /// Auto edges suppressed by the user (edit panel offers a restore).
+  final List<SchematicEdge> hiddenEdges;
+
+  SchematicModel(this.nodes, this.edges, this.canvasSize, this.roomTitle,
+      [this.hiddenEdges = const []]);
 
   SchematicNode? nodeById(String id) {
     for (final n in nodes) {
@@ -148,6 +157,7 @@ class SchematicModel {
         return ConnType.relay;
       }
       if (comType == 'serial') return ConnType.serial;
+      if (comType == 'serialoverethernet') return ConnType.soe;
       if (comType == 'relay') return ConnType.relay;
       return ConnType.network;
     }
@@ -156,6 +166,13 @@ class SchematicModel {
         deviceKeys.where((k) => connOf(k) == ConnType.network).toList();
     final directKeys =
         deviceKeys.where((k) => connOf(k) != ConnType.network).toList();
+
+    // Serial-over-ethernet devices ride the switcher's HDBaseT/DTP serial
+    // ports, so their line targets the room switcher; with no switcher in
+    // the room they fall back to the processor directly.
+    final String soeTarget = deviceKeys.firstWhere(
+        (k) => k.startsWith('SWITCHERDEVICE_'),
+        orElse: () => 'PROCESSOR');
 
     // --- Touch panel node (window icon with one tab per gui_tab page) ---
     final String tlpId = systemSetup['gve_id_tlp_1']?.toString() ?? '';
@@ -198,7 +215,7 @@ class SchematicModel {
           ? processorName
           : '$processorName • $processorIp',
       icon: Icons.memory,
-      conn: ConnType.trunk,
+      conn: ConnType.network,
       pos: autoPos('PROCESSOR', Offset(colProcessorX, processorY)),
     ));
 
@@ -217,12 +234,13 @@ class SchematicModel {
         conn: ConnType.network,
         pos: autoPos('IDF', Offset(colIdfX, idfY)),
       ));
+      // The processor is just another network drop on the IDF.
       edges.add(SchematicEdge(
         fromId: 'IDF',
         toId: 'PROCESSOR',
-        color: kConnColors[ConnType.trunk]!,
-        label: 'Uplink',
+        color: kConnColors[ConnType.network]!,
         width: 3.5,
+        kind: ConnType.network,
       ));
     }
 
@@ -256,6 +274,7 @@ class SchematicModel {
             label: [protocol, if (netPort.isNotEmpty && netPort != '0') netPort]
                 .where((s) => s.isNotEmpty)
                 .join(' '),
+            kind: ConnType.network,
           ));
           break;
         case ConnType.serial:
@@ -264,6 +283,18 @@ class SchematicModel {
             toId: 'PROCESSOR',
             color: kConnColors[ConnType.serial]!,
             label: dev['serial_port']?.toString() ?? 'COM?',
+            kind: ConnType.serial,
+          ));
+          break;
+        case ConnType.soe:
+          edges.add(SchematicEdge(
+            fromId: key,
+            // The room switcher carries the serial line; no switcher in the
+            // room (or the switcher itself is SoE) -> straight to processor.
+            toId: soeTarget == key ? 'PROCESSOR' : soeTarget,
+            color: kConnColors[ConnType.soe]!,
+            label: dev['serial_port']?.toString() ?? 'SoE',
+            kind: ConnType.soe,
           ));
           break;
         default: // relay
@@ -277,6 +308,7 @@ class SchematicModel {
             toId: 'PROCESSOR',
             color: kConnColors[ConnType.relay]!,
             label: relays.isEmpty ? 'Relay' : relays,
+            kind: ConnType.relay,
           ));
       }
     }
@@ -305,8 +337,20 @@ class SchematicModel {
         toId: hasIdf ? 'IDF' : 'PROCESSOR',
         color: kConnColors[ConnType.touchpanel]!,
         label: 'PoE',
+        kind: ConnType.touchpanel,
       ));
     }
+
+    // Auto edges the user deleted/re-routed are pulled aside (still listed
+    // greyed-out in the edit panel so they can be restored).
+    final List<SchematicEdge> hiddenEdges = [];
+    edges.removeWhere((e) {
+      if (provider.schematicHiddenEdges.contains(e.autoId)) {
+        hiddenEdges.add(e);
+        return true;
+      }
+      return false;
+    });
 
     // User-drawn lines (only between nodes that still exist).
     final ids = nodes.map((n) => n.id).toSet();
@@ -340,6 +384,7 @@ class SchematicModel {
       edges,
       Size(maxX, maxY),
       systemSetup['gui_full_room_name']?.toString() ?? '',
+      hiddenEdges,
     );
   }
 
@@ -435,72 +480,139 @@ class _SchematicViewState extends State<SchematicView> {
     }
   }
 
-  /// Rows shared by the xlsx and text reports: one line per active device.
-  List<List<dynamic>> _deviceReportRows(
-      AppStateProvider provider, SchematicModel model) {
+  /// Friendly display name for a config key: the schema label when one is
+  /// defined, otherwise the key title-cased with common AV acronyms upper-
+  /// cased (input_doc_cam -> "Doc Cam"). [stripPrefix] removes a section
+  /// prefix like "input_" first.
+  static String _friendlyKey(AppStateProvider provider, String key,
+      {String? stripPrefix}) {
+    final spec = provider.uiSchema.specFor(key);
+    final label = spec?.label;
+    if (label != null && label.isNotEmpty) return label;
+    var k = key;
+    if (stripPrefix != null && k.startsWith(stripPrefix)) {
+      k = k.substring(stripPrefix.length);
+    }
+    const acronyms = {
+      'pc', 'hdmi', 'usb', 'vga', 'dvd', 'br', 'cc', 'cc2', 'ip', 'gui',
+      'gve', 'ntp', 'ald', 'tlp', 'poe', 'dsp', 'wl', 'tv', 'aud', 'inst',
+    };
+    return k
+        .split('_')
+        .where((w) => w.isNotEmpty)
+        .map((w) => acronyms.contains(w.toLowerCase())
+            ? w.toUpperCase()
+            : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
+  /// Display form of a config value: touch-panel \r line breaks become
+  /// spaces, null becomes ''.
+  static String _friendlyValue(dynamic v) =>
+      (v ?? '').toString().replaceAll(r'\r', ' ');
+
+  /// One report section: a title, a header row, and data rows.
+  /// Shared by the single-sheet xlsx and the plain-text report.
+  List<({String title, List<String> header, List<List<dynamic>> rows})>
+      _reportSections(AppStateProvider provider, SchematicModel model) {
     final config = provider.roomConfig;
-    final rows = <List<dynamic>>[
-      [
-        'Device Key', 'Name', 'Type', 'Model', 'Module', 'Connection',
-        'IP Address', 'Protocol', 'Net Port', 'Serial Port', 'Keep Alive',
-      ],
+    final Map<String, dynamic> setup =
+        (config['SYSTEM_SETUP'] is Map) ? config['SYSTEM_SETUP'] : {};
+
+    // --- System summary (friendly names + resolved building name) ---
+    final String rawBldg = setup['gve_bldg']?.toString() ?? '';
+    final String fullBldg = provider.fullBuildingNameForCode(rawBldg);
+    final deviceCount =
+        model.nodes.where((n) => config.containsKey(n.id)).length;
+    final systemRows = <List<dynamic>>[
+      ['Room', _friendlyValue(setup['gui_full_room_name'])],
+      ['Building', fullBldg.isEmpty ? rawBldg : fullBldg],
+      ['Room Number', _friendlyValue(setup['gve_room'])],
+      ['Processor', _friendlyValue(setup['processor1'])],
+      ['Processor IP', provider.selectedProcessorIp],
+      ['Touch Panel', _friendlyValue(setup['gve_id_tlp_1'])],
+      ['Panel Layout', _friendlyValue(setup['gui_tab'])],
+      ['Device Count', deviceCount.toString()],
+      ['Generated', DateTime.now().toLocal().toString().split('.').first],
     ];
+
+    // --- Inputs / Outputs from SYSTEM_SETUP (friendly names) ---
+    List<List<dynamic>> prefixed(String prefix) {
+      final keys = setup.keys
+          .where((k) => k.startsWith(prefix) && setup[k] != null)
+          .toList()
+        ..sort();
+      return [
+        for (final k in keys)
+          [
+            _friendlyKey(provider, k, stripPrefix: prefix),
+            _friendlyValue(setup[k]),
+          ]
+      ];
+    }
+
+    // --- Devices ---
+    final deviceRows = <List<dynamic>>[];
     for (final node in model.nodes) {
       if (!config.containsKey(node.id)) continue; // processor/IDF/panel
       final dev = config[node.id];
       final family = provider.uiSchema.deviceTypeForSection(node.id);
-      rows.add([
-        node.id,
-        dev['name']?.toString() ?? '',
+      deviceRows.add([
+        _friendlyValue(dev['name']),
         family?.label ?? '',
-        dev['model']?.toString() ?? '',
-        dev['module']?.toString() ?? '',
+        _friendlyValue(dev['model']),
         kConnLabels[node.conn] ?? '',
-        dev['ip_address']?.toString() ?? '',
-        dev['protocol']?.toString() ?? '',
-        dev['net_port']?.toString() ?? '',
-        dev['serial_port']?.toString() ?? '',
-        dev['keep_alive_command']?.toString() ?? '',
+        _friendlyValue(dev['ip_address']),
+        _friendlyValue(dev['protocol']),
+        _friendlyValue(dev['net_port']),
+        _friendlyValue(dev['serial_port']),
+        _friendlyValue(dev['keep_alive_command']),
+        _friendlyValue(dev['module']),
       ]);
     }
-    return rows;
-  }
 
-  List<List<dynamic>> _connectionReportRows(SchematicModel model) {
-    final rows = <List<dynamic>>[
-      ['From', 'To', 'Kind', 'Label'],
+    // --- Connections (as drawn, including user re-routes) ---
+    final connectionRows = <List<dynamic>>[
+      for (final e in model.edges)
+        [
+          model.nodeById(e.fromId)?.title ?? e.fromId,
+          model.nodeById(e.toId)?.title ?? e.toId,
+          e.custom ? 'Custom' : (kConnLabels[e.kind] ?? 'Auto'),
+          e.label,
+        ]
     ];
-    for (final e in model.edges) {
-      final from = model.nodeById(e.fromId)?.title ?? e.fromId;
-      final to = model.nodeById(e.toId)?.title ?? e.toId;
-      String kind = 'Custom';
-      if (!e.custom) {
-        for (final entry in kConnColors.entries) {
-          if (entry.value == e.color) kind = kConnLabels[entry.key]!;
-        }
-      }
-      rows.add([from, to, kind, e.label]);
-    }
-    return rows;
+
+    return [
+      (title: 'System', header: ['Setting', 'Value'], rows: systemRows),
+      (
+        title: 'Inputs',
+        header: ['Input', 'Switcher Input'],
+        rows: prefixed('input_')
+      ),
+      (
+        title: 'Outputs',
+        header: ['Output', 'Switcher Output'],
+        rows: prefixed('output_')
+      ),
+      (
+        title: 'Devices',
+        header: [
+          'Name', 'Type', 'Model', 'Connection', 'IP Address', 'Protocol',
+          'Network Port', 'Serial Port', 'Keep Alive', 'Python Module',
+        ],
+        rows: deviceRows
+      ),
+      (
+        title: 'Connections',
+        header: ['From', 'To', 'Kind', 'Label'],
+        rows: connectionRows
+      ),
+    ];
   }
 
   Future<void> _exportReport(AppStateProvider provider, bool asXlsx) async {
     final model = SchematicModel.build(provider);
-    final setup = provider.roomConfig['SYSTEM_SETUP'] ?? {};
-    final deviceRows = _deviceReportRows(provider, model);
-    final connectionRows = _connectionReportRows(model);
-    final systemRows = <List<dynamic>>[
-      ['Setting', 'Value'],
-      ['Room', setup['gui_full_room_name']?.toString() ?? ''],
-      ['Building', setup['gve_bldg']?.toString() ?? ''],
-      ['Room Number', setup['gve_room']?.toString() ?? ''],
-      ['Processor', setup['processor1']?.toString() ?? ''],
-      ['Processor IP', provider.selectedProcessorIp],
-      ['Touch Panel', setup['gve_id_tlp_1']?.toString() ?? ''],
-      ['GUI Tab Layout', setup['gui_tab']?.toString() ?? ''],
-      ['Device Count', (deviceRows.length - 1).toString()],
-      ['Generated', DateTime.now().toLocal().toString().split('.').first],
-    ];
+    final sections = _reportSections(provider, model);
 
     final ext = asXlsx ? 'xlsx' : 'txt';
     String? outputFile = await FilePicker.saveFile(
@@ -514,22 +626,49 @@ class _SchematicViewState extends State<SchematicView> {
 
     try {
       if (asXlsx) {
+        // ONE sheet, sections stacked like the text report, with the
+        // schematic image dropped in underneath.
+        final rows = <List<dynamic>>[];
+        final rowStyles = <int, int>{};
+        rows.add(['ROOM DEVICE REPORT — ${model.roomTitle}']);
+        rowStyles[0] = XlsxRowStyle.title;
+        for (final s in sections) {
+          rows.add([]);
+          rowStyles[rows.length] = XlsxRowStyle.title;
+          rows.add([s.title]);
+          rowStyles[rows.length] = XlsxRowStyle.header;
+          rows.add(s.header);
+          rows.addAll(s.rows);
+        }
+
+        // Diagram image below the tables, scaled to ~900px wide.
+        XlsxImage? image;
+        final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
+        if (png != null) {
+          final size = XlsxImage.pngSize(png);
+          if (size != null) {
+            const targetW = 900;
+            image = XlsxImage(
+              pngBytes: png,
+              anchorCol: 0,
+              anchorRow: rows.length + 1,
+              widthPx: targetW,
+              heightPx: (size.$2 * targetW / size.$1).round(),
+            );
+          }
+        }
+
         final bytes = buildXlsx([
-          XlsxSheet(name: 'Devices', rows: deviceRows, columnWidths: {
-            0: 22, 1: 38, 2: 24, 3: 26, 4: 42, 5: 18, 6: 16, 7: 10, 8: 10,
-            9: 12, 10: 18,
-          }),
-          XlsxSheet(name: 'Connections', rows: connectionRows, columnWidths: {
-            0: 38, 1: 38, 2: 18, 3: 16,
-          }),
-          XlsxSheet(name: 'System', rows: systemRows, columnWidths: {
-            0: 18, 1: 44,
-          }),
+          XlsxSheet(
+            name: 'Room Report',
+            rows: rows,
+            rowStyles: rowStyles,
+            image: image,
+          ),
         ]);
         await File(outputFile).writeAsBytes(bytes);
       } else {
-        await File(outputFile).writeAsString(_textReport(
-            model.roomTitle, systemRows, deviceRows, connectionRows));
+        await File(outputFile).writeAsString(_textReport(model.roomTitle, sections));
       }
       _snack('Device report saved to $outputFile');
     } catch (e) {
@@ -537,15 +676,20 @@ class _SchematicViewState extends State<SchematicView> {
     }
   }
 
-  /// Fixed-width plain-text rendering of the same three report tables.
-  String _textReport(String roomTitle, List<List<dynamic>> system,
-      List<List<dynamic>> devices, List<List<dynamic>> connections) {
+  /// Fixed-width plain-text rendering of the same report sections.
+  String _textReport(
+      String roomTitle,
+      List<({String title, List<String> header, List<List<dynamic>> rows})>
+          sections) {
     final buffer = StringBuffer();
-    void table(String heading, List<List<dynamic>> rows) {
-      buffer.writeln(heading);
-      buffer.writeln('=' * heading.length);
+    buffer.writeln('ROOM DEVICE REPORT — $roomTitle');
+    buffer.writeln();
+    for (final s in sections) {
+      buffer.writeln(s.title);
+      buffer.writeln('=' * s.title.length);
+      final all = [s.header, ...s.rows];
       final widths = <int>[];
-      for (final row in rows) {
+      for (final row in all) {
         for (int c = 0; c < row.length; c++) {
           final len = row[c].toString().length;
           if (c >= widths.length) {
@@ -555,23 +699,15 @@ class _SchematicViewState extends State<SchematicView> {
           }
         }
       }
-      for (int r = 0; r < rows.length; r++) {
+      for (int r = 0; r < all.length; r++) {
         buffer.writeln([
-          for (int c = 0; c < rows[r].length; c++)
-            rows[r][c].toString().padRight(widths[c]),
+          for (int c = 0; c < all[r].length; c++)
+            all[r][c].toString().padRight(widths[c]),
         ].join('  '));
-        if (r == 0) {
-          buffer.writeln(widths.map((w) => '-' * w).join('  '));
-        }
+        if (r == 0) buffer.writeln(widths.map((w) => '-' * w).join('  '));
       }
       buffer.writeln();
     }
-
-    buffer.writeln('ROOM DEVICE REPORT — $roomTitle');
-    buffer.writeln();
-    table('System', system);
-    table('Devices', devices);
-    table('Connections', connections);
     return buffer.toString();
   }
 
@@ -591,36 +727,76 @@ class _SchematicViewState extends State<SchematicView> {
     }
     final from = _pendingLinkFrom!;
     setState(() => _pendingLinkFrom = null);
-    _showNewLinkDialog(provider, from, node.id);
+    _showLineDialog(provider, fromId: from, toId: node.id);
   }
 
-  Future<void> _showNewLinkDialog(
-      AppStateProvider provider, String fromId, String toId) async {
-    Color picked = kLinkSwatches.first;
-    String label = '';
+  /// The one line dialog, used for every case:
+  ///   * a NEW line (tap two nodes in Draw Line mode)
+  ///   * EDITING a user-drawn line ([customIndex] >= 0)
+  ///   * EDITING an auto line ([hideAutoId] set) — saving suppresses the
+  ///     auto line and adds an editable copy, so a serial-over-ethernet
+  ///     projector can be re-routed to Switcher 2 while keeping its label.
+  /// Endpoints are editable via dropdowns in every case.
+  Future<void> _showLineDialog(
+    AppStateProvider provider, {
+    required String fromId,
+    required String toId,
+    Color? initialColor,
+    String initialLabel = '',
+    int customIndex = -1,
+    String? hideAutoId,
+  }) async {
     final model = SchematicModel.build(provider);
-    final fromTitle = model.nodeById(fromId)?.title ?? fromId;
-    final toTitle = model.nodeById(toId)?.title ?? toId;
+    Color picked = initialColor ?? kLinkSwatches.first;
+    // Editing an auto line whose color isn't a swatch: offer it as an extra
+    // swatch so "keep the current color" stays possible.
+    final List<Color> swatches = [
+      if (!kLinkSwatches.contains(picked)) picked,
+      ...kLinkSwatches,
+    ];
+    String label = initialLabel;
+    String from = fromId;
+    String to = toId;
+    final bool isNew = customIndex < 0 && hideAutoId == null;
+
+    DropdownButtonFormField<String> nodePicker(String current, String title,
+            void Function(String) onChanged) =>
+        DropdownButtonFormField<String>(
+          initialValue: current,
+          isExpanded: true,
+          decoration: InputDecoration(
+              labelText: title, border: const OutlineInputBorder()),
+          items: model.nodes
+              .map((n) => DropdownMenuItem(
+                  value: n.id,
+                  child: Text(n.title, overflow: TextOverflow.ellipsis)))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        );
 
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('New Connection Line'),
+          title: Text(isNew ? 'New Connection Line' : 'Edit Connection Line'),
           content: SizedBox(
-            width: 420,
+            width: 440,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('$fromTitle  →  $toTitle'),
+                nodePicker(from, 'From', (v) => from = v),
+                const SizedBox(height: 12),
+                nodePicker(to, 'To', (v) => to = v),
                 const SizedBox(height: 16),
                 const Text('Line color:'),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: kLinkSwatches.map((c) {
+                  children: swatches.map((c) {
                     final selected = c == picked;
                     return InkWell(
                       customBorder: const CircleBorder(),
@@ -647,10 +823,11 @@ class _SchematicViewState extends State<SchematicView> {
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                TextFormField(
+                  initialValue: label,
                   decoration: const InputDecoration(
                     labelText: 'Label (optional)',
-                    hintText: 'e.g. HDMI, USB-C, Audio',
+                    hintText: 'e.g. HDMI, USB-C, COM3',
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (v) => label = v,
@@ -664,19 +841,20 @@ class _SchematicViewState extends State<SchematicView> {
                 child: const Text('Cancel')),
             ElevatedButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Add Line')),
+                child: Text(isNew ? 'Add Line' : 'Save Line')),
           ],
         ),
       ),
     );
 
-    if (ok == true) {
-      final hex = picked
-          .toARGB32()
-          .toRadixString(16)
-          .toUpperCase()
-          .substring(2); // RRGGBB
-      provider.addSchematicLink(fromId, toId, hex, label);
+    if (ok != true || from == to) return;
+    final hex =
+        picked.toARGB32().toRadixString(16).toUpperCase().substring(2);
+    if (customIndex >= 0) {
+      provider.updateSchematicLinkAt(customIndex, from, to, hex, label);
+    } else {
+      if (hideAutoId != null) provider.hideSchematicEdge(hideAutoId);
+      provider.addSchematicLink(from, to, hex, label);
     }
   }
 
@@ -864,52 +1042,98 @@ class _SchematicViewState extends State<SchematicView> {
     );
   }
 
+  /// Edit-mode line list: EVERY line on the diagram — auto-generated and
+  /// user-drawn — with edit + delete on each row. Editing an auto line
+  /// converts it to a user line (so its route/color/label become editable);
+  /// deleted auto lines stay listed greyed-out with a restore button.
   Widget _buildEditPanel(AppStateProvider provider, SchematicModel model) {
-    final custom = model.edges.where((e) => e.custom).toList();
+    final theme = Theme.of(context);
+    String edgeText(SchematicEdge e) =>
+        '${model.nodeById(e.fromId)?.title ?? e.fromId}  →  '
+        '${model.nodeById(e.toId)?.title ?? e.toId}'
+        '${e.label.isEmpty ? '' : '   (${e.label})'}';
+
+    Widget swatch(Color c, {bool dim = false}) => Container(
+          width: 26,
+          height: 4,
+          margin: const EdgeInsets.only(right: 10),
+          color: dim ? c.withValues(alpha: 0.35) : c,
+        );
+
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 140),
+      constraints: const BoxConstraints(maxHeight: 190),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+        border: Border(top: BorderSide(color: theme.dividerColor)),
       ),
-      child: custom.isEmpty
-          ? const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                  'Edit mode: drag boxes to rearrange. Turn on "Draw Line" and '
-                  'tap two boxes to add a colored connection. Custom lines '
-                  'appear here for removal.'),
-            )
-          : ListView(
+      child: ListView(
+        children: [
+          Text(
+            'Drag boxes to rearrange. "Draw Line" + tap two boxes adds a '
+            'line. Edit any line below to re-route or recolor it (editing an '
+            'auto line makes it yours); deleted auto lines can be restored.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
+          for (final e in model.edges)
+            Row(
               children: [
-                for (final e in custom)
-                  Row(
-                    children: [
-                      Container(
-                        width: 26,
-                        height: 4,
-                        margin: const EdgeInsets.only(right: 10),
-                        color: e.color,
-                      ),
-                      Expanded(
-                        child: Text(
-                          '${model.nodeById(e.fromId)?.title ?? e.fromId}  →  '
-                          '${model.nodeById(e.toId)?.title ?? e.toId}'
-                          '${e.label.isEmpty ? '' : '   (${e.label})'}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        tooltip: 'Remove this line',
-                        onPressed: () =>
-                            provider.removeSchematicLinkAt(e.customIndex),
-                      ),
-                    ],
+                swatch(e.color),
+                Expanded(
+                  child: Text(edgeText(e), overflow: TextOverflow.ellipsis),
+                ),
+                Text(
+                  e.custom ? 'Custom' : (kConnLabels[e.kind] ?? 'Auto'),
+                  style: theme.textTheme.bodySmall,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  tooltip: e.custom
+                      ? 'Edit this line'
+                      : 'Edit this line (re-route, recolor, relabel)',
+                  onPressed: () => _showLineDialog(
+                    provider,
+                    fromId: e.fromId,
+                    toId: e.toId,
+                    initialColor: e.color,
+                    initialLabel: e.label,
+                    customIndex: e.custom ? e.customIndex : -1,
+                    hideAutoId: e.custom ? null : e.autoId,
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  tooltip: 'Remove this line',
+                  onPressed: () => e.custom
+                      ? provider.removeSchematicLinkAt(e.customIndex)
+                      : provider.hideSchematicEdge(e.autoId),
+                ),
               ],
             ),
+          for (final e in model.hiddenEdges)
+            Row(
+              children: [
+                swatch(e.color, dim: true),
+                Expanded(
+                  child: Text(
+                    edgeText(e),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: theme.disabledColor,
+                        decoration: TextDecoration.lineThrough),
+                  ),
+                ),
+                Text('Removed', style: theme.textTheme.bodySmall),
+                IconButton(
+                  icon: const Icon(Icons.restore, size: 20),
+                  tooltip: 'Restore this auto line',
+                  onPressed: () => provider.restoreSchematicEdge(e.autoId),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }
