@@ -199,6 +199,7 @@ class AppStateProvider extends ChangeNotifier {
       'classicSecondary': classicSecondary,
       'textScale': textScale,
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
+      'confirmBeforeDelete': confirmBeforeDelete,
     };
     try {
       const encoder = JsonEncoder.withIndent('    ');
@@ -328,6 +329,46 @@ class AppStateProvider extends ChangeNotifier {
     fillDeviceDefaultsOnLoad = value;
     notifyListeners();
     await _persistSettings();
+  }
+
+  /// When true (default), the trash buttons on the Devices/System tabs ask
+  /// for confirmation before removing a property. Toggle lives in App Config
+  /// for users who prefer one-click deletes.
+  bool confirmBeforeDelete = true;
+
+  Future<void> setConfirmBeforeDelete(bool value) async {
+    confirmBeforeDelete = value;
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  /// True when the LAST load actually changed or flagged anything (key
+  /// mapping, migrations, defaults, audits). The acknowledgement dialog only
+  /// appears when this is set — a clean re-load of an already-migrated file
+  /// stays silent.
+  bool lastLoadHadChanges = false;
+
+  /// The "deny" path of the acknowledgement dialog: throws away every load-
+  /// time change (key mapping, migrations, injected defaults) and reloads the
+  /// working file EXACTLY as it sits on disk. The disk file was never
+  /// touched by the load, so re-reading it restores the original.
+  Future<bool> revertToOriginalLoad() async {
+    if (currentConfigPath.isEmpty) return false;
+    try {
+      final contents = await File(currentConfigPath).readAsString();
+      roomConfig = jsonDecode(contents);
+      systemLogs.clear();
+      lastLoadHadChanges = false;
+      _preloadModulesFromConfig();
+      notifyListeners();
+      AppLogger.logInfo(
+          "Load changes discarded — reloaded original file $currentConfigPath");
+      return true;
+    } catch (e, stack) {
+      AppLogger.logError(
+          "Failed to reload original file $currentConfigPath", e, stack);
+      return false;
+    }
   }
 
   /// The navigation rail tab currently shown (0 = Wizard ... 4 = App Config).
@@ -844,6 +885,9 @@ class AppStateProvider extends ChangeNotifier {
       fillDeviceDefaultsOnLoad = saved['fillDeviceDefaultsOnLoad'] is bool
           ? saved['fillDeviceDefaultsOnLoad']
           : true;
+      confirmBeforeDelete = saved['confirmBeforeDelete'] is bool
+          ? saved['confirmBeforeDelete']
+          : true;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
@@ -1179,6 +1223,9 @@ class AppStateProvider extends ChangeNotifier {
         l.startsWith('BUILDING CODE') ||
         l.startsWith('DEFAULTS') ||
         l.startsWith('AUTO-NAME'));
+    // The acknowledgement dialog keys off this: a clean re-load of an
+    // already-migrated file (backup + OK lines only) shows no dialog.
+    lastLoadHadChanges = hasChanges;
     if (hasChanges) {
       String logBase = changeLogBaseName ?? backupBaseName ?? '';
       if (logBase.isEmpty) {

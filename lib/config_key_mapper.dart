@@ -433,13 +433,19 @@ class ConfigKeyMap {
 
       // 2c. Value normalization (runs on the NEW property names). The mapped
       // value keeps its JSON type, so "True" -> true and "Yes" -> "1" work.
+      // A value that ALREADY equals the mapped target (same value AND type —
+      // boolean false vs string "false" differ) is left alone silently, so a
+      // once-normalized file doesn't re-report the same changes on every load.
       valueMap.forEach((prop, mapping) {
         if (section.containsKey(prop)) {
           final current = section[prop]?.toString();
           if (current != null && mapping.containsKey(current)) {
-            section[prop] = mapping[current];
-            changes.add(
-                "KEYMAP: normalized '$sectionName.$prop' value '$current' -> '${mapping[current]}'");
+            final mapped = mapping[current];
+            if (mapped != section[prop]) {
+              section[prop] = mapped;
+              changes.add(
+                  "KEYMAP: normalized '$sectionName.$prop' value '$current' -> '$mapped'");
+            }
           }
         }
       });

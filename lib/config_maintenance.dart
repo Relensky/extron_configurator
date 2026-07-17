@@ -14,8 +14,14 @@ import 'app_state.dart';
 /// ============================================================================
 
 /// Asks, then removes [fieldKey] from [sectionKey]. Returns true if removed.
+/// The confirmation is skipped entirely when the user turned it off in App
+/// Config ("Confirm before deleting settings").
 Future<bool> confirmRemoveConfigKey(BuildContext context,
     AppStateProvider provider, String sectionKey, String fieldKey) async {
+  if (!provider.confirmBeforeDelete) {
+    provider.removeConfigKey(sectionKey, fieldKey);
+    return true;
+  }
   final bool? confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(

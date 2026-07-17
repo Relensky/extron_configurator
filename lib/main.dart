@@ -260,7 +260,9 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'Open Existing Config',
             onPressed: () async {
               bool loaded = await provider.loadExistingConfig();
-              if (loaded && provider.systemLogs.isNotEmpty && context.mounted) {
+              // Only when the load actually changed/flagged something — a
+              // clean re-load of an already-migrated file stays silent.
+              if (loaded && provider.lastLoadHadChanges && context.mounted) {
                 _showMigrationLogDialog(context, provider.systemLogs);
               }
             },
@@ -275,7 +277,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 builder: (context) => const ProcessorSftpDialog(isUpload: false),
               );
               // On a successful download, show the migration/audit log like a local load does
-              if (result == true && provider.systemLogs.isNotEmpty && context.mounted) {
+              if (result == true && provider.lastLoadHadChanges && context.mounted) {
                 _showMigrationLogDialog(context, provider.systemLogs);
               }
             },
@@ -372,7 +374,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   ),
                   onPressed: () async {
                     bool loaded = await provider.loadExistingConfig();
-                    if (loaded && provider.systemLogs.isNotEmpty && context.mounted) {
+                    if (loaded && provider.lastLoadHadChanges && context.mounted) {
                       _showMigrationLogDialog(context, provider.systemLogs);
                     }
                   },
@@ -444,7 +446,11 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("The loaded file was missing required fields for the current template. The following defaults were injected into memory:"),
+              const Text(
+                  "The loaded file was missing required fields for the current "
+                  "template. The following defaults were injected into memory. "
+                  "\"Use Original\" discards every change and edits the file "
+                  "exactly as it is on disk:"),
               const SizedBox(height: 16),
               Expanded(
                 child: Container(
@@ -483,7 +489,25 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
           ),
         ),
         actions: [
+          // DENY: throw away the key-mapping/migration changes and reload the
+          // file exactly as it sits on disk (the disk copy was never touched).
           TextButton(
+            onPressed: () async {
+              final provider = ctx.read<AppStateProvider>();
+              final messenger = ScaffoldMessenger.of(context);
+              final bool ok = await provider.revertToOriginalLoad();
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              messenger.showSnackBar(SnackBar(
+                content: Text(ok
+                    ? 'Changes discarded — editing the original file as-is.'
+                    : 'Could not reload the original file; the migrated '
+                        'version stays loaded.'),
+                backgroundColor: ok ? null : Colors.red,
+              ));
+            },
+            child: const Text('Use Original (discard changes)'),
+          ),
+          ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Acknowledge'),
           ),
@@ -862,6 +886,20 @@ class AppSettingsView extends StatelessWidget {
               'saved until you export or apply.'),
           value: provider.fillDeviceDefaultsOnLoad,
           onChanged: (val) => provider.setFillDeviceDefaultsOnLoad(val),
+        ),
+        const SizedBox(height: 8),
+
+        // --- DELETE CONFIRMATION ---
+        // Gate for the trash buttons on the Devices/System tabs: off =
+        // one-click removal with no dialog (Check Defaults restores mistakes).
+        SwitchListTile(
+          title: const Text('Confirm before deleting settings'),
+          subtitle: const Text(
+              'Ask before a trash button removes a property from the config '
+              '(Devices & System tabs). Turn off for one-click deletes — '
+              '"Check Defaults" can re-add anything removed by mistake.'),
+          value: provider.confirmBeforeDelete,
+          onChanged: (val) => provider.setConfirmBeforeDelete(val),
         ),
         const SizedBox(height: 20),
 
