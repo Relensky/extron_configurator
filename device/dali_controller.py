@@ -10,7 +10,7 @@ import time
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "screen",
-    "models": ["SCB-100"],
+    "models": ["Controller"],
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",
@@ -24,7 +24,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Screen1",
         "lbl_name": "Lbl_Screen1_Model",
         "gve_id": "Screen1",
-        "name": "Screen - SCB-100",
+        "name": "Screen - Controller",
         "keep_alive_command": None,
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
