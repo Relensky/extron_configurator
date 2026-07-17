@@ -154,7 +154,7 @@ class _MainDashboardState extends State<MainDashboard> {
   /// Captures the current content area and opens the annotation editor. The
   /// default file name embeds the active tab + date.
   void _takeScreenshot(BuildContext context, int selectedIndex) {
-    const tabNames = ['wizard', 'devices', 'schematic', 'system', 'raw_json', 'app_config'];
+    const tabNames = ['wizard', 'devices', 'system', 'schematic', 'raw_json', 'app_config'];
     final tabToken = (selectedIndex >= 0 && selectedIndex < tabNames.length)
         ? tabNames[selectedIndex]
         : 'view';
@@ -316,8 +316,8 @@ class _MainDashboardState extends State<MainDashboard> {
             destinations: const [
               NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
               NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
-              NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
               NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
+              NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
               NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
               NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
             ],
@@ -392,9 +392,9 @@ class _MainDashboardState extends State<MainDashboard> {
       case 1:
         return const DynamicDevicesTabsView();
       case 2:
-        return const SchematicView();
-      case 3:
         return const SystemSettingsView();
+      case 3:
+        return const SchematicView();
       case 4:
         return const JsonEditorView();
       case 5:

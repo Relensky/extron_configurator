@@ -2425,6 +2425,15 @@ class AppStateProvider extends ChangeNotifier {
 
       await targetFile.writeAsString(encoder.convert(_sortJson(exportData)));
       AppLogger.logInfo("Config successfully saved to ${targetFile.path}");
+
+      // ADOPT AS WORKING FILE: exporting ties the saved file to the session
+      // (a wizard-built config starts with no path at all), so later saves —
+      // and the schematic's Save Layout sidecar — have somewhere to live.
+      // The synced-path marker moves with it so the in-memory schematic
+      // layout survives instead of being reset as a "different config".
+      currentConfigPath = outputFile;
+      _schematicSyncedPath = outputFile;
+      notifyListeners();
       return true;
 
     } catch (e, stack) {

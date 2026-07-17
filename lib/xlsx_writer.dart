@@ -31,6 +31,7 @@ class XlsxRowStyle {
   static const int bold = 1;
   static const int title = 2; // bold white on dark blue
   static const int header = 3; // bold on light blue
+  static const int zebra = 4; // normal on light grey (alternating data rows)
 }
 
 /// A PNG image anchored with its top-left corner at (anchorCol, anchorRow),
@@ -174,19 +175,21 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '<font><b/><sz val="11"/><name val="Calibri"/></font>'
       '<font><b/><sz val="12"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>'
       '</fonts>'
-      '<fills count="4">'
+      '<fills count="5">'
       '<fill><patternFill patternType="none"/></fill>'
       '<fill><patternFill patternType="gray125"/></fill>'
       '<fill><patternFill patternType="solid"><fgColor rgb="FF1F4E79"/><bgColor indexed="64"/></patternFill></fill>'
       '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/><bgColor indexed="64"/></patternFill></fill>'
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFEFEFEF"/><bgColor indexed="64"/></patternFill></fill>'
       '</fills>'
       '<borders count="1"><border/></borders>'
       '<cellStyleXfs count="1"><xf/></cellStyleXfs>'
-      '<cellXfs count="4">'
+      '<cellXfs count="5">'
       '<xf xfId="0"/>'
       '<xf fontId="1" applyFont="1" xfId="0"/>'
       '<xf fontId="2" fillId="2" applyFont="1" applyFill="1" xfId="0"/>'
       '<xf fontId="1" fillId="3" applyFont="1" applyFill="1" xfId="0"/>'
+      '<xf fillId="4" applyFill="1" xfId="0"/>'
       '</cellXfs>'
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
       '</styleSheet>'));

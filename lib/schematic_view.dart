@@ -627,18 +627,39 @@ class _SchematicViewState extends State<SchematicView> {
     try {
       if (asXlsx) {
         // ONE sheet, sections stacked like the text report, with the
-        // schematic image dropped in underneath.
+        // schematic image dropped in underneath. Title/header rows are
+        // padded with blank cells to the section's widest row, so their
+        // background band runs the full width of the data beneath them
+        // (auto column widths already size each column to its longest
+        // value); data rows are padded the same and zebra-striped.
+        List<dynamic> pad(List<dynamic> row, int width) =>
+            [...row, ...List.filled(math.max(0, width - row.length), '')];
+        int widthOf(
+                ({
+                  String title,
+                  List<String> header,
+                  List<List<dynamic>> rows
+                }) s) =>
+            s.rows.fold(s.header.length,
+                (m, r) => math.max(m, r.length));
+
         final rows = <List<dynamic>>[];
         final rowStyles = <int, int>{};
-        rows.add(['ROOM DEVICE REPORT — ${model.roomTitle}']);
+        final int reportWidth =
+            sections.fold(1, (w, s) => math.max(w, widthOf(s)));
+        rows.add(pad(['ROOM DEVICE REPORT — ${model.roomTitle}'], reportWidth));
         rowStyles[0] = XlsxRowStyle.title;
         for (final s in sections) {
+          final int width = widthOf(s);
           rows.add([]);
           rowStyles[rows.length] = XlsxRowStyle.title;
-          rows.add([s.title]);
+          rows.add(pad([s.title], width));
           rowStyles[rows.length] = XlsxRowStyle.header;
-          rows.add(s.header);
-          rows.addAll(s.rows);
+          rows.add(pad(s.header, width));
+          for (int i = 0; i < s.rows.length; i++) {
+            if (i.isOdd) rowStyles[rows.length] = XlsxRowStyle.zebra;
+            rows.add(pad(s.rows[i], width));
+          }
         }
 
         // Diagram image below the tables, scaled to ~900px wide.
@@ -941,12 +962,18 @@ class _SchematicViewState extends State<SchematicView> {
               icon: const Icon(Icons.save, size: 18),
               label: const Text('Save Layout'),
               onPressed: () async {
+                // Wizard-built session with no file yet: prompt to save the
+                // config first (which ties the file to the session), then
+                // write the layout sidecar next to it right after.
                 if (provider.schematicSidecarPath.isEmpty) {
-                  _snack(
-                      'No working config file yet — save/export the config '
-                      'first so the layout has somewhere to live.',
-                      error: true);
-                  return;
+                  _snack('No working config file yet — choose where to save '
+                      'the config, then the layout is saved beside it.');
+                  final bool exported = await provider.exportRoomConfig();
+                  if (!exported) {
+                    _snack('Layout not saved — the config save was cancelled.',
+                        error: true);
+                    return;
+                  }
                 }
                 final saved = await provider.saveSchematicLayout();
                 _snack(saved.isEmpty
