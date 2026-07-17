@@ -340,6 +340,129 @@ class AppStateProvider extends ChangeNotifier {
     selectedTabIndex = index;
     notifyListeners();
   }
+
+  // ---------------------------------------------------------------------
+  //  SCHEMATIC TAB STATE
+  //  Node positions dragged in edit mode and user-drawn connection lines.
+  //  Held here (not in the view) so edits survive tab switches; persisted
+  //  on demand to a sidecar file next to the working config
+  //  ("<config>_schematic.json") via saveSchematicLayout, and re-loaded
+  //  automatically the first time the Schematic tab opens for that config.
+  // ---------------------------------------------------------------------
+
+  /// Node id (device key / 'PROCESSOR' / 'IDF' / 'TOUCHPANEL') -> position
+  /// override. Nodes absent from the map sit at their auto-layout spot.
+  final Map<String, Offset> schematicPositions = {};
+
+  /// User-drawn lines: {'from': id, 'to': id, 'color': 'RRGGBB', 'label': s}.
+  final List<Map<String, String>> schematicLinks = [];
+
+  /// The config path the schematic state currently belongs to, so switching
+  /// configs resets the layout instead of carrying stale node spots over.
+  String _schematicSyncedPath = ' never';
+
+  void setSchematicPosition(String nodeId, Offset pos) {
+    schematicPositions[nodeId] = pos;
+    notifyListeners();
+  }
+
+  void addSchematicLink(String from, String to, String colorHex, String label) {
+    schematicLinks.add(
+        {'from': from, 'to': to, 'color': colorHex, 'label': label});
+    notifyListeners();
+  }
+
+  void removeSchematicLinkAt(int index) {
+    if (index < 0 || index >= schematicLinks.length) return;
+    schematicLinks.removeAt(index);
+    notifyListeners();
+  }
+
+  /// Clears dragged positions (auto-layout takes over again). Custom lines
+  /// are kept — they are removed individually from the edit panel.
+  void resetSchematicPositions() {
+    schematicPositions.clear();
+    notifyListeners();
+  }
+
+  /// Sidecar file the layout persists to ('' when the session has no working
+  /// file yet — Create New that was never saved).
+  String get schematicSidecarPath {
+    if (currentConfigPath.isEmpty) return '';
+    final dir = path.dirname(currentConfigPath);
+    final base = path.basenameWithoutExtension(currentConfigPath);
+    return path.join(dir, '${base}_schematic.json');
+  }
+
+  /// Called when the Schematic tab opens: if the working config changed since
+  /// the last visit, drop the old layout and load the sidecar if one exists.
+  void ensureSchematicLayoutForCurrentConfig() {
+    if (_schematicSyncedPath == currentConfigPath) return;
+    _schematicSyncedPath = currentConfigPath;
+    schematicPositions.clear();
+    schematicLinks.clear();
+    // Notify in every path — the tab has already built by the time this runs
+    // (post-frame), so without it a loaded sidecar wouldn't show until the
+    // next unrelated rebuild.
+    final sidecar = schematicSidecarPath;
+    if (sidecar.isEmpty || !File(sidecar).existsSync()) {
+      notifyListeners();
+      return;
+    }
+    try {
+      final doc = jsonDecode(File(sidecar).readAsStringSync());
+      if (doc is! Map) return;
+      final positions = doc['positions'];
+      if (positions is Map) {
+        positions.forEach((id, xy) {
+          if (xy is List && xy.length == 2) {
+            schematicPositions[id.toString()] = Offset(
+                (xy[0] as num).toDouble(), (xy[1] as num).toDouble());
+          }
+        });
+      }
+      final links = doc['links'];
+      if (links is List) {
+        for (final l in links) {
+          if (l is Map && l['from'] != null && l['to'] != null) {
+            schematicLinks.add({
+              'from': l['from'].toString(),
+              'to': l['to'].toString(),
+              'color': (l['color'] ?? '2196F3').toString(),
+              'label': (l['label'] ?? '').toString(),
+            });
+          }
+        }
+      }
+      AppLogger.logInfo('Schematic layout loaded from $sidecar '
+          '(${schematicPositions.length} positions, ${schematicLinks.length} lines).');
+    } catch (e) {
+      AppLogger.logError('Failed to load schematic layout from $sidecar', e);
+    }
+    notifyListeners();
+  }
+
+  /// Writes the layout sidecar. Returns the saved path, or '' when there is
+  /// no working config file to sit next to (or the write failed).
+  Future<String> saveSchematicLayout() async {
+    final sidecar = schematicSidecarPath;
+    if (sidecar.isEmpty) return '';
+    try {
+      const encoder = JsonEncoder.withIndent('  ');
+      await File(sidecar).writeAsString(encoder.convert({
+        '__readme': 'Schematic tab layout for the Room Config Builder: '
+            'dragged node positions and user-drawn connection lines.',
+        'positions': schematicPositions
+            .map((id, p) => MapEntry(id, [p.dx, p.dy])),
+        'links': schematicLinks,
+      }));
+      return sidecar;
+    } catch (e, stack) {
+      AppLogger.logError('Failed to save schematic layout to $sidecar', e, stack);
+      return '';
+    }
+  }
+
   List<String> systemLogs = []; // NEW: Store user-facing session logs
   
   // Cache for parsed python module commands to prevent repetitive disk I/O

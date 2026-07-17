@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'dynamic_devices_view.dart';
+import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
 import 'screenshot_tools.dart';
@@ -153,7 +154,7 @@ class _MainDashboardState extends State<MainDashboard> {
   /// Captures the current content area and opens the annotation editor. The
   /// default file name embeds the active tab + date.
   void _takeScreenshot(BuildContext context, int selectedIndex) {
-    const tabNames = ['wizard', 'devices', 'system', 'raw_json', 'app_config'];
+    const tabNames = ['wizard', 'devices', 'schematic', 'system', 'raw_json', 'app_config'];
     final tabToken = (selectedIndex >= 0 && selectedIndex < tabNames.length)
         ? tabNames[selectedIndex]
         : 'view';
@@ -202,7 +203,7 @@ class _MainDashboardState extends State<MainDashboard> {
         const SnackBar(content: Text('New config created from template.')),
       );
     } else {
-      provider.selectTab(4); // Route to App Config
+      provider.selectTab(5); // Route to App Config
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
               "Place config.json there or set a Template file in App Config."),
@@ -315,6 +316,7 @@ class _MainDashboardState extends State<MainDashboard> {
             destinations: const [
               NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
               NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
+              NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
               NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
               NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
               NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
@@ -324,7 +326,7 @@ class _MainDashboardState extends State<MainDashboard> {
           Expanded(
             child: RepaintBoundary(
               key: _captureKey,
-              child: (!hasConfig && selectedIndex != 4) ? _buildLandingScreen(context, provider) : _buildMainContent(selectedIndex),
+              child: (!hasConfig && selectedIndex != 5) ? _buildLandingScreen(context, provider) : _buildMainContent(selectedIndex),
             ),
           )
         ],
@@ -388,12 +390,14 @@ class _MainDashboardState extends State<MainDashboard> {
       case 0:
         return const SetupWizardView(); 
       case 1:
-        return const DynamicDevicesTabsView(); 
+        return const DynamicDevicesTabsView();
       case 2:
-        return const SystemSettingsView();
+        return const SchematicView();
       case 3:
-        return const JsonEditorView();
+        return const SystemSettingsView();
       case 4:
+        return const JsonEditorView();
+      case 5:
         return const AppSettingsView();
       default:
         return const Center(child: Text("Select a category"));
