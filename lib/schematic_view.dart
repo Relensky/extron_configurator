@@ -524,17 +524,22 @@ class _SchematicViewState extends State<SchematicView> {
     final String fullBldg = provider.fullBuildingNameForCode(rawBldg);
     final deviceCount =
         model.nodes.where((n) => config.containsKey(n.id)).length;
+    final String tlp = _friendlyValue(setup['gve_id_tlp_1']);
+    // Rows with no value (e.g. the GUI/touch-panel keys were deleted from
+    // SYSTEM_SETUP) are left out instead of printing blanks.
     final systemRows = <List<dynamic>>[
       ['Room', _friendlyValue(setup['gui_full_room_name'])],
       ['Building', fullBldg.isEmpty ? rawBldg : fullBldg],
       ['Room Number', _friendlyValue(setup['gve_room'])],
       ['Processor', _friendlyValue(setup['processor1'])],
       ['Processor IP', provider.selectedProcessorIp],
-      ['Touch Panel', _friendlyValue(setup['gve_id_tlp_1'])],
-      ['Panel Layout', _friendlyValue(setup['gui_tab'])],
+      if (tlp.isNotEmpty && tlp.toUpperCase() != 'N/A') ...[
+        ['Touch Panel', tlp],
+        ['Panel Layout', _friendlyValue(setup['gui_tab'])],
+      ],
       ['Device Count', deviceCount.toString()],
       ['Generated', DateTime.now().toLocal().toString().split('.').first],
-    ];
+    ]..removeWhere((r) => r[1].toString().isEmpty);
 
     // --- Inputs / Outputs from SYSTEM_SETUP (friendly names) ---
     List<List<dynamic>> prefixed(String prefix) {
@@ -645,20 +650,29 @@ class _SchematicViewState extends State<SchematicView> {
 
         final rows = <List<dynamic>>[];
         final rowStyles = <int, int>{};
+        final overflowRows = <int>{};
         final int reportWidth =
             sections.fold(1, (w, s) => math.max(w, widthOf(s)));
         rows.add(pad(['ROOM DEVICE REPORT — ${model.roomTitle}'], reportWidth));
         rowStyles[0] = XlsxRowStyle.title;
         for (final s in sections) {
-          final int width = widthOf(s);
+          // 2-column sections (System/Inputs/Outputs) put their value ONE
+          // COLUMN OVER (Setting | | Value) and are excluded from column
+          // auto-sizing, so a long room/building name overflows to the right
+          // instead of stretching a column the Devices table also uses.
+          final bool shifted = s.header.length == 2;
+          List<dynamic> layout(List<dynamic> r) =>
+              shifted ? [r[0], '', r[1]] : r;
+          final int width = shifted ? 3 : widthOf(s);
           rows.add([]);
           rowStyles[rows.length] = XlsxRowStyle.title;
           rows.add(pad([s.title], width));
           rowStyles[rows.length] = XlsxRowStyle.header;
-          rows.add(pad(s.header, width));
+          rows.add(pad(layout(s.header), width));
           for (int i = 0; i < s.rows.length; i++) {
             if (i.isOdd) rowStyles[rows.length] = XlsxRowStyle.zebra;
-            rows.add(pad(s.rows[i], width));
+            if (shifted) overflowRows.add(rows.length);
+            rows.add(pad(layout(s.rows[i]), width));
           }
         }
 
@@ -684,6 +698,7 @@ class _SchematicViewState extends State<SchematicView> {
             name: 'Room Report',
             rows: rows,
             rowStyles: rowStyles,
+            overflowRows: overflowRows,
             image: image,
           ),
         ]);

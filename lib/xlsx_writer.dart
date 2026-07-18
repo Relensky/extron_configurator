@@ -76,6 +76,13 @@ class XlsxSheet {
   /// listed get an automatic width from their longest value.
   final Map<int, double> columnWidths;
 
+  /// Rows whose LAST cell is excluded from the automatic column-width
+  /// computation: that value overflows into the empty cells to its right
+  /// instead of stretching the shared column — used for long free-text
+  /// values (room/building names) that would otherwise blow up a column
+  /// other sections also use. The row's other cells still size normally.
+  final Set<int> overflowRows;
+
   /// Optional embedded PNG (e.g. the schematic diagram).
   final XlsxImage? image;
 
@@ -84,6 +91,7 @@ class XlsxSheet {
     required this.rows,
     this.rowStyles = const {0: XlsxRowStyle.header},
     this.columnWidths = const {},
+    this.overflowRows = const {},
     this.image,
   });
 }
@@ -218,7 +226,9 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     for (int r = 0; r < sheet.rows.length; r++) {
       if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
       final cells = sheet.rows[r];
-      for (int c = 0; c < cells.length; c++) {
+      final int limit =
+          sheet.overflowRows.contains(r) ? cells.length - 1 : cells.length;
+      for (int c = 0; c < limit; c++) {
         final len = cells[c]?.toString().length ?? 0;
         if (len > (maxLen[c] ?? 0)) maxLen[c] = len;
       }
