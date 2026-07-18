@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -164,8 +165,12 @@ class SchematicModel {
 
     final networkKeys =
         deviceKeys.where((k) => connOf(k) == ConnType.network).toList();
-    final directKeys =
-        deviceKeys.where((k) => connOf(k) != ConnType.network).toList();
+    final soeKeys =
+        deviceKeys.where((k) => connOf(k) == ConnType.soe).toList();
+    final directKeys = deviceKeys
+        .where((k) =>
+            connOf(k) != ConnType.network && connOf(k) != ConnType.soe)
+        .toList();
 
     // Serial-over-ethernet devices ride the switcher's HDBaseT/DTP serial
     // ports, so their line targets the room switcher; with no switcher in
@@ -173,6 +178,19 @@ class SchematicModel {
     final String soeTarget = deviceKeys.firstWhere(
         (k) => k.startsWith('SWITCHERDEVICE_'),
         orElse: () => 'PROCESSOR');
+
+    // LEFT column: network devices, with SoE devices slotted in directly
+    // after their switcher — the short adjacent line can't cross anything.
+    // No switcher in the room: SoE devices go to the right column and line
+    // straight to the processor like the other direct connections.
+    final List<String> leftKeys = [];
+    for (final k in networkKeys) {
+      leftKeys.add(k);
+      if (k == soeTarget) leftKeys.addAll(soeKeys.where((s) => s != k));
+    }
+    if (soeTarget == 'PROCESSOR' || !leftKeys.any(soeKeys.contains)) {
+      directKeys.addAll(soeKeys.where((s) => !leftKeys.contains(s)));
+    }
 
     // --- Touch panel node (window icon with one tab per gui_tab page) ---
     final String tlpId = systemSetup['gve_id_tlp_1']?.toString() ?? '';
@@ -192,7 +210,7 @@ class SchematicModel {
     const double rowStart = 96;
     const double rowSpacing = 102;
 
-    final int rows = math.max(networkKeys.length, directKeys.length);
+    final int rows = math.max(leftKeys.length, directKeys.length);
     final double canvasH = math.max(
         560, rowStart + rows * rowSpacing + (hasTouchPanel ? 180 : 60));
     const double canvasW = colDirectX + kNodeWidth + 30;
@@ -222,8 +240,8 @@ class SchematicModel {
     // IDF between the network column and the processor.
     if (hasIdf) {
       double idfY = processorY;
-      if (networkKeys.isNotEmpty) {
-        final mid = (networkKeys.length - 1) / 2;
+      if (leftKeys.isNotEmpty) {
+        final mid = (leftKeys.length - 1) / 2;
         idfY = rowStart + mid * rowSpacing;
       }
       nodes.add(SchematicNode(
@@ -313,8 +331,8 @@ class SchematicModel {
       }
     }
 
-    for (int i = 0; i < networkKeys.length; i++) {
-      addDevice(networkKeys[i], i, colNetworkX);
+    for (int i = 0; i < leftKeys.length; i++) {
+      addDevice(leftKeys[i], i, colNetworkX);
     }
     for (int i = 0; i < directKeys.length; i++) {
       addDevice(directKeys[i], i, colDirectX);
@@ -613,6 +631,16 @@ class _SchematicViewState extends State<SchematicView> {
         rows: connectionRows
       ),
     ];
+  }
+
+  /// "Copy text to clipboard" on the Report menu: the same plain-text report
+  /// the .txt export writes, without touching the disk.
+  Future<void> _copyReportText(AppStateProvider provider) async {
+    final model = SchematicModel.build(provider);
+    final text = _textReport(model.roomTitle, _reportSections(provider, model));
+    await Clipboard.setData(ClipboardData(text: text));
+    _snack('Device report copied to clipboard '
+        '(${text.split('\n').length} lines).');
   }
 
   Future<void> _exportReport(AppStateProvider provider, bool asXlsx) async {
@@ -1004,12 +1032,16 @@ class _SchematicViewState extends State<SchematicView> {
           ),
           PopupMenuButton<String>(
             tooltip: 'Export device report',
-            onSelected: (v) => _exportReport(provider, v == 'xlsx'),
+            onSelected: (v) => v == 'copy'
+                ? _copyReportText(provider)
+                : _exportReport(provider, v == 'xlsx'),
             itemBuilder: (ctx) => const [
               PopupMenuItem(
                   value: 'xlsx', child: Text('Excel report (.xlsx)')),
               PopupMenuItem(
                   value: 'txt', child: Text('Plain text report (.txt)')),
+              PopupMenuItem(
+                  value: 'copy', child: Text('Copy text to clipboard')),
             ],
             child: IgnorePointer(
               // The menu handles taps; the button is just the visual.
@@ -1301,31 +1333,100 @@ class _TabbedWindowIconPainter extends CustomPainter {
       old.tabCount != tabCount || old.color != color;
 }
 
-/// Draws every connection line plus its midpoint label.
+/// Draws every connection line plus its label, avoiding overlaps:
+///   * a line whose straight path would cut through an unrelated node box
+///     curves around it instead (so dragged arrangements stay readable)
+///   * labels are painted in a SECOND pass — no line ever covers a label —
+///     and each label slides along its line to a spot clear of node boxes
+///     and of the labels already placed
 class _EdgePainter extends CustomPainter {
   final SchematicModel model;
   final Brightness brightness;
 
   _EdgePainter(this.model, this.brightness);
 
+  /// True when the segment [a]->[b] passes through [rect] (sampled — cheap
+  /// and plenty accurate for box-sized obstacles).
+  static bool _segmentHitsRect(Offset a, Offset b, Rect rect) {
+    const int samples = 24;
+    for (int i = 1; i < samples; i++) {
+      if (rect.contains(Offset.lerp(a, b, i / samples)!)) return true;
+    }
+    return false;
+  }
+
+  /// Point on the quadratic bezier (a, control, b) at [t].
+  static Offset _bezier(Offset a, Offset c, Offset b, double t) {
+    final u = 1 - t;
+    return a * (u * u) + c * (2 * u * t) + b * (t * t);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    // Inflated node boxes = obstacles for lines and no-go zones for labels.
+    final Map<String, Rect> nodeRects = {
+      for (final n in model.nodes)
+        n.id: Rect.fromLTWH(
+                n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight)
+            .inflate(6),
+    };
+
+    // --- PASS 1: lines (collect each edge's label-anchor curve) ------------
+    final List<(SchematicEdge, Offset, Offset?, Offset)> labeled = [];
     for (final edge in model.edges) {
       final from = model.nodeById(edge.fromId);
       final to = model.nodeById(edge.toId);
       if (from == null || to == null) continue;
+      final a = from.center;
+      final b = to.center;
+
+      // Nodes (other than the endpoints) the straight line would cut through.
+      Rect? blocked;
+      for (final entry in nodeRects.entries) {
+        if (entry.key == edge.fromId || entry.key == edge.toId) continue;
+        if (_segmentHitsRect(a, b, entry.value)) {
+          blocked = entry.value;
+          break;
+        }
+      }
 
       final paint = Paint()
         ..color = edge.color
         ..strokeWidth = edge.width
         ..style = PaintingStyle.stroke;
-      canvas.drawLine(from.center, to.center, paint);
 
-      if (edge.label.isEmpty) continue;
-      final mid = Offset(
-        (from.center.dx + to.center.dx) / 2,
-        (from.center.dy + to.center.dy) / 2,
-      );
+      Offset? control;
+      if (blocked != null) {
+        // Curve around the box: bend away from its center, far enough that
+        // the curve's apex clears the box whichever way the line grazes it.
+        final mid = Offset.lerp(a, b, 0.5)!;
+        final dir = b - a;
+        final len = dir.distance;
+        if (len > 1) {
+          Offset perp = Offset(-dir.dy / len, dir.dx / len);
+          if ((blocked.center - mid).dx * perp.dx +
+                  (blocked.center - mid).dy * perp.dy >
+              0) {
+            perp = -perp; // push away from the obstacle, not into it
+          }
+          control = mid + perp * (kNodeHeight * 2.4);
+          final path = Path()
+            ..moveTo(a.dx, a.dy)
+            ..quadraticBezierTo(control.dx, control.dy, b.dx, b.dy);
+          canvas.drawPath(path, paint);
+        } else {
+          canvas.drawLine(a, b, paint);
+        }
+      } else {
+        canvas.drawLine(a, b, paint);
+      }
+
+      if (edge.label.isNotEmpty) labeled.add((edge, a, control, b));
+    }
+
+    // --- PASS 2: labels (drawn over every line, dodging collisions) --------
+    final List<Rect> placed = [];
+    for (final (edge, a, control, b) in labeled) {
       final textPainter = TextPainter(
         text: TextSpan(
           text: edge.label,
@@ -1340,11 +1441,30 @@ class _EdgePainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
 
-      final bg = Rect.fromCenter(
-        center: mid,
-        width: textPainter.width + 10,
-        height: textPainter.height + 4,
-      );
+      Rect rectAt(double t) {
+        final p = control == null
+            ? Offset.lerp(a, b, t)!
+            : _bezier(a, control, b, t);
+        return Rect.fromCenter(
+            center: p,
+            width: textPainter.width + 10,
+            height: textPainter.height + 4);
+      }
+
+      // Slide along the line until the label is clear of node boxes and of
+      // the labels already placed; the middle spot wins ties.
+      Rect bg = rectAt(0.5);
+      for (final t in const [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78, 0.15]) {
+        final candidate = rectAt(t);
+        final bool clear = !placed.any((r) => r.overlaps(candidate)) &&
+            !nodeRects.values.any((r) => r.overlaps(candidate));
+        if (clear) {
+          bg = candidate;
+          break;
+        }
+      }
+      placed.add(bg);
+
       canvas.drawRRect(
         RRect.fromRectAndRadius(bg, const Radius.circular(4)),
         Paint()
@@ -1360,7 +1480,9 @@ class _EdgePainter extends CustomPainter {
           ..strokeWidth = 1,
       );
       textPainter.paint(
-          canvas, mid - Offset(textPainter.width / 2, textPainter.height / 2));
+          canvas,
+          bg.center -
+              Offset(textPainter.width / 2, textPainter.height / 2));
     }
   }
 
