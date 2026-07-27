@@ -41,6 +41,15 @@ import 'config_dictionary.dart';
 ///  over the global "fields" entries for those sections, and entries marked
 ///  "addIfMissing": true are rendered on the device tab even when the key
 ///  does not exist in the device block yet (the first edit writes it).
+///  "section_fields" is the same thing under a clearer name for NON-device
+///  blocks (e.g. "METRICS_CONFIG"); both are parsed into the same list.
+///
+///  SECTION DEFAULTS: a top-level "section_defaults" object holds whole
+///  non-device, non-SYSTEM_SETUP config sections (e.g. "METRICS_CONFIG")
+///  with their baseline properties. On load, a missing section is created
+///  and missing properties are added, exactly like the SYSTEM_SETUP
+///  migration — so a new processor-side feature block reaches every room
+///  by editing ui_schema.json alone.
 ///
 ///  DEVICE DEFAULTS: a top-level "device_defaults" object maps section
 ///  patterns to property/value pairs that are merged into every NEWLY
@@ -313,6 +322,21 @@ class UiSchema {
 
   Map<String, dynamic> get systemDefaults => Map.unmodifiable(_systemDefaults);
 
+  /// Whole non-device config sections and their baseline properties, from
+  /// "section_defaults" (e.g. "METRICS_CONFIG"). Injected into loaded configs
+  /// that are missing the section or any of its properties. Empty unless the
+  /// schema file defines it — nothing is built in.
+  final Map<String, Map<String, dynamic>> _sectionDefaults = {};
+
+  Map<String, Map<String, dynamic>> get sectionDefaults =>
+      Map.unmodifiable(_sectionDefaults);
+
+  /// True for a top-level config section that is neither SYSTEM_SETUP nor a
+  /// numbered device block — i.e. a standalone settings block like
+  /// METRICS_CONFIG, which the System tab renders as its own group.
+  bool isExtraSection(String sectionKey) =>
+      sectionKey != 'SYSTEM_SETUP' && deviceTypeForSection(sectionKey) == null;
+
   /// Where this schema came from, for display in App Config.
   String source = 'Built-in defaults';
 
@@ -418,9 +442,11 @@ class UiSchema {
     });
 
     // Optional "device_fields": { "PROJECTORDEVICE_*": { "input": {...} } }
-    final deviceFields = doc['device_fields'];
-    if (deviceFields is Map) {
-      deviceFields.forEach((sectionPattern, fieldMap) {
+    // and its alias "section_fields" for non-device blocks (METRICS_CONFIG).
+    for (final key in const ['device_fields', 'section_fields']) {
+      final scopedFields = doc[key];
+      if (scopedFields is! Map) continue;
+      scopedFields.forEach((sectionPattern, fieldMap) {
         if (sectionPattern.toString().startsWith('__')) return;
         if (fieldMap is! Map) return;
         // File entries replace any earlier definition of the same pattern
@@ -501,6 +527,23 @@ class UiSchema {
         parsedDefaults[key.toString()] = value;
       });
       if (parsedDefaults.isNotEmpty) _systemDefaults = parsedDefaults;
+    }
+
+    // Optional "section_defaults": whole non-device blocks injected on load
+    // when missing, e.g. { "METRICS_CONFIG": { "enabled": false, ... } }.
+    final sectionDefaults = doc['section_defaults'];
+    if (sectionDefaults is Map) {
+      sectionDefaults.forEach((sectionKey, valueMap) {
+        if (sectionKey.toString().startsWith('__')) return;
+        if (valueMap is! Map) return;
+        final Map<String, dynamic> values = {};
+        valueMap.forEach((key, value) {
+          if (key.toString().startsWith('__')) return;
+          values[key.toString()] = value;
+        });
+        // File entries replace any earlier definition of the same section
+        if (values.isNotEmpty) _sectionDefaults[sectionKey.toString()] = values;
+      });
     }
   }
 

@@ -54,7 +54,17 @@
     "SYSTEM_SETUP values injected into loaded configs that are missing them",
     "(the migration step). Defining it REPLACES the built-in set. The dev_",
     "counts are NOT listed here - every device_types family is always",
-    "injected as '0' automatically."
+    "injected as '0' automatically.",
+    "",
+    "STANDALONE SECTIONS: config blocks that are neither SYSTEM_SETUP nor a",
+    "numbered device (e.g. 'METRICS_CONFIG') are rendered on the System tab as",
+    "their own group, below System Settings. Describe their properties under",
+    "the top-level 'section_fields' object (same entries as 'fields', keyed by",
+    "section name), give the group its heading with a normal 'fields' entry",
+    "named after the section, and list the baseline properties under",
+    "'section_defaults' - those are created/filled on load just like the",
+    "SYSTEM_SETUP migration, and are what 'Check Defaults' offers for the",
+    "group when the template config has no such block."
   ],
   "device_types": {
     "__readme": [
@@ -138,7 +148,31 @@
     "gui_routing_mode": "Normal",
     "gui_tab": "2_Cam_Dev",
     "gui_capture_source_available": "No",
-    "gui_usb_or_vga": "USB"
+    "gui_usb_or_vga": "USB",
+    "use_qos": true,
+    "disable_inactivity_timer": false,
+    "active_reboot_listener": true,
+    "reboot_listener_port": 3510,
+    "reboot_listener_interface": "LAN",
+    "reboot_listener_token": "",
+    "reboot_listener_client_password": ""
+  },
+  "section_defaults": {
+    "__readme": [
+      "Whole non-device config blocks injected on load when missing (section",
+      "and/or individual properties), shown in the acknowledgement dialog.",
+      "METRICS_CONFIG is created disabled with a blank bearer on purpose: the",
+      "processor's Metrics client raises at startup when 'enabled' is true and",
+      "'bearer' is empty, so a migrated room stays safe until someone pastes",
+      "the token in. New configs built from the template get the template's",
+      "own values instead."
+    ],
+    "METRICS_CONFIG": {
+      "enabled": false,
+      "keylogger": false,
+      "uri": "http://cts-metrics1:41796/metrics",
+      "bearer": ""
+    }
   },
   "device_defaults": {
     "__readme": [
@@ -185,6 +219,66 @@
         "label": "Input",
         "addIfMissing": true,
         "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed)."
+      }
+    }
+  },
+  "section_fields": {
+    "__readme": [
+      "Field definitions for standalone (non-device) config blocks, keyed by",
+      "section name. Same entry format as 'fields'; these win over the global",
+      "'fields' entries inside that section, so short property names like",
+      "'enabled' or 'uri' can be described per block without colliding.",
+      "Only the properties present in the block are rendered - the optional",
+      "tuning keys below are described here so they get a proper editor when",
+      "someone adds them by hand in the Raw JSON tab."
+    ],
+    "METRICS_CONFIG": {
+      "enabled": {
+        "type": "bool",
+        "label": "Metrics Enabled (enabled)",
+        "helperText": "Needs a URI and a bearer token before it is turned on",
+        "description": "Start the python metrics client (modules/project/metrics_client.py) on the processor. When false, a no-op DummyMetrics stands in and nothing is sent. WARNING: with this true and 'bearer' blank, the processor raises at startup - fill in the URI and token first."
+      },
+      "keylogger": {
+        "type": "bool",
+        "label": "Log UI Events (keylogger)",
+        "description": "Send a metric for most touch panel events (button presses and the like) on top of the system's own metrics. Button releases and slider drags are skipped by the processor for performance."
+      },
+      "uri": {
+        "label": "Metrics Ingest URI (uri)",
+        "description": "Full URL the processor POSTs batched metrics to, e.g. http://cts-metrics1:41796/metrics. Points at the AV-System-Metrics ingest service."
+      },
+      "bearer": {
+        "label": "Bearer Token (bearer)",
+        "description": "Secret sent as the 'Authorization: Bearer ...' header on every metrics POST. The ingest service rejects the batch without it, and the client refuses to start when it is blank."
+      },
+      "batch_size": {
+        "type": "int",
+        "description": "OPTIONAL. Metrics are sent once this many are queued (processor default 20). Also the maximum number sent per request."
+      },
+      "flush_interval": {
+        "type": "int",
+        "description": "OPTIONAL. Seconds to wait before sending a partial batch (processor default 10), so a quiet room still reports."
+      },
+      "max_cache_size": {
+        "type": "int",
+        "description": "OPTIONAL. Most metrics held in memory while the ingest server is unreachable (processor default 250). Must be >= batch_size. Oldest entries are dropped only once the failure thresholds below are passed."
+      },
+      "failure_drop_message_threshold": {
+        "type": "int",
+        "description": "OPTIONAL. Failed messages tolerated before the cache is allowed to drop its oldest entries (processor default 100)."
+      },
+      "failure_drop_time_threshold": {
+        "type": "int",
+        "description": "OPTIONAL. Seconds of continuous send failures before the cache is allowed to drop its oldest entries (processor default 300)."
+      },
+      "request_timeout": {
+        "type": "double",
+        "description": "OPTIONAL. Seconds to wait on the HTTP POST before treating it as failed (processor default 10)."
+      },
+      "send_heartbeat": {
+        "type": "bool",
+        "description": "OPTIONAL. Send the periodic 'Heartbeat' metric used to track room uptime (processor default true)."
       }
     }
   },
@@ -338,6 +432,53 @@
     },
     "active_notifications": {
       "description": "Notifications can be enabled with true or disabled with false."
+    },
+    "disable_inactivity_timer": {
+      "type": "bool",
+      "label": "Disable Inactivity Timer (disable_inactivity_timer)",
+      "helperText": "Not a true disable - it pushes the shutdown out to 25hrs",
+      "description": "Selects the 'disabled' inactivity mode: the warning/shutdown timers move out past a full day (25hrs) so a multi-day event is never shut down on the presenter. Works with active_event_space (normal 3hr / event 6hr / disabled 25hr); this flag wins. The room's Timer button cycles the modes and saves both flags back into config.json on the processor."
+    },
+    "use_qos": {
+      "type": "bool",
+      "label": "Use QoS Scheduler (use_qos)",
+      "description": "Route device Set/Update traffic through the quality of service scheduler (modules/project/quality_of_service.py) instead of firing every command the moment it is raised. Commands are queued by priority (high / low / lossy) and drained on a 100ms tick, so bursts of polling cannot starve what the user just pressed. False sends everything immediately, as older systems did."
+    },
+    "active_reboot_listener": {
+      "type": "bool",
+      "label": "Reboot Listener (active_reboot_listener)",
+      "description": "Run the standalone TCP reboot listener (modules/project/reboot_listener.py) so the CTS Dashboard - or anything that can open a socket - can reboot the processor and the touch panels. Independent of active_debug_server: it has its own port and runs with the debug server switched off. False skips the listener entirely and the room can only be rebooted on site."
+    },
+    "reboot_listener_port": {
+      "type": "int",
+      "label": "Reboot Listener Port (reboot_listener_port)",
+      "helperText": "Default 3510",
+      "description": "TCP port the reboot listener binds. Must not collide with the debug server or any other service on the processor. The CTS Dashboard has to be pointed at this port."
+    },
+    "reboot_listener_interface": {
+      "type": "dropdown",
+      "label": "Reboot Listener Interface (reboot_listener_interface)",
+      "options": [
+        "LAN",
+        "AVLAN",
+        "Any"
+      ],
+      "description": "Which processor network interface the reboot listener binds to. Keep it on LAN unless the dashboard reaches the processor over the AV LAN."
+    },
+    "reboot_listener_token": {
+      "label": "Reboot Listener Token (reboot_listener_token)",
+      "helperText": "Blank = no token check; set one for anything off a trusted VLAN",
+      "description": "Shared secret required in front of every plain-text command line (e.g. '<token> reboot processor'), and required somewhere in a debug client's handshake. Blank disables the check, which leaves the listener open to anyone who can reach the port."
+    },
+    "reboot_listener_client_password": {
+      "label": "Reboot Listener Debug Password (reboot_listener_client_password)",
+      "helperText": "Blank = the stock debug password shipped with the template",
+      "description": "Handshake password for the debug-client protocol on the reboot listener's port - the part that makes the debugger's Reboot buttons work by changing only the port. Blank means the processor falls back to the stock DebugServer password, which is a constant in the template source, so set this AND a token for anything reachable off a trusted VLAN."
+    },
+    "METRICS_CONFIG": {
+      "label": "Metrics (Python Metric Tracking)",
+      "__comment": "Not a property - this names the METRICS_CONFIG group heading on the System tab. Its properties live under 'section_fields'.",
+      "description": "Metric tracking for the python side: the processor batches events (system start/stop, device connects, UI presses) and POSTs them to the ingest service. Off by default on migrated rooms until the URI and bearer token are filled in."
     },
     "api_proxy_server": {
       "description": "Set the API proxy (metrics) server address with this line."

@@ -96,6 +96,12 @@
         "service_port": 0,
         "user": "admin"
     },
+    "METRICS_CONFIG": {
+        "bearer": "",
+        "enabled": false,
+        "keylogger": true,
+        "uri": "http://cts-metrics1:41796/metrics"
+    },
     "POWERDEVICE_1": {
         "btn_name": "Btn_Con_Power1",
         "com_type": "Network",
@@ -367,6 +373,12 @@
         "active_debug_server": true,
         "active_event_space": false,
         "active_notifications": true,
+        "active_reboot_listener": true,
+        "reboot_listener_port": 3510,
+        "reboot_listener_interface": "LAN",
+        "reboot_listener_token": "",
+        "reboot_listener_client_password": "",
+        "disable_inactivity_timer": false,
         "api_proxy_server": "http://10.255.4.52:8080/data",
         "conf_display_1": "1",
         "conf_display_2": "2",
@@ -452,6 +464,7 @@
         "switch_max_volume": 0,
         "switch_min_volume": -40,
         "sub_switch_CC": null,
+        "use_qos": true,
         "teams_webhook": "https://default96b947f8b97d4e5eaeef1a880b49c2.51.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/2022617ddc65402e8a269df9ebf55e97/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=b7RyOe03GgyHpXJvTAOZQhCZFVd9GG0CbDFMXMU1qbU",
         "tv_videomute": "No"
     },

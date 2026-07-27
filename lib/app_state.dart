@@ -1362,6 +1362,33 @@ class AppStateProvider extends ChangeNotifier {
       }
     });
 
+    // Standalone feature blocks from ui_schema.json "section_defaults"
+    // (e.g. METRICS_CONFIG): create the section when it is missing entirely,
+    // then fill in any properties it doesn't have. Existing values are never
+    // touched — the same contract as the SYSTEM_SETUP pass above.
+    uiSchema.sectionDefaults.forEach((sectionKey, defaults) {
+      final existing = roomConfig[sectionKey];
+      if (existing != null && existing is! Map) {
+        // Something else lives under that name — never clobber it silently
+        systemLogs.add(
+            "FLAGGED: '$sectionKey' exists but is not a settings block, so its defaults were skipped.");
+        return;
+      }
+      if (existing == null) {
+        roomConfig[sectionKey] = <String, dynamic>{};
+        systemLogs.add("-> Added missing section: '$sectionKey'");
+      }
+      final section = roomConfig[sectionKey] as Map;
+      defaults.forEach((key, defaultValue) {
+        if (!section.containsKey(key)) {
+          section[key] = defaultValue;
+          systemLogs.add(
+              "-> Added missing property: '$sectionKey.$key' (Default: '$defaultValue')");
+          additions++;
+        }
+      });
+    });
+
     if (additions > 0) {
       String summary = "SYSTEM MIGRATION: Added $additions missing schema properties to match current template standards.";
       systemLogs.insert(2, summary); // Insert summary right below the backup notification
@@ -1783,7 +1810,8 @@ class AppStateProvider extends ChangeNotifier {
     // 2. Schema defaults fill any gaps the template leaves
     final schemaDefaults = sectionKey == 'SYSTEM_SETUP'
         ? uiSchema.systemDefaults
-        : uiSchema.defaultsFor(sectionKey);
+        : (uiSchema.sectionDefaults[sectionKey] ??
+            uiSchema.defaultsFor(sectionKey));
     schemaDefaults.forEach((k, v) => defaults.putIfAbsent(k, () => v));
 
     defaults.removeWhere((k, v) => current.containsKey(k));
