@@ -5,6 +5,12 @@
     "'Reload Schema' in App Config (or restart the app) - no compile needed.",
     "Each entry under 'fields' is keyed by a config.json property name and supports:",
     "  label:       Field label shown in the editor (defaults to the raw key).",
+    "  labelWhen:   Condition -> label overrides, checked against the OTHER keys",
+    "               in the same config block; the first match wins and none",
+    "               matching falls back to 'label'. Conditions are 'key=value'",
+    "               (equals) or 'key~text' (contains), case-insensitive. Used by",
+    "               both the editor and the device report - e.g. input_usb reads",
+    "               'VGA over USB' when gui_usb_or_vga is VGA.",
     "  description: Text behind the (i) info button.",
     "  helperText:  Small grey hint line under the field.",
     "  type:        auto | text | int | double | bool | dropdown | combo | hidden | module_states.",
@@ -55,6 +61,12 @@
     "(the migration step). Defining it REPLACES the built-in set. The dev_",
     "counts are NOT listed here - every device_types family is always",
     "injected as '0' automatically.",
+    "",
+    "CONSISTENCY: the top-level 'consistency' list cross-checks keys that have",
+    "to agree - when one condition holds, another must too. Violations never",
+    "block an edit or a save; they paint the red mismatch outline on every",
+    "field the rule flags so the tech can see both sides and fix the wrong one.",
+    "See the '__readme' inside that list for the entry format.",
     "",
     "STANDALONE SECTIONS: config blocks that are neither SYSTEM_SETUP nor a",
     "numbered device (e.g. 'METRICS_CONFIG') are rendered on the System tab as",
@@ -174,6 +186,34 @@
       "bearer": ""
     }
   },
+  "consistency": [
+    {
+      "__readme": [
+        "Cross-key checks: when 'when' holds in a section, 'expect' must hold",
+        "too, or every field named in 'flag' gets the red mismatch outline and",
+        "'message' as its helper line. Conditions are 'key=value' (equals) or",
+        "'key~text' (contains), case-insensitive; '{key}' in a message inserts",
+        "that key's live value. Optional 'section' (default SYSTEM_SETUP)",
+        "accepts a '*' wildcard. Nothing is blocked or auto-corrected - the",
+        "tech sees both fields flagged and decides which one is wrong.",
+        "Entries without 'when' and 'expect' are skipped, which is what lets",
+        "this comment sit in the list. Defining any rule here REPLACES the",
+        "built-in set, so keep every rule you want in this array."
+      ]
+    },
+    {
+      "when": "gui_tab_type~VGA",
+      "expect": "gui_usb_or_vga=VGA",
+      "flag": ["gui_usb_or_vga", "gui_inputs"],
+      "message": "Sources include VGA (gui_tab_type is \"{gui_tab_type}\") but gui_usb_or_vga is \"{gui_usb_or_vga}\" — set it to VGA, or pick a USB sources option."
+    },
+    {
+      "when": "gui_tab_type~USB",
+      "expect": "gui_usb_or_vga=USB",
+      "flag": ["gui_usb_or_vga", "gui_inputs"],
+      "message": "Sources include USB (gui_tab_type is \"{gui_tab_type}\") but gui_usb_or_vga is \"{gui_usb_or_vga}\" — set it to USB, or pick a VGA sources option."
+    }
+  ],
   "device_defaults": {
     "__readme": [
       "Baseline properties per device type, applied when the wizard creates the",
@@ -579,6 +619,9 @@
       "description": "Inputs and Outputs are assigned in the config."
     },
     "input_usb": {
+      "labelWhen": {
+        "gui_usb_or_vga=VGA": "VGA over USB"
+      },
       "description": "Inputs and Outputs are assigned in the config."
     },
     "input_wireless": {

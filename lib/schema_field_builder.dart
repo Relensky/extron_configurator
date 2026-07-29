@@ -42,7 +42,13 @@ class SchemaFieldBuilder {
     final bool isUnknown = spec == null &&
         schema.descriptionFor(fieldKey, sectionKey: sectionKey) == null;
 
-    final String label = spec?.label ?? fieldKey;
+    // "labelWhen" lets the label follow other values in the same block, so
+    // input_usb reads "VGA over USB" in a VGA room and keeps its plain label
+    // otherwise.
+    final String label =
+        schema.labelFor(fieldKey, _sectionMap(provider, sectionKey),
+                sectionKey: sectionKey) ??
+            fieldKey;
     Widget field;
 
     switch (type) {
@@ -85,6 +91,16 @@ class SchemaFieldBuilder {
 
     return _wrapWithInfo(context, schema, fieldKey, field,
         isUnknown: isUnknown, sectionKey: sectionKey, onDelete: onDelete);
+  }
+
+  /// The config block [sectionKey] names, as a plain string-keyed map (empty
+  /// when the section is missing). Feeds the schema's "labelWhen" conditions
+  /// and "consistency" checks, which both read sibling keys.
+  static Map<String, dynamic> _sectionMap(
+      AppStateProvider provider, String sectionKey) {
+    final section = provider.roomConfig[sectionKey];
+    if (section is! Map) return const {};
+    return section.map((k, v) => MapEntry(k.toString(), v));
   }
 
   /// Schema type wins; 'auto' (or no spec) falls back to inferring from the
@@ -140,11 +156,20 @@ class SchemaFieldBuilder {
       options.insert(0, OptionSpec(value: current, label: '$current (not in schema)'));
     }
 
+    // A schema "consistency" rule this field is flagged by (e.g. gui_usb_or_vga
+    // disagreeing with the VGA/USB source in gui_tab_type). The value is still
+    // a legal option, so this only warns — an out-of-schema value wins the
+    // helper line because it's the more basic problem.
+    final String? conflict = provider.uiSchema.consistencyMessageFor(
+        fieldKey, sectionKey, _sectionMap(provider, sectionKey));
+
     return DropdownButtonFormField<String>(
       value: current.isNotEmpty ? current : null,
       decoration: _decoration(label, spec.helperText,
-          mismatch: valueMismatch,
-          mismatchText: 'Value "$current" is not in the schema options — pick a valid option'),
+          mismatch: valueMismatch || conflict != null,
+          mismatchText: valueMismatch
+              ? 'Value "$current" is not in the schema options — pick a valid option'
+              : conflict),
       items: options
           .map((o) => DropdownMenuItem(value: o.value, child: Text(o.label)))
           .toList(),
@@ -269,12 +294,19 @@ class SchemaFieldBuilder {
               label: '$currentComboKey (not in schema)'));
     }
 
+    // Same consistency check the plain dropdowns run, so a VGA/USB
+    // disagreement is visible from the sources side too, not just on
+    // gui_usb_or_vga.
+    final String? conflict = provider.uiSchema.consistencyMessageFor(
+        fieldKey, sectionKey, _sectionMap(provider, sectionKey));
+
     return DropdownButtonFormField<String>(
       value: hasValue ? currentComboKey : null,
       decoration: _decoration(label, spec.helperText,
-          mismatch: valueMismatch,
-          mismatchText:
-              'Combined value "$currentComboKey" (${writes.join(' + ')}) is not in the schema options — pick a valid option'),
+          mismatch: valueMismatch || conflict != null,
+          mismatchText: valueMismatch
+              ? 'Combined value "$currentComboKey" (${writes.join(' + ')}) is not in the schema options — pick a valid option'
+              : conflict),
       items: options
           .map((o) => DropdownMenuItem(value: o.comboKey, child: Text(o.label)))
           .toList(),

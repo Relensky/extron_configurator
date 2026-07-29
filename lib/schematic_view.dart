@@ -502,10 +502,13 @@ class _SchematicViewState extends State<SchematicView> {
   /// defined, otherwise the key title-cased with common AV acronyms upper-
   /// cased (input_doc_cam -> "Doc Cam"). [stripPrefix] removes a section
   /// prefix like "input_" first.
+  ///
+  /// [section] is the config block the key lives in, so a schema "labelWhen"
+  /// can pick the label from a sibling value — input_usb reports as "VGA over
+  /// USB" when SYSTEM_SETUP's gui_usb_or_vga is VGA, and "USB" otherwise.
   static String _friendlyKey(AppStateProvider provider, String key,
-      {String? stripPrefix}) {
-    final spec = provider.uiSchema.specFor(key);
-    final label = spec?.label;
+      {String? stripPrefix, Map<String, dynamic> section = const {}}) {
+    final label = provider.uiSchema.labelFor(key, section);
     if (label != null && label.isNotEmpty) return label;
     var k = key;
     if (stripPrefix != null && k.startsWith(stripPrefix)) {
@@ -568,7 +571,7 @@ class _SchematicViewState extends State<SchematicView> {
       return [
         for (final k in keys)
           [
-            _friendlyKey(provider, k, stripPrefix: prefix),
+            _friendlyKey(provider, k, stripPrefix: prefix, section: setup),
             _friendlyValue(setup[k]),
           ]
       ];

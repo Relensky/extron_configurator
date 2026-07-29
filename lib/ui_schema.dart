@@ -65,7 +65,44 @@ import 'config_dictionary.dart';
 ///  dev_ key + section prefix) can be added without recompiling: it gets a
 ///  wizard count dropdown, device tabs, pruning, count audits, and the
 ///  "0" migration default automatically.
+///
+///  CONDITIONAL LABELS: a field's optional "labelWhen" map gives it a
+///  different label depending on OTHER values in the same config section —
+///  { "gui_usb_or_vga=VGA": "VGA over USB" }. The first matching condition
+///  wins; none matching falls back to the plain "label". Conditions are
+///  "key=value" (equals) or "key~text" (contains), both case-insensitive.
+///
+///  CONSISTENCY CHECKS: a top-level "consistency" list cross-checks keys that
+///  must agree — when one condition holds, another must too. A violation
+///  never blocks an edit; it paints the same red mismatch outline the editor
+///  already uses for out-of-schema values on every field named in "flag",
+///  with "message" as the red helper line ("{key}" inserts a live value).
+///  Defining any entries REPLACES the built-in list.
 /// ============================================================================
+
+/// Evaluates one condition string against [section]: "key=value" (equals) or
+/// "key~text" (contains), both case-insensitive. Shared by "labelWhen" and
+/// the "consistency" rules. Unparseable conditions are simply false.
+bool _conditionHolds(String condition, Map<String, dynamic> section) {
+  for (final op in const ['=', '~']) {
+    final i = condition.indexOf(op);
+    if (i <= 0) continue;
+    final key = condition.substring(0, i).trim();
+    final want = condition.substring(i + 1).trim().toLowerCase();
+    final have = (section[key] ?? '').toString().toLowerCase();
+    return op == '=' ? have == want : (want.isNotEmpty && have.contains(want));
+  }
+  return false;
+}
+
+/// Replaces "{some_key}" in [text] with that key's live value in [section].
+/// A missing or empty value becomes "(unset)" so a message never reads as if
+/// the key held a blank on purpose.
+String _fillPlaceholders(String text, Map<String, dynamic> section) =>
+    text.replaceAllMapped(RegExp(r'\{(\w+)\}'), (m) {
+      final v = section[m.group(1)];
+      return (v == null || v.toString().isEmpty) ? '(unset)' : v.toString();
+    });
 
 /// A single selectable option for "dropdown" and "combo" fields.
 class OptionSpec {
@@ -108,6 +145,11 @@ class FieldSpec {
   final String key;               // exact key or wildcard pattern with '*'
   final String type;              // see list at top of file
   final String? label;            // field label (defaults to the raw key)
+
+  /// Condition -> label overrides ("gui_usb_or_vga=VGA" -> "VGA over USB").
+  /// Checked against the field's own config section; first match wins.
+  final Map<String, String> labelWhen;
+
   final String? description;      // info button text (falls back to ConfigDictionary)
   final String? helperText;       // small grey helper line under the field
   final List<OptionSpec> options; // for dropdown / combo
@@ -122,6 +164,7 @@ class FieldSpec {
     required this.key,
     this.type = 'auto',
     this.label,
+    this.labelWhen = const {},
     this.description,
     this.helperText,
     this.options = const [],
@@ -131,6 +174,16 @@ class FieldSpec {
   });
 
   bool get isPattern => key.contains('*');
+
+  /// The label to show given the current values of [section]: the first
+  /// matching [labelWhen] condition, else the plain [label] (null when the
+  /// schema gives no label at all and the caller should use the raw key).
+  String? labelIn(Map<String, dynamic> section) {
+    for (final entry in labelWhen.entries) {
+      if (_conditionHolds(entry.key, section)) return entry.value;
+    }
+    return label;
+  }
 
   /// True when a wildcard spec like "power1_outlet_*" covers [configKey].
   bool matches(String configKey) {
@@ -145,6 +198,10 @@ class FieldSpec {
       key: key,
       type: json['type']?.toString() ?? 'auto',
       label: json['label']?.toString(),
+      labelWhen: (json['labelWhen'] is Map)
+          ? (json['labelWhen'] as Map)
+              .map((k, v) => MapEntry(k.toString(), v.toString()))
+          : const {},
       description: json['description']?.toString(),
       helperText: json['helperText']?.toString(),
       options: (json['options'] is List)
@@ -233,6 +290,53 @@ class DeviceTypeSpec {
   }) : label = label ?? countKey;
 }
 
+/// One "consistency" entry: a cross-key sanity check inside a single config
+/// section. When [whenCondition] holds, [expectCondition] must hold too —
+/// e.g. a gui_tab_type carrying a VGA source requires gui_usb_or_vga "VGA".
+///
+/// A violation never blocks an edit or a save: it paints the red mismatch
+/// outline (the one already used for out-of-schema values) on every field
+/// named in [flag], with [message] as the red helper line. Rules whose
+/// [whenCondition] doesn't hold are silent, so tab types that pin neither
+/// USB nor VGA (the Wireless-only ones) are never flagged.
+class ConsistencyRule {
+  final String sectionPattern;  // '*' wildcard; SYSTEM_SETUP by default
+  final String whenCondition;   // e.g. 'gui_tab_type~VGA'
+  final String expectCondition; // e.g. 'gui_usb_or_vga=VGA'
+  final String message;         // '{key}' inserts that key's live value
+  final List<String> flag;      // field keys that show the warning
+
+  RegExp? _sectionRegex;
+
+  ConsistencyRule({
+    this.sectionPattern = 'SYSTEM_SETUP',
+    required this.whenCondition,
+    required this.expectCondition,
+    this.message = '',
+    this.flag = const [],
+  });
+
+  bool matchesSection(String sectionKey) {
+    if (!sectionPattern.contains('*')) return sectionPattern == sectionKey;
+    _sectionRegex ??=
+        RegExp('^${RegExp.escape(sectionPattern).replaceAll(r'\*', '.*')}\$');
+    return _sectionRegex!.hasMatch(sectionKey);
+  }
+
+  /// The violation message for [section], or null when this rule doesn't
+  /// apply to [sectionKey], doesn't fire, or is satisfied.
+  String? violation(String sectionKey, Map<String, dynamic> section) {
+    if (!matchesSection(sectionKey)) return null;
+    if (!_conditionHolds(whenCondition, section)) return null;
+    if (_conditionHolds(expectCondition, section)) return null;
+    return _fillPlaceholders(
+        message.isEmpty
+            ? 'Schema check: with $whenCondition, $expectCondition is required.'
+            : message,
+        section);
+  }
+}
+
 /// One "device_defaults" entry: property values merged into newly created
 /// device blocks whose section name matches [sectionPattern].
 class DeviceDefaults {
@@ -265,6 +369,13 @@ class UiSchema {
   /// Baseline property values from "device_defaults", merged into newly
   /// created device blocks (Setup Wizard) by AppStateProvider.setDeviceCount.
   final List<DeviceDefaults> _deviceDefaults = [];
+
+  /// Cross-key sanity checks from "consistency", surfaced as the red mismatch
+  /// outline on the fields each rule flags. Defining any in ui_schema.json
+  /// replaces the built-in list.
+  final List<ConsistencyRule> _consistency = [];
+
+  List<ConsistencyRule> get consistencyRules => List.unmodifiable(_consistency);
 
   /// The device families the Setup Wizard manages, in display order. Starts
   /// as the built-in list (the previously hardcoded ten); a "device_types"
@@ -418,6 +529,26 @@ class UiSchema {
     return merged;
   }
 
+  /// The label for [configKey] as it should read given the current values of
+  /// [section] (its own config block) — honors "labelWhen", so input_usb can
+  /// read "VGA over USB" in a VGA room. Null when the schema gives the key no
+  /// label at all; callers fall back to the raw key or their own formatting.
+  String? labelFor(String configKey, Map<String, dynamic> section,
+          {String? sectionKey}) =>
+      specFor(configKey, sectionKey: sectionKey)?.labelIn(section);
+
+  /// The first "consistency" violation that names [fieldKey] in its flag list,
+  /// or null when every cross-checked key in [section] agrees.
+  String? consistencyMessageFor(
+      String fieldKey, String sectionKey, Map<String, dynamic> section) {
+    for (final rule in _consistency) {
+      if (!rule.flag.contains(fieldKey)) continue;
+      final message = rule.violation(sectionKey, section);
+      if (message != null) return message;
+    }
+    return null;
+  }
+
   /// Description for the info (i) button: schema first, then the legacy
   /// built-in ConfigDictionary so nothing that worked before goes blank.
   String? descriptionFor(String configKey, {String? sectionKey}) {
@@ -545,6 +676,36 @@ class UiSchema {
         if (values.isNotEmpty) _sectionDefaults[sectionKey.toString()] = values;
       });
     }
+
+    // Optional "consistency": [{ "when": ..., "expect": ..., "flag": [...] }]
+    // Defining ANY valid entries replaces the built-in list, so the file owns
+    // the full set. Entries missing "when"/"expect" are skipped, which is what
+    // lets a leading { "__readme": [...] } item document the list in place.
+    final consistency = doc['consistency'];
+    if (consistency is List) {
+      final List<ConsistencyRule> parsed = [];
+      for (final item in consistency) {
+        if (item is! Map) continue;
+        final when = item['when']?.toString();
+        final expect = item['expect']?.toString();
+        if (when == null || when.isEmpty) continue;
+        if (expect == null || expect.isEmpty) continue;
+        parsed.add(ConsistencyRule(
+          sectionPattern: item['section']?.toString() ?? 'SYSTEM_SETUP',
+          whenCondition: when,
+          expectCondition: expect,
+          message: item['message']?.toString() ?? '',
+          flag: (item['flag'] is List)
+              ? (item['flag'] as List).map((e) => e.toString()).toList()
+              : const [],
+        ));
+      }
+      if (parsed.isNotEmpty) {
+        _consistency
+          ..clear()
+          ..addAll(parsed);
+      }
+    }
   }
 
   /// The defaults that replicate the app's previous hardcoded behavior, so
@@ -577,6 +738,35 @@ class UiSchema {
         options: const [OptionSpec(value: 'Yes'), OptionSpec(value: 'No')]));
     s._add(FieldSpec(key: 'gui_usb_or_vga', type: 'dropdown',
         options: const [OptionSpec(value: 'USB'), OptionSpec(value: 'VGA')]));
+
+    // The USB input carries VGA in the older rooms; the report and the field
+    // label follow gui_usb_or_vga rather than reading "USB" in both.
+    s._add(FieldSpec(key: 'input_usb', labelWhen: const {
+      'gui_usb_or_vga=VGA': 'VGA over USB',
+    }));
+
+    // gui_tab_type's USB/VGA source and gui_usb_or_vga describe the same
+    // choice from two angles, so a config where they disagree is a mistake.
+    // Neither is forced: both fields are flagged and the tech picks. Tab
+    // types that name neither (the Wireless-only ones) never fire a rule.
+    s._consistency.addAll([
+      ConsistencyRule(
+        whenCondition: 'gui_tab_type~VGA',
+        expectCondition: 'gui_usb_or_vga=VGA',
+        flag: const ['gui_usb_or_vga', 'gui_inputs'],
+        message: 'Sources include VGA (gui_tab_type is "{gui_tab_type}") but '
+            'gui_usb_or_vga is "{gui_usb_or_vga}" — set it to VGA, or pick a '
+            'USB sources option.',
+      ),
+      ConsistencyRule(
+        whenCondition: 'gui_tab_type~USB',
+        expectCondition: 'gui_usb_or_vga=USB',
+        flag: const ['gui_usb_or_vga', 'gui_inputs'],
+        message: 'Sources include USB (gui_tab_type is "{gui_tab_type}") but '
+            'gui_usb_or_vga is "{gui_usb_or_vga}" — set it to USB, or pick a '
+            'VGA sources option.',
+      ),
+    ]);
 
     // --- Previously hardcoded combined dropdown (gui_inputs + gui_tab_type) ---
     s._add(FieldSpec(
