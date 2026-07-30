@@ -5,15 +5,13 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/main.dart';
 
-/// Changing the room in the SFTP dialog used to be silent and immediate: the IP
-/// was swapped under a password that was already typed, so the next click on
-/// Upload pushed the config at whatever room a stray tap had landed on.
+/// The SFTP dialog must never sit showing one room's IP while a different room
+/// is being picked — that stale pairing is how a transfer lands on the wrong
+/// processor. Touching the search drops the connection details; choosing a room
+/// puts the new ones in.
 ///
-/// The guard: clear both fields, confirm the new room by name and IP, and only
-/// then fill the IP in — leaving the password blank so a transfer can never
-/// ride on credentials entered for the previous target.
+/// Also covers the App Config default password being pre-filled.
 void main() {
-  /// Two rooms to switch between.
   List<Map<String, dynamic>> processors() => [
         {'roomId': '1', 'roomName': 'BSS 103', 'ip': '10.248.103.8'},
         {'roomId': '2', 'roomName': 'AJH 125B', 'ip': '10.248.125.8'},
@@ -33,10 +31,16 @@ void main() {
     view.resetDevicePixelRatio();
   });
 
-  Future<AppStateProvider> pumpDialog(WidgetTester tester,
-      {required bool isUpload}) async {
+  Future<AppStateProvider> pumpDialog(
+    WidgetTester tester, {
+    bool isUpload = true,
+    String savedPassword = '',
+    bool usePassword = false,
+  }) async {
     final provider = AppStateProvider(autoLoadSettings: false)
       ..processors = processors()
+      ..defaultProcessorPassword = savedPassword
+      ..useDefaultProcessorPassword = usePassword
       // Open with BSS 103 already the active target, as the dialog does when a
       // deployment target is set.
       ..selectProcessor(processors().first);
@@ -51,85 +55,99 @@ void main() {
     return provider;
   }
 
-  /// The text currently in the field labelled [label].
   String fieldText(WidgetTester tester, String label) {
     final field = tester.widget<TextField>(
-      find.ancestor(
-        of: find.text(label),
-        matching: find.byType(TextField),
-      ).first,
+      find.ancestor(of: find.text(label), matching: find.byType(TextField)).first,
     );
     return field.controller?.text ?? '';
   }
 
-  /// Types a password, then picks the OTHER room from the search list.
-  Future<void> pickOtherRoom(WidgetTester tester) async {
-    await tester.enterText(
-        find.widgetWithText(TextField, 'Admin Password'), 'secret');
-    await tester.pumpAndSettle();
+  Finder search() => find.widgetWithText(TextField, 'Search Room / Building');
 
-    await tester.tap(find.widgetWithText(TextField, 'Search Room / Building'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-        find.widgetWithText(TextField, 'Search Room / Building'), 'ajh125b');
-    await tester.pumpAndSettle();
-    // The separator-insensitive search finds "AJH 125B" from "ajh125b"
-    await tester.tap(find.textContaining('AJH 125B').last);
-    await tester.pumpAndSettle();
-  }
-
-  testWidgets('picking another room asks before touching the fields',
+  testWidgets('touching the search clears the outgoing room\'s IP',
       (tester) async {
-    await pumpDialog(tester, isUpload: true);
+    final provider = await pumpDialog(tester);
     expect(fieldText(tester, 'Processor IP / Hostname'), '10.248.103.8');
 
-    await pickOtherRoom(tester);
+    // Just focusing the search is enough — no keystroke needed
+    await tester.tap(search());
+    await tester.pumpAndSettle();
 
-    // A confirmation naming the room and its IP, not a silent swap
-    expect(find.text('Upload to this room?'), findsOneWidget);
-    expect(find.text('AJH 125B'), findsWidgets);
-    expect(find.text('10.248.125.8'), findsOneWidget);
+    expect(fieldText(tester, 'Processor IP / Hostname'), '',
+        reason: 'the previous room\'s IP must not linger during a re-pick');
+    expect(provider.selectedProcessor, isNull);
+    // ...and nothing is in the way: the dialog itself IS an AlertDialog, so
+    // the check is for the confirmation's own button, which should be gone.
+    expect(find.text('Use This Room'), findsNothing);
   });
 
-  testWidgets('confirming fills the new IP and leaves the password blank',
+  testWidgets('picking a room fills its IP straight in, no confirmation',
       (tester) async {
-    final provider = await pumpDialog(tester, isUpload: true);
+    final provider = await pumpDialog(tester);
 
-    await pickOtherRoom(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Use This Room'));
+    await tester.tap(search());
+    await tester.pumpAndSettle();
+    // Separator-insensitive search: "ajh125b" finds "AJH 125B"
+    await tester.enterText(search(), 'ajh125b');
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('AJH 125B').last);
     await tester.pumpAndSettle();
 
     expect(fieldText(tester, 'Processor IP / Hostname'), '10.248.125.8');
-    expect(fieldText(tester, 'Admin Password'), '',
-        reason: 'an upload must not ride on the previous room\'s password');
     expect(provider.selectedProcessor?['roomName'], 'AJH 125B');
+    expect(find.text('Use This Room'), findsNothing,
+        reason: 'the confirmation step was removed');
   });
 
-  testWidgets('cancelling keeps the old target and still clears the password',
+  testWidgets('typing in the search also clears, before any pick',
       (tester) async {
-    final provider = await pumpDialog(tester, isUpload: true);
-
-    await pickOtherRoom(tester);
-    // The SFTP dialog has its own Cancel — target the confirmation's, by
-    // scoping to the dialog that carries the Use This Room button.
-    final confirmDialog = find.ancestor(
-        of: find.text('Use This Room'), matching: find.byType(AlertDialog));
-    await tester.tap(find.descendant(
-        of: confirmDialog, matching: find.widgetWithText(TextButton, 'Cancel')));
+    await pumpDialog(tester);
+    await tester.enterText(search(), 'aj');
     await tester.pumpAndSettle();
 
-    // Previous target intact, everywhere it's shown
-    expect(fieldText(tester, 'Processor IP / Hostname'), '10.248.103.8');
-    expect(provider.selectedProcessor?['roomName'], 'BSS 103');
-    // The password stays cleared — the safe side of the trade
-    expect(fieldText(tester, 'Admin Password'), '');
-    // ...and the search box snaps back off the room that was rejected
-    expect(fieldText(tester, 'Search Room / Building'), contains('BSS 103'));
+    expect(fieldText(tester, 'Processor IP / Hostname'), '');
   });
 
-  testWidgets('the download dialog asks in its own words', (tester) async {
-    await pumpDialog(tester, isUpload: false);
-    await pickOtherRoom(tester);
-    expect(find.text('Download from this room?'), findsOneWidget);
+  group('default password', () {
+    testWidgets('is pre-filled when the toggle is on', (tester) async {
+      await pumpDialog(tester, savedPassword: 'ATEC2007', usePassword: true);
+      expect(fieldText(tester, 'Admin Password'), 'ATEC2007');
+    });
+
+    testWidgets('survives a room change (same credential room to room)',
+        (tester) async {
+      await pumpDialog(tester, savedPassword: 'ATEC2007', usePassword: true);
+
+      await tester.tap(search());
+      await tester.pumpAndSettle();
+      await tester.enterText(search(), 'ajh125b');
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('AJH 125B').last);
+      await tester.pumpAndSettle();
+
+      expect(fieldText(tester, 'Admin Password'), 'ATEC2007');
+    });
+
+    testWidgets('stays blank when the toggle is off, even with one saved',
+        (tester) async {
+      await pumpDialog(tester, savedPassword: 'ATEC2007', usePassword: false);
+      expect(fieldText(tester, 'Admin Password'), '');
+    });
+  });
+
+  group('turning the toggle off', () {
+    test('forgets the saved password', () async {
+      final provider = AppStateProvider(autoLoadSettings: false)
+        ..defaultProcessorPassword = 'ATEC2007'
+        ..useDefaultProcessorPassword = true;
+      expect(provider.autofillProcessorPassword, 'ATEC2007');
+
+      await provider.setUseDefaultProcessorPassword(false);
+
+      expect(provider.useDefaultProcessorPassword, isFalse);
+      expect(provider.defaultProcessorPassword, '',
+          reason: 'switching it off must get the value out of the settings file');
+      expect(provider.autofillProcessorPassword, '');
+    });
   });
 }

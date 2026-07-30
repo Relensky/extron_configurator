@@ -8,6 +8,7 @@ import 'app_logger.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'secret_store.dart';
 import 'sftp_client.dart';
 import 'ui_schema.dart';
 import 'package:file_picker/file_picker.dart';
@@ -29,6 +30,77 @@ class AppStateProvider extends ChangeNotifier {
   String sftpUsername = 'admin';
   String sftpPort = '22022';
   String sftpRemoteConfigPath = '/config.json';
+
+  /// Shared processor admin password, pre-filled into the SFTP dialogs when
+  /// [useDefaultProcessorPassword] is on — the rooms are typically all on one
+  /// standard credential, and retyping it per transfer is the slow part.
+  ///
+  /// This field is the in-memory copy only. The stored copy lives in the OS
+  /// keystore (see [SecretStore]) and NEVER in app_config.json, so the settings
+  /// file stays hand-editable without carrying a credential. On Windows the
+  /// keystore encrypts it against the logged-in account.
+  String defaultProcessorPassword = '';
+
+  /// Whether to pre-fill [defaultProcessorPassword]. Off unless turned on, so
+  /// the password is never stored or used by accident.
+  bool useDefaultProcessorPassword = false;
+
+  /// Turning the toggle OFF also forgets the saved password — cleared from
+  /// memory AND deleted from the keystore — so switching it off is enough to
+  /// get the credential off the machine.
+  Future<void> setUseDefaultProcessorPassword(bool value) async {
+    useDefaultProcessorPassword = value;
+    if (!value) {
+      defaultProcessorPassword = '';
+      await _secrets.delete(SecretKeys.processorPassword);
+    }
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  /// Serializes keystore writes. The field calls this on every keystroke, so
+  /// without a queue two writes can be in flight at once and an earlier, shorter
+  /// value can land last — leaving a truncated password stored. Chaining them
+  /// makes the last keystroke the last write.
+  Future<void> _passwordWrites = Future.value();
+
+  /// Saves the processor password to the OS keystore (and to the in-memory copy
+  /// the SFTP dialogs read). Returns false when the keystore refused it, which
+  /// the UI surfaces rather than pretending the password was saved.
+  Future<bool> setDefaultProcessorPassword(String value) {
+    defaultProcessorPassword = value;
+    notifyListeners();
+    final result = Completer<bool>();
+    _passwordWrites = _passwordWrites.then((_) async {
+      result.complete(await _secrets.write(SecretKeys.processorPassword, value));
+    });
+    return result.future;
+  }
+
+  /// Pulls the saved password out of the keystore into memory at startup, and
+  /// migrates one that an older build wrote into app_config.json as plain text:
+  /// moved into the keystore, then stripped from the JSON on the next save.
+  /// [savedJson] is the settings file as parsed.
+  Future<void> _loadProcessorPassword(Map<String, dynamic> savedJson) async {
+    final legacy = savedJson['defaultProcessorPassword']?.toString() ?? '';
+    if (legacy.isNotEmpty) {
+      final moved = await _secrets.write(SecretKeys.processorPassword, legacy);
+      defaultProcessorPassword = legacy;
+      AppLogger.logInfo(moved
+          ? 'Moved the saved processor password out of app_config.json into the '
+              'OS keystore; the plain-text copy is dropped on the next save.'
+          : 'Could not move the saved processor password into the OS keystore — '
+              'it stays in app_config.json for now.');
+      return;
+    }
+    defaultProcessorPassword =
+        await _secrets.read(SecretKeys.processorPassword) ?? '';
+  }
+
+  /// The password the SFTP dialogs should open with: the saved default when the
+  /// toggle is on and one is set, otherwise blank (type it per transfer).
+  String get autofillProcessorPassword =>
+      useDefaultProcessorPassword ? defaultProcessorPassword : '';
 
   /// Parsed SFTP port with the Extron default as the fallback.
   int get effectiveSftpPort => int.tryParse(sftpPort) ?? 22022;
@@ -170,12 +242,14 @@ class AppStateProvider extends ChangeNotifier {
   static String _resolveSettingsFilePath() =>
       path.join(_appBaseDir(), 'app_config.json');
 
-  /// Serializes every setting to app_config.json. Failures are logged but
-  /// never thrown — a read-only folder must not break the running app.
-  Future<void> _persistSettings() async {
-    if (!_persistenceEnabled) return; // Test provider: leave the file alone
-    if (settingsFilePath.isEmpty) settingsFilePath = _resolveSettingsFilePath();
-    final Map<String, dynamic> data = {
+  /// Everything that goes into app_config.json.
+  ///
+  /// Deliberately NOT here: the processor password. It is the one stored value
+  /// that isn't a setting, so it lives in the OS keystore instead — and leaving
+  /// it out of this map is also what strips a plain-text copy written by an
+  /// older build, on the next save.
+  @visibleForTesting
+  Map<String, dynamic> settingsAsJson() => {
       '__readme':
           'Application settings for the Room Config Builder. File paths may '
           'be edited by hand while the app is closed; blank paths fall back '
@@ -192,6 +266,10 @@ class AppStateProvider extends ChangeNotifier {
       'sftpUsername': sftpUsername,
       'sftpPort': sftpPort,
       'sftpRemoteConfigPath': sftpRemoteConfigPath,
+      // defaultProcessorPassword is deliberately absent: it lives in the OS
+      // keystore, never in this file. Omitting it here is also what strips a
+      // plain-text copy left by an older build.
+      'useDefaultProcessorPassword': useDefaultProcessorPassword,
       'isDarkMode': isDarkMode,
       'themeStyle': themeStyle,
       'classicColor': classicColor,
@@ -201,6 +279,13 @@ class AppStateProvider extends ChangeNotifier {
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
     };
+
+  /// Serializes every setting to app_config.json. Failures are logged but
+  /// never thrown — a read-only folder must not break the running app.
+  Future<void> _persistSettings() async {
+    if (!_persistenceEnabled) return; // Test provider: leave the file alone
+    if (settingsFilePath.isEmpty) settingsFilePath = _resolveSettingsFilePath();
+    final Map<String, dynamic> data = settingsAsJson();
     try {
       const encoder = JsonEncoder.withIndent('    ');
       await File(settingsFilePath).writeAsString(encoder.convert(data));
@@ -1103,8 +1188,16 @@ class AppStateProvider extends ChangeNotifier {
   // whose saves would hit the developer's real app_config.json; worse, a
   // write started inside a test's fake-async zone can be killed mid-flight
   // at teardown, leaving a truncated 0-byte file.
-  AppStateProvider({bool autoLoadSettings = true}) {
+  /// Where the processor password lives — the OS keystore in the app, an
+  /// in-memory stand-in under `flutter test` (which has no platform plugin).
+  late final SecretStore _secrets;
+
+  AppStateProvider({bool autoLoadSettings = true, SecretStore? secretStore}) {
     _persistenceEnabled = autoLoadSettings;
+    // A test provider gets a memory store unless it asks for a real one, so no
+    // test ever depends on a keystore being present.
+    _secrets = secretStore ??
+        (autoLoadSettings ? OsSecretStore() : InMemorySecretStore());
     if (autoLoadSettings) _loadSavedSettings();
   }
 
@@ -1156,6 +1249,13 @@ class AppStateProvider extends ChangeNotifier {
       sftpUsername = str('sftpUsername', 'admin');
       sftpPort = str('sftpPort', '22022');
       sftpRemoteConfigPath = str('sftpRemoteConfigPath', '/config.json');
+      useDefaultProcessorPassword =
+          saved['useDefaultProcessorPassword'] is bool
+              ? saved['useDefaultProcessorPassword']
+              : false;
+      // From the OS keystore, not this file — and migrated out of it if an
+      // older build left a plain-text copy behind.
+      await _loadProcessorPassword(saved);
       isDarkMode = saved['isDarkMode'] is bool ? saved['isDarkMode'] : true;
       themeStyle = str('themeStyle', 'classic');
       classicColor = str('classicColor', '2196F3');

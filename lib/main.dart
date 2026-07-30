@@ -674,11 +674,12 @@ class ProcessorSearchField extends StatelessWidget {
   final Map<String, dynamic>? initialProcessor;
   final bool enabled;
 
-  /// Bump this to force the field back to [initialProcessor]'s text. Needed
-  /// when a selection is REJECTED downstream (the SFTP dialog's confirm step):
-  /// the Autocomplete has already written the picked room into the box, and
-  /// without a remount it would keep showing a room that isn't the target.
-  final int resetToken;
+  /// Fired the moment the user engages with the search — focusing it or typing
+  /// in it — BEFORE any room is chosen. The SFTP dialog uses this to drop the
+  /// connection details belonging to the outgoing room, so nothing stale is on
+  /// screen while a new one is being picked. [onSelected] then supplies the
+  /// replacement.
+  final VoidCallback? onInteracted;
 
   const ProcessorSearchField({
     Key? key,
@@ -687,7 +688,7 @@ class ProcessorSearchField extends StatelessWidget {
     this.helperText,
     this.initialProcessor,
     this.enabled = true,
-    this.resetToken = 0,
+    this.onInteracted,
   }) : super(key: key);
 
   /// IP/hostname of one processors.json entry (same fallbacks as the
@@ -731,7 +732,7 @@ class ProcessorSearchField extends StatelessWidget {
     return Autocomplete<String>(
       // Remount when the selection changes elsewhere (e.g. Clear button)
       // so initialValue re-applies; stable while typing.
-      key: ValueKey('procsearch_${initialProcessor?['roomId']}_${byDisplay.length}_$resetToken'),
+      key: ValueKey('procsearch_${initialProcessor?['roomId']}_${byDisplay.length}'),
       initialValue: TextEditingValue(text: initialText),
       optionsBuilder: (TextEditingValue textEditingValue) {
         final String text = textEditingValue.text;
@@ -749,16 +750,25 @@ class ProcessorSearchField extends StatelessWidget {
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
         fieldFocus = focusNode;
-        return TextFormField(
-          controller: controller,
-          focusNode: focusNode,
-          enabled: enabled,
-          decoration: InputDecoration(
-            labelText: label,
-            helperText: helperText,
-            helperMaxLines: 2,
-            border: const OutlineInputBorder(),
-            suffixIcon: const Icon(Icons.search),
+        return Focus(
+          // Gaining focus counts as engaging with the search, so clicking into
+          // the box is enough — the caller doesn't have to wait for a keystroke.
+          onFocusChange: (hasFocus) {
+            if (hasFocus) onInteracted?.call();
+          },
+          child: TextFormField(
+            controller: controller,
+            focusNode: focusNode,
+            enabled: enabled,
+            decoration: InputDecoration(
+              labelText: label,
+              helperText: helperText,
+              helperMaxLines: 2,
+              border: const OutlineInputBorder(),
+              suffixIcon: const Icon(Icons.search),
+            ),
+            // Typing counts too, for anyone who tabs in or pastes.
+            onChanged: (_) => onInteracted?.call(),
           ),
         );
       },
@@ -1294,6 +1304,28 @@ class AppSettingsView extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 20),
+
+        // --- DEFAULT PROCESSOR PASSWORD (opt-in) ---
+        // Rooms are typically all on one standard admin credential, so the
+        // password is the only thing retyped on every transfer. Unlike every
+        // other value on this tab it never reaches app_config.json — it goes to
+        // the OS keystore (DPAPI on Windows), encrypted for the logged-in
+        // account. Still opt-in: storing a credential at all is the user's call.
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: provider.useDefaultProcessorPassword,
+          onChanged: (val) => provider.setUseDefaultProcessorPassword(val),
+          title: const Text('Autofill the processor password'),
+          subtitle: const Text(
+              'Pre-fills the password in the SFTP upload/download dialogs. '
+              'Kept in the Windows credential store, not in app_config.json — '
+              'turning this off deletes it again.'),
+        ),
+        if (provider.useDefaultProcessorPassword) ...[
+          const SizedBox(height: 8),
+          _DefaultPasswordField(provider: provider),
+        ],
         const SizedBox(height: 30),
 
         Text('Active Deployment Target', style: Theme.of(context).textTheme.titleLarge),
@@ -1328,6 +1360,58 @@ class AppSettingsView extends StatelessWidget {
   }
 }
 
+/// The saved processor password field on App Config.
+///
+/// Stateful only for the show/hide eye: the value itself lives in the provider.
+/// Obscured by default so it isn't sitting readable on a settings tab that gets
+/// screen-shared, with a reveal for checking a typo.
+class _DefaultPasswordField extends StatefulWidget {
+  final AppStateProvider provider;
+  const _DefaultPasswordField({required this.provider});
+
+  @override
+  State<_DefaultPasswordField> createState() => _DefaultPasswordFieldState();
+}
+
+class _DefaultPasswordFieldState extends State<_DefaultPasswordField> {
+  bool _visible = false;
+
+  /// Set when the keystore refused the write, so a password that did NOT get
+  /// saved never looks like it did.
+  bool _saveFailed = false;
+
+  Future<void> _save(String value) async {
+    final ok = await widget.provider.setDefaultProcessorPassword(value);
+    if (mounted && ok == _saveFailed) setState(() => _saveFailed = !ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      initialValue: widget.provider.defaultProcessorPassword,
+      obscureText: !_visible,
+      decoration: InputDecoration(
+        labelText: 'Default Processor Password',
+        helperText: _saveFailed
+            ? 'Could not save to the Windows credential store — the password '
+                'is in use for this session only.'
+            : 'Stored in the Windows credential store, encrypted for your user '
+                'account — never in app_config.json.',
+        helperMaxLines: 2,
+        helperStyle:
+            _saveFailed ? TextStyle(color: Colors.red.shade400) : null,
+        border: const OutlineInputBorder(),
+        suffixIcon: IconButton(
+          icon: Icon(_visible ? Icons.visibility_off : Icons.visibility),
+          tooltip: _visible ? 'Hide' : 'Show',
+          onPressed: () => setState(() => _visible = !_visible),
+        ),
+      ),
+      onChanged: _save,
+    );
+  }
+}
+
 /// A dialog that handles both SFTP directions with the processor:
 ///  - Upload:   pushes the in-memory config to /config.json on the processor
 ///  - Download: pulls /config.json, backs it up, prompts for a new working file
@@ -1357,10 +1441,6 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
   /// only). Stays blank unless the user picks one — e.g. Whereused.csv.
   String _extraFilePath = '';
 
-  /// Bumped to snap the room picker's text back to the confirmed target after
-  /// a change is cancelled.
-  int _pickerGeneration = 0;
-
   @override
   void initState() {
     super.initState();
@@ -1372,6 +1452,8 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
       _selectedProcessor = provider.selectedProcessor;
       _targetRoomName = provider.selectedProcessor?['roomName']?.toString() ?? '';
     }
+    // Saved default password, when App Config has one and the toggle is on.
+    _passController.text = provider.autofillProcessorPassword;
     _statusText = widget.isUpload
         ? 'Enter processor details to upload config.json'
         : 'Enter processor details to download config.json';
@@ -1384,99 +1466,34 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
     super.dispose();
   }
 
-  /// Room picked in the searchable list. The connection details are NOT taken
-  /// from it until the change is confirmed.
+  /// Called as soon as the room search is touched (focus or a keystroke).
   ///
-  /// Picking the wrong entry here used to be silent and immediate: the IP was
-  /// replaced under a password that was already typed, so the next click on
-  /// Upload pushed the config at whatever room the stray tap landed on. So the
-  /// fields are cleared first, the new room is confirmed by name and IP, and
-  /// only then is the IP filled in — with the password left blank so an upload
-  /// can't ride on credentials entered for the previous target.
-  ///
-  /// Cancelling restores the previous room untouched.
-  Future<void> _confirmTargetChange(Map<String, dynamic> proc) async {
-    final String roomName = proc['roomName']?.toString() ?? '';
-    final String ip = ProcessorSearchField.ipOf(proc);
-
-    // Re-picking the room that's already active changes nothing to confirm.
-    final String currentId = _selectedProcessor?['roomId']?.toString() ?? '';
-    final String newId = proc['roomId']?.toString() ?? '';
-    final bool sameRoom = _selectedProcessor != null &&
-        (currentId.isNotEmpty ? currentId == newId : _targetRoomName == roomName);
-    if (sameRoom) return;
-
-    // Clear FIRST, so a cancelled or ignored dialog can never leave the old
-    // password sitting against a half-changed target.
-    final String previousIp = _ipController.text;
+  /// The IP is cleared the moment the search is in play, so the field can never
+  /// sit showing the previous room's address while a different one is being
+  /// picked — that stale pairing is how a transfer ends up at the wrong
+  /// processor. It's filled back in by [_applyTarget] when a room is actually
+  /// selected. Typing an IP by hand still works: this only fires from the
+  /// search box.
+  void _clearTargetForSearch() {
+    if (_ipController.text.isEmpty && _targetRoomName.isEmpty) return;
     setState(() {
       _ipController.clear();
-      _passController.clear();
+      _targetRoomName = '';
+      _selectedProcessor = null;
+      _statusText = 'Pick a room to fill in its IP.';
     });
+    context.read<AppStateProvider>().selectProcessor(null);
+  }
 
-    final bool confirmed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            title: Text(widget.isUpload
-                ? 'Upload to this room?'
-                : 'Download from this room?'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_targetRoomName.isNotEmpty) ...[
-                  Text('Currently targeting $_targetRoomName.',
-                      style: Theme.of(ctx).textTheme.bodySmall),
-                  const SizedBox(height: 12),
-                ],
-                const Text('Change the target to:'),
-                const SizedBox(height: 8),
-                Text(roomName,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(ip.isEmpty ? 'No IP in processors.json' : ip),
-                const SizedBox(height: 12),
-                Text(
-                  'The admin password has been cleared — re-enter it for this '
-                  'room before transferring.',
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Use This Room'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!mounted) return;
-
-    if (!confirmed) {
-      // Put the previous target's IP back; the password stays cleared, which
-      // is the safe side of the trade.
-      setState(() {
-        _ipController.text = previousIp;
-        _pickerGeneration++; // snap the search box back off the rejected room
-        _statusText = 'Target unchanged'
-            '${_targetRoomName.isEmpty ? '' : ' — still $_targetRoomName'}.';
-      });
-      return;
-    }
-
+  /// A room was picked: fill the IP in and make it the Active Deployment
+  /// Target. The password is left as it stands — either the App Config default
+  /// or whatever was typed — since it's the same admin credential room to room.
+  void _applyTarget(Map<String, dynamic> proc) {
     setState(() {
       _selectedProcessor = proc;
-      _ipController.text = ip;
-      _targetRoomName = roomName;
-      _pickerGeneration++;
-      _statusText = 'Target set to $roomName — re-enter the admin password.';
+      _ipController.text = ProcessorSearchField.ipOf(proc);
+      _targetRoomName = proc['roomName']?.toString() ?? '';
+      _statusText = 'Target set to $_targetRoomName.';
     });
     context.read<AppStateProvider>().selectProcessor(proc);
   }
@@ -1560,8 +1577,8 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
               helperText: 'Search by building name, code, room number, or IP.',
               initialProcessor: _selectedProcessor,
               enabled: !_isBusy,
-              resetToken: _pickerGeneration,
-              onSelected: _confirmTargetChange,
+              onInteracted: _clearTargetForSearch,
+              onSelected: _applyTarget,
             ),
             const SizedBox(height: 16),
             TextFormField(

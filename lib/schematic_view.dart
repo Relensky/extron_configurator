@@ -477,6 +477,18 @@ class _SchematicViewState extends State<SchematicView> {
       if (error != null) _snack(error, error: true);
     }
 
+    // A snackbar is drawn on an INVERTED surface — dark panel in light mode,
+    // light panel in dark mode — so the theme accent that tints buttons
+    // elsewhere lands on the wrong background and reads badly. These two use
+    // the snackbar's own text colour instead, which is the one colour
+    // guaranteed to contrast with that panel in both modes.
+    final Color actionColor = Theme.of(context).snackBarTheme.actionTextColor ??
+        Theme.of(context).colorScheme.onInverseSurface;
+    final ButtonStyle actionStyle = TextButton.styleFrom(
+      foregroundColor: actionColor,
+      textStyle: const TextStyle(fontWeight: FontWeight.bold),
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       duration: const Duration(seconds: 10),
       content: Row(
@@ -488,10 +500,12 @@ class _SchematicViewState extends State<SchematicView> {
                 overflow: TextOverflow.ellipsis),
           ),
           TextButton(
+            style: actionStyle,
             onPressed: () => run(() => provider.openInDesktop(filePath)),
             child: const Text('OPEN FILE'),
           ),
           TextButton(
+            style: actionStyle,
             onPressed: () => run(() => provider.revealInFileManager(filePath)),
             child: const Text('OPEN FOLDER'),
           ),
