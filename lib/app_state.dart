@@ -631,6 +631,35 @@ class AppStateProvider extends ChangeNotifier {
   /// Sorted model names for the device-tab Model dropdown (every model).
   List<String> get availableModels => modelRegistry.keys.toList()..sort();
 
+  /// The modules-folder-relative stem of a config `module` value — the inverse
+  /// of [normalizeModuleName]. The config stores the import path the processor
+  /// needs ('modules.device.avr_TR311'), but the file sits at
+  /// '<modules path>/avr_TR311.py', so that prefix must come off before the
+  /// remaining dots become folder separators. A bare stem, a '.py' suffix, or a
+  /// sub-foldered 'vendor.model' value all resolve the same way — which is what
+  /// lets one preload (keyed by the stem) serve both spellings instead of the
+  /// dropdowns coming up empty until the module is picked again by hand.
+  static String moduleStem(String raw) => raw
+      .trim()
+      .replaceAll(RegExp(r'\.py$', caseSensitive: false), '')
+      .replaceAll(RegExp(r'[\\/]'), '.')
+      .replaceFirst(RegExp(r'^modules\.'), '')
+      .replaceFirst(RegExp(r'^devices?\.'), '');
+
+  /// Absolute path of the .py file backing a config `module` value ('' when the
+  /// value is blank). See [moduleStem] for how the import prefix is handled.
+  String modulePyPath(String moduleValue) {
+    final stem = moduleStem(moduleValue);
+    if (stem.isEmpty) return '';
+    return path.join(
+        effectiveModulesPath, '${stem.replaceAll('.', path.separator)}.py');
+  }
+
+  /// The module's DEVICE_INFO connection/defaults, accepting either the dotted
+  /// config spelling or the bare stem [moduleDefaults] is keyed by.
+  Map<String, dynamic>? moduleDefaultsFor(String moduleValue) =>
+      moduleDefaults[moduleStem(moduleValue)];
+
   /// Model names offered on [deviceKey]'s tab: only models whose module's
   /// DEVICE_INFO declares a matching "device_type". Untyped models (no
   /// DEVICE_INFO device_type, e.g. the self.Models fallbacks) are left out —
@@ -675,8 +704,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Attempts to find commonly named inputs inside the Python module for the autocomplete field
   Future<List<String>> getInputsForModule(String moduleFileName) async {
-    final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
-    final fullPath = path.join(effectiveModulesPath, relativePath);
+    final fullPath = modulePyPath(moduleFileName);
 
     // Serve from cache when the module was already parsed (startup preload or prior visit)
     if (_moduleInputsCache.containsKey(fullPath)) {
@@ -1444,6 +1472,14 @@ class AppStateProvider extends ChangeNotifier {
     // modules.device.<name> form the processor imports.
     await _resolveDeviceModules();
 
+    // --- MODULE VALUE AUDITS ---
+    // Every device now has its module, so the family defaults the key map
+    // injected can be checked against what that model's driver implements: the
+    // keep-alive is corrected from the module, module_states values (a
+    // projector's input) are flagged for the tech to decide.
+    await validateKeepAliveCommands();
+    await validateModuleStateFields();
+
     // Auto-generate the Title Case full room name when gve_bldg (code like
     // 'BSS' OR a legacy full name) resolves against buildings.json — so a
     // converted legacy file lands with 'Behavioral And Social Science 103'
@@ -2128,8 +2164,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Parses an Extron Python module file to extract valid keep-alive commands.
   Future<List<String>> getCommandsForModule(String moduleFileName) async {
     // Construct the full local path based on the app settings and the json module string
-    final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
-    final fullPath = path.join(effectiveModulesPath, relativePath);
+    final fullPath = modulePyPath(moduleFileName);
 
     if (_moduleCommandsCache.containsKey(fullPath)) {
       return _moduleCommandsCache[fullPath]!;
@@ -2180,8 +2215,7 @@ class AppStateProvider extends ChangeNotifier {
   Future<List<String>> getStatesForModuleCommand(
       String moduleFileName, String command) async {
     if (moduleFileName.isEmpty || command.isEmpty) return [];
-    final relativePath = '${moduleFileName.replaceAll('.', path.separator)}.py';
-    final fullPath = path.join(effectiveModulesPath, relativePath);
+    final fullPath = modulePyPath(moduleFileName);
     final cacheKey = '$fullPath::$command';
 
     if (_moduleStatesCache.containsKey(cacheKey)) {
@@ -2233,8 +2267,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Parses one module's model list + connection defaults into the registry.
   Future<void> _registerModuleModels(String moduleName) async {
-    final relativePath = '${moduleName.replaceAll('.', path.separator)}.py';
-    final fullPath = path.join(effectiveModulesPath, relativePath);
+    final fullPath = modulePyPath(moduleName);
     try {
       final file = File(fullPath);
       if (!await file.exists()) return;
@@ -2268,7 +2301,9 @@ class AppStateProvider extends ChangeNotifier {
             merged.addAll(d.map((k, v) => MapEntry(k.toString(), v)));
           }
         }
-        if (merged.isNotEmpty) moduleDefaults[moduleName] = merged;
+        // Keyed by the stem so [moduleDefaultsFor] finds it from either the
+        // bare name used here or the dotted spelling stored in a config.
+        if (merged.isNotEmpty) moduleDefaults[moduleStem(moduleName)] = merged;
       }
       // Fallback: the driver's own self.Models dict keys
       if (models.isEmpty) models = parseSelfModels(content);
@@ -2878,9 +2913,52 @@ class AppStateProvider extends ChangeNotifier {
     _applyKeepAliveDefaults(newKeys);
   }
 
+  /// The keep-alive command [deviceKey] should poll on [moduleName], or '' when
+  /// the module's .py can't be parsed. Only commands the module actually
+  /// defines are ever returned. Sources, in order of authority:
+  ///   1. the module's own DEVICE_INFO keep_alive_command — the driver author
+  ///      naming the right poll for this hardware (an IN1608 polls
+  ///      'Temperature', not the switcher family's 'RefreshMatrix')
+  ///   2. the family's schema preference list (device_types
+  ///      "keepAlivePreference"), in order
+  ///   3. 'Power', then anything containing 'power' (the typical Extron poll),
+  ///      else the module's first command
+  Future<String> _resolveKeepAliveCommand(
+      String deviceKey, String moduleName) async {
+    final commands = await getCommandsForModule(moduleName);
+    if (commands.isEmpty) return '';
+
+    String pick(String wanted) => commands.firstWhere(
+          (c) => c.toLowerCase() == wanted.toLowerCase(),
+          orElse: () => '',
+        );
+
+    final fromModule =
+        moduleDefaultsFor(moduleName)?['keep_alive_command']?.toString() ?? '';
+    if (fromModule.isNotEmpty) {
+      final match = pick(fromModule);
+      if (match.isNotEmpty) return match;
+    }
+
+    final family = uiSchema.deviceTypeForSection(deviceKey);
+    for (final pref in family?.keepAlivePreference ?? const <String>[]) {
+      final match = pick(pref);
+      if (match.isNotEmpty) return match;
+    }
+
+    return commands.firstWhere(
+      (c) => c == 'Power',
+      orElse: () => commands.firstWhere(
+        (c) => c.toLowerCase().contains('power'),
+        orElse: () => commands.first,
+      ),
+    );
+  }
+
   /// For freshly added devices: parses the module's .py file (instant when
   /// preloaded) and ensures keep_alive_command is a command that actually
-  /// exists in that module. Prefers 'Power'-style commands as the default.
+  /// exists in that module — see [_resolveKeepAliveCommand] for the order the
+  /// default is chosen in.
   Future<void> _applyKeepAliveDefaults(List<String> deviceKeys) async {
     bool changed = false;
     for (final key in deviceKeys) {
@@ -2899,33 +2977,101 @@ class AppStateProvider extends ChangeNotifier {
       final current = device['keep_alive_command']?.toString() ?? '';
       if (current.isNotEmpty && commands.contains(current)) continue; // Already valid for this module
 
-      // Load a sensible default from the module. The family's schema-defined
-      // preference list (device_types "keepAlivePreference") is tried first,
-      // in order; then the built-in heuristic: 'Power' if it exists, then
-      // anything containing 'power' (typical Extron poll), else the first command.
-      String chosen = '';
-      final family = uiSchema.deviceTypeForSection(key);
-      for (final pref in family?.keepAlivePreference ?? const <String>[]) {
-        chosen = commands.firstWhere(
-          (c) => c.toLowerCase() == pref.toLowerCase(),
-          orElse: () => '',
-        );
-        if (chosen.isNotEmpty) break;
-      }
-      if (chosen.isEmpty) {
-        chosen = commands.firstWhere(
-          (c) => c == 'Power',
-          orElse: () => commands.firstWhere(
-            (c) => c.toLowerCase().contains('power'),
-            orElse: () => commands.first,
-          ),
-        );
-      }
+      final chosen = await _resolveKeepAliveCommand(key, moduleName);
+      if (chosen.isEmpty) continue;
       device['keep_alive_command'] = chosen;
       changed = true;
       AppLogger.logInfo("Loaded keep_alive_command '$chosen' for $key from $moduleName.py");
     }
     if (changed) notifyListeners();
+  }
+
+  /// Load-time keep-alive audit, run after module resolution so every device
+  /// has its .py to check against. A converted room inherits its keep-alive
+  /// from the FAMILY default in key_map.json ('RefreshMatrix' for every
+  /// switcher), which the specific model's module often doesn't implement — the
+  /// device would then poll a command that doesn't exist. Any value the module
+  /// doesn't define is replaced with the module's own default; values the
+  /// module does define are left alone, so a deliberate site choice survives.
+  /// Each change lands in systemLogs for the acknowledgement + change log.
+  @visibleForTesting
+  Future<void> validateKeepAliveCommands() async {
+    for (final sectionKey in roomConfig.keys.toList()) {
+      final device = roomConfig[sectionKey];
+      if (device is! Map) continue;
+      if (uiSchema.deviceTypeForSection(sectionKey) == null) continue;
+      if (!device.containsKey('keep_alive_command')) continue;
+
+      final moduleName = device['module']?.toString() ?? '';
+      if (moduleName.isEmpty) continue; // already flagged by module resolution
+
+      final commands = await getCommandsForModule(moduleName);
+      if (commands.isEmpty) {
+        systemLogs.add(
+            "FLAGGED: '$sectionKey.keep_alive_command' could not be checked — "
+            "no commands parsed from '$moduleName' (is the .py in the modules folder?).");
+        continue;
+      }
+
+      final current = device['keep_alive_command']?.toString() ?? '';
+      if (current.isNotEmpty && commands.contains(current)) continue;
+
+      final chosen = await _resolveKeepAliveCommand(sectionKey, moduleName);
+      if (chosen.isEmpty || chosen == current) continue;
+      device['keep_alive_command'] = chosen;
+      systemLogs.add(
+          "MODULE: '$sectionKey.keep_alive_command' "
+          "${current.isEmpty ? 'was empty' : "'$current' is not a command in '$moduleName'"} "
+          "— set to '$chosen' from that module.");
+    }
+  }
+
+  /// Load-time audit of every schema "module_states" field (today: a
+  /// projector's `input`), run alongside the keep-alive check.
+  ///
+  /// These carry the same hazard: a converted room inherits the value from the
+  /// FAMILY default in key_map.json — `input` = "HDBaseT" for every projector —
+  /// and the specific model's module often doesn't implement that state, so the
+  /// device would drive a port it doesn't have.
+  ///
+  /// Unlike the keep-alive, this only FLAGS. Which physical input the device is
+  /// wired to is a site fact, not something the driver knows, so replacing it
+  /// with the module's first state would be a guess that reads as a real
+  /// setting. The tech gets the flag here, the red field on the device tab, and
+  /// the choice: pick a state the module has, or add the missing one to it.
+  @visibleForTesting
+  Future<void> validateModuleStateFields() async {
+    for (final sectionKey in roomConfig.keys.toList()) {
+      final device = roomConfig[sectionKey];
+      if (device is! Map) continue;
+      if (uiSchema.deviceTypeForSection(sectionKey) == null) continue;
+
+      final moduleName = device['module']?.toString() ?? '';
+      if (moduleName.isEmpty) continue; // already flagged by module resolution
+
+      for (final key in device.keys.map((k) => k.toString()).toList()) {
+        final spec = uiSchema.specFor(key, sectionKey: sectionKey);
+        if (spec?.type != 'module_states') continue;
+
+        final current = device[key]?.toString() ?? '';
+        if (current.isEmpty) continue;
+
+        final command = spec!.moduleCommand ?? key;
+        final states = await getStatesForModuleCommand(moduleName, command);
+        // No states parsed at all: the module has no such command (or it can't
+        // be read). That's a different problem from a wrong value, and the
+        // field says so itself — don't cry wolf over every value here.
+        if (states.isEmpty) continue;
+        if (states.any((s) => s.toLowerCase() == current.toLowerCase())) {
+          continue;
+        }
+
+        systemLogs.add(
+            "FLAGGED: '$sectionKey.$key' is '$current', which is not a "
+            "'$command' state in '$moduleName' — pick one of "
+            "${states.join(', ')}, or add '$current' to the module.");
+      }
+    }
   }
 
   /// Internal helper to remove unused devices based on the `dev_` settings

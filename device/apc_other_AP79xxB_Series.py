@@ -11,7 +11,7 @@ from extronlib.system import ProgramLog
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "power",
-    "models": ["AP7921B", "AP7922B"],
+    "models": ["AP7900B", "AP7921B", "AP7922B"],
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",
@@ -56,7 +56,19 @@ class DeviceClass:
         self.deviceUsername = "apc"
         self.devicePassword = "apc"
         self.last_serial_time = 0  # Added for debounce logic
+
+        # Default outlet count, applied before the model lookup below.
+        # Every Set/Update in this driver bounds-checks the outlet number
+        # against this, so without a default an unrecognised model string
+        # raises AttributeError inside UpdatePowerOutlet before it can send
+        # 'olStatus all'. ConnectionHandler.Update swallows that exception and
+        # only writes it to the ProgramLog, so the outlet buttons sit there
+        # with no state and nothing obvious to show for it. Degrade to the
+        # 8-outlet layout instead; a model in self.Models overrides it.
+        self._power_outlet_max = 8
+
         self.Models = {
+            "AP7900B": self.apc_31_2983_8,
             "AP7921B": self.apc_31_2983_8,
             "AP7922B": self.apc_31_2983_16,
         }

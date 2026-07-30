@@ -498,256 +498,12 @@ class _SchematicViewState extends State<SchematicView> {
     }
   }
 
-  /// Friendly display name for a config key: the schema label when one is
-  /// defined, otherwise the key title-cased with common AV acronyms upper-
-  /// cased (input_doc_cam -> "Doc Cam"). [stripPrefix] removes a section
-  /// prefix like "input_" first.
-  ///
-  /// [section] is the config block the key lives in, so a schema "labelWhen"
-  /// can pick the label from a sibling value — input_usb reports as "VGA over
-  /// USB" when SYSTEM_SETUP's gui_usb_or_vga is VGA, and "USB" otherwise.
-  static String _friendlyKey(AppStateProvider provider, String key,
-      {String? stripPrefix, Map<String, dynamic> section = const {}}) {
-    final label = provider.uiSchema.labelFor(key, section);
-    if (label != null && label.isNotEmpty) return label;
-    var k = key;
-    if (stripPrefix != null && k.startsWith(stripPrefix)) {
-      k = k.substring(stripPrefix.length);
-    }
-    const acronyms = {
-      'pc', 'hdmi', 'usb', 'vga', 'dvd', 'br', 'cc', 'cc2', 'ip', 'gui',
-      'gve', 'ntp', 'ald', 'tlp', 'poe', 'dsp', 'wl', 'tv', 'aud', 'inst',
-    };
-    return k
-        .split('_')
-        .where((w) => w.isNotEmpty)
-        .map((w) => acronyms.contains(w.toLowerCase())
-            ? w.toUpperCase()
-            : w[0].toUpperCase() + w.substring(1))
-        .join(' ');
-  }
-
-  /// Display form of a config value: touch-panel \r line breaks become
-  /// spaces, null becomes ''.
-  static String _friendlyValue(dynamic v) =>
-      (v ?? '').toString().replaceAll(r'\r', ' ');
-
-  /// One report section: a title, a header row, and data rows.
-  /// Shared by the single-sheet xlsx and the plain-text report.
-  List<({String title, List<String> header, List<List<dynamic>> rows})>
-      _reportSections(AppStateProvider provider, SchematicModel model) {
-    final config = provider.roomConfig;
-    final Map<String, dynamic> setup =
-        (config['SYSTEM_SETUP'] is Map) ? config['SYSTEM_SETUP'] : {};
-
-    // --- System summary (friendly names + resolved building name) ---
-    final String rawBldg = setup['gve_bldg']?.toString() ?? '';
-    final String fullBldg = provider.fullBuildingNameForCode(rawBldg);
-    final deviceCount =
-        model.nodes.where((n) => config.containsKey(n.id)).length;
-    final String tlp = _friendlyValue(setup['gve_id_tlp_1']);
-
-    // The GVE room IDs, in key order (gve_id_room_1, _2, ...). "N/A" entries
-    // are dropped the same way an unused touch panel is.
-    final roomIdKeys = setup.keys
-        .where((k) => k.startsWith('gve_id_room'))
-        .toList()
-      ..sort();
-
-    // Panel layout and the source list read as their schema descriptions
-    // ("3_Cams_Dev" -> "Menu Tabs: 3 - Cameras & Devices") rather than the
-    // raw tokens the processor stores.
-    final String panelLayout = provider.uiSchema
-        .optionLabelFor('gui_tab', setup['gui_tab']?.toString() ?? '');
-    final String sources =
-        provider.uiSchema.comboLabelFor('gui_inputs', setup) ?? '';
-
-    // Rows with no value (e.g. the GUI/touch-panel keys were deleted from
-    // SYSTEM_SETUP) are left out instead of printing blanks.
-    final systemRows = <List<dynamic>>[
-      ['Room', _friendlyValue(setup['gui_full_room_name'])],
-      ['Building', fullBldg.isEmpty ? rawBldg : fullBldg],
-      ['Room Number', _friendlyValue(setup['gve_room'])],
-      for (final k in roomIdKeys)
-        [
-          _friendlyKey(provider, k, section: setup),
-          _friendlyValue(setup[k]),
-        ],
-      ['Processor', _friendlyValue(setup['processor1'])],
-      ['Processor IP', provider.selectedProcessorIp],
-      if (tlp.isNotEmpty && tlp.toUpperCase() != 'N/A') ...[
-        ['Touch Panel', tlp],
-        ['Panel Layout', panelLayout],
-      ],
-      ['Sources', sources],
-      ['Device Count', deviceCount.toString()],
-      ['Generated', DateTime.now().toLocal().toString().split('.').first],
-    ]..removeWhere((r) {
-        final v = r[1].toString();
-        return v.isEmpty || v.toUpperCase() == 'N/A';
-      });
-
-    // --- Inputs / Outputs from SYSTEM_SETUP (friendly names) ---
-    List<List<dynamic>> prefixed(String prefix) {
-      final keys = setup.keys
-          .where((k) => k.startsWith(prefix) && setup[k] != null)
-          .toList()
-        ..sort();
-      return [
-        for (final k in keys)
-          [
-            _friendlyKey(provider, k, stripPrefix: prefix, section: setup),
-            _friendlyValue(setup[k]),
-          ]
-      ];
-    }
-
-    // --- Power outlets (only the outlets the config actually carries) ---
-    // Outlet 10 must sort after outlet 9, so order by the trailing number
-    // rather than by key text.
-    int outletNumber(String k) =>
-        int.tryParse(RegExp(r'(\d+)$').firstMatch(k)?.group(1) ?? '') ?? 0;
-    final outletKeys = setup.keys
-        .where((k) =>
-            k.startsWith('power1_outlet_') &&
-            !k.endsWith('_action') &&
-            _friendlyValue(setup[k]).isNotEmpty)
-        .toList()
-      ..sort((a, b) => outletNumber(a).compareTo(outletNumber(b)));
-    final powerRows = <List<dynamic>>[
-      for (final k in outletKeys)
-        [
-          'Outlet ${outletNumber(k)}',
-          _friendlyValue(setup[k]),
-          _friendlyValue(setup['${k}_action']),
-        ]
-    ];
-
-    // --- Camera presets (gui_preset_name_<camera>_<n>) ---
-    const presetCameras = {'inst': 'Instructor', 'aud': 'Audience'};
-    const presetPrefix = 'gui_preset_name_';
-    final presetKeys = setup.keys
-        .where((k) =>
-            k.startsWith(presetPrefix) &&
-            _friendlyValue(setup[k]).isNotEmpty)
-        .toList()
-      ..sort();
-    final presetRows = <List<dynamic>>[
-      for (final k in presetKeys)
-        [
-          // "gui_preset_name_inst_2" -> camera "inst", preset "2"
-          presetCameras[
-                  k.substring(presetPrefix.length).split('_').first] ??
-              _friendlyKey(provider, k.substring(presetPrefix.length)),
-          'Preset ${outletNumber(k)}',
-          _friendlyValue(setup[k]),
-        ]
-    ];
-
-    // --- Devices ---
-    final deviceRows = <List<dynamic>>[];
-    // --- Audio groups: which DSP/switcher group number each function uses ---
-    final audioGroupRows = <List<dynamic>>[];
-    for (final node in model.nodes) {
-      if (!config.containsKey(node.id)) continue; // processor/IDF/panel
-      final dev = config[node.id];
-      final family = provider.uiSchema.deviceTypeForSection(node.id);
-      final String deviceName =
-          _friendlyValue(dev['name']).isNotEmpty ? _friendlyValue(dev['name']) : node.title;
-      deviceRows.add([
-        deviceName,
-        family?.label ?? '',
-        _friendlyValue(dev['model']),
-        _friendlyValue(dev['gve_id']),
-        kConnLabels[node.conn] ?? '',
-        _friendlyValue(dev['ip_address']),
-        _friendlyValue(dev['protocol']),
-        _friendlyValue(dev['net_port']),
-        _friendlyValue(dev['serial_port']),
-        _friendlyValue(dev['keep_alive_command']),
-        _friendlyValue(dev['module']),
-      ]);
-
-      // Any device carrying group_ keys (DSPs and switchers today) lists what
-      // each audio group number is tied to.
-      if (dev is! Map) continue;
-      final groupKeys = dev.keys
-          .map((k) => k.toString())
-          .where((k) => k.startsWith('group_') && _friendlyValue(dev[k]).isNotEmpty)
-          .toList()
-        ..sort();
-      for (final k in groupKeys) {
-        audioGroupRows.add([
-          deviceName,
-          _friendlyKey(provider, k, stripPrefix: 'group_'),
-          _friendlyValue(dev[k]),
-        ]);
-      }
-    }
-
-    // --- Connections (as drawn, including user re-routes) ---
-    final connectionRows = <List<dynamic>>[
-      for (final e in model.edges)
-        [
-          model.nodeById(e.fromId)?.title ?? e.fromId,
-          model.nodeById(e.toId)?.title ?? e.toId,
-          e.custom ? 'Custom' : (kConnLabels[e.kind] ?? 'Auto'),
-          e.label,
-        ]
-    ];
-
-    return [
-      (title: 'System', header: ['Setting', 'Value'], rows: systemRows),
-      (
-        title: 'Inputs',
-        header: ['Input', 'Switcher Input'],
-        rows: prefixed('input_')
-      ),
-      (
-        title: 'Outputs',
-        header: ['Output', 'Switcher Output'],
-        rows: prefixed('output_')
-      ),
-      // Sections with nothing to say are dropped below rather than printing a
-      // bare header — a room with no power controller or no camera presets
-      // shouldn't grow empty tables.
-      (
-        title: 'Power Outlets',
-        header: ['Outlet', 'Name', 'Action'],
-        rows: powerRows
-      ),
-      (
-        title: 'Camera Presets',
-        header: ['Camera', 'Preset', 'Name'],
-        rows: presetRows
-      ),
-      (
-        title: 'Devices',
-        header: [
-          'Name', 'Type', 'Model', 'GVE ID', 'Connection', 'IP Address',
-          'Protocol', 'Network Port', 'Serial Port', 'Keep Alive',
-          'Python Module',
-        ],
-        rows: deviceRows
-      ),
-      (
-        title: 'Audio Groups',
-        header: ['Device', 'Group', 'Number'],
-        rows: audioGroupRows
-      ),
-      (
-        title: 'Connections',
-        header: ['From', 'To', 'Kind', 'Label'],
-        rows: connectionRows
-      ),
-    ].where((s) => s.rows.isNotEmpty).toList();
-  }
 
   /// "Copy text to clipboard" on the Report menu: the same plain-text report
   /// the .txt export writes, without touching the disk.
   Future<void> _copyReportText(AppStateProvider provider) async {
     final model = SchematicModel.build(provider);
-    final text = _textReport(model.roomTitle, _reportSections(provider, model));
+    final text = _textReport(model.roomTitle, reportSections(provider, model));
     await Clipboard.setData(ClipboardData(text: text));
     _snack('Device report copied to clipboard '
         '(${text.split('\n').length} lines).');
@@ -755,7 +511,7 @@ class _SchematicViewState extends State<SchematicView> {
 
   Future<void> _exportReport(AppStateProvider provider, bool asXlsx) async {
     final model = SchematicModel.build(provider);
-    final sections = _reportSections(provider, model);
+    final sections = reportSections(provider, model);
 
     final ext = asXlsx ? 'xlsx' : 'txt';
     String? outputFile = await FilePicker.saveFile(
@@ -777,12 +533,7 @@ class _SchematicViewState extends State<SchematicView> {
         // value); data rows are padded the same and zebra-striped.
         List<dynamic> pad(List<dynamic> row, int width) =>
             [...row, ...List.filled(math.max(0, width - row.length), '')];
-        int widthOf(
-                ({
-                  String title,
-                  List<String> header,
-                  List<List<dynamic>> rows
-                }) s) =>
+        int widthOf(ReportSection s) =>
             s.rows.fold(s.header.length,
                 (m, r) => math.max(m, r.length));
 
@@ -796,10 +547,10 @@ class _SchematicViewState extends State<SchematicView> {
         rows.add(pad([model.roomTitle], reportWidth));
         rowStyles[0] = XlsxRowStyle.title;
         for (final s in sections) {
-          // 2-column sections (System/Inputs/Outputs) sit in columns A and B.
-          // Their VALUE cell is excluded from column auto-sizing, so a long
-          // room/building name overflows right into the empty cells instead
-          // of stretching column B, which the Devices table also uses.
+          // 2-column sections (System) sit in columns A and B. Their VALUE
+          // cell is excluded from column auto-sizing, so a long room/building
+          // name overflows right into the empty cells instead of stretching
+          // column B, which the Devices table also uses.
           final bool twoColumn = s.header.length == 2;
           final int width = twoColumn ? 2 : widthOf(s);
           rows.add([]);
@@ -854,8 +605,7 @@ class _SchematicViewState extends State<SchematicView> {
   /// Fixed-width plain-text rendering of the same report sections.
   String _textReport(
       String roomTitle,
-      List<({String title, List<String> header, List<List<dynamic>> rows})>
-          sections) {
+      List<ReportSection> sections) {
     final buffer = StringBuffer();
     buffer.writeln(roomTitle); // the room and nothing else, like the xlsx
     buffer.writeln();
@@ -1638,4 +1388,325 @@ class _Legend extends StatelessWidget {
       ),
     );
   }
+}
+
+// ============================================================================
+//  DEVICE REPORT
+// ============================================================================
+//  Report content lives outside the widget: [reportSections] is a pure
+//  function of the loaded config plus the schematic (which supplies the
+//  connection list and the dev_-count-filtered device set), so the .xlsx, the
+//  .txt and the clipboard copy all render the same thing — and it can be
+//  tested without pumping a widget.
+
+/// One report section: a title, a header row, and data rows.
+typedef ReportSection = ({
+  String title,
+  List<String> header,
+  List<List<dynamic>> rows,
+});
+
+/// Friendly display name for a config key: the schema label when one is
+/// defined, otherwise the key title-cased with common AV acronyms upper-
+/// cased (input_doc_cam -> "Doc Cam"). [stripPrefix] removes a section
+/// prefix like "input_" first.
+///
+/// [section] is the config block the key lives in, so a schema "labelWhen"
+/// can pick the label from a sibling value — input_usb reports as "VGA over
+/// USB" when SYSTEM_SETUP's gui_usb_or_vga is VGA, and "USB" otherwise.
+String _friendlyKey(AppStateProvider provider, String key,
+    {String? stripPrefix, Map<String, dynamic> section = const {}}) {
+  final label = provider.uiSchema.labelFor(key, section);
+  if (label != null && label.isNotEmpty) return label;
+  var k = key;
+  if (stripPrefix != null && k.startsWith(stripPrefix)) {
+    k = k.substring(stripPrefix.length);
+  }
+  const acronyms = {
+    'pc', 'hdmi', 'usb', 'vga', 'dvd', 'br', 'cc', 'cc2', 'ip', 'gui',
+    'gve', 'ntp', 'ald', 'tlp', 'poe', 'dsp', 'wl', 'tv', 'aud', 'inst',
+  };
+  return k
+      .split('_')
+      .where((w) => w.isNotEmpty)
+      .map((w) => acronyms.contains(w.toLowerCase())
+          ? w.toUpperCase()
+          : w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+}
+
+/// Display form of a config value: touch-panel \r line breaks become
+/// spaces, null becomes ''.
+String _friendlyValue(dynamic v) =>
+    (v ?? '').toString().replaceAll(r'\r', ' ');
+
+/// The report name of the device in config section [sectionKey]: its 'name'
+/// property, falling back to the schematic node title. Blank for a null,
+/// absent, or inactive section — a device the dev_ counts exclude is left out
+/// of the diagram and the Devices table, so an I/O row must not name it
+/// either. Blank is also what an I/O key with no device on the end reports.
+String _deviceNameFor(
+    AppStateProvider provider, SchematicModel model, String? sectionKey) {
+  if (sectionKey == null) return '';
+  final node = model.nodeById(sectionKey);
+  if (node == null) return ''; // not an active device in this room
+  final dev = provider.roomConfig[sectionKey];
+  final name = (dev is Map) ? _friendlyValue(dev['name']) : '';
+  return name.isNotEmpty ? name : node.title;
+}
+
+/// REPORT-ONLY names for the switcher I/O keys, spelled out for whoever reads
+/// the report rather than edits the config: the tech-facing "AUD Cam" / "Proj
+/// 1" shorthand stays on the device tabs (and in ui_schema.json), while the
+/// report says what the signal actually is. Keys with no entry keep their
+/// [_friendlyKey] spelling.
+const Map<String, String> _reportIoNames = {
+  'input_aud_cam': 'Audience Camera',
+  'input_inst_cam': 'Instructor Camera',
+  'output_audio': 'Audio Output (Amplifier)',
+  'output_audio_ald': 'Assisted Listening',
+  'output_cc': 'Capture Card',
+  'output_proj_1': 'Display Device 1',
+  'output_proj_2': 'Display Device 2',
+  'output_proj_3': 'Display Device 3',
+  'output_proj_4': 'Display Device 4',
+};
+
+/// The config device section an I/O key feeds, so the report can name the
+/// hardware behind a generic label ("Display Device 1" -> "Projector -
+/// PT-FW430U"). Only one-to-one pairings the config guarantees are listed:
+/// the projector/display outputs by number, the two cameras by the project's
+/// Inst = 1 / Aud = 2 convention (CAMERADEVICE_1 carries Lbl_InstCam_Model),
+/// and the wireless input. Everything else reports a blank Device.
+const Map<String, String> _reportIoDevice = {
+  'input_inst_cam': 'CAMERADEVICE_1',
+  'input_aud_cam': 'CAMERADEVICE_2',
+  'input_wireless': 'WIRELESSDEVICE_1',
+  'output_proj_1': 'PROJECTORDEVICE_1',
+  'output_proj_2': 'PROJECTORDEVICE_2',
+  'output_proj_3': 'PROJECTORDEVICE_3',
+  'output_proj_4': 'PROJECTORDEVICE_4',
+};
+
+/// One report section: a title, a header row, and data rows.
+/// Shared by the single-sheet xlsx and the plain-text report.
+List<ReportSection> reportSections(AppStateProvider provider, SchematicModel model) {
+  final config = provider.roomConfig;
+  final Map<String, dynamic> setup =
+      (config['SYSTEM_SETUP'] is Map) ? config['SYSTEM_SETUP'] : {};
+
+  // --- System summary (friendly names + resolved building name) ---
+  final String rawBldg = setup['gve_bldg']?.toString() ?? '';
+  final String fullBldg = provider.fullBuildingNameForCode(rawBldg);
+  final deviceCount =
+      model.nodes.where((n) => config.containsKey(n.id)).length;
+  final String tlp = _friendlyValue(setup['gve_id_tlp_1']);
+
+  // The GVE room IDs, in key order (gve_id_room_1, _2, ...). "N/A" entries
+  // are dropped the same way an unused touch panel is.
+  final roomIdKeys = setup.keys
+      .where((k) => k.startsWith('gve_id_room'))
+      .toList()
+    ..sort();
+
+  // Panel layout and the source list read as their schema descriptions
+  // ("3_Cams_Dev" -> "Menu Tabs: 3 - Cameras & Devices") rather than the
+  // raw tokens the processor stores.
+  final String panelLayout = provider.uiSchema
+      .optionLabelFor('gui_tab', setup['gui_tab']?.toString() ?? '');
+  final String sources =
+      provider.uiSchema.comboLabelFor('gui_inputs', setup) ?? '';
+
+  // Python tracebacks are opt-in per room — a conversion no longer adds the
+  // ENVIRONMENT block — so the report only speaks up when the room actually
+  // carries the setting, and says which way it is set.
+  final env = config['ENVIRONMENT'];
+  final String tracebacks = (env is Map && env.containsKey('traceback_allowed'))
+      ? (env['traceback_allowed'] == true ? 'Allowed' : 'Not allowed')
+      : '';
+
+  // Rows with no value (e.g. the GUI/touch-panel keys were deleted from
+  // SYSTEM_SETUP) are left out instead of printing blanks.
+  final systemRows = <List<dynamic>>[
+    ['Room', _friendlyValue(setup['gui_full_room_name'])],
+    ['Building', fullBldg.isEmpty ? rawBldg : fullBldg],
+    ['Room Number', _friendlyValue(setup['gve_room'])],
+    for (final k in roomIdKeys)
+      [
+        _friendlyKey(provider, k, section: setup),
+        _friendlyValue(setup[k]),
+      ],
+    ['Processor', _friendlyValue(setup['processor1'])],
+    ['Processor IP', provider.selectedProcessorIp],
+    if (tlp.isNotEmpty && tlp.toUpperCase() != 'N/A') ...[
+      ['Touch Panel', tlp],
+      ['Panel Layout', panelLayout],
+    ],
+    ['Sources', sources],
+    ['Python Tracebacks', tracebacks],
+    ['Device Count', deviceCount.toString()],
+    ['Generated', DateTime.now().toLocal().toString().split('.').first],
+  ]..removeWhere((r) {
+      final v = r[1].toString();
+      return v.isEmpty || v.toUpperCase() == 'N/A';
+    });
+
+  // --- Inputs / Outputs from SYSTEM_SETUP (friendly names) ---
+  // Third column: the device on the other end of that switcher port, named
+  // as the config names it, so "Display Device 2" reads as real hardware.
+  // Rows still sort by the raw config key, so the order matches the config.
+  List<List<dynamic>> prefixed(String prefix) {
+    final keys = setup.keys
+        .where((k) => k.startsWith(prefix) && setup[k] != null)
+        .toList()
+      ..sort();
+    return [
+      for (final k in keys)
+        [
+          _reportIoNames[k] ??
+              _friendlyKey(provider, k, stripPrefix: prefix, section: setup),
+          _friendlyValue(setup[k]),
+          _deviceNameFor(provider, model, _reportIoDevice[k]),
+        ]
+    ];
+  }
+
+  // --- Power outlets (only the outlets the config actually carries) ---
+  // Outlet 10 must sort after outlet 9, so order by the trailing number
+  // rather than by key text.
+  int outletNumber(String k) =>
+      int.tryParse(RegExp(r'(\d+)$').firstMatch(k)?.group(1) ?? '') ?? 0;
+  final outletKeys = setup.keys
+      .where((k) =>
+          k.startsWith('power1_outlet_') &&
+          !k.endsWith('_action') &&
+          _friendlyValue(setup[k]).isNotEmpty)
+      .toList()
+    ..sort((a, b) => outletNumber(a).compareTo(outletNumber(b)));
+  final powerRows = <List<dynamic>>[
+    for (final k in outletKeys)
+      [
+        'Outlet ${outletNumber(k)}',
+        _friendlyValue(setup[k]),
+        _friendlyValue(setup['${k}_action']),
+      ]
+  ];
+
+  // --- Camera presets (gui_preset_name_<camera>_<n>) ---
+  const presetCameras = {'inst': 'Instructor', 'aud': 'Audience'};
+  const presetPrefix = 'gui_preset_name_';
+  final presetKeys = setup.keys
+      .where((k) =>
+          k.startsWith(presetPrefix) &&
+          _friendlyValue(setup[k]).isNotEmpty)
+      .toList()
+    ..sort();
+  final presetRows = <List<dynamic>>[
+    for (final k in presetKeys)
+      [
+        // "gui_preset_name_inst_2" -> camera "inst", preset "2"
+        presetCameras[
+                k.substring(presetPrefix.length).split('_').first] ??
+            _friendlyKey(provider, k.substring(presetPrefix.length)),
+        'Preset ${outletNumber(k)}',
+        _friendlyValue(setup[k]),
+      ]
+  ];
+
+  // --- Devices ---
+  final deviceRows = <List<dynamic>>[];
+  // --- Audio groups: which DSP/switcher group number each function uses ---
+  final audioGroupRows = <List<dynamic>>[];
+  for (final node in model.nodes) {
+    if (!config.containsKey(node.id)) continue; // processor/IDF/panel
+    final dev = config[node.id];
+    final family = provider.uiSchema.deviceTypeForSection(node.id);
+    final String deviceName = _deviceNameFor(provider, model, node.id);
+    deviceRows.add([
+      deviceName,
+      family?.label ?? '',
+      _friendlyValue(dev['model']),
+      _friendlyValue(dev['gve_id']),
+      kConnLabels[node.conn] ?? '',
+      _friendlyValue(dev['ip_address']),
+      _friendlyValue(dev['protocol']),
+      _friendlyValue(dev['net_port']),
+      _friendlyValue(dev['serial_port']),
+      _friendlyValue(dev['keep_alive_command']),
+      _friendlyValue(dev['module']),
+    ]);
+
+    // Any device carrying group_ keys (DSPs and switchers today) lists what
+    // each audio group number is tied to.
+    if (dev is! Map) continue;
+    final groupKeys = dev.keys
+        .map((k) => k.toString())
+        .where((k) => k.startsWith('group_') && _friendlyValue(dev[k]).isNotEmpty)
+        .toList()
+      ..sort();
+    for (final k in groupKeys) {
+      audioGroupRows.add([
+        deviceName,
+        _friendlyKey(provider, k, stripPrefix: 'group_'),
+        _friendlyValue(dev[k]),
+      ]);
+    }
+  }
+
+  // --- Connections (as drawn, including user re-routes) ---
+  final connectionRows = <List<dynamic>>[
+    for (final e in model.edges)
+      [
+        model.nodeById(e.fromId)?.title ?? e.fromId,
+        model.nodeById(e.toId)?.title ?? e.toId,
+        e.custom ? 'Custom' : (kConnLabels[e.kind] ?? 'Auto'),
+        e.label,
+      ]
+  ];
+
+  return [
+    (title: 'System', header: ['Setting', 'Value'], rows: systemRows),
+    (
+      title: 'Inputs',
+      header: ['Input', 'Switcher Input', 'Device'],
+      rows: prefixed('input_')
+    ),
+    (
+      title: 'Outputs',
+      header: ['Output', 'Switcher Output', 'Device'],
+      rows: prefixed('output_')
+    ),
+    // Sections with nothing to say are dropped below rather than printing a
+    // bare header — a room with no power controller or no camera presets
+    // shouldn't grow empty tables.
+    (
+      title: 'Power Outlets',
+      header: ['Outlet', 'Name', 'Action'],
+      rows: powerRows
+    ),
+    (
+      title: 'Camera Presets',
+      header: ['Camera', 'Preset', 'Name'],
+      rows: presetRows
+    ),
+    (
+      title: 'Devices',
+      header: [
+        'Name', 'Type', 'Model', 'GVE ID', 'Connection', 'IP Address',
+        'Protocol', 'Network Port', 'Serial Port', 'Keep Alive',
+        'Python Module',
+      ],
+      rows: deviceRows
+    ),
+    (
+      title: 'Audio Groups',
+      header: ['Device', 'Group', 'Number'],
+      rows: audioGroupRows
+    ),
+    (
+      title: 'Connections',
+      header: ['From', 'To', 'Kind', 'Label'],
+      rows: connectionRows
+    ),
+  ].where((s) => s.rows.isNotEmpty).toList();
 }

@@ -174,6 +174,9 @@
     "__readme": [
       "Whole non-device config blocks injected on load when missing (section",
       "and/or individual properties), shown in the acknowledgement dialog.",
+      "ENVIRONMENT is deliberately NOT listed: traceback_allowed is opt-in per",
+      "room, so a conversion never turns it on. Add the block by hand when a",
+      "room needs it - the device report then states that it is allowed.",
       "METRICS_CONFIG ships enabled with the bearer token filled in, so every",
       "converted room reports metrics without a follow-up edit. The token is",
       "what makes that safe: the processor's Metrics client raises at startup",
@@ -186,9 +189,6 @@
       "keylogger": true,
       "uri": "http://cts-metrics1:41796/metrics",
       "bearer": "enn6vVXIM6TZVho3DOWvJk1uhLfDk9VH"
-    },
-    "ENVIRONMENT": {
-      "traceback_allowed": true
     }
   },
   "consistency": [
@@ -330,7 +330,7 @@
       "traceback_allowed": {
         "type": "bool",
         "label": "Allow Tracebacks (traceback_allowed)",
-        "description": "Let the processor report full Python tracebacks when something raises, instead of swallowing the detail. Added to every converted room."
+        "description": "Let the processor report full Python tracebacks when something raises, instead of swallowing the detail. Opt-in per room: a conversion never adds the ENVIRONMENT block, and the device report calls the setting out whenever the room does carry it."
       }
     }
   },

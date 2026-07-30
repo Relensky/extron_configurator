@@ -265,6 +265,18 @@ class SchemaFieldBuilder {
           helper = "Command '$command' not found in $moduleName.py — type the value manually";
         }
 
+        // MISMATCH: the value isn't a state this module implements — the state
+        // a family default injected ('input' = "HDBaseT" for every projector)
+        // rather than one this projector actually has. Flagged rather than
+        // corrected: which port the device is wired to is a site fact the app
+        // can't guess, so the tech either picks a real state or adds the
+        // missing one to the module. Only judged once the states have actually
+        // been parsed — a module with no '$command' at all (states empty) says
+        // so in its helper line instead, and mid-parse never flashes red.
+        final bool valueMismatch = current.isNotEmpty &&
+            states.isNotEmpty &&
+            !states.any((s) => s.toLowerCase() == current.toLowerCase());
+
         FocusNode? fieldFocus;
         return Autocomplete<String>(
           // Remount when the module changes so initialValue re-applies; a
@@ -290,6 +302,10 @@ class SchemaFieldBuilder {
               controller: controller,
               focusNode: focusNode,
               decoration: _decoration('$label (type or select)', helper,
+                  mismatch: valueMismatch,
+                  mismatchText: '"$current" is not a \'$command\' state in '
+                      '$moduleName.py — pick one of the '
+                      '${states.length} it supports, or add it to the module',
                   labelColor:
                       _originColor(context, provider, sectionKey, fieldKey)),
               onChanged: (val) =>
