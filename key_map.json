@@ -7,7 +7,20 @@
     "Map (App Config tab) - no application rebuild needed.",
     "",
     "Processing order: sections -> properties -> auto-normalization ->",
-    "value_map -> moves -> unused-device removal -> defaults.",
+    "value_map -> moves -> unused-device removal -> connection_fields ->",
+    "removals -> carriage returns -> device defaults -> companion_keys ->",
+    "defaults.",
+    "",
+    "connection_fields: com_type -> the properties a device on that connection",
+    "  must NOT have. A serial device has no ip_address/net_port/protocol/",
+    "  password/user, so those are dropped; one that held a real value is",
+    "  logged as a CONFLICT first rather than vanishing silently.",
+    "removals: properties dropped on convert. 'key_match' is a whole-name",
+    "  regex, optional 'section' is a '*' wildcard (default: every section,",
+    "  plus stray scalars at the root). Add 'when_key' (SECTION.key) and",
+    "  'when_value_in' to gate the removal on another key - the power outlet",
+    "  rule only fires when dev_power_controllers says there is no controller.",
+    "  A rule whose gating key is absent never fires.",
     "",
     "remove_unused_devices + device_counts: legacy device blocks whose family",
     "  count says they're not in use (No / 0 / above the count) are REMOVED",
@@ -61,6 +74,35 @@
     "dev_power_controllers": "POWERDEVICE_"
   },
   "escape_carriage_returns": true,
+  "connection_fields": {
+    "__comment": "Keyed by com_type (after value_map normalizes it): the properties a device on that connection must NOT carry. Removed on convert; one that held a real value is reported as a CONFLICT first so nothing disappears quietly. device_id and keep_alive_trigger are deliberately NOT listed - they describe the module, not the link.",
+    "serial": [
+      "ip_address",
+      "net_port",
+      "protocol",
+      "password",
+      "user"
+    ]
+  },
+  "removals": [
+    {
+      "__comment": "Superseded by the METRICS_CONFIG block.",
+      "key_match": "api_proxy_server",
+      "reason": "superseded by METRICS_CONFIG"
+    },
+    {
+      "__comment": "Generic room label; the room identity lives in gve_bldg + gve_room.",
+      "key_match": "ROOM",
+      "reason": "room identity comes from gve_bldg + gve_room"
+    },
+    {
+      "__comment": "With no power controller in the room the outlet names and their actions are dead data. Fires only when dev_power_controllers actually says none - a missing count never triggers it.",
+      "key_match": "power1_outlet_.*",
+      "when_key": "SYSTEM_SETUP.dev_power_controllers",
+      "when_value_in": [ "0", "no", "false", "" ],
+      "reason": "no power controller in this room"
+    }
+  ],
   "companion_keys": [
     {
       "__comment": "Every power1_outlet_N present after conversion gets a matching power1_outlet_N_action (null) - the number always follows the outlet that exists.",

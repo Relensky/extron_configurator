@@ -546,21 +546,46 @@ class _SchematicViewState extends State<SchematicView> {
     final deviceCount =
         model.nodes.where((n) => config.containsKey(n.id)).length;
     final String tlp = _friendlyValue(setup['gve_id_tlp_1']);
+
+    // The GVE room IDs, in key order (gve_id_room_1, _2, ...). "N/A" entries
+    // are dropped the same way an unused touch panel is.
+    final roomIdKeys = setup.keys
+        .where((k) => k.startsWith('gve_id_room'))
+        .toList()
+      ..sort();
+
+    // Panel layout and the source list read as their schema descriptions
+    // ("3_Cams_Dev" -> "Menu Tabs: 3 - Cameras & Devices") rather than the
+    // raw tokens the processor stores.
+    final String panelLayout = provider.uiSchema
+        .optionLabelFor('gui_tab', setup['gui_tab']?.toString() ?? '');
+    final String sources =
+        provider.uiSchema.comboLabelFor('gui_inputs', setup) ?? '';
+
     // Rows with no value (e.g. the GUI/touch-panel keys were deleted from
     // SYSTEM_SETUP) are left out instead of printing blanks.
     final systemRows = <List<dynamic>>[
       ['Room', _friendlyValue(setup['gui_full_room_name'])],
       ['Building', fullBldg.isEmpty ? rawBldg : fullBldg],
       ['Room Number', _friendlyValue(setup['gve_room'])],
+      for (final k in roomIdKeys)
+        [
+          _friendlyKey(provider, k, section: setup),
+          _friendlyValue(setup[k]),
+        ],
       ['Processor', _friendlyValue(setup['processor1'])],
       ['Processor IP', provider.selectedProcessorIp],
       if (tlp.isNotEmpty && tlp.toUpperCase() != 'N/A') ...[
         ['Touch Panel', tlp],
-        ['Panel Layout', _friendlyValue(setup['gui_tab'])],
+        ['Panel Layout', panelLayout],
       ],
+      ['Sources', sources],
       ['Device Count', deviceCount.toString()],
       ['Generated', DateTime.now().toLocal().toString().split('.').first],
-    ]..removeWhere((r) => r[1].toString().isEmpty);
+    ]..removeWhere((r) {
+        final v = r[1].toString();
+        return v.isEmpty || v.toUpperCase() == 'N/A';
+      });
 
     // --- Inputs / Outputs from SYSTEM_SETUP (friendly names) ---
     List<List<dynamic>> prefixed(String prefix) {
@@ -577,16 +602,63 @@ class _SchematicViewState extends State<SchematicView> {
       ];
     }
 
+    // --- Power outlets (only the outlets the config actually carries) ---
+    // Outlet 10 must sort after outlet 9, so order by the trailing number
+    // rather than by key text.
+    int outletNumber(String k) =>
+        int.tryParse(RegExp(r'(\d+)$').firstMatch(k)?.group(1) ?? '') ?? 0;
+    final outletKeys = setup.keys
+        .where((k) =>
+            k.startsWith('power1_outlet_') &&
+            !k.endsWith('_action') &&
+            _friendlyValue(setup[k]).isNotEmpty)
+        .toList()
+      ..sort((a, b) => outletNumber(a).compareTo(outletNumber(b)));
+    final powerRows = <List<dynamic>>[
+      for (final k in outletKeys)
+        [
+          'Outlet ${outletNumber(k)}',
+          _friendlyValue(setup[k]),
+          _friendlyValue(setup['${k}_action']),
+        ]
+    ];
+
+    // --- Camera presets (gui_preset_name_<camera>_<n>) ---
+    const presetCameras = {'inst': 'Instructor', 'aud': 'Audience'};
+    const presetPrefix = 'gui_preset_name_';
+    final presetKeys = setup.keys
+        .where((k) =>
+            k.startsWith(presetPrefix) &&
+            _friendlyValue(setup[k]).isNotEmpty)
+        .toList()
+      ..sort();
+    final presetRows = <List<dynamic>>[
+      for (final k in presetKeys)
+        [
+          // "gui_preset_name_inst_2" -> camera "inst", preset "2"
+          presetCameras[
+                  k.substring(presetPrefix.length).split('_').first] ??
+              _friendlyKey(provider, k.substring(presetPrefix.length)),
+          'Preset ${outletNumber(k)}',
+          _friendlyValue(setup[k]),
+        ]
+    ];
+
     // --- Devices ---
     final deviceRows = <List<dynamic>>[];
+    // --- Audio groups: which DSP/switcher group number each function uses ---
+    final audioGroupRows = <List<dynamic>>[];
     for (final node in model.nodes) {
       if (!config.containsKey(node.id)) continue; // processor/IDF/panel
       final dev = config[node.id];
       final family = provider.uiSchema.deviceTypeForSection(node.id);
+      final String deviceName =
+          _friendlyValue(dev['name']).isNotEmpty ? _friendlyValue(dev['name']) : node.title;
       deviceRows.add([
-        _friendlyValue(dev['name']),
+        deviceName,
         family?.label ?? '',
         _friendlyValue(dev['model']),
+        _friendlyValue(dev['gve_id']),
         kConnLabels[node.conn] ?? '',
         _friendlyValue(dev['ip_address']),
         _friendlyValue(dev['protocol']),
@@ -595,6 +667,22 @@ class _SchematicViewState extends State<SchematicView> {
         _friendlyValue(dev['keep_alive_command']),
         _friendlyValue(dev['module']),
       ]);
+
+      // Any device carrying group_ keys (DSPs and switchers today) lists what
+      // each audio group number is tied to.
+      if (dev is! Map) continue;
+      final groupKeys = dev.keys
+          .map((k) => k.toString())
+          .where((k) => k.startsWith('group_') && _friendlyValue(dev[k]).isNotEmpty)
+          .toList()
+        ..sort();
+      for (final k in groupKeys) {
+        audioGroupRows.add([
+          deviceName,
+          _friendlyKey(provider, k, stripPrefix: 'group_'),
+          _friendlyValue(dev[k]),
+        ]);
+      }
     }
 
     // --- Connections (as drawn, including user re-routes) ---
@@ -620,20 +708,39 @@ class _SchematicViewState extends State<SchematicView> {
         header: ['Output', 'Switcher Output'],
         rows: prefixed('output_')
       ),
+      // Sections with nothing to say are dropped below rather than printing a
+      // bare header — a room with no power controller or no camera presets
+      // shouldn't grow empty tables.
+      (
+        title: 'Power Outlets',
+        header: ['Outlet', 'Name', 'Action'],
+        rows: powerRows
+      ),
+      (
+        title: 'Camera Presets',
+        header: ['Camera', 'Preset', 'Name'],
+        rows: presetRows
+      ),
       (
         title: 'Devices',
         header: [
-          'Name', 'Type', 'Model', 'Connection', 'IP Address', 'Protocol',
-          'Network Port', 'Serial Port', 'Keep Alive', 'Python Module',
+          'Name', 'Type', 'Model', 'GVE ID', 'Connection', 'IP Address',
+          'Protocol', 'Network Port', 'Serial Port', 'Keep Alive',
+          'Python Module',
         ],
         rows: deviceRows
+      ),
+      (
+        title: 'Audio Groups',
+        header: ['Device', 'Group', 'Number'],
+        rows: audioGroupRows
       ),
       (
         title: 'Connections',
         header: ['From', 'To', 'Kind', 'Label'],
         rows: connectionRows
       ),
-    ];
+    ].where((s) => s.rows.isNotEmpty).toList();
   }
 
   /// "Copy text to clipboard" on the Report menu: the same plain-text report
@@ -684,26 +791,26 @@ class _SchematicViewState extends State<SchematicView> {
         final overflowRows = <int>{};
         final int reportWidth =
             sections.fold(1, (w, s) => math.max(w, widthOf(s)));
-        rows.add(pad(['ROOM DEVICE REPORT — ${model.roomTitle}'], reportWidth));
+        // Row 1 carries the room and nothing else, merged across A:E so the
+        // title band reads as one cell instead of a value stuck in column A.
+        rows.add(pad([model.roomTitle], reportWidth));
         rowStyles[0] = XlsxRowStyle.title;
         for (final s in sections) {
-          // 2-column sections (System/Inputs/Outputs) put their value ONE
-          // COLUMN OVER (Setting | | Value) and are excluded from column
-          // auto-sizing, so a long room/building name overflows to the right
-          // instead of stretching a column the Devices table also uses.
-          final bool shifted = s.header.length == 2;
-          List<dynamic> layout(List<dynamic> r) =>
-              shifted ? [r[0], '', r[1]] : r;
-          final int width = shifted ? 3 : widthOf(s);
+          // 2-column sections (System/Inputs/Outputs) sit in columns A and B.
+          // Their VALUE cell is excluded from column auto-sizing, so a long
+          // room/building name overflows right into the empty cells instead
+          // of stretching column B, which the Devices table also uses.
+          final bool twoColumn = s.header.length == 2;
+          final int width = twoColumn ? 2 : widthOf(s);
           rows.add([]);
           rowStyles[rows.length] = XlsxRowStyle.title;
           rows.add(pad([s.title], width));
           rowStyles[rows.length] = XlsxRowStyle.header;
-          rows.add(pad(layout(s.header), width));
+          rows.add(pad(s.header, width));
           for (int i = 0; i < s.rows.length; i++) {
             if (i.isOdd) rowStyles[rows.length] = XlsxRowStyle.zebra;
-            if (shifted) overflowRows.add(rows.length);
-            rows.add(pad(layout(s.rows[i]), width));
+            if (twoColumn) overflowRows.add(rows.length);
+            rows.add(pad(s.rows[i], width));
           }
         }
 
@@ -730,6 +837,7 @@ class _SchematicViewState extends State<SchematicView> {
             rows: rows,
             rowStyles: rowStyles,
             overflowRows: overflowRows,
+            merges: const ['A1:E1'],
             image: image,
           ),
         ]);
@@ -749,7 +857,7 @@ class _SchematicViewState extends State<SchematicView> {
       List<({String title, List<String> header, List<List<dynamic>> rows})>
           sections) {
     final buffer = StringBuffer();
-    buffer.writeln('ROOM DEVICE REPORT — $roomTitle');
+    buffer.writeln(roomTitle); // the room and nothing else, like the xlsx
     buffer.writeln();
     for (final s in sections) {
       buffer.writeln(s.title);

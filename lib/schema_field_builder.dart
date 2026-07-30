@@ -64,7 +64,9 @@ class SchemaFieldBuilder {
         break;
       case 'bool':
         field = SwitchListTile(
-          title: Text(label),
+          title: Text(label,
+              style: TextStyle(
+                  color: _originColor(context, provider, sectionKey, fieldKey))),
           subtitle: spec?.helperText != null ? Text(spec!.helperText!) : null,
           value: value == true,
           onChanged: (val) => provider.updateDeviceValue(sectionKey, fieldKey, val),
@@ -169,7 +171,8 @@ class SchemaFieldBuilder {
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
               ? 'Value "$current" is not in the schema options — pick a valid option'
-              : conflict),
+              : conflict,
+          labelColor: _originColor(context, provider, sectionKey, fieldKey)),
       items: options
           .map((o) => DropdownMenuItem(value: o.value, child: Text(o.label)))
           .toList(),
@@ -179,16 +182,43 @@ class SchemaFieldBuilder {
     );
   }
 
+  /// The label colour for a converted value: ORANGE when it was carried over
+  /// from the loaded file and nobody has confirmed it against the current
+  /// template yet, plain WHITE (the theme's normal text) when the conversion
+  /// wrote it. Null for a config with no conversion history, which leaves the
+  /// field's normal styling alone.
+  static Color? _originColor(
+      BuildContext context, AppStateProvider provider, String sectionKey, String fieldKey) {
+    switch (provider.originFor(sectionKey, fieldKey)) {
+      case ValueOrigin.legacy:
+        // Readable on both themes — the light theme needs the darker shade
+        return Theme.of(context).brightness == Brightness.dark
+            ? Colors.orangeAccent
+            : Colors.deepOrange.shade700;
+      case ValueOrigin.written:
+        return Theme.of(context).brightness == Brightness.dark
+            ? Colors.white
+            : Colors.black87;
+      case null:
+        return null;
+    }
+  }
+
   /// Shared InputDecoration: normal grey outline, or red in every state (with
   /// a red helper line) when the current value doesn't match the schema.
+  /// [labelColor] tints only the label, so provenance colouring never fights
+  /// the red mismatch outline.
   static InputDecoration _decoration(String label, String? helperText,
-      {bool mismatch = false, String? mismatchText}) {
+      {bool mismatch = false, String? mismatchText, Color? labelColor}) {
     final OutlineInputBorder? red = mismatch
         ? OutlineInputBorder(
             borderSide: BorderSide(color: Colors.red.shade400, width: 1.5))
         : null;
     return InputDecoration(
       labelText: label,
+      labelStyle: labelColor == null ? null : TextStyle(color: labelColor),
+      floatingLabelStyle:
+          labelColor == null ? null : TextStyle(color: labelColor),
       helperText: mismatch ? mismatchText : helperText,
       helperStyle: mismatch ? TextStyle(color: Colors.red.shade400) : null,
       helperMaxLines: 2,
@@ -259,7 +289,9 @@ class SchemaFieldBuilder {
             return TextFormField(
               controller: controller,
               focusNode: focusNode,
-              decoration: _decoration('$label (type or select)', helper),
+              decoration: _decoration('$label (type or select)', helper,
+                  labelColor:
+                      _originColor(context, provider, sectionKey, fieldKey)),
               onChanged: (val) =>
                   provider.updateDeviceValue(sectionKey, fieldKey, val),
             );
@@ -306,7 +338,8 @@ class SchemaFieldBuilder {
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
               ? 'Combined value "$currentComboKey" (${writes.join(' + ')}) is not in the schema options — pick a valid option'
-              : conflict),
+              : conflict,
+          labelColor: _originColor(context, provider, sectionKey, fieldKey)),
       items: options
           .map((o) => DropdownMenuItem(value: o.comboKey, child: Text(o.label)))
           .toList(),
@@ -499,6 +532,9 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
             borderSide: BorderSide(color: Colors.red.shade400, width: 1.5))
         : null;
 
+    final Color? labelColor = SchemaFieldBuilder._originColor(
+        context, widget.provider, widget.sectionKey, widget.fieldKey);
+
     final String displayValue = _display(widget.value);
     String? helper = widget.isUnknown
         ? 'Not in UI schema — add "${widget.fieldKey}" to ui_schema.json'
@@ -519,6 +555,11 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
           : TextInputType.multiline,
       decoration: InputDecoration(
         labelText: widget.label,
+        // Orange label = carried over from the loaded file; white = written by
+        // the conversion. Null (no conversion) leaves the theme's own colour.
+        labelStyle: labelColor == null ? null : TextStyle(color: labelColor),
+        floatingLabelStyle:
+            labelColor == null ? null : TextStyle(color: labelColor),
         helperText: helper,
         helperStyle:
             widget.isUnknown ? TextStyle(color: Colors.red.shade400) : null,

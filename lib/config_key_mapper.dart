@@ -114,6 +114,52 @@ class CompanionRule {
   }) : keyMatch = RegExp('^(?:$pattern)\$');
 }
 
+/// One "removals" entry: a property that should not survive a conversion,
+/// optionally only when another key says the feature isn't in the room.
+///
+/// With no [whenKey] the removal is unconditional (api_proxy_server, the
+/// generic ROOM name). With one, the rule only fires when that key's value is
+/// in [whenValueIn] — e.g. every power1_outlet_* goes away when
+/// SYSTEM_SETUP.dev_power_controllers says there is no power controller.
+class RemovalRule {
+  final String sectionPattern; // '*' wildcard; every section by default
+  final RegExp keyMatch;
+  final String? whenSection; // section of the gating key
+  final String? whenKey;     // property name of the gating key
+  final Set<String> whenValueIn; // lowercased values that trigger the removal
+  final String reason;
+
+  RegExp? _sectionRegex;
+
+  RemovalRule({
+    this.sectionPattern = '*',
+    required String pattern,
+    this.whenSection,
+    this.whenKey,
+    Set<String> whenValueIn = const {},
+    this.reason = '',
+  })  : keyMatch = RegExp('^(?:$pattern)\$'),
+        whenValueIn = whenValueIn.map((v) => v.toLowerCase()).toSet();
+
+  bool matchesSection(String sectionKey) {
+    if (!sectionPattern.contains('*')) return sectionPattern == sectionKey;
+    _sectionRegex ??=
+        RegExp('^${RegExp.escape(sectionPattern).replaceAll(r'\*', '.*')}\$');
+    return _sectionRegex!.hasMatch(sectionKey);
+  }
+
+  /// True when the gating key (if any) currently says to remove. A rule whose
+  /// gating SECTION or KEY is absent never fires — missing information is not
+  /// evidence that a feature is unused.
+  bool firesFor(Map<String, dynamic> config) {
+    if (whenKey == null) return true;
+    final section = config[whenSection ?? 'SYSTEM_SETUP'];
+    if (section is! Map) return false;
+    if (!section.containsKey(whenKey)) return false;
+    return whenValueIn.contains((section[whenKey] ?? '').toString().toLowerCase());
+  }
+}
+
 /// Replaces $1..$9 in [template] with the capture groups of [m].
 String _substituteGroups(String template, RegExpMatch m) {
   String out = template;
@@ -123,11 +169,39 @@ String _substituteGroups(String template, RegExpMatch m) {
   return out;
 }
 
+/// A property the conversion removed because it can't be valid where it was —
+/// an ip_address on a serial device, say. Kept separately from [KeyMapResult.
+/// changes] because the conversion preview shows these in their own right:
+/// the value is gone from the config, so nothing else can report what it was.
+class ConversionConflict {
+  final String section;
+  final String key;
+  final dynamic value;
+  final String reason;
+  const ConversionConflict({
+    required this.section,
+    required this.key,
+    required this.value,
+    required this.reason,
+  });
+}
+
 /// Result of running the mapper over a config.
 class KeyMapResult {
   final Map<String, dynamic> config;
   final List<String> changes;
-  KeyMapResult(this.config, this.changes);
+
+  /// Legacy section name -> the name it was renamed to ("CAMERA1DEVICE" ->
+  /// "CAMERADEVICE_1"). Lets the caller line the converted config back up
+  /// against the original file when working out where each value came from.
+  final Map<String, String> sectionRenames;
+
+  /// Properties dropped as invalid for their device's connection.
+  final List<ConversionConflict> conflicts;
+
+  KeyMapResult(this.config, this.changes,
+      {this.sectionRenames = const {}, this.conflicts = const []});
+
   bool get changed => changes.isNotEmpty;
 }
 
@@ -142,6 +216,16 @@ class ConfigKeyMap {
   /// matching a pattern, guarantee a partner key exists in the same section
   /// (e.g. every power1_outlet_N gets a power1_outlet_N_action of null).
   final List<CompanionRule> companions = [];
+
+  /// Properties dropped on conversion ("removals"), optionally gated on
+  /// another key saying the feature isn't in the room.
+  final List<RemovalRule> removals = [];
+
+  /// com_type (lowercased) -> properties that must NOT exist on a device
+  /// block using that connection ("connection_fields"). A serial device has
+  /// no IP, port, protocol or credentials, so those are removed; one that
+  /// carried a real value is reported as a CONFLICT before it goes.
+  final Map<String, List<String>> connectionFields = {};
 
   bool autoCaseNormalization = false;
 
@@ -176,7 +260,8 @@ class ConfigKeyMap {
 
   int get ruleCount =>
       sections.length + properties.length + valueMap.length + moves.length +
-      defaults.length + deviceCounts.length + companions.length;
+      defaults.length + deviceCounts.length + companions.length +
+      removals.length + connectionFields.length;
 
   /// The built-in map is intentionally EMPTY: legacy naming is site-specific,
   /// so all rules come from key_map.json. With no file present, loading a
@@ -276,6 +361,44 @@ class ConfigKeyMap {
         }
       }
     }
+    // Properties dropped on conversion, optionally gated on another key
+    if (doc['removals'] is List) {
+      for (final item in doc['removals'] as List) {
+        if (item is! Map) continue;
+        final pattern = item['key_match']?.toString();
+        if (pattern == null || pattern.isEmpty) continue;
+        // "SYSTEM_SETUP.dev_power_controllers" -> section + key
+        String? whenSection;
+        String? whenKey;
+        final when = item['when_key']?.toString();
+        if (when != null && when.isNotEmpty) {
+          final dot = when.indexOf('.');
+          whenSection = dot > 0 ? when.substring(0, dot) : 'SYSTEM_SETUP';
+          whenKey = dot > 0 ? when.substring(dot + 1) : when;
+        }
+        removals.add(RemovalRule(
+          sectionPattern: item['section']?.toString() ?? '*',
+          pattern: pattern,
+          whenSection: whenSection,
+          whenKey: whenKey,
+          whenValueIn: (item['when_value_in'] is List)
+              ? (item['when_value_in'] as List).map((e) => e.toString()).toSet()
+              : const {},
+          reason: item['reason']?.toString() ?? '',
+        ));
+      }
+    }
+
+    // com_type -> properties that connection can't have
+    if (doc['connection_fields'] is Map) {
+      (doc['connection_fields'] as Map).forEach((comType, denied) {
+        if (comType.toString().startsWith('__')) return;
+        if (denied is! List) return;
+        connectionFields[comType.toString().toLowerCase()] =
+            denied.map((e) => e.toString()).toList();
+      });
+    }
+
     // Missing-key defaults per section family
     if (doc['defaults'] is Map) {
       (doc['defaults'] as Map).forEach((pattern, block) {
@@ -348,6 +471,8 @@ class ConfigKeyMap {
   KeyMapResult apply(Map<String, dynamic> original,
       {List<String> canonicalKeys = const []}) {
     final List<String> changes = [];
+    final Map<String, String> sectionRenames = {};
+    final List<ConversionConflict> conflicts = [];
     // Deep copy so a failed load can never leave a half-mapped config behind
     final Map<String, dynamic> config =
         jsonDecode(jsonEncode(original)) as Map<String, dynamic>;
@@ -368,6 +493,7 @@ class ConfigKeyMap {
           } else {
             newName = candidate;
             legacyRenamedSections.add(newName);
+            sectionRenames[sectionName] = newName;
             changes.add("KEYMAP: renamed section '$sectionName' -> '$newName'");
           }
           break; // first matching rule wins
@@ -514,6 +640,76 @@ class ConfigKeyMap {
             }
           }
         });
+      }
+    }
+
+    // --- 4b. Connection-specific properties --------------------------------
+    // A serial device has no IP, network port, protocol or credentials. Any
+    // property the connection can't have is removed; one that held a REAL
+    // value (not blank / null / "N/A - ...") is reported as a CONFLICT first,
+    // so the conversion says what it dropped instead of silently binning it.
+    // Runs after value_map, so com_type is already normalized to 'Serial'.
+    if (connectionFields.isNotEmpty) {
+      config.forEach((sectionName, block) {
+        if (block is! Map) return;
+        final Map<String, dynamic> section = block as Map<String, dynamic>;
+        final String comType =
+            section['com_type']?.toString().toLowerCase() ?? '';
+        final denied = connectionFields[comType];
+        if (denied == null) return;
+        for (final key in denied) {
+          if (!section.containsKey(key)) continue;
+          final removed = section.remove(key);
+          final String text = (removed ?? '').toString().trim();
+          final bool hadRealValue = text.isNotEmpty &&
+              text.toLowerCase() != 'null' &&
+              !text.toUpperCase().startsWith('N/A');
+          if (hadRealValue) {
+            final String reason =
+                'not valid on a ${section['com_type']} connection';
+            conflicts.add(ConversionConflict(
+                section: sectionName,
+                key: key,
+                value: removed,
+                reason: reason));
+            changes.add(
+                "CONFLICT: '$sectionName.$key' held '$text' but the device is "
+                "${section['com_type']} — removed, that property is only valid "
+                "for a network connection.");
+          } else {
+            changes.add(
+                "KEYMAP: removed '$sectionName.$key' (not valid for a "
+                "${section['com_type']} connection).");
+          }
+        }
+      });
+    }
+
+    // --- 4c. Rule-driven removals ("removals") ------------------------------
+    // Unconditional drops (api_proxy_server, the generic ROOM name) plus the
+    // gated ones — every power1_outlet_* goes when the room has no power
+    // controller. A rule whose gating key is missing never fires.
+    for (final rule in removals) {
+      if (!rule.firesFor(config)) continue;
+      final String note = rule.reason.isEmpty ? '' : ' (${rule.reason})';
+
+      config.forEach((sectionName, block) {
+        if (block is! Map) return;
+        if (!rule.matchesSection(sectionName)) return;
+        final Map<String, dynamic> section = block as Map<String, dynamic>;
+        for (final key in section.keys.toList()) {
+          if (!rule.keyMatch.hasMatch(key)) continue;
+          section.remove(key);
+          changes.add("KEYMAP: removed '$sectionName.$key'$note.");
+        }
+      });
+
+      // Stray scalars at the ROOT of the file live in no section at all
+      for (final key in config.keys.toList()) {
+        if (config[key] is Map) continue;
+        if (!rule.keyMatch.hasMatch(key)) continue;
+        config.remove(key);
+        changes.add("KEYMAP: removed top-level '$key'$note.");
       }
     }
 
@@ -664,10 +860,18 @@ class ConfigKeyMap {
       final numMatch = RegExp(r'(\d+)$').firstMatch(sectionName);
       final String n = numMatch?.group(1) ?? '1';
 
+      // A family default must never put back a property step 4b just removed
+      // as invalid for this device's connection — the serial camera would get
+      // its 'protocol' handed straight back.
+      final List<String> denied =
+          connectionFields[section['com_type']?.toString().toLowerCase() ?? ''] ??
+              const [];
+
       defaults.forEach((pattern, defaultBlock) {
         if (!_wildcardMatch(pattern, sectionName)) return;
         defaultBlock.forEach((key, value) {
           if (key.startsWith('__')) return; // comment keys
+          if (denied.contains(key)) return; // not valid on this connection
           if (section.containsKey(key)) return; // never overwrite real data
           dynamic resolved = value;
           if (resolved is String) resolved = resolved.replaceAll('{n}', n);
@@ -678,6 +882,7 @@ class ConfigKeyMap {
       });
     });
 
-    return KeyMapResult(config, changes);
+    return KeyMapResult(config, changes,
+        sectionRenames: sectionRenames, conflicts: conflicts);
   }
 }

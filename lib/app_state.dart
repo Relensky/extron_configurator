@@ -348,6 +348,71 @@ class AppStateProvider extends ChangeNotifier {
   /// stays silent.
   bool lastLoadHadChanges = false;
 
+  // ---------------------------------------------------------------------
+  //  CONVERSION PROVENANCE
+  //  Filled at the end of every load: where each value in the working config
+  //  came from, and the reversible list of what the conversion did. The
+  //  preview panel and the field editors both read these; both are cleared
+  //  when a config is created from the template rather than converted.
+  // ---------------------------------------------------------------------
+
+  /// 'SECTION.key' -> where that value came from. A key absent from the map
+  /// has no conversion history (a config built from the template, or a value
+  /// the user has since typed) and is drawn in the normal text colour.
+  final Map<String, ValueOrigin> valueOrigins = {};
+
+  /// Every reversible change the last conversion made, in section/key order.
+  final List<ConversionChange> conversionChanges = [];
+
+  /// True when the last load actually converted something, i.e. the preview
+  /// has something to show.
+  bool get hasConversionPreview => conversionChanges.isNotEmpty;
+
+  /// The deep copy of the file as it was parsed, before any conversion step.
+  /// Used to diff against and to restore individual rejected changes.
+  Map<String, dynamic> _originalLoadedConfig = {};
+
+  ValueOrigin? originFor(String sectionKey, String fieldKey) =>
+      valueOrigins['$sectionKey.$fieldKey'];
+
+  /// Drops the colouring and the preview — for a config that wasn't converted
+  /// (built from the template, or reloaded as-is).
+  void _clearConversionProvenance() {
+    valueOrigins.clear();
+    conversionChanges.clear();
+    _originalLoadedConfig = {};
+  }
+
+  /// Applies the accept/reject choices from the preview: every REJECTED
+  /// change is undone against the working config, and the provenance map is
+  /// rebuilt so the tabs recolour to match. Accepted changes stay as they are.
+  void applyConversionChoices() {
+    for (final change in conversionChanges) {
+      if (change.accepted) continue;
+      final section = roomConfig[change.section];
+      switch (change.kind) {
+        case ConversionKind.added:
+          if (section is Map) section.remove(change.key);
+          valueOrigins.remove(change.id);
+          break;
+        case ConversionKind.removed:
+        case ConversionKind.changed:
+          // Put the loaded file's value back; recreate the block if the whole
+          // section was dropped, so rejecting never silently does nothing.
+          if (section is Map) {
+            section[change.key] = change.before;
+          } else {
+            roomConfig[change.section] = <String, dynamic>{
+              change.key: change.before,
+            };
+          }
+          valueOrigins[change.id] = ValueOrigin.legacy;
+          break;
+      }
+    }
+    notifyListeners();
+  }
+
   /// The "deny" path of the acknowledgement dialog: throws away every load-
   /// time change (key mapping, migrations, injected defaults) and reloads the
   /// working file EXACTLY as it sits on disk. The disk file was never
@@ -359,6 +424,8 @@ class AppStateProvider extends ChangeNotifier {
       roomConfig = jsonDecode(contents);
       systemLogs.clear();
       lastLoadHadChanges = false;
+      // Nothing was converted, so there is no provenance to colour by
+      _clearConversionProvenance();
       _preloadModulesFromConfig();
       notifyListeners();
       AppLogger.logInfo(
@@ -709,6 +776,191 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Warms the parser caches for every module referenced by the active config.
   /// Called after any config is loaded so device tabs open instantly.
+  /// Works out where every value in the converted config came from, and what
+  /// the conversion changed, by diffing the working config against the file as
+  /// it was parsed.
+  ///
+  /// A key that existed in the corresponding ORIGINAL section is [ValueOrigin.
+  /// legacy] — the value's lineage is the old file even if the conversion
+  /// renamed the key or normalized the value ("Yes" -> "1"). A key the
+  /// conversion introduced is [ValueOrigin.written]. Sections are lined up
+  /// through [sectionRenames], and keys through the same lowercase/no-
+  /// underscore comparison auto_case_normalization uses, so COMTYPE and
+  /// com_type are recognized as the same property.
+  void _computeConversionProvenance(
+    Map<String, String> sectionRenames,
+    List<ConversionConflict> conflicts,
+  ) {
+    valueOrigins.clear();
+    conversionChanges.clear();
+
+    // Converted section name -> its name in the loaded file
+    final Map<String, String> originalSectionOf = {
+      for (final entry in sectionRenames.entries) entry.value: entry.key,
+    };
+
+    String norm(String s) => s.toLowerCase().replaceAll('_', '');
+
+    /// The original block a converted section came from, keyed by normalized
+    /// property name, plus the original spelling of each key.
+    (Map<String, dynamic>, Map<String, String>) originalBlock(String section) {
+      final name = originalSectionOf[section] ?? section;
+      final block = _originalLoadedConfig[name];
+      if (block is! Map) return (const {}, const {});
+      final byNorm = <String, dynamic>{};
+      final spelling = <String, String>{};
+      block.forEach((k, v) {
+        byNorm[norm(k.toString())] = v;
+        spelling[norm(k.toString())] = k.toString();
+      });
+      return (byNorm, spelling);
+    }
+
+    // --- Values that survived into the working config ----------------------
+    roomConfig.forEach((sectionKey, block) {
+      if (block is! Map) return;
+      final (originalByNorm, _) = originalBlock(sectionKey);
+      block.forEach((rawKey, value) {
+        final key = rawKey.toString();
+        final id = '$sectionKey.$key';
+        final n = norm(key);
+        if (originalByNorm.containsKey(n)) {
+          valueOrigins[id] = ValueOrigin.legacy;
+          // A value the conversion rewrote is offered as a rejectable change
+          final before = originalByNorm[n];
+          if (jsonEncode(before) != jsonEncode(value)) {
+            conversionChanges.add(ConversionChange(
+              section: sectionKey,
+              key: key,
+              kind: ConversionKind.changed,
+              before: before,
+              after: value,
+            ));
+          }
+        } else {
+          valueOrigins[id] = ValueOrigin.written;
+          conversionChanges.add(ConversionChange(
+            section: sectionKey,
+            key: key,
+            kind: ConversionKind.added,
+            after: value,
+          ));
+        }
+      });
+    });
+
+    // --- Values the conversion dropped -------------------------------------
+    // Indexed by conflict id so a removed property that was ALSO a conflict
+    // (an IP on a serial device) carries its reason into the preview.
+    final Map<String, ConversionConflict> conflictById = {
+      for (final c in conflicts) '${c.section}.${c.key}': c,
+    };
+    for (final c in conflicts) {
+      conversionChanges.add(ConversionChange(
+        section: c.section,
+        key: c.key,
+        kind: ConversionKind.removed,
+        before: c.value,
+        conflictReason: c.reason,
+      ));
+    }
+
+    _originalLoadedConfig.forEach((originalSection, block) {
+      if (block is! Map) return;
+      // Where did this section end up? (unchanged name, or its rename)
+      final String section = sectionRenames[originalSection] ?? originalSection;
+      final current = roomConfig[section];
+      final Set<String> survivingNorms = current is Map
+          ? current.keys.map((k) => norm(k.toString())).toSet()
+          : <String>{};
+      block.forEach((rawKey, value) {
+        final key = rawKey.toString();
+        if (survivingNorms.contains(norm(key))) return;
+        // Conflicts were already added above, with their reason attached
+        if (conflictById.containsKey('$section.$key')) return;
+        conversionChanges.add(ConversionChange(
+          section: section,
+          key: key,
+          kind: ConversionKind.removed,
+          before: value,
+        ));
+      });
+    });
+
+    conversionChanges.sort((a, b) {
+      final s = a.section.compareTo(b.section);
+      return s != 0 ? s : a.key.compareTo(b.key);
+    });
+  }
+
+  /// Normalizes a config `module` value into the dotted form the processor
+  /// imports — `modules.device.<file stem>`. Accepts a bare stem, a file path,
+  /// a name with the .py still on it, or a half-qualified 'device.foo', and
+  /// leaves an already-correct value untouched.
+  static String normalizeModuleName(String raw) {
+    var name = raw.trim();
+    if (name.isEmpty) return name;
+    name = name
+        .replaceAll(RegExp(r'\.py$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'[\\/]'), '.');
+    if (name.startsWith('modules.device.')) return name;
+    // Strip a leading 'modules.' and/or 'device.'/'devices.' so a partially
+    // qualified value doesn't come out doubled.
+    name = name
+        .replaceFirst(RegExp(r'^modules\.'), '')
+        .replaceFirst(RegExp(r'^devices?\.'), '');
+    return name.isEmpty ? '' : 'modules.device.$name';
+  }
+
+  /// Fills a device's `module` from its `model` using the parsed module
+  /// registry when the converted config didn't carry one, and rewrites every
+  /// module value into the `modules.device.` form. A model no module claims is
+  /// flagged rather than guessed at. Each change lands in systemLogs.
+  Future<void> _resolveDeviceModules() async {
+    // The registry is warmed in the background at startup — make sure it has
+    // actually landed before concluding that a model is unknown.
+    if (modelRegistry.isEmpty) await preloadAllModules();
+
+    // Model names in the wild differ in case/spacing from the DEVICE_INFO
+    // spelling ("TR311hw" vs "TR311HW"), so match forgivingly.
+    final Map<String, ModelEntry> byLowerModel = {
+      for (final e in modelRegistry.values) e.model.toLowerCase().trim(): e,
+    };
+
+    roomConfig.forEach((sectionKey, block) {
+      if (block is! Map) return;
+      if (uiSchema.deviceTypeForSection(sectionKey) == null) return;
+      final Map<String, dynamic> section = block as Map<String, dynamic>;
+
+      final String module = section['module']?.toString().trim() ?? '';
+
+      if (module.isEmpty) {
+        final String model = section['model']?.toString().trim() ?? '';
+        if (model.isEmpty) return; // nothing to look the module up by
+        final ModelEntry? match =
+            modelRegistry[model] ?? byLowerModel[model.toLowerCase()];
+        if (match == null) {
+          systemLogs.add(
+              "FLAGGED: '$sectionKey.module' is empty and no python module "
+              "claims model '$model' — set it by hand.");
+          return;
+        }
+        final String resolved = normalizeModuleName(match.module);
+        section['module'] = resolved;
+        systemLogs.add(
+            "MODULE: '$sectionKey.module' set to '$resolved' from model '$model'.");
+        return;
+      }
+
+      final String normalized = normalizeModuleName(module);
+      if (normalized != module) {
+        section['module'] = normalized;
+        systemLogs.add(
+            "MODULE: '$sectionKey.module' rewritten '$module' -> '$normalized'.");
+      }
+    });
+  }
+
   void _preloadModulesFromConfig() {
     roomConfig.forEach((key, value) {
       if (value is Map && value['module'] is String && (value['module'] as String).isNotEmpty) {
@@ -1079,6 +1331,14 @@ class AppStateProvider extends ChangeNotifier {
 
     roomConfig = parsedConfig;
 
+    // Snapshot the file EXACTLY as parsed, before any conversion step. Every
+    // later stage mutates roomConfig in place, so this deep copy is the only
+    // record of what the room looked like on disk — the provenance colouring
+    // and the preview's per-change reject both diff against it.
+    _originalLoadedConfig = jsonDecode(jsonEncode(parsedConfig)) as Map<String, dynamic>;
+    Map<String, String> sectionRenames = const {};
+    List<ConversionConflict> conflicts = const [];
+
     // --- LEGACY KEY MAPPING (key_map.json) ---
     // Translate old section/property names (e.g. CAMERA1DEVICE.IPADDRESS ->
     // CAMERADEVICE_1.ip_address) BEFORE the template migration runs, so the
@@ -1094,6 +1354,10 @@ class AppStateProvider extends ChangeNotifier {
         ...uiSchema.exactKeys,
       }.toList();
       final result = keyMap.apply(roomConfig, canonicalKeys: canonicalKeys);
+      // Kept even when nothing else changed: the renames are how the
+      // provenance diff lines converted sections up with the original file.
+      sectionRenames = result.sectionRenames;
+      conflicts = result.conflicts;
       if (result.changed) {
         roomConfig = result.config;
         systemLogs.add("KEY MAPPING: Translated ${result.changes.length} legacy item(s) using ${keyMap.source}");
@@ -1174,6 +1438,12 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
 
+    // --- MODULE RESOLUTION ---
+    // A converted room often arrives with the model but no module. Look the
+    // module up by model, and put every module value into the
+    // modules.device.<name> form the processor imports.
+    await _resolveDeviceModules();
+
     // Auto-generate the Title Case full room name when gve_bldg (code like
     // 'BSS' OR a legacy full name) resolves against buildings.json — so a
     // converted legacy file lands with 'Behavioral And Social Science 103'
@@ -1189,6 +1459,13 @@ class AppStateProvider extends ChangeNotifier {
             "AUTO-NAME: gui_full_room_name set to '$nameAfter' (gve_bldg matched buildings.json).");
       }
     }
+
+    // --- CONVERSION PROVENANCE ---
+    // Every value-changing step has run by now, so diffing against the parsed
+    // original gives the full picture: which values came from the old file
+    // (orange), which the conversion wrote (white), and the reversible list
+    // the preview offers per change.
+    _computeConversionProvenance(sectionRenames, conflicts);
 
     // Warn (never auto-change) when more device blocks exist than the dev_
     // counts allow — extra blocks are hidden in tabs and pruned on export,
@@ -1222,6 +1499,8 @@ class AppStateProvider extends ChangeNotifier {
         l.startsWith('COUNT WARNING') ||
         l.startsWith('BUILDING CODE') ||
         l.startsWith('DEFAULTS') ||
+        l.startsWith('CONFLICT') ||
+        l.startsWith('MODULE') ||
         l.startsWith('AUTO-NAME'));
     // The acknowledgement dialog keys off this: a clean re-load of an
     // already-migrated file (backup + OK lines only) shows no dialog.
@@ -1421,6 +1700,10 @@ class AppStateProvider extends ChangeNotifier {
       // Fresh session: no working file yet, so the raw editor's Apply won't
       // overwrite the previously opened file (or the template) by mistake.
       currentConfigPath = '';
+
+      // Built from the template, not converted — every value is "written",
+      // so there is nothing to colour orange.
+      _clearConversionProvenance();
 
       // Default all hardware counts to 0 (families from the UI schema's
       // device_types, so new dev_ keys added there are covered too)
@@ -2735,6 +3018,76 @@ class AppStateProvider extends ChangeNotifier {
       }
     });
     return data;
+  }
+}
+
+/// Where a value in the working config came from. Drives the orange/white
+/// colouring in the conversion preview and on the Devices / System tabs.
+enum ValueOrigin {
+  /// Carried over from the file that was loaded — shown in ORANGE, because
+  /// nobody has confirmed it against the current template yet.
+  legacy,
+
+  /// Written by the conversion from the template, the schema defaults or a
+  /// lookup (module by model, generated room name) — shown in WHITE.
+  written,
+}
+
+/// What a conversion did to one property, so the preview can show it and the
+/// user can reject it individually.
+enum ConversionKind { added, removed, changed }
+
+/// A single reversible change the conversion made, as shown in the preview.
+///
+/// [before] is the value in the loaded file (null when the key is new),
+/// [after] the value now (null when the key was removed). Rejecting a change
+/// puts [before] back; accepting leaves [after] in place.
+class ConversionChange {
+  final String section;
+  final String key;
+  final ConversionKind kind;
+  final dynamic before;
+  final dynamic after;
+
+  /// Set when the property was dropped as invalid where it sat (an
+  /// ip_address on a serial device) rather than merely superseded.
+  final String? conflictReason;
+
+  /// False once the user rejects it in the preview.
+  bool accepted;
+
+  ConversionChange({
+    required this.section,
+    required this.key,
+    required this.kind,
+    this.before,
+    this.after,
+    this.conflictReason,
+    this.accepted = true,
+  });
+
+  String get id => '$section.$key';
+  bool get isConflict => conflictReason != null;
+
+  /// One-line summary for the preview list.
+  String get description {
+    String show(dynamic v) {
+      if (v == null) return 'null';
+      final s = v.toString();
+      if (s.isEmpty) return '""';
+      return s.length > 60 ? '${s.substring(0, 57)}...' : s;
+    }
+
+    switch (kind) {
+      case ConversionKind.added:
+        return 'Added — written as ${show(after)}';
+      case ConversionKind.removed:
+        return conflictReason != null
+            ? 'Removed (${conflictReason!}) — was ${show(before)}'
+            : 'Removed — was ${show(before)}';
+      case ConversionKind.changed:
+        return '${show(before)} → ${show(after)}';
+    }
   }
 }
 

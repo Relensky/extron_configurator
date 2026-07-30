@@ -83,6 +83,11 @@ class XlsxSheet {
   /// other sections also use. The row's other cells still size normally.
   final Set<int> overflowRows;
 
+  /// Cell ranges to merge, in A1 notation ("A1:E1"). The merged block takes
+  /// the style and value of its top-left cell; the cells it swallows must be
+  /// blank or Excel reports the file as corrupt.
+  final List<String> merges;
+
   /// Optional embedded PNG (e.g. the schematic diagram).
   final XlsxImage? image;
 
@@ -92,6 +97,7 @@ class XlsxSheet {
     this.rowStyles = const {0: XlsxRowStyle.header},
     this.columnWidths = const {},
     this.overflowRows = const {},
+    this.merges = const [],
     this.image,
   });
 }
@@ -213,10 +219,48 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     return s;
   }
 
+  /// Parses "A1:E1" into 0-based (firstCol, firstRow, lastCol, lastRow).
+  /// Null for anything malformed, which the caller drops rather than writing
+  /// a merge Excel would reject.
+  (int, int, int, int)? parseRange(String range) {
+    final m = RegExp(r'^([A-Z]+)(\d+):([A-Z]+)(\d+)$')
+        .firstMatch(range.toUpperCase());
+    if (m == null) return null;
+    int colIndex(String letters) {
+      var n = 0;
+      for (final unit in letters.codeUnits) {
+        n = n * 26 + (unit - 64); // 'A' is 65
+      }
+      return n - 1;
+    }
+    return (
+      colIndex(m.group(1)!),
+      int.parse(m.group(2)!) - 1,
+      colIndex(m.group(3)!),
+      int.parse(m.group(4)!) - 1,
+    );
+  }
+
   int drawingIndex = 0;
   for (int i = 0; i < sheets.length; i++) {
     final sheet = sheets[i];
     final body = StringBuffer();
+
+    // Cells a merge swallows: written with their row style but NO value, so
+    // the styled band runs the full width of the merge and Excel doesn't
+    // complain about content hidden under a merged block.
+    final List<String> merges =
+        sheet.merges.where((m) => parseRange(m) != null).toList();
+    final Set<String> swallowed = {};
+    for (final range in merges) {
+      final (firstCol, firstRow, lastCol, lastRow) = parseRange(range)!;
+      for (int row = firstRow; row <= lastRow; row++) {
+        for (int col = firstCol; col <= lastCol; col++) {
+          if (row == firstRow && col == firstCol) continue; // anchor keeps it
+          swallowed.add('${colLetter(col)}${row + 1}');
+        }
+      }
+    }
 
     // Column widths: explicit overrides win; otherwise size to the longest
     // value in the column (with padding), clamped to a sane range. Section
@@ -255,8 +299,12 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       final cells = sheet.rows[r];
       for (int c = 0; c < cells.length; c++) {
         final value = cells[c];
-        if (value == null) continue;
         final ref = '${colLetter(c)}${r + 1}';
+        if (swallowed.contains(ref)) {
+          body.write('<c r="$ref"$styleAttr/>');
+          continue;
+        }
+        if (value == null) continue;
         if (value is num) {
           body.write('<c r="$ref"$styleAttr><v>$value</v></c>');
         } else {
@@ -267,6 +315,15 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       body.write('</row>');
     }
     body.write('</sheetData>');
+
+    // mergeCells belongs after sheetData and before drawing in CT_Worksheet
+    if (merges.isNotEmpty) {
+      body.write('<mergeCells count="${merges.length}">');
+      for (final range in merges) {
+        body.write('<mergeCell ref="${range.toUpperCase()}"/>');
+      }
+      body.write('</mergeCells>');
+    }
 
     String drawingTag = '';
     if (sheet.image != null) {

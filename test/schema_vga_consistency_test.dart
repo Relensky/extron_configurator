@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/ui_schema.dart';
 
-/// Covers the two schema features behind the VGA-over-USB reporting:
-///   * "labelWhen" — input_usb reads "VGA over USB" only in a VGA room
+/// Covers the two schema features behind the VGA/USB input reporting:
+///   * "labelWhen" — input_usb reads "VGA" only in a VGA room
 ///   * "consistency" — gui_tab_type's USB/VGA source and gui_usb_or_vga are
 ///     flagged when they disagree, and silent when they don't
 ///
@@ -28,14 +28,14 @@ void main() {
 
   schemas.forEach((name, build) {
     group('input_usb labelWhen ($name)', () {
-      test('reads "VGA over USB" when the room is set to VGA', () {
+      test('reads "VGA" when the room is set to VGA', () {
         expect(build().labelFor('input_usb', {'gui_usb_or_vga': 'VGA'}),
-            'VGA over USB');
+            'VGA');
       });
 
       test('is case-insensitive on the condition value', () {
         expect(build().labelFor('input_usb', {'gui_usb_or_vga': 'vga'}),
-            'VGA over USB');
+            'VGA');
       });
 
       test('falls back to no schema label in a USB room', () {

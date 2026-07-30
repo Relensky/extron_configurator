@@ -537,6 +537,35 @@ class UiSchema {
           {String? sectionKey}) =>
       specFor(configKey, sectionKey: sectionKey)?.labelIn(section);
 
+  /// The friendly label a dropdown gives [value] (e.g. gui_tab "3_Cams_Dev" ->
+  /// "Menu Tabs: 3 - Cameras & Devices"). Falls back to [value] itself when the
+  /// key isn't a dropdown or the value isn't one of its options, so a report
+  /// never blanks out a value it doesn't recognize.
+  String optionLabelFor(String configKey, String value, {String? sectionKey}) {
+    final spec = specFor(configKey, sectionKey: sectionKey);
+    for (final option in spec?.options ?? const <OptionSpec>[]) {
+      if (option.value == value) return option.label;
+    }
+    return value;
+  }
+
+  /// The friendly label of the "combo" field [configKey] given the current
+  /// values of [section] — the combo's written keys joined with "_" and looked
+  /// up in its options (gui_inputs "5" + gui_tab_type "DOC_USB_WL" ->
+  /// "5 Sources: PC, HDMI, Doc Cam, USB, & Wireless"). Null when the key isn't
+  /// a combo, or when the live combination isn't one of its options.
+  String? comboLabelFor(String configKey, Map<String, dynamic> section,
+      {String? sectionKey}) {
+    final spec = specFor(configKey, sectionKey: sectionKey);
+    if (spec == null || spec.type != 'combo') return null;
+    final writes = spec.writes.isNotEmpty ? spec.writes : [configKey];
+    final key = writes.map((k) => (section[k] ?? '').toString()).join('_');
+    for (final option in spec.options) {
+      if (option.comboKey == key) return option.label;
+    }
+    return null;
+  }
+
   /// The first "consistency" violation that names [fieldKey] in its flag list,
   /// or null when every cross-checked key in [section] agrees.
   String? consistencyMessageFor(
@@ -727,22 +756,32 @@ class UiSchema {
       OptionSpec(value: 'Extended'),
     ]));
     s._add(FieldSpec(key: 'gui_tab', type: 'dropdown', options: const [
-      OptionSpec(value: '2_Cam_Dev'),
-      OptionSpec(value: '2_Mic_Dev'),
-      OptionSpec(value: '3_Cam_Mic_Dev'),
-      OptionSpec(value: '3_Cams_Dev'),
-      OptionSpec(value: '4_Cams_Mic_Dev'),
-      OptionSpec(value: 'Conference'),
+      OptionSpec(value: '2_Cam_Dev', label: 'Menu Tabs: 2 - Camera & Devices'),
+      OptionSpec(value: '2_Mic_Dev', label: 'Menu Tabs: 2 - Mic & Devices'),
+      OptionSpec(
+          value: '3_Cam_Mic_Dev',
+          label: 'Menu Tabs: 3 - Camera, Mic, & Devices'),
+      OptionSpec(value: '3_Cams_Dev', label: 'Menu Tabs: 3 - Cameras & Devices'),
+      OptionSpec(
+          value: '4_Cams_Mic_Dev',
+          label: 'Menu Tabs: 4 - Cameras, Mic, & Devices'),
+      // Conference draws the same two tabs, but with no instructor camera it
+      // substitutes the Camera2Handler.
+      OptionSpec(
+          value: 'Conference',
+          label: 'Menu Tabs: 2 - Camera & Devices '
+              '(subs the Camera2Handler — no instructor camera)'),
     ]));
     s._add(FieldSpec(key: 'gui_capture_source_available', type: 'dropdown',
         options: const [OptionSpec(value: 'Yes'), OptionSpec(value: 'No')]));
     s._add(FieldSpec(key: 'gui_usb_or_vga', type: 'dropdown',
         options: const [OptionSpec(value: 'USB'), OptionSpec(value: 'VGA')]));
 
-    // The USB input carries VGA in the older rooms; the report and the field
-    // label follow gui_usb_or_vga rather than reading "USB" in both.
+    // One physical input, switched between USB and VGA by gui_usb_or_vga; the
+    // report and the field label follow the toggle instead of always saying
+    // "USB".
     s._add(FieldSpec(key: 'input_usb', labelWhen: const {
-      'gui_usb_or_vga=VGA': 'VGA over USB',
+      'gui_usb_or_vga=VGA': 'VGA',
     }));
 
     // gui_tab_type's USB/VGA source and gui_usb_or_vga describe the same

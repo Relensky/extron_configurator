@@ -10,7 +10,7 @@
     "               matching falls back to 'label'. Conditions are 'key=value'",
     "               (equals) or 'key~text' (contains), case-insensitive. Used by",
     "               both the editor and the device report - e.g. input_usb reads",
-    "               'VGA over USB' when gui_usb_or_vga is VGA.",
+    "               'VGA' when gui_usb_or_vga is VGA.",
     "  description: Text behind the (i) info button.",
     "  helperText:  Small grey hint line under the field.",
     "  type:        auto | text | int | double | bool | dropdown | combo | hidden | module_states.",
@@ -154,6 +154,7 @@
     ],
     "gve_bldg": "UNKNOWN",
     "gve_room": "000",
+    "processor1": "MainProcessor",
     "gui_full_room_name": "Legacy Room Update",
     "gui_mic_mix": "No",
     "gui_routing_available": "No",
@@ -173,17 +174,21 @@
     "__readme": [
       "Whole non-device config blocks injected on load when missing (section",
       "and/or individual properties), shown in the acknowledgement dialog.",
-      "METRICS_CONFIG is created disabled with a blank bearer on purpose: the",
-      "processor's Metrics client raises at startup when 'enabled' is true and",
-      "'bearer' is empty, so a migrated room stays safe until someone pastes",
-      "the token in. New configs built from the template get the template's",
-      "own values instead."
+      "METRICS_CONFIG ships enabled with the bearer token filled in, so every",
+      "converted room reports metrics without a follow-up edit. The token is",
+      "what makes that safe: the processor's Metrics client raises at startup",
+      "when 'enabled' is true and 'bearer' is empty, so never blank the bearer",
+      "while leaving 'enabled' true. New configs built from the template get",
+      "the template's own values instead."
     ],
     "METRICS_CONFIG": {
-      "enabled": false,
-      "keylogger": false,
+      "enabled": true,
+      "keylogger": true,
       "uri": "http://cts-metrics1:41796/metrics",
-      "bearer": ""
+      "bearer": "enn6vVXIM6TZVho3DOWvJk1uhLfDk9VH"
+    },
+    "ENVIRONMENT": {
+      "traceback_allowed": true
     }
   },
   "consistency": [
@@ -319,6 +324,13 @@
       "send_heartbeat": {
         "type": "bool",
         "description": "OPTIONAL. Send the periodic 'Heartbeat' metric used to track room uptime (processor default true)."
+      }
+    },
+    "ENVIRONMENT": {
+      "traceback_allowed": {
+        "type": "bool",
+        "label": "Allow Tracebacks (traceback_allowed)",
+        "description": "Let the processor report full Python tracebacks when something raises, instead of swallowing the detail. Added to every converted room."
       }
     }
   },
@@ -518,10 +530,12 @@
     "METRICS_CONFIG": {
       "label": "Metrics (Python Metric Tracking)",
       "__comment": "Not a property - this names the METRICS_CONFIG group heading on the System tab. Its properties live under 'section_fields'.",
-      "description": "Metric tracking for the python side: the processor batches events (system start/stop, device connects, UI presses) and POSTs them to the ingest service. Off by default on migrated rooms until the URI and bearer token are filled in."
+      "description": "Metric tracking for the python side: the processor batches events (system start/stop, device connects, UI presses) and POSTs them to the ingest service. Converted rooms get it enabled with the bearer token already filled in."
     },
-    "api_proxy_server": {
-      "description": "Set the API proxy (metrics) server address with this line."
+    "ENVIRONMENT": {
+      "label": "Environment (Processor Runtime)",
+      "__comment": "Not a property - this names the ENVIRONMENT group heading on the System tab. Its properties live under 'section_fields'.",
+      "description": "Runtime switches for the processor itself. Added to every converted room."
     },
     "dev_cameras": {
       "description": "Use the dev_devices to set the number of devices in the room."
@@ -620,7 +634,7 @@
     },
     "input_usb": {
       "labelWhen": {
-        "gui_usb_or_vga=VGA": "VGA over USB"
+        "gui_usb_or_vga=VGA": "VGA"
       },
       "description": "Inputs and Outputs are assigned in the config."
     },
@@ -672,12 +686,12 @@
     "gui_tab": {
       "type": "dropdown",
       "options": [
-        "2_Cam_Dev",
-        "2_Mic_Dev",
-        "3_Cam_Mic_Dev",
-        "3_Cams_Dev",
-        "4_Cams_Mic_Dev",
-        "Conference"
+        { "value": "2_Cam_Dev", "label": "Menu Tabs: 2 - Camera & Devices" },
+        { "value": "2_Mic_Dev", "label": "Menu Tabs: 2 - Mic & Devices" },
+        { "value": "3_Cam_Mic_Dev", "label": "Menu Tabs: 3 - Camera, Mic, & Devices" },
+        { "value": "3_Cams_Dev", "label": "Menu Tabs: 3 - Cameras & Devices" },
+        { "value": "4_Cams_Mic_Dev", "label": "Menu Tabs: 4 - Cameras, Mic, & Devices" },
+        { "value": "Conference", "label": "Menu Tabs: 2 - Camera & Devices (subs the Camera2Handler — no instructor camera)" }
       ],
       "description": "Options: 2_Cam_Dev, 2_Mic_Dev, 3_Cam_Mic_Dev, 3_Cams_Dev, 4_Cams_Mic_Dev, Conference"
     },

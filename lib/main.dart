@@ -6,6 +6,7 @@ import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
+import 'conversion_preview_view.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
@@ -425,6 +426,7 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
         if (line.startsWith('WARNING') ||
             line.startsWith('CRITICAL') ||
             line.startsWith('COUNT WARNING') ||
+            line.startsWith('CONFLICT') ||
             line.startsWith('FLAGGED') ||
             line.contains('SKIPPED')) {
           return warnText;
@@ -489,6 +491,22 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
           ),
         ),
         actions: [
+          // The log above says WHAT changed; the preview shows the converted
+          // config itself, coloured by where each value came from, and lets
+          // individual changes be rejected.
+          if (ctx.read<AppStateProvider>().hasConversionPreview)
+            TextButton.icon(
+              icon: const Icon(Icons.compare_arrows, size: 18),
+              label: const Text('Review Conversion'),
+              onPressed: () async {
+                final provider = ctx.read<AppStateProvider>();
+                final applied =
+                    await showConversionPreviewDialog(ctx, provider);
+                // Choices are applied inside the preview; closing the
+                // acknowledgement too avoids re-confirming the same load.
+                if (applied == true && ctx.mounted) Navigator.of(ctx).pop();
+              },
+            ),
           // DENY: throw away the key-mapping/migration changes and reload the
           // file exactly as it sits on disk (the disk copy was never touched).
           TextButton(
