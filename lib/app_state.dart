@@ -1496,7 +1496,7 @@ class AppStateProvider extends ChangeNotifier {
         l.startsWith('SYSTEM MIGRATION') ||
         l.startsWith('CRITICAL') ||
         l.startsWith('FLAGGED') ||
-        l.startsWith('COUNT WARNING') ||
+        l.startsWith('COUNT') ||
         l.startsWith('BUILDING CODE') ||
         l.startsWith('DEFAULTS') ||
         l.startsWith('CONFLICT') ||
@@ -1622,13 +1622,10 @@ class AppStateProvider extends ChangeNotifier {
     final systemSetup = roomConfig['SYSTEM_SETUP'] as Map<String, dynamic>;
 
     // Define the baseline schema needed for the current template to function.
-    // Values come from the UI schema: "system_defaults" for the SYSTEM_SETUP
-    // properties, plus a "0" for every device_types dev_ count key — so both
-    // lists are editable in ui_schema.json without a rebuild.
-    final Map<String, dynamic> baselineDefaults = {
-      ...uiSchema.systemDefaults,
-      for (final t in uiSchema.deviceTypes) t.countKey: "0",
-    };
+    // Values come from the UI schema's "system_defaults", editable in
+    // ui_schema.json without a rebuild. The dev_ count keys are handled
+    // separately below — they can't just default to "0".
+    final Map<String, dynamic> baselineDefaults = {...uiSchema.systemDefaults};
 
     int additions = 0;
 
@@ -1640,6 +1637,33 @@ class AppStateProvider extends ChangeNotifier {
         additions++;
       }
     });
+
+    // --- DEVICE COUNTS ---
+    // A legacy file can carry device blocks for a family it never declared a
+    // count for (AJH125B has a SWITCHERDEVICE but no dev_Switchers). Injecting
+    // "0" there silently drops real hardware: the tabs hide the block, the
+    // schematic skips it and export prunes it, so the switcher vanishes even
+    // though the conversion kept it. Derive the count from the blocks that are
+    // actually in the config, which lands on "0" only when there are none.
+    for (final t in uiSchema.deviceTypes) {
+      if (systemSetup.containsKey(t.countKey)) continue; // the file said so
+      final int blocks = roomConfig.keys
+          .where((k) =>
+              k.startsWith(t.prefix) &&
+              int.tryParse(k.substring(t.prefix.length)) != null &&
+              roomConfig[k] is Map)
+          .length;
+      systemSetup[t.countKey] = blocks.toString();
+      additions++;
+      if (blocks == 0) {
+        systemLogs.add("-> Added missing property: '${t.countKey}' (Default: '0')");
+      } else {
+        systemLogs.add(
+            "COUNT RECOVERED: '${t.countKey}' was missing from the file — set to "
+            "'$blocks' from the ${t.prefix}* block(s) already present, so the "
+            "hardware isn't dropped on export.");
+      }
+    }
 
     // Standalone feature blocks from ui_schema.json "section_defaults"
     // (e.g. METRICS_CONFIG): create the section when it is missing entirely,
