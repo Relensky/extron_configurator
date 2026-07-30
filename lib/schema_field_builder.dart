@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'search_match.dart';
 import 'ui_schema.dart';
 
 /// ============================================================================
@@ -289,8 +290,7 @@ class SchemaFieldBuilder {
             // the module picker).
             final text = textEditingValue.text;
             if (text.isEmpty || text == current) return states;
-            return states.where(
-                (s) => s.toLowerCase().contains(text.toLowerCase()));
+            return searchFilter(states, text);
           },
           onSelected: (String selection) {
             fieldFocus?.unfocus(); // Close the options overlay

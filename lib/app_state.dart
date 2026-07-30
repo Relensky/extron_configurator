@@ -1480,6 +1480,10 @@ class AppStateProvider extends ChangeNotifier {
     await validateKeepAliveCommands();
     await validateModuleStateFields();
 
+    // Undo any opt-in setting the migration steps above added but the loaded
+    // file never carried (ENVIRONMENT.traceback_allowed).
+    removeUninvitedOptIns(_originalLoadedConfig);
+
     // Auto-generate the Title Case full room name when gve_bldg (code like
     // 'BSS' OR a legacy full name) resolves against buildings.json — so a
     // converted legacy file lands with 'Behavioral And Social Science 103'
@@ -2565,23 +2569,64 @@ class AppStateProvider extends ChangeNotifier {
   Future<String?> openModuleDocumentation(String moduleName) async {
     final located = locateModuleManual(moduleName);
     if (located.error != null) return located.error;
-    final pdfPath = located.path!;
+    return openInDesktop(located.path!);
+  }
+
+  /// Hands [target] (a file or a folder) to the OS to open with whatever is
+  /// registered for it. Returns null on success, else a user-facing message.
+  Future<String?> openInDesktop(String target) async {
+    if (target.isEmpty) return 'Nothing to open.';
+    if (!File(target).existsSync() && !Directory(target).existsSync()) {
+      return 'No longer there: $target';
+    }
     try {
-      if (Platform.isWindows) {
-        await Process.start('explorer.exe', [pdfPath],
-            mode: ProcessStartMode.detached);
-      } else if (Platform.isMacOS) {
-        await Process.start('open', [pdfPath],
-            mode: ProcessStartMode.detached);
-      } else {
-        await Process.start('xdg-open', [pdfPath],
-            mode: ProcessStartMode.detached);
-      }
-      AppLogger.logInfo('Opened documentation $pdfPath');
+      await Process.start(
+          Platform.isWindows
+              ? 'explorer.exe'
+              : (Platform.isMacOS ? 'open' : 'xdg-open'),
+          [target],
+          mode: ProcessStartMode.detached);
+      AppLogger.logInfo('Opened $target');
       return null;
     } catch (e, stack) {
-      AppLogger.logError('Failed to open documentation $pdfPath', e, stack);
-      return 'Could not open $pdfPath';
+      AppLogger.logError('Failed to open $target', e, stack);
+      return 'Could not open $target';
+    }
+  }
+
+  /// Opens the folder holding [filePath] with the file itself highlighted where
+  /// the platform supports it (Explorer and Finder both do). Falls back to just
+  /// opening the folder. Returns null on success, else a user-facing message.
+  ///
+  /// Explorer exits non-zero even when it worked, so the exit code is ignored —
+  /// a launch failure surfaces as an exception instead.
+  Future<String?> revealInFileManager(String filePath) async {
+    if (filePath.isEmpty) return 'Nothing to show.';
+    final folder = path.dirname(filePath);
+    if (!File(filePath).existsSync()) {
+      // The file moved or was never written — the folder is still useful.
+      return Directory(folder).existsSync()
+          ? openInDesktop(folder)
+          : 'No longer there: $filePath';
+    }
+    try {
+      if (Platform.isWindows) {
+        // One argument, comma included: explorer parses "/select,<path>" as a
+        // unit and ignores a space-separated path.
+        await Process.start('explorer.exe', ['/select,$filePath'],
+            mode: ProcessStartMode.detached);
+      } else if (Platform.isMacOS) {
+        await Process.start('open', ['-R', filePath],
+            mode: ProcessStartMode.detached);
+      } else {
+        // No portable "select the file" on Linux desktops — open the folder.
+        return openInDesktop(folder);
+      }
+      AppLogger.logInfo('Revealed $filePath');
+      return null;
+    } catch (e, stack) {
+      AppLogger.logError('Failed to reveal $filePath', e, stack);
+      return 'Could not open $folder';
     }
   }
 
@@ -3024,6 +3069,57 @@ class AppStateProvider extends ChangeNotifier {
           "${current.isEmpty ? 'was empty' : "'$current' is not a command in '$moduleName'"} "
           "— set to '$chosen' from that module.");
     }
+  }
+
+  /// Config keys that are OPT-IN per room: the conversion must never turn them
+  /// on, and anything that put them there gets undone. Section name -> the
+  /// properties inside it.
+  ///
+  /// ENVIRONMENT.traceback_allowed is the case this exists for: it used to be
+  /// injected as `true` into every converted room, which quietly switched full
+  /// Python traceback reporting on for rooms nobody asked it for. The schema no
+  /// longer lists it as a section default, and this pass is the belt-and-braces
+  /// half — whatever adds it (a stale ui_schema.json in the field, a template,
+  /// a later schema edit), a room that didn't ask for it doesn't get it.
+  static const Map<String, List<String>> _optInProperties = {
+    'ENVIRONMENT': ['traceback_allowed'],
+  };
+
+  /// Strips opt-in properties the loaded FILE did not carry, using the
+  /// untouched parse in [_originalLoadedConfig] as the authority — so the test
+  /// is "was this in the file the tech opened", not "is it in the config now".
+  /// A room that really does set traceback_allowed keeps it (either value); the
+  /// device report then states which way it is set.
+  ///
+  /// An ENVIRONMENT block left empty by the strip is removed too, rather than
+  /// exporting `"ENVIRONMENT": {}` to the processor.
+  ///
+  /// [originalConfig] is the file as parsed; the load pipeline passes
+  /// [_originalLoadedConfig].
+  @visibleForTesting
+  void removeUninvitedOptIns(Map<String, dynamic> originalConfig) {
+    _optInProperties.forEach((sectionKey, properties) {
+      final section = roomConfig[sectionKey];
+      if (section is! Map) return;
+      final original = originalConfig[sectionKey];
+      final Map originalSection = original is Map ? original : const {};
+
+      for (final key in properties) {
+        if (!section.containsKey(key)) continue;
+        if (originalSection.containsKey(key)) continue; // the file asked for it
+        final removed = section.remove(key);
+        systemLogs.add(
+            "DEFAULTS: Removed '$sectionKey.$key' (was '$removed') — it is not "
+            "in the loaded file and is opt-in per room, so the conversion "
+            "leaves it off.");
+      }
+
+      if (section.isEmpty && !originalConfig.containsKey(sectionKey)) {
+        roomConfig.remove(sectionKey);
+        systemLogs.add(
+            "DEFAULTS: Removed the now-empty '$sectionKey' section.");
+      }
+    });
   }
 
   /// Load-time audit of every schema "module_states" field (today: a

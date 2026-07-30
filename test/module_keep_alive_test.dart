@@ -160,5 +160,66 @@ void main() {
       expect(schema.specFor('traceback_allowed', sectionKey: 'ENVIRONMENT'),
           isNotNull);
     });
+
+    test('traceback_allowed is stripped when the loaded file had no ENVIRONMENT',
+        () async {
+      final p = provider();
+      // The file as opened: a legacy room, no ENVIRONMENT anywhere.
+      final original = <String, dynamic>{
+        'SYSTEM_SETUP': {'gve_room': '125B'},
+      };
+      // ...and the config after migration, with the block injected by whatever
+      // put it there (a stale ui_schema.json in the field, a template, ...).
+      p.roomConfig = {
+        'SYSTEM_SETUP': {'gve_room': '125B'},
+        'ENVIRONMENT': {'traceback_allowed': true},
+      };
+
+      p.removeUninvitedOptIns(original);
+
+      // Gone — and the emptied section with it, so no "ENVIRONMENT": {} is
+      // exported to the processor.
+      expect(p.roomConfig.containsKey('ENVIRONMENT'), isFalse);
+      expect(p.systemLogs.any((l) => l.contains('traceback_allowed')), isTrue,
+          reason: 'the removal must be reported in the conversion log');
+    });
+
+    test('a room that really sets traceback_allowed keeps it', () async {
+      for (final declared in [true, false]) {
+        final p = provider();
+        final original = <String, dynamic>{
+          'ENVIRONMENT': {'traceback_allowed': declared},
+        };
+        p.roomConfig = {
+          'ENVIRONMENT': {'traceback_allowed': declared},
+        };
+
+        p.removeUninvitedOptIns(original);
+
+        expect(p.roomConfig['ENVIRONMENT']['traceback_allowed'], declared,
+            reason: 'the file asked for it, either way');
+        expect(p.systemLogs, isEmpty);
+      }
+    });
+
+    test('other ENVIRONMENT properties are left alone', () async {
+      final p = provider();
+      // Only the opt-in property is the app's business; a block the file
+      // carries for other reasons survives with its other keys.
+      final original = <String, dynamic>{
+        'ENVIRONMENT': {'some_other_setting': 'keep me'},
+      };
+      p.roomConfig = {
+        'ENVIRONMENT': {
+          'some_other_setting': 'keep me',
+          'traceback_allowed': true,
+        },
+      };
+
+      p.removeUninvitedOptIns(original);
+
+      expect(p.roomConfig['ENVIRONMENT'],
+          {'some_other_setting': 'keep me'}); // section survives, opt-in gone
+    });
   });
 }

@@ -7,6 +7,7 @@ import 'config_dictionary.dart';
 import 'config_maintenance.dart';
 import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
+import 'search_match.dart';
 
 class DynamicDevicesTabsView extends StatefulWidget {
   const DynamicDevicesTabsView({Key? key}) : super(key: key);
@@ -110,7 +111,7 @@ class DeviceConfigurationForm extends StatelessWidget {
             final models = showAllTypes ? allModels : typedModels;
             final visible = filter.isEmpty
                 ? models
-                : models.where((m) => m.toLowerCase().contains(filter.toLowerCase())).toList();
+                : searchFilter(models, filter).toList();
             return AlertDialog(
               title: const Text('Select Device Model'),
               content: SizedBox(
@@ -301,7 +302,7 @@ class DeviceConfigurationForm extends StatelessWidget {
           builder: (ctx, setDialogState) {
             final visible = filter.isEmpty
                 ? modules
-                : modules.where((m) => m.toLowerCase().contains(filter.toLowerCase())).toList();
+                : searchFilter(modules, filter).toList();
             return AlertDialog(
               title: const Text('Select Python Module'),
               content: SizedBox(
@@ -487,7 +488,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                   // Full list while the field is empty or unchanged (see the
                   // module autocomplete below for why).
                   if (text.isEmpty || text == deviceData['model']?.toString()) return models;
-                  return models.where((m) => m.toLowerCase().contains(text.toLowerCase()));
+                  return searchFilter(models, text);
                 },
                 onSelected: (String selection) {
                   modelFieldFocus?.unfocus(); // Close the options overlay
@@ -552,7 +553,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                   // saved value — otherwise a pre-filled field filters itself down
                   // to one entry and the dropdown appears to do nothing.
                   if (text.isEmpty || text == deviceData['module']?.toString()) return modules;
-                  return modules.where((m) => m.toLowerCase().contains(text.toLowerCase()));
+                  return searchFilter(modules, text);
                 },
                 onSelected: (String selection) {
                   moduleFieldFocus?.unfocus(); // Close the options overlay
@@ -675,7 +676,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                 initialValue: TextEditingValue(text: currentValue),
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   if (textEditingValue.text == '') return inputs;
-                  return inputs.where((String option) => option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                  return searchFilter(inputs, textEditingValue.text);
                 },
                 onSelected: (String selection) {
                   inputFieldFocus?.unfocus(); // Close the options overlay

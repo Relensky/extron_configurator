@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'schema_field_builder.dart';
+import 'search_match.dart';
 
 class SetupWizardView extends StatelessWidget {
   const SetupWizardView({Key? key}) : super(key: key);
@@ -65,8 +66,10 @@ class SetupWizardView extends StatelessWidget {
                     initialValue: TextEditingValue(text: initialText),
                     optionsBuilder: (TextEditingValue textEditingValue) {
                       if (textEditingValue.text.isEmpty) return formattedBuildings;
-                      return formattedBuildings.where((bldg) => 
-                          bldg.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                      // Separator-insensitive, so the code and the full name
+                      // both match however they're spaced or punctuated.
+                      return searchFilter(
+                          formattedBuildings, textEditingValue.text);
                     },
                     onSelected: (String selection) {
                       // Store the building CODE from buildings.json — e.g.

@@ -12,6 +12,7 @@ import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
 import 'screenshot_tools.dart';
+import 'search_match.dart';
 import 'system_settings_view.dart';
 
 void main() {
@@ -673,6 +674,12 @@ class ProcessorSearchField extends StatelessWidget {
   final Map<String, dynamic>? initialProcessor;
   final bool enabled;
 
+  /// Bump this to force the field back to [initialProcessor]'s text. Needed
+  /// when a selection is REJECTED downstream (the SFTP dialog's confirm step):
+  /// the Autocomplete has already written the picked room into the box, and
+  /// without a remount it would keep showing a room that isn't the target.
+  final int resetToken;
+
   const ProcessorSearchField({
     Key? key,
     required this.label,
@@ -680,6 +687,7 @@ class ProcessorSearchField extends StatelessWidget {
     this.helperText,
     this.initialProcessor,
     this.enabled = true,
+    this.resetToken = 0,
   }) : super(key: key);
 
   /// IP/hostname of one processors.json entry (same fallbacks as the
@@ -723,17 +731,16 @@ class ProcessorSearchField extends StatelessWidget {
     return Autocomplete<String>(
       // Remount when the selection changes elsewhere (e.g. Clear button)
       // so initialValue re-applies; stable while typing.
-      key: ValueKey('procsearch_${initialProcessor?['roomId']}_${byDisplay.length}'),
+      key: ValueKey('procsearch_${initialProcessor?['roomId']}_${byDisplay.length}_$resetToken'),
       initialValue: TextEditingValue(text: initialText),
       optionsBuilder: (TextEditingValue textEditingValue) {
-        final String text = textEditingValue.text.toLowerCase();
+        final String text = textEditingValue.text;
         // Show the FULL list while the field still holds the current
         // selection, otherwise it filters itself down to one entry.
-        if (text.isEmpty || textEditingValue.text == initialText) {
-          return byDisplay.keys;
-        }
-        return byDisplay.keys
-            .where((d) => d.toLowerCase().contains(text));
+        if (text.isEmpty || text == initialText) return byDisplay.keys;
+        // Separator-insensitive: "BSS103", "BSS 103" and "bss-103" all find
+        // the same room, and an IP can be typed with or without its dots.
+        return searchFilter(byDisplay.keys, text);
       },
       onSelected: (String selection) {
         fieldFocus?.unfocus(); // Close the options overlay
@@ -1350,6 +1357,10 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
   /// only). Stays blank unless the user picks one — e.g. Whereused.csv.
   String _extraFilePath = '';
 
+  /// Bumped to snap the room picker's text back to the confirmed target after
+  /// a change is cancelled.
+  int _pickerGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -1371,6 +1382,103 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
     _ipController.dispose();
     _passController.dispose();
     super.dispose();
+  }
+
+  /// Room picked in the searchable list. The connection details are NOT taken
+  /// from it until the change is confirmed.
+  ///
+  /// Picking the wrong entry here used to be silent and immediate: the IP was
+  /// replaced under a password that was already typed, so the next click on
+  /// Upload pushed the config at whatever room the stray tap landed on. So the
+  /// fields are cleared first, the new room is confirmed by name and IP, and
+  /// only then is the IP filled in — with the password left blank so an upload
+  /// can't ride on credentials entered for the previous target.
+  ///
+  /// Cancelling restores the previous room untouched.
+  Future<void> _confirmTargetChange(Map<String, dynamic> proc) async {
+    final String roomName = proc['roomName']?.toString() ?? '';
+    final String ip = ProcessorSearchField.ipOf(proc);
+
+    // Re-picking the room that's already active changes nothing to confirm.
+    final String currentId = _selectedProcessor?['roomId']?.toString() ?? '';
+    final String newId = proc['roomId']?.toString() ?? '';
+    final bool sameRoom = _selectedProcessor != null &&
+        (currentId.isNotEmpty ? currentId == newId : _targetRoomName == roomName);
+    if (sameRoom) return;
+
+    // Clear FIRST, so a cancelled or ignored dialog can never leave the old
+    // password sitting against a half-changed target.
+    final String previousIp = _ipController.text;
+    setState(() {
+      _ipController.clear();
+      _passController.clear();
+    });
+
+    final bool confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: Text(widget.isUpload
+                ? 'Upload to this room?'
+                : 'Download from this room?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_targetRoomName.isNotEmpty) ...[
+                  Text('Currently targeting $_targetRoomName.',
+                      style: Theme.of(ctx).textTheme.bodySmall),
+                  const SizedBox(height: 12),
+                ],
+                const Text('Change the target to:'),
+                const SizedBox(height: 8),
+                Text(roomName,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(ip.isEmpty ? 'No IP in processors.json' : ip),
+                const SizedBox(height: 12),
+                Text(
+                  'The admin password has been cleared — re-enter it for this '
+                  'room before transferring.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Use This Room'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!mounted) return;
+
+    if (!confirmed) {
+      // Put the previous target's IP back; the password stays cleared, which
+      // is the safe side of the trade.
+      setState(() {
+        _ipController.text = previousIp;
+        _pickerGeneration++; // snap the search box back off the rejected room
+        _statusText = 'Target unchanged'
+            '${_targetRoomName.isEmpty ? '' : ' — still $_targetRoomName'}.';
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedProcessor = proc;
+      _ipController.text = ip;
+      _targetRoomName = roomName;
+      _pickerGeneration++;
+      _statusText = 'Target set to $roomName — re-enter the admin password.';
+    });
+    context.read<AppStateProvider>().selectProcessor(proc);
   }
 
   Future<void> _startTransfer() async {
@@ -1452,14 +1560,8 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
               helperText: 'Search by building name, code, room number, or IP.',
               initialProcessor: _selectedProcessor,
               enabled: !_isBusy,
-              onSelected: (proc) {
-                setState(() {
-                  _selectedProcessor = proc;
-                  _ipController.text = ProcessorSearchField.ipOf(proc);
-                  _targetRoomName = proc['roomName']?.toString() ?? '';
-                });
-                context.read<AppStateProvider>().selectProcessor(proc);
-              },
+              resetToken: _pickerGeneration,
+              onSelected: _confirmTargetChange,
             ),
             const SizedBox(height: 16),
             TextFormField(

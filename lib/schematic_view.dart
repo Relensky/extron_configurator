@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
 import 'screenshot_tools.dart';
@@ -461,6 +462,44 @@ class _SchematicViewState extends State<SchematicView> {
     ));
   }
 
+  /// "Saved" snackbar for a written file, offering the two things you actually
+  /// want next: open it, or open the folder it landed in (with the file
+  /// selected). A SnackBar only takes one `action`, so both buttons live in the
+  /// content row.
+  ///
+  /// Held for 10s rather than the default 4 — a file dialog has just closed and
+  /// the buttons are no use if they're gone before the eye gets back.
+  void _savedSnack(AppStateProvider provider, String label, String filePath) {
+    if (!mounted) return;
+
+    Future<void> run(Future<String?> Function() action) async {
+      final error = await action();
+      if (error != null) _snack(error, error: true);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      duration: const Duration(seconds: 10),
+      content: Row(
+        children: [
+          // The name alone: a full path is long enough to push the buttons off
+          // a narrow window, and "Open Folder" is what a path gets read for.
+          Expanded(
+            child: Text('$label saved as ${path.basename(filePath)}',
+                overflow: TextOverflow.ellipsis),
+          ),
+          TextButton(
+            onPressed: () => run(() => provider.openInDesktop(filePath)),
+            child: const Text('OPEN FILE'),
+          ),
+          TextButton(
+            onPressed: () => run(() => provider.revealInFileManager(filePath)),
+            child: const Text('OPEN FOLDER'),
+          ),
+        ],
+      ),
+    ));
+  }
+
   /// Default export file name stem: `<BLDG>_<room>_schematic`.
   String _fileStem(AppStateProvider provider, String suffix) {
     final setup = provider.roomConfig['SYSTEM_SETUP'] ?? {};
@@ -492,7 +531,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
     try {
       await File(outputFile).writeAsBytes(bytes);
-      _snack('Schematic image saved to $outputFile');
+      _savedSnack(provider, 'Schematic image', outputFile);
     } catch (e) {
       _snack('Failed to save image: $e', error: true);
     }
@@ -596,7 +635,7 @@ class _SchematicViewState extends State<SchematicView> {
       } else {
         await File(outputFile).writeAsString(_textReport(model.roomTitle, sections));
       }
-      _snack('Device report saved to $outputFile');
+      _savedSnack(provider, 'Device report', outputFile);
     } catch (e) {
       _snack('Failed to save report: $e', error: true);
     }
