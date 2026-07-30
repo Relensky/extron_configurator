@@ -8,6 +8,10 @@ from json import loads
 # in the app's Model dropdown; "connection" and "defaults" keys are
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
+    # This model is video-only in our rooms: the room's audio groups live
+    # on the DSP/matrix, so the family default's group_* numbers are not
+    # used here and are stripped on load.
+    "omit": ["group_*"],
     "device_type": "switcher",
     "models": ["NAVigator"],
     "connection": {

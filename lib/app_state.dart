@@ -713,6 +713,11 @@ class AppStateProvider extends ChangeNotifier {
   // keep_alive_command, input, ...) applied when a model is picked.
   final Map<String, Map<String, dynamic>> moduleDefaults = {};
 
+  /// Per-module DEVICE_INFO "omit" lists: config-key patterns the model does
+  /// NOT use, so a family default that supplies them gets undone. Keyed by
+  /// module stem, same as [moduleDefaults].
+  final Map<String, List<String>> moduleOmits = {};
+
   /// Sorted model names for the device-tab Model dropdown (every model).
   List<String> get availableModels => modelRegistry.keys.toList()..sort();
 
@@ -744,6 +749,25 @@ class AppStateProvider extends ChangeNotifier {
   /// config spelling or the bare stem [moduleDefaults] is keyed by.
   Map<String, dynamic>? moduleDefaultsFor(String moduleValue) =>
       moduleDefaults[moduleStem(moduleValue)];
+
+  /// Config-key patterns a module's DEVICE_INFO "omit" list says the model does
+  /// not use, keyed the same way as [moduleDefaults]. Empty for most modules.
+  List<String> moduleOmitsFor(String moduleValue) =>
+      moduleOmits[moduleStem(moduleValue)] ?? const [];
+
+  /// True when [key] matches any pattern in [patterns]. Patterns are plain key
+  /// names or globs with '*' ("group_*"); matching is case-insensitive so a
+  /// legacy block's GROUP_PROG_GAIN is caught alongside group_prog_gain.
+  @visibleForTesting
+  static bool keyMatchesOmitPattern(String key, List<String> patterns) {
+    for (final pattern in patterns) {
+      final regex = RegExp(
+          '^${pattern.split('*').map(RegExp.escape).join('.*')}\$',
+          caseSensitive: false);
+      if (regex.hasMatch(key)) return true;
+    }
+    return false;
+  }
 
   /// Model names offered on [deviceKey]'s tab: only models whose module's
   /// DEVICE_INFO declares a matching "device_type". Untyped models (no
@@ -833,6 +857,7 @@ class AppStateProvider extends ChangeNotifier {
     // Rebuilt from scratch on every scan so renamed/removed files drop out.
     modelRegistry.clear();
     moduleDefaults.clear();
+    moduleOmits.clear();
     try {
       final dir = Directory(mPath);
       if (!await dir.exists()) {
@@ -1580,6 +1605,11 @@ class AppStateProvider extends ChangeNotifier {
     await validateKeepAliveCommands();
     await validateModuleStateFields();
 
+    // Undo family defaults the resolved model doesn't use (a scaler's group_*
+    // audio group numbers). Runs after the audits so the log reads in order:
+    // what was corrected, what was flagged, then what was dropped.
+    applyModuleOmissions();
+
     // Undo any opt-in setting the migration steps above added but the loaded
     // file never carried (ENVIRONMENT.traceback_allowed).
     removeUninvitedOptIns(_originalLoadedConfig);
@@ -2262,6 +2292,14 @@ class AppStateProvider extends ChangeNotifier {
     schemaDefaults.forEach((k, v) => defaults.putIfAbsent(k, () => v));
 
     defaults.removeWhere((k, v) => current.containsKey(k));
+
+    // Never offer back a key the device's module lists as unused for this
+    // model — otherwise Check Defaults hands the scaler its group_* audio
+    // settings again right after the conversion stripped them.
+    final omits = moduleOmitsFor(current['module']?.toString() ?? '');
+    if (omits.isNotEmpty) {
+      defaults.removeWhere((k, v) => keyMatchesOmitPattern(k, omits));
+    }
     return defaults;
   }
 
@@ -2408,6 +2446,19 @@ class AppStateProvider extends ChangeNotifier {
         // Keyed by the stem so [moduleDefaultsFor] finds it from either the
         // bare name used here or the dotted spelling stored in a config.
         if (merged.isNotEmpty) moduleDefaults[moduleStem(moduleName)] = merged;
+
+        // "omit": key patterns this model does NOT use, even when a family
+        // default supplies them (an IN1608 gets no group_* audio settings).
+        final omit = info['omit'] ?? info['omit_keys'];
+        if (omit is List) {
+          final patterns = omit
+              .map((e) => e.toString().trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
+          if (patterns.isNotEmpty) {
+            moduleOmits[moduleStem(moduleName)] = patterns;
+          }
+        }
       }
       // Fallback: the driver's own self.Models dict keys
       if (models.isEmpty) models = parseSelfModels(content);
@@ -3220,6 +3271,47 @@ class AppStateProvider extends ChangeNotifier {
             "DEFAULTS: Removed the now-empty '$sectionKey' section.");
       }
     });
+  }
+
+  /// Removes the config keys a device's module says its model doesn't use
+  /// (DEVICE_INFO "omit"), run after module resolution so the module is known.
+  ///
+  /// This exists because the defaults that shape a device block are FAMILY
+  /// -wide: key_map.json gives every SWITCHERDEVICE_* the seven `group_*` audio
+  /// group numbers, and ui_schema.json does the same. That is right for a
+  /// matrix acting as the room's audio hub and wrong for a plain scaler — an
+  /// IN1608 ends up carrying audio group numbers nothing reads.
+  ///
+  /// Capability sniffing can't decide this: the IN1608 driver defines eight
+  /// `UpdateGroup*` commands, so "does the module support groups" says yes for
+  /// exactly the models that don't use them. Whether a model uses them is a
+  /// deployment fact, so the module states it outright.
+  ///
+  /// Removals are logged (with the value) so they show in the acknowledgement
+  /// and the change log rather than happening silently.
+  @visibleForTesting
+  void applyModuleOmissions() {
+    for (final sectionKey in roomConfig.keys.toList()) {
+      final device = roomConfig[sectionKey];
+      if (device is! Map) continue;
+      if (uiSchema.deviceTypeForSection(sectionKey) == null) continue;
+
+      final moduleName = device['module']?.toString() ?? '';
+      if (moduleName.isEmpty) continue;
+      final patterns = moduleOmitsFor(moduleName);
+      if (patterns.isEmpty) continue;
+
+      for (final key in device.keys.map((k) => k.toString()).toList()) {
+        // 'module' itself is what told us to do this — never strip it, and
+        // leave the identity keys alone whatever a pattern says.
+        if (key == 'module' || key == 'model') continue;
+        if (!keyMatchesOmitPattern(key, patterns)) continue;
+        final removed = device.remove(key);
+        systemLogs.add(
+            "DEFAULTS: Removed '$sectionKey.$key' (was '$removed') — "
+            "'$moduleName' lists it as unused for this model.");
+      }
+    }
   }
 
   /// Load-time audit of every schema "module_states" field (today: a

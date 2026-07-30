@@ -15,6 +15,7 @@ implementations.
 DEVICE_INFO = {
     "device_type": "camera",              # which tab(s) list these models
     "models": ["TR311HW", "TR311"],       # default module for these model names
+    "omit": ["group_*"],                  # keys this model does NOT use
     "connection": { ... },                # config.json device properties, and
     "defaults":   { ... },                #   these — merged by the app
 }
@@ -42,6 +43,18 @@ DEVICE_INFO = {
 
 - **`models`** — marks this file as the default module for those model names
   (falls back to the driver's `self.Models` keys when omitted).
+
+- **`omit`** — config keys this model doesn't use, as exact names or `*` globs.
+  The defaults that build a device block are family-wide: `key_map.json` gives
+  every `SWITCHERDEVICE_*` the seven `group_*` audio group numbers, which is
+  right for a matrix acting as the room's audio hub and wrong for a plain
+  scaler. Listing `"omit": ["group_*"]` strips them after the defaults run, and
+  keeps **Check Defaults** from offering them back. Each removal is reported in
+  the conversion log.
+
+  This has to be declared rather than detected: the IN1608 driver defines eight
+  `UpdateGroup*` commands, so module capability says "yes" for exactly the
+  models that don't use them. Whether a model uses them is a deployment fact.
 
 - **`connection` + `defaults`** — `config.json` device properties, split only
   for readability (the app merges them). They may carry the full field set;
