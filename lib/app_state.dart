@@ -3232,10 +3232,15 @@ class AppStateProvider extends ChangeNotifier {
   ///
   /// ENVIRONMENT.traceback_allowed is the case this exists for: it used to be
   /// injected as `true` into every converted room, which quietly switched full
-  /// Python traceback reporting on for rooms nobody asked it for. The schema no
-  /// longer lists it as a section default, and this pass is the belt-and-braces
-  /// half — whatever adds it (a stale ui_schema.json in the field, a template,
-  /// a later schema edit), a room that didn't ask for it doesn't get it.
+  /// Python traceback reporting on for rooms nobody asked it for. The schema's
+  /// section defaults no longer list that property, and this pass is the
+  /// belt-and-braces half — whatever adds it (a stale ui_schema.json in the
+  /// field, a template, a later schema edit), a room that didn't ask for it
+  /// doesn't get it.
+  ///
+  /// The ENVIRONMENT block itself is NOT opt-in any more: the conversion adds
+  /// it for controlscript_profile, which every room has to declare. Only the
+  /// properties named here are stripped, so that injection survives.
   static const Map<String, List<String>> _optInProperties = {
     'ENVIRONMENT': ['traceback_allowed'],
   };
@@ -3246,8 +3251,10 @@ class AppStateProvider extends ChangeNotifier {
   /// A room that really does set traceback_allowed keeps it (either value); the
   /// device report then states which way it is set.
   ///
-  /// An ENVIRONMENT block left empty by the strip is removed too, rather than
-  /// exporting `"ENVIRONMENT": {}` to the processor.
+  /// A section left empty by the strip is removed too, rather than exporting
+  /// `"ENVIRONMENT": {}` to the processor. In practice the block now survives
+  /// on its controlscript_profile — this only fires if that default is taken
+  /// back out of the schema.
   ///
   /// [originalConfig] is the file as parsed; the load pipeline passes
   /// [_originalLoadedConfig].

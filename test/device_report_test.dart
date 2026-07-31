@@ -128,4 +128,24 @@ void main() {
       expect(rows, contains('Python Tracebacks | Not allowed'));
     });
   });
+
+  group('controlscript profile', () {
+    test('reported for a converted room', () async {
+      final rows = await rowsOf(
+          room()..['ENVIRONMENT'] = {'controlscript_profile': 'pro'}, 'System');
+      expect(rows, contains('ControlScript Profile | pro'));
+    });
+
+    test('an Xi room reports as xi', () async {
+      final rows = await rowsOf(
+          room()..['ENVIRONMENT'] = {'controlscript_profile': 'xi'}, 'System');
+      expect(rows, contains('ControlScript Profile | xi'));
+    });
+
+    test('no row on a file that predates the key', () async {
+      final rows = await rowsOf(
+          room()..['ENVIRONMENT'] = {'traceback_allowed': true}, 'System');
+      expect(rows.join('\n'), isNot(contains('ControlScript Profile')));
+    });
+  });
 }

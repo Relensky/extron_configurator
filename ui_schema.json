@@ -181,9 +181,13 @@
     "__readme": [
       "Whole non-device config blocks injected on load when missing (section",
       "and/or individual properties), shown in the acknowledgement dialog.",
-      "ENVIRONMENT is deliberately NOT listed: traceback_allowed is opt-in per",
-      "room, so a conversion never turns it on. Add the block by hand when a",
-      "room needs it - the device report then states that it is allowed.",
+      "ENVIRONMENT lists controlscript_profile ONLY: every room has to declare",
+      "which ControlScript build the processor runs, so a conversion writes",
+      "'pro' and the tech switches the Xi rooms over on the System tab.",
+      "traceback_allowed is deliberately still absent - it is opt-in per room,",
+      "so a conversion never turns it on (the strip in app_state.dart is the",
+      "other half of that). Add it by hand when a room needs it - the device",
+      "report then states that it is allowed.",
       "METRICS_CONFIG ships enabled with the bearer token filled in, so every",
       "converted room reports metrics without a follow-up edit. The token is",
       "what makes that safe: the processor's Metrics client raises at startup",
@@ -196,6 +200,9 @@
       "keylogger": true,
       "uri": "http://cts-metrics1:41796/metrics",
       "bearer": "enn6vVXIM6TZVho3DOWvJk1uhLfDk9VH"
+    },
+    "ENVIRONMENT": {
+      "controlscript_profile": "pro"
     }
   },
   "runtime_written": [
@@ -341,10 +348,19 @@
       }
     },
     "ENVIRONMENT": {
+      "controlscript_profile": {
+        "type": "dropdown",
+        "label": "ControlScript Profile (controlscript_profile)",
+        "options": [
+          "pro",
+          "xi"
+        ],
+        "description": "Which ControlScript build the processor runs: 'pro' for an IPCP Pro, 'xi' for an Xi. Every converted room gets 'pro' - switch it here when the room is on Xi hardware, since the processor reads this to pick the right runtime behaviour."
+      },
       "traceback_allowed": {
         "type": "bool",
         "label": "Allow Tracebacks (traceback_allowed)",
-        "description": "Let the processor report full Python tracebacks when something raises, instead of swallowing the detail. Opt-in per room: a conversion never adds the ENVIRONMENT block, and the device report calls the setting out whenever the room does carry it."
+        "description": "Let the processor report full Python tracebacks when something raises, instead of swallowing the detail. Opt-in per room: a conversion never adds it, and the device report calls the setting out whenever the room does carry it."
       }
     }
   },
@@ -557,7 +573,7 @@
     "ENVIRONMENT": {
       "label": "Environment (Processor Runtime)",
       "__comment": "Not a property - this names the ENVIRONMENT group heading on the System tab. Its properties live under 'section_fields'.",
-      "description": "Runtime switches for the processor itself. Added to every converted room."
+      "description": "Runtime switches for the processor itself. Every converted room gets this block with controlscript_profile set to 'pro'; traceback_allowed stays opt-in and is only here when the room's own file asked for it."
     },
     "dev_cameras": {
       "description": "Use the dev_devices to set the number of devices in the room."

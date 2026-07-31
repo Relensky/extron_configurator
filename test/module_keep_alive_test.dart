@@ -153,12 +153,48 @@ void main() {
   group('ENVIRONMENT is opt-in', () {
     test('ui_schema.json no longer injects traceback_allowed on load', () async {
       final schema = await UiSchema.load(explicitPath: 'ui_schema.json');
-      expect(schema.sectionDefaults.containsKey('ENVIRONMENT'), isFalse,
+      // The block IS injected now — every room has to declare which
+      // ControlScript build it runs — but only that one property comes with it.
+      final env = schema.sectionDefaults['ENVIRONMENT'] ?? const {};
+      expect(env.containsKey('traceback_allowed'), isFalse,
           reason: 'a conversion must not turn tracebacks on by itself');
       // The field definition stays, so a room that DOES carry the block gets a
       // proper editor for it.
       expect(schema.specFor('traceback_allowed', sectionKey: 'ENVIRONMENT'),
           isNotNull);
+    });
+
+    test('ui_schema.json gives every converted room a ControlScript profile',
+        () async {
+      final schema = await UiSchema.load(explicitPath: 'ui_schema.json');
+      expect(schema.sectionDefaults['ENVIRONMENT']?['controlscript_profile'],
+          'pro');
+      final spec =
+          schema.specFor('controlscript_profile', sectionKey: 'ENVIRONMENT');
+      expect(spec, isNotNull);
+      expect(spec!.options.map((o) => o.value), containsAll(['pro', 'xi']),
+          reason: 'the tech switches an Xi room over on the System tab');
+    });
+
+    test('the injected profile survives the opt-in strip', () async {
+      final p = provider();
+      // A legacy room: no ENVIRONMENT in the file, the block created by the
+      // section defaults, and traceback_allowed added by something stale.
+      final original = <String, dynamic>{
+        'SYSTEM_SETUP': {'gve_room': '125B'},
+      };
+      p.roomConfig = {
+        'SYSTEM_SETUP': {'gve_room': '125B'},
+        'ENVIRONMENT': {
+          'controlscript_profile': 'pro',
+          'traceback_allowed': true,
+        },
+      };
+
+      p.removeUninvitedOptIns(original);
+
+      // The section is no longer empty, so it stays — with the profile only.
+      expect(p.roomConfig['ENVIRONMENT'], {'controlscript_profile': 'pro'});
     });
 
     test('traceback_allowed is stripped when the loaded file had no ENVIRONMENT',

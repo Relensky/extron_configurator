@@ -1588,6 +1588,17 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
       ? (env['traceback_allowed'] == true ? 'Allowed' : 'Not allowed')
       : '';
 
+  // Which ControlScript build the processor runs ('pro'/'xi'). Every converted
+  // room carries it, but a report is also run on files that predate the key,
+  // so the row drops out rather than printing a blank when it isn't there.
+  final String controlScript = (env is Map)
+      ? provider.uiSchema.optionLabelFor(
+          'controlscript_profile',
+          env['controlscript_profile']?.toString() ?? '',
+          sectionKey: 'ENVIRONMENT',
+        )
+      : '';
+
   // Rows with no value (e.g. the GUI/touch-panel keys were deleted from
   // SYSTEM_SETUP) are left out instead of printing blanks.
   final systemRows = <List<dynamic>>[
@@ -1606,6 +1617,7 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
       ['Panel Layout', panelLayout],
     ],
     ['Sources', sources],
+    ['ControlScript Profile', controlScript],
     ['Python Tracebacks', tracebacks],
     ['Device Count', deviceCount.toString()],
     ['Generated', DateTime.now().toLocal().toString().split('.').first],
