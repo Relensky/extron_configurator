@@ -1508,6 +1508,16 @@ String _deviceNameFor(
   return name.isNotEmpty ? name : node.title;
 }
 
+/// How an outlet's reboot capability reads in the report. Blank when the room
+/// carries neither key, so a config without the settings shows an empty cell
+/// rather than asserting something about the hardware.
+String _rebootLabel(dynamic supportsReboot, dynamic rebootOnly) {
+  if (supportsReboot == null && rebootOnly == null) return '';
+  if (rebootOnly == true) return 'Reboot only';
+  if (supportsReboot == true) return 'Reboot supported';
+  return 'No reboot';
+}
+
 /// REPORT-ONLY names for the switcher I/O keys, spelled out for whoever reads
 /// the report rather than edits the config: the tech-facing "AUD Cam" / "Proj
 /// 1" shorthand stays on the device tabs (and in ui_schema.json), while the
@@ -1629,11 +1639,14 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
   // rather than by key text.
   int outletNumber(String k) =>
       int.tryParse(RegExp(r'(\d+)$').firstMatch(k)?.group(1) ?? '') ?? 0;
+  // An outlet is `power1_outlet_<N>` and nothing more. Matching on the prefix
+  // alone swept up its companions — `_action`, and now `_supports_reboot` /
+  // `_reboot_only` — each of which would have reported as its own nameless
+  // "Outlet 0" row, since none of them ends in the outlet's number.
+  final outletPattern = RegExp(r'^power1_outlet_\d+$');
   final outletKeys = setup.keys
       .where((k) =>
-          k.startsWith('power1_outlet_') &&
-          !k.endsWith('_action') &&
-          _friendlyValue(setup[k]).isNotEmpty)
+          outletPattern.hasMatch(k) && _friendlyValue(setup[k]).isNotEmpty)
       .toList()
     ..sort((a, b) => outletNumber(a).compareTo(outletNumber(b)));
   final powerRows = <List<dynamic>>[
@@ -1642,6 +1655,9 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
         'Outlet ${outletNumber(k)}',
         _friendlyValue(setup[k]),
         _friendlyValue(setup['${k}_action']),
+        // Blank rather than "false" when the key is absent, so a room without
+        // the reboot settings reports an empty cell instead of a claim.
+        _rebootLabel(setup['${k}_supports_reboot'], setup['${k}_reboot_only']),
       ]
   ];
 
@@ -1734,7 +1750,7 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
     // shouldn't grow empty tables.
     (
       title: 'Power Outlets',
-      header: ['Outlet', 'Name', 'Action'],
+      header: ['Outlet', 'Name', 'Action', 'Reboot'],
       rows: powerRows
     ),
     (

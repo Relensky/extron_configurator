@@ -932,6 +932,18 @@
       "description": "If you need to have the outlet set to reboot, use this action command to have the outlet only allow that action.",
       "__comment": "More specific pattern listed after the generic one, so it wins for the _action keys."
     },
+    "power1_outlet_*_supports_reboot": {
+      "type": "bool",
+      "description": "Whether this outlet's hardware can power-cycle on command. Optional — a room without the key behaves as before. Set false for an outlet that must only be switched on or off (a screen relay, a device that dislikes a hard cycle).",
+      "helperText": "Optional. Leave unset for rooms that don't use reboot control.",
+      "__comment": "Listed after the generic power1_outlet_* entry: patterns are matched in reverse file order, so the more specific one wins."
+    },
+    "power1_outlet_*_reboot_only": {
+      "type": "bool",
+      "description": "Whether reboot is the ONLY action this outlet offers — the GUI hides plain on/off for it. Optional; needs power1_outlet_N_supports_reboot to be true to mean anything.",
+      "helperText": "Optional. Reboot is the only action offered for this outlet.",
+      "__comment": "Listed after the generic power1_outlet_* entry: patterns are matched in reverse file order, so the more specific one wins."
+    },
     "relay_port_*": {
       "description": "Relay port on the processor used for screen control (e.g. RLY1). _up raises the screen, _down lowers it, _stop halts travel."
     },
