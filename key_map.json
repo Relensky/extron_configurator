@@ -109,6 +109,17 @@
       "key_match": "power1_outlet_(\\d+)",
       "ensure_key": "power1_outlet_$1_action",
       "value": null
+    },
+    {
+      "__comment": "Each outlet that survives also gets its reboot capability flags, so a room with a power controller carries them for every outlet it actually has. Defaults match the template: reboot supported, not reboot-only.",
+      "key_match": "power1_outlet_(\\d+)$",
+      "ensure_key": "power1_outlet_$1_supports_reboot",
+      "value": true
+    },
+    {
+      "key_match": "power1_outlet_(\\d+)$",
+      "ensure_key": "power1_outlet_$1_reboot_only",
+      "value": false
     }
   ],
   "device_labels": {
