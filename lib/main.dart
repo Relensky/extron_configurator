@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:auris/auris.dart';
@@ -1441,6 +1442,11 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
   /// only). Stays blank unless the user picks one — e.g. Whereused.csv.
   String _extraFilePath = '';
 
+  /// Pending auto-close of a successful upload. Held so [dispose] can cancel
+  /// it — a timer that fires after the dialog is gone is what turned a late
+  /// Cancel into a black window.
+  Timer? _autoCloseTimer;
+
   @override
   void initState() {
     super.initState();
@@ -1461,6 +1467,7 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
 
   @override
   void dispose() {
+    _autoCloseTimer?.cancel();
     _ipController.dispose();
     _passController.dispose();
     super.dispose();
@@ -1536,15 +1543,34 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
 
     if (success) {
       if (widget.isUpload) {
-        // Automatically close the dialog after a brief delay on success
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) Navigator.of(context).pop();
-        });
+        scheduleUploadAutoClose();
       } else {
         // Close immediately and signal success so the audit dialog can be shown
         Navigator.of(context).pop(true);
       }
     }
+  }
+
+  /// Leaves the upload's success message up for a moment, then closes.
+  ///
+  /// The delay races the Cancel button, which is live again now that _isBusy is
+  /// false. Cancel pops this dialog, but the State stays mounted until the
+  /// route finishes its exit animation — so a Cancel in the last fraction of
+  /// the wait used to find `mounted` still true here and pop a SECOND time,
+  /// taking the route UNDERNEATH the dialog with it. That left an empty
+  /// navigator: the black window.
+  ///
+  /// Hence both guards: a timer [dispose] can cancel, and a check that the
+  /// thing being popped is still this dialog.
+  @visibleForTesting
+  void scheduleUploadAutoClose() {
+    final route = ModalRoute.of(context);
+    _autoCloseTimer?.cancel();
+    _autoCloseTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      if (route == null || !route.isCurrent) return; // already dismissed
+      Navigator.of(context).pop();
+    });
   }
 
   @override
