@@ -1645,7 +1645,7 @@ class AppStateProvider extends ChangeNotifier {
     // Flag anything in the loaded config that does not exist in the default template
     final template = await _readDefaultTemplate();
     if (template != null) {
-      _flagUnknownKeys(template);
+      flagUnknownKeys(template);
     } else {
       systemLogs.add("NOTE: No default template available to audit against (set one in App Config).");
     }
@@ -1710,7 +1710,8 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Flags any sections/properties in the loaded config that are NOT part of
   /// the default template, so leftovers and custom keys show up in the log.
-  void _flagUnknownKeys(Map<String, dynamic> templateConfig) {
+  @visibleForTesting
+  void flagUnknownKeys(Map<String, dynamic> templateConfig) {
     // Strip trailing digits so PROJECTORDEVICE_2 compares against PROJECTORDEVICE_1
     String normalize(String key) => key.replaceFirst(RegExp(r'\d+$'), '');
     final Set<String> templateFamilies = templateConfig.keys.map(normalize).toSet();
@@ -1718,6 +1719,7 @@ class AppStateProvider extends ChangeNotifier {
 
     // 1. Top-level sections unknown to the template
     roomConfig.forEach((key, value) {
+      if (uiSchema.isRuntimeWritten(key)) return; // the processor's own
       if (!templateFamilies.contains(normalize(key))) {
         systemLogs.add("FLAGGED: Section '$key' does not exist in the default config template.");
         flagged++;
@@ -1728,6 +1730,7 @@ class AppStateProvider extends ChangeNotifier {
     if (roomConfig['SYSTEM_SETUP'] is Map && templateConfig['SYSTEM_SETUP'] is Map) {
       final tplSetup = templateConfig['SYSTEM_SETUP'] as Map;
       (roomConfig['SYSTEM_SETUP'] as Map).forEach((key, value) {
+        if (uiSchema.isRuntimeWritten('SYSTEM_SETUP', key.toString())) return;
         if (!tplSetup.containsKey(key)) {
           systemLogs.add("FLAGGED: SYSTEM_SETUP property '$key' is not in the default config template.");
           flagged++;
@@ -1746,6 +1749,7 @@ class AppStateProvider extends ChangeNotifier {
       if (tplBlockKey.isEmpty) return; // Whole section already flagged above
       final tplBlock = templateConfig[tplBlockKey] as Map;
       value.forEach((prop, _) {
+        if (uiSchema.isRuntimeWritten(key, prop.toString())) return;
         if (!tplBlock.containsKey(prop)) {
           systemLogs.add("FLAGGED: '$key.$prop' is not in the default config template.");
           flagged++;

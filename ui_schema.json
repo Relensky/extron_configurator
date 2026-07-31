@@ -62,6 +62,13 @@
     "counts are NOT listed here - every device_types family is always",
     "injected as '0' automatically.",
     "",
+    "RUNTIME KEYS: the top-level 'runtime_written' list names config items the",
+    "PROCESSOR maintains itself while the room runs (the power schedule times,",
+    "ENVIRONMENT.traceback_allowed). A downloaded config carries them even",
+    "though the template never did, so they are skipped by the template audit",
+    "and are not drawn as unknown keys. Entries are 'SECTION' or 'SECTION.key'",
+    "with '*' wildcards.",
+    "",
     "CONSISTENCY: the top-level 'consistency' list cross-checks keys that have",
     "to agree - when one condition holds, another must too. Violations never",
     "block an edit or a save; they paint the red mismatch outline on every",
@@ -191,6 +198,13 @@
       "bearer": "enn6vVXIM6TZVho3DOWvJk1uhLfDk9VH"
     }
   },
+  "runtime_written": [
+    "__readme: Config items the PROCESSOR writes into config.json while the room runs, so a downloaded file carries them even though the template never did. Listed here they are not reported by the template audit and not drawn as unknown keys on the System tab. Entries are SECTION or SECTION.key; * matches any run of characters.",
+    "ENVIRONMENT",
+    "ENVIRONMENT.traceback_allowed",
+    "SYSTEM_SETUP.morning_power_on_time",
+    "SYSTEM_SETUP.nightly_shutdown_time"
+  ],
   "consistency": [
     {
       "__readme": [
@@ -335,6 +349,14 @@
     }
   },
   "fields": {
+    "morning_power_on_time": {
+      "label": "Morning Power-On Time (morning_power_on_time)",
+      "description": "Set by the PROCESSOR, not by hand: the time it next brings the room up, written back into config.json as the schedule shifts. Shown here for reference — editing it is overwritten on the next cycle."
+    },
+    "nightly_shutdown_time": {
+      "label": "Nightly Shutdown Time (nightly_shutdown_time)",
+      "description": "Set by the PROCESSOR, not by hand: the time it next shuts the room down, written back into config.json as the schedule shifts. Shown here for reference — editing it is overwritten on the next cycle."
+    },
     "btn_name": {
       "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."
     },

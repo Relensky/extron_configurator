@@ -437,10 +437,39 @@ class UiSchema {
   /// "section_defaults" (e.g. "METRICS_CONFIG"). Injected into loaded configs
   /// that are missing the section or any of its properties. Empty unless the
   /// schema file defines it — nothing is built in.
+  /// "SECTION" or "SECTION.key" entries (with '*' wildcards) naming config
+  /// items the PROCESSOR writes while the room runs — see [isRuntimeWritten].
+  final Set<String> _runtimeWritten = {};
+
   final Map<String, Map<String, dynamic>> _sectionDefaults = {};
 
   Map<String, Map<String, dynamic>> get sectionDefaults =>
       Map.unmodifiable(_sectionDefaults);
+
+  /// The raw "runtime_written" entries, for display/tests.
+  Set<String> get runtimeWritten => Set.unmodifiable(_runtimeWritten);
+
+  /// True when the processor maintains this config item itself, so finding it
+  /// in a downloaded file is expected rather than a problem.
+  ///
+  /// A room's config.json is written back by the processor while it runs:
+  /// ENVIRONMENT.traceback_allowed and the SYSTEM_SETUP power schedule times
+  /// are set on the fly. They are legitimately absent from the template, so the
+  /// template audit must not report them and the System tab must not draw them
+  /// as unknown keys.
+  ///
+  /// [propertyKey] null asks about the section itself. Entries are
+  /// "SECTION" or "SECTION.key", with '*' matching any run of characters.
+  bool isRuntimeWritten(String sectionKey, [String? propertyKey]) {
+    final target = propertyKey == null ? sectionKey : '$sectionKey.$propertyKey';
+    for (final pattern in _runtimeWritten) {
+      final regex = RegExp(
+          '^${pattern.split('*').map(RegExp.escape).join('.*')}\$',
+          caseSensitive: false);
+      if (regex.hasMatch(target)) return true;
+    }
+    return false;
+  }
 
   /// True for a top-level config section that is neither SYSTEM_SETUP nor a
   /// numbered device block — i.e. a standalone settings block like
@@ -704,6 +733,17 @@ class UiSchema {
         // File entries replace any earlier definition of the same section
         if (values.isNotEmpty) _sectionDefaults[sectionKey.toString()] = values;
       });
+    }
+
+    // Optional "runtime_written": keys the PROCESSOR maintains at run time, so
+    // a downloaded config legitimately carries things the template never had.
+    final runtimeWritten = doc['runtime_written'];
+    if (runtimeWritten is List) {
+      for (final entry in runtimeWritten) {
+        final text = entry.toString().trim();
+        if (text.isEmpty || text.startsWith('__')) continue;
+        _runtimeWritten.add(text);
+      }
     }
 
     // Optional "consistency": [{ "when": ..., "expect": ..., "flag": [...] }]
