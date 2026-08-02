@@ -316,7 +316,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                     ? (Theme.of(context).brightness == Brightness.dark
                         ? Colors.white
                         : Colors.black87)
-                    : Colors.grey.withOpacity(0.5),
+                    : Colors.grey.withValues(alpha: 0.5),
                 width: selected ? 2.5 : 1),
           ),
         ),
@@ -470,7 +470,7 @@ void _paintAnnotationsOnCanvas(
   for (final a in annotations) {
     final paint = Paint()
       ..color = a.tool == AnnotationTool.highlighter
-          ? a.color.withOpacity(0.35)
+          ? a.color.withValues(alpha: 0.35)
           : a.color
       ..strokeWidth =
           a.tool == AnnotationTool.highlighter ? a.strokeWidth * 3 : a.strokeWidth
@@ -558,7 +558,7 @@ class _AnnotationPainter extends CustomPainter {
       Paint()..filterQuality = FilterQuality.medium,
     );
     _paintAnnotationsOnCanvas(
-        canvas, [...annotations, if (active != null) active!], scale);
+        canvas, [...annotations, ?active], scale);
   }
 
   @override

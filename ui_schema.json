@@ -944,10 +944,6 @@
       "helperText": "Max 23 characters",
       "__comment": "One wildcard entry covers power1_outlet_1 through power1_outlet_8."
     },
-    "power1_outlet_*_action": {
-      "description": "If you need to have the outlet set to reboot, use this action command to have the outlet only allow that action.",
-      "__comment": "More specific pattern listed after the generic one, so it wins for the _action keys."
-    },
     "power1_outlet_*_supports_reboot": {
       "type": "bool",
       "description": "Whether this outlet's hardware can power-cycle on command. Optional — a room without the key behaves as before. Set false for an outlet that must only be switched on or off (a screen relay, a device that dislikes a hard cycle).",

@@ -1,6 +1,13 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 /// Utility class to handle local file logging for the application.
+///
+/// The log FILES are the record; the debugPrint calls below are only the
+/// fallback for when writing one of those files is what failed (a read-only
+/// folder, a locked file). Losing a log entry silently is the one thing a
+/// logger must not do, so the message still has to land somewhere.
 class AppLogger {
   /// Writes error messages and stack traces to a local error log file.
   static Future<void> logError(String message, [dynamic error, StackTrace? stackTrace]) async {
@@ -19,10 +26,10 @@ class AppLogger {
       await file.writeAsString(logEntry.toString(), mode: FileMode.append);
       
       // Print to the debug console during development
-      print(logEntry.toString());
+      debugPrint(logEntry.toString());
     } catch (e) {
       // Fallback if writing to the log file fails (e.g., permissions)
-      print("CRITICAL: Failed to write to log file. Error: $e");
+      debugPrint("CRITICAL: Failed to write to log file. Error: $e");
     }
   }
 
@@ -47,7 +54,7 @@ class AppLogger {
 
       await file.writeAsString(buffer.toString(), mode: FileMode.append);
     } catch (e) {
-      print("Failed to write migration log: $e");
+      debugPrint("Failed to write migration log: $e");
     }
   }
 
@@ -74,7 +81,7 @@ class AppLogger {
       // Append so repeated loads of the same room build a history in one file
       await file.writeAsString(buffer.toString(), mode: FileMode.append);
     } catch (e) {
-      print("Failed to write change log to $filePath: $e");
+      debugPrint("Failed to write change log to $filePath: $e");
     }
   }
 
@@ -85,7 +92,7 @@ class AppLogger {
       final timestamp = DateTime.now().toIso8601String();
       await file.writeAsString('[$timestamp] INFO: $message\n', mode: FileMode.append);
     } catch (e) {
-      print("Failed to write info log: $e");
+      debugPrint("Failed to write info log: $e");
     }
   }
 }

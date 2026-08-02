@@ -270,7 +270,7 @@ class DeviceScopedFields {
 ///   keepAlivePreference: command names tried in order when auto-picking a
 ///                        new device's keep_alive_command from its module
 ///   template:            the full block used for new devices when the
-///                        config has no <PREFIX>1 block to copy (overrides
+///                        config has no `<PREFIX>1` block to copy (overrides
 ///                        the built-in synthesized fallback)
 class DeviceTypeSpec {
   final String countKey; // e.g. 'dev_projectors'

@@ -170,28 +170,28 @@ class AppStateProvider extends ChangeNotifier {
   String get effectiveRootFolder =>
       rootFolderPath.isNotEmpty ? rootFolderPath : _appBaseDir();
 
-  /// Python modules folder: explicit choice, else "<root>/devices".
+  /// Python modules folder: explicit choice, else `<root>/devices`.
   String get effectiveModulesPath => modulesPath.isNotEmpty
       ? modulesPath
       : path.join(effectiveRootFolder, 'devices');
 
-  /// PDF manuals folder: explicit choice, else "<root>/documentation".
-  /// Each module's manual is "<module file name>.pdf" in this folder.
+  /// PDF manuals folder: explicit choice, else `<root>/documentation`.
+  /// Each module's manual is `<module file name>.pdf` in this folder.
   String get effectiveDocumentationPath => documentationPath.isNotEmpty
       ? documentationPath
       : path.join(effectiveRootFolder, 'documentation');
 
-  /// processors.json: explicit choice, else "<root>/processors.json".
+  /// processors.json: explicit choice, else `<root>/processors.json`.
   String get effectiveProcessorsFilePath => processorsFilePath.isNotEmpty
       ? processorsFilePath
       : path.join(effectiveRootFolder, 'processors.json');
 
-  /// buildings.json: explicit choice, else "<root>/buildings.json".
+  /// buildings.json: explicit choice, else `<root>/buildings.json`.
   String get effectiveBuildingsFilePath => buildingsFilePath.isNotEmpty
       ? buildingsFilePath
       : path.join(effectiveRootFolder, 'buildings.json');
 
-  /// Template config: explicit choice, else "<root>/config.json".
+  /// Template config: explicit choice, else `<root>/config.json`.
   String get effectiveTemplateFilePath => templateFilePath.isNotEmpty
       ? templateFilePath
       : path.join(effectiveRootFolder, 'config.json');
@@ -460,6 +460,12 @@ class AppStateProvider extends ChangeNotifier {
   ValueOrigin? originFor(String sectionKey, String fieldKey) =>
       valueOrigins['$sectionKey.$fieldKey'];
 
+  /// Seeds the "file as parsed" side of the diff, so a test can drive
+  /// [computeConversionProvenance] without a real load.
+  @visibleForTesting
+  set originalLoadedConfig(Map<String, dynamic> value) =>
+      _originalLoadedConfig = value;
+
   /// Drops the colouring and the preview — for a config that wasn't converted
   /// (built from the template, or reloaded as-is).
   void _clearConversionProvenance() {
@@ -474,6 +480,23 @@ class AppStateProvider extends ChangeNotifier {
   void applyConversionChoices() {
     for (final change in conversionChanges) {
       if (change.accepted) continue;
+      // An empty key is a scalar sitting at the root of the file rather than a
+      // property inside a block, so the whole entry is what gets put back or
+      // taken away.
+      if (change.key.isEmpty) {
+        switch (change.kind) {
+          case ConversionKind.added:
+            roomConfig.remove(change.section);
+            valueOrigins.remove(change.id);
+            break;
+          case ConversionKind.removed:
+          case ConversionKind.changed:
+            roomConfig[change.section] = change.before;
+            valueOrigins[change.id] = ValueOrigin.legacy;
+            break;
+        }
+        continue;
+      }
       final section = roomConfig[change.section];
       switch (change.kind) {
         case ConversionKind.added:
@@ -724,7 +747,7 @@ class AppStateProvider extends ChangeNotifier {
   /// The modules-folder-relative stem of a config `module` value — the inverse
   /// of [normalizeModuleName]. The config stores the import path the processor
   /// needs ('modules.device.avr_TR311'), but the file sits at
-  /// '<modules path>/avr_TR311.py', so that prefix must come off before the
+  /// `<modules path>/avr_TR311.py`, so that prefix must come off before the
   /// remaining dots become folder separators. A bare stem, a '.py' suffix, or a
   /// sub-foldered 'vendor.model' value all resolve the same way — which is what
   /// lets one preload (keyed by the stem) serve both spellings instead of the
@@ -828,7 +851,7 @@ class AppStateProvider extends ChangeNotifier {
       final content = await file.readAsString();
       
       // Look for common Extron string literals that represent inputs
-      final RegExp inputRegex = RegExp(r"['""](HDMI\s*\d*|HDBaseT|VGA|DisplayPort|DVI|SDI|Composite|Component|Video\s*\d*|RGB|Type-C|USB-C)['""]", caseSensitive: false);
+      final RegExp inputRegex = RegExp(r"['""](HDMIs*d*|HDBaseT|VGA|DisplayPort|DVI|SDI|Composite|Component|Videos*d*|RGB|Type-C|USB-C)['""]", caseSensitive: false);
       
       final Set<String> inputs = {};
       for (final match in inputRegex.allMatches(content)) {
@@ -918,14 +941,22 @@ class AppStateProvider extends ChangeNotifier {
   /// the conversion changed, by diffing the working config against the file as
   /// it was parsed.
   ///
-  /// A key that existed in the corresponding ORIGINAL section is [ValueOrigin.
-  /// legacy] — the value's lineage is the old file even if the conversion
-  /// renamed the key or normalized the value ("Yes" -> "1"). A key the
-  /// conversion introduced is [ValueOrigin.written]. Sections are lined up
-  /// through [sectionRenames], and keys through the same lowercase/no-
-  /// underscore comparison auto_case_normalization uses, so COMTYPE and
-  /// com_type are recognized as the same property.
-  void _computeConversionProvenance(
+  /// A key that existed in the corresponding ORIGINAL section with the SAME
+  /// value is [ValueOrigin.legacy]; one whose value the conversion rewrote is
+  /// [ValueOrigin.changed] (a rename alone is not a rewrite — the value is
+  /// what is being coloured); a key the conversion introduced is
+  /// [ValueOrigin.written]. Sections are lined up through [sectionRenames],
+  /// and keys through the same lowercase/no-underscore comparison
+  /// auto_case_normalization uses, so COMTYPE and com_type are recognized as
+  /// the same property.
+  ///
+  /// Root-level scalars (`startup_watchdog_stage`, which the processor writes
+  /// into the file itself) are diffed too, under an empty field key. They used
+  /// to be skipped along with every other non-Map, which drew them orange
+  /// whatever had happened to them and kept them out of the change list
+  /// entirely.
+  @visibleForTesting
+  void computeConversionProvenance(
     Map<String, String> sectionRenames,
     List<ConversionConflict> conflicts,
   ) {
@@ -954,36 +985,57 @@ class AppStateProvider extends ChangeNotifier {
       return (byNorm, spelling);
     }
 
+    /// Records one surviving value: its origin, and the rejectable change when
+    /// the conversion added or rewrote it. [key] is '' for a root scalar.
+    void record(String sectionKey, String key, dynamic value,
+        {required bool wasInFile, dynamic before}) {
+      final id = '$sectionKey.$key';
+      if (!wasInFile) {
+        valueOrigins[id] = ValueOrigin.written;
+        conversionChanges.add(ConversionChange(
+          section: sectionKey,
+          key: key,
+          kind: ConversionKind.added,
+          after: value,
+        ));
+        return;
+      }
+      if (jsonEncode(before) == jsonEncode(value)) {
+        valueOrigins[id] = ValueOrigin.legacy;
+        return;
+      }
+      // Same key, new value: the conversion wrote what is on screen, so it
+      // gets its own colour as well as a rejectable change.
+      valueOrigins[id] = ValueOrigin.changed;
+      conversionChanges.add(ConversionChange(
+        section: sectionKey,
+        key: key,
+        kind: ConversionKind.changed,
+        before: before,
+        after: value,
+      ));
+    }
+
     // --- Values that survived into the working config ----------------------
     roomConfig.forEach((sectionKey, block) {
-      if (block is! Map) return;
+      if (block is! Map) {
+        // A scalar at the root of the file rather than a settings block.
+        final originalName = originalSectionOf[sectionKey] ?? sectionKey;
+        final bool wasInFile =
+            _originalLoadedConfig.containsKey(originalName) &&
+                _originalLoadedConfig[originalName] is! Map;
+        record(sectionKey, '', block,
+            wasInFile: wasInFile,
+            before: wasInFile ? _originalLoadedConfig[originalName] : null);
+        return;
+      }
       final (originalByNorm, _) = originalBlock(sectionKey);
       block.forEach((rawKey, value) {
         final key = rawKey.toString();
-        final id = '$sectionKey.$key';
         final n = norm(key);
-        if (originalByNorm.containsKey(n)) {
-          valueOrigins[id] = ValueOrigin.legacy;
-          // A value the conversion rewrote is offered as a rejectable change
-          final before = originalByNorm[n];
-          if (jsonEncode(before) != jsonEncode(value)) {
-            conversionChanges.add(ConversionChange(
-              section: sectionKey,
-              key: key,
-              kind: ConversionKind.changed,
-              before: before,
-              after: value,
-            ));
-          }
-        } else {
-          valueOrigins[id] = ValueOrigin.written;
-          conversionChanges.add(ConversionChange(
-            section: sectionKey,
-            key: key,
-            kind: ConversionKind.added,
-            after: value,
-          ));
-        }
+        record(sectionKey, key, value,
+            wasInFile: originalByNorm.containsKey(n),
+            before: originalByNorm[n]);
       });
     });
 
@@ -1004,9 +1056,21 @@ class AppStateProvider extends ChangeNotifier {
     }
 
     _originalLoadedConfig.forEach((originalSection, block) {
-      if (block is! Map) return;
       // Where did this section end up? (unchanged name, or its rename)
       final String section = sectionRenames[originalSection] ?? originalSection;
+      if (block is! Map) {
+        // A root scalar the conversion dropped (the 'ROOM' removal rule and
+        // the like) — reported like any other removal instead of vanishing.
+        if (!roomConfig.containsKey(section)) {
+          conversionChanges.add(ConversionChange(
+            section: section,
+            key: '',
+            kind: ConversionKind.removed,
+            before: block,
+          ));
+        }
+        return;
+      }
       final current = roomConfig[section];
       final Set<String> survivingNorms = current is Map
           ? current.keys.map((k) => norm(k.toString())).toSet()
@@ -1614,6 +1678,12 @@ class AppStateProvider extends ChangeNotifier {
     // file never carried (ENVIRONMENT.traceback_allowed).
     removeUninvitedOptIns(_originalLoadedConfig);
 
+    // Retire the redundant per-outlet '_action' key, carrying a legacy
+    // 'Reboot' over to '_reboot_only' so the outlet still cycles. Runs after
+    // the companion keys that create '_reboot_only', and reads the loaded file
+    // rather than the working config to tell a real setting from that default.
+    foldOutletActionIntoRebootOnly(_originalLoadedConfig);
+
     // Auto-generate the Title Case full room name when gve_bldg (code like
     // 'BSS' OR a legacy full name) resolves against buildings.json — so a
     // converted legacy file lands with 'Behavioral And Social Science 103'
@@ -1635,7 +1705,7 @@ class AppStateProvider extends ChangeNotifier {
     // original gives the full picture: which values came from the old file
     // (orange), which the conversion wrote (white), and the reversible list
     // the preview offers per change.
-    _computeConversionProvenance(sectionRenames, conflicts);
+    computeConversionProvenance(sectionRenames, conflicts);
 
     // Warn (never auto-change) when more device blocks exist than the dev_
     // counts allow — extra blocks are hidden in tabs and pruned on export,
@@ -2068,7 +2138,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Loads the buildings.json file to resolve building names. Falls back to
-  /// "<root>/buildings.json" when no explicit path has been chosen.
+  /// `<root>/buildings.json` when no explicit path has been chosen.
   Future<void> loadBuildingsList() async {
     final String bPath = effectiveBuildingsFilePath;
     try {
@@ -2165,7 +2235,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Loads the external processors.json file to populate the room selection
-  /// dropdown. Runs on boot; falls back to "<root>/processors.json" when no
+  /// dropdown. Runs on boot; falls back to `<root>/processors.json` when no
   /// explicit path has been chosen.
   Future<void> loadProcessorsList() async {
     final String pPath = effectiveProcessorsFilePath;
@@ -2254,7 +2324,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Properties the current [sectionKey] block is missing compared to its
   /// defaults, mapped to the default value that would be added. Sources:
   ///   1. the template config's matching block — the exact section name, or
-  ///      the family's "<PREFIX>1" block with the index substituted in
+  ///      the family's `<PREFIX>1` block with the index substituted in
   ///   2. ui_schema.json "device_defaults" (devices) or "system_defaults"
   ///      (SYSTEM_SETUP), filling anything the template doesn't cover
   /// Returns {} when the section doesn't exist or nothing is missing.
@@ -2350,10 +2420,10 @@ class AppStateProvider extends ChangeNotifier {
   /// the schema-driven "module_states" field type (e.g. ui_schema.json says a
   /// projector's 'input' options come from the module's 'Input' command).
   /// Looks, in order, at:
-  ///   1. self.Commands = { '<command>': { 'AllowedValues': [...] } }
-  ///   2. def Set<command>:     the KEYS of its ValueStateValues dict
-  ///   3. def __Match<command>: the VALUES of its ValueStateValues dict
-  ///   4. the self.<dict>[value] lookup inside Set<command> (per-model dicts
+  ///   1. `self.Commands = { '<command>': { 'AllowedValues': [...] } }`
+  ///   2. `def Set<command>:`   the KEYS of its ValueStateValues dict
+  ///   3. `def __Match<command>:` the VALUES of its ValueStateValues dict
+  ///   4. the `self.<dict>[value]` lookup inside `Set<command>` (per-model
   ///      like self.InputStateValues / self.set_input_states); the union of
   ///      every model's keys is returned
   /// Returns [] when the module file or the command can't be resolved, so the
@@ -2701,8 +2771,8 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Resolves the PDF manual for [moduleName]: "<module file name>.pdf" in the
-  /// Documentation folder (App Config; default <root>/documentation). Returns
+  /// Resolves the PDF manual for [moduleName]: `<module file name>.pdf` in the
+  /// Documentation folder (App Config; default `<root>/documentation`). Returns
   /// the file path when it exists, otherwise a user-facing error message (never
   /// both). Pure lookup — used by both the in-app viewer and the external-open
   /// path so the resolution rules stay in one place.
@@ -2925,7 +2995,7 @@ class AppStateProvider extends ChangeNotifier {
   /// string value of [cfg] with the two-character backslash+r sequence used
   /// by the processor GUI. When the config is saved, the JSON encoder escapes
   /// the backslash, so the file ON DISK contains \\r (e.g. gui_preset_name
-  /// "Whiteboard<CR>Left" -> "Whiteboard\\rLeft" in config.json). Lone \n is
+  /// `Whiteboard<CR>Left` -> "Whiteboard\\rLeft" in config.json). Lone \n is
   /// left untouched. Returns how many values were changed. Mirrors the key
   /// mapper's escape_carriage_returns step so EVERY write path produces the
   /// same on-disk representation.
@@ -2976,7 +3046,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Helper to grab a default template for a device if the user increases the count.
-  /// Priority: 1) the config's own <PREFIX>1 block, 2) the family's "template"
+  /// Priority: 1) the config's own `<PREFIX>1` block, 2) the family's "template"
   /// from ui_schema.json device_types, 3) a basic synthesized map.
   Map<String, dynamic> getDefaultDeviceBlock(String devicePrefix) {
     // Try to find an existing device of this type to use as a template (e.g. CAMERADEVICE_1)
@@ -3284,6 +3354,75 @@ class AppStateProvider extends ChangeNotifier {
     });
   }
 
+  /// `power<N>_outlet_<M>_action` in SYSTEM_SETUP, matched per outlet.
+  static final RegExp _outletActionKey =
+      RegExp(r'^(power\d+_outlet_\d+)_action$');
+
+  /// Drops the outlet `_action` key, carrying a legacy 'Reboot' over to
+  /// `_reboot_only` first so no outlet quietly stops cycling.
+  ///
+  /// An outlet's behaviour used to be spread over two keys that said the same
+  /// thing from different ends: `_action: "Reboot"` drove the panel button, and
+  /// `_reboot_only` drove the remote reboot listener. The processor merged them
+  /// onto `_reboot_only` — one key for both callers — which leaves `_action` as
+  /// a third spelling of a setting that already has one, and a way for a room
+  /// to contradict itself. Two toggles are the whole story now:
+  /// `_supports_reboot` and `_reboot_only`.
+  ///
+  /// The precedence here is the processor's, so a room behaves the same after
+  /// the strip as before it: a `_reboot_only` the LOADED FILE declared (true OR
+  /// false) wins, and `_action` only decides the outlet when the file left
+  /// `_reboot_only` absent or null. A null `_action` is the template's
+  /// placeholder rather than a decision, so it is dropped without comment.
+  ///
+  /// The file has to be the authority rather than [roomConfig], because by the
+  /// time this runs the companion_keys rule in key_map.json has already given
+  /// every outlet a `_reboot_only: false`. Judging against the working config
+  /// would read the conversion's own default as the room's decision and quietly
+  /// turn a legacy reboot-only outlet into an ordinary one — the same trap
+  /// [removeUninvitedOptIns] takes [_originalLoadedConfig] to avoid.
+  ///
+  /// [originalConfig] is the file as parsed; the load pipeline passes
+  /// [_originalLoadedConfig].
+  @visibleForTesting
+  void foldOutletActionIntoRebootOnly(Map<String, dynamic> originalConfig) {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return;
+    final originalSetup = originalConfig['SYSTEM_SETUP'];
+    final Map fileSetup = originalSetup is Map ? originalSetup : const {};
+
+    for (final rawKey in setup.keys.map((k) => k.toString()).toList()) {
+      final match = _outletActionKey.firstMatch(rawKey);
+      if (match == null) continue;
+
+      final outlet = match.group(1)!;
+      final action = setup.remove(rawKey);
+      final bool wantsReboot =
+          action.toString().trim().toLowerCase() == 'reboot';
+      if (!wantsReboot) continue; // null / "Off" / anything else said nothing
+
+      final rebootOnlyKey = '${outlet}_reboot_only';
+      final declared = fileSetup[rebootOnlyKey];
+      if (declared != null) {
+        // The room itself already ruled on this outlet; say so when the two
+        // disagreed rather than changing behaviour on the way past.
+        if (declared != true) {
+          systemLogs.add(
+              "FLAGGED: '$rawKey' was 'Reboot' but the file also set "
+              "'$rebootOnlyKey' to '$declared' — kept '$rebootOnlyKey', which "
+              "is the key the processor reads. Removed '$rawKey'.");
+        }
+        continue;
+      }
+
+      setup[rebootOnlyKey] = true;
+      systemLogs.add(
+          "DEFAULTS: '$rawKey' was 'Reboot' — set '$rebootOnlyKey' to true and "
+          "removed '$rawKey'. Reboot-only is one key now, read by both the "
+          "panel button and the reboot listener.");
+    }
+  }
+
   /// Removes the config keys a device's module says its model doesn't use
   /// (DEVICE_INFO "omit"), run after module resolution so the module is known.
   ///
@@ -3483,22 +3622,33 @@ class AppStateProvider extends ChangeNotifier {
           }
           return false;
         }).toList();
-        for (var k in keysToRemove) data.remove(k);
+        for (var k in keysToRemove) {
+          data.remove(k);
+        }
       }
     });
     return data;
   }
 }
 
-/// Where a value in the working config came from. Drives the orange/white
-/// colouring in the conversion preview and on the Devices / System tabs.
+/// Where a value in the working config came from. Drives the colouring in the
+/// conversion preview and on the Devices / System tabs; the palette itself
+/// lives in conversion_colors.dart.
 enum ValueOrigin {
-  /// Carried over from the file that was loaded — shown in ORANGE, because
-  /// nobody has confirmed it against the current template yet.
+  /// Carried over from the file that was loaded, untouched — shown in ORANGE,
+  /// because nobody has confirmed it against the current template yet.
   legacy,
 
+  /// The key came from the loaded file but the conversion REWROTE the value:
+  /// gve_bldg normalized to its building code, the module resolved from the
+  /// model, the generated room name replacing the placeholder. Shown in TEAL —
+  /// it is neither purely the old file's value nor purely the template's, and
+  /// calling it "from the old file" (which is what the single orange used to
+  /// say) points the tech at the wrong thing when they come to check it.
+  changed,
+
   /// Written by the conversion from the template, the schema defaults or a
-  /// lookup (module by model, generated room name) — shown in WHITE.
+  /// lookup — shown in the theme's ordinary text colour.
   written,
 }
 
@@ -3537,6 +3687,10 @@ class ConversionChange {
 
   String get id => '$section.$key';
   bool get isConflict => conflictReason != null;
+
+  /// How the change reads in the preview list: 'SECTION.key', or just the name
+  /// for a scalar sitting at the root of the file (which has no key).
+  String get label => key.isEmpty ? section : '$section.$key';
 
   /// One-line summary for the preview list.
   String get description {

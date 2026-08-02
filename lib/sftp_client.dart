@@ -70,10 +70,12 @@ class SftpLogger {
       // that fall within the user's selected date range.
       final targetFiles = items.where((item) {
         // Ensure grabbing the correct extension
-        if (logType == LogFileType.debug && !item.filename.endsWith('.csv'))
+        if (logType == LogFileType.debug && !item.filename.endsWith('.csv')) {
           return false;
-        if (logType == LogFileType.program && !item.filename.endsWith('.log'))
+        }
+        if (logType == LogFileType.program && !item.filename.endsWith('.log')) {
           return false;
+        }
 
         // If the user selected "All Time" in the UI, grab everything.
         if (startDate == null && endDate == null) return true;
@@ -93,8 +95,9 @@ class SftpLogger {
         if (startDate != null && fileDate.isBefore(startDate)) return false;
         if (endDate != null &&
             fileDate
-                .isAfter(endDate.add(const Duration(hours: 23, minutes: 59))))
+                .isAfter(endDate.add(const Duration(hours: 23, minutes: 59)))) {
           return false;
+        }
 
         return true;
       }).toList();

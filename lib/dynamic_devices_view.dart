@@ -10,7 +10,7 @@ import 'schema_field_builder.dart';
 import 'search_match.dart';
 
 class DynamicDevicesTabsView extends StatefulWidget {
-  const DynamicDevicesTabsView({Key? key}) : super(key: key);
+  const DynamicDevicesTabsView({super.key});
 
   @override
   State<DynamicDevicesTabsView> createState() => _DynamicDevicesTabsViewState();
@@ -90,7 +90,7 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
 class DeviceConfigurationForm extends StatelessWidget {
   final String deviceKey;
 
-  const DeviceConfigurationForm({Key? key, required this.deviceKey}) : super(key: key);
+  const DeviceConfigurationForm({super.key, required this.deviceKey});
 
   /// Searchable dialog of the models aggregated across the python modules
   /// (DEVICE_INFO "models" lists, falling back to each driver's self.Models
@@ -633,7 +633,7 @@ class DeviceConfigurationForm extends StatelessWidget {
               if (!commands.contains('')) commands.insert(0, ''); 
 
               return DropdownButtonFormField<String>(
-                value: currentValue, 
+                initialValue: currentValue, 
                 decoration: InputDecoration(
                   labelText: 'Keep Alive Command',
                   helperText: 'Parsed from $moduleName.py',

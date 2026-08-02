@@ -10,6 +10,7 @@
 ///  dots. Whoever is searching knows the name, not the separators — so both the
 ///  query and the candidate are reduced to letters and digits before comparing.
 /// ============================================================================
+library;
 
 /// [text] stripped to lowercase letters and digits: "BSS 103" and "BSS103" both
 /// become "bss103", "PT-FW430U" and "PT FW430U" both become "ptfw430u".

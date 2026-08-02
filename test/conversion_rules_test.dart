@@ -108,9 +108,9 @@ void main() {
         'SYSTEM_SETUP': {
           'dev_power_controllers': 'No', // value_map turns this into "0"
           'power1_outlet_1': 'PC',
-          'power1_outlet_1_action': null,
+          'power1_outlet_1_reboot_only': false,
           'power1_outlet_4': 'TLP\\rPoE',
-          'power1_outlet_4_action': null,
+          'power1_outlet_4_reboot_only': false,
         },
       });
       final setup = result.config['SYSTEM_SETUP'] as Map;

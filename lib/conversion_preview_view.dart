@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'conversion_colors.dart';
 
 /// ============================================================================
 ///  CONVERSION PREVIEW
@@ -11,11 +12,10 @@ import 'app_state.dart';
 ///  panes:
 ///
 ///    LEFT   the converted config, rendered as JSON and coloured by where each
-///           value came from — ORANGE for values carried over from the loaded
-///           file, WHITE for values the conversion wrote from the template or
-///           schema defaults. Properties the conversion DROPPED are shown in
-///           place, struck through, with the reason (an ip_address on a serial
-///           device and the like), so nothing disappears without being seen.
+///           value came from — see [ConversionColors] for the three states and
+///           what each one means. Properties the conversion DROPPED are shown
+///           in place, struck through, with the reason (an ip_address on a
+///           serial device and the like), so nothing disappears unseen.
 ///
 ///    RIGHT  every change as its own row with an accept/reject switch. Rejects
 ///           are applied together by [AppStateProvider.applyConversionChoices]
@@ -26,34 +26,6 @@ import 'app_state.dart';
 ///  Nothing here touches disk — the working config stays in memory until the
 ///  user saves, exactly like the rest of the load pipeline.
 /// ============================================================================
-
-/// The palette both panes share, resolved against the active theme.
-class _PreviewColors {
-  final Color legacy; // carried over from the old file
-  final Color written; // written by the conversion
-  final Color punctuation;
-  final Color sectionName;
-  final Color panel;
-
-  const _PreviewColors({
-    required this.legacy,
-    required this.written,
-    required this.punctuation,
-    required this.sectionName,
-    required this.panel,
-  });
-
-  factory _PreviewColors.of(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    return _PreviewColors(
-      legacy: isDark ? Colors.orangeAccent : Colors.deepOrange.shade700,
-      written: isDark ? Colors.white : Colors.black87,
-      punctuation: isDark ? Colors.white38 : Colors.black45,
-      sectionName: isDark ? Colors.lightBlueAccent : Colors.blue.shade800,
-      panel: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F7F7),
-    );
-  }
-}
 
 /// Opens the preview. Returns true when the user confirmed (choices applied),
 /// false or null when they backed out and left the conversion untouched.
@@ -94,7 +66,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = _PreviewColors.of(context);
+    final colors = ConversionColors.of(context);
     final int conflictCount =
         widget.provider.conversionChanges.where((c) => c.isConflict).length;
 
@@ -161,7 +133,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
 
   // --- LEFT PANE: the converted config, coloured by provenance --------------
 
-  Widget _buildJsonPane(_PreviewColors colors) {
+  Widget _buildJsonPane(ConversionColors colors) {
     final provider = widget.provider;
 
     // Properties the conversion dropped, so they can be shown struck through
@@ -195,15 +167,34 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
 
       final block = provider.roomConfig[sectionKey];
       if (block is! Map) {
-        // A stray scalar at the root (or a section the conversion removed
-        // wholesale) still gets a line, so it isn't silently missing.
-        spans.add(TextSpan(
-          text: jsonEncode(block),
-          style: mono.copyWith(
-              color: provider.originFor(sectionKey, '') == ValueOrigin.written
-                  ? colors.written
-                  : colors.legacy),
-        ));
+        if (provider.roomConfig.containsKey(sectionKey)) {
+          // A scalar at the root of the file. These ARE diffed now, so the
+          // colour means the same here as it does inside a section.
+          spans.add(TextSpan(
+            text: jsonEncode(block),
+            style: mono.copyWith(
+                color: colors.forOrigin(provider.originFor(sectionKey, '')) ??
+                    colors.written),
+          ));
+        } else {
+          // A section (or root scalar) the conversion dropped wholesale —
+          // struck through rather than printed as a bare "null".
+          spans.add(TextSpan(
+            text: removedBySection[sectionKey]
+                    ?.map((c) => jsonEncode(c.before))
+                    .join(', ') ??
+                'null',
+            style: mono.copyWith(
+              color: colors.legacy,
+              decoration: TextDecoration.lineThrough,
+            ),
+          ));
+          spans.add(TextSpan(
+            text: '   // removed',
+            style: mono.copyWith(
+                color: colors.punctuation, fontStyle: FontStyle.italic),
+          ));
+        }
         punct(',\n');
         continue;
       }
@@ -211,12 +202,12 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
       punct('{\n');
       final keys = block.keys.map((k) => k.toString()).toList()..sort();
       for (final key in keys) {
-        final origin = provider.originFor(sectionKey, key);
         final Color valueColor =
-            origin == ValueOrigin.written ? colors.written : colors.legacy;
+            colors.forOrigin(provider.originFor(sectionKey, key)) ??
+                colors.written;
         punct('    ');
         spans.add(TextSpan(
-            text: '"$key"', style: mono.copyWith(color: colors.sectionName)));
+            text: '"$key"', style: mono.copyWith(color: colors.propertyName)));
         punct(': ');
         spans.add(TextSpan(
           text: jsonEncode(block[key]),
@@ -252,7 +243,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
       decoration: BoxDecoration(
         color: colors.panel,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade600),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: SingleChildScrollView(
         child: SelectableText.rich(TextSpan(children: spans)),
@@ -262,7 +253,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
 
   // --- RIGHT PANE: per-change accept/reject ---------------------------------
 
-  Widget _buildChangePane(_PreviewColors colors) {
+  Widget _buildChangePane(ConversionColors colors) {
     final changes = _changes;
 
     return Column(
@@ -317,12 +308,12 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
                         children: [
                           if (c.isConflict) ...[
                             Icon(Icons.warning_amber_rounded,
-                                size: 15, color: Colors.red.shade400),
+                                size: 15, color: colors.conflict),
                             const SizedBox(width: 4),
                           ],
                           Expanded(
                             child: Text(
-                              '${c.section}.${c.key}',
+                              c.label,
                               style: TextStyle(
                                 fontFamily: 'monospace',
                                 fontSize: 12.5,
@@ -347,16 +338,26 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
     );
   }
 
-  Color _kindColor(ConversionChange c, _PreviewColors colors) {
-    if (c.isConflict) return Colors.red.shade400;
-    return c.kind == ConversionKind.added ? colors.written : colors.legacy;
+  /// The row colour, matching what the JSON pane does to the same value: an
+  /// added key is written, a rewritten one is changed, and a removal keeps the
+  /// old file's colour because the old file's value is what it shows.
+  Color _kindColor(ConversionChange c, ConversionColors colors) {
+    if (c.isConflict) return colors.conflict;
+    switch (c.kind) {
+      case ConversionKind.added:
+        return colors.written;
+      case ConversionKind.changed:
+        return colors.changed;
+      case ConversionKind.removed:
+        return colors.legacy;
+    }
   }
 }
 
-/// The orange/white key, shown in the dialog title so the colouring in both
-/// panes (and on the Devices / System tabs) doesn't need explaining twice.
+/// The colour key, shown in the dialog title so the colouring in both panes
+/// (and on the Devices / System tabs) doesn't need explaining twice.
 class _Legend extends StatelessWidget {
-  final _PreviewColors colors;
+  final ConversionColors colors;
   const _Legend({required this.colors});
 
   @override
@@ -373,9 +374,10 @@ class _Legend extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        swatch(colors.legacy, 'from the old file'),
-        const SizedBox(width: 14),
-        swatch(colors.written, 'written from template'),
+        for (final (origin, label) in ConversionColors.legend) ...[
+          swatch(colors.forOrigin(origin)!, label),
+          const SizedBox(width: 14),
+        ],
       ],
     );
   }

@@ -52,7 +52,7 @@
     "companion_keys: for every property matching key_match, ensure_key (with",
     "  $1..$9 capture groups) is created in the same section when missing,",
     "  set to 'value'. E.g. every converted power1_outlet_N gets a matching",
-    "  power1_outlet_N_action of null. Existing values are never overwritten.",
+    "  power1_outlet_N_supports_reboot. Existing values are never overwritten.",
     "device_labels + device_templates: legacy device blocks get a generated",
     "  name '<Label> - <model>' (numbered only when the family has multiple",
     "  units), btn_name/lbl_name from the same-numbered template block, and",
@@ -105,13 +105,7 @@
   ],
   "companion_keys": [
     {
-      "__comment": "Every power1_outlet_N present after conversion gets a matching power1_outlet_N_action (null) - the number always follows the outlet that exists.",
-      "key_match": "power1_outlet_(\\d+)",
-      "ensure_key": "power1_outlet_$1_action",
-      "value": null
-    },
-    {
-      "__comment": "Each outlet that survives also gets its reboot capability flags, so a room with a power controller carries them for every outlet it actually has. Defaults match the template: reboot supported, not reboot-only.",
+      "__comment": "Each outlet that survives gets its reboot capability flags, so a room with a power controller carries them for every outlet it actually has. Defaults match the template: reboot supported, not reboot-only. These two are the whole story - the old power1_outlet_N_action key was a third way of saying reboot-only and is stripped on load, see foldOutletActionIntoRebootOnly.",
       "key_match": "power1_outlet_(\\d+)$",
       "ensure_key": "power1_outlet_$1_supports_reboot",
       "value": true

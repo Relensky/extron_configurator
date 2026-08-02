@@ -29,19 +29,19 @@ import 'app_logger.dart';
 ///                  "Active_Notifications" -> "active_notifications" does
 ///                  match automatically). Explicit "properties" entries
 ///                  always run first and always win.
-///    "sections":   list of { "match": <regex>, "rename_to": <name> } rules
+///    "sections":   list of `{ "match": <regex>, "rename_to": <name> }` rules
 ///                  applied to TOP-LEVEL section names. The regex must match
 ///                  the whole name; $1..$9 insert capture groups.
 ///    "properties": flat { "OLDNAME": "new_name" } map applied to every
 ///                  property inside every section.
-///    "value_map":  optional { "property": { "OldValue": <new value> } } to
+///    "value_map":  optional `{ "property": { "OldValue": <new value> } }` to
 ///                  normalize stored values after renaming. New values keep
 ///                  their JSON type ("True" -> true, "Yes" -> "1", etc).
 ///    "moves":      list of { "from_section", "key_match", "to_section",
 ///                  "to_key" } rules relocating a property into another
 ///                  section (regex capture groups work in to_section), e.g.
 ///                  GVE_ID_Projector_(\d+) -> PROJECTORDEVICE_$1.gve_id.
-///    "defaults":   { "SECTIONPATTERN_*": { "key": <value> } } — after all
+///    "defaults":   `{ "SECTIONPATTERN_*": { "key": <value> } }` — after all
 ///                  of the above, any listed key still MISSING from a
 ///                  matching section is injected. "{n}" in a string value
 ///                  becomes the section's trailing device number.
@@ -242,7 +242,7 @@ class ConfigKeyMap {
 
   /// When true, real carriage-return control characters inside string values
   /// (\r\n or \r) are converted to the literal two-character sequence \r that
-  /// the processor GUI expects (e.g. "Intake<CR><LF>Fans" -> "Intake\rFans").
+  /// the processor GUI expects (e.g. `Intake<CR><LF>Fans` -> "Intake\rFans").
   bool escapeCarriageReturns = false;
 
   /// Device prefix -> friendly label used to generate device names

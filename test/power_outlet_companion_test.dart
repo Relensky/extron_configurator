@@ -4,11 +4,12 @@ import 'package:extron_configurator/config_dictionary.dart';
 import 'package:extron_configurator/config_key_mapper.dart';
 import 'package:extron_configurator/ui_schema.dart';
 
-/// Every outlet a room actually has should come out of a load carrying its
-/// reboot flags, the same way it already gets its `_action` companion. The
-/// gating is free: outlet keys are stripped earlier in the pipeline when the
-/// room declares no power controller, so by the time companions run there is
-/// nothing to attach them to.
+/// Every outlet a room actually has should come out of a load carrying its two
+/// reboot flags — `_supports_reboot` and `_reboot_only`, which are the whole
+/// story now that `_action` is retired. The gating is free: outlet keys are
+/// stripped earlier in the pipeline when the room declares no power
+/// controller, so by the time companions run there is nothing to attach them
+/// to.
 void main() {
   late ConfigKeyMap map;
   late List<String> canonicalKeys;
@@ -51,8 +52,8 @@ void main() {
       expect(setup['power1_outlet_${n}_reboot_only'], isFalse,
           reason: 'outlet $n should not default to reboot-only');
     }
-    // The existing companion still lands too
-    expect(setup.containsKey('power1_outlet_1_action'), isTrue);
+    // ...and nothing recreates the retired third key
+    expect(setup.keys.where((k) => k.toString().endsWith('_action')), isEmpty);
   });
 
   test('only for the outlets that exist', () {

@@ -11,7 +11,7 @@ import 'package:extron_configurator/ui_schema.dart';
 /// A config stores `module` as the import path the processor uses
 /// ('modules.device.extr_scaler_...'), but the .py file sits directly under the
 /// modules folder. Resolving the file by turning EVERY dot into a separator
-/// looked for '<modules>/modules/device/extr_scaler_....py', found nothing, and
+/// looked for `<modules>/modules/device/extr_scaler_....py`, found nothing, and
 /// two things followed: the Keep Alive dropdown came up empty until the module
 /// was picked again by hand (which writes the bare stem), and the keep-alive
 /// audit had no command list to check against — so the switcher kept the

@@ -7,7 +7,7 @@ import 'app_state.dart';
 
 // --- CUSTOM CONTROLLER FOR SYNTAX HIGHLIGHTING (theme-aware) ---
 class JsonSyntaxController extends TextEditingController {
-  JsonSyntaxController({String? text}) : super(text: text);
+  JsonSyntaxController({super.text});
 
   /// Updated by the view whenever the app theme changes
   bool isDark = true;
@@ -22,7 +22,7 @@ class JsonSyntaxController extends TextEditingController {
     final Color stringColor  = isDark ? Colors.greenAccent     : Colors.green.shade800;
     final Color numberColor  = isDark ? Colors.orangeAccent    : Colors.deepOrange.shade800;
     final Color booleanColor = isDark ? Colors.pinkAccent      : Colors.purple.shade700;
-    final Color zebraColor   = isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03);
+    final Color zebraColor   = isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.03);
 
     // Regex to match JSON components
     final RegExp syntaxRegex = RegExp(
@@ -80,7 +80,7 @@ class JsonSyntaxController extends TextEditingController {
 
 // --- UPDATED VIEW ---
 class JsonEditorView extends StatefulWidget {
-  const JsonEditorView({Key? key}) : super(key: key);
+  const JsonEditorView({super.key});
 
   @override
   State<JsonEditorView> createState() => _JsonEditorViewState();

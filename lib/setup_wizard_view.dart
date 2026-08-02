@@ -5,7 +5,7 @@ import 'schema_field_builder.dart';
 import 'search_match.dart';
 
 class SetupWizardView extends StatelessWidget {
-  const SetupWizardView({Key? key}) : super(key: key);
+  const SetupWizardView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +227,7 @@ class SetupWizardView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 16.0),
       child: DropdownButtonFormField<String>(
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-        value: currentValue,
+        initialValue: currentValue,
         items: counts.map((count) {
           return DropdownMenuItem(value: count, child: Text(count));
         }).toList(),

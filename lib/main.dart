@@ -26,7 +26,7 @@ void main() {
 }
 
 class RoomConfigApp extends StatelessWidget {
-  const RoomConfigApp({Key? key}) : super(key: key);
+  const RoomConfigApp({super.key});
 
   /// The swatches offered by the Auris accent picker. Amber first (the
   /// package's canonical accent), then HUD-intensity alternates.
@@ -141,7 +141,7 @@ class RoomConfigApp extends StatelessWidget {
 }
 
 class MainDashboard extends StatefulWidget {
-  const MainDashboard({Key? key}) : super(key: key);
+  const MainDashboard({super.key});
 
   @override
   State<MainDashboard> createState() => _MainDashboardState();
@@ -550,11 +550,10 @@ class AccentColorPicker extends StatelessWidget {
   final bool allowAuto;
 
   const AccentColorPicker(
-      {Key? key,
+      {super.key,
       required this.settingKey,
       required this.swatches,
-      this.allowAuto = false})
-      : super(key: key);
+      this.allowAuto = false});
 
   String _currentHex(AppStateProvider p) {
     switch (settingKey) {
@@ -683,14 +682,14 @@ class ProcessorSearchField extends StatelessWidget {
   final VoidCallback? onInteracted;
 
   const ProcessorSearchField({
-    Key? key,
+    super.key,
     required this.label,
     required this.onSelected,
     this.helperText,
     this.initialProcessor,
     this.enabled = true,
     this.onInteracted,
-  }) : super(key: key);
+  });
 
   /// IP/hostname of one processors.json entry (same fallbacks as the
   /// provider's selectedProcessorIp).
@@ -779,7 +778,7 @@ class ProcessorSearchField extends StatelessWidget {
 
 /// View for mapping application paths and selecting the active deployment room
 class AppSettingsView extends StatelessWidget {
-  const AppSettingsView({Key? key}) : super(key: key);
+  const AppSettingsView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -889,7 +888,7 @@ class AppSettingsView extends StatelessWidget {
           };
           // Match the stored double back to an option key; null (no
           // selection shown) if it was hand-set to something unlisted.
-          final String? current = sizes.keys.firstWhere(
+          final String current = sizes.keys.firstWhere(
               (k) => double.parse(k) == provider.textScale,
               orElse: () => '');
           return DropdownButtonFormField<String>(
@@ -898,7 +897,7 @@ class AppSettingsView extends StatelessWidget {
               helperText: 'Scales all text in the app.',
               border: OutlineInputBorder(),
             ),
-            initialValue: (current != null && current.isNotEmpty) ? current : null,
+            initialValue: (current.isNotEmpty) ? current : null,
             items: sizes.entries
                 .map((e) =>
                     DropdownMenuItem(value: e.key, child: Text(e.value)))
@@ -1420,7 +1419,7 @@ class _DefaultPasswordFieldState extends State<_DefaultPasswordField> {
 /// when no room is selected, the user is prompted for it as before.
 class ProcessorSftpDialog extends StatefulWidget {
   final bool isUpload;
-  const ProcessorSftpDialog({Key? key, required this.isUpload}) : super(key: key);
+  const ProcessorSftpDialog({super.key, required this.isUpload});
 
   @override
   State<ProcessorSftpDialog> createState() => _ProcessorSftpDialogState();
@@ -1749,7 +1748,7 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
 ///  live somewhere else. Every Browse choice is saved immediately.
 /// ============================================================================
 class FirstRunSetupDialog extends StatelessWidget {
-  const FirstRunSetupDialog({Key? key}) : super(key: key);
+  const FirstRunSetupDialog({super.key});
 
   Future<void> _finish(BuildContext context, AppStateProvider provider) async {
     await provider.completeFirstRunSetup();

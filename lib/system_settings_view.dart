@@ -15,7 +15,7 @@ import 'schema_field_builder.dart';
 /// ui_schema.json under "section_fields", and the group heading comes from the
 /// "fields" entry named after the section itself.
 class SystemSettingsView extends StatelessWidget {
-  const SystemSettingsView({Key? key}) : super(key: key);
+  const SystemSettingsView({super.key});
 
   @override
   Widget build(BuildContext context) {

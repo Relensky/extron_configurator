@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'conversion_colors.dart';
 import 'search_match.dart';
 import 'ui_schema.dart';
 
@@ -167,7 +168,7 @@ class SchemaFieldBuilder {
         fieldKey, sectionKey, _sectionMap(provider, sectionKey));
 
     return DropdownButtonFormField<String>(
-      value: current.isNotEmpty ? current : null,
+      initialValue: current.isNotEmpty ? current : null,
       decoration: _decoration(label, spec.helperText,
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
@@ -183,26 +184,14 @@ class SchemaFieldBuilder {
     );
   }
 
-  /// The label colour for a converted value: ORANGE when it was carried over
-  /// from the loaded file and nobody has confirmed it against the current
-  /// template yet, plain WHITE (the theme's normal text) when the conversion
-  /// wrote it. Null for a config with no conversion history, which leaves the
-  /// field's normal styling alone.
+  /// The label colour for a converted value, from the one palette the
+  /// conversion preview also draws with — so a field the preview showed as
+  /// rewritten looks rewritten here too. Null for a config with no conversion
+  /// history, which leaves the field's normal styling alone.
   static Color? _originColor(
       BuildContext context, AppStateProvider provider, String sectionKey, String fieldKey) {
-    switch (provider.originFor(sectionKey, fieldKey)) {
-      case ValueOrigin.legacy:
-        // Readable on both themes — the light theme needs the darker shade
-        return Theme.of(context).brightness == Brightness.dark
-            ? Colors.orangeAccent
-            : Colors.deepOrange.shade700;
-      case ValueOrigin.written:
-        return Theme.of(context).brightness == Brightness.dark
-            ? Colors.white
-            : Colors.black87;
-      case null:
-        return null;
-    }
+    return ConversionColors.of(context)
+        .forOrigin(provider.originFor(sectionKey, fieldKey));
   }
 
   /// Shared InputDecoration: normal grey outline, or red in every state (with
@@ -349,7 +338,7 @@ class SchemaFieldBuilder {
         fieldKey, sectionKey, _sectionMap(provider, sectionKey));
 
     return DropdownButtonFormField<String>(
-      value: hasValue ? currentComboKey : null,
+      initialValue: hasValue ? currentComboKey : null,
       decoration: _decoration(label, spec.helperText,
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
@@ -478,7 +467,7 @@ class _SyncedTextField extends StatefulWidget {
   final bool isUnknown;
 
   const _SyncedTextField({
-    Key? key,
+    super.key,
     required this.provider,
     required this.sectionKey,
     required this.fieldKey,
@@ -487,7 +476,7 @@ class _SyncedTextField extends StatefulWidget {
     required this.type,
     required this.value,
     required this.isUnknown,
-  }) : super(key: key);
+  });
 
   @override
   State<_SyncedTextField> createState() => _SyncedTextFieldState();

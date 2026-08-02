@@ -1652,9 +1652,9 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
   int outletNumber(String k) =>
       int.tryParse(RegExp(r'(\d+)$').firstMatch(k)?.group(1) ?? '') ?? 0;
   // An outlet is `power1_outlet_<N>` and nothing more. Matching on the prefix
-  // alone swept up its companions — `_action`, and now `_supports_reboot` /
-  // `_reboot_only` — each of which would have reported as its own nameless
-  // "Outlet 0" row, since none of them ends in the outlet's number.
+  // alone swept up its companions — `_supports_reboot` / `_reboot_only` —
+  // each of which would have reported as its own nameless "Outlet 0" row,
+  // since neither ends in the outlet's number.
   final outletPattern = RegExp(r'^power1_outlet_\d+$');
   final outletKeys = setup.keys
       .where((k) =>
@@ -1666,7 +1666,6 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
       [
         'Outlet ${outletNumber(k)}',
         _friendlyValue(setup[k]),
-        _friendlyValue(setup['${k}_action']),
         // Blank rather than "false" when the key is absent, so a room without
         // the reboot settings reports an empty cell instead of a claim.
         _rebootLabel(setup['${k}_supports_reboot'], setup['${k}_reboot_only']),
@@ -1762,7 +1761,7 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
     // shouldn't grow empty tables.
     (
       title: 'Power Outlets',
-      header: ['Outlet', 'Name', 'Action', 'Reboot'],
+      header: ['Outlet', 'Name', 'Reboot'],
       rows: powerRows
     ),
     (

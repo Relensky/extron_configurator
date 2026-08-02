@@ -18,10 +18,10 @@ class PdfViewerDialog extends StatefulWidget {
   final String moduleName;
 
   const PdfViewerDialog({
-    Key? key,
+    super.key,
     required this.filePath,
     required this.moduleName,
-  }) : super(key: key);
+  });
 
   /// Convenience: resolve the manual for [moduleName] and, if found, show the
   /// dialog; otherwise surface the resolver's error in a snackbar. Keeps the
