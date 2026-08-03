@@ -1648,6 +1648,9 @@ class AppStateProvider extends ChangeNotifier {
         onStatusUpdate('System: Download cancelled (no save location chosen).');
         return false;
       }
+      // The dialog hands back exactly what was typed, so a name entered without
+      // an extension would land as a file Windows can't associate with JSON.
+      if (!savePath.toLowerCase().endsWith('.json')) savePath += '.json';
 
       // Write the working copy exactly as downloaded; your edits are exported later
       await File(savePath).writeAsString(originalContents);
@@ -3378,7 +3381,10 @@ class AppStateProvider extends ChangeNotifier {
       );
 
       // User cancelled the picker
-      if (outputFile == null) return false; 
+      if (outputFile == null) return false;
+      // The dialog hands back exactly what was typed, so a name entered without
+      // an extension would land as a file Windows can't associate with JSON.
+      if (!outputFile.toLowerCase().endsWith('.json')) outputFile += '.json';
 
       final targetFile = File(outputFile);
       final encoder = const JsonEncoder.withIndent('    ');
