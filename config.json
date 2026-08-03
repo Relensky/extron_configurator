@@ -151,6 +151,9 @@
         "serial_port": "COM3",
         "service_port": 0,
         "use_device_mute": false,
+        "speaker_mute": true,
+        "speaker_mute_method": "volume",
+        "speaker_unmute_volume": null,
         "user": "root"
     },
     "PROJECTORDEVICE_2": {
@@ -174,6 +177,9 @@
         "serial_port": "COM3",
         "service_port": 0,
         "use_device_mute": false,
+        "speaker_mute": true,
+        "speaker_mute_method": "volume",
+        "speaker_unmute_volume": null,
         "user": "root"
     },
     "PROJECTORDEVICE_3": {
@@ -199,6 +205,9 @@
         "serial_port": "COM4",
         "service_port": 0,
         "use_device_mute": false,
+        "speaker_mute": true,
+        "speaker_mute_method": "volume",
+        "speaker_unmute_volume": null,
         "user": "root"
     },
     "PROJECTORDEVICE_4": {
@@ -224,6 +233,9 @@
         "serial_port": "COM5",
         "service_port": 0,
         "use_device_mute": false,
+        "speaker_mute": true,
+        "speaker_mute_method": "volume",
+        "speaker_unmute_volume": null,
         "user": "root"
     },
     "RECORDERDEVICE_1": {

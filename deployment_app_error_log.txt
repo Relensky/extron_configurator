@@ -1,0 +1,6 @@
+[2026-08-03T16:38:02.089914] ERROR: Failed to load schematic layout from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_ee13d3b3\BSS103_config_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------

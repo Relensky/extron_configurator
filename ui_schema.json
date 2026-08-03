@@ -253,7 +253,10 @@
     ],
     "PROJECTORDEVICE_*": {
       "input": "",
-      "relay_host": "processor1"
+      "relay_host": "processor1",
+      "speaker_mute": true,
+      "speaker_mute_method": "volume",
+      "speaker_unmute_volume": null
     },
     "DSPDEVICE_*": {
       "group_mic_ceiling_mute": "4",
@@ -291,6 +294,31 @@
         "label": "Input",
         "addIfMissing": true,
         "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed)."
+      },
+      "speaker_mute": {
+        "type": "bool",
+        "label": "Mute Device Speakers (speaker_mute)",
+        "addIfMissing": true,
+        "helperText": "Absent from a config the processor treats as ON — turn it off to leave this display's audio alone",
+        "description": "Whether the room's audio mute also silences THIS display's own speakers. On (the processor's default when the key is absent) it mutes them with the display's own commands — the mute state, or a volume of 0, whichever speaker_mute_method selects. Turn it OFF for a display that IS the room's audio output, or for a room whose audio is routed and controlled at the switcher/DSP instead, where the program mute already happens on that device and the display should be left alone. Not the same as use_device_mute, which hands VIDEO muting to the display's AV mute / shutter; this key is only ever about its speakers."
+      },
+      "speaker_mute_method": {
+        "type": "dropdown",
+        "label": "Speaker Mute Method (speaker_mute_method)",
+        "addIfMissing": true,
+        "options": [
+          { "value": "volume", "label": "volume (set the device's volume to 0)" },
+          { "value": "mute", "label": "mute (send the device's mute state)" }
+        ],
+        "helperText": "Ignored when speaker_mute is off",
+        "description": "How the display's speakers are silenced. 'volume' (default) calls the module's volume command with 0; 'mute' sends the module's mute state (AudioMute / SpeakerMute / Mute — whichever that driver exposes). Volume is the default because a muted display usually parks a MUTE banner on screen and leaves it there. A module with no volume command falls back to its mute command on its own, and one with neither is skipped rather than guessed at."
+      },
+      "speaker_unmute_volume": {
+        "type": "int",
+        "label": "Speaker Unmute Volume (speaker_unmute_volume)",
+        "addIfMissing": true,
+        "helperText": "Only read when the method is 'volume'. Blank/absent = unmute with the mute command instead",
+        "description": "The level restored when unmuting a display that was silenced by volume: setting a volume to 0 does not record what it replaced, so there is nothing to go back to without this. Left unset, the processor unmutes with the module's mute command rather than pick a number that could be far too loud in an empty room. Note that 0 is a real level here and would leave the room silent — clear the key (trash button) instead of typing 0 if you want the fallback."
       }
     }
   },
