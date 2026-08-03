@@ -353,11 +353,42 @@ class DeviceClass:
         'group_pc_record_mute': '11',
       });
 
-      // Fallback source: a module with NO DEVICE_INFO still contributes the
-      // keys of its self.Models dict.
-      final fallback = provider.modelRegistry['DMP 128 Plus C'];
-      expect(fallback, isNotNull, reason: 'self.Models keys should be picked up');
-      expect(fallback!.explicit, isFalse);
+      // The DMP 128 next door claims its own models now too, so nothing in
+      // the shipped folder is left winning by self.Models fallback. That
+      // mechanism is covered against a synthetic module below, where it can't
+      // be invalidated by a driver getting its DEVICE_INFO filled in.
+      final neighbour = provider.modelRegistry['DMP 128 Plus C'];
+      expect(neighbour?.module, 'extr_dsp_DMP_128_Plus_Series');
+      expect(neighbour?.explicit, isTrue);
+    });
+
+    test('a module with NO DEVICE_INFO still contributes its self.Models keys',
+        () async {
+      final dir = Directory.systemTemp.createTempSync('selfmodels_fallback_');
+      addTearDown(() {
+        try {
+          dir.deleteSync(recursive: true);
+        } catch (_) {}
+      });
+      File(path.join(dir.path, 'vendor_widget_9000.py')).writeAsStringSync('''
+class DeviceClass:
+    def __init__(self):
+        self.Models = {
+            'Widget 9000': self.vendor_9000,
+            'Widget 9000X': self.vendor_9000x,
+        }
+''');
+
+      final provider = AppStateProvider(autoLoadSettings: false)
+        ..modulesPath = dir.path;
+      await provider.preloadAllModules();
+
+      final entry = provider.modelRegistry['Widget 9000'];
+      expect(entry, isNotNull, reason: 'self.Models keys should be picked up');
+      expect(entry!.module, 'vendor_widget_9000');
+      expect(entry.explicit, isFalse, reason: 'no DEVICE_INFO claimed it');
+      // Untyped, so it stays out of a known family's dropdown (checkbox-only).
+      expect(entry.deviceTypes, isEmpty);
     });
 
     test('unknown model: preview reports not-known, keep just saves the text',

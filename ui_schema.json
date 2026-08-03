@@ -91,7 +91,12 @@
       "numbered blocks use (PROJECTORDEVICE_1, ...); 'label' is the wizard text.",
       "'max' caps the wizard count dropdown. 'keepAlivePreference' lists the",
       "keep-alive commands to try (in order) when a new device's module is",
-      "parsed; if none match, 'Power'-style commands are used as before."
+      "parsed; if none match, 'Power'-style commands are used as before.",
+      "'systemKeys' lists SYSTEM_SETUP key patterns ('*' wildcard) that only",
+      "mean anything while the family has hardware in the room - setting its",
+      "wizard count to 0 removes them, so a room with no power controller",
+      "carries no outlet names. Same rule the key_map.json 'removals' entry",
+      "applies when an existing config is loaded."
     ],
     "dev_projectors": {
       "prefix": "PROJECTORDEVICE_",
@@ -127,7 +132,8 @@
       "prefix": "POWERDEVICE_",
       "label": "Power Controllers",
       "max": 8,
-      "keepAlivePreference": [ "SerialNumber", "Power" ]
+      "keepAlivePreference": [ "SerialNumber", "Power" ],
+      "systemKeys": [ "power*_outlet_*" ]
     },
     "dev_media_ports": {
       "prefix": "MEDIAPORTDEVICE_",

@@ -96,6 +96,9 @@
         "service_port": 0,
         "user": "admin"
     },
+    "ENVIRONMENT": {
+        "controlscript_profile": "pro"
+    },
     "METRICS_CONFIG": {
         "bearer": "enn6vVXIM6TZVho3DOWvJk1uhLfDk9VH",
         "enabled": true,
@@ -379,7 +382,6 @@
         "reboot_listener_token": "",
         "reboot_listener_client_password": "",
         "disable_inactivity_timer": false,
-        "api_proxy_server": "http://10.255.4.52:8080/data",
         "conf_display_1": "1",
         "conf_display_2": "2",
         "default_cc_aud_cam": false,

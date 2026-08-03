@@ -51,7 +51,7 @@ class ConfigDictionary {
     "active_debug_server": "Event space timer (6hrs for inactivity shutdown, default is 3hrs) and the debug server can be enabled with this boolean.",
     "active_event_space": "Event space timer (6hrs for inactivity shutdown, default is 3hrs) and the debug server can be enabled with this boolean.",
     "active_notifications": "Notifications can be enabled with true or disabled with false.",
-    "api_proxy_server": "Set the API proxy (metrics) server address with this line.",
+    "api_proxy_server": "RETIRED. The old API proxy (metrics) server address. Superseded by the METRICS_CONFIG block (uri + bearer), so it is no longer part of the template and is dropped when a legacy config is loaded. Only visible on a file opened with \"Use Original\".",
     "dev_cameras": "Use the dev_devices to set the number of devices in the room.",
     "dev_dsps": "Use the dev_devices to set the number of devices in the room.",
     "dev_media_ports": "Use the dev_devices to set the number of devices in the room.",

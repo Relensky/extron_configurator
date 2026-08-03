@@ -11,7 +11,15 @@ import hashlib
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "projector",
-    "models": [],
+    "models": [
+        "PT-VMZ51S",
+        "PT-BMZ51",
+        "PT-VMZ41",
+        "PT-VMZ71",
+        "PT-VMZ61",
+        "PT-VMW61",
+        "PT-VMW51",
+    ],
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",
@@ -25,7 +33,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Projector1",
         "lbl_name": "Lbl_Proj_Model_Proj1",
         "gve_id": "Proj1",
-        "name": "Projector - pana_vp_PT_BMZx1_VMWx1_VMZx1_Series_v1_0_3_0",
+        "name": "Projector - PT-VMZ51S",
         "device_id": None,
         "keep_alive_command": "Power",
         "keep_alive_interval": 10,

@@ -875,6 +875,13 @@ class AppStateProvider extends ChangeNotifier {
   /// module stem, same as [moduleDefaults].
   final Map<String, List<String>> moduleOmits = {};
 
+  /// Every model name a module covers, keyed by module stem. One driver often
+  /// serves a whole product line (the 82 4K and the 84 4K share a file), while
+  /// its DEVICE_INFO "defaults" can only spell out ONE of them in the device
+  /// name. This is what lets [_modelSubstitute] rewrite that name to whichever
+  /// model was actually picked.
+  final Map<String, List<String>> moduleModels = {};
+
   /// Sorted model names for the device-tab Model dropdown (every model).
   List<String> get availableModels => modelRegistry.keys.toList()..sort();
 
@@ -1015,6 +1022,7 @@ class AppStateProvider extends ChangeNotifier {
     modelRegistry.clear();
     moduleDefaults.clear();
     moduleOmits.clear();
+    moduleModels.clear();
     try {
       final dir = Directory(mPath);
       if (!await dir.exists()) {
@@ -1682,6 +1690,7 @@ class AppStateProvider extends ChangeNotifier {
     String? changeLogBaseName, // base for the per-load change log file name
   }) async {
     systemLogs.clear(); // Clear old logs on new load
+    _prunedSystemKeys.clear(); // Belongs to the room being replaced
 
     roomConfig = parsedConfig;
 
@@ -2111,6 +2120,10 @@ class AppStateProvider extends ChangeNotifier {
       // so there is nothing to colour orange.
       _clearConversionProvenance();
 
+      // Nothing carried over from the previous room can be restored into this
+      // one — the stash is per-config.
+      _prunedSystemKeys.clear();
+
       // Default all hardware counts to 0 (families from the UI schema's
       // device_types, so new dev_ keys added there are covered too)
       if (roomConfig.containsKey('SYSTEM_SETUP')) {
@@ -2123,10 +2136,27 @@ class AppStateProvider extends ChangeNotifier {
             setup[key] = "0";
           }
         }
+
+        // A new file starts with no hardware at all, so the SYSTEM_SETUP
+        // settings that only configure a family's hardware go with it — a room
+        // with no power controller carries no power1_outlet_* names. The
+        // template's values are stashed, so choosing a Power Controller count
+        // in the wizard puts them straight back.
+        for (final key in deviceKeys) {
+          _pruneSystemKeysForCount(key, 0);
+        }
       }
 
       // Prune existing devices based on the new 0 counts
       roomConfig = _pruneConfig(roomConfig);
+
+      // Give a new file the same schema baseline a LOADED one gets. Without
+      // this the two paths disagree: ENVIRONMENT (the ControlScript
+      // pro/xi profile) is described in ui_schema.json and injected on load,
+      // so a converted room had the setting while a brand new one silently
+      // had no ENVIRONMENT block at all. Template values always win — this
+      // only fills what the template does not carry.
+      _applySchemaBaseline();
 
       // A brand new room starts with a blank diagram — there is no working
       // file for a sidecar to sit next to yet.
@@ -2141,6 +2171,49 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logError("Failed to create new config", e, stack);
       return false;
     }
+  }
+
+  /// Fills anything the UI schema calls a baseline that the working config is
+  /// missing — SYSTEM_SETUP "system_defaults" and whole "section_defaults"
+  /// blocks (ENVIRONMENT, METRICS_CONFIG). Existing values are NEVER touched,
+  /// so a template that ships its own copy keeps it.
+  ///
+  /// The load path does this as part of the migration (with each addition
+  /// written to the change log); this is the same contract for New Config,
+  /// where there is no migration log to write to — additions go to the app log
+  /// instead. Returns how many properties were added.
+  int _applySchemaBaseline() {
+    int added = 0;
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is Map) {
+      uiSchema.systemDefaults.forEach((key, defaultValue) {
+        if (!setup.containsKey(key)) {
+          setup[key] = defaultValue;
+          added++;
+        }
+      });
+    }
+
+    uiSchema.sectionDefaults.forEach((sectionKey, defaults) {
+      final existing = roomConfig[sectionKey];
+      // Something else already lives under that name — never clobber it.
+      if (existing != null && existing is! Map) return;
+      if (existing == null) roomConfig[sectionKey] = <String, dynamic>{};
+      final section = roomConfig[sectionKey] as Map;
+      defaults.forEach((key, defaultValue) {
+        if (!section.containsKey(key)) {
+          section[key] = defaultValue;
+          added++;
+        }
+      });
+    });
+
+    if (added > 0) {
+      AppLogger.logInfo(
+          "New config: added $added schema baseline propert${added == 1 ? 'y' : 'ies'} "
+          "the template did not carry (ui_schema.json system_defaults / section_defaults).");
+    }
+    return added;
   }
 
   /// Updates a setting in memory and saves app_config.json simultaneously
@@ -2688,6 +2761,11 @@ class AppStateProvider extends ChangeNotifier {
       // Fallback: the driver's own self.Models dict keys
       if (models.isEmpty) models = parseSelfModels(content);
 
+      // Remembered whether or not this module ends up owning them in the
+      // registry — the name rewrite only needs to know which model names this
+      // file's own defaults could be spelled with.
+      if (models.isNotEmpty) moduleModels[moduleStem(moduleName)] = models;
+
       for (final model in models) {
         final existing = modelRegistry[model];
         // First module wins unless a later one declares the model EXPLICITLY
@@ -2821,6 +2899,38 @@ class AppStateProvider extends ChangeNotifier {
     return map;
   }
 
+  /// Rewrites the module's DEVICE_INFO defaults to name the model that was
+  /// actually PICKED, mutating and returning [map].
+  ///
+  /// One driver usually covers a whole product line, but its "defaults" can
+  /// only spell out one of them: the file serving both DTP CrossPoint 82 4K
+  /// and 84 4K carries `"name": "Switcher - DTP CrossPoint 82 4K"`, so picking
+  /// the 84 named the device an 82. Any default value containing one of the
+  /// module's OWN declared model names (see [moduleModels]) has that name
+  /// swapped for [model] — so the rule only ever fires on a value the module
+  /// wrote a model into, and leaves generic values (btn_name, gve_id, the
+  /// keep-alive) untouched.
+  Map<String, dynamic> _modelSubstitute(
+      Map<String, dynamic> map, String moduleValue, String model) {
+    final declared = moduleModels[moduleStem(moduleValue)];
+    if (declared == null || model.isEmpty) return map;
+
+    // Longest first: "DTP CrossPoint 82 4K IPCP SA" must win over the
+    // "DTP CrossPoint 82 4K" it starts with, or the suffix would be orphaned.
+    final candidates = List<String>.from(declared)
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    map.forEach((key, value) {
+      if (value is! String || value.isEmpty) return;
+      for (final declaredModel in candidates) {
+        if (declaredModel == model || !value.contains(declaredModel)) continue;
+        map[key] = value.replaceAll(declaredModel, model);
+        return; // one model name per value
+      }
+    });
+    return map;
+  }
+
   /// Treats null and '' as the same "empty" value so a blank module default
   /// (e.g. ip_address: "") doesn't read as different from an absent key.
   static bool _valuesEqual(dynamic a, dynamic b) {
@@ -2852,8 +2962,10 @@ class AppStateProvider extends ChangeNotifier {
     final currentModule =
         normalizeModuleName(dev['module']?.toString() ?? '');
     final raw = moduleDefaults[entry.module] ?? const <String, dynamic>{};
-    final resolved =
-        _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey);
+    final resolved = _modelSubstitute(
+        _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey),
+        entry.module,
+        model);
     final diffs = <FieldDiff>[];
     resolved.forEach((k, v) {
       if (!_valuesEqual(dev[k], v)) {
@@ -2890,8 +3002,12 @@ class AppStateProvider extends ChangeNotifier {
       }
       final raw = moduleDefaults[entry.module];
       if (raw != null) {
-        final resolved =
-            _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey);
+        // One driver serves a whole line, so its defaults name only one of
+        // them — rewrite to the model actually picked.
+        final resolved = _modelSubstitute(
+            _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey),
+            entry.module,
+            model);
         resolved.forEach((k, v) {
           dev[k] = v;
           applied.add('$k = $v');
@@ -3289,12 +3405,91 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// SYSTEM_SETUP keys taken out by [_pruneSystemKeysForCount], with the values
+  /// they held. Setting the family's count back above zero puts them straight
+  /// back, so changing your mind in the wizard doesn't cost you the outlet
+  /// names (or a trip through Check Defaults). Session-only, and cleared
+  /// whenever a different room is loaded.
+  final Map<String, dynamic> _prunedSystemKeys = {};
+
+  /// The family that owns [countKey], or null when the schema has no such
+  /// entry.
+  DeviceTypeSpec? _deviceTypeForCountKey(String countKey) {
+    for (final t in uiSchema.deviceTypes) {
+      if (t.countKey == countKey) return t;
+    }
+    return null;
+  }
+
+  /// Removes the SYSTEM_SETUP keys a device family owns (device_types
+  /// "systemKeys") once its count is 0 — outlet names with no power controller
+  /// behind them are dead data that still ships to the processor and still has
+  /// to be read past on the System tab. Nothing happens for a family with no
+  /// systemKeys, or while the count is above zero. Returns how many keys went,
+  /// and logs them so the removal is never silent.
+  int _pruneSystemKeysForCount(String countKey, int count) {
+    if (count > 0) return 0;
+    final spec = _deviceTypeForCountKey(countKey);
+    if (spec == null || spec.systemKeys.isEmpty) return 0;
+
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return 0;
+    final doomed = setup.keys
+        .map((k) => k.toString())
+        .where(spec.ownsSystemKey)
+        .toList();
+    if (doomed.isEmpty) return 0;
+
+    for (final key in doomed) {
+      _prunedSystemKeys[key] = setup[key]; // recoverable if the count returns
+      setup.remove(key);
+    }
+    AppLogger.logInfo(
+        "No ${spec.label.toLowerCase()} in this room: removed ${doomed.length} "
+        "SYSTEM_SETUP key(s) that only configure them — ${doomed.join(', ')}");
+    return doomed.length;
+  }
+
+  /// The other half of [_pruneSystemKeysForCount]: giving a family hardware
+  /// again restores the keys its own removal took, with their previous values.
+  /// A key the config has since gained back on its own is never overwritten.
+  int _restoreSystemKeysForCount(String countKey, int count) {
+    if (count <= 0 || _prunedSystemKeys.isEmpty) return 0;
+    final spec = _deviceTypeForCountKey(countKey);
+    if (spec == null || spec.systemKeys.isEmpty) return 0;
+
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return 0;
+    final restorable =
+        _prunedSystemKeys.keys.where(spec.ownsSystemKey).toList();
+    int restored = 0;
+    for (final key in restorable) {
+      final value = _prunedSystemKeys.remove(key);
+      if (setup.containsKey(key)) continue; // the room already has its own
+      setup[key] = value;
+      restored++;
+    }
+    if (restored > 0) {
+      AppLogger.logInfo(
+          "${spec.label} back in this room: restored $restored SYSTEM_SETUP "
+          "key(s) removed when the count was set to 0.");
+    }
+    return restored;
+  }
+
   /// Updates the device count in SYSTEM_SETUP and generates/removes device blocks
   void setDeviceCount(String devKey, String devicePrefix, int count, Map<String, dynamic> defaultTemplateBlock) {
     if (!roomConfig.containsKey('SYSTEM_SETUP')) return;
     
     // Update the integer string in SYSTEM_SETUP (e.g., dev_cameras: "2")
     roomConfig['SYSTEM_SETUP'][devKey] = count.toString();
+
+    // Setting a family to none also drops the SYSTEM_SETUP settings that only
+    // exist to configure its hardware (the power controller's outlet names) —
+    // see the schema's device_types "systemKeys". Raising the count again puts
+    // them back, so the wizard's dropdown stays a reversible choice.
+    _pruneSystemKeysForCount(devKey, count);
+    _restoreSystemKeysForCount(devKey, count);
 
     // 1. Remove existing devices of this type to ensure a clean slate
     roomConfig.removeWhere((key, value) => key.startsWith(devicePrefix));

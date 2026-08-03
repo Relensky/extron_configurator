@@ -280,6 +280,13 @@ class DeviceTypeSpec {
   final List<String> keepAlivePreference;
   final Map<String, dynamic>? template;
 
+  /// SYSTEM_SETUP key patterns ('*' wildcard) that only mean anything while
+  /// this family has hardware in the room — e.g. the power controller's
+  /// `power1_outlet_*` names. Setting the family's count to 0 removes them,
+  /// because outlet names with no power controller behind them are dead data
+  /// the tech still has to read past on the System tab.
+  final List<String> systemKeys;
+
   const DeviceTypeSpec({
     required this.countKey,
     required this.prefix,
@@ -287,7 +294,20 @@ class DeviceTypeSpec {
     this.maxCount = 8,
     this.keepAlivePreference = const [],
     this.template,
+    this.systemKeys = const [],
   }) : label = label ?? countKey;
+
+  /// True when [key] matches one of this family's [systemKeys] patterns.
+  /// Case-insensitive so a legacy block's POWER1_OUTLET_1 is caught too.
+  bool ownsSystemKey(String key) {
+    for (final pattern in systemKeys) {
+      final regex = RegExp(
+          '^${pattern.split('*').map(RegExp.escape).join('.*')}\$',
+          caseSensitive: false);
+      if (regex.hasMatch(key)) return true;
+    }
+    return false;
+  }
 }
 
 /// One "consistency" entry: a cross-key sanity check inside a single config
@@ -389,7 +409,13 @@ class UiSchema {
     DeviceTypeSpec(countKey: 'dev_switchers', prefix: 'SWITCHERDEVICE_', label: 'Switchers'),
     DeviceTypeSpec(countKey: 'dev_dsps', prefix: 'DSPDEVICE_', label: 'DSPs'),
     DeviceTypeSpec(countKey: 'dev_usb_switchers', prefix: 'USBDEVICE_', label: 'USB Switchers'),
-    DeviceTypeSpec(countKey: 'dev_power_controllers', prefix: 'POWERDEVICE_', label: 'Power Controllers'),
+    DeviceTypeSpec(
+        countKey: 'dev_power_controllers',
+        prefix: 'POWERDEVICE_',
+        label: 'Power Controllers',
+        // No controller, no outlets — see [DeviceTypeSpec.systemKeys]. Mirrors
+        // the key_map.json removal that already does this on load.
+        systemKeys: ['power*_outlet_*']),
     DeviceTypeSpec(countKey: 'dev_media_ports', prefix: 'MEDIAPORTDEVICE_', label: 'MediaPorts'),
     DeviceTypeSpec(countKey: 'dev_wireless', prefix: 'WIRELESSDEVICE_', label: 'Wireless (ShareLink)'),
     DeviceTypeSpec(countKey: 'dev_recorders', prefix: 'RECORDERDEVICE_', label: 'Recorders'),
@@ -701,6 +727,12 @@ class UiSchema {
               ? (spec['template'] as Map)
                   .map((k, v) => MapEntry(k.toString(), v))
               : null,
+          systemKeys: (spec['systemKeys'] is List)
+              ? (spec['systemKeys'] as List)
+                  .map((e) => e.toString())
+                  .where((s) => s.isNotEmpty)
+                  .toList()
+              : const [],
         ));
       });
       if (parsed.isNotEmpty) _deviceTypes = parsed;

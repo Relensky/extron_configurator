@@ -25,7 +25,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Screen1",
         "lbl_name": "Lbl_Screen1_Model",
         "gve_id": "Screen1",
-        "name": "Screen - dali_controller_SCB_100_v1_0_3_0",
+        "name": "Screen - SCB-100",
         "keep_alive_command": None,
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
