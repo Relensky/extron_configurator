@@ -547,7 +547,9 @@ class DeviceConfigurationForm extends StatelessWidget {
               child: Autocomplete<String>(
                 initialValue: TextEditingValue(text: deviceData['module']?.toString() ?? ''),
                 optionsBuilder: (TextEditingValue textEditingValue) {
-                  final modules = provider.availableModules;
+                  // Offered (and therefore stored) as the 'modules.device.<x>'
+                  // import path the processor needs, never the bare file stem.
+                  final modules = provider.availableModuleImports;
                   final text = textEditingValue.text;
                   // Show the FULL list when the field is empty or still holds the
                   // saved value — otherwise a pre-filled field filters itself down
@@ -576,10 +578,16 @@ class DeviceConfigurationForm extends StatelessWidget {
                         icon: const Icon(Icons.arrow_drop_down),
                         tooltip: 'Browse modules',
                         onPressed: () async {
-                          final selected = await _showModulePicker(context, provider.availableModules);
+                          final selected = await _showModulePicker(
+                              context, provider.availableModuleImports);
                           if (selected != null) {
                             provider.updateDeviceValue(deviceKey, 'module', selected);
-                            controller.text = selected; // Keep the visible field in sync
+                            // Show whatever was actually stored, so the prefix
+                            // the provider adds is visible in the field.
+                            controller.text =
+                                provider.roomConfig[deviceKey]?['module']
+                                        ?.toString() ??
+                                    selected;
                           }
                         },
                       ),
@@ -612,7 +620,11 @@ class DeviceConfigurationForm extends StatelessWidget {
                     modPath = result.files.single.name.replaceAll('.py', '');
                   }
                   provider.updateDeviceValue(deviceKey, 'module', modPath);
-                  moduleFieldController?.text = modPath; // Keep the visible field in sync
+                  // Keep the visible field in sync with the stored (prefixed)
+                  // import path rather than the raw relative name.
+                  moduleFieldController?.text =
+                      provider.roomConfig[deviceKey]?['module']?.toString() ??
+                          modPath;
                 }
               },
             ),

@@ -179,7 +179,9 @@ class DeviceClass:
 
       expect(preview.known, isTrue);
       expect(preview.moduleChanged, isTrue);
-      expect(preview.newModule, 'extr_dsp_DMP_64_Plus_Series');
+      // The registry is keyed by the bare file stem; what lands in the config
+      // (and what the dialog quotes) is always the dotted import path.
+      expect(preview.newModule, 'modules.device.extr_dsp_DMP_64_Plus_Series');
       // Trailing index substituted for device 3.
       expect(preview.resolvedDefaults['btn_name'], 'Btn_Con_DSP3');
       expect(preview.resolvedDefaults['gve_id'], 'DSP3');
@@ -222,14 +224,15 @@ class DeviceClass:
 
       final dev = provider.roomConfig['DSPDEVICE_2'];
       expect(dev['model'], 'DMP 64 Plus C');
-      expect(dev['module'], 'extr_dsp_DMP_64_Plus_Series');
+      expect(dev['module'], 'modules.device.extr_dsp_DMP_64_Plus_Series');
       expect(dev['protocol'], 'TCP');
       expect(dev['net_port'], 22023);
       expect(dev['com_type'], 'Network'); // added even though it was missing
       expect(dev['keep_alive_command'], 'RefreshMatrix');
       expect(dev['btn_name'], 'Btn_Con_DSP2'); // index substituted
       expect(dev['gve_id'], 'DSP2');
-      expect(applied, contains('module = extr_dsp_DMP_64_Plus_Series'));
+      expect(applied,
+          contains('module = modules.device.extr_dsp_DMP_64_Plus_Series'));
       expect(applied, contains('net_port = 22023'));
     });
 
@@ -294,7 +297,8 @@ class DeviceClass:
 
       final dev = provider.roomConfig['DSPDEVICE_1'];
       expect(dev['model'], 'DMP 64 Plus C');
-      expect(dev['module'], 'extr_dsp_DMP_64_Plus_Series'); // switched
+      expect(dev['module'],
+          'modules.device.extr_dsp_DMP_64_Plus_Series'); // switched
       expect(dev['protocol'], 'SSH'); // preserved
       expect(dev['ip_address'], '10.0.0.5'); // preserved
       expect(dev['name'], 'My DSP'); // preserved

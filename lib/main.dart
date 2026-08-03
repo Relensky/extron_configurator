@@ -214,6 +214,48 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
+  /// Brings the schematic in line with the config that was just opened.
+  ///
+  /// A saved `<config>_schematic.json` belongs to the config file, so it is
+  /// loaded from that folder as soon as the config is — no need to visit the
+  /// Schematic tab first. The one case that isn't obvious is a session that has
+  /// already arranged a diagram of its own: then the user is asked whether to
+  /// take the saved one or discard it and keep what's on screen.
+  Future<void> _syncSchematicAfterLoad(
+      BuildContext context, AppStateProvider provider) async {
+    if (!provider.schematicLayoutNeedsChoice) {
+      provider.loadSchematicLayoutForCurrentConfig();
+      return;
+    }
+    final bool? loadSaved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Saved schematic found'),
+        content: Text(
+            'This config has a saved schematic beside it:\n\n'
+            '${provider.schematicSidecarPath}\n\n'
+            'You also have a schematic arranged in this session. Load the '
+            'saved one, or discard it and keep yours?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Discard saved, keep mine'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Load saved schematic'),
+          ),
+        ],
+      ),
+    );
+    // Dismissed without answering: the file's own layout is the safe default.
+    if (loadSaved == false) {
+      provider.keepSchematicLayoutForCurrentConfig();
+    } else {
+      provider.loadSchematicLayoutForCurrentConfig();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
@@ -263,9 +305,12 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'Open Existing Config',
             onPressed: () async {
               bool loaded = await provider.loadExistingConfig();
+              if (!loaded || !context.mounted) return;
+              // The schematic saved next to the config comes back with it.
+              await _syncSchematicAfterLoad(context, provider);
               // Only when the load actually changed/flagged something — a
               // clean re-load of an already-migrated file stays silent.
-              if (loaded && provider.lastLoadHadChanges && context.mounted) {
+              if (provider.lastLoadHadChanges && context.mounted) {
                 _showMigrationLogDialog(context, provider.systemLogs);
               }
             },
@@ -279,8 +324,11 @@ class _MainDashboardState extends State<MainDashboard> {
                 barrierDismissible: false,
                 builder: (context) => const ProcessorSftpDialog(isUpload: false),
               );
+              if (result != true || !context.mounted) return;
+              // Working copy on disk now — pick up any schematic beside it.
+              await _syncSchematicAfterLoad(context, provider);
               // On a successful download, show the migration/audit log like a local load does
-              if (result == true && provider.lastLoadHadChanges && context.mounted) {
+              if (provider.lastLoadHadChanges && context.mounted) {
                 _showMigrationLogDialog(context, provider.systemLogs);
               }
             },
@@ -331,7 +379,9 @@ class _MainDashboardState extends State<MainDashboard> {
           Expanded(
             child: RepaintBoundary(
               key: _captureKey,
-              child: (!hasConfig && selectedIndex != 5) ? _buildLandingScreen(context, provider) : _buildMainContent(selectedIndex),
+              child: (!hasConfig && selectedIndex != 5)
+                  ? _buildLandingScreen(context, provider)
+                  : _buildMainContent(selectedIndex, provider.configRevision),
             ),
           )
         ],
@@ -377,7 +427,9 @@ class _MainDashboardState extends State<MainDashboard> {
                   ),
                   onPressed: () async {
                     bool loaded = await provider.loadExistingConfig();
-                    if (loaded && provider.lastLoadHadChanges && context.mounted) {
+                    if (!loaded || !context.mounted) return;
+                    await _syncSchematicAfterLoad(context, provider);
+                    if (provider.lastLoadHadChanges && context.mounted) {
                       _showMigrationLogDialog(context, provider.systemLogs);
                     }
                   },
@@ -390,17 +442,28 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  Widget _buildMainContent(int selectedIndex) {
+  /// The active tab's view. [configRevision] identifies the loaded room: the
+  /// config-driven tabs are keyed on it so replacing the config (New from
+  /// template, opening a file, a download) rebuilds their fields from scratch.
+  /// Text fields and autocompletes read `initialValue` once per element, so
+  /// without this the previous room's name and number stayed on screen until
+  /// the user switched tabs and came back. App Config is left unkeyed — its
+  /// fields are application settings and have nothing to do with the room.
+  Widget _buildMainContent(int selectedIndex, int configRevision) {
+    final key = ValueKey('tab_${selectedIndex}_cfg_$configRevision');
     switch (selectedIndex) {
       case 0:
-        return const SetupWizardView(); 
+        return SetupWizardView(key: key);
       case 1:
-        return const DynamicDevicesTabsView();
+        return DynamicDevicesTabsView(key: key);
       case 2:
-        return const SystemSettingsView();
+        return SystemSettingsView(key: key);
       case 3:
-        return const SchematicView();
+        return SchematicView(key: key);
       case 4:
+        // Unkeyed on purpose: the raw editor already re-reads the config in
+        // didChangeDependencies, and remounting it mid-Apply would cut off its
+        // own "applied/saved" feedback.
         return const JsonEditorView();
       case 5:
         return const AppSettingsView();

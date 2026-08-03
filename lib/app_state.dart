@@ -220,13 +220,14 @@ class AppStateProvider extends ChangeNotifier {
   // ---------------------------------------------------------------------
   //  SETTINGS PERSISTENCE (app_config.json)
   //  Every application setting (file paths, SFTP connection, theme,
-  //  toggles) lives in a plain app_config.json in the app's root folder —
-  //  the working directory, or the folder next to the executable — so the
-  //  settings travel with the app and can be inspected or hand-edited.
-  //  The file is created automatically with defaults on the very first
-  //  launch, so startup never depends on the user picking a folder or
-  //  location. Settings saved by older versions in the OS store
-  //  (SharedPreferences) are imported into the file once.
+  //  toggles) lives in a plain, hand-editable app_config.json — kept in the
+  //  per-user settings folder (%APPDATA%\RoomConfigBuilder on Windows) so
+  //  that installing a new build never overwrites it. Its exact location is
+  //  shown on the App Config tab. The file is created automatically with
+  //  defaults on the very first launch, so startup never depends on the user
+  //  picking a folder or location. A file left next to the app by an older
+  //  version is migrated in once, as are settings saved by even older
+  //  versions in the OS store (SharedPreferences).
   // ---------------------------------------------------------------------
 
   /// Absolute path of the app_config.json in use (shown in App Config).
@@ -235,12 +236,66 @@ class AppStateProvider extends ChangeNotifier {
   /// True once first-run setup has been completed (persisted in the file).
   bool _initialSetupComplete = false;
 
-  /// app_config.json lives in the app's base directory, so the settings file
-  /// and the default Root Folder always agree (see [_appBaseDir]). That base
-  /// is a stable, writable location, so settings persist across launches even
-  /// when the app is started from a shortcut (working dir = System32).
-  static String _resolveSettingsFilePath() =>
+  /// The app folder copy of app_config.json — where settings used to live, and
+  /// still the file [_appBaseDir] looks for when working out the app's root.
+  static String _legacySettingsFilePath() =>
       path.join(_appBaseDir(), 'app_config.json');
+
+  /// Per-user settings folder: %APPDATA%\RoomConfigBuilder on Windows, else
+  /// ~/.room_config_builder. Falls back to the app folder when the environment
+  /// gives us nothing to work with.
+  static String _userSettingsDir() {
+    final env = Platform.environment;
+    final String base = Platform.isWindows
+        ? (env['APPDATA'] ?? env['LOCALAPPDATA'] ?? '')
+        : (env['XDG_CONFIG_HOME'] ?? env['HOME'] ?? '');
+    if (base.isEmpty) return _appBaseDir();
+    return path.join(
+        base, Platform.isWindows ? 'RoomConfigBuilder' : '.room_config_builder');
+  }
+
+  /// Where app_config.json is read from and written to.
+  ///
+  /// It deliberately does NOT live next to the executable any more. Deploying a
+  /// new build by copying the output folder over the installed one replaced the
+  /// settings file along with it, which is how toggles like "Confirm before
+  /// deleting settings" and the processor-password autofill kept reverting to
+  /// an old build's values. A per-user location is outside anything a deploy
+  /// overwrites, so settings carry over across updates.
+  ///
+  /// A file left in the app folder by an earlier version is migrated on the
+  /// first launch (see [_migrateLegacySettingsFile]) and then left alone —
+  /// [_appBaseDir] still uses its presence to resolve the app's root folder.
+  static String _resolveSettingsFilePath() =>
+      path.join(_userSettingsDir(), 'app_config.json');
+
+  /// The resolved app_config.json location, for tests that guard it against
+  /// drifting back next to the executable.
+  @visibleForTesting
+  static String resolvedSettingsFilePath() => _resolveSettingsFilePath();
+
+  /// The app-folder location settings used to live in, for the same tests.
+  @visibleForTesting
+  static String legacySettingsFilePath() => _legacySettingsFilePath();
+
+  /// One-time move of an app-folder app_config.json into the per-user folder.
+  /// Only runs when the per-user file doesn't exist yet, so it can never
+  /// clobber newer settings, and never deletes the original.
+  static void _migrateLegacySettingsFile(String target) {
+    try {
+      if (File(target).existsSync()) return;
+      final legacy = File(_legacySettingsFilePath());
+      if (legacy.path == target || !legacy.existsSync()) return;
+      Directory(path.dirname(target)).createSync(recursive: true);
+      legacy.copySync(target);
+      AppLogger.logInfo(
+          'Moved app_config.json into the per-user settings folder '
+          '($target) so it survives app updates. The old copy at '
+          '${legacy.path} is no longer read.');
+    } catch (e, stack) {
+      AppLogger.logError('Could not migrate the old app_config.json', e, stack);
+    }
+  }
 
   /// Everything that goes into app_config.json.
   ///
@@ -288,7 +343,10 @@ class AppStateProvider extends ChangeNotifier {
     final Map<String, dynamic> data = settingsAsJson();
     try {
       const encoder = JsonEncoder.withIndent('    ');
-      await File(settingsFilePath).writeAsString(encoder.convert(data));
+      final file = File(settingsFilePath);
+      // The per-user settings folder doesn't exist on a first launch.
+      await file.parent.create(recursive: true);
+      await file.writeAsString(encoder.convert(data));
     } catch (e, stack) {
       AppLogger.logError(
           'Failed to save settings to $settingsFilePath', e, stack);
@@ -375,6 +433,20 @@ class AppStateProvider extends ChangeNotifier {
   Map<String, dynamic> buildings = {}; // NEW: Store building abbreviations
   Map<String, dynamic>? selectedProcessor;
   Map<String, dynamic> roomConfig = {};
+
+  /// Bumped every time [roomConfig] is REPLACED wholesale — New from template,
+  /// opening a file, an SFTP download, Apply Changes in the raw editor, Use
+  /// Original. The views key their content on it so Flutter throws the old
+  /// input elements away instead of reusing them: `TextFormField.initialValue`
+  /// and `Autocomplete.initialValue` are read once per element, so without a
+  /// changing key the previous room's name/number sat on the Wizard until the
+  /// tab was switched away and back.
+  int configRevision = 0;
+
+  /// Call after any wholesale replacement of [roomConfig]. Callers still
+  /// notifyListeners() themselves — this only moves the identity forward.
+  void _bumpConfigRevision() => configRevision++;
+
   bool isDarkMode = true;
 
   /// Visual style selected in App Config. 'classic' (the default) is a
@@ -534,6 +606,7 @@ class AppStateProvider extends ChangeNotifier {
       lastLoadHadChanges = false;
       // Nothing was converted, so there is no provenance to colour by
       _clearConversionProvenance();
+      _bumpConfigRevision(); // Every field now shows the on-disk value
       _preloadModulesFromConfig();
       notifyListeners();
       AppLogger.logInfo(
@@ -562,8 +635,10 @@ class AppStateProvider extends ChangeNotifier {
   //  Node positions dragged in edit mode and user-drawn connection lines.
   //  Held here (not in the view) so edits survive tab switches; persisted
   //  on demand to a sidecar file next to the working config
-  //  ("<config>_schematic.json") via saveSchematicLayout, and re-loaded
-  //  automatically the first time the Schematic tab opens for that config.
+  //  ("<config>_schematic.json") via saveSchematicLayout, and re-loaded as
+  //  soon as that config is opened (the saved diagram belongs to the file, so
+  //  it comes back with it). When the session already has a diagram of its
+  //  own, the UI asks first — see schematicLayoutNeedsChoice.
   // ---------------------------------------------------------------------
 
   /// Node id (device key / 'PROCESSOR' / 'IDF' / 'TOUCHPANEL') -> position
@@ -634,14 +709,63 @@ class AppStateProvider extends ChangeNotifier {
     return path.join(dir, '${base}_schematic.json');
   }
 
-  /// Called when the Schematic tab opens: if the working config changed since
-  /// the last visit, drop the old layout and load the sidecar if one exists.
-  void ensureSchematicLayoutForCurrentConfig() {
-    if (_schematicSyncedPath == currentConfigPath) return;
+  /// True when the in-memory diagram holds anything the user arranged by hand
+  /// (dragged nodes, drawn lines, deleted auto-edges). Drives the "keep or
+  /// replace" prompt when a config with its own saved layout is opened.
+  bool get hasSchematicLayout =>
+      schematicPositions.isNotEmpty ||
+      schematicLinks.isNotEmpty ||
+      schematicHiddenEdges.isNotEmpty;
+
+  /// True when a `<config>_schematic.json` sits next to the working config.
+  bool get hasSavedSchematicLayout {
+    final sidecar = schematicSidecarPath;
+    return sidecar.isNotEmpty && File(sidecar).existsSync();
+  }
+
+  /// True when the config that was just opened needs the user's call on the
+  /// diagram: they arranged one in this session AND the file has its own saved
+  /// layout beside it. Without both, loading the sidecar (or clearing) is the
+  /// obvious answer and happens without a prompt.
+  bool get schematicLayoutNeedsChoice =>
+      _schematicSyncedPath != currentConfigPath &&
+      hasSchematicLayout &&
+      hasSavedSchematicLayout;
+
+  /// Empties the in-memory diagram and detaches it from any file, so the next
+  /// Schematic tab visit starts from the auto-layout.
+  void _resetSchematicLayout() {
     _schematicSyncedPath = currentConfigPath;
     schematicPositions.clear();
     schematicLinks.clear();
     schematicHiddenEdges.clear();
+  }
+
+  /// Adopts the CURRENT in-memory diagram for the working config, ignoring any
+  /// saved sidecar next to it — the "discard the saved schematic" answer to the
+  /// prompt shown on load. Nothing is written; the sidecar on disk is only
+  /// replaced if the user later hits Save Layout.
+  void keepSchematicLayoutForCurrentConfig() {
+    _schematicSyncedPath = currentConfigPath;
+    AppLogger.logInfo(
+        'Kept the in-memory schematic layout; the saved layout beside '
+        '$currentConfigPath was not loaded.');
+    notifyListeners();
+  }
+
+  /// Called when the Schematic tab opens: if the working config changed since
+  /// the last visit, drop the old layout and load the sidecar if one exists.
+  void ensureSchematicLayoutForCurrentConfig() {
+    if (_schematicSyncedPath == currentConfigPath) return;
+    loadSchematicLayoutForCurrentConfig();
+  }
+
+  /// Replaces the in-memory diagram with the layout saved beside the working
+  /// config (blank when there is no sidecar). Called unconditionally when a
+  /// config is opened — the saved schematic belongs to the file, so it comes
+  /// back with it — and lazily by the Schematic tab for older sessions.
+  void loadSchematicLayoutForCurrentConfig() {
+    _resetSchematicLayout();
     // Notify in every path — the tab has already built by the time this runs
     // (post-frame), so without it a loaded sidecar wouldn't show until the
     // next unrelated rebuild.
@@ -652,7 +776,10 @@ class AppStateProvider extends ChangeNotifier {
     }
     try {
       final doc = jsonDecode(File(sidecar).readAsStringSync());
-      if (doc is! Map) return;
+      if (doc is! Map) {
+        notifyListeners();
+        return;
+      }
       final positions = doc['positions'];
       if (positions is Map) {
         positions.forEach((id, xy) {
@@ -721,6 +848,13 @@ class AppStateProvider extends ChangeNotifier {
   // All python modules discovered under modulesPath (dot notation), for the
   // module selection dropdown/autocomplete on device tabs.
   List<String> availableModules = [];
+
+  /// [availableModules] in the form the config stores — `modules.device.<stem>`.
+  /// The device tab's picker and autocomplete offer these, so what is selected
+  /// is exactly what is written and the field never shows a bare stem the
+  /// processor could not import.
+  List<String> get availableModuleImports =>
+      availableModules.map(normalizeModuleName).toList();
 
   // --- MODEL REGISTRY -------------------------------------------------
   // Every model name found across the module files, mapped to the module
@@ -1301,6 +1435,9 @@ class AppStateProvider extends ChangeNotifier {
   Future<void> _loadSavedSettings() async {
     try {
       settingsFilePath = _resolveSettingsFilePath();
+      // Carry an older build's app-folder settings over the first time the
+      // per-user location is used, so nothing is re-entered after an update.
+      _migrateLegacySettingsFile(settingsFilePath);
       Map<String, dynamic> saved = {};
       final file = File(settingsFilePath);
       if (await file.exists()) {
@@ -1759,6 +1896,7 @@ class AppStateProvider extends ChangeNotifier {
       systemLogs.add("CHANGE LOG: Details saved to '${logBase}_backup_log.txt'");
     }
 
+    _bumpConfigRevision(); // Repaint every tab with the newly loaded room
     _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
     notifyListeners();
   }
@@ -1989,7 +2127,12 @@ class AppStateProvider extends ChangeNotifier {
 
       // Prune existing devices based on the new 0 counts
       roomConfig = _pruneConfig(roomConfig);
-      
+
+      // A brand new room starts with a blank diagram — there is no working
+      // file for a sidecar to sit next to yet.
+      _resetSchematicLayout();
+
+      _bumpConfigRevision(); // Repaint every tab: this is a different room now
       _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
       notifyListeners();
       AppLogger.logInfo("New config created from template: $baseConfigPath");
@@ -2288,6 +2431,14 @@ class AppStateProvider extends ChangeNotifier {
       // e.g. "TLP\\rPoE"), same as every other write path.
       if (value is String && value.contains('\r')) {
         value = value.replaceAll('\r\n', r'\r').replaceAll('\r', r'\r');
+      }
+      // The config always stores the import path the processor uses —
+      // 'modules.device.<file stem>' — however the value arrived (picked from
+      // the list, typed by hand, or resolved from a .py file). Normalizing on
+      // the way in is what keeps the prefix on a module chosen for a NEW
+      // device, not just on one rewritten during a load.
+      if (property == 'module' && value is String) {
+        value = normalizeModuleName(value);
       }
       roomConfig[deviceKey][property] = value;
       // A new python module was just selected: parse it right away (if it isn't
@@ -2689,13 +2840,17 @@ class AppStateProvider extends ChangeNotifier {
     if (dev is! Map || entry == null) {
       return ModelChangePreview(
         known: entry != null,
-        newModule: entry?.module ?? '',
+        newModule: normalizeModuleName(entry?.module ?? ''),
         moduleChanged: false,
         resolvedDefaults: const {},
         diffs: const [],
       );
     }
-    final currentModule = dev['module']?.toString() ?? '';
+    // Compare in the stored import form so a device already on this module
+    // isn't reported as a switch just because the registry key is the stem.
+    final moduleImport = normalizeModuleName(entry.module);
+    final currentModule =
+        normalizeModuleName(dev['module']?.toString() ?? '');
     final raw = moduleDefaults[entry.module] ?? const <String, dynamic>{};
     final resolved =
         _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey);
@@ -2707,8 +2862,8 @@ class AppStateProvider extends ChangeNotifier {
     });
     return ModelChangePreview(
       known: true,
-      newModule: entry.module,
-      moduleChanged: currentModule != entry.module,
+      newModule: moduleImport,
+      moduleChanged: currentModule != moduleImport,
       resolvedDefaults: resolved,
       diffs: diffs,
     );
@@ -2726,9 +2881,12 @@ class AppStateProvider extends ChangeNotifier {
 
     final entry = modelRegistry[model];
     if (entry != null) {
-      if (dev['module'] != entry.module) {
-        dev['module'] = entry.module;
-        applied.add('module = ${entry.module}');
+      // The registry is keyed by the bare file stem; the config stores the
+      // dotted import path.
+      final String moduleImport = normalizeModuleName(entry.module);
+      if (dev['module'] != moduleImport) {
+        dev['module'] = moduleImport;
+        applied.add('module = $moduleImport');
       }
       final raw = moduleDefaults[entry.module];
       if (raw != null) {
@@ -2760,13 +2918,14 @@ class AppStateProvider extends ChangeNotifier {
 
     final entry = modelRegistry[model];
     if (entry != null) {
-      dev['module'] = entry.module;
+      final String moduleImport = normalizeModuleName(entry.module);
+      dev['module'] = moduleImport;
       // Parse the newly selected module right away so the keep-alive /
       // input dropdowns are ready the moment the form rebuilds.
       getCommandsForModule(entry.module);
       getInputsForModule(entry.module);
       AppLogger.logInfo(
-          "Model '$model' set on $deviceKey (module ${entry.module}); existing settings kept.");
+          "Model '$model' set on $deviceKey (module $moduleImport); existing settings kept.");
     }
     notifyListeners();
   }
@@ -2982,6 +3141,7 @@ class AppStateProvider extends ChangeNotifier {
       }
 
       roomConfig = parsed;
+      _bumpConfigRevision(); // Hand-edited JSON: rebuild the form fields from it
       _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
       notifyListeners();
       AppLogger.logInfo("Room configuration updated from raw JSON editor.");

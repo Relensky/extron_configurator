@@ -47,7 +47,7 @@ Future<void> _run(WidgetTester tester, String style) async {
     // Skip the first-run dialog so we land straight on the tabs.
     provider.settingsLoaded = true;
     provider.firstRunSetupNeeded = false;
-    provider.selectTab(4); // App Config
+    provider.selectTab(5); // App Config (index 4 is Raw JSON)
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppStateProvider>.value(
