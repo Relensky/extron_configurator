@@ -460,7 +460,8 @@
       "description": "Delay the keep_alive_command until the trigger is received such as the APC needing to complete the login before polling."
     },
     "default_cc_aud_cam": {
-      "description": "Make the system show the audience camera as the capture source on startup."
+      "type": "bool",
+      "description": "In a two-camera room, start with the AUDIENCE camera selected as the capture-card source instead of the instructor camera — what the far end of a call sees when the room comes up. Ignored in a room with fewer than two cameras."
     },
     "gui_capture_source_available": {
       "type": "dropdown",
@@ -468,7 +469,7 @@
         "Yes",
         "No"
       ],
-      "description": "Determine if the user can change the capture source on the touch panel."
+      "description": "Whether the panel offers a capture-source page at all — the controls that pick what gets sent to the capture card / USB interface for a Zoom or Teams call. 'No' hides them, for a room whose capture feed is fixed or that has no capture card."
     },
     "gui_usb_or_vga": {
       "type": "dropdown",
@@ -485,13 +486,14 @@
       "description": "Network Time Protocol (NTP) secondary server address in use for the processor."
     },
     "output_audio_ald": {
-      "description": "Output for the Assisted Listening Device in use for the room."
+      "description": "Switcher output feeding the Assisted Listening system. It gets the same audio tie as output_audio on every source change and at startup, so the ALD hears whatever the room hears. Blank in a room without one. Non-digits are stripped, so '4A' reaches the switcher as 4."
     },
     "pcmac": {
-      "description": "Future use for the mac address on the local PC."
+      "description": "MAC address of the room PC, for a future wake-on-LAN feature. Recorded for reference — the current ControlScript template does not read this key, so filling it in changes nothing yet."
     },
     "gui_demo_mode": {
-      "description": "Operate the touch panel while not connecting to any device."
+      "type": "bool",
+      "description": "Bring the room up with every device faked: each one gets a dummy connection handler, so the panel is fully usable while nothing is actually talked to. For demonstrating or exercising a panel off the hardware. Leave it false in a live room — no command reaches a device while it is on."
     },
     "module": {
       "description": "File path to the module as a string."
@@ -520,7 +522,8 @@
       "type": "int"
     },
     "use_device_mute": {
-      "description": "Boolean for whether a mute command will also call to the device when video mute is pressed."
+      "type": "bool",
+      "description": "Whether pressing Video Mute also mutes the PICTURE at this display itself — the processor sends the module's AV mute / video mute / shutter command on top of muting the switcher output feeding it. Turn it on for a display that must black out even when it isn't fed from the switcher, or one whose own blanking is cleaner than dropping the signal. Not to be confused with speaker_mute, which is the same idea for the display's SPEAKERS."
     },
     "user": {
       "description": "Username for the device when using a network connection."
@@ -549,13 +552,16 @@
       "description": "Device alias for import from the room's Extron json file. These can be used to set the host on serial devices."
     },
     "active_debug_server": {
-      "description": "Event space timer (6hrs for inactivity shutdown, default is 3hrs) and the debug server can be enabled with this boolean."
+      "type": "bool",
+      "description": "Run the processor's debug server, so a debug client can attach to the running room and watch its logs live. Nothing to do with the inactivity timer. The reboot listener (active_reboot_listener) is separate and works with this switched off."
     },
     "active_event_space": {
-      "description": "Event space timer (6hrs for inactivity shutdown, default is 3hrs) and the debug server can be enabled with this boolean."
+      "type": "bool",
+      "description": "Put the room on the EVENT inactivity timer — 6 hours before it shuts itself down, against the normal 3. For a room that regularly hosts long sessions with no touch panel activity. The room's Timer button cycles normal / event / disabled and writes the choice back into config.json on the processor; disable_inactivity_timer (25hrs) outranks this flag."
     },
     "active_notifications": {
-      "description": "Notifications can be enabled with true or disabled with false."
+      "type": "bool",
+      "description": "Send the room's Teams notifications (device offline, system errors) to the teams_webhook URL. The panel can toggle this at runtime and the processor saves the new value back into config.json."
     },
     "disable_inactivity_timer": {
       "type": "bool",
@@ -610,22 +616,22 @@
       "description": "Runtime switches for the processor itself. Every converted room gets this block with controlscript_profile set to 'pro'; traceback_allowed stays opt-in and is only here when the room's own file asked for it."
     },
     "dev_cameras": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many cameras the room has. Sets how many CAMERADEVICE_n blocks exist (edit them on the Devices tabs) and how many camera controls the panel shows. The processor also uses it to decide whether to route a camera to the capture card at all."
     },
     "dev_dsps": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many DSPs the room has. Sets how many DSPDEVICE_n blocks exist. Any count above 0 puts the room in 'DSP system' mode, where volume and mute go to the DSP's audio groups instead of the switcher's."
     },
     "dev_media_ports": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many MediaPort USB interfaces the room has. Sets how many MEDIAPORTDEVICE_n blocks exist."
     },
     "dev_power_controllers": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many power controllers (APC) the room has. Sets how many POWERDEVICE_n blocks exist. Dropping it to 0 also clears the power1_outlet_* names, since a room with no controller has no outlets to label."
     },
     "dev_projectors": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many projectors/displays the room has. Sets how many PROJECTORDEVICE_n blocks exist, how many power buttons the panel shows, and how many output_proj_n outputs the processor routes and video-mutes."
     },
     "dev_recorders": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many recorders (AV Bridge and the like) the room has. Sets how many RECORDERDEVICE_n blocks exist."
     },
     "dev_relay_power": {
       "label": "Relay Power Control (dev_relay_power)",
@@ -648,103 +654,116 @@
       "description": "How the projection screens are controlled: 'Relay' (processor relay ports), 'Serial' (direct RS-232), 'Serial over Ethernet', or 'Network' (not a device count). Edited under Hardware Options in the Setup Wizard."
     },
     "dev_screens": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many projection screens the room has. Sets how many SCREENDEVICE_n blocks exist. How those screens are driven is dev_screen_control (relay ports, serial, or network)."
     },
     "dev_switchers": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many switchers the room has. Sets how many SWITCHERDEVICE_n blocks exist. Switcher 1 is the main matrix/scaler every route goes through; switchers 2 and 3 are the sub-switchers used for capture-card routing (sub_switch_CC) and Conference mode (conf_display_1 / conf_display_2)."
     },
     "dev_usb_switchers": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many USB switchers the room has. Sets how many USBDEVICE_n blocks exist — the device that hands the room's USB camera/mic over to the laptop or the room PC."
     },
     "dev_wireless": {
-      "description": "Use the dev_devices to set the number of devices in the room."
+      "description": "How many wireless presentation devices (ShareLink, VIA) the room has. Sets how many WIRELESSDEVICE_n blocks exist; the wireless source button also needs input_wireless set."
     },
     "gve_bldg": {
       "description": "Building CODE for GVE (e.g. 'BSS' for Behavioral and Social Science), from buildings.json. The Setup Wizard stores the code here and generates gui_full_room_name from the full building name."
     },
     "gve_room": {
-      "description": "Room name for GVE. Set the IDs from the room after it is created in GVE."
+      "description": "Room number as GVE knows it (e.g. '103'). Paired with gve_bldg it identifies the room to GVE, and the two together name the backup files this app writes (BSS103_old_config.json)."
     },
     "gve_id_processor": {
-      "description": "Set the IDs from the room after it is created in GVE."
+      "description": "GVE device ID for the processor itself, copied from GVE after the room is created there. Carried in the config as the room's inventory record — device connection statuses are reported under each device block's own gve_id."
     },
     "gve_id_room_1": {
-      "description": "Set the IDs from the room after it is created in GVE."
+      "description": "GVE ROOM ID, copied from GVE after the room is created there. This is the one GVE sends room events to: a SystemOn or SystemOff addressed to this ID starts or shuts down the room, so a wrong value means GVE cannot power the room."
     },
     "gve_id_room_2": {
-      "description": "Set the IDs from the room after it is created in GVE."
+      "description": "GVE room ID for the second room of a divisible/paired space. Set it to N/A in a single room."
     },
     "gve_id_tlp_1": {
-      "description": "Set the IDs from the room after it is created in GVE."
+      "description": "GVE device ID for the touch panel, copied from GVE. The processor reports the panel as Online under this ID at startup and whenever Force Online is pressed, so GVE shows the TLP as connected."
     },
     "gve_ip": {
-      "description": "DNS or IP for the GVE module to connect to the instance of GVE. Example: gve.csuchico.edu"
+      "description": "DNS name or IP of the GVE server the processor connects to (port 5555). Example: gve.csuchico.edu. Every device status, source change and power event the room reports goes here."
+    },
+    "__input_output_note": {
+      "__comment": [
+        "input_* / output_* are switcher CONNECTOR NUMBERS, written as strings.",
+        "Pressing a source on the panel reads input_<source> and ties that",
+        "input to output_audio, output_audio_ald and every output_proj_N.",
+        "A blank or missing value means the room does not have that source or",
+        "destination: the processor logs it and routes nothing, which is how a",
+        "room without (say) a Blu-ray is configured. The processor strips",
+        "non-digits from most output values, so '5B' reaches the switcher as 5."
+      ]
     },
     "input_aud_cam": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input the audience camera is wired to. Routed to the second capture card (output_cc2) for the far end of a Zoom/Teams call. In a one-camera room, leave the camera you don't have blank — the panel keeps a single 'Camera' routing button and the processor falls back to whichever camera input IS set."
     },
     "input_blu_ray": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input the Blu-ray player is wired to. Only reachable when the sources list (gui_inputs) includes BluRay."
     },
     "input_doc_cam": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input the document camera is wired to. Only reachable when the sources list (gui_inputs) includes a Doc Cam."
     },
     "input_dvd": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input the DVD player is wired to. Only reachable when the sources list (gui_inputs) includes DVD."
     },
     "input_hdmi": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input for the room's HDMI connection — the laptop plate or cubby cable. Present on every sources layout."
     },
     "input_inst_cam": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input the instructor camera is wired to. Routed to the capture card (output_cc) for a Zoom/Teams call, and sent to LoopOut on switchers that have one (IN1806/IN1808, DTP2 CrossPoint 82). In a one-camera room the audience camera button falls back to this input."
     },
     "input_pc": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input the room PC is wired to — the input number to enter when the room has a PC. It is also the room's startup default: at power-on the processor ties it to program audio (output_audio), the ALD feed (output_audio_ald), the confidence monitor (output_monitor_1) and every projector output. Leave it blank in a room with no PC."
     },
     "input_pc_extended": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input carrying the PC's SECOND display output (extended desktop). Tied to output_monitor_2 at startup, so the lectern monitor can show a different picture from the projectors. Blank in a room whose PC has one output."
     },
     "input_usb": {
       "labelWhen": {
         "gui_usb_or_vga=VGA": "VGA"
       },
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input for the room's USB-C plate — or the VGA plate in an older room, which is what gui_usb_or_vga selects. The key name stays input_usb either way; only the panel label and this field's label change."
     },
     "input_wireless": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher input the wireless presentation device (ShareLink, VIA) is wired to. Only reachable when the sources list (gui_inputs) includes Wireless."
     },
     "output_audio": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding the room's program audio. Every source selection ties the chosen input here as an Audio-only tie (Audio/Video on a DTP2, which cannot break audio out), so this is the output the volume slider and program mute act on. On a DTP2 CrossPoint 82 the processor forces the audio breakaway to output 2 regardless of this value."
     },
     "output_cc": {
-      "description": "Used for the capture card or USB interface for Zoom meetings."
+      "description": "Switcher output feeding the capture card / USB interface used for Zoom and Teams — what the far end sees. The instructor camera routes here by default; on a switcher with a LoopOut (IN1806/IN1808, DTP2 CrossPoint 82) the processor uses that instead of a matrix tie."
     },
     "output_cc2": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding a SECOND capture card, used by the audience camera. Setting it is what gives the panel its CC2 routing row — a room without a second capture path leaves it blank."
     },
     "output_monitor_1": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding the lectern / confidence monitor. The room PC (input_pc) is tied here at startup as a Video-only tie, so the monitor keeps showing the PC while the projectors follow the source buttons."
     },
     "output_monitor_2": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding a second lectern monitor, tied to the PC's extended desktop (input_pc_extended) at startup. Blank in a room with one monitor."
     },
     "output_proj_1": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding projector/display 1. Every source selection ties the chosen input here, and video mute is sent to this output. Non-digits are stripped by the processor, so '5B' (a DTP output's B connector) reaches the switcher as output 5. The literal string 'None' skips the mute for a display the switcher does not drive."
     },
     "output_proj_2": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding projector/display 2 — see output_proj_1. Only read while dev_projectors is 2 or more."
     },
     "output_proj_3": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding projector/display 3 — see output_proj_1. Only read while dev_projectors is 3 or more."
     },
     "output_proj_4": {
-      "description": "Inputs and Outputs are assigned in the config."
+      "description": "Switcher output feeding projector/display 4 — see output_proj_1. Only read while dev_projectors is 4."
     },
     "conf_display_1": {
-      "description": "Set the Conference display outputs."
+      "helperText": "An INPUT on the conference switcher (Switcher 3), not an output",
+      "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 1' is pressed on the Conference routing page — the codec's first display feed. Read only while gui_routing_mode is Conference."
     },
     "conf_display_2": {
-      "description": "Set the Conference display outputs."
+      "helperText": "An INPUT on the conference switcher (Switcher 3), not an output",
+      "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 2' is pressed on the Conference routing page — the codec's second display feed. Read only while gui_routing_mode is Conference."
     },
     "gui_routing_mode": {
       "type": "dropdown",
@@ -753,7 +772,7 @@
         "Conference",
         "Extended"
       ],
-      "description": "Normal, Conference, or Extended"
+      "description": "How the room's displays are driven. 'Normal': every display follows the selected source. 'Extended': displays 2 and 4 show the PC's extended desktop (input_pc_extended) while 1 and 3 follow the source, and the routing pages switch to their Extended layouts. 'Conference': the room is built around a codec — the Conference routing page appears and drives the conference switcher with conf_display_1 / conf_display_2, and the camera pages change to match."
     },
     "gui_tab": {
       "type": "dropdown",
@@ -765,7 +784,7 @@
         { "value": "4_Cams_Mic_Dev", "label": "Menu Tabs: 4 - Cameras, Mic, & Devices" },
         { "value": "Conference", "label": "Menu Tabs: 2 - Camera & Devices (subs the Camera2Handler — no instructor camera)" }
       ],
-      "description": "Options: 2_Cam_Dev, 2_Mic_Dev, 3_Cam_Mic_Dev, 3_Cams_Dev, 4_Cams_Mic_Dev, Conference"
+      "description": "Which menu tabs the panel shows down the side of the main page, so a room only carries the controls it has: cameras, microphone, devices, or a combination. Pick the entry matching the room's hardware — the count in each option is how many tabs appear. 'Conference' is the 2-tab camera layout for a codec room and also substitutes the second camera handler, so there is no instructor camera."
     },
     "gui_routing_available": {
       "type": "dropdown",
@@ -773,7 +792,7 @@
         "Yes",
         "No"
       ],
-      "description": "Yes or No option for showing the video matrix button and routing pages."
+      "description": "Whether the panel offers the routing pages — the video matrix button and the per-destination source picking. 'No' leaves the room on the plain source buttons, which is what most teaching rooms want; 'Yes' suits a room where someone needs to send different sources to different displays."
     },
     "gui_inputs": {
       "type": "combo",
@@ -921,57 +940,53 @@
       ],
       "description": "Specify the Microphone sub page: 'Yes' (Single Mic w/ Ducking), 'No' (Single Mic w/ Mute), 'Ceiling' (Ceiling Mic w/ Voicelift)."
     },
-    "gui_preset_name_aud_1": {
-      "description": "Set the audience camera preset names."
+    "gui_preset_name_aud_*": {
+      "helperText": "Panel button text — \\r starts a new line",
+      "description": "Button text for the audience camera's stored presets 1-4 (the camera holds the actual positions; this only names the buttons). Name them for what the shot is — 'Left', 'Wide', 'Whiteboard'. A \\r puts the rest on a second line, which is how a two-word name fits the button.",
+      "__comment": "One wildcard entry covers gui_preset_name_aud_1 through _4."
     },
-    "gui_preset_name_aud_2": {
-      "description": "Set the audience camera preset names."
-    },
-    "gui_preset_name_aud_3": {
-      "description": "Set the audience camera preset names."
-    },
-    "gui_preset_name_aud_4": {
-      "description": "Set the audience camera preset names."
-    },
-    "gui_preset_name_inst_1": {
-      "description": "Set the instructor camera preset names."
-    },
-    "gui_preset_name_inst_2": {
-      "description": "Set the instructor camera preset names."
-    },
-    "gui_preset_name_inst_3": {
-      "description": "Set the instructor camera preset names."
-    },
-    "gui_preset_name_inst_4": {
-      "description": "Set the instructor camera preset names."
+    "gui_preset_name_inst_*": {
+      "helperText": "Panel button text — \\r starts a new line",
+      "description": "Button text for the instructor camera's stored presets 1-4 (the camera holds the actual positions; this only names the buttons). Name them for what the shot is — 'Lectern', 'Wide', 'Whiteboard'. A \\r puts the rest on a second line, which is how a two-word name fits the button.",
+      "__comment": "One wildcard entry covers gui_preset_name_inst_1 through _4."
     },
     "gui_full_room_name": {
-      "description": "You can set the full room name that appears on the gui pages."
+      "description": "Room name printed across the panel's pages, e.g. 'Butte Hall 103'. Free text for people in the room to read — the Setup Wizard fills it in from the building name and room number, unlike gve_bldg/gve_room which are the codes GVE matches on."
     },
     "mic_max_volume": {
-      "description": "Volume settings for the project.",
+      "description": "Loudest the microphone slider can reach, in dB as the DSP/switcher reads it (processor default 0). With mic_min_volume it defines the range the panel's mic slider maps onto — so 0 to -10 means a full slider is 0 dB and the bottom is -10 dB, not 'off'.",
+      "helperText": "dB at the top of the mic slider (default 0)",
       "type": "int"
     },
     "mic_min_volume": {
-      "description": "Volume settings for the project.",
+      "description": "Quietest the microphone slider can reach, in dB (processor default -10). Raise it (e.g. -6) in a room where the bottom of the slider still needs to be audible; lower it for finer control over a wider range.",
+      "helperText": "dB at the bottom of the mic slider (default -10)",
       "type": "int"
     },
     "switch_max_volume": {
-      "description": "Volume settings for the project.",
+      "description": "Loudest the program volume slider can reach, in dB (processor default 0). With switch_min_volume it defines the range the panel's program slider maps onto, whether the level lands on the switcher or the DSP.",
+      "helperText": "dB at the top of the program slider (default 0)",
       "type": "int"
     },
     "switch_min_volume": {
-      "description": "Volume settings for the project.",
+      "description": "Quietest the program volume slider can reach, in dB (processor default -40). This is the floor a user can drag to, not a mute — muting is a separate command.",
+      "helperText": "dB at the bottom of the program slider (default -40)",
       "type": "int"
     },
     "teams_webhook": {
-      "description": "The teams notifications that are sent out are set through the webhook link."
+      "description": "Power Automate webhook URL the room posts its Teams notifications to (device offline, errors). Only used while active_notifications is true; blank it and the room reports nothing."
     },
     "sub_switch_CC": {
-      "description": "Used when another switcher is used for the capture card routing."
+      "helperText": "The string \"true\" turns it on — anything else is off",
+      "description": "Route the capture-card destinations through the SECONDARY switchers instead of the main one: CC1 goes to Switcher 2 and CC2 to Switcher 3, each set by input number rather than a matrix tie. For a room where the capture feeds hang off their own small switcher. Leave it null/false and CC routing stays on switcher 1."
     },
     "tv_videomute": {
-      "description": "Addon for Arts 208 to only mute the secondary output on the switcher and then mute the display from the TV. Un-needed in other rooms."
+      "type": "dropdown",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "description": "On a DTP2 CrossPoint 82 only: when video mute is pressed, DON'T mute switcher output 1 — the display on that output is muted by its own command instead, which keeps the HDBaseT link to the TV alive. Added for Arts 208; leave it 'No' in a room that doesn't need the exception (the other outputs mute normally either way)."
     },
     "power1_outlet_*": {
       "description": "Set the GUI names for the power controller (APC). 23 character limitation.",
