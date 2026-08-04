@@ -254,8 +254,8 @@ class _JsonEditorViewState extends State<JsonEditorView> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Edits here are applied to the loaded config as you type — press '
-            'Save in the toolbar to write them to the config file.',
+            'Edits here are applied to the temporary loaded config as you type — press '
+            'Save in the toolbar to write them to the local config file.',
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
