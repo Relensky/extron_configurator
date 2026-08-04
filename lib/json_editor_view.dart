@@ -121,8 +121,14 @@ class _JsonEditorViewState extends State<JsonEditorView> {
       String saveNote = '';
       try {
         savedPath = await provider.saveCurrentConfigToFile();
+        // The save keeps a <name>_previous.json copy of what it replaced —
+        // say so, since the toolbar's Undo button restores from exactly that.
+        final String backupNote = provider.canUndoLastSave
+            ? ' Previous version kept as '
+                '${provider.saveBackupPath.split(Platform.pathSeparator).last}.'
+            : '';
         saveNote = savedPath != null
-            ? ' Saved to ${savedPath.split(Platform.pathSeparator).last}.'
+            ? ' Saved to ${savedPath.split(Platform.pathSeparator).last}.$backupNote'
             : ' No working file loaded — use Export to save to disk.';
       } catch (e) {
         saveNote = ' WARNING: could not write working file ($e).';

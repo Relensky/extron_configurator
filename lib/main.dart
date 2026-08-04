@@ -214,6 +214,96 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
+  /// Puts the working file back the way it was before the last save, after
+  /// showing exactly what that costs.
+  ///
+  /// The dialog lists the differences between the backup and the config on
+  /// screen — which is more than the save wrote, because any editing done
+  /// since is in there too and goes with it. That list is the whole point of
+  /// the confirmation: "undo a save" is easy to press expecting only the last
+  /// thing you typed to come back.
+  Future<void> _undoLastSave(
+      BuildContext context, AppStateProvider provider) async {
+    final List<ConfigDelta> deltas = await provider.undoDeltas();
+    if (!context.mounted) return;
+
+    if (deltas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Nothing to undo — the config already matches the backup.'),
+      ));
+      return;
+    }
+
+    final String backupName =
+        provider.saveBackupPath.split(Platform.pathSeparator).last;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          const Icon(Icons.undo, color: Colors.orange),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text('Undo Last Save',
+                  style: Theme.of(ctx).textTheme.titleLarge)),
+        ]),
+        content: SizedBox(
+          width: 560,
+          height: 340,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Restoring $backupName rewrites both the file and what is '
+                  'on screen. ${deltas.length} propert'
+                  '${deltas.length == 1 ? 'y' : 'ies'} would change — this '
+                  'includes anything you have edited since that save:'),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Theme.of(ctx).dividerColor),
+                  ),
+                  child: ListView.builder(
+                    itemCount: deltas.length,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6.0),
+                      child: Text(deltas[index].summary,
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 12)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.undo, size: 18),
+            label: const Text('Restore Backup'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final bool ok = await provider.undoLastSave();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? 'Restored $backupName — the file and the editor are back to the '
+              'previous save.'
+          : 'Could not restore $backupName; nothing was changed.'),
+      backgroundColor: ok ? Colors.green : Colors.orange.shade800,
+    ));
+  }
+
   /// Brings the schematic in line with the config that was just opened.
   ///
   /// A saved `<config>_schematic.json` belongs to the config file, so it is
@@ -343,6 +433,66 @@ class _MainDashboardState extends State<MainDashboard> {
                 builder: (context) => const ProcessorSftpDialog(isUpload: true),
               );
             },
+          ),
+          // UNDO THE LAST SAVE: put back the '<name>_previous.json' copy the
+          // save took of the file beforehand. Enabled only while that backup
+          // belongs to the file currently loaded — see canUndoLastSave.
+          IconButton(
+            icon: const Icon(Icons.undo),
+            tooltip: provider.canUndoLastSave
+                ? 'Undo Last Save — restore the config from '
+                    '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
+                : 'Undo Last Save — nothing has been saved over a local file yet',
+            onPressed: provider.canUndoLastSave
+                ? () => _undoLastSave(context, provider)
+                : null,
+          ),
+          // SAVE OVER THE WORKING FILE: the file this session was opened
+          // from (or the working copy an SFTP download wrote), with no save
+          // dialog — the same "Apply = save" the Raw JSON tab performs, so a
+          // tech editing an existing room isn't forced through Export and a
+          // filename prompt for every change. Writes the FULL un-pruned
+          // config like every other working-file save; Export/upload are
+          // still what produce the pruned file. Disabled until the session
+          // has a local file, since there is nothing to write over then.
+          IconButton(
+            icon: const Icon(Icons.save),
+            tooltip: hasConfig && provider.currentConfigPath.isNotEmpty
+                ? 'Save & Apply Changes to Local Config\n'
+                    '(${provider.currentConfigPath})'
+                : 'Save & Apply Changes to Local Config — no local file yet, '
+                    'use Export Config Locally first',
+            onPressed: (!hasConfig || provider.currentConfigPath.isEmpty)
+                ? null
+                : () async {
+                    String message;
+                    bool failed = false;
+                    try {
+                      final String? saved =
+                          await provider.saveCurrentConfigToFile();
+                      failed = saved == null;
+                      // canUndoLastSave is the honest report of whether the
+                      // pre-save copy actually landed — it is best-effort.
+                      final String backupNote = provider.canUndoLastSave
+                          ? ' — previous version kept as '
+                              '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
+                          : '';
+                      message = saved == null
+                          ? 'No local file for this config — use Export Config Locally.'
+                          : 'Changes applied and saved to '
+                              '${saved.split(Platform.pathSeparator).last}'
+                              '$backupNote';
+                    } catch (e) {
+                      failed = true;
+                      message = 'Could not write the local config file: $e';
+                    }
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(message),
+                      backgroundColor:
+                          failed ? Colors.orange.shade800 : Colors.green,
+                    ));
+                  },
           ),
           IconButton(
             icon: const Icon(Icons.save_alt),

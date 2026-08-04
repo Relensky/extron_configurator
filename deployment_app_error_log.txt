@@ -4,3 +4,21 @@ not json at all
 ^
 
 --------------------------------------------------
+[2026-08-03T18:13:47.813883] ERROR: Failed to load schematic layout from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_d4b43f02\BSS103_config_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-03T18:20:36.143430] ERROR: Failed to load schematic layout from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_591f950a\BSS103_config_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-03T18:21:51.961850] ERROR: Failed to load schematic layout from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_6837dace\BSS103_config_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------

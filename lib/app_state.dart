@@ -3294,24 +3294,176 @@ class AppStateProvider extends ChangeNotifier {
     return changed;
   }
 
+  /// Where the pre-save backup of the working file lives: `<name>_previous.json`
+  /// beside it, the same sidecar convention `<name>_schematic.json` follows.
+  /// '' when the session has no working file yet.
+  String get saveBackupPath {
+    if (currentConfigPath.isEmpty) return '';
+    final dir = path.dirname(currentConfigPath);
+    final base = path.basenameWithoutExtension(currentConfigPath);
+    return path.join(dir, '${base}_previous.json');
+  }
+
+  /// The backup this session's last save actually wrote, so Undo can never
+  /// offer a stale file: a backup left beside a DIFFERENT config (the path
+  /// moved on) or one whose write failed is not something to restore from.
+  String _lastSaveBackupPath = '';
+
+  /// True when the last save's backup is still the one belonging to the
+  /// working file — what enables the Undo button. Says nothing about whether
+  /// the two files actually differ; [undoDeltas] answers that.
+  bool get canUndoLastSave =>
+      _lastSaveBackupPath.isNotEmpty &&
+      _lastSaveBackupPath == saveBackupPath &&
+      File(_lastSaveBackupPath).existsSync();
+
+  /// Copies the working file to `<name>_previous.json` before it is
+  /// overwritten. Best-effort: a backup that cannot be written (read-only
+  /// folder, file in use) must not stop the save, but it does clear the undo
+  /// marker — restoring an older backup would undo more than the user did.
+  Future<void> _backupWorkingFile() async {
+    _lastSaveBackupPath = '';
+    final target = saveBackupPath;
+    if (target.isEmpty) return;
+    try {
+      final source = File(currentConfigPath);
+      // First save of a brand new file: nothing on disk to preserve yet.
+      if (!await source.exists()) return;
+      await source.copy(target);
+      _lastSaveBackupPath = target;
+      AppLogger.logInfo('Backed up $currentConfigPath to $target');
+    } catch (e, stack) {
+      AppLogger.logError('Failed to back up $currentConfigPath to $target', e, stack);
+    }
+  }
+
   /// Writes the CURRENT in-memory config to the active working file (the file
-  /// opened locally, or the working copy chosen during an SFTP download).
-  /// Saves the FULL un-pruned config so no device blocks are ever lost on
-  /// disk — export and SFTP upload still produce the pruned version.
+  /// opened locally, or the working copy chosen during an SFTP download),
+  /// after copying what is on disk to `<name>_previous.json` so the save can
+  /// be undone. Saves the FULL un-pruned config so no device blocks are ever
+  /// lost on disk — export and SFTP upload still produce the pruned version.
   /// Returns the path written, or null when no working file is associated
   /// with this session (e.g. 'Create New' that hasn't been exported yet).
   Future<String?> saveCurrentConfigToFile() async {
     if (currentConfigPath.isEmpty) return null;
+    await _backupWorkingFile();
     try {
       const encoder = JsonEncoder.withIndent('    ');
       await File(currentConfigPath)
           .writeAsString(encoder.convert(_sortJson(roomConfig)));
       AppLogger.logInfo("Saved current config to working file $currentConfigPath");
+      notifyListeners(); // The Undo button becomes available
       return currentConfigPath;
     } catch (e, stack) {
       AppLogger.logError("Failed to save working file $currentConfigPath", e, stack);
       rethrow; // Surface to the UI so the user knows the save failed
     }
+  }
+
+  /// What Undo would change: the working config as it stands now against the
+  /// backup taken before the last save. Empty when there is no usable backup
+  /// or the two already agree — which is what makes Undo a no-op the UI can
+  /// say so about instead of silently rewriting an identical file.
+  Future<List<ConfigDelta>> undoDeltas() async {
+    if (!canUndoLastSave) return const [];
+    try {
+      final backup = jsonDecode(await File(_lastSaveBackupPath).readAsString());
+      if (backup is! Map) return const [];
+      return diffConfigs(
+          backup.map((k, v) => MapEntry(k.toString(), v)), roomConfig);
+    } catch (e, stack) {
+      AppLogger.logError('Could not read backup $_lastSaveBackupPath', e, stack);
+      return const [];
+    }
+  }
+
+  /// Restores the pre-save backup: the working file is rewritten with it and
+  /// the config is reloaded from it, so disk and screen agree again. One level
+  /// deep by design — the marker is cleared afterwards, so Undo greys out
+  /// rather than turning into a redo that ping-pongs between two states.
+  /// Returns false when there is no usable backup.
+  Future<bool> undoLastSave() async {
+    if (!canUndoLastSave) return false;
+    try {
+      final contents = await File(_lastSaveBackupPath).readAsString();
+      final parsed = jsonDecode(contents);
+      if (parsed is! Map) return false;
+
+      await File(currentConfigPath).writeAsString(contents);
+      roomConfig = jsonDecode(contents);
+      // The colours and the rejectable change list describe the load this
+      // undo just stepped back from, so they no longer describe anything.
+      _clearConversionProvenance();
+      _bumpConfigRevision(); // Every tab now shows the restored value
+      _preloadModulesFromConfig();
+      AppLogger.logInfo(
+          'Undid the last save: restored $currentConfigPath from $_lastSaveBackupPath');
+      _lastSaveBackupPath = '';
+      notifyListeners();
+      return true;
+    } catch (e, stack) {
+      AppLogger.logError(
+          'Failed to restore $currentConfigPath from $_lastSaveBackupPath', e, stack);
+      return false;
+    }
+  }
+
+  /// Every difference between two configs, one line per property. Sections are
+  /// compared block by block and root scalars (`startup_watchdog_stage`) under
+  /// an empty key, like the conversion diff does. Values are compared as JSON
+  /// text so 0 and "0" read as the change they are.
+  @visibleForTesting
+  static List<ConfigDelta> diffConfigs(
+      Map<String, dynamic> before, Map<String, dynamic> after) {
+    final List<ConfigDelta> deltas = [];
+
+    void compare(String section, Map beforeBlock, Map afterBlock) {
+      for (final rawKey in afterBlock.keys) {
+        final key = rawKey.toString();
+        if (!beforeBlock.containsKey(key)) {
+          deltas.add(ConfigDelta(
+              section: section, key: key, kind: DeltaKind.added,
+              after: afterBlock[key]));
+        } else if (jsonEncode(beforeBlock[key]) != jsonEncode(afterBlock[key])) {
+          deltas.add(ConfigDelta(
+              section: section, key: key, kind: DeltaKind.changed,
+              before: beforeBlock[key], after: afterBlock[key]));
+        }
+      }
+      for (final rawKey in beforeBlock.keys) {
+        final key = rawKey.toString();
+        if (afterBlock.containsKey(key)) continue;
+        deltas.add(ConfigDelta(
+            section: section, key: key, kind: DeltaKind.removed,
+            before: beforeBlock[key]));
+      }
+    }
+
+    after.forEach((section, block) {
+      final other = before[section];
+      if (block is Map && other is Map) {
+        compare(section, other, block);
+      } else if (!before.containsKey(section)) {
+        deltas.add(ConfigDelta(
+            section: section, key: '', kind: DeltaKind.added, after: block));
+      } else if (jsonEncode(other) != jsonEncode(block)) {
+        deltas.add(ConfigDelta(
+            section: section, key: '', kind: DeltaKind.changed,
+            before: other, after: block));
+      }
+    });
+
+    before.forEach((section, block) {
+      if (after.containsKey(section)) return;
+      deltas.add(ConfigDelta(
+          section: section, key: '', kind: DeltaKind.removed, before: block));
+    });
+
+    deltas.sort((a, b) {
+      final s = a.section.compareTo(b.section);
+      return s != 0 ? s : a.key.compareTo(b.key);
+    });
+    return deltas;
   }
 
   /// Returns a formatted JSON string of the current config for the editor.
@@ -4132,4 +4284,56 @@ class FieldDiff {
   final dynamic moduleDefault;
   const FieldDiff(
       {required this.key, required this.current, required this.moduleDefault});
+}
+
+/// What happened to one property between two versions of a config, read in
+/// the "after" direction: [added] exists only in the newer one, [removed] only
+/// in the older, [changed] in both with different values.
+enum DeltaKind { added, changed, removed }
+
+/// One difference between two configs (AppStateProvider.diffConfigs) — the
+/// per-property lines the Undo dialog lists before restoring a backup.
+class ConfigDelta {
+  /// The config block, e.g. 'PROJECTORDEVICE_1'.
+  final String section;
+
+  /// The property inside it; '' when the whole section (or a root scalar)
+  /// is what differs.
+  final String key;
+
+  final DeltaKind kind;
+  final dynamic before;
+  final dynamic after;
+
+  const ConfigDelta({
+    required this.section,
+    required this.key,
+    required this.kind,
+    this.before,
+    this.after,
+  });
+
+  /// 'PROJECTORDEVICE_1.speaker_mute', or just the section for a whole-block
+  /// difference.
+  String get label => key.isEmpty ? section : '$section.$key';
+
+  /// One line for the dialog: what restoring the backup would do to this
+  /// property, written from the file's point of view.
+  String get summary {
+    String show(dynamic v) {
+      if (v == null) return 'null';
+      if (v is Map) return '{${v.length} propert${v.length == 1 ? 'y' : 'ies'}}';
+      if (v is List) return '[${v.length} item${v.length == 1 ? '' : 's'}]';
+      return v is String ? '"$v"' : v.toString();
+    }
+
+    switch (kind) {
+      case DeltaKind.added:
+        return '$label — added by the save, would be removed: ${show(after)}';
+      case DeltaKind.removed:
+        return '$label — removed by the save, would come back: ${show(before)}';
+      case DeltaKind.changed:
+        return '$label — ${show(after)} would go back to ${show(before)}';
+    }
+  }
 }
