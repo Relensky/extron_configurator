@@ -164,4 +164,70 @@ void main() {
       expect(p.originFor('SYSTEM_SETUP', 'use_qos'), isNull);
     });
   });
+
+  group('a value the user sets loses its colour', () {
+    // Orange says "carried over from the old file, nobody has checked it".
+    // Once the tech has set the value themselves that is no longer true of
+    // it, so the field goes back to the theme's ordinary colour — otherwise
+    // the one signal telling them what still needs checking never shrinks.
+    test('typing over a legacy value clears it', () {
+      final p = diffed(
+        {'SYSTEM_SETUP': {'gve_room': '125B'}},
+        {'SYSTEM_SETUP': {'gve_room': '125B'}},
+      );
+      expect(p.originFor('SYSTEM_SETUP', 'gve_room'), ValueOrigin.legacy);
+
+      p.updateDeviceValue('SYSTEM_SETUP', 'gve_room', '125');
+      expect(p.originFor('SYSTEM_SETUP', 'gve_room'), isNull);
+    });
+
+    test('the neighbours keep theirs', () {
+      final p = diffed(
+        {'SYSTEM_SETUP': {'gve_room': '125B', 'gve_bldg': 'AJH'}},
+        {'SYSTEM_SETUP': {'gve_room': '125B', 'gve_bldg': 'AJH'}},
+      );
+      p.updateDeviceValue('SYSTEM_SETUP', 'gve_room', '125');
+
+      expect(p.originFor('SYSTEM_SETUP', 'gve_bldg'), ValueOrigin.legacy,
+          reason: 'editing one field must not clear the whole room');
+    });
+
+    test('a device value the conversion rewrote clears too', () {
+      final p = diffed(
+        {'PROJECTORDEVICE_1': {'input': 'HDMI 1'}},
+        {'PROJECTORDEVICE_1': {'input': 'HDBaseT'}},
+      );
+      expect(p.originFor('PROJECTORDEVICE_1', 'input'), ValueOrigin.changed);
+
+      p.updateDeviceValue('PROJECTORDEVICE_1', 'input', 'HDMI 2');
+      expect(p.originFor('PROJECTORDEVICE_1', 'input'), isNull);
+    });
+
+    test('picking a model clears every value it applies', () {
+      final p = diffed(
+        {'PROJECTORDEVICE_1': {'model': 'Old Model', 'protocol': 'TCP'}},
+        {'PROJECTORDEVICE_1': {'model': 'Old Model', 'protocol': 'TCP'}},
+      );
+      // No registry entry in a bare provider, so only the model itself is
+      // written — which is exactly the value whose colour must go.
+      p.applyModuleDefaults('PROJECTORDEVICE_1', 'VPL-PHZ60');
+
+      expect(p.originFor('PROJECTORDEVICE_1', 'model'), isNull);
+      expect(p.originFor('PROJECTORDEVICE_1', 'protocol'), ValueOrigin.legacy,
+          reason: 'a value the model change did not touch is still the file\'s');
+    });
+
+    test('deleting a key takes its colour with it', () {
+      // Check Defaults can re-add the key later; it should come back as a
+      // fresh value, not wearing the colour the conversion gave the old one.
+      final p = diffed(
+        {'SYSTEM_SETUP': {'pcmac': 'aa-bb-cc'}},
+        {'SYSTEM_SETUP': {'pcmac': 'aa-bb-cc'}},
+      );
+      p.removeConfigKey('SYSTEM_SETUP', 'pcmac');
+      p.addConfigKey('SYSTEM_SETUP', 'pcmac', '11-22-33');
+
+      expect(p.originFor('SYSTEM_SETUP', 'pcmac'), isNull);
+    });
+  });
 }

@@ -532,6 +532,19 @@ class AppStateProvider extends ChangeNotifier {
   ValueOrigin? originFor(String sectionKey, String fieldKey) =>
       valueOrigins['$sectionKey.$fieldKey'];
 
+  /// Drops the conversion colour from a value the USER has just set.
+  ///
+  /// The map records what the LOAD did to each value, and orange reads as
+  /// "carried over from the old file, nobody has checked it against the
+  /// current template yet". The moment a tech types the value themselves that
+  /// is no longer true of it, so the field falls back to the theme's ordinary
+  /// colour — which is what a value with no conversion history looks like.
+  /// Every write the user drives goes through here; the load-time migrations
+  /// deliberately do not, since colouring what they changed is the point.
+  void _forgetConversionOrigin(String sectionKey, String key) {
+    valueOrigins.remove('$sectionKey.$key');
+  }
+
   /// Seeds the "file as parsed" side of the diff, so a test can drive
   /// [computeConversionProvenance] without a real load.
   @visibleForTesting
@@ -2518,6 +2531,7 @@ class AppStateProvider extends ChangeNotifier {
         value = normalizeModuleName(value);
       }
       roomConfig[deviceKey][property] = value;
+      _forgetConversionOrigin(deviceKey, property);
       // A new python module was just selected: parse it right away (if it isn't
       // already cached) so its command/input dictionaries are ready instantly.
       if (property == 'module' && value is String && value.isNotEmpty) {
@@ -2535,6 +2549,9 @@ class AppStateProvider extends ChangeNotifier {
     final section = roomConfig[sectionKey];
     if (section is Map && section.containsKey(property)) {
       section.remove(property);
+      // Otherwise the entry outlives the key and Check Defaults re-adding it
+      // later would bring the old conversion colour back with it.
+      _forgetConversionOrigin(sectionKey, property);
       notifyListeners();
     }
   }
@@ -2994,6 +3011,9 @@ class AppStateProvider extends ChangeNotifier {
     final dev = roomConfig[deviceKey];
     if (dev is! Map) return applied;
     dev['model'] = model;
+    // Picking a model is the user setting these values, so they lose the
+    // conversion colouring the same way a typed value does.
+    _forgetConversionOrigin(deviceKey, 'model');
 
     final entry = modelRegistry[model];
     if (entry != null) {
@@ -3002,6 +3022,7 @@ class AppStateProvider extends ChangeNotifier {
       final String moduleImport = normalizeModuleName(entry.module);
       if (dev['module'] != moduleImport) {
         dev['module'] = moduleImport;
+        _forgetConversionOrigin(deviceKey, 'module');
         applied.add('module = $moduleImport');
       }
       final raw = moduleDefaults[entry.module];
@@ -3014,6 +3035,7 @@ class AppStateProvider extends ChangeNotifier {
             model);
         resolved.forEach((k, v) {
           dev[k] = v;
+          _forgetConversionOrigin(deviceKey, k);
           applied.add('$k = $v');
         });
       }
@@ -3035,11 +3057,13 @@ class AppStateProvider extends ChangeNotifier {
     final dev = roomConfig[deviceKey];
     if (dev is! Map) return;
     dev['model'] = model;
+    _forgetConversionOrigin(deviceKey, 'model');
 
     final entry = modelRegistry[model];
     if (entry != null) {
       final String moduleImport = normalizeModuleName(entry.module);
       dev['module'] = moduleImport;
+      _forgetConversionOrigin(deviceKey, 'module');
       // Parse the newly selected module right away so the keep-alive /
       // input dropdowns are ready the moment the form rebuilds.
       getCommandsForModule(entry.module);
