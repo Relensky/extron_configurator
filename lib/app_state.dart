@@ -1321,6 +1321,7 @@ class AppStateProvider extends ChangeNotifier {
     required Function(String) onStatusUpdate,
     String? extraFilePath, // Optional additional file (e.g. Whereused.csv)
   }) async {
+    pendingRawEditorCommit?.call(); // Raw-editor typing goes up with it
     if (roomConfig.isEmpty) {
       onStatusUpdate("Error: No configuration loaded to upload.");
       return false;
@@ -3344,7 +3345,17 @@ class AppStateProvider extends ChangeNotifier {
   /// lost on disk — export and SFTP upload still produce the pruned version.
   /// Returns the path written, or null when no working file is associated
   /// with this session (e.g. 'Create New' that hasn't been exported yet).
+  /// Set by the Raw JSON tab while it is open: applies text typed there that
+  /// hasn't reached the config yet. A save calls it first, so pressing Save
+  /// straight after typing writes what is on screen rather than the config as
+  /// it stood a few hundred milliseconds ago. Null whenever that tab is not
+  /// mounted; a no-op when the editor has nothing pending.
+  void Function()? pendingRawEditorCommit;
+
   Future<String?> saveCurrentConfigToFile() async {
+    // Whatever is half-typed in the raw editor belongs in the config before
+    // the config goes to disk.
+    pendingRawEditorCommit?.call();
     if (currentConfigPath.isEmpty) return null;
     await _backupWorkingFile();
     try {
@@ -3512,6 +3523,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Exports the pruned config.json using a user-prompted save dialog
   Future<bool> exportRoomConfig() async { // <-- UPDATED: Returns a bool for UI feedback
+    pendingRawEditorCommit?.call(); // Raw-editor typing goes out with it
     if (roomConfig.isEmpty) {
       AppLogger.logError("Cannot export: Config is empty.");
       return false;

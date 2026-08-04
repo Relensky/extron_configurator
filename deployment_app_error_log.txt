@@ -22,3 +22,9 @@ not json at all
 ^
 
 --------------------------------------------------
+[2026-08-03T19:25:18.154354] ERROR: Failed to load schematic layout from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_d820f41c\BSS103_config_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
