@@ -644,10 +644,12 @@ class ConfigKeyMap {
     }
 
     // --- 4b. Connection-specific properties --------------------------------
-    // A serial device has no IP, network port, protocol or credentials. Any
-    // property the connection can't have is removed; one that held a REAL
-    // value (not blank / null / "N/A - ...") is reported as a CONFLICT first,
-    // so the conversion says what it dropped instead of silently binning it.
+    // A serial device has no IP, network port, protocol or credentials, and a
+    // network / serial-over-ethernet one has no COM port or baud rate — it
+    // reaches its hardware by ip_address + net_port. Any property the
+    // connection can't have is removed; one that held a REAL value (not blank
+    // / null / "N/A - ...") is reported as a CONFLICT first, so the conversion
+    // says what it dropped instead of silently binning it.
     // Runs after value_map, so com_type is already normalized to 'Serial'.
     if (connectionFields.isNotEmpty) {
       config.forEach((sectionName, block) {
@@ -674,8 +676,8 @@ class ConfigKeyMap {
                 reason: reason));
             changes.add(
                 "CONFLICT: '$sectionName.$key' held '$text' but the device is "
-                "${section['com_type']} — removed, that property is only valid "
-                "for a network connection.");
+                "${section['com_type']} — removed, that property is not valid "
+                "on this connection.");
           } else {
             changes.add(
                 "KEYMAP: removed '$sectionName.$key' (not valid for a "

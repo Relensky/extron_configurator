@@ -31,12 +31,13 @@ void main() {
           },
         };
 
-    test('drops exactly the five network-only keys', () {
+    test('drops exactly the six network-only keys', () {
       final result = map.apply(serialCamera());
       final dev = result.config['CAMERADEVICE_1'] as Map;
 
       for (final gone in const [
-        'ip_address', 'net_port', 'protocol', 'password', 'user',
+        'ip_address', 'net_port', 'protocol', 'service_port', 'password',
+        'user',
       ]) {
         expect(dev.containsKey(gone), isFalse, reason: '$gone must be removed');
       }
@@ -45,7 +46,6 @@ void main() {
       expect(dev.containsKey('keep_alive_trigger'), isTrue);
       // The serial side is untouched
       expect(dev['serial_port'], 'COM6');
-      expect(dev['service_port'], 0);
     });
 
     test('reports a real value as a conflict, a placeholder as a plain removal', () {

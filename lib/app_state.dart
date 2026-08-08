@@ -2007,13 +2007,16 @@ class AppStateProvider extends ChangeNotifier {
     roomConfig.forEach((sectionKey, block) {
       if (sectionKey == 'SYSTEM_SETUP' || block is! Map) return;
       final defaults = uiSchema.defaultsFor(sectionKey);
+      final live = block.map((k, v) => MapEntry(k.toString(), v));
       defaults.forEach((prop, defaultValue) {
-        if (!block.containsKey(prop)) {
-          block[prop] = defaultValue;
-          systemLogs.add(
-              "-> Added missing device property: '$sectionKey.$prop' (Default: '$defaultValue')");
-          filled++;
-        }
+        if (block.containsKey(prop)) return;
+        // A family default must never hand a device a property its connection
+        // can't use ("hideWhen") — a Network projector has no serial port.
+        if (uiSchema.isHiddenFor(prop, live, sectionKey: sectionKey)) return;
+        block[prop] = defaultValue;
+        systemLogs.add(
+            "-> Added missing device property: '$sectionKey.$prop' (Default: '$defaultValue')");
+        filled++;
       });
     });
     return filled;
@@ -2538,8 +2541,33 @@ class AppStateProvider extends ChangeNotifier {
         getCommandsForModule(value);
         getInputsForModule(value);
       }
+      // Switching a device to a connection that can't use a property it still
+      // carries (com_type Serial -> Network, leaving serial_port behind) drops
+      // it now rather than leaving dead data in the file the editor no longer
+      // shows. Only ever removes keys the schema's "hideWhen" rules out.
+      _dropKeysHiddenByConnection(deviceKey);
       notifyListeners();
     }
+  }
+
+  /// Removes the properties of [sectionKey] that the schema's "hideWhen" rules
+  /// out for the block as it now stands — the serial_port and baud a device
+  /// keeps hold of after being switched from Serial to Network. Returns the
+  /// keys removed (empty in the ordinary case, which is every edit that isn't
+  /// a com_type change). Never notifies: the callers already do.
+  List<String> _dropKeysHiddenByConnection(String sectionKey) {
+    final section = roomConfig[sectionKey];
+    if (section is! Map) return const [];
+    final block = section.map((k, v) => MapEntry(k.toString(), v));
+    final stale = uiSchema.staleKeysIn(sectionKey, block);
+    for (final key in stale) {
+      final removed = section.remove(key);
+      _forgetConversionOrigin(sectionKey, key);
+      AppLogger.logInfo(
+          "Removed '$sectionKey.$key' (${jsonEncode(removed)}): not valid for a "
+          "${section['com_type'] ?? 'this'} connection.");
+    }
+    return stale;
   }
 
   /// Removes one property from a section (device block or SYSTEM_SETUP).
@@ -2619,6 +2647,13 @@ class AppStateProvider extends ChangeNotifier {
     if (omits.isNotEmpty) {
       defaults.removeWhere((k, v) => keyMatchesOmitPattern(k, omits));
     }
+
+    // Same for a key the connection can't use: the template's PROJECTORDEVICE_1
+    // is a Network device, so offering its serial_port to every projector would
+    // put back exactly what the rest of this change takes out.
+    final block = current.map((k, v) => MapEntry(k.toString(), v));
+    defaults.removeWhere(
+        (k, v) => uiSchema.isHiddenFor(k, block, sectionKey: sectionKey));
     return defaults;
   }
 
@@ -2960,6 +2995,24 @@ class AppStateProvider extends ChangeNotifier {
     return na == nb;
   }
 
+  /// [resolved] with every property the schema's "hideWhen" rules out for the
+  /// block the defaults would PRODUCE — the current device with the defaults
+  /// laid over it, so a module that sets com_type "Network" takes its own
+  /// serial_port out with it. Most driver DEVICE_INFO "connection" dicts list
+  /// serial_port whatever the connection is; without this, picking a network
+  /// model would hand the device back the key the rest of this change removes.
+  Map<String, dynamic> _dropHiddenDefaults(
+      String deviceKey, Map<String, dynamic> resolved) {
+    final dev = roomConfig[deviceKey];
+    final Map<String, dynamic> after = {
+      if (dev is Map) ...dev.map((k, v) => MapEntry(k.toString(), v)),
+      ...resolved,
+    };
+    resolved.removeWhere(
+        (k, v) => uiSchema.isHiddenFor(k, after, sectionKey: deviceKey));
+    return resolved;
+  }
+
   /// Computes what selecting [model] on [deviceKey] would do, WITHOUT mutating
   /// the config. Feeds the Model-change dialog: whether the module changes, the
   /// module's DEVICE_INFO defaults resolved for this device (trailing index
@@ -2983,10 +3036,12 @@ class AppStateProvider extends ChangeNotifier {
     final currentModule =
         normalizeModuleName(dev['module']?.toString() ?? '');
     final raw = moduleDefaults[entry.module] ?? const <String, dynamic>{};
-    final resolved = _modelSubstitute(
-        _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey),
-        entry.module,
-        model);
+    final resolved = _dropHiddenDefaults(
+        deviceKey,
+        _modelSubstitute(
+            _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey),
+            entry.module,
+            model));
     final diffs = <FieldDiff>[];
     resolved.forEach((k, v) {
       if (!_valuesEqual(dev[k], v)) {
@@ -3029,10 +3084,12 @@ class AppStateProvider extends ChangeNotifier {
       if (raw != null) {
         // One driver serves a whole line, so its defaults name only one of
         // them — rewrite to the model actually picked.
-        final resolved = _modelSubstitute(
-            _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey),
-            entry.module,
-            model);
+        final resolved = _dropHiddenDefaults(
+            deviceKey,
+            _modelSubstitute(
+                _indexSubstitute(Map<String, dynamic>.from(raw), deviceKey),
+                entry.module,
+                model));
         resolved.forEach((k, v) {
           dev[k] = v;
           _forgetConversionOrigin(deviceKey, k);
@@ -3045,6 +3102,12 @@ class AppStateProvider extends ChangeNotifier {
       getInputsForModule(entry.module);
       AppLogger.logInfo(
           "Model '$model' applied to $deviceKey with module defaults: ${applied.isEmpty ? 'no changes needed' : applied.join(', ')}");
+    }
+    // The new module may have moved the device onto a different connection,
+    // leaving behind properties the old one used (a serial_port from before
+    // the switch to a network model).
+    for (final key in _dropKeysHiddenByConnection(deviceKey)) {
+      applied.add('$key removed');
     }
     notifyListeners();
     return applied;
@@ -3710,10 +3773,15 @@ class AppStateProvider extends ChangeNotifier {
       // the template block always win; only missing keys are added.
       int addedDefaults = 0;
       uiSchema.defaultsFor(newDeviceKey).forEach((prop, defaultValue) {
-        if (!newDevice.containsKey(prop)) {
-          newDevice[prop] = defaultValue;
-          addedDefaults++;
+        if (newDevice.containsKey(prop)) return;
+        // Skip anything this device's connection can't use ("hideWhen"), the
+        // same rule the editor draws by — a new Network device is created
+        // without a serial_port rather than given one to ignore.
+        if (uiSchema.isHiddenFor(prop, newDevice, sectionKey: newDeviceKey)) {
+          return;
         }
+        newDevice[prop] = defaultValue;
+        addedDefaults++;
       });
       if (addedDefaults > 0) {
         AppLogger.logInfo(
@@ -3721,6 +3789,9 @@ class AppStateProvider extends ChangeNotifier {
       }
 
       roomConfig[newDeviceKey] = newDevice;
+      // The block was copied from <PREFIX>1 (or a schema template), which may
+      // have carried keys this device's connection can't use.
+      _dropKeysHiddenByConnection(newDeviceKey);
       newKeys.add(newDeviceKey);
     }
     

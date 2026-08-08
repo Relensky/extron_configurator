@@ -38,6 +38,13 @@ class SchemaFieldBuilder {
 
     if (type == 'hidden') return null;
 
+    // "hideWhen": the key is irrelevant to this block as it currently stands —
+    // serial_port on a device whose com_type is Network, which reaches its
+    // hardware by ip_address + net_port and never opens a COM port.
+    if (spec != null && spec.isHiddenIn(_sectionMap(provider, sectionKey))) {
+      return null;
+    }
+
     // UNKNOWN KEY: no schema entry (exact or wildcard) AND no legacy
     // dictionary description. Rendered with a red outline + warning icon so
     // unrecognized config items stand out for schema maintenance.

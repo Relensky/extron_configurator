@@ -312,7 +312,11 @@ class SchematicModel {
             // room (or the switcher itself is SoE) -> straight to processor.
             toId: soeTarget == key ? 'PROCESSOR' : soeTarget,
             color: kConnColors[ConnType.soe]!,
-            label: dev['serial_port']?.toString() ?? 'SoE',
+            // An SoE device reaches its hardware by ip_address + net_port and
+            // carries no serial_port of its own, so the plain label is normal.
+            label: (dev['serial_port']?.toString().trim().isNotEmpty ?? false)
+                ? dev['serial_port'].toString()
+                : 'SoE',
             kind: ConnType.soe,
           ));
           break;

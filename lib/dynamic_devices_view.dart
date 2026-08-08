@@ -433,8 +433,9 @@ class DeviceConfigurationForm extends StatelessWidget {
     // edit writes the key into config.json. Lets a new device-type setting
     // (e.g. a projector-only option) ship via ui_schema.json alone. ('input'
     // is handled by its own dedicated slot above and is skipped here.)
-    for (final spec
-        in provider.uiSchema.missingFieldsFor(deviceKey, sortedKeys)) {
+    for (final spec in provider.uiSchema.missingFieldsFor(
+        deviceKey, sortedKeys,
+        section: deviceData.map((k, v) => MapEntry(k.toString(), v)))) {
       if (skipKeys.contains(spec.key)) continue;
       final Widget? field = SchemaFieldBuilder.buildField(
         context: context,
