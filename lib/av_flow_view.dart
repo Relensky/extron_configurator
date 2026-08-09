@@ -13,7 +13,9 @@ import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_rack_view.dart';
+import 'color_wheel_picker.dart';
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
+import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
@@ -689,7 +691,7 @@ class _AvFlowViewState extends State<AvFlowView> {
             ),
           OutlinedButton.icon(
             icon: const Icon(Icons.palette_outlined, size: 18),
-            label: const Text('Colours'),
+            label: const Text('Colors'),
             onPressed: () => _showPaletteDialog(provider),
           ),
           OutlinedButton.icon(
@@ -787,7 +789,21 @@ class _AvFlowViewState extends State<AvFlowView> {
     if (id == null || offset == Offset.zero) return;
     final node = provider.avNodeById(id);
     if (node == null) return;
-    provider.setAvNodePosition(id, _clamped(node.pos + offset));
+
+    // Land clear of the other boxes. Dropping one device on top of another
+    // hides both and makes the cabling unreadable, so a drop that would
+    // overlap slides to the nearest free spot instead.
+    provider.setAvNodePosition(
+      id,
+      nonOverlappingPosition(
+        desired: _clamped(node.pos + offset),
+        size: node.size,
+        others: [
+          for (final other in provider.avNodes)
+            if (other.id != id) other.rect,
+        ],
+      ),
+    );
   }
 
   Widget _buildCanvas(
@@ -805,8 +821,15 @@ class _AvFlowViewState extends State<AvFlowView> {
     // Every device is an obstacle, inflated a little so cables don't graze
     // the boxes. A run's own two endpoints are excluded — it has to reach
     // them.
-    final boxes = {
-      for (final n in model.nodes) n.id: n.rect.inflate(10),
+    final boxes = {for (final n in model.nodes) n.id: n.rect.inflate(10)};
+
+    // A run's own two devices are obstacles too, just barely deflated so the
+    // port anchor on the boundary and the stub leaving it stay clear. Without
+    // this, a cable into a port on the FAR side of its destination simply cut
+    // straight through the box — drag a source past a DTP CrossPoint and the
+    // line would run through the unit instead of around it.
+    final endpointBoxes = {
+      for (final n in model.nodes) n.id: n.rect.deflate(2),
     };
     _paths = {
       for (final c in model.cables)
@@ -818,6 +841,8 @@ class _AvFlowViewState extends State<AvFlowView> {
           obstacles: [
             for (final e in boxes.entries)
               if (e.key != c.fromNodeId && e.key != c.toNodeId) e.value,
+            endpointBoxes[c.fromNodeId]!,
+            endpointBoxes[c.toNodeId]!,
           ],
         ),
     };
@@ -1375,7 +1400,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
-  /// Recolours the signal palette for this room. Changing HDMI here moves
+  /// Recolors the signal palette for this room. Changing HDMI here moves
   /// every HDMI cable, every HDMI port dot AND the legend entry together, so
   /// the key never stops describing the drawing.
   Future<void> _showPaletteDialog(AppStateProvider provider) async {
@@ -1383,14 +1408,14 @@ class _AvFlowViewState extends State<AvFlowView> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Signal colours'),
+          title: const Text('Signal colors'),
           content: SizedBox(
             width: 520,
             height: math.min(560, MediaQuery.of(ctx).size.height - 220),
             child: ListView(
               children: [
                 Text(
-                  'A colour set here applies to every cable and connector of '
+                  'A color set here applies to every cable and connector of '
                   'that type, and to the legend.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
@@ -1413,45 +1438,42 @@ class _AvFlowViewState extends State<AvFlowView> {
                             runSpacing: 4,
                             children: [
                               for (final c in kCableSwatches)
-                                InkWell(
+                                ColorSwatchButton(
                                   key: ValueKey(
                                     'palette_${s.name}_'
                                     '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
                                   ),
+                                  color: c,
+                                  width: 24,
+                                  height: 20,
+                                  selected:
+                                      provider.avSignalColor(s).toARGB32() ==
+                                      c.toARGB32(),
                                   onTap: () => setLocal(
                                     () => provider.setAvSignalColor(s, c),
-                                  ),
-                                  child: Container(
-                                    width: 20,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: c,
-                                      borderRadius: BorderRadius.circular(3),
-                                      border: Border.all(
-                                        color:
-                                            provider
-                                                    .avSignalColor(s)
-                                                    .toARGB32() ==
-                                                c.toARGB32()
-                                            ? Theme.of(ctx).colorScheme.primary
-                                            : Theme.of(ctx).dividerColor,
-                                        width:
-                                            provider
-                                                    .avSignalColor(s)
-                                                    .toARGB32() ==
-                                                c.toARGB32()
-                                            ? 3
-                                            : 1,
-                                      ),
-                                    ),
                                   ),
                                 ),
                             ],
                           ),
                         ),
                         IconButton(
+                          icon: const Icon(Icons.colorize, size: 16),
+                          tooltip: 'Pick a custom color',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () async {
+                            final picked = await showColorWheelDialog(
+                              ctx,
+                              initial: provider.avSignalColor(s),
+                              title: 'Color for ${kSignalLabels[s] ?? s.name}',
+                            );
+                            if (picked != null) {
+                              setLocal(() => provider.setAvSignalColor(s, picked));
+                            }
+                          },
+                        ),
+                        IconButton(
                           icon: const Icon(Icons.restart_alt, size: 16),
-                          tooltip: 'Back to the default colour',
+                          tooltip: 'Back to the default color',
                           visualDensity: VisualDensity.compact,
                           onPressed: () => setLocal(
                             () => provider.setAvSignalColor(s, null),
@@ -1736,7 +1758,7 @@ class _AvFlowViewState extends State<AvFlowView> {
   }
 
   /// The room's signal palette. Read on demand rather than cached: it can
-  /// change from the Colours dialog while a port editor is open.
+  /// change from the Colors dialog while a port editor is open.
   Map<SignalType, Color> get palette =>
       context.read<AppStateProvider>().avSignalColors;
 
@@ -2054,7 +2076,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Text('Colour', style: Theme.of(ctx).textTheme.titleSmall),
+                    Text('Color', style: Theme.of(ctx).textTheme.titleSmall),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -2073,25 +2095,49 @@ class _AvFlowViewState extends State<AvFlowView> {
                 ),
                 const SizedBox(height: 6),
                 Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                  spacing: 2,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    // First swatch resets to the signal type's own colour, so
+                    // First chip resets to the signal type's own color, so
                     // the default is one click away and looks like the rest.
-                    _colorSwatch(
-                      ctx,
-                      provider.avSignalColor(signal),
+                    ColorSwatchButton(
+                      key: const ValueKey('cable_color_default'),
+                      color: provider.avSignalColor(signal),
                       selected: colorOverride == null,
-                      isDefault: true,
+                      badge: Icons.auto_awesome,
+                      tooltip: 'Follow the signal type',
                       onTap: () => setLocal(() => colorOverride = null),
                     ),
                     for (final c in kCableSwatches)
-                      _colorSwatch(
-                        ctx,
-                        c,
+                      ColorSwatchButton(
+                        key: ValueKey(
+                          'cable_color_'
+                          '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
+                        ),
+                        color: c,
                         selected: colorOverride?.toARGB32() == c.toARGB32(),
                         onTap: () => setLocal(() => colorOverride = c),
                       ),
+                    // Anything not on the row above.
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.colorize, size: 16),
+                        label: const Text('Custom'),
+                        onPressed: () async {
+                          final picked = await showColorWheelDialog(
+                            ctx,
+                            initial: colorOverride ??
+                                provider.avSignalColor(signal),
+                            title: 'Color for cable ${cable.id}',
+                          );
+                          if (picked != null) {
+                            setLocal(() => colorOverride = picked);
+                          }
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -2127,54 +2173,6 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
-  /// One clickable colour chip. [isDefault] marks the "follow the signal
-  /// type" swatch, which is drawn with a dashed-looking outline so it reads
-  /// as the automatic choice rather than just another colour.
-  Widget _colorSwatch(
-    BuildContext ctx,
-    Color color, {
-    required bool selected,
-    required VoidCallback onTap,
-    bool isDefault = false,
-  }) {
-    return Tooltip(
-      message: isDefault ? 'Follow the signal type' : '',
-      child: InkWell(
-        key: ValueKey(
-          isDefault
-              ? 'cable_color_default'
-              : 'cable_color_${(color.toARGB32() & 0xFFFFFF).toRadixString(16)}',
-        ),
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          width: 30,
-          height: 24,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: selected
-                  ? Theme.of(ctx).colorScheme.primary
-                  : Theme.of(ctx).dividerColor,
-              width: selected ? 3 : 1,
-            ),
-          ),
-          child: isDefault
-              ? Icon(
-                  Icons.auto_awesome,
-                  size: 12,
-                  color:
-                      ThemeData.estimateBrightnessForColor(color) ==
-                          Brightness.dark
-                      ? Colors.white
-                      : Colors.black87,
-                )
-              : null,
-        ),
-      ),
-    );
-  }
 }
 
 /// The port editor's name field. It owns its controller so typing doesn't
@@ -2237,7 +2235,7 @@ class _AvNodeBox extends StatelessWidget {
   final AvNode node;
   final bool editMode;
 
-  /// The room's signal palette, so a recoloured type moves its port dots too.
+  /// The room's signal palette, so a recolored type moves its port dots too.
   final Map<SignalType, Color> palette;
 
   /// Cable-drawing mode: connectors are click targets and nothing drags.
@@ -2575,7 +2573,7 @@ class _CablePainter extends CustomPainter {
   final String? selectedId;
   final Brightness brightness;
 
-  /// The room's signal palette, so recolouring a type moves every run of it.
+  /// The room's signal palette, so recoloring a type moves every run of it.
   final Map<SignalType, Color> palette;
 
   const _CablePainter({
@@ -2621,7 +2619,7 @@ class _CablePainter extends CustomPainter {
     }
   }
 
-  /// Shallow map compare — a repaint has to happen when a signal's colour
+  /// Shallow map compare — a repaint has to happen when a signal's color
   /// changes, and Map has no useful == of its own.
   static bool _sameMap(Map<SignalType, Color> a, Map<SignalType, Color> b) {
     if (a.length != b.length) return false;
@@ -2763,7 +2761,7 @@ class _AvLegend extends StatelessWidget {
   /// The room's palette, so the key matches the lines it describes.
   final Map<SignalType, Color> palette;
 
-  /// At least one run was recoloured by hand, so the key above it doesn't
+  /// At least one run was recolored by hand, so the key above it doesn't
   /// account for every line on the page.
   final bool hasCustomColors;
 
@@ -2820,7 +2818,7 @@ class _AvLegend extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Some runs are coloured individually',
+                'Some runs are colored individually',
                 style: TextStyle(
                   fontSize: 10,
                   fontStyle: FontStyle.italic,

@@ -8,6 +8,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
+import 'color_wheel_picker.dart';
+import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
@@ -55,6 +57,13 @@ const Map<ConnType, String> kConnLabels = {
   ConnType.relay: 'Relay',
   ConnType.touchpanel: 'Touch Panel',
 };
+
+/// The colour a connection category is drawn in, honouring the room's
+/// overrides. Nothing reads [kConnColors] directly except this — recolouring
+/// a category has to move the lines, the box borders AND the legend together
+/// or the key stops describing the drawing.
+Color connColor(ConnType conn, AppStateProvider provider) =>
+    provider.schematicConnColor(conn.index, kConnColors[conn]!);
 
 /// Swatches offered when drawing a custom line.
 const List<Color> kLinkSwatches = [
@@ -276,7 +285,7 @@ class SchematicModel {
       edges.add(SchematicEdge(
         fromId: 'IDF',
         toId: 'PROCESSOR',
-        color: kConnColors[ConnType.network]!,
+        color: connColor(ConnType.network, provider),
         width: 3.5,
         kind: ConnType.network,
       ));
@@ -308,7 +317,7 @@ class SchematicModel {
           edges.add(SchematicEdge(
             fromId: key,
             toId: 'IDF',
-            color: kConnColors[ConnType.network]!,
+            color: connColor(ConnType.network, provider),
             label: [protocol, if (netPort.isNotEmpty && netPort != '0') netPort]
                 .where((s) => s.isNotEmpty)
                 .join(' '),
@@ -319,7 +328,7 @@ class SchematicModel {
           edges.add(SchematicEdge(
             fromId: key,
             toId: 'PROCESSOR',
-            color: kConnColors[ConnType.serial]!,
+            color: connColor(ConnType.serial, provider),
             label: dev['serial_port']?.toString() ?? 'COM?',
             kind: ConnType.serial,
           ));
@@ -330,7 +339,7 @@ class SchematicModel {
             // The room switcher carries the serial line; no switcher in the
             // room (or the switcher itself is SoE) -> straight to processor.
             toId: soeTarget == key ? 'PROCESSOR' : soeTarget,
-            color: kConnColors[ConnType.soe]!,
+            color: connColor(ConnType.soe, provider),
             // An SoE device reaches its hardware by ip_address + net_port and
             // carries no serial_port of its own, so the plain label is normal.
             label: (dev['serial_port']?.toString().trim().isNotEmpty ?? false)
@@ -348,7 +357,7 @@ class SchematicModel {
           edges.add(SchematicEdge(
             fromId: key,
             toId: 'PROCESSOR',
-            color: kConnColors[ConnType.relay]!,
+            color: connColor(ConnType.relay, provider),
             label: relays.isEmpty ? 'Relay' : relays,
             kind: ConnType.relay,
           ));
@@ -377,7 +386,7 @@ class SchematicModel {
       edges.add(SchematicEdge(
         fromId: 'TOUCHPANEL',
         toId: hasIdf ? 'IDF' : 'PROCESSOR',
-        color: kConnColors[ConnType.touchpanel]!,
+        color: connColor(ConnType.touchpanel, provider),
         label: 'PoE',
         kind: ConnType.touchpanel,
       ));
@@ -406,7 +415,7 @@ class SchematicModel {
         fromId: from,
         toId: to,
         color: colorVal == null
-            ? kConnColors[ConnType.network]!
+            ? connColor(ConnType.network, provider)
             : Color(0xFF000000 | colorVal),
         label: link['label'] ?? '',
         custom: true,
@@ -885,6 +894,11 @@ class _SchematicViewState extends State<SchematicView> {
                     : 'Layout saved to $saved');
               },
             ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.palette_outlined, size: 18),
+            label: const Text('Colors'),
+            onPressed: () => _showColorsDialog(provider),
+          ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
             icon: const Icon(Icons.image, size: 18),
@@ -914,6 +928,103 @@ class _SchematicViewState extends State<SchematicView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Recolors the connection categories for this room. Changing Network
+  /// here moves every network line, every network box border AND the legend
+  /// entry together, so the key never stops describing the drawing.
+  Future<void> _showColorsDialog(AppStateProvider provider) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Line colors'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'A color set here applies to every line of that kind, to '
+                  'the device boxes, and to the legend.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                for (final conn in ConnType.values)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 168,
+                          child: Text(kConnLabels[conn]!,
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              for (final c in kLinkSwatches)
+                                ColorSwatchButton(
+                                  key: ValueKey('conn_color_${conn.name}_'
+                                      '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}'),
+                                  color: c,
+                                  width: 24,
+                                  height: 20,
+                                  selected:
+                                      connColor(conn, provider).toARGB32() ==
+                                          c.toARGB32(),
+                                  onTap: () => setLocal(() => provider
+                                      .setSchematicConnColor(conn.index, c)),
+                                ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.colorize, size: 16),
+                          tooltip: 'Pick a custom color',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () async {
+                            final picked = await showColorWheelDialog(
+                              ctx,
+                              initial: connColor(conn, provider),
+                              title: 'Color for ${kConnLabels[conn]}',
+                            );
+                            if (picked != null) {
+                              setLocal(() => provider.setSchematicConnColor(
+                                  conn.index, picked));
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.restart_alt, size: 16),
+                          tooltip: 'Back to the default color',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => setLocal(() =>
+                              provider.setSchematicConnColor(conn.index, null)),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  setLocal(() => provider.resetSchematicConnColors()),
+              child: const Text('Reset all'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -980,6 +1091,7 @@ class _SchematicViewState extends State<SchematicView> {
                         : MouseCursor.defer,
                     child: _NodeBox(
                       node: node,
+                      connColor: connColor(node.conn, provider),
                       highlighted: _pendingLinkFrom == node.id,
                       editMode: _editMode,
                       dragging: _dragNodeId == node.id,
@@ -989,7 +1101,7 @@ class _SchematicViewState extends State<SchematicView> {
               ),
             ),
           // Legend under the diagram (also part of the PNG export).
-          Positioned(left: 16, top: legendTop, child: _Legend(theme: theme)),
+          Positioned(left: 16, top: legendTop, child: _Legend(theme: theme, provider: provider)),
         ],
       ),
     );
@@ -1054,7 +1166,22 @@ class _SchematicViewState extends State<SchematicView> {
       _dragOffset = Offset.zero;
     });
     if (id == null || offset == Offset.zero) return;
-    provider.setSchematicPosition(id, _clamped(startPos + offset));
+
+    // Land clear of the other boxes: dropping one on top of another hides
+    // both and makes the lines impossible to follow.
+    final model = SchematicModel.build(provider);
+    provider.setSchematicPosition(
+      id,
+      nonOverlappingPosition(
+        desired: _clamped(startPos + offset),
+        size: const Size(kNodeWidth, kNodeHeight),
+        others: [
+          for (final n in model.nodes)
+            if (n.id != id)
+              Rect.fromLTWH(n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight),
+        ],
+      ),
+    );
   }
 
   /// Edit-mode line list: EVERY line on the diagram — auto-generated and
@@ -1161,6 +1288,10 @@ const double kLegendHeight = 16 + 5 * 18.0;
 /// One device/processor/IDF box.
 class _NodeBox extends StatelessWidget {
   final SchematicNode node;
+
+  /// Resolved through the room's palette by the canvas, so a recoloured
+  /// category moves its boxes as well as its lines.
+  final Color connColor;
   final bool highlighted;
   final bool editMode;
 
@@ -1170,6 +1301,7 @@ class _NodeBox extends StatelessWidget {
 
   const _NodeBox(
       {required this.node,
+      required this.connColor,
       required this.highlighted,
       required this.editMode,
       this.dragging = false});
@@ -1177,7 +1309,7 @@ class _NodeBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final connColor = kConnColors[node.conn]!;
+    final connColor = this.connColor;
     return Container(
       width: kNodeWidth,
       height: kNodeHeight,
@@ -1501,7 +1633,10 @@ class _EdgePainter extends CustomPainter {
 class _Legend extends StatelessWidget {
   final ThemeData theme;
 
-  const _Legend({required this.theme});
+  /// The room's line colours, so the key matches what is drawn.
+  final AppStateProvider provider;
+
+  const _Legend({required this.theme, required this.provider});
 
   @override
   Widget build(BuildContext context) {
@@ -1523,7 +1658,7 @@ class _Legend extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                      width: 22, height: 3.5, color: kConnColors[conn]),
+                      width: 22, height: 3.5, color: connColor(conn, provider)),
                   const SizedBox(width: 8),
                   Text(kConnLabels[conn]!,
                       style: const TextStyle(fontSize: 11)),

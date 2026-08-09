@@ -678,6 +678,30 @@ class AppStateProvider extends ChangeNotifier {
   /// panel. Persisted in the sidecar with the rest of the layout.
   final Set<String> schematicHiddenEdges = {};
 
+  /// Per-room overrides of the control schematic's line colours, keyed by
+  /// the connection category's index in ConnType. Stored by index because
+  /// this layer must not depend on the view that defines the enum. Empty
+  /// means the built-in colours.
+  final Map<int, Color> schematicConnColors = {};
+
+  /// The colour a connection category is drawn in for this room.
+  Color schematicConnColor(int connIndex, Color fallback) =>
+      schematicConnColors[connIndex] ?? fallback;
+
+  void setSchematicConnColor(int connIndex, Color? color) {
+    if (color == null) {
+      schematicConnColors.remove(connIndex);
+    } else {
+      schematicConnColors[connIndex] = color;
+    }
+    notifyListeners();
+  }
+
+  void resetSchematicConnColors() {
+    schematicConnColors.clear();
+    notifyListeners();
+  }
+
   /// The config path the schematic state currently belongs to, so switching
   /// configs resets the layout instead of carrying stale node spots over.
   String _schematicSyncedPath = ' never';
@@ -762,7 +786,8 @@ class AppStateProvider extends ChangeNotifier {
   bool get hasSchematicLayout =>
       schematicPositions.isNotEmpty ||
       schematicLinks.isNotEmpty ||
-      schematicHiddenEdges.isNotEmpty;
+      schematicHiddenEdges.isNotEmpty ||
+      schematicConnColors.isNotEmpty;
 
   /// True when a saved control schematic sits next to the working config,
   /// under either the current name or the pre-rename one.
@@ -784,6 +809,7 @@ class AppStateProvider extends ChangeNotifier {
     schematicPositions.clear();
     schematicLinks.clear();
     schematicHiddenEdges.clear();
+    schematicConnColors.clear();
   }
 
   /// Adopts the CURRENT in-memory diagram for the working config, ignoring any
@@ -854,6 +880,16 @@ class AppStateProvider extends ChangeNotifier {
       if (hidden is List) {
         schematicHiddenEdges.addAll(hidden.map((e) => e.toString()));
       }
+      final lineColors = doc['connColors'];
+      if (lineColors is Map) {
+        lineColors.forEach((index, hex) {
+          final i = int.tryParse(index.toString());
+          final value = int.tryParse(hex.toString(), radix: 16);
+          if (i != null && value != null) {
+            schematicConnColors[i] = Color(0xFF000000 | value);
+          }
+        });
+      }
       AppLogger.logInfo(
           'Control schematic loaded from $sidecar '
           '(${schematicPositions.length} positions, '
@@ -884,6 +920,12 @@ class AppStateProvider extends ChangeNotifier {
             .map((id, p) => MapEntry(id, [p.dx, p.dy])),
         'links': schematicLinks,
         'hiddenEdges': schematicHiddenEdges.toList(),
+        'connColors': {
+          for (final e in schematicConnColors.entries)
+            e.key.toString(): (e.value.toARGB32() & 0xFFFFFF)
+                .toRadixString(16)
+                .padLeft(6, '0'),
+        },
       }));
 
       // The write succeeded, so the pre-rename file is now a stale duplicate
