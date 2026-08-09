@@ -82,6 +82,19 @@ class SchematicNode {
   });
 
   Offset get center => pos + const Offset(kNodeWidth / 2, kNodeHeight / 2);
+
+  /// The same node at a different spot — used for the live drag preview,
+  /// which moves a box (and the lines attached to it) without writing the
+  /// new position to the provider on every pointer event.
+  SchematicNode movedTo(Offset newPos) => SchematicNode(
+        id: id,
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        conn: conn,
+        tabCount: tabCount,
+        pos: newPos,
+      );
 }
 
 /// One line on the diagram.
@@ -442,6 +455,13 @@ class _SchematicViewState extends State<SchematicView> {
   bool _linkMode = false;
   String? _pendingLinkFrom; // first node tapped while drawing a line
 
+  /// Live drag, held locally: writing the position to the provider on every
+  /// pointer move rebuilt every listener in the app (nav rail, app bar, the
+  /// lot) for each frame of the drag. Committed once on release.
+  String? _dragNodeId;
+  Offset _dragStartPos = Offset.zero;
+  Offset _dragOffset = Offset.zero;
+
   @override
   void initState() {
     super.initState();
@@ -767,7 +787,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = SchematicModel.build(provider);
+    final model = _withDragPreview(SchematicModel.build(provider));
     final theme = Theme.of(context);
 
     return Column(
@@ -919,28 +939,35 @@ class _SchematicViewState extends State<SchematicView> {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-          // Nodes.
+          // Nodes. Each gets its own RepaintBoundary so dragging one doesn't
+          // force the others to repaint with it.
           for (final node in model.nodes)
             Positioned(
               left: node.pos.dx,
               top: node.pos.dy,
-              child: GestureDetector(
-                onTap: () => _onNodeTap(provider, node),
-                onPanUpdate: _editMode && !_linkMode
-                    ? (details) {
-                        // delta is already in canvas coordinates (the
-                        // GestureDetector lives inside the InteractiveViewer
-                        // transform). Clamp to the canvas origin — it only
-                        // grows right/down, so negative spots would clip.
-                        final p = node.pos + details.delta;
-                        provider.setSchematicPosition(node.id,
-                            Offset(math.max(0, p.dx), math.max(0, p.dy)));
-                      }
-                    : null,
-                child: _NodeBox(
-                  node: node,
-                  highlighted: _pendingLinkFrom == node.id,
-                  editMode: _editMode,
+              child: RepaintBoundary(
+                child: GestureDetector(
+                  onTap: () => _onNodeTap(provider, node),
+                  onPanStart: _canDrag
+                      ? (_) => _onNodeDragStart(node.id, node.pos)
+                      : null,
+                  onPanUpdate:
+                      _canDrag ? (d) => _onNodeDragUpdate(d.delta) : null,
+                  onPanEnd: _canDrag ? (_) => _onNodeDragEnd(provider) : null,
+                  onPanCancel: _canDrag ? () => _onNodeDragEnd(provider) : null,
+                  child: MouseRegion(
+                    cursor: _canDrag
+                        ? (_dragNodeId == node.id
+                            ? SystemMouseCursors.grabbing
+                            : SystemMouseCursors.grab)
+                        : MouseCursor.defer,
+                    child: _NodeBox(
+                      node: node,
+                      highlighted: _pendingLinkFrom == node.id,
+                      editMode: _editMode,
+                      dragging: _dragNodeId == node.id,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -949,6 +976,68 @@ class _SchematicViewState extends State<SchematicView> {
         ],
       ),
     );
+  }
+
+  // -------------------------------------------------------------------------
+  //  DRAGGING
+  // -------------------------------------------------------------------------
+
+  /// Boxes move in edit mode, except while a line is being drawn — then a
+  /// click is picking the line's endpoints, not grabbing a box.
+  bool get _canDrag => _editMode && !_linkMode;
+
+  /// The canvas only grows right and down, so a box can't be pushed past the
+  /// origin where it would be clipped.
+  static Offset _clamped(Offset p) =>
+      Offset(math.max(0, p.dx), math.max(0, p.dy));
+
+  /// The model as it should be drawn right now: the box under the cursor sits
+  /// at its dragged spot, so it AND the lines attached to it follow live while
+  /// the provider stays untouched until release.
+  SchematicModel _withDragPreview(SchematicModel model) {
+    final id = _dragNodeId;
+    if (id == null || _dragOffset == Offset.zero) return model;
+
+    final nodes = [
+      for (final n in model.nodes)
+        n.id == id ? n.movedTo(_clamped(n.pos + _dragOffset)) : n,
+    ];
+    double maxX = model.canvasSize.width, maxY = model.canvasSize.height;
+    for (final n in nodes) {
+      maxX = math.max(maxX, n.pos.dx + kNodeWidth + 30);
+      maxY = math.max(maxY, n.pos.dy + kNodeHeight + 30);
+    }
+    return SchematicModel(nodes, model.edges, Size(maxX, maxY), model.roomTitle,
+        model.hiddenEdges);
+  }
+
+  /// [startPos] is captured here rather than read back on release: by then
+  /// the model the view holds is the PREVIEW, whose position already includes
+  /// the drag, and committing from that would apply the offset twice.
+  void _onNodeDragStart(String nodeId, Offset startPos) {
+    setState(() {
+      _dragNodeId = nodeId;
+      _dragStartPos = startPos;
+      _dragOffset = Offset.zero;
+    });
+  }
+
+  void _onNodeDragUpdate(Offset delta) {
+    // delta is already in canvas coordinates — the GestureDetector lives
+    // inside the InteractiveViewer transform.
+    setState(() => _dragOffset += delta);
+  }
+
+  void _onNodeDragEnd(AppStateProvider provider) {
+    final id = _dragNodeId;
+    final offset = _dragOffset;
+    final startPos = _dragStartPos;
+    setState(() {
+      _dragNodeId = null;
+      _dragOffset = Offset.zero;
+    });
+    if (id == null || offset == Offset.zero) return;
+    provider.setSchematicPosition(id, _clamped(startPos + offset));
   }
 
   /// Edit-mode line list: EVERY line on the diagram — auto-generated and
@@ -1053,8 +1142,15 @@ class _NodeBox extends StatelessWidget {
   final bool highlighted;
   final bool editMode;
 
+  /// This box is the one under the cursor: it lifts off the page a little so
+  /// it reads as picked up.
+  final bool dragging;
+
   const _NodeBox(
-      {required this.node, required this.highlighted, required this.editMode});
+      {required this.node,
+      required this.highlighted,
+      required this.editMode,
+      this.dragging = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1068,14 +1164,16 @@ class _NodeBox extends StatelessWidget {
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: highlighted ? theme.colorScheme.primary : connColor,
-          width: highlighted ? 3 : 1.6,
+          color: (highlighted || dragging)
+              ? theme.colorScheme.primary
+              : connColor,
+          width: highlighted ? 3 : (dragging ? 2.4 : 1.6),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 4,
-            offset: const Offset(1, 2),
+            color: Colors.black.withValues(alpha: dragging ? 0.4 : 0.25),
+            blurRadius: dragging ? 11 : 4,
+            offset: Offset(1, dragging ? 5 : 2),
           ),
         ],
       ),
