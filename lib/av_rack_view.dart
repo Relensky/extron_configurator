@@ -98,40 +98,40 @@ class _AvRackViewState extends State<AvRackView> {
   /// occupies at least 1U even if nobody has filled in its height.
   int _heightOf(AvNode? node) => math.max(1, node?.rackUnits ?? 1);
 
+  /// Puts the carried device on [startU]. Sharing is automatic: if something
+  /// is already on that rail the row re-splits to fit them side by side.
   void _place(
     AppStateProvider provider,
     RackFrame rack,
     RackFace face,
-    int startU, [
-    RackHalf side = RackHalf.left,
-  ]) {
+    int startU,
+  ) {
     final nodeId = _carriedNodeId;
     if (nodeId == null) return;
     final node = provider.avNodeById(nodeId);
     final height = _heightOf(node);
-    final half = _halfFor(node, side);
 
-    if (!provider.avRackSpanIsFree(
+    final placed = provider.avRackPlaceSharing(
+      nodeId: nodeId,
       rackId: rack.id,
       face: face,
       startU: startU,
-      heightU: height,
-      half: half,
-      ignoreNodeId: nodeId,
-    )) {
+    );
+    if (!placed) {
+      final occupants = provider
+          .avRackOccupantsAt(rackId: rack.id, face: face, startU: startU)
+          .length;
       _snack(
-        'U$startU doesn\'t have ${height}U free on the '
-        '${half == RackHalf.full ? '' : '${half.name} half of the '}'
-        '${face.name} of ${rack.name}.',
+        occupants >= kMaxRackColumns
+            ? 'U$startU of ${rack.name} already holds $occupants devices — '
+                  'that is as many as one rack unit will list.'
+            : 'U$startU has no room for a ${height}U device on the '
+                  '${face.name} of ${rack.name}.',
         error: true,
       );
       return;
     }
 
-    provider.setAvRackSlot(
-      nodeId,
-      RackSlot(rackId: rack.id, startU: startU, face: face, half: half),
-    );
     setState(() {
       _carriedNodeId = null;
       // Remember where the last placement went, so the next typed U lands in
@@ -290,8 +290,7 @@ class _AvRackViewState extends State<AvRackView> {
     );
   }
 
-  /// A device waiting to go in, shown in the toolbar. Half-width gear says so
-  /// so it's obvious why it only claims half a rail.
+  /// A device waiting to go in, shown in the toolbar.
   Widget _unrackedChip(
     AvNode n,
     ThemeData theme, {
@@ -299,7 +298,7 @@ class _AvRackViewState extends State<AvRackView> {
   }) {
     return ActionChip(
       avatar: Icon(iconForAvNode(n.id, n.model), size: 16),
-      label: Text('${n.label} (${n.rackUnits}U${n.isHalfRack ? ' ½' : ''})'),
+      label: Text('${n.label} (${n.rackUnits}U)'),
       onPressed: onPressed,
     );
   }
@@ -341,7 +340,8 @@ class _AvRackViewState extends State<AvRackView> {
                         ),
                       ),
                       Text(
-                        '  ${rack.heightU}U',
+                        '  ${rack.heightU}U'
+                        '${rack.kind.isEmpty ? '' : ' · ${rack.kind}'}',
                         style: theme.textTheme.bodySmall,
                       ),
                       if (widget.editMode) ...[
@@ -425,11 +425,10 @@ class _AvRackViewState extends State<AvRackView> {
     );
   }
 
-  /// One rail position. The bay between the rails is split into a left and a
-  /// right target: a half-width device lands on the side you pick, and a
-  /// full-width one ignores the split and takes the whole U. Each half is
-  /// both a click target (for the carried device) and a drop target (for a
-  /// dragged one), so both ways of placing gear go through the same rules.
+  /// One rail position, and one drop target. There is no need to aim at a
+  /// slice: dropping onto a rail that is already occupied re-splits it and
+  /// puts the new box alongside, which is how a shelf of small gear —
+  /// a Revolabs receiver, a DTP receiver, a micro PC — gets recorded.
   Widget _buildUSlot(
     AppStateProvider provider,
     RackFrame rack,
@@ -450,39 +449,33 @@ class _AvRackViewState extends State<AvRackView> {
     return Row(
       children: [
         rail(),
-        Expanded(
-          child: _buildHalfSlot(provider, rack, face, u, RackHalf.left, theme),
-        ),
-        Expanded(
-          child: _buildHalfSlot(provider, rack, face, u, RackHalf.right, theme),
-        ),
+        Expanded(child: _buildDropZone(provider, rack, face, u, theme)),
         rail(),
       ],
     );
   }
 
-  Widget _buildHalfSlot(
+  Widget _buildDropZone(
     AppStateProvider provider,
     RackFrame rack,
     RackFace face,
     int u,
-    RackHalf side,
     ThemeData theme,
   ) {
     return DragTarget<String>(
-      key: ValueKey('u_${rack.id}_${face.name}_${u}_${side.name}'),
+      key: ValueKey('u_${rack.id}_${face.name}_$u'),
       onWillAcceptWithDetails: (details) =>
-          _canDrop(provider, details.data, rack, face, u, side),
+          _canDrop(provider, details.data, rack, face, u),
       onAcceptWithDetails: (details) =>
-          _dropInto(provider, details.data, rack, face, u, side),
+          _dropInto(provider, details.data, rack, face, u),
       builder: (ctx, candidate, rejected) {
         final hovering = candidate.isNotEmpty;
         final rejecting = rejected.isNotEmpty;
-        // Only tint the halves while something is actually in flight or in
-        // hand — an idle rack should look like a rack, not a grid of buttons.
+        // Only tint while something is in flight or in hand — an idle rack
+        // should look like a rack, not a grid of buttons.
         final carrying = _carriedNodeId != null;
         return InkWell(
-          onTap: carrying ? () => _place(provider, rack, face, u, side) : null,
+          onTap: carrying ? () => _place(provider, rack, face, u) : null,
           child: Container(
             decoration: BoxDecoration(
               border: Border(
@@ -505,31 +498,38 @@ class _AvRackViewState extends State<AvRackView> {
     );
   }
 
-  /// Whether [nodeId] would fit at this spot — drives both the green hover
-  /// tint and the refusal, so the rack never accepts a drop it can't honour.
+  /// Whether [nodeId] would fit here — drives the hover tint and the refusal,
+  /// so the rack never lights up green for a drop it won't honour.
   bool _canDrop(
     AppStateProvider provider,
     String nodeId,
     RackFrame rack,
     RackFace face,
     int u,
-    RackHalf side,
   ) {
     final node = provider.avNodeById(nodeId);
     if (node == null) return false;
-    return provider.avRackSpanIsFree(
+
+    final occupants = provider.avRackOccupantsAt(
       rackId: rack.id,
       face: face,
       startU: u,
-      heightU: _heightOf(node),
-      half: _halfFor(node, side),
-      ignoreNodeId: nodeId,
-    );
-  }
+    )..remove(nodeId);
+    if (occupants.length >= kMaxRackColumns) return false;
 
-  /// A full-width device occupies the whole rail whichever side was aimed at.
-  RackHalf _halfFor(AvNode? node, RackHalf side) =>
-      (node?.isHalfRack ?? false) ? side : RackHalf.full;
+    // Alone on the rail it needs the whole width; sharing it only needs the
+    // row not to be fouled by a taller neighbour, which the placer checks.
+    if (occupants.isEmpty) {
+      return provider.avRackSpanIsFree(
+        rackId: rack.id,
+        face: face,
+        startU: u,
+        heightU: _heightOf(node),
+        ignoreNodeId: nodeId,
+      );
+    }
+    return true;
+  }
 
   void _dropInto(
     AppStateProvider provider,
@@ -537,19 +537,17 @@ class _AvRackViewState extends State<AvRackView> {
     RackFrame rack,
     RackFace face,
     int u,
-    RackHalf side,
   ) {
-    final node = provider.avNodeById(nodeId);
-    if (node == null) return;
-    provider.setAvRackSlot(
-      nodeId,
-      RackSlot(
-        rackId: rack.id,
-        startU: u,
-        face: face,
-        half: _halfFor(node, side),
-      ),
+    final ok = provider.avRackPlaceSharing(
+      nodeId: nodeId,
+      rackId: rack.id,
+      face: face,
+      startU: u,
     );
+    if (!ok) {
+      _snack('That rack unit has no room for it.', error: true);
+      return;
+    }
     setState(() {
       _carriedNodeId = null;
       _typedRackId = rack.id;
@@ -560,7 +558,9 @@ class _AvRackViewState extends State<AvRackView> {
 
   /// The little block that follows the cursor during a drag.
   Widget _dragGhost(AvNode node, ThemeData theme) {
-    final width = node.isHalfRack ? kRackInnerWidth / 2 : kRackInnerWidth;
+    // How wide it will end up depends on what is already on the target rail,
+    // which isn't known mid-drag, so the ghost is a fixed, compact size.
+    const width = kRackInnerWidth / 2;
     return Material(
       color: Colors.transparent,
       child: Opacity(
@@ -611,11 +611,12 @@ class _AvRackViewState extends State<AvRackView> {
     // units down from the top of the frame.
     final topU = rack.heightU - (slot.startU + height - 1);
 
-    // Half-width devices take one side of the rail; everything else spans it.
-    final bool half = slot.half != RackHalf.full;
-    final double blockWidth = half ? kRackInnerWidth / 2 : kRackInnerWidth;
-    final double left =
-        kRailWidth + (slot.half == RackHalf.right ? kRackInnerWidth / 2 : 0);
+    // The rail is divided into slice.columns equal pieces and this device
+    // sits in slice.column of them.
+    final slice = slot.slice;
+    final bool shared = slice.columns > 1;
+    final double blockWidth = kRackInnerWidth / slice.columns;
+    final double left = kRailWidth + kRackInnerWidth * slice.start;
 
     return Positioned(
       left: left,
@@ -627,54 +628,73 @@ class _AvRackViewState extends State<AvRackView> {
             '${node?.label ?? entry.key}\n'
             'U${slot.startU}'
             '${height == 1 ? '' : '–U${slot.startU + height - 1}'}'
-            '${half ? ' · ${slot.half.name} half' : ''}'
+            '${shared ? ' · ${slice.label} of the rail' : ''}'
             '${widget.editMode ? '\nDrag to move • click to pick up • '
                       'double-click to type a U • right-click to un-rack' : ''}',
-        child: _draggableIfEditing(
-          provider,
-          entry.key,
-          node,
-          theme,
-          GestureDetector(
-            onTap: widget.editMode
-                ? () => setState(() => _carriedNodeId = entry.key)
-                : null,
+        // A placed device covers the rail's drop target, so it has to accept
+        // drops itself and pass them to the same sharing placer — otherwise a
+        // second box could never be dropped onto an occupied rail.
+        child: DragTarget<String>(
+          onWillAcceptWithDetails: (d) =>
+              d.data != entry.key &&
+              _canDrop(provider, d.data, rack, face, slot.startU),
+          onAcceptWithDetails: (d) =>
+              _dropInto(provider, d.data, rack, face, slot.startU),
+          builder: (ctx, candidate, rejected) => _draggableIfEditing(
+            provider,
+            entry.key,
+            node,
+            theme,
+            GestureDetector(
+              onTap: widget.editMode
+                  // Carrying something already? Then a click here means "put
+                  // it on this rail too", not "pick this one up instead".
+                  ? () => _carriedNodeId != null &&
+                            _carriedNodeId != entry.key
+                        ? _place(provider, rack, face, slot.startU)
+                        : setState(() => _carriedNodeId = entry.key)
+                  : null,
             // Typing the position beats dragging when the frame is tall or the
             // device needs to land on an exact U.
-            onDoubleTap: widget.editMode
-                ? () => _showPlacementDialog(provider, entry.key)
-                : null,
-            onSecondaryTap: widget.editMode
-                ? () => provider.setAvRackSlot(entry.key, null)
-                : null,
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              decoration: BoxDecoration(
-                color: dark ? const Color(0xFF283039) : const Color(0xFFD7DEE8),
-                borderRadius: BorderRadius.circular(3),
-                border: Border.all(color: theme.colorScheme.outlineVariant),
-              ),
-              child: Row(
-                children: [
-                  Icon(iconForAvNode(entry.key, node?.model ?? ''), size: 13),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      node?.label ?? entry.key,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+              onDoubleTap: widget.editMode
+                  ? () => _showPlacementDialog(provider, entry.key)
+                  : null,
+              onSecondaryTap: widget.editMode
+                  ? () => provider.setAvRackSlot(entry.key, null)
+                  : null,
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: candidate.isNotEmpty
+                      ? theme.colorScheme.primary.withValues(alpha: 0.35)
+                      : (dark
+                            ? const Color(0xFF283039)
+                            : const Color(0xFFD7DEE8)),
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                ),
+                child: Row(
+                  children: [
+                    Icon(iconForAvNode(entry.key, node?.model ?? ''), size: 13),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        node?.label ?? entry.key,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (!half)
-                    Text(
-                      '${height}U',
-                      style: TextStyle(fontSize: 9, color: theme.hintColor),
-                    ),
-                ],
+                    if (!shared)
+                      Text(
+                        '${height}U',
+                        style: TextStyle(fontSize: 9, color: theme.hintColor),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -719,6 +739,9 @@ class _AvRackViewState extends State<AvRackView> {
     final heightController = TextEditingController(
       text: (existing?.heightU ?? 42).toString(),
     );
+    final kindController = TextEditingController(
+      text: existing?.kind ?? kRackKinds.first,
+    );
 
     final ok = await showDialog<bool>(
       context: context,
@@ -749,15 +772,42 @@ class _AvRackViewState extends State<AvRackView> {
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    for (final entry in kRackPresets.entries)
+                    // Heights only. Where the frame lives is the Type field
+                    // below — a 12U frame is as likely to be under a lectern
+                    // as on a wall.
+                    for (final u in kRackHeightPresets)
                       ActionChip(
-                        label: Text(entry.key),
-                        onPressed: () => setLocal(
-                          () => heightController.text = entry.value.toString(),
-                        ),
+                        label: Text('${u}U'),
+                        onPressed: () =>
+                            setLocal(() => heightController.text = '$u'),
                       ),
                   ],
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: kRackKinds.contains(kindController.text)
+                      ? kindController.text
+                      : null,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Type',
+                    helperText: 'Where this frame lives',
+                  ),
+                  items: [
+                    for (final k in kRackKinds)
+                      DropdownMenuItem(value: k, child: Text(k)),
+                  ],
+                  onChanged: (v) =>
+                      setLocal(() => kindController.text = v ?? ''),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: kindController,
+                  decoration: const InputDecoration(
+                    labelText: 'Type (or type your own)',
+                  ),
                 ),
               ],
             ),
@@ -784,10 +834,13 @@ class _AvRackViewState extends State<AvRackView> {
       return;
     }
 
+    final kind = kindController.text.trim();
+
     if (existing == null) {
       provider.addAvRack(
         name.isEmpty ? 'Rack ${provider.avRacks.length + 1}' : name,
         height,
+        kind: kind,
       );
       return;
     }
@@ -807,6 +860,7 @@ class _AvRackViewState extends State<AvRackView> {
       existing.copyWith(
         name: name.isEmpty ? existing.name : name,
         heightU: height,
+        kind: kind,
       ),
     );
 
@@ -836,10 +890,9 @@ class _AvRackViewState extends State<AvRackView> {
     );
     String rackId = slot?.rackId ?? provider.avRacks.first.id;
     RackFace face = slot?.face ?? RackFace.front;
-    RackWidth rackWidth = node.rackWidth;
-    RackHalf half = slot?.half == RackHalf.full
-        ? RackHalf.left
-        : (slot?.half ?? RackHalf.left);
+    // Where along a shared rail it sits. 1-based, because a row of gear reads
+    // as "first, second, third", not from zero.
+    int position = (slot?.slice.column ?? 0) + 1;
 
     final result = await showDialog<String>(
       context: context,
@@ -873,46 +926,33 @@ class _AvRackViewState extends State<AvRackView> {
                   selected: {face},
                   onSelectionChanged: (s) => setLocal(() => face = s.first),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SegmentedButton<RackWidth>(
-                        segments: const [
-                          ButtonSegment(
-                            value: RackWidth.full,
-                            label: Text('Full width'),
-                          ),
-                          ButtonSegment(
-                            value: RackWidth.half,
-                            label: Text('Half'),
-                          ),
-                        ],
-                        selected: {rackWidth},
-                        onSelectionChanged: (s) =>
-                            setLocal(() => rackWidth = s.first),
+                // Width isn't a property of the device any more: it comes
+                // from how many boxes share the rail. All this offers is the
+                // order along it.
+                if ((slot?.slice.columns ?? 1) > 1) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Shares U${slot!.startU} with '
+                          '${slot.slice.columns - 1} other'
+                          '${slot.slice.columns == 2 ? '' : 's'}. Position:',
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
                       ),
-                    ),
-                    if (rackWidth == RackWidth.half) ...[
-                      const SizedBox(width: 10),
-                      SegmentedButton<RackHalf>(
-                        segments: const [
-                          ButtonSegment(
-                            value: RackHalf.left,
-                            label: Text('Left'),
-                          ),
-                          ButtonSegment(
-                            value: RackHalf.right,
-                            label: Text('Right'),
-                          ),
+                      SegmentedButton<int>(
+                        segments: [
+                          for (int i = 1; i <= slot.slice.columns; i++)
+                            ButtonSegment(value: i, label: Text('$i')),
                         ],
-                        selected: {half},
-                        onSelectionChanged: (s) =>
-                            setLocal(() => half = s.first),
+                        selected: {position},
+                        onSelectionChanged: (v) =>
+                            setLocal(() => position = v.first),
                       ),
                     ],
-                  ],
-                ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -978,29 +1018,32 @@ class _AvRackViewState extends State<AvRackView> {
       return;
     }
 
-    // Height and width live on the DEVICE, not the slot, so they have to be
-    // written back before the span is checked against them.
-    if (height != node.rackUnits || rackWidth != node.rackWidth) {
-      provider.updateAvNode(
-        node.copyWith(rackUnits: height, rackWidth: rackWidth),
-      );
+    // Height lives on the DEVICE, not the slot, so write it back before the
+    // span is measured against it.
+    if (height != node.rackUnits) {
+      provider.updateAvNode(node.copyWith(rackUnits: height));
     }
-    final slotHalf = rackWidth == RackWidth.half ? half : RackHalf.full;
-    if (!provider.avRackSpanIsFree(
+
+    // Staying on the rail it is already on: this is a re-order, not a move.
+    final sameRow =
+        slot != null &&
+        slot.rackId == rackId &&
+        slot.face == face &&
+        slot.startU == startU;
+    if (sameRow && slot.slice.columns > 1) {
+      provider.avRackReorderRow(nodeId, position - 1);
+      return;
+    }
+
+    if (!provider.avRackPlaceSharing(
+      nodeId: nodeId,
       rackId: rackId,
       face: face,
       startU: startU,
-      heightU: height,
-      half: slotHalf,
-      ignoreNodeId: nodeId,
     )) {
-      _snack('U$startU doesn\'t have ${height}U free there.', error: true);
+      _snack('U$startU has no room for it.', error: true);
       return;
     }
-    provider.setAvRackSlot(
-      nodeId,
-      RackSlot(rackId: rackId, startU: startU, face: face, half: slotHalf),
-    );
   }
 
   Future<void> _confirmRemoveRack(

@@ -891,6 +891,30 @@ class AppStateProvider extends ChangeNotifier {
   /// re-seeding doesn't keep dragging them back.
   final Set<String> avDismissedDevices = {};
 
+  /// Per-room overrides of the signal-type palette. Recolouring HDMI here
+  /// moves every HDMI cable, every HDMI port dot and the legend entry
+  /// together — the point being that the key keeps describing the drawing.
+  /// Empty means the built-in colours.
+  final Map<SignalType, Color> avSignalColors = {};
+
+  /// The colour a signal type is drawn in for this room.
+  Color avSignalColor(SignalType s) => signalColor(s, avSignalColors);
+
+  /// Recolours one signal type, or clears the override when [color] is null.
+  void setAvSignalColor(SignalType s, Color? color) {
+    if (color == null) {
+      avSignalColors.remove(s);
+    } else {
+      avSignalColors[s] = color;
+    }
+    notifyListeners();
+  }
+
+  void resetAvSignalColors() {
+    avSignalColors.clear();
+    notifyListeners();
+  }
+
   /// The config path the AV diagram belongs to (see [_schematicSyncedPath]).
   String _avFlowSyncedPath = ' never';
 
@@ -926,7 +950,8 @@ class AppStateProvider extends ChangeNotifier {
       ports: node.ports,
       fromConfig: node.fromConfig,
       rackUnits: node.rackUnits,
-      rackWidth: node.rackWidth,
+      kind: node.kind,
+      powerSource: node.powerSource,
       note: node.note,
     );
     avNodes.add(stored);
@@ -959,7 +984,10 @@ class AppStateProvider extends ChangeNotifier {
     if (node == null) return;
     avNodes.removeWhere((n) => n.id == nodeId);
     avCables.removeWhere((c) => c.fromNodeId == nodeId || c.toNodeId == nodeId);
-    avRackSlots.remove(nodeId);
+    final vacated = avRackSlots.remove(nodeId);
+    if (vacated != null) {
+      avRepackRow(vacated.rackId, vacated.face, vacated.startU);
+    }
     if (node.fromConfig) avDismissedDevices.add(nodeId);
     notifyListeners();
   }
@@ -1014,12 +1042,13 @@ class AppStateProvider extends ChangeNotifier {
 
   // --- racks ---
 
-  RackFrame addAvRack(String name, int heightU) {
+  RackFrame addAvRack(String name, int heightU, {String kind = ''}) {
     // Frames sit side by side; the new one goes to the right of the last.
     final rack = RackFrame(
       id: 'RACK_${avRacks.length + 1}_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       heightU: heightU,
+      kind: kind,
       x: avRacks.isEmpty ? 0 : avRacks.last.x + 340,
     );
     avRacks.add(rack);
@@ -1043,10 +1072,20 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Places [nodeId] in a rack, or clears its placement when [slot] is null.
   void setAvRackSlot(String nodeId, RackSlot? slot) {
+    final previous = avRackSlots[nodeId];
     if (slot == null) {
       avRackSlots.remove(nodeId);
     } else {
       avRackSlots[nodeId] = slot;
+    }
+    // The row it left has one fewer device on it; close the gap so two
+    // survivors go back to halves rather than sitting in thirds.
+    if (previous != null &&
+        (slot == null ||
+            slot.rackId != previous.rackId ||
+            slot.face != previous.face ||
+            slot.startU != previous.startU)) {
+      avRepackRow(previous.rackId, previous.face, previous.startU);
     }
     notifyListeners();
   }
@@ -1063,7 +1102,7 @@ class AppStateProvider extends ChangeNotifier {
     required RackFace face,
     required int startU,
     required int heightU,
-    RackHalf half = RackHalf.full,
+    RackColumn slice = RackColumn.full,
     String? ignoreNodeId,
   }) {
     final rack = avRacks.firstWhere((r) => r.id == rackId,
@@ -1080,9 +1119,129 @@ class AppStateProvider extends ChangeNotifier {
       final otherEnd = slot.startU + otherHeight - 1;
       final usOverlap =
           startU <= otherEnd && slot.startU <= startU + heightU - 1;
-      if (usOverlap && rackHalvesOverlap(half, slot.half)) return false;
+      if (usOverlap && slice.overlaps(slot.slice)) return false;
     }
     return true;
+  }
+
+  /// Everything already sitting on [startU] of [face], in slice order — the
+  /// devices a newly dropped box would be sharing the rail with.
+  List<String> avRackOccupantsAt({
+    required String rackId,
+    required RackFace face,
+    required int startU,
+  }) {
+    final rows = avRackSlots.entries
+        .where((e) =>
+            e.value.rackId == rackId &&
+            e.value.face == face &&
+            e.value.startU == startU)
+        .toList()
+      ..sort((a, b) => a.value.slice.column.compareTo(b.value.slice.column));
+    return [for (final e in rows) e.key];
+  }
+
+  /// Places [nodeId] on [startU], SHARING the rail with whatever is already
+  /// there: the row re-splits into one more slice and the existing devices
+  /// shuffle over. This is the drop path — you aim at a rack unit, not at a
+  /// slice of one, which is how a Revolabs receiver, a DTP receiver and a
+  /// micro PC end up listed together on one shelf.
+  ///
+  /// Returns false when the row already holds [kMaxRackColumns] devices, or
+  /// when something spanning in from a neighbouring U is in the way.
+  bool avRackPlaceSharing({
+    required String nodeId,
+    required String rackId,
+    required RackFace face,
+    required int startU,
+  }) {
+    final node = avNodeById(nodeId);
+    final heightU = math.max(1, node?.rackUnits ?? 1);
+
+    final occupants =
+        avRackOccupantsAt(rackId: rackId, face: face, startU: startU)
+          ..remove(nodeId);
+
+    // Alone on the row: take the whole width.
+    if (occupants.isEmpty) {
+      if (!avRackSpanIsFree(
+        rackId: rackId,
+        face: face,
+        startU: startU,
+        heightU: heightU,
+        ignoreNodeId: nodeId,
+      )) {
+        return false;
+      }
+      avRackSlots[nodeId] =
+          RackSlot(rackId: rackId, startU: startU, face: face);
+      notifyListeners();
+      return true;
+    }
+
+    final columns = occupants.length + 1;
+    if (columns > kMaxRackColumns) return false;
+
+    // Re-splitting only moves devices within this row, so the one thing that
+    // can still block is a taller neighbour spanning in from another U.
+    final rowIds = {...occupants, nodeId};
+    for (final entry in avRackSlots.entries) {
+      if (rowIds.contains(entry.key)) continue;
+      final slot = entry.value;
+      if (slot.rackId != rackId || slot.face != face) continue;
+      final other = avNodeById(entry.key);
+      final otherHeight = (other?.rackUnits ?? 1).clamp(1, 60);
+      final otherEnd = slot.startU + otherHeight - 1;
+      if (startU <= otherEnd && slot.startU <= startU + heightU - 1) {
+        return false;
+      }
+    }
+
+    for (int i = 0; i < occupants.length; i++) {
+      final existing = avRackSlots[occupants[i]]!;
+      avRackSlots[occupants[i]] =
+          existing.copyWith(slice: RackColumn(column: i, columns: columns));
+    }
+    avRackSlots[nodeId] = RackSlot(
+      rackId: rackId,
+      startU: startU,
+      face: face,
+      slice: RackColumn(column: occupants.length, columns: columns),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  /// Moves [nodeId] to position [target] along the rail it already shares,
+  /// sliding its neighbours over rather than swapping two of them.
+  void avRackReorderRow(String nodeId, int target) {
+    final slot = avRackSlots[nodeId];
+    if (slot == null) return;
+    final order = avRackOccupantsAt(
+        rackId: slot.rackId, face: slot.face, startU: slot.startU);
+    order.remove(nodeId);
+    order.insert(target.clamp(0, order.length), nodeId);
+    for (int i = 0; i < order.length; i++) {
+      final existing = avRackSlots[order[i]]!;
+      avRackSlots[order[i]] =
+          existing.copyWith(slice: RackColumn(column: i, columns: order.length));
+    }
+    notifyListeners();
+  }
+
+  /// Closes the gap after a device leaves a shared row, so two survivors go
+  /// back to halves instead of leaving a hole where the third one was.
+  void avRepackRow(String rackId, RackFace face, int startU) {
+    final occupants =
+        avRackOccupantsAt(rackId: rackId, face: face, startU: startU);
+    for (int i = 0; i < occupants.length; i++) {
+      final slot = avRackSlots[occupants[i]]!;
+      avRackSlots[occupants[i]] = slot.copyWith(
+        slice: occupants.length <= 1
+            ? RackColumn.full
+            : RackColumn(column: i, columns: occupants.length),
+      );
+    }
   }
 
   // --- persistence ---
@@ -1117,6 +1276,7 @@ class AppStateProvider extends ChangeNotifier {
     avRacks.clear();
     avRackSlots.clear();
     avDismissedDevices.clear();
+    avSignalColors.clear();
     _avNodeCounter = 0;
     _avCableCounter = 0;
   }
@@ -1183,6 +1343,18 @@ class AppStateProvider extends ChangeNotifier {
       if (dismissed is List) {
         avDismissedDevices.addAll(dismissed.map((e) => e.toString()));
       }
+      final palette = doc['signalColors'];
+      if (palette is Map) {
+        palette.forEach((name, hex) {
+          final value = int.tryParse(hex.toString(), radix: 16);
+          if (value == null) return;
+          for (final s in SignalType.values) {
+            if (s.name == name.toString()) {
+              avSignalColors[s] = Color(0xFF000000 | value);
+            }
+          }
+        });
+      }
 
       // Rebuild the id counters past everything that was loaded, so new
       // nodes and cables can never collide with restored ones.
@@ -1224,6 +1396,12 @@ class AppStateProvider extends ChangeNotifier {
         'racks': avRacks.map((r) => r.toJson()).toList(),
         'rackSlots': avRackSlots.map((id, s) => MapEntry(id, s.toJson())),
         'dismissedDevices': avDismissedDevices.toList(),
+        'signalColors': {
+          for (final e in avSignalColors.entries)
+            e.key.name: (e.value.toARGB32() & 0xFFFFFF)
+                .toRadixString(16)
+                .padLeft(6, '0'),
+        },
       }));
       _avFlowSyncedPath = currentConfigPath;
       return sidecar;

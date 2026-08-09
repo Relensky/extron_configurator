@@ -11,17 +11,12 @@ import 'package:extron_configurator/av_rack_view.dart';
 /// cover the drag path and the half-width sharing that makes two boxes fit on
 /// one rail.
 void main() {
-  AvNode device(
-    String id, {
-    RackWidth width = RackWidth.full,
-    int units = 1,
-  }) => AvNode(
+  AvNode device(String id, {int units = 1}) => AvNode(
     id: id,
     label: id,
     model: 'Model $id',
     pos: Offset.zero,
     rackUnits: units,
-    rackWidth: width,
     ports: const [],
   );
 
@@ -77,21 +72,21 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Finder slot(RackFrame rack, int u, RackHalf side, {String face = 'front'}) =>
-      find.byKey(ValueKey('u_${rack.id}_${face}_${u}_${side.name}'));
+  Finder slot(RackFrame rack, int u, {String face = 'front'}) =>
+      find.byKey(ValueKey('u_${rack.id}_${face}_$u'));
 
   testWidgets('a device drags from the to-place list into a U', (tester) async {
     final (provider, rack) = rackWith([device('AMP', units: 2)]);
     await pumpRacks(tester, provider);
 
-    await dragOnto(tester, find.text('AMP (2U)'), slot(rack, 5, RackHalf.left));
+    await dragOnto(tester, find.text('AMP (2U)'), slot(rack, 5));
 
     final placed = provider.avRackSlots['AMP'];
     expect(placed, isNotNull);
     expect(placed!.startU, 5);
     expect(placed.face, RackFace.front);
-    // A full-width device takes the whole rail whichever half it was aimed at.
-    expect(placed.half, RackHalf.full);
+    // Alone on the rail, so it keeps the whole width.
+    expect(placed.slice.columns, 1);
   });
 
   testWidgets('a racked device drags to a different U', (tester) async {
@@ -99,78 +94,82 @@ void main() {
     provider.setAvRackSlot('AMP', RackSlot(rackId: rack.id, startU: 2));
     await pumpRacks(tester, provider);
 
-    await dragOnto(tester, find.text('AMP'), slot(rack, 9, RackHalf.right));
+    await dragOnto(tester, find.text('AMP'), slot(rack, 9));
 
     expect(provider.avRackSlots['AMP']!.startU, 9);
   });
 
-  testWidgets('two half-width devices land side by side in one U', (
+  testWidgets('two devices dropped on the same U share the rail', (
+    tester,
+  ) async {
+    final (provider, rack) = rackWith([device('BOXA'), device('BOXB')]);
+    await pumpRacks(tester, provider);
+
+    await dragOnto(tester, find.text('BOXA (1U)'), slot(rack, 4));
+    await dragOnto(tester, find.text('BOXB (1U)'), slot(rack, 4));
+
+    expect(provider.avRackSlots['BOXA']!.startU, 4);
+    expect(provider.avRackSlots['BOXA']!.slice.columns, 2);
+    expect(provider.avRackSlots['BOXA']!.slice.column, 0);
+    expect(provider.avRackSlots['BOXB']!.slice.column, 1);
+  });
+
+  testWidgets('a third device makes it thirds', (tester) async {
+    final (provider, rack) = rackWith([
+      device('REVOLABS'),
+      device('DTPRX'),
+      device('MICROPC'),
+    ]);
+    await pumpRacks(tester, provider);
+
+    for (final name in ['REVOLABS', 'DTPRX', 'MICROPC']) {
+      await dragOnto(tester, find.text('$name (1U)'), slot(rack, 2));
+    }
+
+    expect(
+      provider.avRackOccupantsAt(
+        rackId: rack.id,
+        face: RackFace.front,
+        startU: 2,
+      ),
+      ['REVOLABS', 'DTPRX', 'MICROPC'],
+    );
+    expect(provider.avRackSlots['MICROPC']!.slice.columns, 3);
+  });
+
+  testWidgets('a drop is refused once the rail is full', (tester) async {
+    final devices = [
+      for (int i = 0; i < kMaxRackColumns; i++) device('D$i'),
+      device('ONEMORE'),
+    ];
+    final (provider, rack) = rackWith(devices);
+    await pumpRacks(tester, provider);
+
+    for (int i = 0; i < kMaxRackColumns; i++) {
+      await dragOnto(tester, find.text('D$i (1U)'), slot(rack, 3));
+    }
+    await dragOnto(tester, find.text('ONEMORE (1U)'), slot(rack, 3));
+
+    expect(provider.avRackSlots.containsKey('ONEMORE'), isFalse);
+    expect(provider.avRackSlots.length, kMaxRackColumns);
+  });
+
+  testWidgets('dropping onto a tall device shares that device\'s rail', (
     tester,
   ) async {
     final (provider, rack) = rackWith([
-      device('LEFTBOX', width: RackWidth.half),
-      device('RIGHTBOX', width: RackWidth.half),
+      device('TALL', units: 3),
+      device('SMALL'),
     ]);
+    provider.setAvRackSlot('TALL', RackSlot(rackId: rack.id, startU: 6));
     await pumpRacks(tester, provider);
 
-    await dragOnto(
-      tester,
-      find.text('LEFTBOX (1U ½)'),
-      slot(rack, 4, RackHalf.left),
-    );
-    await dragOnto(
-      tester,
-      find.text('RIGHTBOX (1U ½)'),
-      slot(rack, 4, RackHalf.right),
-    );
+    // The 3U block covers U6-U8, so a drop anywhere on it means "go beside
+    // this one" — and beside it means starting where it starts, at U6.
+    await dragOnto(tester, find.text('SMALL (1U)'), find.text('TALL'));
 
-    expect(provider.avRackSlots['LEFTBOX']!.startU, 4);
-    expect(provider.avRackSlots['LEFTBOX']!.half, RackHalf.left);
-    expect(provider.avRackSlots['RIGHTBOX']!.startU, 4);
-    expect(provider.avRackSlots['RIGHTBOX']!.half, RackHalf.right);
-  });
-
-  testWidgets('a drop onto an occupied half is refused', (tester) async {
-    final (provider, rack) = rackWith([
-      device('LEFTBOX', width: RackWidth.half),
-      device('OTHER', width: RackWidth.half),
-    ]);
-    provider.setAvRackSlot(
-      'LEFTBOX',
-      RackSlot(rackId: rack.id, startU: 4, half: RackHalf.left),
-    );
-    await pumpRacks(tester, provider);
-
-    await dragOnto(
-      tester,
-      find.text('OTHER (1U ½)'),
-      slot(rack, 4, RackHalf.left),
-    );
-
-    // Refused, so it stays unplaced rather than stacking on top.
-    expect(provider.avRackSlots.containsKey('OTHER'), isFalse);
-    expect(provider.avRackSlots['LEFTBOX']!.half, RackHalf.left);
-  });
-
-  testWidgets('a full-width device is refused where only a half is free', (
-    tester,
-  ) async {
-    final (provider, rack) = rackWith([
-      device('HALFBOX', width: RackWidth.half),
-      device('FULLBOX'),
-    ]);
-    provider.setAvRackSlot(
-      'HALFBOX',
-      RackSlot(rackId: rack.id, startU: 7, half: RackHalf.left),
-    );
-    await pumpRacks(tester, provider);
-
-    await dragOnto(
-      tester,
-      find.text('FULLBOX (1U)'),
-      slot(rack, 7, RackHalf.right),
-    );
-
-    expect(provider.avRackSlots.containsKey('FULLBOX'), isFalse);
+    expect(provider.avRackSlots['SMALL']!.startU, 6);
+    expect(provider.avRackSlots['SMALL']!.slice.columns, 2);
+    expect(provider.avRackSlots['TALL']!.slice.column, 0);
   });
 }

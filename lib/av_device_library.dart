@@ -56,16 +56,12 @@ class AvDeviceTemplate {
   final String manufacturer;
   final int rackUnits;
 
-  /// Half-width models ("rackWidth": "half") pair up two to a rack unit.
-  final RackWidth rackWidth;
-
   final List<AvPort> ports;
 
   const AvDeviceTemplate({
     required this.model,
     this.manufacturer = '',
     this.rackUnits = 0,
-    this.rackWidth = RackWidth.full,
     required this.ports,
   });
 
@@ -73,7 +69,6 @@ class AvDeviceTemplate {
     'model': model,
     if (manufacturer.isNotEmpty) 'manufacturer': manufacturer,
     'rackUnits': rackUnits,
-    if (rackWidth != RackWidth.full) 'rackWidth': rackWidth.name,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
 
@@ -82,7 +77,6 @@ class AvDeviceTemplate {
         model: json['model']?.toString() ?? '',
         manufacturer: json['manufacturer']?.toString() ?? '',
         rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
-        rackWidth: rackWidthFromName(json['rackWidth']?.toString()),
         ports: [
           for (final p in (json['ports'] as List? ?? []))
             if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
@@ -215,7 +209,6 @@ class AvDeviceLibrary {
         return AvDeviceTemplate(
           model: model.isEmpty ? entry.key : model,
           rackUnits: entry.value.rackUnits,
-          rackWidth: entry.value.rackWidth,
           ports: entry.value.ports,
         );
       }

@@ -142,6 +142,16 @@ const Set<SignalType> kAudioSignals = {
   SignalType.speaker,
 };
 
+/// The colour a signal type is drawn in, honouring the room's palette.
+///
+/// [kSignalColors] is only the factory default. A room can recolour any type
+/// — see `avSignalColors` in app_state.dart — and when it does, EVERY cable,
+/// port dot and legend entry of that type has to move together, or the key
+/// stops describing the drawing. So nothing reads [kSignalColors] directly
+/// except this function.
+Color signalColor(SignalType s, [Map<SignalType, Color>? palette]) =>
+    palette?[s] ?? kSignalColors[s] ?? kSignalColors[SignalType.other]!;
+
 SignalType signalFromName(String? name) {
   if (name == null) return SignalType.other;
   final key = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
@@ -173,6 +183,44 @@ SignalType signalFromName(String? name) {
 // ---------------------------------------------------------------------------
 //  PORTS
 // ---------------------------------------------------------------------------
+
+/// What a box on the canvas represents. Only [jackField] behaves differently:
+/// its "ports" are numbered jacks in a wall box, floor box or patch panel, so
+/// the report can say which device landed on which jack number.
+enum AvNodeKind { device, jackField }
+
+AvNodeKind nodeKindFromName(String? name) =>
+    name?.trim().toLowerCase() == 'jackfield'
+    ? AvNodeKind.jackField
+    : AvNodeKind.device;
+
+/// Where a device gets its mains from. Recorded per device so the power
+/// report can separate "on the APC, outlet 3" from "straight into the wall"
+/// from "PoE off the switch" — the three answers an installer needs.
+enum PowerSource { unspecified, controller, wall, poe, none }
+
+const Map<PowerSource, String> kPowerSourceLabels = {
+  PowerSource.unspecified: 'Not recorded',
+  PowerSource.controller: 'Power controller outlet',
+  PowerSource.wall: 'Wall / building outlet',
+  PowerSource.poe: 'PoE',
+  PowerSource.none: 'No mains needed',
+};
+
+PowerSource powerSourceFromName(String? name) {
+  switch (name?.trim().toLowerCase()) {
+    case 'controller':
+      return PowerSource.controller;
+    case 'wall':
+      return PowerSource.wall;
+    case 'poe':
+      return PowerSource.poe;
+    case 'none':
+      return PowerSource.none;
+    default:
+      return PowerSource.unspecified;
+  }
+}
 
 enum PortDirection { input, output, bidirectional }
 
@@ -327,8 +375,11 @@ class AvNode {
   /// Rack height; 0 means "not rack mounted" and keeps it out of the racks.
   final int rackUnits;
 
-  /// Full or half rail width. Two half-width devices share one U.
-  final RackWidth rackWidth;
+  /// Device or numbered jack field (wall box / floor box / patch panel).
+  final AvNodeKind kind;
+
+  /// Where this device's mains comes from.
+  final PowerSource powerSource;
 
   /// Free-text note carried into the pack list.
   final String note;
@@ -341,9 +392,12 @@ class AvNode {
     required this.ports,
     this.fromConfig = false,
     this.rackUnits = 0,
-    this.rackWidth = RackWidth.full,
+    this.kind = AvNodeKind.device,
+    this.powerSource = PowerSource.unspecified,
     this.note = '',
   });
+
+  bool get isJackField => kind == AvNodeKind.jackField;
 
   AvNode copyWith({
     String? label,
@@ -352,7 +406,8 @@ class AvNode {
     List<AvPort>? ports,
     bool? fromConfig,
     int? rackUnits,
-    RackWidth? rackWidth,
+    AvNodeKind? kind,
+    PowerSource? powerSource,
     String? note,
   }) => AvNode(
     id: id,
@@ -362,11 +417,10 @@ class AvNode {
     ports: ports ?? this.ports,
     fromConfig: fromConfig ?? this.fromConfig,
     rackUnits: rackUnits ?? this.rackUnits,
-    rackWidth: rackWidth ?? this.rackWidth,
+    kind: kind ?? this.kind,
+    powerSource: powerSource ?? this.powerSource,
     note: note ?? this.note,
   );
-
-  bool get isHalfRack => rackWidth == RackWidth.half;
 
   List<AvPort> get leftPorts =>
       ports.where((p) => p.side == PortSide.left).toList();
@@ -478,7 +532,8 @@ class AvNode {
     'y': pos.dy,
     'fromConfig': fromConfig,
     'rackUnits': rackUnits,
-    if (rackWidth != RackWidth.full) 'rackWidth': rackWidth.name,
+    if (kind != AvNodeKind.device) 'kind': kind.name,
+    if (powerSource != PowerSource.unspecified) 'power': powerSource.name,
     if (note.isNotEmpty) 'note': note,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
@@ -493,7 +548,8 @@ class AvNode {
     ),
     fromConfig: json['fromConfig'] == true,
     rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
-    rackWidth: rackWidthFromName(json['rackWidth']?.toString()),
+    kind: nodeKindFromName(json['kind']?.toString()),
+    powerSource: powerSourceFromName(json['power']?.toString()),
     note: json['note']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))
@@ -563,11 +619,10 @@ class AvCable {
         : (colorOverride ?? this.colorOverride),
   );
 
-  /// The colour this run is actually drawn in.
-  Color get color =>
-      colorOverride ??
-      kSignalColors[signal] ??
-      kSignalColors[SignalType.other]!;
+  /// The colour this run is actually drawn in: its own override if it has
+  /// one, otherwise whatever the room's palette says its signal type is.
+  Color colorFor([Map<SignalType, Color>? palette]) =>
+      colorOverride ?? signalColor(signal, palette);
 
   /// True when this run is drawn in something other than its signal colour —
   /// the legend calls those out so it doesn't quietly lie about the diagram.
@@ -643,39 +698,66 @@ const List<Color> kCableSwatches = [
 
 enum RackFace { front, rear }
 
-/// How much of the rail width a device takes. Two half-width boxes share one
-/// U — a pair of 1U half-racks on a shelf, or two DTP receivers side by side.
-enum RackWidth { full, half }
+/// What kind of frame this is. Purely descriptive — it doesn't change the
+/// geometry, it just tells whoever reads the elevation where the thing lives.
+/// The list is a starting point; [RackFrame.kindLabel] carries free text so a
+/// room can call it whatever it actually is.
+const List<String> kRackKinds = [
+  'Free-standing rack',
+  'Wall-mounted rack',
+  'Lectern built-in rack',
+  'Credenza / cabinet rack',
+  'Under-table rack',
+  'Equipment room rack',
+];
 
-/// Which side of the U a half-width device sits on. [full] is the whole
-/// width, which is what a normal device uses.
-enum RackHalf { full, left, right }
+/// How many devices share one rail position, and which slice this one is.
+///
+/// A rail is divided into [columns] equal slices and this device sits in
+/// slice [column]. Alone on a U that's 1 slice of 1 — the whole width. Drop a
+/// second box on the same U and both become halves; a third makes thirds.
+/// That is how a shelf of small gear actually gets recorded: a Revolabs
+/// receiver, a DTP receiver and a micro PC all on the same 2U.
+class RackColumn {
+  final int column;
+  final int columns;
 
-RackWidth rackWidthFromName(String? name) =>
-    name?.trim().toLowerCase() == 'half' ? RackWidth.half : RackWidth.full;
+  const RackColumn({this.column = 0, this.columns = 1});
 
-RackHalf rackHalfFromName(String? name) {
-  switch (name?.trim().toLowerCase()) {
-    case 'left':
-      return RackHalf.left;
-    case 'right':
-      return RackHalf.right;
-    default:
-      return RackHalf.full;
-  }
+  static const RackColumn full = RackColumn();
+
+  /// Fraction of the rail this slice starts at and ends at, used for the
+  /// overlap test — fractions compare correctly even when two neighbouring
+  /// rows are split a different number of ways.
+  double get start => column / columns;
+  double get end => (column + 1) / columns;
+
+  bool overlaps(RackColumn other) => start < other.end && other.start < end;
+
+  RackColumn copyWith({int? column, int? columns}) => RackColumn(
+    column: column ?? this.column,
+    columns: columns ?? this.columns,
+  );
+
+  /// How this reads in a report: "1 of 3 (left)" is noise, "1/3" is not.
+  String get label => columns <= 1 ? 'Full' : '${column + 1}/$columns';
 }
 
-/// True when two placements in the same U would physically collide: a
-/// full-width device blocks the whole rail, two halves only clash when
-/// they're on the same side.
-bool rackHalvesOverlap(RackHalf a, RackHalf b) =>
-    a == RackHalf.full || b == RackHalf.full || a == b;
+/// Most rails are split at most this many ways; beyond it the labels stop
+/// being readable and it stops being a rack elevation.
+const int kMaxRackColumns = 4;
 
 /// A rack frame on the elevation page.
 class RackFrame {
   final String id;
   final String name;
   final int heightU;
+
+  /// What sort of frame it is — "Lectern built-in rack", "Wall-mounted rack",
+  /// and so on. Free text, so a room isn't limited to [kRackKinds]. This used
+  /// to be baked into the height presets ("12U wall"), which was wrong: a 12U
+  /// frame is just as likely to be under a lectern.
+  final String kind;
 
   /// Left edge on the elevation page; frames sit side by side.
   final double x;
@@ -684,20 +766,24 @@ class RackFrame {
     required this.id,
     required this.name,
     required this.heightU,
+    this.kind = '',
     this.x = 0,
   });
 
-  RackFrame copyWith({String? name, int? heightU, double? x}) => RackFrame(
-    id: id,
-    name: name ?? this.name,
-    heightU: heightU ?? this.heightU,
-    x: x ?? this.x,
-  );
+  RackFrame copyWith({String? name, int? heightU, String? kind, double? x}) =>
+      RackFrame(
+        id: id,
+        name: name ?? this.name,
+        heightU: heightU ?? this.heightU,
+        kind: kind ?? this.kind,
+        x: x ?? this.x,
+      );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'heightU': heightU,
+    if (kind.isNotEmpty) 'kind': kind,
     'x': x,
   };
 
@@ -705,18 +791,15 @@ class RackFrame {
     id: json['id']?.toString() ?? '',
     name: json['name']?.toString() ?? 'Rack',
     heightU: (json['heightU'] as num?)?.toInt() ?? 42,
+    kind: json['kind']?.toString() ?? '',
     x: (json['x'] as num?)?.toDouble() ?? 0,
   );
 }
 
 /// Rack presets offered when adding a frame.
-const Map<String, int> kRackPresets = {
-  '42U floor': 42,
-  '24U floor': 24,
-  '12U wall': 12,
-  '8U wall': 8,
-  '4U wall': 4,
-};
+/// Common heights offered as one-click shortcuts. Heights only — where the
+/// frame lives is [RackFrame.kind], not something to infer from its size.
+const List<int> kRackHeightPresets = [42, 24, 18, 12, 8, 6, 4, 2];
 
 /// Where one device sits in a rack. Keyed by node id in the state map, so a
 /// device can only be in one place — which is the physical truth.
@@ -728,42 +811,66 @@ class RackSlot {
   final int startU;
   final RackFace face;
 
-  /// Which side of the rail a half-width device sits on; [RackHalf.full] for
-  /// everything else.
-  final RackHalf half;
+  /// Which slice of the rail this device takes; the whole width by default.
+  final RackColumn slice;
 
   const RackSlot({
     required this.rackId,
     required this.startU,
     this.face = RackFace.front,
-    this.half = RackHalf.full,
+    this.slice = RackColumn.full,
   });
 
   RackSlot copyWith({
     String? rackId,
     int? startU,
     RackFace? face,
-    RackHalf? half,
+    RackColumn? slice,
   }) => RackSlot(
     rackId: rackId ?? this.rackId,
     startU: startU ?? this.startU,
     face: face ?? this.face,
-    half: half ?? this.half,
+    slice: slice ?? this.slice,
   );
 
   Map<String, dynamic> toJson() => {
     'rack': rackId,
     'startU': startU,
     'face': face.name,
-    if (half != RackHalf.full) 'half': half.name,
+    if (slice.columns > 1) 'column': slice.column,
+    if (slice.columns > 1) 'columns': slice.columns,
   };
 
-  factory RackSlot.fromJson(Map<String, dynamic> json) => RackSlot(
-    rackId: json['rack']?.toString() ?? '',
-    startU: (json['startU'] as num?)?.toInt() ?? 1,
-    face: json['face']?.toString() == 'rear' ? RackFace.rear : RackFace.front,
-    half: rackHalfFromName(json['half']?.toString()),
-  );
+  factory RackSlot.fromJson(Map<String, dynamic> json) {
+    // 'half' is the older two-slice format (left/right). Read it so diagrams
+    // saved before rails could be split any number of ways still open.
+    final legacyHalf = json['half']?.toString().trim().toLowerCase();
+    final RackColumn slice;
+    if (json['columns'] != null) {
+      final columns = ((json['columns'] as num?)?.toInt() ?? 1).clamp(
+        1,
+        kMaxRackColumns,
+      );
+      final column = ((json['column'] as num?)?.toInt() ?? 0).clamp(
+        0,
+        columns - 1,
+      );
+      slice = RackColumn(column: column, columns: columns);
+    } else if (legacyHalf == 'left') {
+      slice = const RackColumn(column: 0, columns: 2);
+    } else if (legacyHalf == 'right') {
+      slice = const RackColumn(column: 1, columns: 2);
+    } else {
+      slice = RackColumn.full;
+    }
+
+    return RackSlot(
+      rackId: json['rack']?.toString() ?? '',
+      startU: (json['startU'] as num?)?.toInt() ?? 1,
+      face: json['face']?.toString() == 'rear' ? RackFace.rear : RackFace.front,
+      slice: slice,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

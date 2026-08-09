@@ -26,6 +26,8 @@ List<ReportSection> avReportSections(
     _cableSchedule(model),
     _packList(model),
     if (model.racks.isNotEmpty) _rackInventory(model),
+    if (model.nodes.any((n) => n.isJackField)) _jackSchedule(model),
+    _powerSchedule(model),
     _portUtilization(model),
   ];
 }
@@ -140,6 +142,9 @@ ReportSection _rackInventory(AvFlowModel model) {
   final rows = <List<dynamic>>[];
 
   for (final rack in model.racks) {
+    if (rack.kind.isNotEmpty) {
+      rows.add([rack.name, '', '', '', '— ${rack.kind} —', '']);
+    }
     for (final face in RackFace.values) {
       final entries =
           model.rackSlots.entries
@@ -152,15 +157,14 @@ ReportSection _rackInventory(AvFlowModel model) {
         final height = (node?.rackUnits ?? 1).clamp(1, 60);
         final startU = entry.value.startU;
         final endU = startU + height - 1;
-        final half = entry.value.half;
+        final slice = entry.value.slice;
         rows.add([
           rack.name,
           face == RackFace.front ? 'Front' : 'Rear',
           height == 1 ? 'U$startU' : 'U$startU-U$endU',
-          // Which side of the rail matters to whoever mounts it.
-          half == RackHalf.full
-              ? 'Full'
-              : (half == RackHalf.left ? 'Left half' : 'Right half'),
+          // Which slice of the rail — the thing you need when three boxes
+          // share one shelf.
+          slice.label,
           node?.label ?? entry.key,
           node?.model ?? '',
         ]);
@@ -174,19 +178,108 @@ ReportSection _rackInventory(AvFlowModel model) {
       .where((n) => n.rackUnits > 0 && !model.rackSlots.containsKey(n.id))
       .toList();
   for (final n in unracked) {
-    rows.add([
-      '(not placed)',
-      '',
-      '${n.rackUnits}U',
-      n.isHalfRack ? 'Half' : 'Full',
-      n.label,
-      n.model,
-    ]);
+    rows.add(['(not placed)', '', '${n.rackUnits}U', '', n.label, n.model]);
   }
 
   return (
     title: 'Rack Inventory',
-    header: ['Rack', 'Face', 'Position', 'Width', 'Device', 'Model'],
+    header: ['Rack', 'Face', 'Position', 'Slice', 'Device', 'Model'],
+    rows: rows,
+  );
+}
+
+/// Which device is on which numbered jack of each wall box, floor box or
+/// patch panel — the sheet you read standing at the wall plate with a tester.
+ReportSection _jackSchedule(AvFlowModel model) {
+  final byId = model.nodesById;
+  final rows = <List<dynamic>>[];
+
+  for (final field in model.nodes.where((n) => n.isJackField)) {
+    for (final jack in field.ports) {
+      // A jack can be patched at either end of a run, so look both ways.
+      final uses = model.cables.where(
+        (c) =>
+            (c.fromNodeId == field.id && c.fromPortId == jack.id) ||
+            (c.toNodeId == field.id && c.toPortId == jack.id),
+      );
+
+      if (uses.isEmpty) {
+        rows.add([
+          field.label,
+          jack.label,
+          kSignalCodes[jack.signal] ?? jack.signal.name,
+          '(spare)',
+          '',
+          '',
+        ]);
+        continue;
+      }
+      for (final c in uses) {
+        final farNode = c.fromNodeId == field.id ? c.toNodeId : c.fromNodeId;
+        final farPort = c.fromNodeId == field.id ? c.toPortId : c.fromPortId;
+        rows.add([
+          field.label,
+          jack.label,
+          kSignalCodes[c.signal] ?? c.signal.name,
+          byId[farNode]?.label ?? farNode,
+          byId[farNode]?.portById(farPort)?.label ?? farPort,
+          c.id,
+        ]);
+      }
+    }
+  }
+
+  return (
+    title: 'Jack Schedule',
+    header: [
+      'Wall box / panel',
+      'Jack',
+      'Signal',
+      'Connected device',
+      'Device port',
+      'Cable',
+    ],
+    rows: rows,
+  );
+}
+
+/// Where every device's mains comes from, and — when it is on a controller —
+/// which outlet, resolved from the power cable actually drawn.
+ReportSection _powerSchedule(AvFlowModel model) {
+  final byId = model.nodesById;
+  final rows = <List<dynamic>>[];
+
+  for (final node in model.nodes) {
+    if (node.isJackField) continue;
+
+    // A power-signal cable landing on this device names its outlet.
+    String feed = '';
+    String outlet = '';
+    for (final c in model.cables) {
+      if (c.signal != SignalType.power) continue;
+      final incoming = c.toNodeId == node.id;
+      final outgoing = c.fromNodeId == node.id;
+      if (!incoming && !outgoing) continue;
+      final sourceId = incoming ? c.fromNodeId : c.toNodeId;
+      final sourcePort = incoming ? c.fromPortId : c.toPortId;
+      if (sourceId == node.id) continue;
+      feed = byId[sourceId]?.label ?? sourceId;
+      outlet = byId[sourceId]?.portById(sourcePort)?.label ?? sourcePort;
+      break;
+    }
+
+    rows.add([
+      node.label,
+      node.model,
+      kPowerSourceLabels[node.powerSource] ?? node.powerSource.name,
+      feed,
+      outlet,
+    ]);
+  }
+
+  return (
+    title: 'Power',
+    header: ['Device', 'Model', 'Source', 'Fed from', 'Outlet'],
     rows: rows,
   );
 }

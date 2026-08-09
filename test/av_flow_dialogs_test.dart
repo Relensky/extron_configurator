@@ -226,7 +226,7 @@ void main() {
     expect(tester.takeException(), isNull);
     final cable = provider.avCables.single;
     expect(cable.hasCustomColor, isTrue);
-    expect(cable.color, isNot(kSignalColors[SignalType.hdmi]));
+    expect(cable.colorFor(), isNot(kSignalColors[SignalType.hdmi]));
   });
 
   testWidgets('the cable dialog opens from the cable list', (tester) async {
