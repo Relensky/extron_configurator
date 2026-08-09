@@ -9,6 +9,33 @@ import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
 import 'search_match.dart';
 
+/// The config's live device blocks, in device-family order: for each dev_
+/// count key, the sections that actually exist up to that count.
+///
+/// Top-level (not a method) because the Devices tab, the Schematic tab and the
+/// AV Flow tab all need the same answer — "which devices does this room
+/// really have?" — and they must agree.
+List<String> getActiveDeviceKeys(
+    Map<String, dynamic> config, Map<String, String> map) {
+  List<String> activeKeys = [];
+  final systemSetup = config['SYSTEM_SETUP'] ?? {};
+
+  // hardware map comes from the UI schema's "device_types" so families
+  // added in ui_schema.json get their tabs without a recompile
+  map.forEach((countKey, prefix) {
+    if (systemSetup.containsKey(countKey)) {
+      var countVal = systemSetup[countKey];
+      int count = (countVal.toString().toLowerCase() == 'yes') ? 1 : (int.tryParse(countVal.toString()) ?? 0);
+
+      for (int i = 1; i <= count; i++) {
+        String expectedKey = '$prefix$i';
+        if (config.containsKey(expectedKey)) activeKeys.add(expectedKey);
+      }
+    }
+  });
+  return activeKeys;
+}
+
 class DynamicDevicesTabsView extends StatefulWidget {
   const DynamicDevicesTabsView({super.key});
 
@@ -17,27 +44,6 @@ class DynamicDevicesTabsView extends StatefulWidget {
 }
 
 class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
-  List<String> getActiveDeviceKeys(
-      Map<String, dynamic> config, Map<String, String> map) {
-    List<String> activeKeys = [];
-    final systemSetup = config['SYSTEM_SETUP'] ?? {};
-
-    // hardware map comes from the UI schema's "device_types" so families
-    // added in ui_schema.json get their tabs without a recompile
-    map.forEach((countKey, prefix) {
-      if (systemSetup.containsKey(countKey)) {
-        var countVal = systemSetup[countKey];
-        int count = (countVal.toString().toLowerCase() == 'yes') ? 1 : (int.tryParse(countVal.toString()) ?? 0);
-
-        for (int i = 1; i <= count; i++) {
-          String expectedKey = '$prefix$i';
-          if (config.containsKey(expectedKey)) activeKeys.add(expectedKey);
-        }
-      }
-    });
-    return activeKeys;
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();

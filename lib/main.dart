@@ -7,6 +7,7 @@ import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
+import 'av_flow_view.dart';
 import 'conversion_preview_view.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
@@ -15,6 +16,26 @@ import 'json_editor_view.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
 import 'system_settings_view.dart';
+
+/// The navigation rail's tabs, in rail order.
+///
+/// Several places key off the selected tab (the view switch, the landing-screen
+/// bypass for App Config, the screenshot file name). They used to compare bare
+/// integers, which meant inserting a tab silently repointed all of them — so
+/// the index lives here once and everything reads it through [index].
+enum AppTab {
+  wizard('wizard'),
+  devices('devices'),
+  system('system'),
+  schematic('schematic'),
+  avFlow('av_flow'),
+  rawJson('raw_json'),
+  appConfig('app_config');
+
+  /// Token used in screenshot file names.
+  final String token;
+  const AppTab(this.token);
+}
 
 void main() {
   runApp(
@@ -157,10 +178,10 @@ class _MainDashboardState extends State<MainDashboard> {
   /// Captures the current content area and opens the annotation editor. The
   /// default file name embeds the active tab + date.
   void _takeScreenshot(BuildContext context, int selectedIndex) {
-    const tabNames = ['wizard', 'devices', 'system', 'schematic', 'raw_json', 'app_config'];
-    final tabToken = (selectedIndex >= 0 && selectedIndex < tabNames.length)
-        ? tabNames[selectedIndex]
-        : 'view';
+    final tabToken =
+        (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+            ? AppTab.values[selectedIndex].token
+            : 'view';
     final dateToken = DateTime.now().toLocal().toIso8601String().split('T').first;
     captureAndAnnotate(context, _captureKey,
         defaultFileName: '${tabToken}_screenshot_$dateToken.png');
@@ -206,7 +227,7 @@ class _MainDashboardState extends State<MainDashboard> {
         const SnackBar(content: Text('New config created from template.')),
       );
     } else {
-      provider.selectTab(5); // Route to App Config
+      provider.selectTab(AppTab.appConfig.index);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
               "Place config.json there or set a Template file in App Config."),
@@ -346,6 +367,51 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
+  /// The AV Flow equivalent of [_syncSchematicAfterLoad], for the
+  /// `<config>_avflow.json` sidecar. Same rule: load it silently unless the
+  /// session already has a diagram of its own worth protecting.
+  Future<void> _syncAvFlowAfterLoad(
+      BuildContext context, AppStateProvider provider) async {
+    if (!provider.avFlowNeedsChoice) {
+      provider.loadAvFlowForCurrentConfig();
+      return;
+    }
+    final bool? loadSaved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Saved AV flow found'),
+        content: Text('This config has a saved AV signal flow beside it:\n\n'
+            '${provider.avFlowSidecarPath}\n\n'
+            'You also have an AV flow drawn in this session. Load the saved '
+            'one, or discard it and keep yours?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Discard saved, keep mine'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Load saved AV flow'),
+          ),
+        ],
+      ),
+    );
+    if (loadSaved == false) {
+      provider.keepAvFlowForCurrentConfig();
+    } else {
+      provider.loadAvFlowForCurrentConfig();
+    }
+  }
+
+  /// Both diagrams belong to the config file, so both sidecars are picked up
+  /// together whenever a config is opened or downloaded.
+  Future<void> _syncDiagramsAfterLoad(
+      BuildContext context, AppStateProvider provider) async {
+    await _syncSchematicAfterLoad(context, provider);
+    if (!context.mounted) return;
+    await _syncAvFlowAfterLoad(context, provider);
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
@@ -397,7 +463,7 @@ class _MainDashboardState extends State<MainDashboard> {
               bool loaded = await provider.loadExistingConfig();
               if (!loaded || !context.mounted) return;
               // The schematic saved next to the config comes back with it.
-              await _syncSchematicAfterLoad(context, provider);
+              await _syncDiagramsAfterLoad(context, provider);
               // Only when the load actually changed/flagged something — a
               // clean re-load of an already-migrated file stays silent.
               if (provider.lastLoadHadChanges && context.mounted) {
@@ -416,7 +482,7 @@ class _MainDashboardState extends State<MainDashboard> {
               );
               if (result != true || !context.mounted) return;
               // Working copy on disk now — pick up any schematic beside it.
-              await _syncSchematicAfterLoad(context, provider);
+              await _syncDiagramsAfterLoad(context, provider);
               // On a successful download, show the migration/audit log like a local load does
               if (provider.lastLoadHadChanges && context.mounted) {
                 _showMigrationLogDialog(context, provider.systemLogs);
@@ -521,6 +587,7 @@ class _MainDashboardState extends State<MainDashboard> {
               NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
               NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
               NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
+              NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
               NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
               NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
             ],
@@ -529,7 +596,7 @@ class _MainDashboardState extends State<MainDashboard> {
           Expanded(
             child: RepaintBoundary(
               key: _captureKey,
-              child: (!hasConfig && selectedIndex != 5)
+              child: (!hasConfig && selectedIndex != AppTab.appConfig.index)
                   ? _buildLandingScreen(context, provider)
                   : _buildMainContent(selectedIndex, provider.configRevision),
             ),
@@ -578,7 +645,7 @@ class _MainDashboardState extends State<MainDashboard> {
                   onPressed: () async {
                     bool loaded = await provider.loadExistingConfig();
                     if (!loaded || !context.mounted) return;
-                    await _syncSchematicAfterLoad(context, provider);
+                    await _syncDiagramsAfterLoad(context, provider);
                     if (provider.lastLoadHadChanges && context.mounted) {
                       _showMigrationLogDialog(context, provider.systemLogs);
                     }
@@ -601,24 +668,27 @@ class _MainDashboardState extends State<MainDashboard> {
   /// fields are application settings and have nothing to do with the room.
   Widget _buildMainContent(int selectedIndex, int configRevision) {
     final key = ValueKey('tab_${selectedIndex}_cfg_$configRevision');
-    switch (selectedIndex) {
-      case 0:
+    if (selectedIndex < 0 || selectedIndex >= AppTab.values.length) {
+      return const Center(child: Text("Select a category"));
+    }
+    switch (AppTab.values[selectedIndex]) {
+      case AppTab.wizard:
         return SetupWizardView(key: key);
-      case 1:
+      case AppTab.devices:
         return DynamicDevicesTabsView(key: key);
-      case 2:
+      case AppTab.system:
         return SystemSettingsView(key: key);
-      case 3:
+      case AppTab.schematic:
         return SchematicView(key: key);
-      case 4:
+      case AppTab.avFlow:
+        return AvFlowView(key: key);
+      case AppTab.rawJson:
         // Unkeyed on purpose: the raw editor already re-reads the config in
         // didChangeDependencies, and remounting it mid-Apply would cut off its
         // own "applied/saved" feedback.
         return const JsonEditorView();
-      case 5:
+      case AppTab.appConfig:
         return const AppSettingsView();
-      default:
-        return const Center(child: Text("Select a category"));
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/report_tools.dart';
 import 'package:extron_configurator/schematic_view.dart';
 import 'package:extron_configurator/ui_schema.dart';
 

@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
+import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
 
@@ -560,7 +561,8 @@ class _SchematicViewState extends State<SchematicView> {
   /// the .txt export writes, without touching the disk.
   Future<void> _copyReportText(AppStateProvider provider) async {
     final model = SchematicModel.build(provider);
-    final text = _textReport(model.roomTitle, reportSections(provider, model));
+    final text =
+        renderTextReport(model.roomTitle, reportSections(provider, model));
     await Clipboard.setData(ClipboardData(text: text));
     _snack('Device report copied to clipboard '
         '(${text.split('\n').length} lines).');
@@ -583,114 +585,29 @@ class _SchematicViewState extends State<SchematicView> {
     try {
       if (asXlsx) {
         // ONE sheet, sections stacked like the text report, with the
-        // schematic image dropped in underneath. Title/header rows are
-        // padded with blank cells to the section's widest row, so their
-        // background band runs the full width of the data beneath them
-        // (auto column widths already size each column to its longest
-        // value); data rows are padded the same and zebra-striped.
-        List<dynamic> pad(List<dynamic> row, int width) =>
-            [...row, ...List.filled(math.max(0, width - row.length), '')];
-        int widthOf(ReportSection s) =>
-            s.rows.fold(s.header.length,
-                (m, r) => math.max(m, r.length));
-
-        final rows = <List<dynamic>>[];
-        final rowStyles = <int, int>{};
-        final overflowRows = <int>{};
-        final int reportWidth =
-            sections.fold(1, (w, s) => math.max(w, widthOf(s)));
-        // Row 1 carries the room and nothing else, merged across A:E so the
-        // title band reads as one cell instead of a value stuck in column A.
-        rows.add(pad([model.roomTitle], reportWidth));
-        rowStyles[0] = XlsxRowStyle.title;
-        for (final s in sections) {
-          // 2-column sections (System) sit in columns A and B. Their VALUE
-          // cell is excluded from column auto-sizing, so a long room/building
-          // name overflows right into the empty cells instead of stretching
-          // column B, which the Devices table also uses.
-          final bool twoColumn = s.header.length == 2;
-          final int width = twoColumn ? 2 : widthOf(s);
-          rows.add([]);
-          rowStyles[rows.length] = XlsxRowStyle.title;
-          rows.add(pad([s.title], width));
-          rowStyles[rows.length] = XlsxRowStyle.header;
-          rows.add(pad(s.header, width));
-          for (int i = 0; i < s.rows.length; i++) {
-            if (i.isOdd) rowStyles[rows.length] = XlsxRowStyle.zebra;
-            if (twoColumn) overflowRows.add(rows.length);
-            rows.add(pad(s.rows[i], width));
-          }
-        }
-
-        // Diagram image below the tables, scaled to ~900px wide.
-        XlsxImage? image;
+        // schematic image dropped in underneath. The banding, padding and
+        // column-width rules are shared with the AV Flow tab's cable
+        // schedule — see buildStackedReportSheet.
         final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
-        if (png != null) {
-          final size = XlsxImage.pngSize(png);
-          if (size != null) {
-            const targetW = 900;
-            image = XlsxImage(
-              pngBytes: png,
-              anchorCol: 0,
-              anchorRow: rows.length + 1,
-              widthPx: targetW,
-              heightPx: (size.$2 * targetW / size.$1).round(),
-            );
-          }
-        }
-
         final bytes = buildXlsx([
-          XlsxSheet(
-            name: 'Room Report',
-            rows: rows,
-            rowStyles: rowStyles,
-            overflowRows: overflowRows,
-            merges: const ['A1:E1'],
-            image: image,
+          buildStackedReportSheet(
+            sheetName: 'Room Report',
+            title: model.roomTitle,
+            sections: sections,
+            imageBuilder: png == null
+                ? null
+                : (anchorRow) => scaledSheetImage(png, anchorRow),
           ),
         ]);
         await File(outputFile).writeAsBytes(bytes);
       } else {
-        await File(outputFile).writeAsString(_textReport(model.roomTitle, sections));
+        await File(outputFile)
+            .writeAsString(renderTextReport(model.roomTitle, sections));
       }
       _savedSnack(provider, 'Device report', outputFile);
     } catch (e) {
       _snack('Failed to save report: $e', error: true);
     }
-  }
-
-  /// Fixed-width plain-text rendering of the same report sections.
-  String _textReport(
-      String roomTitle,
-      List<ReportSection> sections) {
-    final buffer = StringBuffer();
-    buffer.writeln(roomTitle); // the room and nothing else, like the xlsx
-    buffer.writeln();
-    for (final s in sections) {
-      buffer.writeln(s.title);
-      buffer.writeln('=' * s.title.length);
-      final all = [s.header, ...s.rows];
-      final widths = <int>[];
-      for (final row in all) {
-        for (int c = 0; c < row.length; c++) {
-          final len = row[c].toString().length;
-          if (c >= widths.length) {
-            widths.add(len);
-          } else if (len > widths[c]) {
-            widths[c] = len;
-          }
-        }
-      }
-      for (int r = 0; r < all.length; r++) {
-        buffer.writeln([
-          for (int c = 0; c < all[r].length; c++)
-            all[r][c].toString().padRight(widths[c]),
-        ].join('  '));
-        if (r == 0) buffer.writeln(widths.map((w) => '-' * w).join('  '));
-      }
-      buffer.writeln();
-    }
-    return buffer.toString();
   }
 
   // -------------------------------------------------------------------------
@@ -1456,12 +1373,8 @@ class _Legend extends StatelessWidget {
 //  .txt and the clipboard copy all render the same thing — and it can be
 //  tested without pumping a widget.
 
-/// One report section: a title, a header row, and data rows.
-typedef ReportSection = ({
-  String title,
-  List<String> header,
-  List<List<dynamic>> rows,
-});
+//  [ReportSection], the fixed-width text renderer and the banded .xlsx sheet
+//  builder are shared with the AV Flow tab — see report_tools.dart.
 
 /// Friendly display name for a config key: the schema label when one is
 /// defined, otherwise the key title-cased with common AV acronyms upper-

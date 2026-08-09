@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
+import 'av_device_library.dart';
+import 'av_flow_model.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -401,6 +404,7 @@ class AppStateProvider extends ChangeNotifier {
 
     await loadUiSchema();
     await loadKeyMap();
+    await loadAvDeviceLibrary();
     await loadBuildingsList();
     await loadProcessorsList();
     // ignore: unawaited_futures
@@ -422,6 +426,12 @@ class AppStateProvider extends ChangeNotifier {
   // --- Key Map (translates legacy config key names on load) ---
   // Built-in map is empty, so with no key_map.json loading behaves as before.
   ConfigKeyMap keyMap = ConfigKeyMap.builtIn();
+
+  // --- AV device library (connector sets for the AV Flow tab) ---
+  // The room config describes control, never AV connectors, so the ports a
+  // device shows on the AV canvas come from here. Built-ins cover the common
+  // models; av_devices.json in the Root Folder overrides and extends them.
+  AvDeviceLibrary avDeviceLibrary = AvDeviceLibrary.builtIn();
 
   /// The active working file on disk: the file opened locally, or the working
   /// copy chosen during an SFTP download. Empty when the session started from
@@ -632,7 +642,8 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// The navigation rail tab currently shown (0 = Wizard ... 4 = App Config).
+  /// The navigation rail tab currently shown, as an `AppTab.index` (main.dart
+  /// owns that enum; this layer only stores the number).
   /// Lives in the provider — above the MaterialApp — so it survives the full
   /// remount that switching between the Auris and Classic theme families
   /// forces (see the MaterialApp key in main.dart). Session-only by design.
@@ -845,6 +856,372 @@ class AppStateProvider extends ChangeNotifier {
       return sidecar;
     } catch (e, stack) {
       AppLogger.logError('Failed to save schematic layout to $sidecar', e, stack);
+      return '';
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  //  AV FLOW TAB STATE
+  //  The video/audio signal path, which the room config knows nothing about.
+  //  Unlike the Schematic tab — where the diagram is DERIVED from the config
+  //  and the state here is only the user's overrides — the AV diagram IS the
+  //  document: nodes, their ports, the cables between them and the rack
+  //  elevations all live here and nowhere else. Seeding from the config's
+  //  device list is a convenience on first visit, not a source of truth.
+  //
+  //  Persists to "<config>_avflow.json" beside the working config, on the
+  //  same terms as the schematic sidecar: written on demand by Save, read
+  //  back whenever that config is opened, and the user is asked first when
+  //  both a session diagram and a saved file exist (avFlowNeedsChoice).
+  // ---------------------------------------------------------------------
+
+  /// Every box on the AV canvas, in creation order.
+  final List<AvNode> avNodes = [];
+
+  /// Every cable, in creation order (which is also their lane order).
+  final List<AvCable> avCables = [];
+
+  /// Rack frames on the elevation page.
+  final List<RackFrame> avRacks = [];
+
+  /// Node id -> where it sits in a rack. A device can only be in one place.
+  final Map<String, RackSlot> avRackSlots = {};
+
+  /// Config device keys the user deliberately removed from the canvas, so
+  /// re-seeding doesn't keep dragging them back.
+  final Set<String> avDismissedDevices = {};
+
+  /// The config path the AV diagram belongs to (see [_schematicSyncedPath]).
+  String _avFlowSyncedPath = ' never';
+
+  /// Counter behind manually added node ids ('AVNODE_7').
+  int _avNodeCounter = 0;
+
+  /// Counter behind cable ids ('C7'), which double as the cable schedule's
+  /// Cable ID column.
+  int _avCableCounter = 0;
+
+  AvNode? avNodeById(String id) {
+    for (final n in avNodes) {
+      if (n.id == id) return n;
+    }
+    return null;
+  }
+
+  /// Adds a node, keeping ids unique. Returns the node actually stored (the
+  /// caller may have passed an id that was already taken).
+  AvNode addAvNode(AvNode node) {
+    String id = node.id;
+    if (id.isEmpty || avNodeById(id) != null) {
+      do {
+        _avNodeCounter++;
+        id = 'AVNODE_$_avNodeCounter';
+      } while (avNodeById(id) != null);
+    }
+    final stored = AvNode(
+      id: id,
+      label: node.label,
+      model: node.model,
+      pos: node.pos,
+      ports: node.ports,
+      fromConfig: node.fromConfig,
+      rackUnits: node.rackUnits,
+      note: node.note,
+    );
+    avNodes.add(stored);
+    avDismissedDevices.remove(id);
+    notifyListeners();
+    return stored;
+  }
+
+  /// Replaces a node in place (drag, rename, port edit).
+  void updateAvNode(AvNode node) {
+    final index = avNodes.indexWhere((n) => n.id == node.id);
+    if (index < 0) return;
+    avNodes[index] = node;
+    notifyListeners();
+  }
+
+  /// Moves a node without a full rebuild round-trip — the drag path.
+  void setAvNodePosition(String nodeId, Offset pos) {
+    final index = avNodes.indexWhere((n) => n.id == nodeId);
+    if (index < 0) return;
+    avNodes[index] = avNodes[index].copyWith(pos: pos);
+    notifyListeners();
+  }
+
+  /// Removes a node along with every cable touching it and its rack slot.
+  /// Config-seeded nodes are remembered in [avDismissedDevices] so the next
+  /// seed pass leaves them off.
+  void removeAvNode(String nodeId) {
+    final node = avNodeById(nodeId);
+    if (node == null) return;
+    avNodes.removeWhere((n) => n.id == nodeId);
+    avCables.removeWhere((c) => c.fromNodeId == nodeId || c.toNodeId == nodeId);
+    avRackSlots.remove(nodeId);
+    if (node.fromConfig) avDismissedDevices.add(nodeId);
+    notifyListeners();
+  }
+
+  /// Draws a cable. Returns the created cable, or null when the same pair of
+  /// ports is already joined (drawing it twice is always a slip).
+  AvCable? addAvCable({
+    required String fromNodeId,
+    required String fromPortId,
+    required String toNodeId,
+    required String toPortId,
+    required SignalType signal,
+    String label = '',
+  }) {
+    final duplicate = avCables.any((c) =>
+        (c.fromNodeId == fromNodeId &&
+            c.fromPortId == fromPortId &&
+            c.toNodeId == toNodeId &&
+            c.toPortId == toPortId) ||
+        (c.fromNodeId == toNodeId &&
+            c.fromPortId == toPortId &&
+            c.toNodeId == fromNodeId &&
+            c.toPortId == fromPortId));
+    if (duplicate) return null;
+
+    _avCableCounter++;
+    final cable = AvCable(
+      id: 'C$_avCableCounter',
+      fromNodeId: fromNodeId,
+      fromPortId: fromPortId,
+      toNodeId: toNodeId,
+      toPortId: toPortId,
+      signal: signal,
+      label: label,
+    );
+    avCables.add(cable);
+    notifyListeners();
+    return cable;
+  }
+
+  void updateAvCable(AvCable cable) {
+    final index = avCables.indexWhere((c) => c.id == cable.id);
+    if (index < 0) return;
+    avCables[index] = cable;
+    notifyListeners();
+  }
+
+  void removeAvCable(String cableId) {
+    avCables.removeWhere((c) => c.id == cableId);
+    notifyListeners();
+  }
+
+  // --- racks ---
+
+  RackFrame addAvRack(String name, int heightU) {
+    // Frames sit side by side; the new one goes to the right of the last.
+    final rack = RackFrame(
+      id: 'RACK_${avRacks.length + 1}_${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      heightU: heightU,
+      x: avRacks.isEmpty ? 0 : avRacks.last.x + 340,
+    );
+    avRacks.add(rack);
+    notifyListeners();
+    return rack;
+  }
+
+  void updateAvRack(RackFrame rack) {
+    final index = avRacks.indexWhere((r) => r.id == rack.id);
+    if (index < 0) return;
+    avRacks[index] = rack;
+    notifyListeners();
+  }
+
+  /// Removes a frame and un-racks everything that was in it.
+  void removeAvRack(String rackId) {
+    avRacks.removeWhere((r) => r.id == rackId);
+    avRackSlots.removeWhere((_, slot) => slot.rackId == rackId);
+    notifyListeners();
+  }
+
+  /// Places [nodeId] in a rack, or clears its placement when [slot] is null.
+  void setAvRackSlot(String nodeId, RackSlot? slot) {
+    if (slot == null) {
+      avRackSlots.remove(nodeId);
+    } else {
+      avRackSlots[nodeId] = slot;
+    }
+    notifyListeners();
+  }
+
+  /// True when [startU]..[startU]+[heightU]-1 is free in [rackId] on [face],
+  /// ignoring [ignoreNodeId] (the device being moved).
+  bool avRackSpanIsFree({
+    required String rackId,
+    required RackFace face,
+    required int startU,
+    required int heightU,
+    String? ignoreNodeId,
+  }) {
+    final rack = avRacks.firstWhere((r) => r.id == rackId,
+        orElse: () => const RackFrame(id: '', name: '', heightU: 0));
+    if (rack.id.isEmpty) return false;
+    if (startU < 1 || startU + heightU - 1 > rack.heightU) return false;
+
+    for (final entry in avRackSlots.entries) {
+      if (entry.key == ignoreNodeId) continue;
+      final slot = entry.value;
+      if (slot.rackId != rackId || slot.face != face) continue;
+      final other = avNodeById(entry.key);
+      final otherHeight = (other?.rackUnits ?? 1).clamp(1, 60);
+      final otherEnd = slot.startU + otherHeight - 1;
+      if (startU <= otherEnd && slot.startU <= startU + heightU - 1) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // --- persistence ---
+
+  /// Sidecar the AV diagram persists to ('' when the session has no working
+  /// file yet — Create New that was never saved).
+  String get avFlowSidecarPath {
+    if (currentConfigPath.isEmpty) return '';
+    final dir = path.dirname(currentConfigPath);
+    final base = path.basenameWithoutExtension(currentConfigPath);
+    return path.join(dir, '${base}_avflow.json');
+  }
+
+  /// True when the session holds an AV diagram worth protecting.
+  bool get hasAvFlow =>
+      avNodes.isNotEmpty || avCables.isNotEmpty || avRacks.isNotEmpty;
+
+  bool get hasSavedAvFlow {
+    final sidecar = avFlowSidecarPath;
+    return sidecar.isNotEmpty && File(sidecar).existsSync();
+  }
+
+  /// Same prompt rule as [schematicLayoutNeedsChoice]: only ask when the
+  /// session has its own diagram AND the opened config has one saved.
+  bool get avFlowNeedsChoice =>
+      _avFlowSyncedPath != currentConfigPath && hasAvFlow && hasSavedAvFlow;
+
+  void _resetAvFlow() {
+    _avFlowSyncedPath = currentConfigPath;
+    avNodes.clear();
+    avCables.clear();
+    avRacks.clear();
+    avRackSlots.clear();
+    avDismissedDevices.clear();
+    _avNodeCounter = 0;
+    _avCableCounter = 0;
+  }
+
+  /// Keeps the in-memory AV diagram for the working config, ignoring the
+  /// sidecar beside it. Nothing is written until the user saves.
+  void keepAvFlowForCurrentConfig() {
+    _avFlowSyncedPath = currentConfigPath;
+    AppLogger.logInfo('Kept the in-memory AV flow; the saved diagram beside '
+        '$currentConfigPath was not loaded.');
+    notifyListeners();
+  }
+
+  /// Called when the AV Flow tab opens: reload the sidecar if the working
+  /// config changed since the last visit.
+  void ensureAvFlowForCurrentConfig() {
+    if (_avFlowSyncedPath == currentConfigPath) return;
+    loadAvFlowForCurrentConfig();
+  }
+
+  /// Replaces the in-memory AV diagram with the one saved beside the working
+  /// config (blank when there is no sidecar).
+  void loadAvFlowForCurrentConfig() {
+    _resetAvFlow();
+    final sidecar = avFlowSidecarPath;
+    if (sidecar.isEmpty || !File(sidecar).existsSync()) {
+      notifyListeners();
+      return;
+    }
+    try {
+      final doc = jsonDecode(File(sidecar).readAsStringSync());
+      if (doc is! Map) {
+        notifyListeners();
+        return;
+      }
+      for (final n in (doc['nodes'] as List? ?? [])) {
+        if (n is Map) {
+          final node = AvNode.fromJson(Map<String, dynamic>.from(n));
+          if (node.id.isNotEmpty) avNodes.add(node);
+        }
+      }
+      for (final c in (doc['cables'] as List? ?? [])) {
+        if (c is Map) {
+          final cable = AvCable.fromJson(Map<String, dynamic>.from(c));
+          if (cable.id.isNotEmpty) avCables.add(cable);
+        }
+      }
+      for (final r in (doc['racks'] as List? ?? [])) {
+        if (r is Map) {
+          final rack = RackFrame.fromJson(Map<String, dynamic>.from(r));
+          if (rack.id.isNotEmpty) avRacks.add(rack);
+        }
+      }
+      final slots = doc['rackSlots'];
+      if (slots is Map) {
+        slots.forEach((nodeId, value) {
+          if (value is Map) {
+            avRackSlots[nodeId.toString()] =
+                RackSlot.fromJson(Map<String, dynamic>.from(value));
+          }
+        });
+      }
+      final dismissed = doc['dismissedDevices'];
+      if (dismissed is List) {
+        avDismissedDevices.addAll(dismissed.map((e) => e.toString()));
+      }
+
+      // Rebuild the id counters past everything that was loaded, so new
+      // nodes and cables can never collide with restored ones.
+      for (final n in avNodes) {
+        final match = RegExp(r'^AVNODE_(\d+)$').firstMatch(n.id);
+        if (match != null) {
+          _avNodeCounter =
+              math.max(_avNodeCounter, int.parse(match.group(1)!));
+        }
+      }
+      for (final c in avCables) {
+        final match = RegExp(r'^C(\d+)$').firstMatch(c.id);
+        if (match != null) {
+          _avCableCounter =
+              math.max(_avCableCounter, int.parse(match.group(1)!));
+        }
+      }
+
+      AppLogger.logInfo('AV flow loaded from $sidecar (${avNodes.length} '
+          'devices, ${avCables.length} cables, ${avRacks.length} racks).');
+    } catch (e) {
+      AppLogger.logError('Failed to load AV flow from $sidecar', e);
+    }
+    notifyListeners();
+  }
+
+  /// Writes the AV sidecar. Returns the saved path, or '' when there is no
+  /// working config file to sit next to (or the write failed).
+  Future<String> saveAvFlow() async {
+    final sidecar = avFlowSidecarPath;
+    if (sidecar.isEmpty) return '';
+    try {
+      const encoder = JsonEncoder.withIndent('  ');
+      await File(sidecar).writeAsString(encoder.convert({
+        '__readme': 'AV signal flow for the Room Config Builder: devices with '
+            'their connectors, the cables between them, and rack elevations.',
+        'nodes': avNodes.map((n) => n.toJson()).toList(),
+        'cables': avCables.map((c) => c.toJson()).toList(),
+        'racks': avRacks.map((r) => r.toJson()).toList(),
+        'rackSlots': avRackSlots.map((id, s) => MapEntry(id, s.toJson())),
+        'dismissedDevices': avDismissedDevices.toList(),
+      }));
+      _avFlowSyncedPath = currentConfigPath;
+      return sidecar;
+    } catch (e, stack) {
+      AppLogger.logError('Failed to save AV flow to $sidecar', e, stack);
       return '';
     }
   }
@@ -1555,6 +1932,8 @@ class AppStateProvider extends ChangeNotifier {
       await loadUiSchema();
       // Load the legacy key translation map (empty/no-op when no file exists)
       await loadKeyMap();
+      // Load the AV connector library (built-ins when no file exists)
+      await loadAvDeviceLibrary();
 
       // Load files into memory on boot. The loaders resolve their own
       // default paths (Root Folder / working directory) when no explicit
@@ -2178,9 +2557,10 @@ class AppStateProvider extends ChangeNotifier {
       // only fills what the template does not carry.
       _applySchemaBaseline();
 
-      // A brand new room starts with a blank diagram — there is no working
+      // A brand new room starts with blank diagrams — there is no working
       // file for a sidecar to sit next to yet.
       _resetSchematicLayout();
+      _resetAvFlow();
 
       _bumpConfigRevision(); // Repaint every tab: this is a different room now
       _preloadModulesFromConfig(); // Warm the parser caches for referenced modules
@@ -2262,6 +2642,8 @@ class AppStateProvider extends ChangeNotifier {
         loadUiSchema();
         // ignore: unawaited_futures
         loadKeyMap();
+        // ignore: unawaited_futures
+        loadAvDeviceLibrary();
         // ignore: unawaited_futures
         loadBuildingsList();
         // ignore: unawaited_futures
@@ -2349,6 +2731,15 @@ class AppStateProvider extends ChangeNotifier {
     // else '' so UiSchema.load runs its own working-dir/executable search.
     uiSchema = await UiSchema.load(
         explicitPath: _resolveOptionalFile(uiSchemaPath, 'ui_schema.json'));
+    notifyListeners();
+  }
+
+  /// (Re)loads av_devices.json, the connector sets the AV Flow tab draws ports
+  /// from. Same contract as [loadUiSchema]: built-ins stay active on any
+  /// failure and the error is logged.
+  Future<void> loadAvDeviceLibrary() async {
+    avDeviceLibrary = await AvDeviceLibrary.load(
+        explicitPath: _resolveOptionalFile('', 'av_devices.json'));
     notifyListeners();
   }
 
@@ -3648,11 +4039,12 @@ class AppStateProvider extends ChangeNotifier {
 
       // ADOPT AS WORKING FILE: exporting ties the saved file to the session
       // (a wizard-built config starts with no path at all), so later saves —
-      // and the schematic's Save Layout sidecar — have somewhere to live.
-      // The synced-path marker moves with it so the in-memory schematic
-      // layout survives instead of being reset as a "different config".
+      // and the Save Layout / Save AV Flow sidecars — have somewhere to live.
+      // The synced-path markers move with it so the in-memory diagrams
+      // survive instead of being reset as a "different config".
       currentConfigPath = outputFile;
       _schematicSyncedPath = outputFile;
+      _avFlowSyncedPath = outputFile;
       notifyListeners();
       return true;
 
