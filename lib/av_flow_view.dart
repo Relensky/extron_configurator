@@ -63,19 +63,23 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
 
   // Config devices not on the canvas and not dismissed — the palette.
   final config = provider.roomConfig;
-  final activeKeys =
-      getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
+  final activeKeys = getActiveDeviceKeys(
+    config,
+    provider.uiSchema.deviceCountMap,
+  );
   final unplaced = <AvUnplacedDevice>[];
   for (final key in activeKeys) {
     if (byId.containsKey(key)) continue;
     if (provider.avDismissedDevices.contains(key)) continue;
     final dev = config[key];
     if (dev is! Map) continue;
-    unplaced.add(AvUnplacedDevice(
-      key: key,
-      label: dev['name']?.toString() ?? key,
-      model: dev['model']?.toString() ?? '',
-    ));
+    unplaced.add(
+      AvUnplacedDevice(
+        key: key,
+        label: dev['name']?.toString() ?? key,
+        model: dev['model']?.toString() ?? '',
+      ),
+    );
   }
 
   double maxX = 900, maxY = 560;
@@ -91,7 +95,8 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
     racks: provider.avRacks,
     rackSlots: provider.avRackSlots,
     canvasSize: Size(maxX, maxY),
-    roomTitle: (setup is Map ? setup['gui_full_room_name']?.toString() : '') ?? '',
+    roomTitle:
+        (setup is Map ? setup['gui_full_room_name']?.toString() : '') ?? '',
     unplaced: unplaced,
   );
 }
@@ -156,8 +161,20 @@ class _AvFlowViewState extends State<AvFlowView> {
   bool _editMode = false;
   bool _showPalette = true;
 
+  /// Cable-drawing mode, the AV twin of the Schematic tab's "Draw Line".
+  /// Dragging and connecting are separate modes on purpose: when both were
+  /// live at once a click with a pixel of mouse travel became a drag, and the
+  /// connection silently didn't happen.
+  bool _cableMode = false;
+
   /// First port tapped while drawing a cable: (nodeId, portId).
   (String, String)? _pendingPort;
+
+  /// Live drag, held locally so a moving device doesn't push a provider
+  /// notification — and a rebuild of every listener in the app — per frame.
+  /// Committed once on release.
+  String? _dragNodeId;
+  Offset _dragOffset = Offset.zero;
 
   /// Cable whose route handles are showing.
   String? _selectedCableId;
@@ -188,10 +205,9 @@ class _AvFlowViewState extends State<AvFlowView> {
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: error ? Colors.red : null,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+    );
   }
 
   /// "Saved" snackbar offering to open the file or its folder. Mirrors the
@@ -204,45 +220,54 @@ class _AvFlowViewState extends State<AvFlowView> {
       if (error != null) _snack(error, error: true);
     }
 
-    final Color actionColor = Theme.of(context).snackBarTheme.actionTextColor ??
+    final Color actionColor =
+        Theme.of(context).snackBarTheme.actionTextColor ??
         Theme.of(context).colorScheme.onInverseSurface;
     final ButtonStyle actionStyle = TextButton.styleFrom(
       foregroundColor: actionColor,
       textStyle: const TextStyle(fontWeight: FontWeight.bold),
     );
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      duration: const Duration(seconds: 10),
-      content: Row(
-        children: [
-          Expanded(
-            child: Text('$label saved as ${path.basename(filePath)}',
-                overflow: TextOverflow.ellipsis),
-          ),
-          TextButton(
-            style: actionStyle,
-            onPressed: () => run(() => provider.openInDesktop(filePath)),
-            child: const Text('OPEN FILE'),
-          ),
-          TextButton(
-            style: actionStyle,
-            onPressed: () => run(() => provider.revealInFileManager(filePath)),
-            child: const Text('OPEN FOLDER'),
-          ),
-        ],
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 10),
+        content: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$label saved as ${path.basename(filePath)}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            TextButton(
+              style: actionStyle,
+              onPressed: () => run(() => provider.openInDesktop(filePath)),
+              child: const Text('OPEN FILE'),
+            ),
+            TextButton(
+              style: actionStyle,
+              onPressed: () =>
+                  run(() => provider.revealInFileManager(filePath)),
+              child: const Text('OPEN FOLDER'),
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 
   /// Default export file name stem: `<BLDG>_<room>_<suffix>`.
   String _fileStem(AppStateProvider provider, String suffix) {
     final setup = provider.roomConfig['SYSTEM_SETUP'] ?? {};
-    final bldg =
-        provider.bldgAbbreviation((setup['gve_bldg'] ?? 'ROOM').toString());
+    final bldg = provider.bldgAbbreviation(
+      (setup['gve_bldg'] ?? 'ROOM').toString(),
+    );
     final room = (setup['gve_room'] ?? '').toString();
-    return [bldg, if (room.isNotEmpty) room, suffix]
-        .join('_')
-        .replaceAll(RegExp(r'[^\w\-]+'), '_');
+    return [
+      bldg,
+      if (room.isNotEmpty) room,
+      suffix,
+    ].join('_').replaceAll(RegExp(r'[^\w\-]+'), '_');
   }
 
   // -------------------------------------------------------------------------
@@ -273,8 +298,10 @@ class _AvFlowViewState extends State<AvFlowView> {
       if (dev is! Map) continue;
 
       final model = dev['model']?.toString() ?? '';
-      final template =
-          provider.avDeviceLibrary.resolve(configKey: key, model: model);
+      final template = provider.avDeviceLibrary.resolve(
+        configKey: key,
+        model: model,
+      );
       final col = _columnForDevice(key);
       final y = columnY[col] ?? 60;
 
@@ -293,9 +320,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     }
 
     if (!silent) {
-      _snack(added == 0
-          ? 'Every config device is already on the canvas.'
-          : 'Added $added device${added == 1 ? '' : 's'} from the config.');
+      _snack(
+        added == 0
+            ? 'Every config device is already on the canvas.'
+            : 'Added $added device${added == 1 ? '' : 's'} from the config.',
+      );
     }
   }
 
@@ -319,8 +348,11 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// Two-tap connect: the first port arms, the second completes. Tapping the
   /// armed port again cancels.
   Future<void> _onPortTap(
-      AppStateProvider provider, AvNode node, AvPort port) async {
-    if (!_editMode) return;
+    AppStateProvider provider,
+    AvNode node,
+    AvPort port,
+  ) async {
+    if (!_editMode || !_cableMode) return;
 
     final pending = _pendingPort;
     if (pending == null) {
@@ -359,9 +391,10 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     if (match == PortMatch.invalid) {
       _snack(
-          'Can\'t connect ${fromPort.label} to ${port.label} — a cable runs '
-          'from an output to an input.',
-          error: true);
+        'Can\'t connect ${fromPort.label} to ${port.label} — a cable runs '
+        'from an output to an input.',
+        error: true,
+      );
       return;
     }
 
@@ -390,9 +423,11 @@ class _AvFlowViewState extends State<AvFlowView> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Signal types differ'),
-        content: Text('${from.label} carries $fromLabel, but ${to.label} '
-            'expects $toLabel.\n\nDraw the cable anyway? Use this when an '
-            'adapter or converter sits in the run.'),
+        content: Text(
+          '${from.label} carries $fromLabel, but ${to.label} '
+          'expects $toLabel.\n\nDraw the cable anyway? Use this when an '
+          'adapter or converter sits in the run.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -463,11 +498,15 @@ class _AvFlowViewState extends State<AvFlowView> {
 
   Future<void> _copyReportText(AppStateProvider provider) async {
     final model = buildAvFlowModel(provider);
-    final text =
-        renderTextReport(model.roomTitle, avReportSections(provider, model));
+    final text = renderTextReport(
+      model.roomTitle,
+      avReportSections(provider, model),
+    );
     await Clipboard.setData(ClipboardData(text: text));
-    _snack('AV report copied to clipboard '
-        '(${text.split('\n').length} lines).');
+    _snack(
+      'AV report copied to clipboard '
+      '(${text.split('\n').length} lines).',
+    );
   }
 
   Future<void> _exportReport(AppStateProvider provider, bool asXlsx) async {
@@ -499,8 +538,9 @@ class _AvFlowViewState extends State<AvFlowView> {
         ]);
         await File(outputFile).writeAsBytes(bytes);
       } else {
-        await File(outputFile)
-            .writeAsString(renderTextReport(model.roomTitle, sections));
+        await File(
+          outputFile,
+        ).writeAsString(renderTextReport(model.roomTitle, sections));
       }
       _savedSnack(provider, 'AV report', outputFile);
     } catch (e) {
@@ -511,17 +551,23 @@ class _AvFlowViewState extends State<AvFlowView> {
   Future<void> _saveDiagram(AppStateProvider provider) async {
     // A wizard-built session has no file for the sidecar to sit beside yet.
     if (provider.avFlowSidecarPath.isEmpty) {
-      _snack('No working config file yet — choose where to save the config, '
-          'then the AV flow is saved beside it.');
+      _snack(
+        'No working config file yet — choose where to save the config, '
+        'then the AV flow is saved beside it.',
+      );
       final bool exported = await provider.exportRoomConfig();
       if (!exported) {
-        _snack('AV flow not saved — the config save was cancelled.',
-            error: true);
+        _snack(
+          'AV flow not saved — the config save was cancelled.',
+          error: true,
+        );
         return;
       }
     }
     final saved = await provider.saveAvFlow();
-    _snack(saved.isEmpty ? 'Failed to save the AV flow.' : 'AV flow saved to $saved');
+    _snack(
+      saved.isEmpty ? 'Failed to save the AV flow.' : 'AV flow saved to $saved',
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -534,7 +580,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = buildAvFlowModel(provider);
+    final model = _withDragPreview(buildAvFlowModel(provider));
     final theme = Theme.of(context);
 
     return Column(
@@ -547,10 +593,7 @@ class _AvFlowViewState extends State<AvFlowView> {
             children: [
               Expanded(
                 child: _page == AvPage.racks
-                    ? AvRackView(
-                        captureKey: _diagramKey,
-                        editMode: _editMode,
-                      )
+                    ? AvRackView(captureKey: _diagramKey, editMode: _editMode)
                     : InteractiveViewer(
                         transformationController: _transform,
                         constrained: false,
@@ -589,13 +632,15 @@ class _AvFlowViewState extends State<AvFlowView> {
           SegmentedButton<AvPage>(
             segments: const [
               ButtonSegment(
-                  value: AvPage.flow,
-                  icon: Icon(Icons.cable, size: 18),
-                  label: Text('Signal Flow')),
+                value: AvPage.flow,
+                icon: Icon(Icons.cable, size: 18),
+                label: Text('Signal Flow'),
+              ),
               ButtonSegment(
-                  value: AvPage.racks,
-                  icon: Icon(Icons.view_day, size: 18),
-                  label: Text('Racks')),
+                value: AvPage.racks,
+                icon: Icon(Icons.view_day, size: 18),
+                label: Text('Racks'),
+              ),
             ],
             selected: {_page},
             onSelectionChanged: (s) => setState(() {
@@ -605,15 +650,31 @@ class _AvFlowViewState extends State<AvFlowView> {
             }),
           ),
           FilterChip(
-            avatar: Icon(_editMode ? Icons.edit : Icons.edit_outlined, size: 18),
+            avatar: Icon(
+              _editMode ? Icons.edit : Icons.edit_outlined,
+              size: 18,
+            ),
             label: const Text('Edit'),
             selected: _editMode,
             onSelected: (v) => setState(() {
               _editMode = v;
+              _cableMode = false;
               _pendingPort = null;
               _selectedCableId = null;
             }),
           ),
+          if (_editMode && _page == AvPage.flow)
+            FilterChip(
+              avatar: const Icon(Icons.cable, size: 18),
+              label: Text(
+                _pendingPort == null ? 'Draw Cable' : 'Pick 2nd connector...',
+              ),
+              selected: _cableMode,
+              onSelected: (v) => setState(() {
+                _cableMode = v;
+                _pendingPort = null;
+              }),
+            ),
           FilterChip(
             avatar: const Icon(Icons.view_sidebar, size: 18),
             label: Text('Devices (${model.unplaced.length})'),
@@ -643,8 +704,14 @@ class _AvFlowViewState extends State<AvFlowView> {
                 : _exportReport(provider, v == 'xlsx'),
             itemBuilder: (ctx) => const [
               PopupMenuItem(value: 'xlsx', child: Text('Excel report (.xlsx)')),
-              PopupMenuItem(value: 'txt', child: Text('Plain text report (.txt)')),
-              PopupMenuItem(value: 'copy', child: Text('Copy text to clipboard')),
+              PopupMenuItem(
+                value: 'txt',
+                child: Text('Plain text report (.txt)'),
+              ),
+              PopupMenuItem(
+                value: 'copy',
+                child: Text('Copy text to clipboard'),
+              ),
             ],
             child: IgnorePointer(
               child: ElevatedButton.icon(
@@ -661,8 +728,68 @@ class _AvFlowViewState extends State<AvFlowView> {
 
   // --- canvas -------------------------------------------------------------
 
+  /// The model as it should be drawn RIGHT NOW: identical to what the provider
+  /// holds, except that a device being dragged is shown under the cursor. Its
+  /// real position is only written back on release, so the cables follow the
+  /// device live without a provider write per pointer event.
+  AvFlowModel _withDragPreview(AvFlowModel model) {
+    final id = _dragNodeId;
+    if (id == null || _dragOffset == Offset.zero) return model;
+
+    final nodes = [
+      for (final n in model.nodes)
+        n.id == id ? n.copyWith(pos: _clamped(n.pos + _dragOffset)) : n,
+    ];
+    double maxX = 900, maxY = 560;
+    for (final n in nodes) {
+      maxX = math.max(maxX, n.pos.dx + n.width + 60);
+      maxY = math.max(maxY, n.pos.dy + n.height + 80);
+    }
+    return AvFlowModel(
+      nodes: nodes,
+      cables: model.cables,
+      racks: model.racks,
+      rackSlots: model.rackSlots,
+      canvasSize: Size(maxX, maxY),
+      roomTitle: model.roomTitle,
+      unplaced: model.unplaced,
+    );
+  }
+
+  /// The canvas only grows right and down, so a device can't be pushed past
+  /// the origin where it would be clipped.
+  static Offset _clamped(Offset p) =>
+      Offset(math.max(0, p.dx), math.max(0, p.dy));
+
+  void _onNodeDragStart(String nodeId) {
+    setState(() {
+      _dragNodeId = nodeId;
+      _dragOffset = Offset.zero;
+    });
+  }
+
+  void _onNodeDragUpdate(Offset delta) {
+    setState(() => _dragOffset += delta);
+  }
+
+  void _onNodeDragEnd(AppStateProvider provider) {
+    final id = _dragNodeId;
+    final offset = _dragOffset;
+    setState(() {
+      _dragNodeId = null;
+      _dragOffset = Offset.zero;
+    });
+    if (id == null || offset == Offset.zero) return;
+    final node = provider.avNodeById(id);
+    if (node == null) return;
+    provider.setAvNodePosition(id, _clamped(node.pos + offset));
+  }
+
   Widget _buildCanvas(
-      AppStateProvider provider, AvFlowModel model, ThemeData theme) {
+    AppStateProvider provider,
+    AvFlowModel model,
+    ThemeData theme,
+  ) {
     final surface = theme.brightness == Brightness.dark
         ? const Color(0xFF15181C)
         : const Color(0xFFFAFAFA);
@@ -696,10 +823,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
                 final hit = _cableAt(details.localPosition);
-                setState(() {
-                  _selectedCableId = hit;
-                  if (hit == null) _pendingPort = null;
-                });
+                setState(() => _selectedCableId = hit);
               },
               child: CustomPaint(
                 painter: _CablePainter(
@@ -717,31 +841,37 @@ class _AvFlowViewState extends State<AvFlowView> {
             top: 16,
             child: Text(
               model.roomTitle.isEmpty ? 'AV Signal Flow' : model.roomTitle,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          // Devices.
+          // Devices. Each gets its own RepaintBoundary so dragging one does
+          // not force the rest of the canvas to repaint with it.
           for (final node in model.nodes)
             Positioned(
               left: node.pos.dx,
               top: node.pos.dy,
-              child: _AvNodeBox(
-                node: node,
-                editMode: _editMode,
-                pendingNodeId: _pendingPort?.$1,
-                pendingPortId: _pendingPort?.$2,
-                pendingPort: pendingPort,
-                racked: provider.avRackSlots.containsKey(node.id),
-                onPortTap: (port) => _onPortTap(provider, node, port),
-                onDrag: _editMode
-                    ? (delta) {
-                        final p = node.pos + delta;
-                        provider.setAvNodePosition(node.id,
-                            Offset(math.max(0, p.dx), math.max(0, p.dy)));
-                      }
-                    : null,
-                onEdit: () => _showNodeDialog(provider, node),
+              child: RepaintBoundary(
+                child: _AvNodeBox(
+                  node: node,
+                  editMode: _editMode,
+                  cableMode: _cableMode,
+                  dragging: _dragNodeId == node.id,
+                  pendingNodeId: _pendingPort?.$1,
+                  pendingPortId: _pendingPort?.$2,
+                  pendingPort: pendingPort,
+                  racked: provider.avRackSlots.containsKey(node.id),
+                  onPortTap: (port) => _onPortTap(provider, node, port),
+                  // Dragging and cabling never compete: in cable mode the box
+                  // is a click target only.
+                  onDragStart: _editMode && !_cableMode
+                      ? () => _onNodeDragStart(node.id)
+                      : null,
+                  onDragUpdate: _onNodeDragUpdate,
+                  onDragEnd: () => _onNodeDragEnd(provider),
+                  onEdit: () => _showNodeDialog(provider, node),
+                ),
               ),
             ),
           // Route handles for the selected cable, above the boxes so they can
@@ -776,7 +906,9 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// move, double-tap to drop), plus a hollow dot at each segment midpoint
   /// that creates a waypoint there.
   List<Widget> _buildWaypointHandles(
-      AppStateProvider provider, AvFlowModel model) {
+    AppStateProvider provider,
+    AvFlowModel model,
+  ) {
     final id = _selectedCableId!;
     final matches = model.cables.where((c) => c.id == id);
     final points = _paths[id];
@@ -788,63 +920,67 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     for (int i = 0; i < cable.waypoints.length; i++) {
       final w = cable.waypoints[i];
-      widgets.add(Positioned(
-        left: w.dx - r,
-        top: w.dy - r,
-        child: GestureDetector(
-          onPanUpdate: (d) {
-            final next = List<Offset>.from(cable.waypoints);
-            next[i] = next[i] + d.delta;
-            provider.updateAvCable(cable.copyWith(waypoints: next));
-          },
-          onDoubleTap: () {
-            final next = List<Offset>.from(cable.waypoints)..removeAt(i);
-            provider.updateAvCable(cable.copyWith(waypoints: next));
-          },
-          child: Tooltip(
-            message: 'Drag to route • double-tap to remove',
-            child: Container(
-              width: r * 2,
-              height: r * 2,
-              decoration: BoxDecoration(
-                color: cable.color,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
+      widgets.add(
+        Positioned(
+          left: w.dx - r,
+          top: w.dy - r,
+          child: GestureDetector(
+            onPanUpdate: (d) {
+              final next = List<Offset>.from(cable.waypoints);
+              next[i] = next[i] + d.delta;
+              provider.updateAvCable(cable.copyWith(waypoints: next));
+            },
+            onDoubleTap: () {
+              final next = List<Offset>.from(cable.waypoints)..removeAt(i);
+              provider.updateAvCable(cable.copyWith(waypoints: next));
+            },
+            child: Tooltip(
+              message: 'Drag to route • double-tap to remove',
+              child: Container(
+                width: r * 2,
+                height: r * 2,
+                decoration: BoxDecoration(
+                  color: cable.color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
               ),
             ),
           ),
         ),
-      ));
+      );
     }
 
     for (int i = 0; i < points.length - 1; i++) {
       final mid = (points[i] + points[i + 1]) / 2;
-      widgets.add(Positioned(
-        left: mid.dx - r,
-        top: mid.dy - r,
-        child: GestureDetector(
-          onTap: () {
-            // With no waypoints yet the whole route is automatic, so the first
-            // one simply becomes the single bend. After that the segment index
-            // is the insertion point in [start, ...waypoints, end].
-            final next = List<Offset>.from(cable.waypoints);
-            next.insert(next.isEmpty ? 0 : i.clamp(0, next.length), mid);
-            provider.updateAvCable(cable.copyWith(waypoints: next));
-          },
-          child: Tooltip(
-            message: 'Add a bend here',
-            child: Container(
-              width: r * 2,
-              height: r * 2,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.6),
-                shape: BoxShape.circle,
-                border: Border.all(color: cable.color, width: 1.5),
+      widgets.add(
+        Positioned(
+          left: mid.dx - r,
+          top: mid.dy - r,
+          child: GestureDetector(
+            onTap: () {
+              // With no waypoints yet the whole route is automatic, so the first
+              // one simply becomes the single bend. After that the segment index
+              // is the insertion point in [start, ...waypoints, end].
+              final next = List<Offset>.from(cable.waypoints);
+              next.insert(next.isEmpty ? 0 : i.clamp(0, next.length), mid);
+              provider.updateAvCable(cable.copyWith(waypoints: next));
+            },
+            child: Tooltip(
+              message: 'Add a bend here',
+              child: Container(
+                width: r * 2,
+                height: r * 2,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cable.color, width: 1.5),
+                ),
               ),
             ),
           ),
         ),
-      ));
+      );
     }
     return widgets;
   }
@@ -881,12 +1017,16 @@ class _AvFlowViewState extends State<AvFlowView> {
                     child: ListTile(
                       dense: true,
                       leading: Icon(iconForAvNode(d.key, d.model), size: 20),
-                      title: Text(d.label,
-                          style: const TextStyle(fontSize: 13),
-                          overflow: TextOverflow.ellipsis),
-                      subtitle: Text(d.model.isEmpty ? d.key : d.model,
-                          style: const TextStyle(fontSize: 11),
-                          overflow: TextOverflow.ellipsis),
+                      title: Text(
+                        d.label,
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        d.model.isEmpty ? d.key : d.model,
+                        style: const TextStyle(fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: const Icon(Icons.add, size: 18),
                       onTap: () => _placeConfigDevice(provider, d),
                     ),
@@ -904,12 +1044,15 @@ class _AvFlowViewState extends State<AvFlowView> {
                   onPressed: () => _seedFromConfig(provider),
                 ),
                 const SizedBox(height: 16),
-                Text('Library: ${provider.avDeviceLibrary.modelCount} models',
-                    style: theme.textTheme.bodySmall),
+                Text(
+                  'Library: ${provider.avDeviceLibrary.modelCount} models',
+                  style: theme.textTheme.bodySmall,
+                ),
                 Text(
                   provider.avDeviceLibrary.source,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.disabledColor),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.disabledColor,
+                  ),
                 ),
               ],
             ),
@@ -920,8 +1063,10 @@ class _AvFlowViewState extends State<AvFlowView> {
   }
 
   void _placeConfigDevice(AppStateProvider provider, AvUnplacedDevice d) {
-    final template =
-        provider.avDeviceLibrary.resolve(configKey: d.key, model: d.model);
+    final template = provider.avDeviceLibrary.resolve(
+      configKey: d.key,
+      model: d.model,
+    );
     final col = _columnForDevice(d.key);
     double y = 60;
     for (final n in provider.avNodes) {
@@ -929,15 +1074,17 @@ class _AvFlowViewState extends State<AvFlowView> {
         y = math.max(y, n.pos.dy + n.height + 30);
       }
     }
-    provider.addAvNode(AvNode(
-      id: d.key,
-      label: d.label,
-      model: d.model,
-      pos: Offset(40 + col * 340.0, y),
-      ports: template.ports,
-      fromConfig: true,
-      rackUnits: template.rackUnits,
-    ));
+    provider.addAvNode(
+      AvNode(
+        id: d.key,
+        label: d.label,
+        model: d.model,
+        pos: Offset(40 + col * 340.0, y),
+        ports: template.ports,
+        fromConfig: true,
+        rackUnits: template.rackUnits,
+      ),
+    );
   }
 
   Future<void> _showAddCustomDeviceDialog(AppStateProvider provider) async {
@@ -1001,31 +1148,35 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     if (created != true) return;
     final model = selectedModel ?? '';
-    final template =
-        provider.avDeviceLibrary.templateForModel(model);
+    final template = provider.avDeviceLibrary.templateForModel(model);
     final label = labelController.text.trim();
-    provider.addAvNode(AvNode(
-      id: '', // provider assigns AVNODE_<n>
-      label: label.isEmpty ? (model.isEmpty ? 'Device' : model) : label,
-      model: model,
-      pos: const Offset(40, 60),
-      ports: template?.ports ??
-          const [
-            AvPort(
+    provider.addAvNode(
+      AvNode(
+        id: '', // provider assigns AVNODE_<n>
+        label: label.isEmpty ? (model.isEmpty ? 'Device' : model) : label,
+        model: model,
+        pos: const Offset(40, 60),
+        ports:
+            template?.ports ??
+            const [
+              AvPort(
                 id: 'in_1',
                 label: 'IN 1',
                 signal: SignalType.hdmi,
                 direction: PortDirection.input,
-                side: PortSide.left),
-            AvPort(
+                side: PortSide.left,
+              ),
+              AvPort(
                 id: 'out_1',
                 label: 'OUT 1',
                 signal: SignalType.hdmi,
                 direction: PortDirection.output,
-                side: PortSide.right),
-          ],
-      rackUnits: template?.rackUnits ?? 0,
-    ));
+                side: PortSide.right,
+              ),
+            ],
+        rackUnits: template?.rackUnits ?? 0,
+      ),
+    );
   }
 
   // --- device / port editing ----------------------------------------------
@@ -1034,7 +1185,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     final labelController = TextEditingController(text: node.label);
     final modelController = TextEditingController(text: node.model);
     final noteController = TextEditingController(text: node.note);
-    int rackUnits = node.rackUnits;
+    // Persistent, like the others: a controller rebuilt inside the dialog's
+    // builder resets its text and cursor on every keystroke.
+    final rackUnitsController = TextEditingController(
+      text: node.rackUnits.toString(),
+    );
     final ports = List<AvPort>.from(node.ports);
 
     final result = await showDialog<String>(
@@ -1053,30 +1208,29 @@ class _AvFlowViewState extends State<AvFlowView> {
                     Expanded(
                       child: TextField(
                         controller: labelController,
-                        decoration:
-                            const InputDecoration(labelText: 'Name'),
+                        decoration: const InputDecoration(labelText: 'Name'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
                         controller: modelController,
-                        decoration:
-                            const InputDecoration(labelText: 'Model'),
+                        decoration: const InputDecoration(labelText: 'Model'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     SizedBox(
                       width: 96,
                       child: TextField(
-                        controller:
-                            TextEditingController(text: rackUnits.toString()),
+                        controller: rackUnitsController,
                         decoration: const InputDecoration(
                           labelText: 'Rack U',
                           helperText: '0 = none',
                         ),
                         keyboardType: TextInputType.number,
-                        onChanged: (v) => rackUnits = int.tryParse(v) ?? 0,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                       ),
                     ),
                   ],
@@ -1091,8 +1245,10 @@ class _AvFlowViewState extends State<AvFlowView> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Text('Connectors',
-                        style: Theme.of(ctx).textTheme.titleSmall),
+                    Text(
+                      'Connectors',
+                      style: Theme.of(ctx).textTheme.titleSmall,
+                    ),
                     const Spacer(),
                     TextButton.icon(
                       icon: const Icon(Icons.refresh, size: 16),
@@ -1112,13 +1268,17 @@ class _AvFlowViewState extends State<AvFlowView> {
                     TextButton.icon(
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Add port'),
-                      onPressed: () => setLocal(() => ports.add(AvPort(
+                      onPressed: () => setLocal(
+                        () => ports.add(
+                          AvPort(
                             id: 'port_${DateTime.now().microsecondsSinceEpoch}',
                             label: 'NEW ${ports.length + 1}',
                             signal: SignalType.hdmi,
                             direction: PortDirection.input,
                             side: PortSide.left,
-                          ))),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1135,15 +1295,15 @@ class _AvFlowViewState extends State<AvFlowView> {
                             onMoveUp: i == 0
                                 ? null
                                 : () => setLocal(() {
-                                      final p = ports.removeAt(i);
-                                      ports.insert(i - 1, p);
-                                    }),
+                                    final p = ports.removeAt(i);
+                                    ports.insert(i - 1, p);
+                                  }),
                             onMoveDown: i == ports.length - 1
                                 ? null
                                 : () => setLocal(() {
-                                      final p = ports.removeAt(i);
-                                      ports.insert(i + 1, p);
-                                    }),
+                                    final p = ports.removeAt(i);
+                                    ports.insert(i + 1, p);
+                                  }),
                           ),
                         ),
                 ),
@@ -1153,14 +1313,18 @@ class _AvFlowViewState extends State<AvFlowView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('delete'),
-              child: const Text('Remove device',
-                  style: TextStyle(color: Colors.red)),
+              child: const Text(
+                'Remove device',
+                style: TextStyle(color: Colors.red),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('copy'),
               child: const Text('Copy as av_devices.json'),
             ),
-            const Spacer(),
+            // No Spacer here: AlertDialog lays its actions out in an
+            // OverflowBar, which is not a Flex, so an Expanded inside it
+            // throws and takes the whole tab down with it.
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('cancel'),
               child: const Text('Cancel'),
@@ -1188,7 +1352,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           : labelController.text.trim(),
       model: modelController.text.trim(),
       note: noteController.text.trim(),
-      rackUnits: rackUnits,
+      rackUnits: int.tryParse(rackUnitsController.text.trim()) ?? 0,
       ports: ports,
     );
 
@@ -1198,10 +1362,15 @@ class _AvFlowViewState extends State<AvFlowView> {
         rackUnits: updated.rackUnits,
         ports: updated.ports,
       );
-      await Clipboard.setData(ClipboardData(
-          text: const JsonEncoder.withIndent('  ').convert(entry.toJson())));
-      _snack('Library entry copied — paste it into the "devices" array of '
-          'av_devices.json.');
+      await Clipboard.setData(
+        ClipboardData(
+          text: const JsonEncoder.withIndent('  ').convert(entry.toJson()),
+        ),
+      );
+      _snack(
+        'Library entry copied — paste it into the "devices" array of '
+        'av_devices.json.',
+      );
     }
 
     // Cables referencing a port that was deleted or re-id'd disappear on the
@@ -1212,16 +1381,21 @@ class _AvFlowViewState extends State<AvFlowView> {
         .toSet();
     if (removedIds.isNotEmpty) {
       final orphaned = provider.avCables
-          .where((c) =>
-              (c.fromNodeId == node.id && removedIds.contains(c.fromPortId)) ||
-              (c.toNodeId == node.id && removedIds.contains(c.toPortId)))
+          .where(
+            (c) =>
+                (c.fromNodeId == node.id &&
+                    removedIds.contains(c.fromPortId)) ||
+                (c.toNodeId == node.id && removedIds.contains(c.toPortId)),
+          )
           .toList();
       for (final c in orphaned) {
         provider.removeAvCable(c.id);
       }
       if (orphaned.isNotEmpty) {
-        _snack('${orphaned.length} cable${orphaned.length == 1 ? '' : 's'} '
-            'removed with the deleted connectors.');
+        _snack(
+          '${orphaned.length} cable${orphaned.length == 1 ? '' : 's'} '
+          'removed with the deleted connectors.',
+        );
       }
     }
 
@@ -1236,6 +1410,9 @@ class _AvFlowViewState extends State<AvFlowView> {
     VoidCallback? onMoveDown,
   }) {
     return Padding(
+      // Keyed on the port so reordering moves each row's field state with it
+      // rather than leaving the values behind at the old index.
+      key: ValueKey(port.id),
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
@@ -1250,10 +1427,9 @@ class _AvFlowViewState extends State<AvFlowView> {
           ),
           SizedBox(
             width: 150,
-            child: TextField(
-              controller: TextEditingController(text: port.label),
-              decoration: const InputDecoration(
-                  isDense: true, border: OutlineInputBorder()),
+            child: _PortLabelField(
+              portId: port.id,
+              initialLabel: port.label,
               onChanged: (v) => onChanged(port.copyWith(label: v)),
             ),
           ),
@@ -1264,13 +1440,17 @@ class _AvFlowViewState extends State<AvFlowView> {
               initialValue: port.signal,
               isExpanded: true,
               decoration: const InputDecoration(
-                  isDense: true, border: OutlineInputBorder()),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
               items: [
                 for (final s in SignalType.values)
                   DropdownMenuItem(
                     value: s,
-                    child: Text(kSignalLabels[s] ?? s.name,
-                        style: const TextStyle(fontSize: 12)),
+                    child: Text(
+                      kSignalLabels[s] ?? s.name,
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
               ],
               onChanged: (v) =>
@@ -1284,30 +1464,37 @@ class _AvFlowViewState extends State<AvFlowView> {
               initialValue: port.direction,
               isExpanded: true,
               decoration: const InputDecoration(
-                  isDense: true, border: OutlineInputBorder()),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
               items: const [
                 DropdownMenuItem(
-                    value: PortDirection.input,
-                    child: Text('Input', style: TextStyle(fontSize: 12))),
+                  value: PortDirection.input,
+                  child: Text('Input', style: TextStyle(fontSize: 12)),
+                ),
                 DropdownMenuItem(
-                    value: PortDirection.output,
-                    child: Text('Output', style: TextStyle(fontSize: 12))),
+                  value: PortDirection.output,
+                  child: Text('Output', style: TextStyle(fontSize: 12)),
+                ),
                 DropdownMenuItem(
-                    value: PortDirection.bidirectional,
-                    child: Text('Both', style: TextStyle(fontSize: 12))),
+                  value: PortDirection.bidirectional,
+                  child: Text('Both', style: TextStyle(fontSize: 12)),
+                ),
               ],
               onChanged: (v) => v == null
                   ? null
-                  : onChanged(port.copyWith(
-                      direction: v,
-                      // Keep the box readable: an output that stays on the
-                      // left reads as an input at a glance.
-                      side: v == PortDirection.output
-                          ? PortSide.right
-                          : (port.side == PortSide.right
-                              ? PortSide.left
-                              : port.side),
-                    )),
+                  : onChanged(
+                      port.copyWith(
+                        direction: v,
+                        // Keep the box readable: an output that stays on the
+                        // left reads as an input at a glance.
+                        side: v == PortDirection.output
+                            ? PortSide.right
+                            : (port.side == PortSide.right
+                                  ? PortSide.left
+                                  : port.side),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(width: 8),
@@ -1317,20 +1504,26 @@ class _AvFlowViewState extends State<AvFlowView> {
               initialValue: port.side,
               isExpanded: true,
               decoration: const InputDecoration(
-                  isDense: true, border: OutlineInputBorder()),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
               items: const [
                 DropdownMenuItem(
-                    value: PortSide.left,
-                    child: Text('Left', style: TextStyle(fontSize: 12))),
+                  value: PortSide.left,
+                  child: Text('Left', style: TextStyle(fontSize: 12)),
+                ),
                 DropdownMenuItem(
-                    value: PortSide.right,
-                    child: Text('Right', style: TextStyle(fontSize: 12))),
+                  value: PortSide.right,
+                  child: Text('Right', style: TextStyle(fontSize: 12)),
+                ),
                 DropdownMenuItem(
-                    value: PortSide.top,
-                    child: Text('Top', style: TextStyle(fontSize: 12))),
+                  value: PortSide.top,
+                  child: Text('Top', style: TextStyle(fontSize: 12)),
+                ),
                 DropdownMenuItem(
-                    value: PortSide.bottom,
-                    child: Text('Bottom', style: TextStyle(fontSize: 12))),
+                  value: PortSide.bottom,
+                  child: Text('Bottom', style: TextStyle(fontSize: 12)),
+                ),
               ],
               onChanged: (v) =>
                   v == null ? null : onChanged(port.copyWith(side: v)),
@@ -1370,8 +1563,9 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     // Cables whose endpoints vanished are not drawn; list them so a run that
     // disappeared after a device change has a visible explanation.
-    final orphaned =
-        provider.avCables.where((c) => !AvFlowModel.cableIsResolvable(c, byId));
+    final orphaned = provider.avCables.where(
+      (c) => !AvFlowModel.cableIsResolvable(c, byId),
+    );
 
     return Container(
       width: double.infinity,
@@ -1384,12 +1578,17 @@ class _AvFlowViewState extends State<AvFlowView> {
         shrinkWrap: true, // one line of help shouldn't hold open 200px
         children: [
           Text(
-            _pendingPort == null
-                ? 'Drag a device to move it. Click its header pencil to rename '
-                    'or edit connectors. Click a port, then another port, to '
-                    'draw a cable. Click a cable to add bends.'
-                : 'Now click the port at the other end of the cable '
-                    '(click the same port again to cancel).',
+            _pendingPort != null
+                ? 'Now click the connector at the other end of the cable '
+                      '(click the same one again to cancel).'
+                : _cableMode
+                ? 'Click a connector, then the connector at the other end, '
+                      'to draw a cable. Turn off "Draw Cable" to move '
+                      'devices again.'
+                : 'Drag a device to move it. Click its header pencil to '
+                      'rename it or edit its connectors. Turn on "Draw '
+                      'Cable" to wire connectors together. Click a cable to '
+                      'add bends.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 4),
@@ -1414,9 +1613,12 @@ class _AvFlowViewState extends State<AvFlowView> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text(kSignalLabels[c.signal] ?? c.signal.name,
-                    style: theme.textTheme.bodySmall),
+                Text(
+                  kSignalLabels[c.signal] ?? c.signal.name,
+                  style: theme.textTheme.bodySmall,
+                ),
                 IconButton(
+                  key: ValueKey('av_cable_edit_${c.id}'),
                   icon: const Icon(Icons.edit_outlined, size: 20),
                   tooltip: 'Edit this cable',
                   onPressed: () => _showCableDialog(provider, c),
@@ -1452,7 +1654,10 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
-  Future<void> _showCableDialog(AppStateProvider provider, AvCable cable) async {
+  Future<void> _showCableDialog(
+    AppStateProvider provider,
+    AvCable cable,
+  ) async {
     final labelController = TextEditingController(text: cable.label);
     SignalType signal = cable.signal;
 
@@ -1473,7 +1678,9 @@ class _AvFlowViewState extends State<AvFlowView> {
                   items: [
                     for (final s in SignalType.values)
                       DropdownMenuItem(
-                          value: s, child: Text(kSignalLabels[s] ?? s.name)),
+                        value: s,
+                        child: Text(kSignalLabels[s] ?? s.name),
+                      ),
                   ],
                   onChanged: (v) => setLocal(() => signal = v ?? signal),
                 ),
@@ -1493,7 +1700,6 @@ class _AvFlowViewState extends State<AvFlowView> {
               onPressed: () => Navigator.of(ctx).pop('straighten'),
               child: const Text('Clear bends'),
             ),
-            const Spacer(),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('cancel'),
               child: const Text('Cancel'),
@@ -1508,12 +1714,64 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
 
     if (result == null || result == 'cancel') return;
-    provider.updateAvCable(cable.copyWith(
-      signal: signal,
-      label: labelController.text.trim(),
-      waypoints: result == 'straighten' ? const [] : cable.waypoints,
-    ));
+    provider.updateAvCable(
+      cable.copyWith(
+        signal: signal,
+        label: labelController.text.trim(),
+        waypoints: result == 'straighten' ? const [] : cable.waypoints,
+      ),
+    );
   }
+}
+
+/// The port editor's name field. It owns its controller so typing doesn't
+/// rebuild the text out from under the cursor — the row above it rebuilds on
+/// every keystroke to keep the live port list in sync.
+class _PortLabelField extends StatefulWidget {
+  final String portId;
+  final String initialLabel;
+  final ValueChanged<String> onChanged;
+
+  const _PortLabelField({
+    required this.portId,
+    required this.initialLabel,
+    required this.onChanged,
+  });
+
+  @override
+  State<_PortLabelField> createState() => _PortLabelFieldState();
+}
+
+class _PortLabelFieldState extends State<_PortLabelField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialLabel,
+  );
+
+  @override
+  void didUpdateWidget(covariant _PortLabelField old) {
+    super.didUpdateWidget(old);
+    // Only when this row now represents a DIFFERENT port (Reset from library
+    // replaces the whole list) — never on the user's own keystrokes.
+    if (old.portId != widget.portId) {
+      _controller.text = widget.initialLabel;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _controller,
+    decoration: const InputDecoration(
+      isDense: true,
+      border: OutlineInputBorder(),
+    ),
+    onChanged: widget.onChanged,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1525,6 +1783,13 @@ class _AvFlowViewState extends State<AvFlowView> {
 class _AvNodeBox extends StatelessWidget {
   final AvNode node;
   final bool editMode;
+
+  /// Cable-drawing mode: connectors are click targets and nothing drags.
+  final bool cableMode;
+
+  /// This device is the one currently under the cursor.
+  final bool dragging;
+
   final bool racked;
   final String? pendingNodeId;
   final String? pendingPortId;
@@ -1533,20 +1798,30 @@ class _AvNodeBox extends StatelessWidget {
   final AvPort? pendingPort;
 
   final ValueChanged<AvPort> onPortTap;
-  final ValueChanged<Offset>? onDrag;
+
+  /// Null when this device can't be dragged (view mode, or cable mode).
+  final VoidCallback? onDragStart;
+  final ValueChanged<Offset> onDragUpdate;
+  final VoidCallback onDragEnd;
   final VoidCallback onEdit;
 
   const _AvNodeBox({
     required this.node,
     required this.editMode,
+    required this.cableMode,
+    required this.dragging,
     required this.racked,
     required this.pendingNodeId,
     required this.pendingPortId,
     required this.pendingPort,
     required this.onPortTap,
-    required this.onDrag,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
     required this.onEdit,
   });
+
+  bool get _canDrag => onDragStart != null;
 
   @override
   Widget build(BuildContext context) {
@@ -1561,86 +1836,107 @@ class _AvNodeBox extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // The box itself. Dragging is on the box, so a pan that starts on a
-          // port still moves the device — the ports respond to taps.
+          // The box itself, and the drag surface.
           GestureDetector(
-            onPanUpdate:
-                onDrag == null ? null : (details) => onDrag!(details.delta),
-            child: Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                color: dark ? const Color(0xFF1E242B) : Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: theme.colorScheme.outlineVariant,
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: dark ? 0.4 : 0.12),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
+            onPanStart: _canDrag ? (_) => onDragStart!() : null,
+            onPanUpdate: _canDrag ? (d) => onDragUpdate(d.delta) : null,
+            onPanEnd: _canDrag ? (_) => onDragEnd() : null,
+            onPanCancel: _canDrag ? onDragEnd : null,
+            child: MouseRegion(
+              cursor: _canDrag
+                  ? (dragging
+                        ? SystemMouseCursors.grabbing
+                        : SystemMouseCursors.grab)
+                  : MouseCursor.defer,
+              child: Container(
+                width: width,
+                height: height,
+                decoration: BoxDecoration(
+                  color: dark ? const Color(0xFF1E242B) : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: dragging
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outlineVariant,
+                    width: dragging ? 2 : 1.2,
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Container(
-                    height: kAvNodeHeaderHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary
-                          .withValues(alpha: dark ? 0.22 : 0.10),
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(7)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: dark ? 0.4 : (dragging ? 0.28 : 0.12),
+                      ),
+                      blurRadius: dragging ? 12 : 5,
+                      offset: Offset(0, dragging ? 5 : 2),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(iconForAvNode(node.id, node.model), size: 16),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                node.label,
-                                style: const TextStyle(
-                                    fontSize: 12, fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (node.model.isNotEmpty)
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Container(
+                      height: kAvNodeHeaderHeight,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: dark ? 0.22 : 0.10,
+                        ),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(7),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(iconForAvNode(node.id, node.model), size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
-                                  node.model,
-                                  style: TextStyle(
-                                      fontSize: 9.5,
-                                      color: theme.hintColor),
+                                  node.label,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                            ],
-                          ),
-                        ),
-                        if (racked)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 2),
-                            child: Icon(Icons.view_day,
-                                size: 13, color: theme.hintColor),
-                          ),
-                        if (editMode)
-                          InkWell(
-                            onTap: onEdit,
-                            child: const Padding(
-                              padding: EdgeInsets.all(2),
-                              child: Icon(Icons.edit, size: 14),
+                                if (node.model.isNotEmpty)
+                                  Text(
+                                    node.model,
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      color: theme.hintColor,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
                             ),
                           ),
-                      ],
+                          if (racked)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 2),
+                              child: Icon(
+                                Icons.view_day,
+                                size: 13,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                          if (editMode)
+                            InkWell(
+                              key: ValueKey('av_edit_${node.id}'),
+                              onTap: onEdit,
+                              child: const Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Icon(Icons.edit, size: 14),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1694,9 +1990,11 @@ class _AvNodeBox extends StatelessWidget {
   bool _dimmed(AvPort port) {
     if (pendingPort == null) return false;
     if (pendingNodeId == node.id && pendingPortId == port.id) return false;
-    final forward = pendingPort!.direction != PortDirection.input &&
+    final forward =
+        pendingPort!.direction != PortDirection.input &&
         port.direction != PortDirection.output;
-    final backward = port.direction != PortDirection.input &&
+    final backward =
+        port.direction != PortDirection.input &&
         pendingPort!.direction != PortDirection.output;
     return !(forward || backward);
   }
@@ -1725,39 +2023,49 @@ class _AvNodeBox extends StatelessWidget {
   Widget _portRowTarget(BuildContext context, AvPort port, bool isLeft) {
     final theme = Theme.of(context);
     final isPending = pendingNodeId == node.id && pendingPortId == port.id;
+    // The rows cover most of the box, so outside cable mode they forward the
+    // drag — otherwise a device could only be moved by its header strip. In
+    // cable mode they are pure click targets, so a click that travels a pixel
+    // still connects instead of turning into a drag.
     return GestureDetector(
-      onTap: () => onPortTap(port),
-      // The rows cover most of the box, so they forward panning too —
-      // otherwise a device could only be dragged by its header.
-      onPanUpdate:
-          onDrag == null ? null : (details) => onDrag!(details.delta),
+      onTap: cableMode ? () => onPortTap(port) : null,
+      onPanStart: !cableMode && _canDrag ? (_) => onDragStart!() : null,
+      onPanUpdate: !cableMode && _canDrag ? (d) => onDragUpdate(d.delta) : null,
+      onPanEnd: !cableMode && _canDrag ? (_) => onDragEnd() : null,
+      onPanCancel: !cableMode && _canDrag ? onDragEnd : null,
       behavior: HitTestBehavior.opaque,
-      child: Tooltip(
-        message: '${port.label} · ${kSignalLabels[port.signal]}'
-            ' · ${port.direction.name}',
-        waitDuration: const Duration(milliseconds: 500),
-        child: Container(
-          alignment: isLeft ? Alignment.centerLeft : Alignment.centerRight,
-          padding: EdgeInsets.only(
-            left: isLeft ? kAvPortHandleRadius + 6 : 4,
-            right: isLeft ? 4 : kAvPortHandleRadius + 6,
-          ),
-          decoration: isPending
-              ? BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(3),
-                )
-              : null,
-          child: Text(
-            port.label,
-            textAlign: isLeft ? TextAlign.left : TextAlign.right,
-            style: TextStyle(
-              fontSize: 10,
-              color: _dimmed(port)
-                  ? theme.disabledColor
-                  : theme.textTheme.bodySmall?.color,
+      child: MouseRegion(
+        cursor: cableMode
+            ? SystemMouseCursors.precise
+            : (_canDrag ? SystemMouseCursors.grab : MouseCursor.defer),
+        child: Tooltip(
+          message:
+              '${port.label} · ${kSignalLabels[port.signal]}'
+              ' · ${port.direction.name}',
+          waitDuration: const Duration(milliseconds: 500),
+          child: Container(
+            alignment: isLeft ? Alignment.centerLeft : Alignment.centerRight,
+            padding: EdgeInsets.only(
+              left: isLeft ? kAvPortHandleRadius + 6 : 4,
+              right: isLeft ? 4 : kAvPortHandleRadius + 6,
             ),
-            overflow: TextOverflow.ellipsis,
+            decoration: isPending
+                ? BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(3),
+                  )
+                : null,
+            child: Text(
+              port.label,
+              textAlign: isLeft ? TextAlign.left : TextAlign.right,
+              style: TextStyle(
+                fontSize: 10,
+                color: _dimmed(port)
+                    ? theme.disabledColor
+                    : theme.textTheme.bodySmall?.color,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
       ),
@@ -1767,7 +2075,11 @@ class _AvNodeBox extends StatelessWidget {
   /// Tap target for a top- or bottom-edge port, held fully inside the box so
   /// it is hit-testable.
   Widget _edgePortTarget(
-      BuildContext context, AvPort port, double width, double height) {
+    BuildContext context,
+    AvPort port,
+    double width,
+    double height,
+  ) {
     const size = (kAvPortHandleRadius + 4) * 2;
     final anchor = node.localAnchorOf(port.id);
     return Positioned(
@@ -1776,10 +2088,17 @@ class _AvNodeBox extends StatelessWidget {
       width: size,
       height: size,
       child: GestureDetector(
-        onTap: () => onPortTap(port),
+        onTap: cableMode ? () => onPortTap(port) : null,
+        onPanStart: !cableMode && _canDrag ? (_) => onDragStart!() : null,
+        onPanUpdate: !cableMode && _canDrag
+            ? (d) => onDragUpdate(d.delta)
+            : null,
+        onPanEnd: !cableMode && _canDrag ? (_) => onDragEnd() : null,
+        onPanCancel: !cableMode && _canDrag ? onDragEnd : null,
         behavior: HitTestBehavior.opaque,
         child: Tooltip(
-          message: '${port.label} · ${kSignalLabels[port.signal]}'
+          message:
+              '${port.label} · ${kSignalLabels[port.signal]}'
               ' · ${port.direction.name}',
           waitDuration: const Duration(milliseconds: 500),
           child: const SizedBox.expand(),
@@ -1833,7 +2152,12 @@ class _CablePainter extends CustomPainter {
       }
       canvas.drawPath(_polyline(points), paint);
 
-      _drawArrowHead(canvas, points[points.length - 2], points.last, cable.color);
+      _drawArrowHead(
+        canvas,
+        points[points.length - 2],
+        points.last,
+        cable.color,
+      );
       if (cable.label.isNotEmpty) {
         _drawLabel(canvas, points, cable.label, cable.color);
       }
@@ -1866,7 +2190,11 @@ class _CablePainter extends CustomPainter {
   }
 
   void _drawLabel(
-      Canvas canvas, List<Offset> points, String label, Color color) {
+    Canvas canvas,
+    List<Offset> points,
+    String label,
+    Color color,
+  ) {
     // Midpoint of the longest segment: the most room for text.
     var bestIndex = 0;
     var bestLength = 0.0;
@@ -1940,9 +2268,12 @@ class _AvLegend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Signal types',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'Signal types',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 4),
           for (final s in signals)
             Padding(
@@ -1950,11 +2281,12 @@ class _AvLegend extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                      width: 22, height: 3.5, color: kSignalColors[s]),
+                  Container(width: 22, height: 3.5, color: kSignalColors[s]),
                   const SizedBox(width: 8),
-                  Text(kSignalLabels[s] ?? s.name,
-                      style: const TextStyle(fontSize: 11)),
+                  Text(
+                    kSignalLabels[s] ?? s.name,
+                    style: const TextStyle(fontSize: 11),
+                  ),
                 ],
               ),
             ),

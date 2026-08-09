@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
@@ -52,26 +53,57 @@ class _AvRackViewState extends State<AvRackView> {
   /// small target.
   String? _carriedNodeId;
 
+  /// The typed-U path: enter the number instead of finding the row.
+  final TextEditingController _uController = TextEditingController();
+  RackFace _typedFace = RackFace.front;
+
+  /// Which frame typed placement targets when there is more than one.
+  String? _typedRackId;
+
   @override
   void dispose() {
     _transform.dispose();
+    _uController.dispose();
     super.dispose();
+  }
+
+  /// Places the carried device at the U typed in the toolbar. With several
+  /// frames on the page, the one last clicked wins; otherwise the only one.
+  void _placeAtTypedU(AppStateProvider provider) {
+    if (_carriedNodeId == null) return;
+    final u = int.tryParse(_uController.text.trim());
+    if (u == null || u < 1) {
+      _snack(
+        'Enter the U number the device\'s bottom rail sits at.',
+        error: true,
+      );
+      return;
+    }
+    if (provider.avRacks.isEmpty) return;
+    final rack = provider.avRacks.firstWhere(
+      (r) => r.id == _typedRackId,
+      orElse: () => provider.avRacks.first,
+    );
+    _place(provider, rack, _typedFace, u);
   }
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: error ? Colors.red : null,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+    );
   }
 
   /// Rack height for a device, never 0 — a device you are trying to rack
   /// occupies at least 1U even if nobody has filled in its height.
   int _heightOf(AvNode? node) => math.max(1, node?.rackUnits ?? 1);
 
-  void _place(AppStateProvider provider, RackFrame rack, RackFace face,
-      int startU) {
+  void _place(
+    AppStateProvider provider,
+    RackFrame rack,
+    RackFace face,
+    int startU,
+  ) {
     final nodeId = _carriedNodeId;
     if (nodeId == null) return;
     final node = provider.avNodeById(nodeId);
@@ -85,15 +117,25 @@ class _AvRackViewState extends State<AvRackView> {
       ignoreNodeId: nodeId,
     )) {
       _snack(
-          'U$startU doesn\'t have ${height}U free on the ${face.name} of '
-          '${rack.name}.',
-          error: true);
+        'U$startU doesn\'t have ${height}U free on the ${face.name} of '
+        '${rack.name}.',
+        error: true,
+      );
       return;
     }
 
     provider.setAvRackSlot(
-        nodeId, RackSlot(rackId: rack.id, startU: startU, face: face));
-    setState(() => _carriedNodeId = null);
+      nodeId,
+      RackSlot(rackId: rack.id, startU: startU, face: face),
+    );
+    setState(() {
+      _carriedNodeId = null;
+      // Remember where the last placement went, so the next typed U lands in
+      // the same frame and face without re-picking them.
+      _typedRackId = rack.id;
+      _typedFace = face;
+      _uController.clear();
+    });
   }
 
   @override
@@ -146,7 +188,7 @@ class _AvRackViewState extends State<AvRackView> {
           ElevatedButton.icon(
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add rack'),
-            onPressed: () => _showAddRackDialog(provider),
+            onPressed: () => _showRackDialog(provider),
           ),
         ],
       ),
@@ -154,7 +196,10 @@ class _AvRackViewState extends State<AvRackView> {
   }
 
   Widget _buildRackToolbar(
-      AppStateProvider provider, List<AvNode> unracked, ThemeData theme) {
+    AppStateProvider provider,
+    List<AvNode> unracked,
+    ThemeData theme,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Wrap(
@@ -165,23 +210,53 @@ class _AvRackViewState extends State<AvRackView> {
           OutlinedButton.icon(
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add rack'),
-            onPressed: () => _showAddRackDialog(provider),
+            onPressed: () => _showRackDialog(provider),
           ),
           const SizedBox(width: 4),
-          if (_carriedNodeId != null)
+          if (_carriedNodeId != null) ...[
             Chip(
               avatar: const Icon(Icons.pan_tool_alt, size: 16),
               label: Text(
-                  'Placing: ${provider.avNodeById(_carriedNodeId!)?.label ?? ''}'
-                  ' — click a U'),
+                'Placing: ${provider.avNodeById(_carriedNodeId!)?.label ?? ''}'
+                ' — click a U, or type one',
+              ),
               onDeleted: () => setState(() => _carriedNodeId = null),
-            )
-          else if (unracked.isEmpty)
+            ),
+            // Typing the U beats hunting for a 22px row, especially on a 42U
+            // frame where the rails scroll.
+            SizedBox(
+              width: 74,
+              child: TextField(
+                controller: _uController,
+                decoration: const InputDecoration(
+                  labelText: 'at U',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onSubmitted: (_) => _placeAtTypedU(provider),
+              ),
+            ),
+            SegmentedButton<RackFace>(
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              segments: const [
+                ButtonSegment(value: RackFace.front, label: Text('Front')),
+                ButtonSegment(value: RackFace.rear, label: Text('Rear')),
+              ],
+              selected: {_typedFace},
+              onSelectionChanged: (s) => setState(() => _typedFace = s.first),
+            ),
+            FilledButton(
+              onPressed: () => _placeAtTypedU(provider),
+              child: const Text('Place'),
+            ),
+          ] else if (unracked.isEmpty)
             Text(
               provider.avNodes.any((n) => n.rackUnits > 0)
                   ? 'Every rack-mount device is placed.'
                   : 'No device has a rack height yet — set "Rack U" in a '
-                      'device\'s edit dialog on the Signal Flow page.',
+                        'device\'s edit dialog on the Signal Flow page.',
               style: theme.textTheme.bodySmall,
             )
           else ...[
@@ -210,8 +285,7 @@ class _AvRackViewState extends State<AvRackView> {
     const faceGap = 24.0; // between front and rear of one frame
     const frameGap = 60.0; // between frames
     const framePitch = faceWidth * 2 + faceGap + frameGap;
-    final tallest =
-        provider.avRacks.fold(0, (m, r) => math.max(m, r.heightU));
+    final tallest = provider.avRacks.fold(0, (m, r) => math.max(m, r.heightU));
 
     return Container(
       width: 40 + provider.avRacks.length * framePitch,
@@ -229,17 +303,29 @@ class _AvRackViewState extends State<AvRackView> {
                 children: [
                   Row(
                     children: [
-                      Text(rack.name,
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.bold)),
-                      Text('  ${rack.heightU}U',
-                          style: theme.textTheme.bodySmall),
-                      if (widget.editMode)
+                      Text(
+                        rack.name,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '  ${rack.heightU}U',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (widget.editMode) ...[
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 16),
+                          tooltip: 'Rename or resize this rack',
+                          onPressed: () =>
+                              _showRackDialog(provider, existing: rack),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 16),
                           tooltip: 'Remove this rack',
                           onPressed: () => _confirmRemoveRack(provider, rack),
                         ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -259,8 +345,12 @@ class _AvRackViewState extends State<AvRackView> {
     );
   }
 
-  Widget _buildFace(AppStateProvider provider, RackFrame rack, RackFace face,
-      ThemeData theme) {
+  Widget _buildFace(
+    AppStateProvider provider,
+    RackFrame rack,
+    RackFace face,
+    ThemeData theme,
+  ) {
     final dark = theme.brightness == Brightness.dark;
     final occupants = provider.avRackSlots.entries
         .where((e) => e.value.rackId == rack.id && e.value.face == face)
@@ -269,8 +359,10 @@ class _AvRackViewState extends State<AvRackView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(face == RackFace.front ? 'Front' : 'Rear',
-            style: theme.textTheme.bodySmall),
+        Text(
+          face == RackFace.front ? 'Front' : 'Rear',
+          style: theme.textTheme.bodySmall,
+        ),
         const SizedBox(height: 3),
         Container(
           width: kRackInnerWidth + kRailWidth * 2,
@@ -302,8 +394,13 @@ class _AvRackViewState extends State<AvRackView> {
     );
   }
 
-  Widget _buildUSlot(AppStateProvider provider, RackFrame rack, RackFace face,
-      int u, ThemeData theme) {
+  Widget _buildUSlot(
+    AppStateProvider provider,
+    RackFrame rack,
+    RackFace face,
+    int u,
+    ThemeData theme,
+  ) {
     final carrying = _carriedNodeId != null;
     return InkWell(
       onTap: carrying ? () => _place(provider, rack, face, u) : null,
@@ -312,8 +409,10 @@ class _AvRackViewState extends State<AvRackView> {
           SizedBox(
             width: kRailWidth,
             child: Center(
-              child: Text('$u',
-                  style: TextStyle(fontSize: 9, color: theme.hintColor)),
+              child: Text(
+                '$u',
+                style: TextStyle(fontSize: 9, color: theme.hintColor),
+              ),
             ),
           ),
           Expanded(
@@ -321,8 +420,9 @@ class _AvRackViewState extends State<AvRackView> {
               decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(
-                      color: theme.dividerColor.withValues(alpha: 0.5),
-                      width: 0.5),
+                    color: theme.dividerColor.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
                 ),
                 color: carrying
                     ? theme.colorScheme.primary.withValues(alpha: 0.06)
@@ -333,8 +433,10 @@ class _AvRackViewState extends State<AvRackView> {
           SizedBox(
             width: kRailWidth,
             child: Center(
-              child: Text('$u',
-                  style: TextStyle(fontSize: 9, color: theme.hintColor)),
+              child: Text(
+                '$u',
+                style: TextStyle(fontSize: 9, color: theme.hintColor),
+              ),
             ),
           ),
         ],
@@ -364,13 +466,20 @@ class _AvRackViewState extends State<AvRackView> {
       top: topU * kUHeight,
       height: height * kUHeight,
       child: Tooltip(
-        message: '${node?.label ?? entry.key}\n'
+        message:
+            '${node?.label ?? entry.key}\n'
             'U${slot.startU}'
             '${height == 1 ? '' : '–U${slot.startU + height - 1}'}'
-            '${widget.editMode ? '\nClick to pick up • right-click to un-rack' : ''}',
+            '${widget.editMode ? '\nClick to pick up • double-click to type a '
+                      'U • right-click to un-rack' : ''}',
         child: GestureDetector(
           onTap: widget.editMode
               ? () => setState(() => _carriedNodeId = entry.key)
+              : null,
+          // Typing the position beats dragging when the frame is tall or the
+          // device needs to land on an exact U.
+          onDoubleTap: widget.editMode
+              ? () => _showPlacementDialog(provider, entry.key)
               : null,
           onSecondaryTap: widget.editMode
               ? () => provider.setAvRackSlot(entry.key, null)
@@ -391,12 +500,16 @@ class _AvRackViewState extends State<AvRackView> {
                   child: Text(
                     node?.label ?? entry.key,
                     style: const TextStyle(
-                        fontSize: 10, fontWeight: FontWeight.w600),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text('${height}U',
-                    style: TextStyle(fontSize: 9, color: theme.hintColor)),
+                Text(
+                  '${height}U',
+                  style: TextStyle(fontSize: 9, color: theme.hintColor),
+                ),
               ],
             ),
           ),
@@ -405,36 +518,58 @@ class _AvRackViewState extends State<AvRackView> {
     );
   }
 
-  Future<void> _showAddRackDialog(AppStateProvider provider) async {
-    final nameController =
-        TextEditingController(text: 'Rack ${provider.avRacks.length + 1}');
-    String preset = kRackPresets.keys.first;
+  /// Add ([existing] null) or resize/rename a frame. Height is a typed number
+  /// with the common sizes as one-click shortcuts — plenty of rooms have a
+  /// 16U or 27U frame that no preset list is going to cover.
+  Future<void> _showRackDialog(
+    AppStateProvider provider, {
+    RackFrame? existing,
+  }) async {
+    final nameController = TextEditingController(
+      text: existing?.name ?? 'Rack ${provider.avRacks.length + 1}',
+    );
+    final heightController = TextEditingController(
+      text: (existing?.heightU ?? 42).toString(),
+    );
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Add rack'),
+          title: Text(existing == null ? 'Add rack' : 'Edit ${existing.name}'),
           content: SizedBox(
             width: 380,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
                   controller: nameController,
-                  autofocus: true,
+                  autofocus: existing == null,
                   decoration: const InputDecoration(labelText: 'Name'),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: preset,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Size'),
-                  items: [
-                    for (final p in kRackPresets.keys)
-                      DropdownMenuItem(value: p, child: Text(p)),
+                TextField(
+                  controller: heightController,
+                  decoration: const InputDecoration(
+                    labelText: 'Height (U)',
+                    helperText: 'Any number of rack units',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final entry in kRackPresets.entries)
+                      ActionChip(
+                        label: Text(entry.key),
+                        onPressed: () => setLocal(
+                          () => heightController.text = entry.value.toString(),
+                        ),
+                      ),
                   ],
-                  onChanged: (v) => setLocal(() => preset = v ?? preset),
                 ),
               ],
             ),
@@ -446,7 +581,7 @@ class _AvRackViewState extends State<AvRackView> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Add'),
+              child: Text(existing == null ? 'Add' : 'Save'),
             ),
           ],
         ),
@@ -455,14 +590,187 @@ class _AvRackViewState extends State<AvRackView> {
 
     if (ok != true) return;
     final name = nameController.text.trim();
-    provider.addAvRack(
-      name.isEmpty ? 'Rack ${provider.avRacks.length + 1}' : name,
-      kRackPresets[preset] ?? 42,
+    final height = int.tryParse(heightController.text.trim()) ?? 0;
+    if (height < 1) {
+      _snack('A rack needs a height of at least 1U.', error: true);
+      return;
+    }
+
+    if (existing == null) {
+      provider.addAvRack(
+        name.isEmpty ? 'Rack ${provider.avRacks.length + 1}' : name,
+        height,
+      );
+      return;
+    }
+
+    // Shrinking a frame can strand devices above the new top rail; say so
+    // rather than drawing them hanging off the end.
+    final stranded = provider.avRackSlots.entries.where((e) {
+      if (e.value.rackId != existing.id) return false;
+      final h = _heightOf(provider.avNodeById(e.key));
+      return e.value.startU + h - 1 > height;
+    }).toList();
+    for (final e in stranded) {
+      provider.setAvRackSlot(e.key, null);
+    }
+
+    provider.updateAvRack(
+      existing.copyWith(
+        name: name.isEmpty ? existing.name : name,
+        heightU: height,
+      ),
+    );
+
+    if (stranded.isNotEmpty) {
+      _snack(
+        '${stranded.length} device${stranded.length == 1 ? '' : 's'} '
+        'un-racked — ${stranded.length == 1 ? 'it no longer fits' : 'they no '
+                  'longer fit'} in ${height}U.',
+      );
+    }
+  }
+
+  /// Retype where a device sits: frame, face, bottom rail, and its own height.
+  Future<void> _showPlacementDialog(
+    AppStateProvider provider,
+    String nodeId,
+  ) async {
+    final node = provider.avNodeById(nodeId);
+    if (node == null) return;
+    final slot = provider.avRackSlots[nodeId];
+
+    final startController = TextEditingController(
+      text: (slot?.startU ?? 1).toString(),
+    );
+    final heightController = TextEditingController(
+      text: _heightOf(node).toString(),
+    );
+    String rackId = slot?.rackId ?? provider.avRacks.first.id;
+    RackFace face = slot?.face ?? RackFace.front;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(node.label),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: rackId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Rack'),
+                  items: [
+                    for (final r in provider.avRacks)
+                      DropdownMenuItem(
+                        value: r.id,
+                        child: Text('${r.name} (${r.heightU}U)'),
+                      ),
+                  ],
+                  onChanged: (v) => setLocal(() => rackId = v ?? rackId),
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<RackFace>(
+                  segments: const [
+                    ButtonSegment(value: RackFace.front, label: Text('Front')),
+                    ButtonSegment(value: RackFace.rear, label: Text('Rear')),
+                  ],
+                  selected: {face},
+                  onSelectionChanged: (s) => setLocal(() => face = s.first),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: startController,
+                        decoration: const InputDecoration(
+                          labelText: 'Bottom rail (U)',
+                          helperText: 'U1 is the floor',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: heightController,
+                        decoration: const InputDecoration(
+                          labelText: 'Device height (U)',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('unrack'),
+              child: const Text('Un-rack'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('cancel'),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop('save'),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null || result == 'cancel') return;
+    if (result == 'unrack') {
+      provider.setAvRackSlot(nodeId, null);
+      return;
+    }
+
+    final height = int.tryParse(heightController.text.trim()) ?? 1;
+    final startU = int.tryParse(startController.text.trim()) ?? 1;
+    if (height < 1 || startU < 1) {
+      _snack('U numbers start at 1.', error: true);
+      return;
+    }
+
+    // The height lives on the device, not the slot, so it has to be written
+    // back before the span is checked against it.
+    if (height != node.rackUnits) {
+      provider.updateAvNode(node.copyWith(rackUnits: height));
+    }
+    if (!provider.avRackSpanIsFree(
+      rackId: rackId,
+      face: face,
+      startU: startU,
+      heightU: height,
+      ignoreNodeId: nodeId,
+    )) {
+      _snack('U$startU doesn\'t have ${height}U free there.', error: true);
+      return;
+    }
+    provider.setAvRackSlot(
+      nodeId,
+      RackSlot(rackId: rackId, startU: startU, face: face),
     );
   }
 
   Future<void> _confirmRemoveRack(
-      AppStateProvider provider, RackFrame rack) async {
+    AppStateProvider provider,
+    RackFrame rack,
+  ) async {
     final occupants = provider.avRackSlots.values
         .where((s) => s.rackId == rack.id)
         .length;
@@ -470,11 +778,13 @@ class _AvRackViewState extends State<AvRackView> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Remove ${rack.name}?'),
-        content: Text(occupants == 0
-            ? 'The frame is empty.'
-            : '$occupants device${occupants == 1 ? '' : 's'} will be '
-                'un-racked. The devices themselves stay on the signal flow '
-                'diagram.'),
+        content: Text(
+          occupants == 0
+              ? 'The frame is empty.'
+              : '$occupants device${occupants == 1 ? '' : 's'} will be '
+                    'un-racked. The devices themselves stay on the signal flow '
+                    'diagram.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
