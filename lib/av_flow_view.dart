@@ -313,6 +313,7 @@ class _AvFlowViewState extends State<AvFlowView> {
         ports: template.ports,
         fromConfig: true,
         rackUnits: template.rackUnits,
+        rackWidth: template.rackWidth,
       );
       provider.addAvNode(node);
       columnY[col] = y + node.height + 30;
@@ -879,11 +880,15 @@ class _AvFlowViewState extends State<AvFlowView> {
           if (_editMode && _selectedCableId != null)
             ..._buildWaypointHandles(provider, model),
           // Legend bottom-left (also part of the PNG export).
-          if (model.usedSignals.isNotEmpty)
+          if (model.usedSignals.isNotEmpty || model.hasCustomCableColors)
             Positioned(
               left: 16,
               bottom: 12,
-              child: _AvLegend(signals: model.usedSignals, theme: theme),
+              child: _AvLegend(
+                signals: model.usedSignals,
+                hasCustomColors: model.hasCustomCableColors,
+                theme: theme,
+              ),
             ),
           if (model.nodes.isEmpty)
             const Center(
@@ -1083,6 +1088,7 @@ class _AvFlowViewState extends State<AvFlowView> {
         ports: template.ports,
         fromConfig: true,
         rackUnits: template.rackUnits,
+        rackWidth: template.rackWidth,
       ),
     );
   }
@@ -1175,6 +1181,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               ),
             ],
         rackUnits: template?.rackUnits ?? 0,
+        rackWidth: template?.rackWidth ?? RackWidth.full,
       ),
     );
   }
@@ -1191,6 +1198,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       text: node.rackUnits.toString(),
     );
     final ports = List<AvPort>.from(node.ports);
+    RackWidth rackWidth = node.rackWidth;
 
     final result = await showDialog<String>(
       context: context,
@@ -1198,8 +1206,10 @@ class _AvFlowViewState extends State<AvFlowView> {
         builder: (ctx, setLocal) => AlertDialog(
           title: Text('Edit ${node.label}'),
           content: SizedBox(
-            width: 640,
-            height: 520,
+            // Wide enough for a whole port row, but never wider than the
+            // window — the port rows shrink to fit whatever is left.
+            width: math.min(820, MediaQuery.of(ctx).size.width - 120),
+            height: math.min(560, MediaQuery.of(ctx).size.height - 200),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1236,11 +1246,32 @@ class _AvFlowViewState extends State<AvFlowView> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: noteController,
-                  decoration: const InputDecoration(
-                    labelText: 'Note (shown in the pack list)',
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: noteController,
+                        decoration: const InputDecoration(
+                          labelText: 'Note (shown in the pack list)',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Half-width gear shares a U with another box, so the
+                    // rack page has to know before it can offer the two
+                    // halves of a rail as separate drop targets.
+                    Tooltip(
+                      message: 'Two half-width devices share one rack unit',
+                      child: FilterChip(
+                        avatar: const Icon(Icons.splitscreen, size: 16),
+                        label: const Text('Half rack'),
+                        selected: rackWidth == RackWidth.half,
+                        onSelected: (v) => setLocal(
+                          () => rackWidth = v ? RackWidth.half : RackWidth.full,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -1353,6 +1384,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       model: modelController.text.trim(),
       note: noteController.text.trim(),
       rackUnits: int.tryParse(rackUnitsController.text.trim()) ?? 0,
+      rackWidth: rackWidth,
       ports: ports,
     );
 
@@ -1360,6 +1392,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       final entry = AvDeviceTemplate(
         model: updated.model.isEmpty ? updated.label : updated.model,
         rackUnits: updated.rackUnits,
+        rackWidth: updated.rackWidth,
         ports: updated.ports,
       );
       await Clipboard.setData(
@@ -1402,6 +1435,25 @@ class _AvFlowViewState extends State<AvFlowView> {
     provider.updateAvNode(updated);
   }
 
+  /// Tight icon button for the port rows — the stock 48px ones plus the
+  /// fields no longer fit across the dialog.
+  Widget _rowIcon(
+    IconData icon,
+    String tooltip,
+    VoidCallback? onPressed, {
+    bool danger = false,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 18),
+      color: danger ? Colors.red.shade400 : null,
+      onPressed: onPressed,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+    );
+  }
+
   Widget _portEditorRow(
     AvPort port, {
     required ValueChanged<AvPort> onChanged,
@@ -1425,8 +1477,10 @@ class _AvFlowViewState extends State<AvFlowView> {
               shape: BoxShape.circle,
             ),
           ),
-          SizedBox(
-            width: 150,
+          // Flexible, not fixed: the fixed widths used to add up to more than
+          // the dialog, which pushed the delete button off the right edge
+          // where it could not be seen OR clicked.
+          Expanded(
             child: _PortLabelField(
               portId: port.id,
               initialLabel: port.label,
@@ -1435,7 +1489,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 160,
+            width: 150,
             child: DropdownButtonFormField<SignalType>(
               initialValue: port.signal,
               isExpanded: true,
@@ -1459,7 +1513,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 120,
+            width: 104,
             child: DropdownButtonFormField<PortDirection>(
               initialValue: port.direction,
               isExpanded: true,
@@ -1499,7 +1553,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 110,
+            width: 96,
             child: DropdownButtonFormField<PortSide>(
               initialValue: port.side,
               isExpanded: true,
@@ -1529,21 +1583,9 @@ class _AvFlowViewState extends State<AvFlowView> {
                   v == null ? null : onChanged(port.copyWith(side: v)),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.arrow_upward, size: 18),
-            onPressed: onMoveUp,
-            tooltip: 'Move up',
-          ),
-          IconButton(
-            icon: const Icon(Icons.arrow_downward, size: 18),
-            onPressed: onMoveDown,
-            tooltip: 'Move down',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18),
-            onPressed: onDelete,
-            tooltip: 'Delete port',
-          ),
+          _rowIcon(Icons.arrow_upward, 'Move up', onMoveUp),
+          _rowIcon(Icons.arrow_downward, 'Move down', onMoveDown),
+          _rowIcon(Icons.delete_outline, 'Delete port', onDelete, danger: true),
         ],
       ),
     );
@@ -1660,6 +1702,7 @@ class _AvFlowViewState extends State<AvFlowView> {
   ) async {
     final labelController = TextEditingController(text: cable.label);
     SignalType signal = cable.signal;
+    Color? colorOverride = cable.colorOverride;
 
     final result = await showDialog<String>(
       context: context,
@@ -1670,6 +1713,7 @@ class _AvFlowViewState extends State<AvFlowView> {
             width: 420,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButtonFormField<SignalType>(
                   initialValue: signal,
@@ -1679,7 +1723,17 @@ class _AvFlowViewState extends State<AvFlowView> {
                     for (final s in SignalType.values)
                       DropdownMenuItem(
                         value: s,
-                        child: Text(kSignalLabels[s] ?? s.name),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 20,
+                              height: 3.5,
+                              margin: const EdgeInsets.only(right: 8),
+                              color: kSignalColors[s],
+                            ),
+                            Text(kSignalLabels[s] ?? s.name),
+                          ],
+                        ),
                       ),
                   ],
                   onChanged: (v) => setLocal(() => signal = v ?? signal),
@@ -1691,6 +1745,49 @@ class _AvFlowViewState extends State<AvFlowView> {
                     labelText: 'Label / cable ID',
                     hintText: 'e.g. HDMI-04, 50ft',
                   ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Text('Colour', style: Theme.of(ctx).textTheme.titleSmall),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        colorOverride == null
+                            ? 'Following the signal type'
+                            : 'Custom for this run',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                    ),
+                    if (colorOverride != null)
+                      TextButton(
+                        onPressed: () => setLocal(() => colorOverride = null),
+                        child: const Text('Match signal'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    // First swatch resets to the signal type's own colour, so
+                    // the default is one click away and looks like the rest.
+                    _colorSwatch(
+                      ctx,
+                      kSignalColors[signal] ?? Colors.grey,
+                      selected: colorOverride == null,
+                      isDefault: true,
+                      onTap: () => setLocal(() => colorOverride = null),
+                    ),
+                    for (final c in kCableSwatches)
+                      _colorSwatch(
+                        ctx,
+                        c,
+                        selected: colorOverride?.toARGB32() == c.toARGB32(),
+                        onTap: () => setLocal(() => colorOverride = c),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -1719,6 +1816,57 @@ class _AvFlowViewState extends State<AvFlowView> {
         signal: signal,
         label: labelController.text.trim(),
         waypoints: result == 'straighten' ? const [] : cable.waypoints,
+        colorOverride: colorOverride,
+        clearColorOverride: colorOverride == null,
+      ),
+    );
+  }
+
+  /// One clickable colour chip. [isDefault] marks the "follow the signal
+  /// type" swatch, which is drawn with a dashed-looking outline so it reads
+  /// as the automatic choice rather than just another colour.
+  Widget _colorSwatch(
+    BuildContext ctx,
+    Color color, {
+    required bool selected,
+    required VoidCallback onTap,
+    bool isDefault = false,
+  }) {
+    return Tooltip(
+      message: isDefault ? 'Follow the signal type' : '',
+      child: InkWell(
+        key: ValueKey(
+          isDefault
+              ? 'cable_color_default'
+              : 'cable_color_${(color.toARGB32() & 0xFFFFFF).toRadixString(16)}',
+        ),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          width: 30,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: selected
+                  ? Theme.of(ctx).colorScheme.primary
+                  : Theme.of(ctx).dividerColor,
+              width: selected ? 3 : 1,
+            ),
+          ),
+          child: isDefault
+              ? Icon(
+                  Icons.auto_awesome,
+                  size: 12,
+                  color:
+                      ThemeData.estimateBrightnessForColor(color) ==
+                          Brightness.dark
+                      ? Colors.white
+                      : Colors.black87,
+                )
+              : null,
+        ),
       ),
     );
   }
@@ -2250,9 +2398,18 @@ class _CablePainter extends CustomPainter {
 /// Lists only the signal types actually on the canvas, so it stays short.
 class _AvLegend extends StatelessWidget {
   final List<SignalType> signals;
+
+  /// At least one run was recoloured by hand, so the key above it doesn't
+  /// account for every line on the page.
+  final bool hasCustomColors;
+
   final ThemeData theme;
 
-  const _AvLegend({required this.signals, required this.theme});
+  const _AvLegend({
+    required this.signals,
+    required this.hasCustomColors,
+    required this.theme,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2288,6 +2445,18 @@ class _AvLegend extends StatelessWidget {
                     style: const TextStyle(fontSize: 11),
                   ),
                 ],
+              ),
+            ),
+          if (hasCustomColors)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Some runs are coloured individually',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontStyle: FontStyle.italic,
+                  color: theme.hintColor,
+                ),
               ),
             ),
         ],

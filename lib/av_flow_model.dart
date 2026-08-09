@@ -235,22 +235,21 @@ class AvPort {
     SignalType? signal,
     PortDirection? direction,
     PortSide? side,
-  }) =>
-      AvPort(
-        id: id ?? this.id,
-        label: label ?? this.label,
-        signal: signal ?? this.signal,
-        direction: direction ?? this.direction,
-        side: side ?? this.side,
-      );
+  }) => AvPort(
+    id: id ?? this.id,
+    label: label ?? this.label,
+    signal: signal ?? this.signal,
+    direction: direction ?? this.direction,
+    side: side ?? this.side,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'label': label,
-        'signal': signal.name,
-        'direction': direction.name,
-        'side': side.name,
-      };
+    'id': id,
+    'label': label,
+    'signal': signal.name,
+    'direction': direction.name,
+    'side': side.name,
+  };
 
   factory AvPort.fromJson(Map<String, dynamic> json) {
     final direction = directionFromName(json['direction']?.toString());
@@ -328,6 +327,9 @@ class AvNode {
   /// Rack height; 0 means "not rack mounted" and keeps it out of the racks.
   final int rackUnits;
 
+  /// Full or half rail width. Two half-width devices share one U.
+  final RackWidth rackWidth;
+
   /// Free-text note carried into the pack list.
   final String note;
 
@@ -339,6 +341,7 @@ class AvNode {
     required this.ports,
     this.fromConfig = false,
     this.rackUnits = 0,
+    this.rackWidth = RackWidth.full,
     this.note = '',
   });
 
@@ -349,18 +352,21 @@ class AvNode {
     List<AvPort>? ports,
     bool? fromConfig,
     int? rackUnits,
+    RackWidth? rackWidth,
     String? note,
-  }) =>
-      AvNode(
-        id: id,
-        label: label ?? this.label,
-        model: model ?? this.model,
-        pos: pos ?? this.pos,
-        ports: ports ?? this.ports,
-        fromConfig: fromConfig ?? this.fromConfig,
-        rackUnits: rackUnits ?? this.rackUnits,
-        note: note ?? this.note,
-      );
+  }) => AvNode(
+    id: id,
+    label: label ?? this.label,
+    model: model ?? this.model,
+    pos: pos ?? this.pos,
+    ports: ports ?? this.ports,
+    fromConfig: fromConfig ?? this.fromConfig,
+    rackUnits: rackUnits ?? this.rackUnits,
+    rackWidth: rackWidth ?? this.rackWidth,
+    note: note ?? this.note,
+  );
+
+  bool get isHalfRack => rackWidth == RackWidth.half;
 
   List<AvPort> get leftPorts =>
       ports.where((p) => p.side == PortSide.left).toList();
@@ -397,8 +403,8 @@ class AvNode {
     final rows = math.max(leftPorts.length, rightPorts.length);
     final body = math.max(kAvNodeMinBodyHeight, rows * kAvPortRowHeight);
     // Top/bottom ports ride the edges and need a little breathing room.
-    final edgePad = (topPorts.isEmpty ? 0.0 : 6.0) +
-        (bottomPorts.isEmpty ? 0.0 : 6.0);
+    final edgePad =
+        (topPorts.isEmpty ? 0.0 : 6.0) + (bottomPorts.isEmpty ? 0.0 : 6.0);
     return kAvNodeHeaderHeight + body + kAvNodePadBottom + edgePad;
   }
 
@@ -465,33 +471,35 @@ class AvNode {
       w * (index + 1) / (count + 1);
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'label': label,
-        'model': model,
-        'x': pos.dx,
-        'y': pos.dy,
-        'fromConfig': fromConfig,
-        'rackUnits': rackUnits,
-        if (note.isNotEmpty) 'note': note,
-        'ports': ports.map((p) => p.toJson()).toList(),
-      };
+    'id': id,
+    'label': label,
+    'model': model,
+    'x': pos.dx,
+    'y': pos.dy,
+    'fromConfig': fromConfig,
+    'rackUnits': rackUnits,
+    if (rackWidth != RackWidth.full) 'rackWidth': rackWidth.name,
+    if (note.isNotEmpty) 'note': note,
+    'ports': ports.map((p) => p.toJson()).toList(),
+  };
 
   factory AvNode.fromJson(Map<String, dynamic> json) => AvNode(
-        id: json['id']?.toString() ?? '',
-        label: json['label']?.toString() ?? '',
-        model: json['model']?.toString() ?? '',
-        pos: Offset(
-          (json['x'] as num?)?.toDouble() ?? 0,
-          (json['y'] as num?)?.toDouble() ?? 0,
-        ),
-        fromConfig: json['fromConfig'] == true,
-        rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
-        note: json['note']?.toString() ?? '',
-        ports: [
-          for (final p in (json['ports'] as List? ?? []))
-            if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
-        ],
-      );
+    id: json['id']?.toString() ?? '',
+    label: json['label']?.toString() ?? '',
+    model: json['model']?.toString() ?? '',
+    pos: Offset(
+      (json['x'] as num?)?.toDouble() ?? 0,
+      (json['y'] as num?)?.toDouble() ?? 0,
+    ),
+    fromConfig: json['fromConfig'] == true,
+    rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
+    rackWidth: rackWidthFromName(json['rackWidth']?.toString()),
+    note: json['note']?.toString() ?? '',
+    ports: [
+      for (final p in (json['ports'] as List? ?? []))
+        if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
+    ],
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -516,6 +524,11 @@ class AvCable {
   /// Manual route overrides. Empty means "use the automatic route".
   final List<Offset> waypoints;
 
+  /// Paints this one run in a colour of its own instead of the signal type's.
+  /// Null — the normal case — means "follow the signal type", so a later
+  /// change to the palette still reaches it.
+  final Color? colorOverride;
+
   const AvCable({
     required this.id,
     required this.fromNodeId,
@@ -525,62 +538,138 @@ class AvCable {
     required this.signal,
     this.label = '',
     this.waypoints = const [],
+    this.colorOverride,
   });
 
+  /// [clearColorOverride] exists because passing null to [colorOverride]
+  /// cannot be told apart from "leave it alone" in a copyWith.
   AvCable copyWith({
     SignalType? signal,
     String? label,
     List<Offset>? waypoints,
-  }) =>
-      AvCable(
-        id: id,
-        fromNodeId: fromNodeId,
-        fromPortId: fromPortId,
-        toNodeId: toNodeId,
-        toPortId: toPortId,
-        signal: signal ?? this.signal,
-        label: label ?? this.label,
-        waypoints: waypoints ?? this.waypoints,
-      );
+    Color? colorOverride,
+    bool clearColorOverride = false,
+  }) => AvCable(
+    id: id,
+    fromNodeId: fromNodeId,
+    fromPortId: fromPortId,
+    toNodeId: toNodeId,
+    toPortId: toPortId,
+    signal: signal ?? this.signal,
+    label: label ?? this.label,
+    waypoints: waypoints ?? this.waypoints,
+    colorOverride: clearColorOverride
+        ? null
+        : (colorOverride ?? this.colorOverride),
+  );
 
-  Color get color => kSignalColors[signal] ?? kSignalColors[SignalType.other]!;
+  /// The colour this run is actually drawn in.
+  Color get color =>
+      colorOverride ??
+      kSignalColors[signal] ??
+      kSignalColors[SignalType.other]!;
+
+  /// True when this run is drawn in something other than its signal colour —
+  /// the legend calls those out so it doesn't quietly lie about the diagram.
+  bool get hasCustomColor => colorOverride != null;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'fromNode': fromNodeId,
-        'fromPort': fromPortId,
-        'toNode': toNodeId,
-        'toPort': toPortId,
-        'signal': signal.name,
-        if (label.isNotEmpty) 'label': label,
-        if (waypoints.isNotEmpty)
-          'waypoints': [
-            for (final w in waypoints) {'x': w.dx, 'y': w.dy}
-          ],
-      };
+    'id': id,
+    'fromNode': fromNodeId,
+    'fromPort': fromPortId,
+    'toNode': toNodeId,
+    'toPort': toPortId,
+    'signal': signal.name,
+    if (label.isNotEmpty) 'label': label,
+    if (colorOverride != null)
+      'color': (colorOverride!.toARGB32() & 0xFFFFFF)
+          .toRadixString(16)
+          .padLeft(6, '0'),
+    if (waypoints.isNotEmpty)
+      'waypoints': [
+        for (final w in waypoints) {'x': w.dx, 'y': w.dy},
+      ],
+  };
 
-  factory AvCable.fromJson(Map<String, dynamic> json) => AvCable(
-        id: json['id']?.toString() ?? '',
-        fromNodeId: json['fromNode']?.toString() ?? '',
-        fromPortId: json['fromPort']?.toString() ?? '',
-        toNodeId: json['toNode']?.toString() ?? '',
-        toPortId: json['toPort']?.toString() ?? '',
-        signal: signalFromName(json['signal']?.toString()),
-        label: json['label']?.toString() ?? '',
-        waypoints: [
-          for (final w in (json['waypoints'] as List? ?? []))
-            if (w is Map)
-              Offset((w['x'] as num?)?.toDouble() ?? 0,
-                  (w['y'] as num?)?.toDouble() ?? 0),
-        ],
-      );
+  factory AvCable.fromJson(Map<String, dynamic> json) {
+    final rawColor = json['color']?.toString();
+    final parsed = rawColor == null ? null : int.tryParse(rawColor, radix: 16);
+    return AvCable(
+      id: json['id']?.toString() ?? '',
+      fromNodeId: json['fromNode']?.toString() ?? '',
+      fromPortId: json['fromPort']?.toString() ?? '',
+      toNodeId: json['toNode']?.toString() ?? '',
+      toPortId: json['toPort']?.toString() ?? '',
+      signal: signalFromName(json['signal']?.toString()),
+      label: json['label']?.toString() ?? '',
+      colorOverride: parsed == null ? null : Color(0xFF000000 | parsed),
+      waypoints: [
+        for (final w in (json['waypoints'] as List? ?? []))
+          if (w is Map)
+            Offset(
+              (w['x'] as num?)?.toDouble() ?? 0,
+              (w['y'] as num?)?.toDouble() ?? 0,
+            ),
+      ],
+    );
+  }
 }
+
+/// Colours offered when recolouring a single run. The signal palette first —
+/// so "make this one look like Dante" is one click — then a few neutrals that
+/// aren't spoken for.
+const List<Color> kCableSwatches = [
+  Color(0xFF42A5F5),
+  Color(0xFF5C6BC0),
+  Color(0xFF7E57C2),
+  Color(0xFF26C6DA),
+  Color(0xFF66BB6A),
+  Color(0xFF26A69A),
+  Color(0xFF9CCC65),
+  Color(0xFFFFA726),
+  Color(0xFFEF5350),
+  Color(0xFFEC407A),
+  Color(0xFF78909C),
+  Color(0xFFFFEE58),
+  Color(0xFFAB47BC),
+  Color(0xFF8D6E63),
+  Color(0xFF616161),
+  Color(0xFFECEFF1),
+];
 
 // ---------------------------------------------------------------------------
 //  RACKS
 // ---------------------------------------------------------------------------
 
 enum RackFace { front, rear }
+
+/// How much of the rail width a device takes. Two half-width boxes share one
+/// U — a pair of 1U half-racks on a shelf, or two DTP receivers side by side.
+enum RackWidth { full, half }
+
+/// Which side of the U a half-width device sits on. [full] is the whole
+/// width, which is what a normal device uses.
+enum RackHalf { full, left, right }
+
+RackWidth rackWidthFromName(String? name) =>
+    name?.trim().toLowerCase() == 'half' ? RackWidth.half : RackWidth.full;
+
+RackHalf rackHalfFromName(String? name) {
+  switch (name?.trim().toLowerCase()) {
+    case 'left':
+      return RackHalf.left;
+    case 'right':
+      return RackHalf.right;
+    default:
+      return RackHalf.full;
+  }
+}
+
+/// True when two placements in the same U would physically collide: a
+/// full-width device blocks the whole rail, two halves only clash when
+/// they're on the same side.
+bool rackHalvesOverlap(RackHalf a, RackHalf b) =>
+    a == RackHalf.full || b == RackHalf.full || a == b;
 
 /// A rack frame on the elevation page.
 class RackFrame {
@@ -599,21 +688,25 @@ class RackFrame {
   });
 
   RackFrame copyWith({String? name, int? heightU, double? x}) => RackFrame(
-        id: id,
-        name: name ?? this.name,
-        heightU: heightU ?? this.heightU,
-        x: x ?? this.x,
-      );
+    id: id,
+    name: name ?? this.name,
+    heightU: heightU ?? this.heightU,
+    x: x ?? this.x,
+  );
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'name': name, 'heightU': heightU, 'x': x};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'heightU': heightU,
+    'x': x,
+  };
 
   factory RackFrame.fromJson(Map<String, dynamic> json) => RackFrame(
-        id: json['id']?.toString() ?? '',
-        name: json['name']?.toString() ?? 'Rack',
-        heightU: (json['heightU'] as num?)?.toInt() ?? 42,
-        x: (json['x'] as num?)?.toDouble() ?? 0,
-      );
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? 'Rack',
+    heightU: (json['heightU'] as num?)?.toInt() ?? 42,
+    x: (json['x'] as num?)?.toDouble() ?? 0,
+  );
 }
 
 /// Rack presets offered when adding a frame.
@@ -635,26 +728,42 @@ class RackSlot {
   final int startU;
   final RackFace face;
 
+  /// Which side of the rail a half-width device sits on; [RackHalf.full] for
+  /// everything else.
+  final RackHalf half;
+
   const RackSlot({
     required this.rackId,
     required this.startU,
     this.face = RackFace.front,
+    this.half = RackHalf.full,
   });
 
-  RackSlot copyWith({String? rackId, int? startU, RackFace? face}) => RackSlot(
-        rackId: rackId ?? this.rackId,
-        startU: startU ?? this.startU,
-        face: face ?? this.face,
-      );
+  RackSlot copyWith({
+    String? rackId,
+    int? startU,
+    RackFace? face,
+    RackHalf? half,
+  }) => RackSlot(
+    rackId: rackId ?? this.rackId,
+    startU: startU ?? this.startU,
+    face: face ?? this.face,
+    half: half ?? this.half,
+  );
 
-  Map<String, dynamic> toJson() =>
-      {'rack': rackId, 'startU': startU, 'face': face.name};
+  Map<String, dynamic> toJson() => {
+    'rack': rackId,
+    'startU': startU,
+    'face': face.name,
+    if (half != RackHalf.full) 'half': half.name,
+  };
 
   factory RackSlot.fromJson(Map<String, dynamic> json) => RackSlot(
-        rackId: json['rack']?.toString() ?? '',
-        startU: (json['startU'] as num?)?.toInt() ?? 1,
-        face: json['face']?.toString() == 'rear' ? RackFace.rear : RackFace.front,
-      );
+    rackId: json['rack']?.toString() ?? '',
+    startU: (json['startU'] as num?)?.toInt() ?? 1,
+    face: json['face']?.toString() == 'rear' ? RackFace.rear : RackFace.front,
+    half: rackHalfFromName(json['half']?.toString()),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -703,8 +812,7 @@ List<Offset> routeCable({
     return [start, a, Offset(a.dx, midY), Offset(b.dx, midY), b, end];
   }
   // Mixed: turn once at the corner that keeps both stubs straight.
-  final corner =
-      sN.dy == 0 ? Offset(b.dx, a.dy) : Offset(a.dx, b.dy);
+  final corner = sN.dy == 0 ? Offset(b.dx, a.dy) : Offset(a.dx, b.dy);
   return [start, a, corner, b, end];
 }
 
@@ -774,12 +882,20 @@ class AvFlowModel {
     return null;
   }
 
-  /// Signal types actually present on the canvas — the legend only lists
-  /// what is drawn, so it stays short.
+  /// Signal types the legend can honestly speak for: those with at least one
+  /// run actually drawn in the type's own colour. A run the user recoloured
+  /// by hand is not evidence that "HDMI is blue" on this page.
   List<SignalType> get usedSignals {
-    final used = <SignalType>{for (final c in cables) c.signal};
+    final used = <SignalType>{
+      for (final c in cables)
+        if (!c.hasCustomColor) c.signal,
+    };
     return SignalType.values.where(used.contains).toList();
   }
+
+  /// True when at least one run is drawn off-palette, so the legend can say
+  /// so instead of quietly under-describing the page.
+  bool get hasCustomCableColors => cables.any((c) => c.hasCustomColor);
 
   /// Cables that reference a node or port that no longer exists. The view
   /// drops these from the canvas; the edit panel reports them so a user can

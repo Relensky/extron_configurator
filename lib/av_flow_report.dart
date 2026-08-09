@@ -18,7 +18,9 @@ import 'report_tools.dart';
 /// ============================================================================
 
 List<ReportSection> avReportSections(
-    AppStateProvider provider, AvFlowModel model) {
+  AppStateProvider provider,
+  AvFlowModel model,
+) {
   return [
     _roomSummary(provider, model),
     _cableSchedule(model),
@@ -139,20 +141,26 @@ ReportSection _rackInventory(AvFlowModel model) {
 
   for (final rack in model.racks) {
     for (final face in RackFace.values) {
-      final entries = model.rackSlots.entries
-          .where((e) => e.value.rackId == rack.id && e.value.face == face)
-          .toList()
-        ..sort((a, b) => b.value.startU.compareTo(a.value.startU));
+      final entries =
+          model.rackSlots.entries
+              .where((e) => e.value.rackId == rack.id && e.value.face == face)
+              .toList()
+            ..sort((a, b) => b.value.startU.compareTo(a.value.startU));
 
       for (final entry in entries) {
         final node = byId[entry.key];
         final height = (node?.rackUnits ?? 1).clamp(1, 60);
         final startU = entry.value.startU;
         final endU = startU + height - 1;
+        final half = entry.value.half;
         rows.add([
           rack.name,
           face == RackFace.front ? 'Front' : 'Rear',
           height == 1 ? 'U$startU' : 'U$startU-U$endU',
+          // Which side of the rail matters to whoever mounts it.
+          half == RackHalf.full
+              ? 'Full'
+              : (half == RackHalf.left ? 'Left half' : 'Right half'),
           node?.label ?? entry.key,
           node?.model ?? '',
         ]);
@@ -166,12 +174,19 @@ ReportSection _rackInventory(AvFlowModel model) {
       .where((n) => n.rackUnits > 0 && !model.rackSlots.containsKey(n.id))
       .toList();
   for (final n in unracked) {
-    rows.add(['(not placed)', '', '${n.rackUnits}U', n.label, n.model]);
+    rows.add([
+      '(not placed)',
+      '',
+      '${n.rackUnits}U',
+      n.isHalfRack ? 'Half' : 'Full',
+      n.label,
+      n.model,
+    ]);
   }
 
   return (
     title: 'Rack Inventory',
-    header: ['Rack', 'Face', 'Position', 'Device', 'Model'],
+    header: ['Rack', 'Face', 'Position', 'Width', 'Device', 'Model'],
     rows: rows,
   );
 }

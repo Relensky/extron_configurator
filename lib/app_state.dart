@@ -926,6 +926,7 @@ class AppStateProvider extends ChangeNotifier {
       ports: node.ports,
       fromConfig: node.fromConfig,
       rackUnits: node.rackUnits,
+      rackWidth: node.rackWidth,
       note: node.note,
     );
     avNodes.add(stored);
@@ -1052,11 +1053,17 @@ class AppStateProvider extends ChangeNotifier {
 
   /// True when [startU]..[startU]+[heightU]-1 is free in [rackId] on [face],
   /// ignoring [ignoreNodeId] (the device being moved).
+  ///
+  /// [half] is the side of the rail being claimed: [RackHalf.full] wants the
+  /// whole width, so it clashes with anything overlapping those Us, while two
+  /// half-width devices happily share a U as long as they're on opposite
+  /// sides.
   bool avRackSpanIsFree({
     required String rackId,
     required RackFace face,
     required int startU,
     required int heightU,
+    RackHalf half = RackHalf.full,
     String? ignoreNodeId,
   }) {
     final rack = avRacks.firstWhere((r) => r.id == rackId,
@@ -1071,9 +1078,9 @@ class AppStateProvider extends ChangeNotifier {
       final other = avNodeById(entry.key);
       final otherHeight = (other?.rackUnits ?? 1).clamp(1, 60);
       final otherEnd = slot.startU + otherHeight - 1;
-      if (startU <= otherEnd && slot.startU <= startU + heightU - 1) {
-        return false;
-      }
+      final usOverlap =
+          startU <= otherEnd && slot.startU <= startU + heightU - 1;
+      if (usOverlap && rackHalvesOverlap(half, slot.half)) return false;
     }
     return true;
   }

@@ -55,27 +55,34 @@ class AvDeviceTemplate {
   final String model;
   final String manufacturer;
   final int rackUnits;
+
+  /// Half-width models ("rackWidth": "half") pair up two to a rack unit.
+  final RackWidth rackWidth;
+
   final List<AvPort> ports;
 
   const AvDeviceTemplate({
     required this.model,
     this.manufacturer = '',
     this.rackUnits = 0,
+    this.rackWidth = RackWidth.full,
     required this.ports,
   });
 
   Map<String, dynamic> toJson() => {
-        'model': model,
-        if (manufacturer.isNotEmpty) 'manufacturer': manufacturer,
-        'rackUnits': rackUnits,
-        'ports': ports.map((p) => p.toJson()).toList(),
-      };
+    'model': model,
+    if (manufacturer.isNotEmpty) 'manufacturer': manufacturer,
+    'rackUnits': rackUnits,
+    if (rackWidth != RackWidth.full) 'rackWidth': rackWidth.name,
+    'ports': ports.map((p) => p.toJson()).toList(),
+  };
 
   factory AvDeviceTemplate.fromJson(Map<String, dynamic> json) =>
       AvDeviceTemplate(
         model: json['model']?.toString() ?? '',
         manufacturer: json['manufacturer']?.toString() ?? '',
         rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
+        rackWidth: rackWidthFromName(json['rackWidth']?.toString()),
         ports: [
           for (final p in (json['ports'] as List? ?? []))
             if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
@@ -124,8 +131,12 @@ class AvDeviceLibrary {
     } else {
       candidates.add(path.join(Directory.current.path, 'av_devices.json'));
       try {
-        candidates.add(path.join(
-            File(Platform.resolvedExecutable).parent.path, 'av_devices.json'));
+        candidates.add(
+          path.join(
+            File(Platform.resolvedExecutable).parent.path,
+            'av_devices.json',
+          ),
+        );
       } catch (_) {}
     }
 
@@ -137,7 +148,8 @@ class AvDeviceLibrary {
         final doc = jsonDecode(await file.readAsString());
         if (doc is! Map) {
           throw const FormatException(
-              'Root of av_devices.json must be an object.');
+            'Root of av_devices.json must be an object.',
+          );
         }
         int added = 0;
         for (final d in (doc['devices'] as List? ?? [])) {
@@ -162,15 +174,17 @@ class AvDeviceLibrary {
         }
         library.source = candidate;
         AppLogger.logInfo(
-            'AV device library loaded from $candidate ($added models, '
-            '${library._familyDefaults.length} family defaults).');
+          'AV device library loaded from $candidate ($added models, '
+          '${library._familyDefaults.length} family defaults).',
+        );
         return library;
       } catch (e, stack) {
         AppLogger.logError(
-            'Failed to load av_devices.json from $candidate — using built-in '
-            'defaults.',
-            e,
-            stack);
+          'Failed to load av_devices.json from $candidate — using built-in '
+          'defaults.',
+          e,
+          stack,
+        );
         library.source = 'Built-in defaults (failed to load $candidate: $e)';
         return library;
       }
@@ -201,6 +215,7 @@ class AvDeviceLibrary {
         return AvDeviceTemplate(
           model: model.isEmpty ? entry.key : model,
           rackUnits: entry.value.rackUnits,
+          rackWidth: entry.value.rackWidth,
           ports: entry.value.ports,
         );
       }
@@ -245,126 +260,159 @@ class AvDeviceLibrary {
       );
     }
     if (configKey.startsWith('CAMERADEVICE_')) {
-      return AvDeviceTemplate(model: model, ports: [
-        _videoOut('out_hdmi_1', 'HDMI OUT', SignalType.hdmi),
-        AvPort(
-          id: 'out_usb_1',
-          label: 'USB',
-          signal: SignalType.usbData,
-          direction: PortDirection.output,
-          side: PortSide.right,
-        ),
-        _lan(),
-      ]);
+      return AvDeviceTemplate(
+        model: model,
+        ports: [
+          _videoOut('out_hdmi_1', 'HDMI OUT', SignalType.hdmi),
+          AvPort(
+            id: 'out_usb_1',
+            label: 'USB',
+            signal: SignalType.usbData,
+            direction: PortDirection.output,
+            side: PortSide.right,
+          ),
+          _lan(),
+        ],
+      );
     }
     if (configKey.startsWith('PROJECTORDEVICE_')) {
-      return AvDeviceTemplate(model: model, ports: [
-        _videoIn('in_hdmi_1', 'HDMI 1', SignalType.hdmi),
-        _videoIn('in_hdmi_2', 'HDMI 2', SignalType.hdmi),
-        _videoIn('in_hdbt_1', 'HDBaseT', SignalType.hdbaset),
-        _audioIn('in_aud_1', 'AUDIO IN'),
-        _lan(),
-      ]);
+      return AvDeviceTemplate(
+        model: model,
+        ports: [
+          _videoIn('in_hdmi_1', 'HDMI 1', SignalType.hdmi),
+          _videoIn('in_hdmi_2', 'HDMI 2', SignalType.hdmi),
+          _videoIn('in_hdbt_1', 'HDBaseT', SignalType.hdbaset),
+          _audioIn('in_aud_1', 'AUDIO IN'),
+          _lan(),
+        ],
+      );
     }
     if (configKey.startsWith('DSPDEVICE_')) {
-      return AvDeviceTemplate(model: model, rackUnits: 1, ports: [
-        for (int i = 1; i <= 6; i++) _micIn('in_mic_$i', 'MIC/LINE $i'),
-        for (int i = 1; i <= 4; i++) _audioOut('out_aud_$i', 'OUT $i'),
-        _dante(),
-        _lan(),
-      ]);
+      return AvDeviceTemplate(
+        model: model,
+        rackUnits: 1,
+        ports: [
+          for (int i = 1; i <= 6; i++) _micIn('in_mic_$i', 'MIC/LINE $i'),
+          for (int i = 1; i <= 4; i++) _audioOut('out_aud_$i', 'OUT $i'),
+          _dante(),
+          _lan(),
+        ],
+      );
     }
     if (configKey.startsWith('USBDEVICE_')) {
-      return AvDeviceTemplate(model: model, ports: [
-        for (int i = 1; i <= 2; i++)
+      return AvDeviceTemplate(
+        model: model,
+        ports: [
+          for (int i = 1; i <= 2; i++)
+            AvPort(
+              id: 'in_usb_$i',
+              label: 'HOST $i',
+              signal: SignalType.usbData,
+              direction: PortDirection.input,
+              side: PortSide.left,
+            ),
+          for (int i = 1; i <= 2; i++)
+            AvPort(
+              id: 'out_usb_$i',
+              label: 'DEVICE $i',
+              signal: SignalType.usbData,
+              direction: PortDirection.output,
+              side: PortSide.right,
+            ),
+        ],
+      );
+    }
+    if (configKey.startsWith('MEDIAPORTDEVICE_')) {
+      return AvDeviceTemplate(
+        model: model,
+        ports: [
+          _videoIn('in_hdmi_1', 'HDMI IN', SignalType.hdmi),
+          _audioIn('in_aud_1', 'AUDIO IN'),
           AvPort(
-            id: 'in_usb_$i',
-            label: 'HOST $i',
+            id: 'out_usb_1',
+            label: 'USB OUT',
             signal: SignalType.usbData,
+            direction: PortDirection.output,
+            side: PortSide.right,
+          ),
+          _lan(),
+        ],
+      );
+    }
+    if (configKey.startsWith('WIRELESSDEVICE_')) {
+      return AvDeviceTemplate(
+        model: model,
+        rackUnits: 1,
+        ports: [
+          _videoOut('out_hdmi_1', 'HDMI OUT', SignalType.hdmi),
+          AvPort(
+            id: 'out_usb_1',
+            label: 'USB',
+            signal: SignalType.usbData,
+            direction: PortDirection.bidirectional,
+            side: PortSide.right,
+          ),
+          _lan(),
+        ],
+      );
+    }
+    if (configKey.startsWith('RECORDERDEVICE_')) {
+      return AvDeviceTemplate(
+        model: model,
+        ports: [
+          _videoIn('in_hdmi_1', 'HDMI IN', SignalType.hdmi),
+          _audioIn('in_aud_1', 'AUDIO IN'),
+          _videoOut('out_hdmi_1', 'HDMI OUT', SignalType.hdmi),
+          AvPort(
+            id: 'out_usb_1',
+            label: 'USB OUT',
+            signal: SignalType.usbData,
+            direction: PortDirection.output,
+            side: PortSide.right,
+          ),
+          _lan(),
+        ],
+      );
+    }
+    if (configKey.startsWith('POWERDEVICE_')) {
+      return AvDeviceTemplate(
+        model: model,
+        rackUnits: 1,
+        ports: [
+          for (int i = 1; i <= 8; i++)
+            AvPort(
+              id: 'out_pwr_$i',
+              label: 'OUTLET $i',
+              signal: SignalType.power,
+              direction: PortDirection.output,
+              side: PortSide.right,
+            ),
+          _lan(),
+        ],
+      );
+    }
+    if (configKey.startsWith('SCREENDEVICE_')) {
+      return AvDeviceTemplate(
+        model: model,
+        ports: [
+          AvPort(
+            id: 'in_ctrl_1',
+            label: 'CONTROL',
+            signal: SignalType.serial,
             direction: PortDirection.input,
             side: PortSide.left,
           ),
-        for (int i = 1; i <= 2; i++)
-          AvPort(
-            id: 'out_usb_$i',
-            label: 'DEVICE $i',
-            signal: SignalType.usbData,
-            direction: PortDirection.output,
-            side: PortSide.right,
-          ),
-      ]);
-    }
-    if (configKey.startsWith('MEDIAPORTDEVICE_')) {
-      return AvDeviceTemplate(model: model, ports: [
-        _videoIn('in_hdmi_1', 'HDMI IN', SignalType.hdmi),
-        _audioIn('in_aud_1', 'AUDIO IN'),
-        AvPort(
-          id: 'out_usb_1',
-          label: 'USB OUT',
-          signal: SignalType.usbData,
-          direction: PortDirection.output,
-          side: PortSide.right,
-        ),
-        _lan(),
-      ]);
-    }
-    if (configKey.startsWith('WIRELESSDEVICE_')) {
-      return AvDeviceTemplate(model: model, rackUnits: 1, ports: [
-        _videoOut('out_hdmi_1', 'HDMI OUT', SignalType.hdmi),
-        AvPort(
-          id: 'out_usb_1',
-          label: 'USB',
-          signal: SignalType.usbData,
-          direction: PortDirection.bidirectional,
-          side: PortSide.right,
-        ),
-        _lan(),
-      ]);
-    }
-    if (configKey.startsWith('RECORDERDEVICE_')) {
-      return AvDeviceTemplate(model: model, ports: [
-        _videoIn('in_hdmi_1', 'HDMI IN', SignalType.hdmi),
-        _audioIn('in_aud_1', 'AUDIO IN'),
-        _videoOut('out_hdmi_1', 'HDMI OUT', SignalType.hdmi),
-        AvPort(
-          id: 'out_usb_1',
-          label: 'USB OUT',
-          signal: SignalType.usbData,
-          direction: PortDirection.output,
-          side: PortSide.right,
-        ),
-        _lan(),
-      ]);
-    }
-    if (configKey.startsWith('POWERDEVICE_')) {
-      return AvDeviceTemplate(model: model, rackUnits: 1, ports: [
-        for (int i = 1; i <= 8; i++)
-          AvPort(
-            id: 'out_pwr_$i',
-            label: 'OUTLET $i',
-            signal: SignalType.power,
-            direction: PortDirection.output,
-            side: PortSide.right,
-          ),
-        _lan(),
-      ]);
-    }
-    if (configKey.startsWith('SCREENDEVICE_')) {
-      return AvDeviceTemplate(model: model, ports: [
-        AvPort(
-          id: 'in_ctrl_1',
-          label: 'CONTROL',
-          signal: SignalType.serial,
-          direction: PortDirection.input,
-          side: PortSide.left,
-        ),
-      ]);
+        ],
+      );
     }
     // Unknown family: one in, one out, so it can at least be cabled.
-    return AvDeviceTemplate(model: model, ports: [
-      _videoIn('in_1', 'IN 1', SignalType.hdmi),
-      _videoOut('out_1', 'OUT 1', SignalType.hdmi),
-    ]);
+    return AvDeviceTemplate(
+      model: model,
+      ports: [
+        _videoIn('in_1', 'IN 1', SignalType.hdmi),
+        _videoOut('out_1', 'OUT 1', SignalType.hdmi),
+      ],
+    );
   }
 
   /// Reads an input/output count out of a switcher model name.
@@ -402,60 +450,68 @@ class AvDeviceLibrary {
   // --- port shorthands, so the built-in table stays readable ---------------
 
   static AvPort _videoIn(String id, String label, SignalType s) => AvPort(
-      id: id,
-      label: label,
-      signal: s,
-      direction: PortDirection.input,
-      side: PortSide.left);
+    id: id,
+    label: label,
+    signal: s,
+    direction: PortDirection.input,
+    side: PortSide.left,
+  );
 
   static AvPort _videoOut(String id, String label, SignalType s) => AvPort(
-      id: id,
-      label: label,
-      signal: s,
-      direction: PortDirection.output,
-      side: PortSide.right);
+    id: id,
+    label: label,
+    signal: s,
+    direction: PortDirection.output,
+    side: PortSide.right,
+  );
 
   static AvPort _audioIn(String id, String label) => AvPort(
-      id: id,
-      label: label,
-      signal: SignalType.analogAudio,
-      direction: PortDirection.input,
-      side: PortSide.left);
+    id: id,
+    label: label,
+    signal: SignalType.analogAudio,
+    direction: PortDirection.input,
+    side: PortSide.left,
+  );
 
   static AvPort _audioOut(String id, String label) => AvPort(
-      id: id,
-      label: label,
-      signal: SignalType.analogAudio,
-      direction: PortDirection.output,
-      side: PortSide.right);
+    id: id,
+    label: label,
+    signal: SignalType.analogAudio,
+    direction: PortDirection.output,
+    side: PortSide.right,
+  );
 
   static AvPort _micIn(String id, String label) => AvPort(
-      id: id,
-      label: label,
-      signal: SignalType.micLine,
-      direction: PortDirection.input,
-      side: PortSide.left);
+    id: id,
+    label: label,
+    signal: SignalType.micLine,
+    direction: PortDirection.input,
+    side: PortSide.left,
+  );
 
   static AvPort _usbOut(String id, String label) => AvPort(
-      id: id,
-      label: label,
-      signal: SignalType.usbData,
-      direction: PortDirection.output,
-      side: PortSide.right);
+    id: id,
+    label: label,
+    signal: SignalType.usbData,
+    direction: PortDirection.output,
+    side: PortSide.right,
+  );
 
   static AvPort _dante() => const AvPort(
-      id: 'dante_1',
-      label: 'DANTE',
-      signal: SignalType.dante,
-      direction: PortDirection.bidirectional,
-      side: PortSide.bottom);
+    id: 'dante_1',
+    label: 'DANTE',
+    signal: SignalType.dante,
+    direction: PortDirection.bidirectional,
+    side: PortSide.bottom,
+  );
 
   static AvPort _lan() => const AvPort(
-      id: 'lan_1',
-      label: 'LAN',
-      signal: SignalType.network,
-      direction: PortDirection.bidirectional,
-      side: PortSide.bottom);
+    id: 'lan_1',
+    label: 'LAN',
+    signal: SignalType.network,
+    direction: PortDirection.bidirectional,
+    side: PortSide.bottom,
+  );
 
   // -------------------------------------------------------------------------
   //  BUILT-IN MODELS
@@ -595,17 +651,19 @@ class AvDeviceLibrary {
       manufacturer: 'iGen',
       ports: [
         AvPort(
-            id: 'in_usb_1',
-            label: 'HOST 1',
-            signal: SignalType.usbData,
-            direction: PortDirection.input,
-            side: PortSide.left),
+          id: 'in_usb_1',
+          label: 'HOST 1',
+          signal: SignalType.usbData,
+          direction: PortDirection.input,
+          side: PortSide.left,
+        ),
         AvPort(
-            id: 'in_usb_2',
-            label: 'HOST 2',
-            signal: SignalType.usbData,
-            direction: PortDirection.input,
-            side: PortSide.left),
+          id: 'in_usb_2',
+          label: 'HOST 2',
+          signal: SignalType.usbData,
+          direction: PortDirection.input,
+          side: PortSide.left,
+        ),
         _usbOut('out_usb_1', 'DEVICE OUT'),
       ],
     ),
@@ -673,11 +731,12 @@ class AvDeviceLibrary {
       ports: [
         for (int i = 1; i <= 8; i++)
           AvPort(
-              id: 'out_pwr_$i',
-              label: 'OUTLET $i',
-              signal: SignalType.power,
-              direction: PortDirection.output,
-              side: PortSide.right),
+            id: 'out_pwr_$i',
+            label: 'OUTLET $i',
+            signal: SignalType.power,
+            direction: PortDirection.output,
+            side: PortSide.right,
+          ),
         _lan(),
       ],
     ),
@@ -686,11 +745,12 @@ class AvDeviceLibrary {
       manufacturer: 'Extron',
       ports: [
         AvPort(
-            id: 'in_ctrl_1',
-            label: 'CONTROL',
-            signal: SignalType.serial,
-            direction: PortDirection.input,
-            side: PortSide.left),
+          id: 'in_ctrl_1',
+          label: 'CONTROL',
+          signal: SignalType.serial,
+          direction: PortDirection.input,
+          side: PortSide.left,
+        ),
       ],
     ),
 
@@ -717,11 +777,12 @@ class AvDeviceLibrary {
         _videoOut('out_hdmi_1', 'HDMI', SignalType.hdmi),
         _videoOut('out_dp_1', 'DisplayPort', SignalType.displayPort),
         AvPort(
-            id: 'in_usb_1',
-            label: 'USB',
-            signal: SignalType.usbData,
-            direction: PortDirection.input,
-            side: PortSide.left),
+          id: 'in_usb_1',
+          label: 'USB',
+          signal: SignalType.usbData,
+          direction: PortDirection.input,
+          side: PortSide.left,
+        ),
         _lan(),
       ],
     ),
@@ -746,28 +807,31 @@ class AvDeviceLibrary {
         _audioIn('in_aud_1', 'LINE IN L'),
         _audioIn('in_aud_2', 'LINE IN R'),
         AvPort(
-            id: 'out_spk_1',
-            label: 'SPKR OUT L',
-            signal: SignalType.speaker,
-            direction: PortDirection.output,
-            side: PortSide.right),
+          id: 'out_spk_1',
+          label: 'SPKR OUT L',
+          signal: SignalType.speaker,
+          direction: PortDirection.output,
+          side: PortSide.right,
+        ),
         AvPort(
-            id: 'out_spk_2',
-            label: 'SPKR OUT R',
-            signal: SignalType.speaker,
-            direction: PortDirection.output,
-            side: PortSide.right),
+          id: 'out_spk_2',
+          label: 'SPKR OUT R',
+          signal: SignalType.speaker,
+          direction: PortDirection.output,
+          side: PortSide.right,
+        ),
       ],
     ),
     AvDeviceTemplate(
       model: 'Speaker',
       ports: [
         AvPort(
-            id: 'in_spk_1',
-            label: 'SPKR IN',
-            signal: SignalType.speaker,
-            direction: PortDirection.input,
-            side: PortSide.left),
+          id: 'in_spk_1',
+          label: 'SPKR IN',
+          signal: SignalType.speaker,
+          direction: PortDirection.input,
+          side: PortSide.left,
+        ),
       ],
     ),
     AvDeviceTemplate(
@@ -783,11 +847,12 @@ class AvDeviceLibrary {
       ports: [
         for (int i = 1; i <= 8; i++)
           AvPort(
-              id: 'lan_$i',
-              label: 'PORT $i',
-              signal: SignalType.network,
-              direction: PortDirection.bidirectional,
-              side: i <= 4 ? PortSide.left : PortSide.right),
+            id: 'lan_$i',
+            label: 'PORT $i',
+            signal: SignalType.network,
+            direction: PortDirection.bidirectional,
+            side: i <= 4 ? PortSide.left : PortSide.right,
+          ),
       ],
     ),
     AvDeviceTemplate(
@@ -796,11 +861,12 @@ class AvDeviceLibrary {
       ports: [
         for (int i = 1; i <= 12; i++)
           AvPort(
-              id: 'p_$i',
-              label: 'P$i',
-              signal: SignalType.network,
-              direction: PortDirection.bidirectional,
-              side: i <= 6 ? PortSide.left : PortSide.right),
+            id: 'p_$i',
+            label: 'P$i',
+            signal: SignalType.network,
+            direction: PortDirection.bidirectional,
+            side: i <= 6 ? PortSide.left : PortSide.right,
+          ),
       ],
     ),
   ];

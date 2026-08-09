@@ -131,6 +131,104 @@ void main() {
     expect(node.rackUnits, 3);
   });
 
+  testWidgets('every port row control is reachable, including delete', (
+    tester,
+  ) async {
+    final provider = seeded();
+    await pumpTab(tester, provider);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('av_edit_SWITCHERDEVICE_1')));
+    await tester.pumpAndSettle();
+
+    // Regression: the row's fixed widths added up to more than the dialog, so
+    // the delete button sat past the right edge — rendered, but off-screen and
+    // impossible to click. An overflow shows up as an exception here.
+    expect(tester.takeException(), isNull);
+
+    final deletes = find.widgetWithIcon(IconButton, Icons.delete_outline);
+    expect(deletes, findsNWidgets(2)); // one per port
+
+    await tester.tap(deletes.first);
+    await tester.pumpAndSettle();
+    expect(
+      find.widgetWithIcon(IconButton, Icons.delete_outline),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final node = provider.avNodeById('SWITCHERDEVICE_1')!;
+    expect(node.ports.length, 1);
+    expect(node.ports.single.id, 'out_hdmi_1');
+  });
+
+  testWidgets('deleting a port takes the cable plugged into it', (
+    tester,
+  ) async {
+    final provider = seeded();
+    provider.addAvCable(
+      fromNodeId: 'SWITCHERDEVICE_1',
+      fromPortId: 'out_hdmi_1',
+      toNodeId: 'PROJECTORDEVICE_1',
+      toPortId: 'in_hdmi_1',
+      signal: SignalType.hdmi,
+    );
+    await pumpTab(tester, provider);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('av_edit_SWITCHERDEVICE_1')));
+    await tester.pumpAndSettle();
+
+    // Second row is HDMI OUT, the cabled one.
+    await tester.tap(
+      find.widgetWithIcon(IconButton, Icons.delete_outline).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(provider.avCables, isEmpty);
+  });
+
+  testWidgets('a cable can be recoloured away from its signal type', (
+    tester,
+  ) async {
+    final provider = seeded();
+    provider.addAvCable(
+      fromNodeId: 'SWITCHERDEVICE_1',
+      fromPortId: 'out_hdmi_1',
+      toNodeId: 'PROJECTORDEVICE_1',
+      toPortId: 'in_hdmi_1',
+      signal: SignalType.hdmi,
+    );
+    await pumpTab(tester, provider);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('av_cable_edit_C1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Following the signal type'), findsOneWidget);
+
+    // Red, which is nothing like HDMI's blue.
+    await tester.tap(find.byKey(const ValueKey('cable_color_ef5350')));
+    await tester.pumpAndSettle();
+    expect(find.text('Custom for this run'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final cable = provider.avCables.single;
+    expect(cable.hasCustomColor, isTrue);
+    expect(cable.color, isNot(kSignalColors[SignalType.hdmi]));
+  });
+
   testWidgets('the cable dialog opens from the cable list', (tester) async {
     final provider = seeded();
     provider.addAvCable(
