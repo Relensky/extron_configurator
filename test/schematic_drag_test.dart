@@ -126,4 +126,32 @@ void main() {
 
     expect(provider.schematicPositions, isEmpty);
   });
+
+  testWidgets('the tab is called Control Schematic', (tester) async {
+    final provider = roomWithOneProjector();
+    await pumpTab(tester, provider);
+
+    expect(find.text('Control Schematic'), findsOneWidget);
+    expect(find.text('Room Schematic'), findsNothing);
+  });
+
+  testWidgets('the legend sits below the lowest box, not over it', (
+    tester,
+  ) async {
+    final provider = roomWithOneProjector();
+    await pumpTab(tester, provider);
+
+    // The legend's first entry names the network row; find the box that sits
+    // lowest and check the key clears it.
+    final legend = find.text('Network (via IDF)');
+    expect(legend, findsOneWidget);
+
+    final legendTop = tester.getTopLeft(legend).dy;
+    final projectorBottom = tester.getBottomLeft(find.text('Projector 1')).dy;
+    expect(
+      legendTop,
+      greaterThan(projectorBottom),
+      reason: 'the legend must clear the diagram rather than overlap it',
+    );
+  });
 }

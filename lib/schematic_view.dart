@@ -13,9 +13,12 @@ import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
-///  ROOM SCHEMATIC TAB
+///  CONTROL SCHEMATIC TAB
 /// ============================================================================
-///  Auto-draws the room's control topology from the loaded config:
+///  Auto-draws the room's CONTROL topology from the loaded config — how each
+///  device talks to the processor. The signal path (what plugs into what) is
+///  the AV Flow tab's job; these two are deliberately separate documents.
+///
 ///    * every active device block (same dev_ count logic as the Devices tab)
 ///      becomes a node with a device-type icon
 ///    * Network devices (com_type "Network") connect to a Network IDF node,
@@ -557,12 +560,13 @@ class _SchematicViewState extends State<SchematicView> {
   Future<void> _exportPng(AppStateProvider provider) async {
     final bytes = await captureBoundary(_diagramKey, pixelRatio: 2.0);
     if (bytes == null) {
-      _snack('Could not render the schematic to an image.', error: true);
+      _snack('Could not render the control schematic to an image.',
+          error: true);
       return;
     }
     String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save Schematic Image',
-      fileName: '${_fileStem(provider, 'schematic')}.png',
+      dialogTitle: 'Save Control Schematic Image',
+      fileName: '${_fileStem(provider, 'control_schematic')}.png',
       type: FileType.custom,
       allowedExtensions: ['png'],
     );
@@ -570,7 +574,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
     try {
       await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(provider, 'Schematic image', outputFile);
+      _savedSnack(provider, 'Control schematic image', outputFile);
     } catch (e) {
       _snack('Failed to save image: $e', error: true);
     }
@@ -821,7 +825,7 @@ class _SchematicViewState extends State<SchematicView> {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('Room Schematic',
+          Text('Control Schematic',
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(width: 12),
           FilterChip(
@@ -917,9 +921,18 @@ class _SchematicViewState extends State<SchematicView> {
     final surface = theme.brightness == Brightness.dark
         ? const Color(0xFF15181C)
         : const Color(0xFFFAFAFA);
+    // The legend sits BELOW the diagram rather than floating over the
+    // bottom-left corner, where it covered whatever box happened to be
+    // there. The canvas grows to make room for it.
+    final contentBottom = model.nodes.fold<double>(
+        0, (m, n) => math.max(m, n.pos.dy + kNodeHeight));
+    final legendTop = contentBottom + 28;
+    final canvasHeight = math.max(
+        model.canvasSize.height, legendTop + kLegendHeight + 20);
+
     return Container(
       width: model.canvasSize.width,
-      height: model.canvasSize.height,
+      height: canvasHeight,
       color: surface,
       child: Stack(
         children: [
@@ -934,7 +947,7 @@ class _SchematicViewState extends State<SchematicView> {
             left: 24,
             top: 16,
             child: Text(
-              model.roomTitle.isEmpty ? 'Room Schematic' : model.roomTitle,
+              model.roomTitle.isEmpty ? 'Control Schematic' : model.roomTitle,
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
@@ -971,8 +984,8 @@ class _SchematicViewState extends State<SchematicView> {
                 ),
               ),
             ),
-          // Legend bottom-left (also part of the PNG export).
-          Positioned(left: 16, bottom: 12, child: _Legend(theme: theme)),
+          // Legend under the diagram (also part of the PNG export).
+          Positioned(left: 16, top: legendTop, child: _Legend(theme: theme)),
         ],
       ),
     );
@@ -1135,6 +1148,11 @@ class _SchematicViewState extends State<SchematicView> {
     );
   }
 }
+
+/// How tall [_Legend] is, so the canvas can reserve room for it beneath the
+/// diagram. An estimate: one row per connection type, plus the container's
+/// own padding. Over-shooting just leaves a little blank canvas.
+const double kLegendHeight = 16 + 5 * 18.0;
 
 /// One device/processor/IDF box.
 class _NodeBox extends StatelessWidget {

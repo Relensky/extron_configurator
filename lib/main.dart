@@ -341,12 +341,12 @@ class _MainDashboardState extends State<MainDashboard> {
     final bool? loadSaved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Saved schematic found'),
+        title: const Text('Saved control schematic found'),
         content: Text(
-            'This config has a saved schematic beside it:\n\n'
+            'This config has a saved control schematic beside it:\n\n'
             '${provider.schematicSidecarPath}\n\n'
-            'You also have a schematic arranged in this session. Load the '
-            'saved one, or discard it and keep yours?'),
+            'You also have a control schematic arranged in this session. '
+            'Load the saved one, or discard it and keep yours?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -354,7 +354,7 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Load saved schematic'),
+            child: const Text('Load saved control schematic'),
           ),
         ],
       ),

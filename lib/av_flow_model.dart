@@ -892,6 +892,7 @@ List<Offset> routeCable({
   required AvNode toNode,
   required AvCable cable,
   double lane = 0,
+  List<Rect> obstacles = const [],
 }) {
   final start = fromNode.anchorOf(cable.fromPortId);
   final end = toNode.anchorOf(cable.toPortId);
@@ -906,21 +907,125 @@ List<Offset> routeCable({
   final a = start + Offset(sN.dx * stub, sN.dy * stub);
   final b = end + Offset(eN.dx * stub, eN.dy * stub);
 
+  bool clear(List<Offset> route) => !polylineHitsAny(route, obstacles);
+
   // Both stubs horizontal (the common case: output right -> input left).
   if (sN.dy == 0 && eN.dy == 0) {
-    if ((a.dy - b.dy).abs() < 1) return [start, a, b, end];
-    final midX = (a.dx + b.dx) / 2 + lane;
-    return [start, a, Offset(midX, a.dy), Offset(midX, b.dy), b, end];
+    if ((a.dy - b.dy).abs() < 1) {
+      final direct = [start, a, b, end];
+      if (clear(direct)) return direct;
+    }
+    // Slide the vertical leg sideways until it misses whatever is in the
+    // way. The ideal lane is tried first, so an unobstructed diagram routes
+    // exactly as before.
+    final ideal = (a.dx + b.dx) / 2 + lane;
+    for (final shift in _kDetourShifts) {
+      final midX = ideal + shift;
+      final route = [start, a, Offset(midX, a.dy), Offset(midX, b.dy), b, end];
+      if (clear(route)) return route;
+    }
+    // Nothing sideways worked: go over or under the whole obstruction.
+    final band = _clearBand(obstacles, a, b, horizontal: true);
+    if (band != null) {
+      final route = [
+        start,
+        a,
+        Offset(a.dx, band),
+        Offset(b.dx, band),
+        b,
+        end,
+      ];
+      if (clear(route)) return route;
+    }
+    return [start, a, Offset(ideal, a.dy), Offset(ideal, b.dy), b, end];
   }
+
   // Both stubs vertical.
   if (sN.dx == 0 && eN.dx == 0) {
-    if ((a.dx - b.dx).abs() < 1) return [start, a, b, end];
-    final midY = (a.dy + b.dy) / 2 + lane;
-    return [start, a, Offset(a.dx, midY), Offset(b.dx, midY), b, end];
+    if ((a.dx - b.dx).abs() < 1) {
+      final direct = [start, a, b, end];
+      if (clear(direct)) return direct;
+    }
+    final ideal = (a.dy + b.dy) / 2 + lane;
+    for (final shift in _kDetourShifts) {
+      final midY = ideal + shift;
+      final route = [start, a, Offset(a.dx, midY), Offset(b.dx, midY), b, end];
+      if (clear(route)) return route;
+    }
+    final band = _clearBand(obstacles, a, b, horizontal: false);
+    if (band != null) {
+      final route = [
+        start,
+        a,
+        Offset(band, a.dy),
+        Offset(band, b.dy),
+        b,
+        end,
+      ];
+      if (clear(route)) return route;
+    }
+    return [start, a, Offset(a.dx, ideal), Offset(b.dx, ideal), b, end];
   }
-  // Mixed: turn once at the corner that keeps both stubs straight.
+
+  // Mixed: turn once at the corner that keeps both stubs straight, and take
+  // the other corner when the first one cuts through something.
   final corner = sN.dy == 0 ? Offset(b.dx, a.dy) : Offset(a.dx, b.dy);
-  return [start, a, corner, b, end];
+  final first = [start, a, corner, b, end];
+  if (clear(first)) return first;
+  final other = sN.dy == 0 ? Offset(a.dx, b.dy) : Offset(b.dx, a.dy);
+  final second = [start, a, other, b, end];
+  if (clear(second)) return second;
+  return first;
+}
+
+/// How far sideways the router will slide a leg looking for a clear line,
+/// nearest first so a diagram that doesn't need detours never gets one.
+const List<double> _kDetourShifts = [
+  0, 30, -30, 60, -60, 100, -100, 150, -150, 210, -210,
+];
+
+/// A coordinate just outside every obstacle between [a] and [b] — the lane a
+/// cable can take to get over or under (or left or right of) the whole
+/// obstruction in one go. Returns the nearer of the two sides.
+double? _clearBand(
+  List<Rect> obstacles,
+  Offset a,
+  Offset b, {
+  required bool horizontal,
+}) {
+  if (obstacles.isEmpty) return null;
+  const margin = 26.0;
+
+  double lo = double.infinity, hi = -double.infinity;
+  for (final r in obstacles) {
+    lo = math.min(lo, horizontal ? r.top : r.left);
+    hi = math.max(hi, horizontal ? r.bottom : r.right);
+  }
+  if (lo == double.infinity) return null;
+
+  final over = lo - margin;
+  final under = hi + margin;
+  final from = horizontal ? a.dy : a.dx;
+  final to = horizontal ? b.dy : b.dx;
+  final mid = (from + to) / 2;
+  return (mid - over).abs() <= (mid - under).abs() ? over : under;
+}
+
+/// True when any leg of [route] crosses any of [obstacles]. Sampled along
+/// each segment — cheap, and box-sized obstacles don't need better.
+bool polylineHitsAny(List<Offset> route, List<Rect> obstacles) {
+  if (obstacles.isEmpty) return false;
+  for (int i = 0; i < route.length - 1; i++) {
+    final p = route[i], q = route[i + 1];
+    final steps = math.max(8, ((q - p).distance / 8).ceil());
+    for (int s = 0; s <= steps; s++) {
+      final point = Offset.lerp(p, q, s / steps)!;
+      for (final r in obstacles) {
+        if (r.contains(point)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 /// Assigns each cable a lane offset so runs sharing the same corridor are

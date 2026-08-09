@@ -801,6 +801,13 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     final byId = model.nodesById;
     final lanes = assignCableLanes(model.cables, byId);
+
+    // Every device is an obstacle, inflated a little so cables don't graze
+    // the boxes. A run's own two endpoints are excluded — it has to reach
+    // them.
+    final boxes = {
+      for (final n in model.nodes) n.id: n.rect.inflate(10),
+    };
     _paths = {
       for (final c in model.cables)
         c.id: routeCable(
@@ -808,8 +815,29 @@ class _AvFlowViewState extends State<AvFlowView> {
           toNode: byId[c.toNodeId]!,
           cable: c,
           lane: lanes[c.id] ?? 0,
+          obstacles: [
+            for (final e in boxes.entries)
+              if (e.key != c.fromNodeId && e.key != c.toNodeId) e.value,
+          ],
         ),
     };
+
+    // The legend sits BELOW everything rather than floating over the
+    // bottom-left corner, where it covered whatever device happened to be
+    // there. The canvas grows to make room for it.
+    final contentBottom = model.nodes.fold<double>(
+      0,
+      (m, n) => math.max(m, n.pos.dy + n.height),
+    );
+    final legendTop = contentBottom + 28;
+    final legendHeight = avLegendHeight(
+      model.usedSignals.length,
+      model.hasCustomCableColors,
+    );
+    final canvasHeight = math.max(
+      model.canvasSize.height,
+      legendTop + legendHeight + 20,
+    );
 
     final pendingPort = _pendingPort == null
         ? null
@@ -817,7 +845,7 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     return Container(
       width: model.canvasSize.width,
-      height: model.canvasSize.height,
+      height: canvasHeight,
       color: surface,
       child: Stack(
         children: [
@@ -885,11 +913,11 @@ class _AvFlowViewState extends State<AvFlowView> {
           // always be grabbed.
           if (_editMode && _selectedCableId != null)
             ..._buildWaypointHandles(provider, model),
-          // Legend bottom-left (also part of the PNG export).
+          // Legend under the diagram (also part of the PNG export).
           if (model.usedSignals.isNotEmpty || model.hasCustomCableColors)
             Positioned(
               left: 16,
-              bottom: 12,
+              top: legendTop,
               child: _AvLegend(
                 signals: model.usedSignals,
                 hasCustomColors: model.hasCustomCableColors,
@@ -2678,6 +2706,22 @@ class _CablePainter extends CustomPainter {
 // ---------------------------------------------------------------------------
 //  LEGEND
 // ---------------------------------------------------------------------------
+
+/// How tall [_AvLegend] will be, so the canvas can reserve room underneath
+/// the diagram for it. An estimate rather than a measurement — over-shooting
+/// leaves a little blank canvas, which is harmless; the widget itself still
+/// lays out naturally.
+double avLegendHeight(int signalCount, bool hasCustomColors) {
+  const padding = 16.0; // 8 top + 8 bottom
+  const title = 18.0;
+  const rowHeight = 16.0;
+  const customNote = 18.0;
+  return padding +
+      title +
+      4 +
+      signalCount * rowHeight +
+      (hasCustomColors ? customNote : 0);
+}
 
 /// Lists only the signal types actually on the canvas, so it stays short.
 class _AvLegend extends StatelessWidget {
