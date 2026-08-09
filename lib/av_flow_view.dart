@@ -38,7 +38,7 @@ import 'xlsx_writer.dart';
 ///  elevations. Exports: the diagram as a PNG, and a cable schedule + pack
 ///  list as .xlsx / .txt / clipboard.
 ///
-///  Persists to `<config>_avflow.json` beside the working config — see the
+///  Persists to `<config>_av_flow.json` beside the working config — see the
 ///  AV FLOW TAB STATE block in app_state.dart.
 /// ============================================================================
 
@@ -824,11 +824,19 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     // The legend sits BELOW everything rather than floating over the
     // bottom-left corner, where it covered whatever device happened to be
-    // there. The canvas grows to make room for it.
-    final contentBottom = model.nodes.fold<double>(
-      0,
-      (m, n) => math.max(m, n.pos.dy + n.height),
-    );
+    // there. "Everything" has to include the CABLES, not just the boxes: a
+    // run detouring under the diagram, or one with a bend dragged low, can
+    // reach further down than any device. Recomputed every build, so it
+    // keeps clear while a device is being dragged.
+    double contentBottom = 0;
+    for (final n in model.nodes) {
+      contentBottom = math.max(contentBottom, n.pos.dy + n.height);
+    }
+    for (final route in _paths.values) {
+      for (final point in route) {
+        contentBottom = math.max(contentBottom, point.dy);
+      }
+    }
     final legendTop = contentBottom + 28;
     final legendHeight = avLegendHeight(
       model.usedSignals.length,
@@ -2623,11 +2631,36 @@ class _CablePainter extends CustomPainter {
     return true;
   }
 
+  /// The route as a path with its corners rounded off, so a cable reads as
+  /// sweeping around an obstacle rather than hitting a hard right angle.
+  /// The radius shrinks on short legs so a tight detour still draws cleanly.
   static Path _polyline(List<Offset> points) {
     final p = Path()..moveTo(points.first.dx, points.first.dy);
-    for (int i = 1; i < points.length; i++) {
-      p.lineTo(points[i].dx, points[i].dy);
+    if (points.length < 3) {
+      for (int i = 1; i < points.length; i++) {
+        p.lineTo(points[i].dx, points[i].dy);
+      }
+      return p;
     }
+
+    const maxRadius = 10.0;
+    for (int i = 1; i < points.length - 1; i++) {
+      final prev = points[i - 1], corner = points[i], next = points[i + 1];
+      final inLen = (corner - prev).distance;
+      final outLen = (next - corner).distance;
+      // Never eat more than half of either leg, or neighbouring corners
+      // would overlap and the line would visibly cut the turn.
+      final r = math.min(maxRadius, math.min(inLen, outLen) / 2);
+      if (r < 0.5) {
+        p.lineTo(corner.dx, corner.dy);
+        continue;
+      }
+      final start = corner + (prev - corner) / inLen * r;
+      final end = corner + (next - corner) / outLen * r;
+      p.lineTo(start.dx, start.dy);
+      p.quadraticBezierTo(corner.dx, corner.dy, end.dx, end.dy);
+    }
+    p.lineTo(points.last.dx, points.last.dy);
     return p;
   }
 

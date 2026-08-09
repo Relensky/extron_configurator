@@ -659,7 +659,8 @@ class AppStateProvider extends ChangeNotifier {
   //  Node positions dragged in edit mode and user-drawn connection lines.
   //  Held here (not in the view) so edits survive tab switches; persisted
   //  on demand to a sidecar file next to the working config
-  //  ("<config>_schematic.json") via saveSchematicLayout, and re-loaded as
+  //  ("<config>_control_schematic.json") via saveSchematicLayout, and
+  //  re-loaded as
   //  soon as that config is opened (the saved diagram belongs to the file, so
   //  it comes back with it). When the session already has a diagram of its
   //  own, the UI asks first — see schematicLayoutNeedsChoice.
@@ -730,7 +731,29 @@ class AppStateProvider extends ChangeNotifier {
     if (currentConfigPath.isEmpty) return '';
     final dir = path.dirname(currentConfigPath);
     final base = path.basenameWithoutExtension(currentConfigPath);
+    return path.join(dir, '${base}_control_schematic.json');
+  }
+
+  /// The name this sidecar used before the tab was renamed to Control
+  /// Schematic. Rooms documented with an older build still have one of these
+  /// sitting next to the config, so it is read when the new name is absent
+  /// and removed once the layout has been written under the new name — see
+  /// [loadSchematicLayoutForCurrentConfig] and [saveSchematicLayout].
+  String get legacySchematicSidecarPath {
+    if (currentConfigPath.isEmpty) return '';
+    final dir = path.dirname(currentConfigPath);
+    final base = path.basenameWithoutExtension(currentConfigPath);
     return path.join(dir, '${base}_schematic.json');
+  }
+
+  /// Where the layout should actually be READ from: the current name when it
+  /// exists, otherwise the old one. Empty when neither is there.
+  String get _readableSchematicSidecar {
+    final current = schematicSidecarPath;
+    if (current.isNotEmpty && File(current).existsSync()) return current;
+    final legacy = legacySchematicSidecarPath;
+    if (legacy.isNotEmpty && File(legacy).existsSync()) return legacy;
+    return '';
   }
 
   /// True when the in-memory diagram holds anything the user arranged by hand
@@ -741,11 +764,9 @@ class AppStateProvider extends ChangeNotifier {
       schematicLinks.isNotEmpty ||
       schematicHiddenEdges.isNotEmpty;
 
-  /// True when a `<config>_schematic.json` sits next to the working config.
-  bool get hasSavedSchematicLayout {
-    final sidecar = schematicSidecarPath;
-    return sidecar.isNotEmpty && File(sidecar).existsSync();
-  }
+  /// True when a saved control schematic sits next to the working config,
+  /// under either the current name or the pre-rename one.
+  bool get hasSavedSchematicLayout => _readableSchematicSidecar.isNotEmpty;
 
   /// True when the config that was just opened needs the user's call on the
   /// diagram: they arranged one in this session AND the file has its own saved
@@ -793,8 +814,11 @@ class AppStateProvider extends ChangeNotifier {
     // Notify in every path — the tab has already built by the time this runs
     // (post-frame), so without it a loaded sidecar wouldn't show until the
     // next unrelated rebuild.
-    final sidecar = schematicSidecarPath;
-    if (sidecar.isEmpty || !File(sidecar).existsSync()) {
+    // Reads whichever name is actually on disk, so a room documented before
+    // the rename opens untouched. Nothing is moved here — a read should not
+    // rewrite the user's folder; the file moves on the next save.
+    final sidecar = _readableSchematicSidecar;
+    if (sidecar.isEmpty) {
       notifyListeners();
       return;
     }
@@ -830,10 +854,16 @@ class AppStateProvider extends ChangeNotifier {
       if (hidden is List) {
         schematicHiddenEdges.addAll(hidden.map((e) => e.toString()));
       }
-      AppLogger.logInfo('Schematic layout loaded from $sidecar '
-          '(${schematicPositions.length} positions, ${schematicLinks.length} lines).');
+      AppLogger.logInfo(
+          'Control schematic loaded from $sidecar '
+          '(${schematicPositions.length} positions, '
+          '${schematicLinks.length} lines)'
+          '${sidecar == legacySchematicSidecarPath ? ' — pre-rename file; it '
+              'moves to ${path.basename(schematicSidecarPath)} on the next '
+              'Save Layout.' : '.'}');
     } catch (e) {
-      AppLogger.logError('Failed to load schematic layout from $sidecar', e);
+      AppLogger.logError(
+          'Failed to load the control schematic from $sidecar', e);
     }
     notifyListeners();
   }
@@ -846,16 +876,42 @@ class AppStateProvider extends ChangeNotifier {
     try {
       const encoder = JsonEncoder.withIndent('  ');
       await File(sidecar).writeAsString(encoder.convert({
-        '__readme': 'Schematic tab layout for the Room Config Builder: '
-            'dragged node positions and user-drawn connection lines.',
+        '__readme': 'Control Schematic tab layout for the Room Config '
+            'Builder: dragged node positions and user-drawn connection '
+            'lines. (Before the tab was renamed this file was called '
+            '<config>_schematic.json.)',
         'positions': schematicPositions
             .map((id, p) => MapEntry(id, [p.dx, p.dy])),
         'links': schematicLinks,
         'hiddenEdges': schematicHiddenEdges.toList(),
       }));
+
+      // The write succeeded, so the pre-rename file is now a stale duplicate
+      // that would quietly diverge from this one. Retire it — but only ever
+      // AFTER the new file is safely on disk, and never if the two paths are
+      // somehow the same.
+      final legacy = legacySchematicSidecarPath;
+      if (legacy.isNotEmpty && legacy != sidecar) {
+        final old = File(legacy);
+        if (old.existsSync()) {
+          try {
+            await old.delete();
+            AppLogger.logInfo(
+                'Control schematic moved to ${path.basename(sidecar)}; '
+                'removed the old ${path.basename(legacy)}.');
+          } catch (e) {
+            // Not fatal: the layout is saved either way, and the loader
+            // prefers the new name from here on.
+            AppLogger.logError(
+                'Saved the control schematic, but could not remove the old '
+                '$legacy', e);
+          }
+        }
+      }
       return sidecar;
     } catch (e, stack) {
-      AppLogger.logError('Failed to save schematic layout to $sidecar', e, stack);
+      AppLogger.logError(
+          'Failed to save the control schematic to $sidecar', e, stack);
       return '';
     }
   }
@@ -869,7 +925,7 @@ class AppStateProvider extends ChangeNotifier {
   //  elevations all live here and nowhere else. Seeding from the config's
   //  device list is a convenience on first visit, not a source of truth.
   //
-  //  Persists to "<config>_avflow.json" beside the working config, on the
+  //  Persists to "<config>_av_flow.json" beside the working config, on the
   //  same terms as the schematic sidecar: written on demand by Save, read
   //  back whenever that config is opened, and the user is asked first when
   //  both a session diagram and a saved file exist (avFlowNeedsChoice).
@@ -1252,17 +1308,35 @@ class AppStateProvider extends ChangeNotifier {
     if (currentConfigPath.isEmpty) return '';
     final dir = path.dirname(currentConfigPath);
     final base = path.basenameWithoutExtension(currentConfigPath);
+    return path.join(dir, '${base}_av_flow.json');
+  }
+
+  /// The name this sidecar used before it was brought in line with
+  /// `<config>_control_schematic.json`. Read when the current name is absent,
+  /// and retired once the diagram has been written under the new one.
+  String get legacyAvFlowSidecarPath {
+    if (currentConfigPath.isEmpty) return '';
+    final dir = path.dirname(currentConfigPath);
+    final base = path.basenameWithoutExtension(currentConfigPath);
     return path.join(dir, '${base}_avflow.json');
+  }
+
+  /// Where the AV diagram should actually be READ from: the current name when
+  /// it exists, otherwise the old one. Empty when neither is there.
+  String get _readableAvFlowSidecar {
+    final current = avFlowSidecarPath;
+    if (current.isNotEmpty && File(current).existsSync()) return current;
+    final legacy = legacyAvFlowSidecarPath;
+    if (legacy.isNotEmpty && File(legacy).existsSync()) return legacy;
+    return '';
   }
 
   /// True when the session holds an AV diagram worth protecting.
   bool get hasAvFlow =>
       avNodes.isNotEmpty || avCables.isNotEmpty || avRacks.isNotEmpty;
 
-  bool get hasSavedAvFlow {
-    final sidecar = avFlowSidecarPath;
-    return sidecar.isNotEmpty && File(sidecar).existsSync();
-  }
+  /// True under either the current name or the pre-rename one.
+  bool get hasSavedAvFlow => _readableAvFlowSidecar.isNotEmpty;
 
   /// Same prompt rule as [schematicLayoutNeedsChoice]: only ask when the
   /// session has its own diagram AND the opened config has one saved.
@@ -1301,8 +1375,11 @@ class AppStateProvider extends ChangeNotifier {
   /// config (blank when there is no sidecar).
   void loadAvFlowForCurrentConfig() {
     _resetAvFlow();
-    final sidecar = avFlowSidecarPath;
-    if (sidecar.isEmpty || !File(sidecar).existsSync()) {
+    // Reads whichever name is on disk, so a room documented before the
+    // rename opens untouched. Nothing is moved here — a read should not
+    // rewrite the user's folder; the file moves on the next save.
+    final sidecar = _readableAvFlowSidecar;
+    if (sidecar.isEmpty) {
       notifyListeners();
       return;
     }
@@ -1373,8 +1450,12 @@ class AppStateProvider extends ChangeNotifier {
         }
       }
 
-      AppLogger.logInfo('AV flow loaded from $sidecar (${avNodes.length} '
-          'devices, ${avCables.length} cables, ${avRacks.length} racks).');
+      AppLogger.logInfo(
+          'AV flow loaded from $sidecar (${avNodes.length} devices, '
+          '${avCables.length} cables, ${avRacks.length} racks)'
+          '${sidecar == legacyAvFlowSidecarPath ? ' — pre-rename file; it '
+              'moves to ${path.basename(avFlowSidecarPath)} on the next '
+              'Save AV Flow.' : '.'}');
     } catch (e) {
       AppLogger.logError('Failed to load AV flow from $sidecar', e);
     }
@@ -1403,6 +1484,28 @@ class AppStateProvider extends ChangeNotifier {
                 .padLeft(6, '0'),
         },
       }));
+
+      // The write succeeded, so the pre-rename file is now a stale duplicate
+      // that would quietly diverge. Retire it — but only ever AFTER the new
+      // file is safely on disk.
+      final legacy = legacyAvFlowSidecarPath;
+      if (legacy.isNotEmpty && legacy != sidecar) {
+        final old = File(legacy);
+        if (old.existsSync()) {
+          try {
+            await old.delete();
+            AppLogger.logInfo(
+                'AV flow moved to ${path.basename(sidecar)}; removed the old '
+                '${path.basename(legacy)}.');
+          } catch (e) {
+            // Not fatal: the diagram is saved either way, and the loader
+            // prefers the new name from here on.
+            AppLogger.logError(
+                'Saved the AV flow, but could not remove the old $legacy', e);
+          }
+        }
+      }
+
       _avFlowSyncedPath = currentConfigPath;
       return sidecar;
     } catch (e, stack) {
@@ -3959,7 +4062,8 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Where the pre-save backup of the working file lives: `<name>_previous.json`
-  /// beside it, the same sidecar convention `<name>_schematic.json` follows.
+  /// beside it, the same sidecar convention
+  /// `<name>_control_schematic.json` follows.
   /// '' when the session has no working file yet.
   String get saveBackupPath {
     if (currentConfigPath.isEmpty) return '';

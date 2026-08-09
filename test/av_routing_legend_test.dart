@@ -169,4 +169,80 @@ void main() {
       expect(avLegendHeight(3, true), greaterThan(avLegendHeight(3, false)));
     });
   });
+
+  group('re-routing while devices move', () {
+    testWidgets('a cable re-routes around a device dragged into its path', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final provider = AppStateProvider(autoLoadSettings: false)
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
+        };
+      provider.loadAvFlowForCurrentConfig();
+      provider.addAvNode(box('LEFT', const Offset(20, 60)));
+      provider.addAvNode(box('RIGHT', const Offset(620, 60)));
+      // Parked well below the run between the two.
+      provider.addAvNode(box('MOVER', const Offset(320, 460)));
+      provider.addAvCable(
+        fromNodeId: 'LEFT',
+        fromPortId: 'out_1',
+        toNodeId: 'RIGHT',
+        toPortId: 'in_1',
+        signal: SignalType.hdmi,
+      );
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: provider,
+          child: const MaterialApp(home: Scaffold(body: AvFlowView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      List<Offset> currentRoute() {
+        final byId = {for (final n in provider.avNodes) n.id: n};
+        final others = [
+          for (final n in provider.avNodes)
+            if (n.id != 'LEFT' && n.id != 'RIGHT') n.rect.inflate(10),
+        ];
+        return routeCable(
+          fromNode: byId['LEFT']!,
+          toNode: byId['RIGHT']!,
+          cable: provider.avCables.single,
+          obstacles: others,
+        );
+      }
+
+      final before = currentRoute();
+
+      // Drag MOVER up into the corridor between LEFT and RIGHT.
+      await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('MOVER')),
+      );
+      for (int i = 0; i < 12; i++) {
+        await gesture.moveBy(const Offset(0, -34));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      final after = currentRoute();
+      expect(
+        after,
+        isNot(before),
+        reason: 'the run should have moved aside for the device',
+      );
+
+      // And it genuinely clears the device in its new position.
+      final mover = provider.avNodeById('MOVER')!;
+      expect(polylineHitsAny(after, [mover.rect.inflate(10)]), isFalse);
+    });
+  });
 }

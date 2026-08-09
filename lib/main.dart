@@ -327,7 +327,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   /// Brings the schematic in line with the config that was just opened.
   ///
-  /// A saved `<config>_schematic.json` belongs to the config file, so it is
+  /// A saved `<config>_control_schematic.json` belongs to the config file, so
   /// loaded from that folder as soon as the config is — no need to visit the
   /// Schematic tab first. The one case that isn't obvious is a session that has
   /// already arranged a diagram of its own: then the user is asked whether to
@@ -368,7 +368,7 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   /// The AV Flow equivalent of [_syncSchematicAfterLoad], for the
-  /// `<config>_avflow.json` sidecar. Same rule: load it silently unless the
+  /// `<config>_av_flow.json` sidecar. Same rule: load it silently unless the
   /// session already has a diagram of its own worth protecting.
   Future<void> _syncAvFlowAfterLoad(
       BuildContext context, AppStateProvider provider) async {

@@ -31,7 +31,9 @@ import 'xlsx_writer.dart';
 ///  Each connection type has its own color (legend bottom-left, included in
 ///  the PNG export). Edit mode allows dragging nodes and drawing extra lines
 ///  in any color between any two nodes; the layout persists to a
-///  `<config>_schematic.json` sidecar via Save Layout.
+///  `<config>_control_schematic.json` sidecar via Save Layout. (Diagrams
+///  saved before the rename used `<config>_schematic.json`; those are read
+///  as-is and move to the new name the next time the layout is saved.)
 ///  Exports: the diagram as a PNG, and a device report as .xlsx or .txt.
 /// ============================================================================
 
@@ -924,8 +926,10 @@ class _SchematicViewState extends State<SchematicView> {
     // The legend sits BELOW the diagram rather than floating over the
     // bottom-left corner, where it covered whatever box happened to be
     // there. The canvas grows to make room for it.
-    final contentBottom = model.nodes.fold<double>(
-        0, (m, n) => math.max(m, n.pos.dy + kNodeHeight));
+    // Includes the curves, not just the boxes: a line bending around an
+    // obstacle can reach lower than anything else on the page. Recomputed
+    // every build, so it stays clear while a box is being dragged.
+    final contentBottom = schematicContentBottom(model);
     final legendTop = contentBottom + 28;
     final canvasHeight = math.max(
         model.canvasSize.height, legendTop + kLegendHeight + 20);
@@ -1290,6 +1294,85 @@ class _TabbedWindowIconPainter extends CustomPainter {
 ///   * labels are painted in a SECOND pass — no line ever covers a label —
 ///     and each label slides along its line to a spot clear of node boxes
 ///     and of the labels already placed
+/// Node boxes inflated into obstacles — what lines bend around and what
+/// labels keep clear of.
+Map<String, Rect> schematicNodeRects(SchematicModel model) => {
+      for (final n in model.nodes)
+        n.id: Rect.fromLTWH(n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight)
+            .inflate(6),
+    };
+
+/// The control point a line bends through to get around a box in its way, or
+/// null when the straight run is clear.
+///
+/// Extracted from the painter so the canvas can work out how far down the
+/// drawing actually reaches — the legend sits below all of it, and a curve
+/// swinging around a box can dip lower than any box.
+Offset? schematicEdgeControl(
+  SchematicModel model,
+  SchematicEdge edge,
+  Map<String, Rect> nodeRects,
+) {
+  final from = model.nodeById(edge.fromId);
+  final to = model.nodeById(edge.toId);
+  if (from == null || to == null) return null;
+  final a = from.center;
+  final b = to.center;
+
+  Rect? blocked;
+  for (final entry in nodeRects.entries) {
+    if (entry.key == edge.fromId || entry.key == edge.toId) continue;
+    if (_EdgePainter._segmentHitsRect(a, b, entry.value)) {
+      blocked = entry.value;
+      break;
+    }
+  }
+  if (blocked == null) return null;
+
+  final mid = Offset.lerp(a, b, 0.5)!;
+  final dir = b - a;
+  final len = dir.distance;
+  if (len <= 1) return null;
+
+  Offset perp = Offset(-dir.dy / len, dir.dx / len);
+  if ((blocked.center - mid).dx * perp.dx +
+          (blocked.center - mid).dy * perp.dy >
+      0) {
+    perp = -perp; // push away from the obstacle, not into it
+  }
+  return mid + perp * (kNodeHeight * 2.4);
+}
+
+/// The lowest point anything drawn reaches: boxes, straight lines, and the
+/// curves that bend around them.
+double schematicContentBottom(SchematicModel model) {
+  double bottom = 0;
+  for (final n in model.nodes) {
+    bottom = math.max(bottom, n.pos.dy + kNodeHeight);
+  }
+
+  final rects = schematicNodeRects(model);
+  for (final edge in model.edges) {
+    final from = model.nodeById(edge.fromId);
+    final to = model.nodeById(edge.toId);
+    if (from == null || to == null) continue;
+    final a = from.center;
+    final b = to.center;
+    final control = schematicEdgeControl(model, edge, rects);
+    if (control == null) {
+      bottom = math.max(bottom, math.max(a.dy, b.dy));
+      continue;
+    }
+    // Sample the curve rather than solving it — nine points is plenty for
+    // deciding where a legend goes.
+    for (int i = 0; i <= 8; i++) {
+      bottom = math.max(
+          bottom, _EdgePainter._bezier(a, control, b, i / 8).dy);
+    }
+  }
+  return bottom;
+}
+
 class _EdgePainter extends CustomPainter {
   final SchematicModel model;
   final Brightness brightness;
@@ -1315,12 +1398,7 @@ class _EdgePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // Inflated node boxes = obstacles for lines and no-go zones for labels.
-    final Map<String, Rect> nodeRects = {
-      for (final n in model.nodes)
-        n.id: Rect.fromLTWH(
-                n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight)
-            .inflate(6),
-    };
+    final Map<String, Rect> nodeRects = schematicNodeRects(model);
 
     // --- PASS 1: lines (collect each edge's label-anchor curve) ------------
     final List<(SchematicEdge, Offset, Offset?, Offset)> labeled = [];
@@ -1331,43 +1409,21 @@ class _EdgePainter extends CustomPainter {
       final a = from.center;
       final b = to.center;
 
-      // Nodes (other than the endpoints) the straight line would cut through.
-      Rect? blocked;
-      for (final entry in nodeRects.entries) {
-        if (entry.key == edge.fromId || entry.key == edge.toId) continue;
-        if (_segmentHitsRect(a, b, entry.value)) {
-          blocked = entry.value;
-          break;
-        }
-      }
-
       final paint = Paint()
         ..color = edge.color
         ..strokeWidth = edge.width
         ..style = PaintingStyle.stroke;
 
-      Offset? control;
-      if (blocked != null) {
-        // Curve around the box: bend away from its center, far enough that
-        // the curve's apex clears the box whichever way the line grazes it.
-        final mid = Offset.lerp(a, b, 0.5)!;
-        final dir = b - a;
-        final len = dir.distance;
-        if (len > 1) {
-          Offset perp = Offset(-dir.dy / len, dir.dx / len);
-          if ((blocked.center - mid).dx * perp.dx +
-                  (blocked.center - mid).dy * perp.dy >
-              0) {
-            perp = -perp; // push away from the obstacle, not into it
-          }
-          control = mid + perp * (kNodeHeight * 2.4);
-          final path = Path()
+      // Curve around any box in the way, bending away from its centre far
+      // enough that the apex clears it whichever way the line grazes.
+      final Offset? control = schematicEdgeControl(model, edge, nodeRects);
+      if (control != null) {
+        canvas.drawPath(
+          Path()
             ..moveTo(a.dx, a.dy)
-            ..quadraticBezierTo(control.dx, control.dy, b.dx, b.dy);
-          canvas.drawPath(path, paint);
-        } else {
-          canvas.drawLine(a, b, paint);
-        }
+            ..quadraticBezierTo(control.dx, control.dy, b.dx, b.dy),
+          paint,
+        );
       } else {
         canvas.drawLine(a, b, paint);
       }

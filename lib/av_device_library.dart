@@ -12,7 +12,7 @@ import 'av_flow_model.dart';
 ///  Answers the one question config.json cannot: "what connectors does this
 ///  box actually have?" Ports for a node are resolved in this order:
 ///
-///    1. Per-node overrides saved in the `<config>_avflow.json` sidecar (the
+///    1. Per-node overrides saved in the `<config>_av_flow.json` sidecar (the
 ///       port editor's output) — handled by the caller, not here.
 ///    2. An exact model match in an external `av_devices.json`.
 ///    3. An exact model match in the built-in table below.

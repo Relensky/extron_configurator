@@ -7,7 +7,7 @@ import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 
 /// The AV signal flow belongs to the config file it was drawn for: it saves as
-/// `<config>_avflow.json` beside it and comes back from that folder when the
+/// `<config>_av_flow.json` beside it and comes back from that folder when the
 /// config is opened. Unlike the control schematic — where the diagram is
 /// derived and only the overrides persist — this file IS the document, so a
 /// round trip has to bring back devices, their connectors, every cable, and
@@ -78,7 +78,7 @@ void main() {
 
   test('the sidecar path sits next to the working config', () {
     expect(openedOn(configPath).avFlowSidecarPath,
-        path.join(dir.path, 'BSS103_config_avflow.json'));
+        path.join(dir.path, 'BSS103_config_av_flow.json'));
   });
 
   test('a round trip preserves devices, connectors, cables and racks',
@@ -147,7 +147,7 @@ void main() {
   });
 
   test('a corrupt sidecar leaves a blank diagram instead of throwing', () {
-    File(path.join(dir.path, 'BSS103_config_avflow.json'))
+    File(path.join(dir.path, 'BSS103_config_av_flow.json'))
         .writeAsStringSync('not json at all');
     final p = openedOn(configPath)..loadAvFlowForCurrentConfig();
     expect(p.hasAvFlow, isFalse);
@@ -292,6 +292,66 @@ void main() {
             ignoreNodeId: 'SWITCHERDEVICE_1'),
         isTrue,
       );
+    });
+  });
+
+  group('the rename from <config>_avflow.json', () {
+    String legacyPath() => path.join(dir.path, 'BSS103_config_avflow.json');
+    String currentPath() => path.join(dir.path, 'BSS103_config_av_flow.json');
+
+    Future<void> writeLegacy() async {
+      final seed = openedOn(configPath)..addAvNode(switcher());
+      await seed.saveAvFlow();
+      // saveAvFlow writes the CURRENT name, so move it back to simulate a
+      // diagram saved by an older build.
+      File(currentPath()).renameSync(legacyPath());
+    }
+
+    test('a pre-rename file is still found and read', () async {
+      await writeLegacy();
+      final p = openedOn(configPath);
+
+      expect(p.hasSavedAvFlow, isTrue);
+      p.loadAvFlowForCurrentConfig();
+      expect(p.avNodeById('SWITCHERDEVICE_1')!.label, 'Switcher');
+    });
+
+    test('loading one does NOT move it', () async {
+      await writeLegacy();
+      openedOn(configPath).loadAvFlowForCurrentConfig();
+
+      expect(File(legacyPath()).existsSync(), isTrue);
+      expect(File(currentPath()).existsSync(), isFalse);
+    });
+
+    test('saving moves it: new file written, old one retired', () async {
+      await writeLegacy();
+      final p = openedOn(configPath)..loadAvFlowForCurrentConfig();
+
+      final saved = await p.saveAvFlow();
+
+      expect(saved, currentPath());
+      expect(File(currentPath()).existsSync(), isTrue);
+      expect(File(legacyPath()).existsSync(), isFalse);
+
+      final reopened = openedOn(configPath)..loadAvFlowForCurrentConfig();
+      expect(reopened.avNodeById('SWITCHERDEVICE_1')!.label, 'Switcher');
+    });
+
+    test('the current name wins when both are present', () async {
+      // Save under the current name first, then plant a legacy file beside
+      // it by hand — saving would have retired it, which is the whole point.
+      final other = openedOn(configPath)..addAvNode(projector());
+      await other.saveAvFlow();
+      File(legacyPath()).writeAsStringSync(
+        '{"nodes":[{"id":"SWITCHERDEVICE_1","label":"Switcher","model":"",'
+        '"x":0,"y":0,"rackUnits":1,"ports":[]}],"cables":[],"racks":[],'
+        '"rackSlots":{}}',
+      );
+
+      final p = openedOn(configPath)..loadAvFlowForCurrentConfig();
+      expect(p.avNodeById('PROJECTORDEVICE_1'), isNotNull);
+      expect(p.avNodeById('SWITCHERDEVICE_1'), isNull);
     });
   });
 }

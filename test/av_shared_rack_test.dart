@@ -272,7 +272,7 @@ void main() {
   test('a diagram saved with the old left/right halves still opens', () {
     // Files written before rails could be split any number of ways used
     // "half": "left" / "right". They have to keep working.
-    File(path.join(dir.path, 'BSS103_config_avflow.json')).writeAsStringSync('''
+    File(path.join(dir.path, 'BSS103_config_av_flow.json')).writeAsStringSync('''
 {
   "nodes": [
     {"id": "A", "label": "A", "model": "", "x": 0, "y": 0, "rackUnits": 1,
