@@ -19,6 +19,42 @@ import 'sftp_client.dart';
 import 'ui_schema.dart';
 import 'package:file_picker/file_picker.dart';
 
+/// The navigation rail's tabs, in rail order.
+///
+/// Several places key off the selected tab (the view switch, the landing-screen
+/// bypass for App Config, the screenshot file name, the diagram capture). They
+/// used to compare bare integers, which meant inserting a tab silently
+/// repointed all of them — so the index lives here once and everything reads
+/// it through [index].
+///
+/// Here rather than in main.dart because the number it stands for is stored on
+/// the provider ([AppStateProvider.selectedTabIndex]), and the pages that read
+/// it should not have to import the app's entry point to say which tab they
+/// are.
+enum AppTab {
+  wizard('wizard'),
+  devices('devices'),
+  system('system'),
+  schematic('schematic'),
+  avFlow('av_flow'),
+  racks('racks'),
+  cost('cost'),
+  deviceEditor('device_editor'),
+  rawJson('raw_json'),
+  appConfig('app_config');
+
+  /// Token used in screenshot file names.
+  final String token;
+  const AppTab(this.token);
+
+  /// Tabs that work with no room loaded. App Config is settings; the Device
+  /// Editor is the equipment catalog — both are about the app and the price
+  /// list, not about a room, so the "No Configuration Loaded" screen must not
+  /// stand in front of them.
+  bool get worksWithoutConfig =>
+      this == AppTab.appConfig || this == AppTab.deviceEditor;
+}
+
 /// How far along a room is.
 ///
 /// A room is usually specified long before anybody writes its control config —
@@ -796,8 +832,7 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// The navigation rail tab currently shown, as an `AppTab.index` (main.dart
-  /// owns that enum; this layer only stores the number).
+  /// The navigation rail tab currently shown, as an [AppTab] index.
   /// Lives in the provider — above the MaterialApp — so it survives the full
   /// remount that switching between the Auris and Classic theme families
   /// forces (see the MaterialApp key in main.dart). Session-only by design.
@@ -1275,14 +1310,19 @@ class AppStateProvider extends ChangeNotifier {
   String rackOccupantLabel(String id) =>
       avNodeById(id)?.label ?? avRackItemById(id)?.label ?? id;
 
-  /// Adds a piece of rack hardware and (optionally) drops it straight into a
-  /// frame. Returns the stored item, whose id the rack slot map keys on, or
-  /// null when a requested placement would not fit.
+  /// Adds a piece of rack hardware and — when [rackId] and [startU] are given
+  /// — drops it straight into a frame. Returns the stored item, whose id the
+  /// rack slot map keys on, or null when a requested placement would not fit.
   ///
-  /// A refused placement takes the item back out again rather than leaving it
-  /// floating: an unplaced plate is invisible on the elevation and would still
-  /// be priced into the estimate, which is money on a quote for a part that
-  /// nobody can point at.
+  /// Adding with no placement is deliberate and normal: parts are ordered
+  /// before anybody decides which rail they land on, so an item can wait in
+  /// the Racks page's waiting area, on the estimate and off the elevation,
+  /// until it is dragged in.
+  ///
+  /// A REQUESTED placement that is refused is different — it takes the item
+  /// back out again rather than leaving it floating, because the caller asked
+  /// for a rail and silently landing somewhere else (or nowhere) is not what
+  /// it asked for.
   RackItem? addAvRackItem(
     RackItem item, {
     String? rackId,

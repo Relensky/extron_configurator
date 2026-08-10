@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -201,6 +202,42 @@ void main() {
     );
     expect(sheetText(archive, 2), contains('60-1234-01')); // pack list
     expect(sheetText(archive, 4), contains('60-1234-01')); // equipment lines
+  });
+
+  test('the rack elevation is embedded on the Racks sheet', () {
+    // Only the IHDR is read (for the aspect ratio), so a header is enough to
+    // stand in for a captured elevation here.
+    Uint8List headerOnlyPng(int w, int h) {
+      final bytes = BytesBuilder()
+        ..add(const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        ..add(const [0, 0, 0, 13])
+        ..add(utf8.encode('IHDR'))
+        ..add((ByteData(8)..setUint32(0, w)..setUint32(4, h))
+            .buffer
+            .asUint8List())
+        ..add(const [8, 6, 0, 0, 0]);
+      return bytes.toBytes();
+    }
+
+    final p = room();
+    final archive = ZipDecoder().decodeBytes(
+      buildRoomWorkbookBytes(
+        provider: p,
+        av: buildAvFlowModel(p),
+        rackPng: headerOnlyPng(1200, 800),
+      ),
+    );
+
+    expect(
+      archive.files.map((f) => f.name),
+      contains('xl/media/image1.png'),
+      reason: 'the elevation travels inside the book',
+    );
+    expect(
+      sheetText(archive, 3),
+      contains('<drawing'),
+      reason: 'and hangs off the Racks sheet, under its tables',
+    );
   });
 
   test('a room with no racks still gets a readable Racks tab', () {

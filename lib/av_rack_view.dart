@@ -336,20 +336,47 @@ class _AvRackViewState extends State<AvRackView> {
                   onPressed: () => setState(() => _carriedNodeId = n.id),
                 ),
               ),
-            // Hardware taken back out of a frame. Listed so it can be put
-            // somewhere else — or deleted, since it is still being priced.
+            // Hardware waiting for a rail: added unplaced, or taken back out
+            // of a frame. Dragged in exactly like a device — it is the same
+            // payload, an id the U slots know how to fit — or clicked and
+            // clicked, or deleted, since it is priced either way.
             for (final i in loose)
-              InputChip(
-                avatar: Icon(iconForRackItem(i.category), size: 16),
-                label: Text('${i.label} (${i.rackUnits}U)'),
-                onPressed: () => setState(() => _carriedNodeId = i.id),
-                onDeleted: () => provider.removeAvRackItem(i.id),
-                deleteIcon: const Icon(Icons.close, size: 16),
-                tooltip: 'Un-racked — click to place it, × to delete it',
+              Draggable<String>(
+                data: i.id,
+                dragAnchorStrategy: pointerDragAnchorStrategy,
+                feedback: _dragGhost(i.label, math.max(1, i.rackUnits), theme),
+                childWhenDragging: Opacity(
+                  opacity: 0.35,
+                  child: _looseHardwareChip(provider, i, onPressed: null),
+                ),
+                child: _looseHardwareChip(
+                  provider,
+                  i,
+                  onPressed: () => setState(() => _carriedNodeId = i.id),
+                ),
               ),
           ],
         ],
       ),
+    );
+  }
+
+  /// A plate, shelf or drawer waiting to go in, shown in the toolbar beside
+  /// the unracked devices. The × deletes it: it is on the estimate from the
+  /// moment it is added, placed or not.
+  Widget _looseHardwareChip(
+    AppStateProvider provider,
+    RackItem item, {
+    required VoidCallback? onPressed,
+  }) {
+    return InputChip(
+      avatar: Icon(iconForRackItem(item.category), size: 16),
+      label: Text('${item.label} (${item.rackUnits}U)'),
+      onPressed: onPressed,
+      onDeleted: () => provider.removeAvRackItem(item.id),
+      deleteIcon: const Icon(Icons.close, size: 16),
+      tooltip: 'Not in a rack — drag it onto a U, or click it and click '
+          'the U. × deletes it.',
     );
   }
 
@@ -1368,6 +1395,17 @@ class _AvRackViewState extends State<AvRackView> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  // Ordering a shelf and knowing which rail it lands on are
+                  // two different moments, and the parts are usually ordered
+                  // first. "Add unplaced" is that moment: it puts the item in
+                  // the waiting area at the top of the page, on the estimate
+                  // and off the elevation, until somebody drags it in.
+                  Text(
+                    'Not sure where it goes yet? Add unplaced and it waits in '
+                    'the toolbar until you drag it onto a U.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),
@@ -1375,6 +1413,12 @@ class _AvRackViewState extends State<AvRackView> {
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop('cancel'),
                 child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: selectedModel == null
+                    ? null
+                    : () => Navigator.of(ctx).pop('hold'),
+                child: const Text('Add unplaced'),
               ),
               ElevatedButton(
                 onPressed: selectedModel == null
@@ -1388,17 +1432,20 @@ class _AvRackViewState extends State<AvRackView> {
       ),
     );
 
-    if (created != 'add') return;
+    if (created != 'add' && created != 'hold') return;
     final template = library.templateForModel(selectedModel ?? '');
     if (template == null) return;
 
+    // 'hold' is the same add with nowhere to put it yet: the items go on the
+    // parts list and into the waiting area, and a drag lands them on a rail.
+    final bool place = created == 'add';
     final startU = math.max(1, int.tryParse(uController.text.trim()) ?? 1);
     final qty = (int.tryParse(qtyController.text.trim()) ?? 1).clamp(1, 42);
     final heightU = math.max(1, template.rackUnits);
 
     // Several of the same plate stack up from the U asked for, because that is
     // what filling the top of a rack with blanks actually is.
-    int placed = 0;
+    int added = 0;
     int u = startU;
     for (int i = 0; i < qty; i++) {
       final item = RackItem(
@@ -1412,22 +1459,31 @@ class _AvRackViewState extends State<AvRackView> {
       );
       final stored = provider.addAvRackItem(
         item,
-        rackId: rackId,
+        rackId: place ? rackId : null,
         face: face,
-        startU: u,
+        startU: place ? u : null,
       );
-      if (stored != null) placed++;
+      if (stored != null) added++;
       u += heightU;
     }
 
     if (!mounted) return;
+    if (!place) {
+      // An unplaced add cannot fail to fit — there is nothing to fit into.
+      _snack(
+        '$added × ${template.model} waiting to be placed — drag one onto a U, '
+        'or click it and click the U.',
+      );
+      return;
+    }
     _snack(
-      placed == qty
+      added == qty
           ? '$qty × ${template.model} added from U$startU up.'
-          : placed == 0
-          ? 'Nothing added — U$startU up is already occupied.'
-          : '$placed of $qty added; the rest had nowhere to go.',
-      error: placed < qty,
+          : added == 0
+          ? 'Nothing added — U$startU up is already occupied. '
+                'Add them unplaced and drag them in.'
+          : '$added of $qty added; the rest had nowhere to go.',
+      error: added < qty,
     );
   }
 

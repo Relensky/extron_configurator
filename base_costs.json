@@ -1,0 +1,101 @@
+{
+  "__readme": "Base costs for the Room Config Builder: one typical unit price per device category at each of the two published tiers — \"price\" is MSRP (list) and \"educationPrice\" is the education price — used when a room has a switcher on the diagram but no model chosen yet. A model with a catalog price, or a price typed on the room, always wins over the figure here. 0 means \"not set\" and is reported as an unpriced line rather than costed at nothing.",
+  "costs": [
+    {
+      "category": "Switcher",
+      "price": 13000.0,
+      "educationPrice": 7052.8,
+      "notes": "Matrix / presentation switcher"
+    },
+    {
+      "category": "Camera",
+      "price": 2048.0,
+      "educationPrice": 1600.0,
+      "notes": "PTZ or auto-tracking camera"
+    },
+    {
+      "category": "DSP",
+      "price": 2500.0,
+      "educationPrice": 1832.8,
+      "notes": "Audio processor"
+    },
+    {
+      "category": "Amplifier",
+      "price": 600.0,
+      "educationPrice": 429.2
+    },
+    {
+      "category": "Display",
+      "price": 2000.0,
+      "educationPrice": 1500.0,
+      "notes": "Flat panel"
+    },
+    {
+      "category": "Projector",
+      "price": 3000.0,
+      "educationPrice": 2500.0
+    },
+    {
+      "category": "Screen",
+      "price": 2000.0,
+      "educationPrice": 1500.0
+    },
+    {
+      "category": "USB interface",
+      "price": 800.0,
+      "educationPrice": 650.0,
+      "notes": "USB / soft-codec bridge"
+    },
+    {
+      "category": "Wireless presentation",
+      "price": 700.0,
+      "educationPrice": 550.0
+    },
+    {
+      "category": "Recorder / streamer",
+      "price": 2500.0,
+      "educationPrice": 2000.0
+    },
+    {
+      "category": "Control processor",
+      "price": 1200.0,
+      "educationPrice": 800.0
+    },
+    {
+      "category": "Touch panel",
+      "price": 2000.0,
+      "educationPrice": 1600.0
+    },
+    {
+      "category": "Power controller",
+      "price": 1500.0,
+      "educationPrice": 900.0
+    },
+    {
+      "category": "Network switch",
+      "price": 1000.0,
+      "educationPrice": 700.0
+    },
+    {
+      "category": "Microphone",
+      "price": 5000.0,
+      "educationPrice": 4800.0
+    },
+    {
+      "category": "Speaker",
+      "price": 800.0,
+      "educationPrice": 504.6
+    },
+    {
+      "category": "Transmitter / receiver",
+      "price": 600.0,
+      "educationPrice": 400.2,
+      "notes": "DTP / HDBaseT pair"
+    },
+    {
+      "category": "Mount / bracket",
+      "price": 300.0,
+      "educationPrice": 200.0
+    }
+  ]
+}

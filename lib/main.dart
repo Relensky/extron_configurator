@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
@@ -14,6 +13,7 @@ import 'av_only_notice.dart';
 import 'av_flow_view.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
+import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'device_editor_view.dart';
 import 'device_start_wizard.dart';
@@ -26,36 +26,6 @@ import 'json_editor_view.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
 import 'system_settings_view.dart';
-
-/// The navigation rail's tabs, in rail order.
-///
-/// Several places key off the selected tab (the view switch, the landing-screen
-/// bypass for App Config, the screenshot file name). They used to compare bare
-/// integers, which meant inserting a tab silently repointed all of them — so
-/// the index lives here once and everything reads it through [index].
-enum AppTab {
-  wizard('wizard'),
-  devices('devices'),
-  system('system'),
-  schematic('schematic'),
-  avFlow('av_flow'),
-  racks('racks'),
-  cost('cost'),
-  deviceEditor('device_editor'),
-  rawJson('raw_json'),
-  appConfig('app_config');
-
-  /// Token used in screenshot file names.
-  final String token;
-  const AppTab(this.token);
-
-  /// Tabs that work with no room loaded. App Config is settings; the Device
-  /// Editor is the equipment catalog — both are about the app and the price
-  /// list, not about a room, so the "No Configuration Loaded" screen must not
-  /// stand in front of them.
-  bool get worksWithoutConfig =>
-      this == AppTab.appConfig || this == AppTab.deviceEditor;
-}
 
 void main() {
   runApp(
@@ -651,7 +621,7 @@ class _MainDashboardState extends State<MainDashboard> {
                 ? 'Save All — write the whole project to a room folder'
                 : 'Save All — nothing loaded yet',
             onPressed: hasConfig
-                ? () => _saveAllProject(context, provider, _captureKey)
+                ? () => _saveAllProject(context, provider)
                 : null,
           ),
           IconButton(
@@ -834,12 +804,12 @@ class _MainDashboardState extends State<MainDashboard> {
 
 /// SAVE ALL — everything this room has produced, into one folder.
 ///
-/// The diagram images can only be rendered from a widget that is on screen,
-/// so this walks the diagram tabs, capturing each in turn, and puts the user
-/// back where they started. Anything that could not be captured is reported
-/// in the result rather than quietly missing from the folder.
+/// The diagram images can only be rendered from a widget that is on screen, so
+/// [captureDiagramTabs] walks the diagram tabs, capturing each in turn, and
+/// puts the user back where they started. Anything that could not be captured
+/// is reported in the result rather than quietly missing from the folder.
 Future<void> _saveAllProject(
-    BuildContext context, AppStateProvider provider, GlobalKey captureKey) async {
+    BuildContext context, AppStateProvider provider) async {
   final parent = await FilePicker.getDirectoryPath(
     dialogTitle: 'Where should the room folder go?',
   );
@@ -851,31 +821,16 @@ Future<void> _saveAllProject(
     content: Text('Capturing the diagrams...'),
   ));
 
-  final int startingTab = provider.selectedTabIndex;
-  Future<Uint8List?> capture(AppTab tab) async {
-    provider.selectTab(tab.index);
-    // Two frames plus a beat: the tab has to be built, laid out and painted
-    // before its RepaintBoundary has anything to hand over.
-    await WidgetsBinding.instance.endOfFrame;
-    await Future<void>.delayed(const Duration(milliseconds: 320));
-    await WidgetsBinding.instance.endOfFrame;
-    return captureBoundary(captureKey, pixelRatio: 2.0);
-  }
-
-  final schematicPng = await capture(AppTab.schematic);
-  final avFlowPng = await capture(AppTab.avFlow);
-  final rackPng = await capture(AppTab.racks);
-  provider.selectTab(startingTab);
-  await WidgetsBinding.instance.endOfFrame;
+  final shots = await captureDiagramTabs(provider, pixelRatio: 2.0);
 
   ProjectExport result;
   try {
     result = await saveProjectFolder(
       provider: provider,
       parentFolder: parent,
-      schematicPng: schematicPng,
-      avFlowPng: avFlowPng,
-      rackPng: rackPng,
+      schematicPng: shots.schematic,
+      avFlowPng: shots.avFlow,
+      rackPng: shots.racks,
     );
   } catch (e) {
     messenger.showSnackBar(SnackBar(

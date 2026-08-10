@@ -16,12 +16,13 @@ import 'av_port_editor.dart';
 import 'color_wheel_picker.dart';
 import 'cost_estimate.dart';
 import 'device_recheck_dialog.dart';
+import 'diagram_capture.dart';
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'view_zoom.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
-import 'room_workbook.dart';
 import 'screenshot_tools.dart';
+import 'workbook_export.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -209,6 +210,9 @@ class _AvFlowViewState extends State<AvFlowView> {
   @override
   void initState() {
     super.initState();
+    // So a workbook exported from another tab can still be illustrated with
+    // this page's diagram — see diagram_capture.dart.
+    registerDiagramCanvas(AppTab.avFlow, _diagramKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AppStateProvider>();
@@ -223,6 +227,7 @@ class _AvFlowViewState extends State<AvFlowView> {
 
   @override
   void dispose() {
+    unregisterDiagramCanvas(AppTab.avFlow, _diagramKey);
     _transform.dispose();
     super.dispose();
   }
@@ -604,35 +609,12 @@ class _AvFlowViewState extends State<AvFlowView> {
     }
   }
 
-  /// The whole job in one book: control, AV flow, racks, cost. The diagram
-  /// image can only come from the page currently on screen, so the sheet it
-  /// belongs to gets it and the others come out as tables — switching to the
-  /// Racks page and exporting again is what illustrates that one.
-  Future<void> _exportWorkbook(AppStateProvider provider) async {
-    final model = buildAvFlowModel(provider);
-
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save Room Workbook',
-      fileName: '${_fileStem(provider, 'room_workbook')}.xlsx',
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-    );
-    if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.xlsx')) outputFile += '.xlsx';
-
-    try {
-      final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
-      final bytes = buildRoomWorkbookBytes(
-        provider: provider,
-        av: model,
-        avFlowPng: png,
-      );
-      await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(provider, 'Room workbook', outputFile);
-    } catch (e) {
-      _snack('Failed to save the workbook: $e', error: true);
-    }
-  }
+  /// The whole job in one book: control, AV flow, racks, cost — every sheet
+  /// illustrated, whichever tab the export was pressed on. Shared with the
+  /// Schematic tab; see workbook_export.dart, which walks the diagram tabs to
+  /// capture them and therefore disposes THIS page on the way past.
+  Future<void> _exportWorkbook(AppStateProvider provider) =>
+      exportRoomWorkbook(context, provider);
 
   Future<void> _saveDiagram(AppStateProvider provider) async {
     // A wizard-built session has no file for the sidecar to sit beside yet.

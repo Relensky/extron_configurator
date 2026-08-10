@@ -8,13 +8,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
-import 'av_flow_view.dart' show buildAvFlowModel;
 import 'color_wheel_picker.dart';
+import 'diagram_capture.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
-import 'room_workbook.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
+import 'workbook_export.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -496,6 +496,9 @@ class _SchematicViewState extends State<SchematicView> {
   @override
   void initState() {
     super.initState();
+    // So a workbook exported from another tab can still be illustrated with
+    // this page's schematic — see diagram_capture.dart.
+    registerDiagramCanvas(AppTab.schematic, _diagramKey);
     // Load (or reset) the persisted layout for the currently open config.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -506,6 +509,7 @@ class _SchematicViewState extends State<SchematicView> {
 
   @override
   void dispose() {
+    unregisterDiagramCanvas(AppTab.schematic, _diagramKey);
     _transform.dispose();
     super.dispose();
   }
@@ -663,37 +667,12 @@ class _SchematicViewState extends State<SchematicView> {
   }
 
   /// The whole job in one book: control (with the room's estimated power
-  /// draw), AV flow, racks and the cost estimate. Exported from here the
-  /// control schematic is the diagram that gets embedded; exporting from the
-  /// AV Flow tab embeds that page's diagram instead.
-  Future<void> _exportWorkbook(AppStateProvider provider) async {
-    // The AV data lives in the provider whether or not that tab has been
-    // opened this session, but the sidecar is only read on the tab's first
-    // visit — so make sure it has been.
-    provider.ensureAvFlowForCurrentConfig();
-
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save Room Workbook',
-      fileName: '${_fileStem(provider, 'room_workbook')}.xlsx',
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-    );
-    if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.xlsx')) outputFile += '.xlsx';
-
-    try {
-      final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
-      final bytes = buildRoomWorkbookBytes(
-        provider: provider,
-        av: buildAvFlowModel(provider),
-        controlPng: png,
-      );
-      await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(provider, 'Room workbook', outputFile);
-    } catch (e) {
-      _snack('Failed to save the workbook: $e', error: true);
-    }
-  }
+  /// draw), AV flow, racks and the cost estimate — every sheet illustrated
+  /// with its own diagram, whichever tab the export was pressed on. Shared
+  /// with the AV Flow tab; see workbook_export.dart, which walks the diagram
+  /// tabs to capture them and therefore disposes THIS page on the way past.
+  Future<void> _exportWorkbook(AppStateProvider provider) =>
+      exportRoomWorkbook(context, provider);
 
   // -------------------------------------------------------------------------
   //  EDIT MODE — drawing custom lines

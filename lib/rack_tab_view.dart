@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'av_rack_view.dart';
+import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'screenshot_tools.dart';
 
@@ -37,12 +38,22 @@ class _RackTabViewState extends State<RackTabView> {
   @override
   void initState() {
     super.initState();
+    // So the elevation can be captured for a workbook exported from another
+    // tab — see diagram_capture.dart. Without this the Racks sheet was the
+    // one sheet in the book that never got its picture.
+    registerDiagramCanvas(AppTab.racks, _captureKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // The racks live in the AV sidecar, which is only read on the first
       // visit to whichever tab gets there first.
       context.read<AppStateProvider>().ensureAvFlowForCurrentConfig();
     });
+  }
+
+  @override
+  void dispose() {
+    unregisterDiagramCanvas(AppTab.racks, _captureKey);
+    super.dispose();
   }
 
   @override

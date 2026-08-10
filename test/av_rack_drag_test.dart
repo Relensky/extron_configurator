@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_rack_view.dart';
 
@@ -152,6 +153,63 @@ void main() {
 
     expect(provider.avRackSlots.containsKey('ONEMORE'), isFalse);
     expect(provider.avRackSlots.length, kMaxRackColumns);
+  });
+
+  group('hardware waiting to be placed', () {
+    testWidgets('an unplaced shelf waits in the toolbar and drags into a U', (
+      tester,
+    ) async {
+      final (provider, rack) = rackWith([]);
+      // What "Add unplaced" produces: on the parts list, on the estimate, and
+      // in no frame until somebody puts it in one.
+      final item = provider.addAvRackItem(
+        const RackItem(
+          id: '',
+          catalogModel: '1U Shelf',
+          label: '1U Shelf',
+          category: 'Shelf',
+          rackUnits: 1,
+          price: 42,
+        ),
+      );
+      expect(item, isNotNull);
+      expect(provider.avRackSlots.containsKey(item!.id), isFalse);
+
+      await pumpRacks(tester, provider);
+      await dragOnto(tester, find.text('1U Shelf (1U)'), slot(rack, 7));
+
+      expect(provider.avRackSlots[item.id]?.startU, 7);
+    });
+
+    testWidgets('"Add unplaced" adds the part without asking for a U', (
+      tester,
+    ) async {
+      final (provider, _) = rackWith([]);
+      provider.avDeviceLibrary = AvDeviceLibrary.empty()
+        ..upsert(
+          const AvDeviceTemplate(
+            model: '2U Vent',
+            category: 'Vent plate',
+            rackUnits: 2,
+            price: 30,
+            ports: [],
+          ),
+        );
+      await pumpRacks(tester, provider);
+
+      await tester.tap(find.text('Add plate / shelf'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add unplaced'));
+      await tester.pumpAndSettle();
+
+      expect(provider.avRackItems.length, 1);
+      expect(provider.avRackItems.single.label, '2U Vent');
+      expect(
+        provider.avRackSlots.containsKey(provider.avRackItems.single.id),
+        isFalse,
+        reason: 'it is waiting, not racked',
+      );
+    });
   });
 
   testWidgets('dropping onto a tall device shares that device\'s rail', (
