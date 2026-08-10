@@ -86,6 +86,12 @@ class CostLineItem {
   final double unitPrice;
   final bool taxable;
 
+  /// Catalog model this line was picked from, or '' when it was typed by
+  /// hand. When it is set, the catalog's current price at the active tier
+  /// wins over [unitPrice] — so a part added to a quote picks up a price
+  /// revision the same way a part on the diagram does.
+  final String catalogModel;
+
   const CostLineItem({
     required this.id,
     required this.description,
@@ -93,6 +99,7 @@ class CostLineItem {
     this.qty = 1,
     this.unitPrice = 0,
     this.taxable = true,
+    this.catalogModel = '',
   });
 
   double get total => qty * unitPrice;
@@ -103,6 +110,7 @@ class CostLineItem {
     double? qty,
     double? unitPrice,
     bool? taxable,
+    String? catalogModel,
   }) => CostLineItem(
     id: id,
     description: description ?? this.description,
@@ -110,6 +118,7 @@ class CostLineItem {
     qty: qty ?? this.qty,
     unitPrice: unitPrice ?? this.unitPrice,
     taxable: taxable ?? this.taxable,
+    catalogModel: catalogModel ?? this.catalogModel,
   );
 
   Map<String, dynamic> toJson() => {
@@ -119,6 +128,7 @@ class CostLineItem {
     'qty': qty,
     'unitPrice': unitPrice,
     'taxable': taxable,
+    if (catalogModel.isNotEmpty) 'catalogModel': catalogModel,
   };
 
   factory CostLineItem.fromJson(Map<String, dynamic> json) => CostLineItem(
@@ -128,6 +138,7 @@ class CostLineItem {
     qty: (json['qty'] as num?)?.toDouble() ?? 1,
     unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
     taxable: json['taxable'] != false,
+    catalogModel: json['catalogModel']?.toString() ?? '',
   );
 }
 
@@ -154,6 +165,17 @@ class RoomCostSettings {
   /// says exactly how many runs of what there are.
   bool includeCabling;
 
+  /// Rack hardware bought for the job but not placed in a frame — a spare
+  /// shelf, a box of blanks, the plate that goes in somebody else's rack.
+  /// Priced like placed hardware and listed with it, marked as not racked.
+  final List<CostLineItem> extraHardware;
+
+  /// Cable that is not a run on the diagram: a spool, a bag of patch leads,
+  /// the drop somebody else is pulling. Counted by hand rather than off the
+  /// drawing, which is exactly why it needs a home of its own — otherwise it
+  /// gets typed into "Other items" where the cable schedule can never see it.
+  final List<CostLineItem> extraCables;
+
   /// Signal type name -> extra runs to buy beyond what the diagram shows.
   /// Spares are a decision, not a diagram fact, so they live here rather than
   /// being inferred: "three more HDMI leads because two always go missing" is
@@ -170,11 +192,15 @@ class RoomCostSettings {
     List<CostLineItem>? items,
     List<LaborLine>? labor,
     Map<String, double>? cableSpares,
+    List<CostLineItem>? extraHardware,
+    List<CostLineItem>? extraCables,
   }) : fees = fees ?? [],
        priceOverrides = priceOverrides ?? {},
        items = items ?? [],
        labor = labor ?? [],
-       cableSpares = cableSpares ?? {};
+       cableSpares = cableSpares ?? {},
+       extraHardware = extraHardware ?? [],
+       extraCables = extraCables ?? [];
 
   bool get isEmpty =>
       taxPercent == 0 &&
@@ -182,7 +208,9 @@ class RoomCostSettings {
       priceOverrides.isEmpty &&
       items.isEmpty &&
       labor.isEmpty &&
-      cableSpares.isEmpty;
+      cableSpares.isEmpty &&
+      extraHardware.isEmpty &&
+      extraCables.isEmpty;
 
   void clear() {
     currency = r'$';
@@ -194,6 +222,8 @@ class RoomCostSettings {
     items.clear();
     labor.clear();
     cableSpares.clear();
+    extraHardware.clear();
+    extraCables.clear();
   }
 
   Map<String, dynamic> toJson() => {
@@ -206,6 +236,10 @@ class RoomCostSettings {
     'items': [for (final i in items) i.toJson()],
     'labor': [for (final l in labor) l.toJson()],
     if (cableSpares.isNotEmpty) 'cableSpares': cableSpares,
+    if (extraHardware.isNotEmpty)
+      'extraHardware': [for (final i in extraHardware) i.toJson()],
+    if (extraCables.isNotEmpty)
+      'extraCables': [for (final i in extraCables) i.toJson()],
   };
 
   void readJson(Map<String, dynamic> json) {
@@ -236,6 +270,16 @@ class RoomCostSettings {
     for (final l in (json['labor'] as List? ?? [])) {
       if (l is Map) {
         labor.add(LaborLine.fromJson(Map<String, dynamic>.from(l)));
+      }
+    }
+    for (final i in (json['extraHardware'] as List? ?? [])) {
+      if (i is Map) {
+        extraHardware.add(CostLineItem.fromJson(Map<String, dynamic>.from(i)));
+      }
+    }
+    for (final i in (json['extraCables'] as List? ?? [])) {
+      if (i is Map) {
+        extraCables.add(CostLineItem.fromJson(Map<String, dynamic>.from(i)));
       }
     }
     final spares = json['cableSpares'];
@@ -679,6 +723,59 @@ CostEstimate computeRoomCost({
     );
   }
 
+  // --- hardware and cable bought for the job but not on the drawing -------
+  //  Same pricing ladder as everything else, so a spare shelf and a racked one
+  //  cost the same and both follow a catalog revision.
+  CostLine extraLine(CostLineItem item, String fallbackCategory) {
+    final catalog = library.templateForModel(item.catalogModel);
+    final catalogPrice = catalog?.priceForTier(tier);
+    final override = settings.priceOverrides[item.id];
+
+    final double price;
+    final PriceSource source;
+    if (override != null) {
+      price = override;
+      source = PriceSource.override;
+    } else if (catalogPrice != null && catalogPrice.price > 0) {
+      price = catalogPrice.price;
+      source = catalogPrice.fallback
+          ? PriceSource.catalogOtherTier
+          : PriceSource.catalog;
+    } else if (item.unitPrice > 0) {
+      price = item.unitPrice;
+      source = PriceSource.override;
+    } else {
+      price = 0;
+      source = PriceSource.none;
+    }
+    if (source == PriceSource.none) {
+      unpricedLines++;
+      unpricedDevices += item.qty.round();
+    }
+    if (source == PriceSource.catalogOtherTier) otherTierLines++;
+
+    return CostLine(
+      key: item.id,
+      description: item.description.trim().isEmpty
+          ? (item.catalogModel.trim().isEmpty
+                ? '(unnamed)'
+                : item.catalogModel)
+          : item.description,
+      model: item.catalogModel,
+      category: item.category.trim().isEmpty
+          ? fallbackCategory
+          : item.category,
+      qty: item.qty,
+      unitPrice: price,
+      taxable: item.taxable,
+      source: source,
+    );
+  }
+
+  for (final item in settings.extraHardware) {
+    hardware.add(extraLine(item, kCategoryRackHardware));
+  }
+
   // --- cabling: one line per signal type on the diagram, plus spares -------
   final cabling = <CostLine>[];
   if (settings.includeCabling) {
@@ -740,6 +837,12 @@ CostEstimate computeRoomCost({
         ),
       );
     }
+  }
+
+  // Miscellaneous cable is quoted whether or not the diagram's runs are —
+  // it is a decision about the job, not a reading of the drawing.
+  for (final item in settings.extraCables) {
+    cabling.add(extraLine(item, kCategoryCable));
   }
 
   final extras = [

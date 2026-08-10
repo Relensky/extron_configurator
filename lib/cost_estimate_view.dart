@@ -429,11 +429,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               children: [
                 Text('Rack hardware', style: theme.textTheme.titleSmall),
                 const SizedBox(width: 8),
-                Text(
-                  'plates, shelves and drawers placed on the Racks tab',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.disabledColor,
+                Expanded(
+                  child: Text(
+                    'placed on the Racks tab, plus anything added here that '
+                    'is bought but not racked',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.disabledColor,
+                    ),
                   ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add hardware'),
+                  onPressed: () => _addExtraPart(context, provider,
+                      cable: false),
                 ),
               ],
             ),
@@ -442,8 +451,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'None yet. A rack of gear also has blanks, vents and a shelf '
-                  'or two in it — add them on the Racks tab and they are '
-                  'quoted here.',
+                  'or two in it — add them on the Racks tab, or add one '
+                  'here when it is bought without going in a frame.',
                   style: theme.textTheme.bodySmall,
                 ),
               )
@@ -460,7 +469,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ]),
               const Divider(height: 12),
               for (final line in estimate.hardware)
-                Padding(
+                Builder(
+                  builder: (context) {
+                    // Lines added here (rather than placed in a frame) keep an
+                    // editable quantity and a way out; a racked one takes both
+                    // from the elevation.
+                    final extra = provider.avCost.extraHardware
+                        .where((i) => i.id == line.key)
+                        .firstOrNull;
+                    return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     children: [
@@ -487,7 +504,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       Expanded(
                         flex: 2,
                         child: Text(
-                          line.category.isEmpty ? '—' : line.category,
+                          extra == null
+                              ? (line.category.isEmpty
+                                    ? '—'
+                                    : line.category)
+                              : '${line.category.isEmpty ? 'Hardware'
+                                    : line.category} · not racked',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12,
@@ -497,11 +519,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                       SizedBox(
                         width: 60,
-                        child: Text(
-                          '×${line.qty.toStringAsFixed(0)}',
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(fontSize: 13),
-                        ),
+                        child: extra == null
+                            ? Text(
+                                '×${line.qty.toStringAsFixed(0)}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontSize: 13),
+                              )
+                            : LiveTextField(
+                                fieldId: 'hwqty_${extra.id}',
+                                initial: trimNumber(extra.qty),
+                                numeric: true,
+                                onChanged: (v) =>
+                                    provider.updateAvCostExtraHardware(
+                                  extra.copyWith(
+                                    qty: double.tryParse(v) ?? 0,
+                                  ),
+                                ),
+                              ),
                       ),
                       const SizedBox(width: 12),
                       SizedBox(
@@ -546,15 +580,26 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                         ),
                       ),
-                      avRowIcon(
-                        Icons.restart_alt,
-                        'Back to the parts list price',
-                        line.source == PriceSource.override
-                            ? () => provider.setAvCostPrice(line.key, null)
-                            : null,
-                      ),
+                      if (extra == null)
+                        avRowIcon(
+                          Icons.restart_alt,
+                          'Back to the parts list price',
+                          line.source == PriceSource.override
+                              ? () => provider.setAvCostPrice(line.key, null)
+                              : null,
+                        )
+                      else
+                        avRowIcon(
+                          Icons.delete_outline,
+                          'Remove this line',
+                          () => provider
+                              .removeAvCostExtraHardware(extra.id),
+                          danger: true,
+                        ),
                     ],
                   ),
+                );
+                  },
                 ),
             ],
           ],
@@ -605,6 +650,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
                 ),
                 const Spacer(),
+                TextButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add cable'),
+                  onPressed: () => _addExtraPart(context, provider,
+                      cable: true),
+                ),
+                const SizedBox(width: 8),
                 Switch(
                   value: settings.includeCabling,
                   onChanged: (v) => provider.setAvCostIncludeCabling(v),
@@ -621,13 +673,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   style: theme.textTheme.bodySmall,
                 ),
               )
-            else if (types.isEmpty)
+            else if (types.isEmpty && settings.extraCables.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'No cables drawn yet. Draw the runs on the Signal Flow page '
                   'and they are counted and priced here; prices per cable type '
-                  'live on the Catalog tab under "Cable".',
+                  'live on the Catalog tab under "Cable". Cable that is not a '
+                  'run on the drawing — a spool, a bag of patch leads — '
+                  'goes in with "Add cable".',
                   style: theme.textTheme.bodySmall,
                 ),
               )
@@ -764,6 +818,121 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     );
                   },
                 ),
+              // Cable bought for the job that no run on the diagram accounts
+              // for. Listed under the counted runs so the two are read
+              // together, and labeled so nobody looks for it on the drawing.
+              for (final item in settings.extraCables)
+                Builder(
+                  builder: (context) {
+                    final line = estimate.cabling
+                        .where((l) => l.key == item.id)
+                        .firstOrNull;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Row(
+                              children: [
+                                Icon(Icons.shopping_bag_outlined,
+                                    size: 15, color: theme.disabledColor),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: LiveTextField(
+                                    fieldId: 'cbldesc_${item.id}',
+                                    initial: item.description,
+                                    hint: 'e.g. Cat6A spool, 1000 ft',
+                                    onChanged: (v) =>
+                                        provider.updateAvCostExtraCable(
+                                      item.copyWith(description: v),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(
+                            width: 66,
+                            child: Text(
+                              'misc',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.disabledColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 80,
+                            child: LiveTextField(
+                              fieldId: 'cblqty_${item.id}',
+                              initial: trimNumber(item.qty),
+                              numeric: true,
+                              onChanged: (v) =>
+                                  provider.updateAvCostExtraCable(
+                                item.copyWith(qty: double.tryParse(v) ?? 0),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 54,
+                            child: Text(
+                              trimNumber(item.qty),
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 130,
+                            child: LiveTextField(
+                              fieldId: 'cblprice_${item.id}',
+                              initial: line == null
+                                  ? ''
+                                  : _roomPriceText(provider, line),
+                              prefix: currency,
+                              numeric: true,
+                              hint: line == null || line.unitPrice <= 0
+                                  ? 'unpriced'
+                                  : trimNumber(line.unitPrice),
+                              onChanged: (v) {
+                                final parsed = double.tryParse(v);
+                                provider.setAvCostPrice(
+                                  item.id,
+                                  v.trim().isEmpty ? null : (parsed ?? 0),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 110,
+                            child: Text(
+                              formatMoney(line?.total ?? 0, currency),
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          avRowIcon(
+                            Icons.delete_outline,
+                            'Remove this line',
+                            () => provider.removeAvCostExtraCable(item.id),
+                            danger: true,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
             ],
           ],
         ),
@@ -771,6 +940,207 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
   }
 
+  // --- adding a part that is not on the drawing ----------------------------
+
+  /// Picks a catalog part and adds it to the estimate without it appearing on
+  /// any drawing.
+  ///
+  /// Both cards need this for the same reason: not everything on an order is
+  /// on a diagram. A spare shelf, a box of blanks, a spool of Cat6A and the
+  /// bag of patch leads are all real money, and none of them is a rack slot or
+  /// a run between two ports. Before this they had to go in "Other items",
+  /// divorced from the parts list and invisible to anyone reading the hardware
+  /// or cabling totals.
+  Future<void> _addExtraPart(
+    BuildContext context,
+    AppStateProvider provider, {
+    required bool cable,
+  }) async {
+    final library = provider.avDeviceLibrary;
+    final parts = cable ? library.cables : library.rackHardware;
+    final searchController = TextEditingController();
+    final qtyController = TextEditingController(text: '1');
+    final nameController = TextEditingController();
+    String? selectedModel;
+
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final matches =
+              searchCatalog(parts, searchController.text, limit: parts.length);
+          return AlertDialog(
+            title: Text(cable ? 'Add cable' : 'Add rack hardware'),
+            content: SizedBox(
+              width: 560,
+              height: 520,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    cable
+                        ? 'Cable that is not a run on the diagram — a spool, '
+                              'a bag of patch leads, a drop somebody else is '
+                              'pulling. Quoted with the counted runs and '
+                              'marked as miscellaneous.'
+                        : 'Hardware bought for the job without going into a '
+                              'frame here. Quoted with the racked hardware and '
+                              'marked as not racked.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: searchController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: cable
+                          ? 'Search the cable types'
+                          : 'Search the parts list',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: matches.isEmpty
+                        ? Center(
+                            child: Text(
+                              'Nothing in the catalog matches. Name it below '
+                              'and type its price on the line instead.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(ctx).textTheme.bodySmall,
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: matches.length,
+                            itemBuilder: (ctx, i) {
+                              final t = matches[i];
+                              final price =
+                                  t.priceForTier(provider.pricingTier);
+                              return ListTile(
+                                dense: true,
+                                selected: t.model == selectedModel,
+                                leading: Icon(
+                                  cable
+                                      ? Icons.cable
+                                      : iconForRackItem(t.category),
+                                  size: 20,
+                                ),
+                                title: Text(
+                                  t.model,
+                                  style: const TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  [
+                                    if (t.category.isNotEmpty) t.category,
+                                    if (t.rackUnits > 0) '${t.rackUnits}U',
+                                    price.price > 0
+                                        ? formatMoney(price.price,
+                                            provider.currencySymbol)
+                                        : 'not priced',
+                                  ].join(' · '),
+                                  style: const TextStyle(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () => setLocal(() {
+                                  selectedModel = t.model;
+                                  nameController.text = t.model;
+                                }),
+                              );
+                            },
+                          ),
+                  ),
+                  const Divider(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: nameController,
+                          decoration: InputDecoration(
+                            labelText: 'Name on the estimate',
+                            hintText: cable
+                                ? 'e.g. Cat6A spool, 1000 ft'
+                                : 'e.g. Spare 2U shelf',
+                            isDense: true,
+                          ),
+                          onChanged: (_) => setLocal(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 100,
+                        child: TextField(
+                          controller: qtyController,
+                          decoration: const InputDecoration(
+                            labelText: 'Qty',
+                            isDense: true,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9.]')),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    selectedModel == null
+                        ? 'Nothing picked — it goes on by name, and you type '
+                              'its price on the line.'
+                        : 'Priced from the catalog: $selectedModel',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed:
+                    selectedModel == null && nameController.text.trim().isEmpty
+                        ? null
+                        : () => Navigator.of(ctx).pop(true),
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (added != true) return;
+    final typed = double.tryParse(qtyController.text.trim()) ?? 1;
+    final qty = typed <= 0 ? 1.0 : typed;
+    final name = nameController.text.trim().isEmpty
+        ? (selectedModel ?? '')
+        : nameController.text.trim();
+    final template = library.templateForModel(selectedModel ?? '');
+
+    if (cable) {
+      provider.addAvCostExtraCable(
+        catalogModel: selectedModel ?? '',
+        description: name,
+        qty: qty,
+      );
+    } else {
+      provider.addAvCostExtraHardware(
+        catalogModel: selectedModel ?? '',
+        description: name,
+        category: template?.category ?? '',
+        qty: qty,
+      );
+    }
+  }
+
+  // --- export --------------------------------------------------------------
   /// The price typed on THIS room for [line], or '' when it is taking the
   /// catalog / base-cost figure.
   String _roomPriceText(AppStateProvider provider, CostLine line) {

@@ -1437,6 +1437,79 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // --- parts bought for the job but not on the drawing ----------------------
+  //  A spare shelf, a box of blanks, a spool of cable. These belong ON the
+  //  hardware and cabling lines rather than in "Other items", because that is
+  //  where somebody reading the quote looks for them — and because they are
+  //  priced from the catalog like everything else.
+
+  CostLineItem addAvCostExtraHardware({
+    String catalogModel = '',
+    String description = '',
+    String category = '',
+    double qty = 1,
+    double unitPrice = 0,
+  }) {
+    final item = CostLineItem(
+      id: _nextCostId('HW_'),
+      description: description,
+      category: category,
+      qty: qty,
+      unitPrice: unitPrice,
+      catalogModel: catalogModel,
+    );
+    avCost.extraHardware.add(item);
+    notifyListeners();
+    return item;
+  }
+
+  void updateAvCostExtraHardware(CostLineItem item) {
+    final index = avCost.extraHardware.indexWhere((i) => i.id == item.id);
+    if (index < 0) return;
+    avCost.extraHardware[index] = item;
+    notifyListeners();
+  }
+
+  void removeAvCostExtraHardware(String itemId) {
+    avCost.extraHardware.removeWhere((i) => i.id == itemId);
+    // A room price typed against a line that no longer exists would sit in the
+    // sidecar forever, and reappear if the id were ever reused.
+    avCost.priceOverrides.remove(itemId);
+    notifyListeners();
+  }
+
+  CostLineItem addAvCostExtraCable({
+    String catalogModel = '',
+    String description = '',
+    double qty = 1,
+    double unitPrice = 0,
+  }) {
+    final item = CostLineItem(
+      id: _nextCostId('CBL_'),
+      description: description,
+      category: kCategoryCable,
+      qty: qty,
+      unitPrice: unitPrice,
+      catalogModel: catalogModel,
+    );
+    avCost.extraCables.add(item);
+    notifyListeners();
+    return item;
+  }
+
+  void updateAvCostExtraCable(CostLineItem item) {
+    final index = avCost.extraCables.indexWhere((i) => i.id == item.id);
+    if (index < 0) return;
+    avCost.extraCables[index] = item;
+    notifyListeners();
+  }
+
+  void removeAvCostExtraCable(String itemId) {
+    avCost.extraCables.removeWhere((i) => i.id == itemId);
+    avCost.priceOverrides.remove(itemId);
+    notifyListeners();
+  }
+
   // --- cabling: counted off the diagram, topped up by hand ------------------
 
   /// Whether the runs drawn on the AV flow are priced into the estimate.
@@ -2043,6 +2116,8 @@ class AppStateProvider extends ChangeNotifier {
       for (final id in [
         for (final f in avCost.fees) f.id,
         for (final i in avCost.items) i.id,
+        for (final i in avCost.extraHardware) i.id,
+        for (final i in avCost.extraCables) i.id,
       ]) {
         final match = RegExp(r'_(\d+)$').firstMatch(id);
         if (match != null) {
