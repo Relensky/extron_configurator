@@ -191,8 +191,11 @@ def scrape(d, url):
     if "404.aspx" in d.current_url:
         rec["error"] = "404"
         return rec
+    # Generously: a page that is merely slow must not be recorded as a product
+    # with no published price, because the two are indistinguishable
+    # afterwards and one of them is wrong.
     try:
-        WebDriverWait(d, 8).until(
+        WebDriverWait(d, 20).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "table.table-price")))
     except TimeoutException:
         rec["noPriceTable"] = True
@@ -205,10 +208,19 @@ def scrape(d, url):
 
     rec["skus"] = parse_price_rows(d.execute_script(PRICE_JS))
 
+    # The specifications tab fills in after the click, so waiting a fixed
+    # moment is a coin toss: a short wait silently yields a page with no heat
+    # figure, which is indistinguishable from a product that never published
+    # one. Poll for the content instead.
+    rows = None
     try:
         d.execute_script(SPEC_JS)
-        time.sleep(0.8)
-        rows = d.execute_script(SPEC_ROWS_JS)
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            rows = d.execute_script(SPEC_ROWS_JS)
+            if rows and len(rows) > 5:
+                break
+            time.sleep(0.4)
     except WebDriverException:
         rows = None
     btu, watts = parse_spec_rows(rows)

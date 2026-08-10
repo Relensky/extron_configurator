@@ -103,10 +103,27 @@ void main() {
     }
   });
 
-  test('nothing is metered — the drawings do not say', () {
-    // Guards the import against inventing figures: a fabricated figure is
-    // worse than a blank one, because a blank is reported as missing.
-    expect(catalog.all.every((e) => e.powerWatts == 0), isTrue);
+  test('a metered entry says where the figure came from', () {
+    // The drawings carry no wattage, so for a long time nothing here was
+    // metered at all. Some entries are now — the projectors, off their
+    // manufacturer spec pages (tools/import_projectorcentral.py) — which
+    // makes the blanket "nothing is metered" check the wrong guard. The
+    // point it was making still stands: a fabricated figure is worse than a
+    // blank one, because a blank is reported as missing and a number is
+    // believed. So the rule is provenance — a wattage must have a page
+    // behind it.
+    final metered = catalog.all.where((e) => e.powerWatts > 0).toList();
+    for (final entry in metered) {
+      expect(entry.url.trim(), isNotEmpty,
+          reason: '${entry.model} has a wattage but no source page');
+      expect(entry.powerWatts, lessThan(20000),
+          reason: '${entry.model}: that is a parse error, not a projector');
+    }
+
+    // And most of the catalog is still blank, because no source covers it.
+    final unmetered = catalog.all.where((e) => e.powerWatts == 0).length;
+    expect(unmetered, greaterThan(metered.length),
+        reason: 'a catalog with no gaps means something was invented');
   });
 
   test('prices came from a price list, and only where one matched', () {

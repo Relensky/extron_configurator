@@ -65,3 +65,32 @@ number and requiring the model name to agree before it writes anything.
 Existing MSRP is left alone (it carries the price list's date); `--fill-msrp`
 fills entries that have none. Everything it declines to match is listed in the
 report.
+
+## Projectors
+
+The projectors need a different source: Extron's drawings do not carry their
+power draw, and Panasonic and Epson publish it per model with no list.
+`projectorcentral.com` has one page per model with the draw and the end of
+production on it, and unlike extron.com it takes a plain HTTP client.
+
+```bash
+python tools/match_projectorcentral.py av_devices.json --out pc_matched.json --sitemap pc_urls.json
+python tools/scrape_projectorcentral.py --matched pc_matched.json --out pc_scraped.jsonl
+python tools/import_projectorcentral.py pc_scraped.jsonl av_devices.json --report pc_report.txt
+```
+
+Matching is the hard part and is deliberately its own step, written to a file
+somebody can read before it becomes wattages: one projector is sold as
+`PT-EW540` here, `pt-ew540u` in the US and `pt-ew540ul` without a lens, and
+Epson's `EB-G7100` is the US `Pro G7100`. Every row records whether it matched
+**exact**, by **region** letter, or by market **alias**, and the import lists
+the inexact ones. Regional variants really do differ — the US BrightLink 685Wi
+draws 373 W and the European EB-685Wi 354 W — so an inexact match is the right
+projector, not guaranteed the right market's figure. `--exact-only` writes
+nothing but exact matches.
+
+Retirement comes off the page's **Status**: `Discontinued <month>` sets
+`retired` and appends the end-of-production month to the entry's notes. The
+import only ever *sets* that flag — something retired by hand stays retired,
+because the reason may be local (off contract, not stocked) rather than the
+manufacturer's.

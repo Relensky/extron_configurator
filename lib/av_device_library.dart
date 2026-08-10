@@ -201,11 +201,12 @@ class AvDeviceTemplate {
   /// them. Null on everything else.
   final SignalType? cableSignal;
 
-  /// The manufacturer's page for this model. A price, a rack height and a heat
-  /// figure all came off a page somebody read, and next year somebody has to
-  /// check whether they still hold — keeping the link on the entry is the
-  /// difference between re-checking a spec and hunting for it. Empty when
-  /// nobody has recorded one.
+  /// The page this entry's figures were read off — the manufacturer's product
+  /// page for the Extron gear, projectorcentral.com for the projectors. A
+  /// price, a wattage and a heat figure all came from somewhere, and next year
+  /// somebody has to check whether they still hold; keeping the link on the
+  /// entry is the difference between re-checking a spec and hunting for it.
+  /// Empty when nobody has recorded one.
   final String url;
 
   final String notes;

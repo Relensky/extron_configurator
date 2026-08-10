@@ -364,3 +364,15 @@ not json at all
 ^
 
 --------------------------------------------------
+[2026-08-10T03:28:02.940114] ERROR: Failed to load AV flow from C:\Users\derek\AppData\Local\Temp\av_flow_sidecar_test_25795e2d\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T03:28:18.751151] ERROR: Failed to load the control schematic from C:\Users\derek\AppData\Local\Temp\schematic_sidecar_test_51ed2a63\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
