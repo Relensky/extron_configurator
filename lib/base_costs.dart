@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'app_logger.dart';
+import 'av_device_library.dart' show PricingTier;
 
 /// ============================================================================
 ///  BASE COSTS
@@ -26,6 +27,12 @@ import 'app_logger.dart';
 ///
 ///  A base cost of 0 means "not set" and is skipped rather than costing a
 ///  camera at nothing — the same rule the rate card uses for an unfilled role.
+///
+///  Each category carries BOTH published prices, exactly as a catalog entry
+///  does: the list price and the education price. A budget drawn up before the
+///  models are chosen still gets quoted at one tier or the other, and a card
+///  with only one figure on it would have every early estimate reading high or
+///  low depending on which way the job went.
 /// ============================================================================
 
 class BaseCost {
@@ -33,32 +40,66 @@ class BaseCost {
   /// case-insensitively against [AvDeviceTemplate.category].
   final String category;
 
-  /// Typical unit price. 0 means "not set".
+  /// Typical unit price at list (MSRP). 0 means "not set". Kept under the
+  /// plain name `price` so cards written before there were two tiers still
+  /// read, the same spelling the device catalog uses.
   final double price;
+
+  /// Typical unit price at education / institutional pricing. 0 = not set.
+  final double educationPrice;
 
   /// What this figure assumes — the spec level it was priced at.
   final String notes;
 
-  const BaseCost({required this.category, this.price = 0, this.notes = ''});
+  const BaseCost({
+    required this.category,
+    this.price = 0,
+    this.educationPrice = 0,
+    this.notes = '',
+  });
 
-  bool get isSet => price > 0;
+  /// True when either tier has a figure — one price is still a price.
+  bool get isSet => price > 0 || educationPrice > 0;
 
-  BaseCost copyWith({String? category, double? price, String? notes}) =>
-      BaseCost(
-        category: category ?? this.category,
-        price: price ?? this.price,
-        notes: notes ?? this.notes,
-      );
+  /// The figure for [tier], and whether it had to fall back to the other tier
+  /// because the one asked for was never entered. Same ladder, and the same
+  /// reporting, as [AvDeviceTemplate.priceForTier].
+  ({double price, bool fallback}) priceForTier(PricingTier tier) {
+    final wanted = tier == PricingTier.education ? educationPrice : price;
+    if (wanted > 0) return (price: wanted, fallback: false);
+    final other = tier == PricingTier.education ? price : educationPrice;
+    if (other > 0) return (price: other, fallback: true);
+    return (price: 0, fallback: false);
+  }
+
+  BaseCost copyWith({
+    String? category,
+    double? price,
+    double? educationPrice,
+    String? notes,
+  }) => BaseCost(
+    category: category ?? this.category,
+    price: price ?? this.price,
+    educationPrice: educationPrice ?? this.educationPrice,
+    notes: notes ?? this.notes,
+  );
 
   Map<String, dynamic> toJson() => {
     'category': category,
     'price': price,
+    'educationPrice': educationPrice,
     if (notes.isNotEmpty) 'notes': notes,
   };
 
   factory BaseCost.fromJson(Map<String, dynamic> json) => BaseCost(
     category: json['category']?.toString() ?? '',
     price: (json['price'] as num?)?.toDouble() ?? 0,
+    // 'eduPrice' is read as an alias for the same reason the catalog reads it:
+    // it is what a hand-written card tends to say.
+    educationPrice:
+        (json['educationPrice'] as num?)?.toDouble() ??
+        (json['eduPrice'] as num?)?.toDouble() ??
+        0,
     notes: json['notes']?.toString() ?? '',
   );
 }
@@ -119,8 +160,11 @@ class BaseCostBook {
     return null;
   }
 
-  /// The figure to price a [category] device at, or 0 when there isn't one.
-  double priceFor(String category) => byCategory(category)?.price ?? 0;
+  /// The figure to price a [category] device at, at [tier], and whether it
+  /// fell back to the other tier. 0 when the category has no figure at all.
+  ({double price, bool fallback}) priceFor(String category, PricingTier tier) =>
+      byCategory(category)?.priceForTier(tier) ??
+      (price: 0.0, fallback: false);
 
   void upsert(BaseCost cost) {
     final index = costs.indexWhere(
@@ -139,10 +183,12 @@ class BaseCostBook {
   Map<String, dynamic> toJson() => {
     '__readme':
         'Base costs for the Room Config Builder: one typical unit price per '
-        'device category, used when a room has a switcher on the diagram but '
-        'no model chosen yet. A model with a catalog price, or a price typed '
-        'on the room, always wins over the figure here. 0 means "not set" and '
-        'is reported as an unpriced line rather than costed at nothing.',
+        'device category at each of the two published tiers — "price" is MSRP '
+        '(list) and "educationPrice" is the education price — used when a room '
+        'has a switcher on the diagram but no model chosen yet. A model with a '
+        'catalog price, or a price typed on the room, always wins over the '
+        'figure here. 0 means "not set" and is reported as an unpriced line '
+        'rather than costed at nothing.',
     'costs': [for (final c in costs) c.toJson()],
   };
 

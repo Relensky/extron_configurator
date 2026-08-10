@@ -507,6 +507,19 @@ class AvDeviceLibrary {
     return list;
   }
 
+  /// The boxes — everything that is a piece of equipment rather than a cable,
+  /// a rack part, a consumable or a billable line. What the estimate offers
+  /// when a device is being quoted without appearing on any diagram.
+  List<AvDeviceTemplate> get equipment => active
+      .where(
+        (t) =>
+            !t.isCable &&
+            !t.isMiscItem &&
+            !t.isRackHardware &&
+            !t.isConsumable,
+      )
+      .toList();
+
   List<AvDeviceTemplate> get consumables =>
       active.where((t) => t.isConsumable).toList();
 

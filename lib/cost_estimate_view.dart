@@ -14,6 +14,7 @@ import 'av_rack_view.dart' show iconForRackItem;
 import 'base_costs_dialog.dart';
 import 'cost_estimate.dart';
 import 'export_tools.dart';
+import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
@@ -36,9 +37,9 @@ import 'xlsx_writer.dart';
 /// ============================================================================
 
 /// What the "add a part that isn't on the drawing" picker is being opened for.
-/// The three differ in which slice of the catalog they offer and which list on
+/// The four differ in which slice of the catalog they offer and which list on
 /// the estimate the result lands on, and nothing else.
-enum _ExtraPart { cable, hardware, misc }
+enum _ExtraPart { equipment, cable, hardware, misc }
 
 class CostEstimateView extends StatefulWidget {
   /// The diagram to price. Null means "read it from the provider", which is
@@ -290,10 +291,40 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Equipment (${estimate.equipment.length} line'
-              '${estimate.equipment.length == 1 ? '' : 's'})',
-              style: theme.textTheme.titleSmall,
+            Row(
+              children: [
+                Text(
+                  'Equipment (${estimate.equipment.length} line'
+                  '${estimate.equipment.length == 1 ? '' : 's'})',
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'counted off the signal flow diagram, plus anything added '
+                    'here that is quoted without being drawn',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.disabledColor,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Two ways on, the same pair the "Other items" card offers:
+                // off the catalog, so the price follows a revision; or a plain
+                // line for the box that has no catalog entry and a figure
+                // somebody was quoted over the phone.
+                TextButton.icon(
+                  icon: const Icon(Icons.playlist_add, size: 16),
+                  label: const Text('Add from catalog'),
+                  onPressed: () => _addExtraPart(context, provider,
+                      kind: _ExtraPart.equipment),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add line'),
+                  onPressed: () => provider.addAvCostExtraEquipment(),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             _headerRow(theme, const [
@@ -311,100 +342,146 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text(
                   'No devices on the AV diagram yet — place some on the '
-                  'Signal Flow page and they appear here.',
+                  'Signal Flow page and they appear here, or add a line for '
+                  'something being quoted that nobody has drawn.',
                 ),
               ),
             for (final line in estimate.equipment)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        line.description,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        line.model.isEmpty ? '—' : line.model,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.disabledColor,
+              Builder(
+                builder: (context) {
+                  // Lines added here keep an editable name and quantity and a
+                  // way out; a device on the diagram takes both from the
+                  // drawing, which is the whole point of counting them there.
+                  final extra = provider.avCost.extraEquipment
+                      .where((i) => i.id == line.key)
+                      .firstOrNull;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: extra == null
+                              ? Text(
+                                  line.description,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 13),
+                                )
+                              : LiveTextField(
+                                  fieldId: 'eqpdesc_${extra.id}',
+                                  initial: extra.description,
+                                  hint: 'e.g. Owner-furnished display',
+                                  onChanged: (v) =>
+                                      provider.updateAvCostExtraEquipment(
+                                    extra.copyWith(description: v),
+                                  ),
+                                ),
                         ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 60,
-                      child: Text(
-                        '×${line.qty.toStringAsFixed(0)}',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 130,
-                      child: LiveTextField(
-                        fieldId: 'price_${line.key}',
-                        // The box holds THIS ROOM'S price and nothing else.
-                        // Showing the catalog figure in it made every line
-                        // look like it had been quoted by hand, and left the
-                        // box disagreeing with the row when the catalog or
-                        // the base cost changed underneath it. Blank means
-                        // "use whatever the row resolved to" — which the
-                        // hint spells out.
-                        initial: _roomPriceText(provider, line),
-                        prefix: currency,
-                        numeric: true,
-                        hint: _resolvedPriceHint(line),
-                        onChanged: (v) {
-                          final parsed = double.tryParse(v);
-                          provider.setAvCostPrice(
-                            line.key,
-                            v.trim().isEmpty ? null : (parsed ?? 0),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 110,
-                      child: Text(
-                        formatMoney(line.total, currency),
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            extra == null
+                                ? (line.model.isEmpty ? '—' : line.model)
+                                : (line.model.isEmpty
+                                      ? 'not on the diagram'
+                                      : '${line.model} · not on the diagram'),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.disabledColor,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 92,
-                      child: Text(
-                        kPriceSourceLabels[line.source] ?? '',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: line.source == PriceSource.none
-                              ? theme.colorScheme.error
-                              : theme.disabledColor,
+                        SizedBox(
+                          width: 60,
+                          child: extra == null
+                              ? Text(
+                                  '×${line.qty.toStringAsFixed(0)}',
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(fontSize: 13),
+                                )
+                              : LiveTextField(
+                                  fieldId: 'eqpqty_${extra.id}',
+                                  initial: trimNumber(extra.qty),
+                                  numeric: true,
+                                  onChanged: (v) =>
+                                      provider.updateAvCostExtraEquipment(
+                                    extra.copyWith(
+                                      qty: double.tryParse(v) ?? 0,
+                                    ),
+                                  ),
+                                ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 130,
+                          child: LiveTextField(
+                            fieldId: 'price_${line.key}',
+                            // The box holds THIS ROOM'S price and nothing
+                            // else. Showing the catalog figure in it made
+                            // every line look like it had been quoted by
+                            // hand, and left the box disagreeing with the row
+                            // when the catalog or the base cost changed
+                            // underneath it. Blank means "use whatever the row
+                            // resolved to" — which the hint spells out.
+                            initial: _roomPriceText(provider, line),
+                            prefix: currency,
+                            numeric: true,
+                            hint: _resolvedPriceHint(line),
+                            onChanged: (v) {
+                              final parsed = double.tryParse(v);
+                              provider.setAvCostPrice(
+                                line.key,
+                                v.trim().isEmpty ? null : (parsed ?? 0),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 110,
+                          child: Text(
+                            formatMoney(line.total, currency),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 92,
+                          child: Text(
+                            kPriceSourceLabels[line.source] ?? '',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: line.source == PriceSource.none
+                                  ? theme.colorScheme.error
+                                  : theme.disabledColor,
+                            ),
+                          ),
+                        ),
+                        if (extra == null)
+                          avRowIcon(
+                            Icons.restart_alt,
+                            'Back to the catalog price',
+                            line.source == PriceSource.override
+                                ? () => provider.setAvCostPrice(line.key, null)
+                                : null,
+                          )
+                        else
+                          avRowIcon(
+                            Icons.delete_outline,
+                            'Remove this line',
+                            () => provider
+                                .removeAvCostExtraEquipment(extra.id),
+                            danger: true,
+                          ),
+                      ],
                     ),
-                    avRowIcon(
-                      Icons.restart_alt,
-                      'Back to the catalog price',
-                      line.source == PriceSource.override
-                          ? () => provider.setAvCostPrice(line.key, null)
-                          : null,
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
           ],
         ),
@@ -963,6 +1040,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   }) async {
     final library = provider.avDeviceLibrary;
     final parts = switch (kind) {
+      _ExtraPart.equipment => library.equipment,
       _ExtraPart.cable => library.cables,
       _ExtraPart.hardware => library.rackHardware,
       _ExtraPart.misc => library.miscItems,
@@ -980,6 +1058,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               searchCatalog(parts, searchController.text, limit: parts.length);
           return AlertDialog(
             title: Text(switch (kind) {
+              _ExtraPart.equipment => 'Add equipment',
               _ExtraPart.cable => 'Add cable',
               _ExtraPart.hardware => 'Add rack hardware',
               _ExtraPart.misc => 'Add a cost item',
@@ -992,6 +1071,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 children: [
                   Text(
                     switch (kind) {
+                      _ExtraPart.equipment =>
+                        'A box on the quote that is not on the diagram — '
+                            'something somebody else is installing, a spare, '
+                            'or a stand-in for a decision not yet made. It is '
+                            'quoted with the drawn devices and marked as not '
+                            'on the diagram. Pick nothing and it goes on as a '
+                            'plain line at whatever price you type.',
                       _ExtraPart.cable =>
                         'Cable that is not a run on the diagram — a spool, '
                             'a bag of patch leads, a drop somebody else is '
@@ -1016,6 +1102,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     autofocus: true,
                     decoration: InputDecoration(
                       labelText: switch (kind) {
+                        _ExtraPart.equipment => 'Search the device catalog',
                         _ExtraPart.cable => 'Search the cable types',
                         _ExtraPart.hardware => 'Search the parts list',
                         _ExtraPart.misc => 'Search the cost items',
@@ -1048,6 +1135,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 selected: t.model == selectedModel,
                                 leading: Icon(
                                   switch (kind) {
+                                    _ExtraPart.equipment => Icons.developer_board,
                                     _ExtraPart.cable => Icons.cable,
                                     _ExtraPart.hardware =>
                                       iconForRackItem(t.category),
@@ -1089,6 +1177,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           decoration: InputDecoration(
                             labelText: 'Name on the estimate',
                             hintText: switch (kind) {
+                              _ExtraPart.equipment =>
+                                'e.g. Owner-furnished 86" display',
                               _ExtraPart.cable => 'e.g. Cat6A spool, 1000 ft',
                               _ExtraPart.hardware => 'e.g. Spare 2U shelf',
                               _ExtraPart.misc => 'e.g. Display mount',
@@ -1154,6 +1244,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final template = library.templateForModel(selectedModel ?? '');
 
     switch (kind) {
+      case _ExtraPart.equipment:
+        provider.addAvCostExtraEquipment(
+          catalogModel: selectedModel ?? '',
+          description: name,
+          category: template?.category ?? '',
+          qty: qty,
+        );
       case _ExtraPart.cable:
         provider.addAvCostExtraCable(
           catalogModel: selectedModel ?? '',
@@ -1354,30 +1451,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       children: [
                         SizedBox(
                           width: 182,
-                          child: DropdownButtonFormField<String>(
-                            initialValue: book.byId(line.rateId) == null
-                                ? null
-                                : line.rateId,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                            ),
-                            items: [
-                              for (final r in book.rates)
-                                DropdownMenuItem(
-                                  value: r.id,
-                                  child: Text(
-                                    r.isSet
-                                        ? '${r.name} '
-                                              '(${formatMoney(r.hourlyRate, currency)})'
-                                        : '${r.name} (no rate)',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                            ],
+                          child: _JobTypeField(
+                            book: book,
+                            rateId: line.rateId,
+                            currency: currency,
                             onChanged: (v) => provider.updateAvCostLabor(
-                              line.copyWith(rateId: v ?? ''),
+                              line.copyWith(rateId: v),
                             ),
                           ),
                         ),
@@ -1896,4 +1975,202 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       ],
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+//  JOB TYPE PICKER
+// ---------------------------------------------------------------------------
+
+/// The job-type cell on a labor row.
+///
+/// No longer a [DropdownButtonFormField]. A dense dropdown clamps its closed
+/// button to the height of one line and clips what does not fit, so any rate
+/// named more than a few characters wrapped inside the box and had its second
+/// line sliced through the middle — which is what the cell looked broken
+/// doing. A published billing schedule is also far too long to find anything
+/// in by scrolling a menu, so this opens a searchable list instead and shows
+/// one ellipsized line when it is closed.
+///
+/// The hourly figure is deliberately not repeated here: the Rate/hr box two
+/// columns over already shows what this line costs at, and the name needs
+/// every pixel of a 182-wide cell.
+class _JobTypeField extends StatelessWidget {
+  final LaborRateBook book;
+
+  /// The selected [LaborRate.id]; '' when the line carries its own rate.
+  final String rateId;
+  final String currency;
+
+  /// Called with the chosen id, or '' when the job type is cleared. Not called
+  /// at all when the picker is dismissed.
+  final ValueChanged<String> onChanged;
+
+  const _JobTypeField({
+    required this.book,
+    required this.rateId,
+    required this.currency,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final rate = book.byId(rateId);
+    return InkWell(
+      onTap: () async {
+        final picked = await _pickJobType(context, book, currency, rateId);
+        if (picked != null) onChanged(picked);
+      },
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          isDense: true,
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.fromLTRB(8, 9, 4, 9),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                rate?.name ?? (rateId.isEmpty ? 'Pick a job type' : rateId),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  // An id with no rate behind it means the card no longer has
+                  // that job type — worth seeing rather than showing blank.
+                  color: rate == null
+                      ? (rateId.isEmpty
+                            ? theme.hintColor
+                            : theme.colorScheme.error)
+                      : null,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, size: 20, color: theme.hintColor),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Picks a job type off the rate card. Returns the chosen id, '' to clear it,
+/// or null when the dialog is dismissed.
+Future<String?> _pickJobType(
+  BuildContext context,
+  LaborRateBook book,
+  String currency,
+  String current,
+) {
+  final search = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        final theme = Theme.of(ctx);
+        final needle = search.text.trim().toLowerCase();
+        // Notes are searched as well as names, so the class number and the
+        // funding wording on a published schedule both find their rows.
+        final matches = needle.isEmpty
+            ? book.rates
+            : [
+                for (final r in book.rates)
+                  if (r.name.toLowerCase().contains(needle) ||
+                      r.notes.toLowerCase().contains(needle))
+                    r,
+              ];
+        return AlertDialog(
+          title: const Text('Job type'),
+          content: SizedBox(
+            width: 620,
+            height: 500,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'The rate this crew is billed at. Rates live on the shared '
+                  'card, so revising one re-costs every room that uses it — '
+                  'open "Labor rates" to edit them.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: search,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Search the rate card',
+                    prefixIcon: Icon(Icons.search, size: 20),
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setLocal(() {}),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: matches.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No job type on the card matches.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: matches.length,
+                          itemBuilder: (ctx, i) {
+                            final r = matches[i];
+                            return ListTile(
+                              dense: true,
+                              selected: r.id == current,
+                              title: Text(
+                                r.name,
+                                style: const TextStyle(fontSize: 13),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: r.notes.isEmpty
+                                  ? null
+                                  : Text(
+                                      r.notes,
+                                      style: const TextStyle(fontSize: 11),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                              trailing: Text(
+                                r.isSet
+                                    ? '${formatMoney(r.hourlyRate, currency)}'
+                                          '/hr'
+                                    : 'no rate',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: r.isSet
+                                      ? null
+                                      : theme.colorScheme.error,
+                                ),
+                              ),
+                              onTap: () => Navigator.of(ctx).pop(r.id),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            // A line with no job type still costs, off the rate typed on the
+            // row itself — that is how a one-off subcontract gets recorded.
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(''),
+              child: const Text('No job type'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

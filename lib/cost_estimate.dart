@@ -165,6 +165,17 @@ class RoomCostSettings {
   /// says exactly how many runs of what there are.
   bool includeCabling;
 
+  /// Equipment quoted on the job that is not a device on the diagram — a box
+  /// somebody else is installing, a spare, a stand-in for a decision that has
+  /// not been made yet, or a plain line with a price typed on it.
+  ///
+  /// The diagram is the right source for what a room contains, and a poor one
+  /// for what an order contains: a quote regularly carries a figure for
+  /// something nobody has drawn. Before this those went into "Other items",
+  /// where they read as fees rather than as equipment and never showed up in
+  /// the equipment total anybody was checking.
+  final List<CostLineItem> extraEquipment;
+
   /// Rack hardware bought for the job but not placed in a frame — a spare
   /// shelf, a box of blanks, the plate that goes in somebody else's rack.
   /// Priced like placed hardware and listed with it, marked as not racked.
@@ -192,6 +203,7 @@ class RoomCostSettings {
     List<CostLineItem>? items,
     List<LaborLine>? labor,
     Map<String, double>? cableSpares,
+    List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
   }) : fees = fees ?? [],
@@ -199,6 +211,7 @@ class RoomCostSettings {
        items = items ?? [],
        labor = labor ?? [],
        cableSpares = cableSpares ?? {},
+       extraEquipment = extraEquipment ?? [],
        extraHardware = extraHardware ?? [],
        extraCables = extraCables ?? [];
 
@@ -209,6 +222,7 @@ class RoomCostSettings {
       items.isEmpty &&
       labor.isEmpty &&
       cableSpares.isEmpty &&
+      extraEquipment.isEmpty &&
       extraHardware.isEmpty &&
       extraCables.isEmpty;
 
@@ -222,6 +236,7 @@ class RoomCostSettings {
     items.clear();
     labor.clear();
     cableSpares.clear();
+    extraEquipment.clear();
     extraHardware.clear();
     extraCables.clear();
   }
@@ -236,6 +251,8 @@ class RoomCostSettings {
     'items': [for (final i in items) i.toJson()],
     'labor': [for (final l in labor) l.toJson()],
     if (cableSpares.isNotEmpty) 'cableSpares': cableSpares,
+    if (extraEquipment.isNotEmpty)
+      'extraEquipment': [for (final i in extraEquipment) i.toJson()],
     if (extraHardware.isNotEmpty)
       'extraHardware': [for (final i in extraHardware) i.toJson()],
     if (extraCables.isNotEmpty)
@@ -270,6 +287,11 @@ class RoomCostSettings {
     for (final l in (json['labor'] as List? ?? [])) {
       if (l is Map) {
         labor.add(LaborLine.fromJson(Map<String, dynamic>.from(l)));
+      }
+    }
+    for (final i in (json['extraEquipment'] as List? ?? [])) {
+      if (i is Map) {
+        extraEquipment.add(CostLineItem.fromJson(Map<String, dynamic>.from(i)));
       }
     }
     for (final i in (json['extraHardware'] as List? ?? [])) {
@@ -635,24 +657,29 @@ CostEstimate computeRoomCost({
     final category = (catalog?.category.trim().isNotEmpty ?? false)
         ? catalog!.category.trim()
         : categoryForConfigKey(group.first.id);
-    final basePrice = baseBook.priceFor(category);
+    final basePrice = baseBook.priceFor(category, tier);
 
     final catalogPrice = catalog?.priceForTier(tier);
 
     final double price;
     final PriceSource source;
+    // A base cost entered at only one tier is still worth costing off, but the
+    // line is flagged the same way a one-tier catalog entry is.
+    var otherTier = false;
     if (override != null) {
       price = override;
       source = PriceSource.override;
     } else if (catalogPrice != null && catalogPrice.price > 0) {
       price = catalogPrice.price;
+      otherTier = catalogPrice.fallback;
       source = catalogPrice.fallback
           ? PriceSource.catalogOtherTier
           : PriceSource.catalog;
-    } else if (basePrice > 0) {
+    } else if (basePrice.price > 0) {
       // No model price anywhere, but the shop knows roughly what a camera
       // costs. Better than a hole in the total, as long as the line says so.
-      price = basePrice;
+      price = basePrice.price;
+      otherTier = basePrice.fallback;
       source = PriceSource.baseCost;
     } else {
       price = 0;
@@ -663,7 +690,7 @@ CostEstimate computeRoomCost({
       unpricedDevices += group.qty;
     }
     if (isEstimatedSource(source)) estimatedLines++;
-    if (source == PriceSource.catalogOtherTier) otherTierLines++;
+    if (otherTier) otherTierLines++;
 
     equipment.add(
       CostLine(
@@ -770,6 +797,13 @@ CostEstimate computeRoomCost({
       taxable: item.taxable,
       source: source,
     );
+  }
+
+  // Equipment quoted but not drawn, listed under the devices that are. It
+  // lands in the equipment total rather than in "Other items" because that is
+  // what it is, and because the equipment total is the figure people check.
+  for (final item in settings.extraEquipment) {
+    equipment.add(extraLine(item, ''));
   }
 
   for (final item in settings.extraHardware) {

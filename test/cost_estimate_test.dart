@@ -5,6 +5,7 @@ import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_flow_report.dart';
 import 'package:extron_configurator/av_flow_view.dart';
+import 'package:extron_configurator/base_costs.dart';
 import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/report_tools.dart';
 
@@ -210,6 +211,197 @@ void main() {
       expect(labels.any((l) => l.contains('Freight (4.5% of subtotal)')), isTrue);
       expect(labels.any((l) => l.contains('State tax (8.25%)')), isTrue);
       expect(labels.last, contains('TOTAL'));
+    });
+  });
+
+  /// Not everything on a quote is on the drawing. A line added on the Cost tab
+  /// has to land in the EQUIPMENT total — not in "Other items", where nobody
+  /// checking what the gear costs would ever see it.
+  group('equipment added by hand', () {
+    test('a plain line prices off the figure typed on it', () {
+      final p = room();
+      p.addAvNode(device('S1', 'Switcher', 'Switcher Y')); // 2500
+      final line = p.addAvCostExtraEquipment(
+        description: 'Owner-furnished display',
+        qty: 2,
+      );
+      p.setAvCostPrice(line.id, 1200);
+
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+      );
+
+      final added = estimate.equipment.firstWhere((l) => l.key == line.id);
+      expect(added.description, 'Owner-furnished display');
+      expect(added.qty, 2);
+      expect(added.unitPrice, 1200);
+      expect(added.source, PriceSource.override);
+      // In the equipment total, and nowhere near "Other items".
+      expect(estimate.equipmentTotal, 4900);
+      expect(estimate.extras, isEmpty);
+      expect(estimate.grandTotal, 4900);
+    });
+
+    test('a line off the catalog follows a price revision', () {
+      final p = room();
+      p.addAvCostExtraEquipment(
+        catalogModel: 'Switcher Y',
+        description: 'Spare switcher',
+      );
+
+      expect(
+        computeRoomCost(
+          model: buildAvFlowModel(p),
+          library: catalog(),
+          settings: p.avCost,
+        ).equipmentTotal,
+        2500,
+      );
+
+      final revised = catalog()
+        ..upsert(
+          const AvDeviceTemplate(model: 'Switcher Y', price: 2700, ports: []),
+        );
+      final after = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: revised,
+        settings: p.avCost,
+      );
+      expect(after.equipmentTotal, 2700);
+      expect(after.equipment.single.source, PriceSource.catalog);
+    });
+
+    test('a line with no price anywhere is reported, not costed at zero', () {
+      final p = room();
+      p.addAvCostExtraEquipment(description: 'Something nobody priced', qty: 3);
+
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+      );
+      expect(estimate.isComplete, isFalse);
+      expect(estimate.unpricedLines, 1);
+      expect(estimate.unpricedDevices, 3);
+      expect(estimate.grandTotal, 0);
+    });
+
+    test('survives a round trip through the AV sidecar', () async {
+      final p = room();
+      final line = p.addAvCostExtraEquipment(description: 'Loaner camera');
+      p.setAvCostPrice(line.id, 800);
+
+      final back = RoomCostSettings()..readJson(p.avCost.toJson());
+      expect(back.extraEquipment.single.description, 'Loaner camera');
+      expect(back.priceOverrides[line.id], 800);
+    });
+
+    test('removing a line takes its room price with it', () {
+      final p = room();
+      final line = p.addAvCostExtraEquipment(description: 'Loaner camera');
+      p.setAvCostPrice(line.id, 800);
+      p.removeAvCostExtraEquipment(line.id);
+
+      expect(p.avCost.extraEquipment, isEmpty);
+      expect(p.avCost.priceOverrides, isEmpty);
+    });
+  });
+
+  /// The base-cost card is the last rung the estimate falls back to, and it
+  /// carries both published prices for the same reason the catalog does: an
+  /// early budget still gets quoted at one tier or the other.
+  group('base costs at each tier', () {
+    AppStateProvider roomWithUnmodeledSwitcher() {
+      final p = room();
+      p.addAvNode(
+        AvNode(
+          id: 'SWITCHERDEVICE_1',
+          label: 'Main switcher',
+          model: '',
+          pos: Offset.zero,
+          ports: const [],
+        ),
+      );
+      return p;
+    }
+
+    BaseCostBook card({double msrp = 0, double edu = 0}) =>
+        BaseCostBook(costs: [
+          BaseCost(category: 'Switcher', price: msrp, educationPrice: edu),
+        ]);
+
+    test('each tier costs off its own figure', () {
+      final p = roomWithUnmodeledSwitcher();
+      final book = card(msrp: 3000, edu: 2100);
+
+      final list = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: AvDeviceLibrary.empty(),
+        settings: p.avCost,
+        baseCosts: book,
+      );
+      expect(list.equipment.single.unitPrice, 3000);
+      expect(list.equipment.single.source, PriceSource.baseCost);
+      expect(list.otherTierLines, 0);
+
+      final edu = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: AvDeviceLibrary.empty(),
+        settings: p.avCost,
+        baseCosts: book,
+        tier: PricingTier.education,
+      );
+      expect(edu.equipment.single.unitPrice, 2100);
+      expect(edu.isBudgetary, isTrue);
+    });
+
+    test('a card priced at one tier only falls back and says so', () {
+      final p = roomWithUnmodeledSwitcher();
+      final edu = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: AvDeviceLibrary.empty(),
+        settings: p.avCost,
+        baseCosts: card(msrp: 3000),
+        tier: PricingTier.education,
+      );
+      expect(edu.equipment.single.unitPrice, 3000);
+      expect(edu.equipment.single.source, PriceSource.baseCost);
+      // Worth a look before it goes on a quote: it is a list figure on an
+      // education job.
+      expect(edu.otherTierLines, 1);
+    });
+
+    test('a category with neither tier set is unpriced, not free', () {
+      final p = roomWithUnmodeledSwitcher();
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: AvDeviceLibrary.empty(),
+        settings: p.avCost,
+        baseCosts: card(),
+      );
+      expect(estimate.equipment.single.source, PriceSource.none);
+      expect(estimate.unpricedLines, 1);
+      expect(card().costs.single.isSet, isFalse);
+      expect(card(edu: 2100).costs.single.isSet, isTrue);
+    });
+
+    test('both tiers round trip through the card file', () {
+      const cost = BaseCost(
+        category: 'Camera',
+        price: 4000,
+        educationPrice: 2800,
+      );
+      final back = BaseCost.fromJson(cost.toJson());
+      expect(back.price, 4000);
+      expect(back.educationPrice, 2800);
+      // 'eduPrice' is what a hand-written card tends to say.
+      expect(
+        BaseCost.fromJson({'category': 'Camera', 'eduPrice': 2800})
+            .educationPrice,
+        2800,
+      );
     });
   });
 

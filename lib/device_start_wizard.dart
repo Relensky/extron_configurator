@@ -97,8 +97,8 @@ class _DeviceStartWizardState extends State<_DeviceStartWizard> {
   double? _unitPrice(AppStateProvider provider, AvDeviceTemplate t) {
     final catalog = t.priceForTier(provider.pricingTier);
     if (catalog.price > 0) return catalog.price;
-    final base = provider.baseCosts.priceFor(t.category);
-    return base > 0 ? base : null;
+    final base = provider.baseCosts.priceFor(t.category, provider.pricingTier);
+    return base.price > 0 ? base.price : null;
   }
 
   void _add(AvDeviceTemplate t) {

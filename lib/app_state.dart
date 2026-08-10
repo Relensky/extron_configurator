@@ -1440,10 +1440,46 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   // --- parts bought for the job but not on the drawing ----------------------
-  //  A spare shelf, a box of blanks, a spool of cable. These belong ON the
-  //  hardware and cabling lines rather than in "Other items", because that is
-  //  where somebody reading the quote looks for them — and because they are
-  //  priced from the catalog like everything else.
+  //  A box nobody drew, a spare shelf, a box of blanks, a spool of cable.
+  //  These belong ON the equipment, hardware and cabling lines rather than in
+  //  "Other items", because that is where somebody reading the quote looks for
+  //  them — and because they are priced from the catalog like everything else.
+
+  /// Equipment on the quote that is not on the diagram. [catalogModel] empty
+  /// makes it a plain line: whatever it is called, at whatever price gets
+  /// typed on it.
+  CostLineItem addAvCostExtraEquipment({
+    String catalogModel = '',
+    String description = '',
+    String category = '',
+    double qty = 1,
+    double unitPrice = 0,
+  }) {
+    final item = CostLineItem(
+      id: _nextCostId('EQP_'),
+      description: description,
+      category: category,
+      qty: qty,
+      unitPrice: unitPrice,
+      catalogModel: catalogModel,
+    );
+    avCost.extraEquipment.add(item);
+    notifyListeners();
+    return item;
+  }
+
+  void updateAvCostExtraEquipment(CostLineItem item) {
+    final index = avCost.extraEquipment.indexWhere((i) => i.id == item.id);
+    if (index < 0) return;
+    avCost.extraEquipment[index] = item;
+    notifyListeners();
+  }
+
+  void removeAvCostExtraEquipment(String itemId) {
+    avCost.extraEquipment.removeWhere((i) => i.id == itemId);
+    avCost.priceOverrides.remove(itemId);
+    notifyListeners();
+  }
 
   CostLineItem addAvCostExtraHardware({
     String catalogModel = '',
@@ -2118,6 +2154,7 @@ class AppStateProvider extends ChangeNotifier {
       for (final id in [
         for (final f in avCost.fees) f.id,
         for (final i in avCost.items) i.id,
+        for (final i in avCost.extraEquipment) i.id,
         for (final i in avCost.extraHardware) i.id,
         for (final i in avCost.extraCables) i.id,
       ]) {

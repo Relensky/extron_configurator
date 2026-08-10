@@ -81,17 +81,21 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
         ],
       ),
       content: SizedBox(
-        width: 760,
+        // Wide enough for both tiers plus a readable note column; the single
+        // price card fitted in 760 and two do not.
+        width: 900,
         height: 480,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'One typical unit price per category, used when a device on the '
-              'diagram has no model chosen or the catalog does not price the '
-              'one it has. A price typed on the room, or a catalog price for '
-              'the actual model, always wins. 0 means "not set": the line is '
-              'reported as unpriced rather than costed at nothing.',
+              'One typical unit price per category at each published tier, '
+              'used when a device on the diagram has no model chosen or the '
+              'catalog does not price the one it has. A price typed on the '
+              'room, or a catalog price for the actual model, always wins. '
+              'A tier left blank falls back to the other one and the estimate '
+              'says so; both blank means "not set", and the line is reported '
+              'as unpriced rather than costed at nothing.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -102,9 +106,16 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
                   child: Text('Category', style: theme.textTheme.labelSmall),
                 ),
                 SizedBox(
-                  width: 140,
+                  width: 148,
                   child: Text(
-                    'Typical unit price',
+                    'MSRP (list)',
+                    style: theme.textTheme.labelSmall,
+                  ),
+                ),
+                SizedBox(
+                  width: 148,
+                  child: Text(
+                    'Education price',
                     style: theme.textTheme.labelSmall,
                   ),
                 ),
@@ -149,6 +160,26 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
                                 provider,
                                 cost.copyWith(
                                   price: double.tryParse(v.trim()) ?? 0,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 140,
+                            child: LiveTextField(
+                              fieldId: 'baseedu_${cost.category}',
+                              initial: cost.educationPrice == 0
+                                  ? ''
+                                  : trimNumber(cost.educationPrice),
+                              prefix: provider.avCost.currency,
+                              hint: 'not set',
+                              numeric: true,
+                              onChanged: (v) => _update(
+                                provider,
+                                cost.copyWith(
+                                  educationPrice:
+                                      double.tryParse(v.trim()) ?? 0,
                                 ),
                               ),
                             ),
