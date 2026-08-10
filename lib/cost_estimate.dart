@@ -1,5 +1,6 @@
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'base_costs.dart';
 import 'labor_rates.dart';
 import 'report_tools.dart';
 
@@ -16,7 +17,7 @@ import 'report_tools.dart';
 ///
 ///    * FEES are percentages of the total before tax (freight, install,
 ///      contingency, overhead). Any number of them; each says whether it is
-///      itself taxable, because a freight charge usually is and a labour line
+///      itself taxable, because a freight charge usually is and a labor line
 ///      usually isn't.
 ///    * LABOR is priced as rate x techs x hours, against the shared rate card
 ///      (labor_rates.dart) so revising a rate re-costs every estimate that
@@ -42,7 +43,7 @@ class CostFee {
   final double percent;
 
   /// Whether tax is charged on this fee as well. Freight normally is;
-  /// labour normally isn't. Getting this wrong is a quiet few hundred
+  /// labor normally isn't. Getting this wrong is a quiet few hundred
   /// dollars, so it is a per-fee answer rather than a global assumption.
   final bool taxable;
 
@@ -75,7 +76,7 @@ class CostFee {
   );
 }
 
-/// A line that isn't a device on the canvas: labour, cable, mounts, freight
+/// A line that isn't a device on the canvas: labor, cable, mounts, freight
 /// quoted as a figure rather than a percentage.
 class CostLineItem {
   final String id;
@@ -148,44 +149,63 @@ class RoomCostSettings {
   /// The crews on this job: which rate, how many techs, how many hours.
   final List<LaborLine> labor;
 
+  /// Whether the cable runs drawn on the AV flow are priced into the estimate.
+  /// On by default: a room's cabling is a real cost, and the diagram already
+  /// says exactly how many runs of what there are.
+  bool includeCabling;
+
+  /// Signal type name -> extra runs to buy beyond what the diagram shows.
+  /// Spares are a decision, not a diagram fact, so they live here rather than
+  /// being inferred: "three more HDMI leads because two always go missing" is
+  /// the sort of thing a quote should say out loud.
+  final Map<String, double> cableSpares;
+
   RoomCostSettings({
     this.currency = r'$',
     this.taxLabel = 'Sales tax',
     this.taxPercent = 0,
+    this.includeCabling = true,
     List<CostFee>? fees,
     Map<String, double>? priceOverrides,
     List<CostLineItem>? items,
     List<LaborLine>? labor,
+    Map<String, double>? cableSpares,
   }) : fees = fees ?? [],
        priceOverrides = priceOverrides ?? {},
        items = items ?? [],
-       labor = labor ?? [];
+       labor = labor ?? [],
+       cableSpares = cableSpares ?? {};
 
   bool get isEmpty =>
       taxPercent == 0 &&
       fees.isEmpty &&
       priceOverrides.isEmpty &&
       items.isEmpty &&
-      labor.isEmpty;
+      labor.isEmpty &&
+      cableSpares.isEmpty;
 
   void clear() {
     currency = r'$';
     taxLabel = 'Sales tax';
     taxPercent = 0;
+    includeCabling = true;
     fees.clear();
     priceOverrides.clear();
     items.clear();
     labor.clear();
+    cableSpares.clear();
   }
 
   Map<String, dynamic> toJson() => {
     'currency': currency,
     'taxLabel': taxLabel,
     'taxPercent': taxPercent,
+    'includeCabling': includeCabling,
     'fees': [for (final f in fees) f.toJson()],
     'priceOverrides': priceOverrides,
     'items': [for (final i in items) i.toJson()],
     'labor': [for (final l in labor) l.toJson()],
+    if (cableSpares.isNotEmpty) 'cableSpares': cableSpares,
   };
 
   void readJson(Map<String, dynamic> json) {
@@ -193,6 +213,11 @@ class RoomCostSettings {
     currency = json['currency']?.toString() ?? r'$';
     taxLabel = json['taxLabel']?.toString() ?? 'Sales tax';
     taxPercent = (json['taxPercent'] as num?)?.toDouble() ?? 0;
+    // Absent in files written before cabling was priced. On is the right
+    // default there too: the cable types ship unpriced, so an older room gains
+    // a cabling section that says what it needs and reports it as not yet
+    // priced, rather than one that quietly adds money nobody entered.
+    includeCabling = json['includeCabling'] != false;
     for (final f in (json['fees'] as List? ?? [])) {
       if (f is Map) fees.add(CostFee.fromJson(Map<String, dynamic>.from(f)));
     }
@@ -212,6 +237,13 @@ class RoomCostSettings {
       if (l is Map) {
         labor.add(LaborLine.fromJson(Map<String, dynamic>.from(l)));
       }
+    }
+    final spares = json['cableSpares'];
+    if (spares is Map) {
+      spares.forEach((key, value) {
+        final qty = (value as num?)?.toDouble();
+        if (qty != null && qty > 0) cableSpares[key.toString()] = qty;
+      });
     }
   }
 }
@@ -266,19 +298,108 @@ List<DeviceGroup> groupDevices(AvFlowModel model) {
   ];
 }
 
+/// Rack hardware of one kind, counted. Twelve 1U blanks are one order line of
+/// twelve, not twelve lines — the same rule the device pack list follows.
+class RackItemGroup {
+  final String key;
+  final String catalogModel;
+  final String description;
+  final String category;
+  final double qty;
+
+  /// The unit price recorded on the placed items. Used only when the catalog
+  /// entry it came from has gone.
+  final double price;
+
+  const RackItemGroup({
+    required this.key,
+    required this.catalogModel,
+    required this.description,
+    required this.category,
+    required this.qty,
+    required this.price,
+  });
+}
+
+/// Groups placed rack hardware for ordering. Items from the same catalog entry
+/// merge; a one-off typed in by hand merges on its name, so "Blank plate" typed
+/// twice is still one line of two.
+List<RackItemGroup> groupRackItems(List<RackItem> items) {
+  final grouped = <String, List<RackItem>>{};
+  for (final item in items) {
+    final key = item.catalogModel.trim().isNotEmpty
+        ? 'rackitem:model:${item.catalogModel.trim().toLowerCase()}'
+        : 'rackitem:label:${item.label.trim().toLowerCase()}|${item.rackUnits}';
+    grouped.putIfAbsent(key, () => []).add(item);
+  }
+  final out = [
+    for (final e in grouped.entries)
+      RackItemGroup(
+        key: e.key,
+        catalogModel: e.value.first.catalogModel,
+        description: e.value.first.label,
+        category: e.value.first.category,
+        qty: e.value.length.toDouble(),
+        // The highest recorded price rather than the first: an item re-placed
+        // after a price rise should not quote the room at the old figure.
+        price: e.value.fold(0.0, (m, i) => i.price > m ? i.price : m),
+      ),
+  ];
+  out.sort((a, b) => a.description.toLowerCase().compareTo(
+    b.description.toLowerCase(),
+  ));
+  return out;
+}
+
+/// How many runs of each signal type the diagram has. This is the whole point
+/// of drawing the cabling: the cable order is counted from the drawing rather
+/// than guessed, so the two cannot disagree.
+Map<SignalType, int> countCableRuns(AvFlowModel model) {
+  final counts = <SignalType, int>{};
+  final byId = model.nodesById;
+  for (final cable in model.cables) {
+    // A run whose ends no longer exist isn't a run — the same rule the canvas
+    // uses when it declines to draw it.
+    if (!AvFlowModel.cableIsResolvable(cable, byId)) continue;
+    counts[cable.signal] = (counts[cable.signal] ?? 0) + 1;
+  }
+  return counts;
+}
+
 // ---------------------------------------------------------------------------
 //  THE COMPUTED ESTIMATE
 // ---------------------------------------------------------------------------
 
 /// Where a line's unit price came from — shown in the table and the report so
 /// a number can always be traced back to a decision.
-enum PriceSource { override, catalog, none }
+enum PriceSource {
+  override,
+  catalog,
+
+  /// The catalog priced it, but only at the OTHER tier — an education job
+  /// costed off a list price, or the reverse. Called out separately because
+  /// that is a number somebody needs to look at before it goes on a quote.
+  catalogOtherTier,
+  baseCost,
+  none,
+}
 
 const Map<PriceSource, String> kPriceSourceLabels = {
   PriceSource.override: 'Room price',
   PriceSource.catalog: 'Catalog',
+  PriceSource.catalogOtherTier: 'Catalog — other tier',
+  PriceSource.baseCost: 'Base cost',
   PriceSource.none: 'Not priced',
 };
+
+/// True when the line is costed at a category average rather than a real
+/// price. The estimate counts these separately: a budget built on base costs is
+/// a budget, and should not be read as a quote.
+bool isEstimatedSource(PriceSource s) => s == PriceSource.baseCost;
+
+/// True when the figure came from the catalog at all, either tier.
+bool isCatalogSource(PriceSource s) =>
+    s == PriceSource.catalog || s == PriceSource.catalogOtherTier;
 
 class CostLine {
   final String key;
@@ -339,20 +460,37 @@ class LaborCostLine {
 
 class CostEstimate {
   final String currency;
+
+  /// Which published price this estimate was costed from. Recorded on the
+  /// estimate rather than assumed, so a quote read a year later says whether
+  /// it was written at list or at education pricing.
+  final PricingTier tier;
   final List<CostLine> equipment;
+
+  /// Vent plates, blanks, shelves and drawers placed in the racks. Kept apart
+  /// from [equipment] because a rack full of blanking plates is a real line on
+  /// an order and a distracting one in a list of AV devices.
+  final List<CostLine> hardware;
+
+  /// Cable runs counted off the AV flow, one line per signal type, plus the
+  /// spares asked for. Empty when cabling is switched off for this room.
+  final List<CostLine> cabling;
+
   final List<CostLine> extras;
 
   /// Crews, priced from the rate card. Kept apart from [extras] because a
-  /// quote is read as equipment + labour, and because the hours behind the
+  /// quote is read as equipment + labor, and because the hours behind the
   /// figure are what get argued about.
   final List<LaborCostLine> labor;
   final List<FeeAmount> fees;
   final double equipmentTotal;
+  final double hardwareTotal;
+  final double cablingTotal;
   final double extrasTotal;
   final double laborTotal;
   final double laborHours;
 
-  /// Labour lines whose rate is 0 — the rate card has no figure for that job
+  /// Labor lines whose rate is 0 — the rate card has no figure for that job
   /// type yet, so the hours are real but the money is missing.
   final int unratedLabor;
 
@@ -371,13 +509,27 @@ class CostEstimate {
   final int unpricedLines;
   final int unpricedDevices;
 
+  /// Lines costed off the base-cost card rather than a real price. Counted so
+  /// the total can be labeled a budget rather than a quote.
+  final int estimatedLines;
+
+  /// Lines the catalog could only price at the OTHER tier. Worth a look before
+  /// the total goes anywhere: an education job with list prices in it reads
+  /// high, and the reverse reads low.
+  final int otherTierLines;
+
   const CostEstimate({
     required this.currency,
+    this.tier = PricingTier.msrp,
     required this.equipment,
+    required this.hardware,
+    required this.cabling,
     required this.extras,
     required this.labor,
     required this.fees,
     required this.equipmentTotal,
+    required this.hardwareTotal,
+    required this.cablingTotal,
     required this.extrasTotal,
     required this.laborTotal,
     required this.laborHours,
@@ -391,9 +543,17 @@ class CostEstimate {
     required this.grandTotal,
     required this.unpricedLines,
     required this.unpricedDevices,
+    required this.estimatedLines,
+    this.otherTierLines = 0,
   });
 
   bool get isComplete => unpricedLines == 0 && unratedLabor == 0;
+
+  /// True when some of the money on this page came off the base-cost card.
+  bool get isBudgetary => estimatedLines > 0;
+
+  /// The tier's short name, for a column heading or a report row.
+  String get tierLabel => kPricingTierShort[tier] ?? tier.name;
 }
 
 /// Rounds to cents. Percentages of percentages otherwise leave a fraction of a
@@ -406,11 +566,17 @@ CostEstimate computeRoomCost({
   required AvDeviceLibrary library,
   required RoomCostSettings settings,
   LaborRateBook? rates,
+  BaseCostBook? baseCosts,
+  /// Which of a catalog entry's two published prices to cost from.
+  PricingTier tier = PricingTier.msrp,
 }) {
   final book = rates ?? LaborRateBook.builtIn();
+  final baseBook = baseCosts ?? BaseCostBook.builtIn();
   final equipment = <CostLine>[];
   int unpricedLines = 0;
   int unpricedDevices = 0;
+  int estimatedLines = 0;
+  int otherTierLines = 0;
 
   final groups = groupDevices(model)
     ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
@@ -419,14 +585,31 @@ CostEstimate computeRoomCost({
     final catalog = library.templateForModel(group.model);
     final override = settings.priceOverrides[group.key];
 
+    // The category a base cost would be looked up under: what the catalog
+    // says this model is, or — for a device nobody has chosen a model for yet
+    // — what its config section key makes it.
+    final category = (catalog?.category.trim().isNotEmpty ?? false)
+        ? catalog!.category.trim()
+        : categoryForConfigKey(group.first.id);
+    final basePrice = baseBook.priceFor(category);
+
+    final catalogPrice = catalog?.priceForTier(tier);
+
     final double price;
     final PriceSource source;
     if (override != null) {
       price = override;
       source = PriceSource.override;
-    } else if (catalog != null && catalog.price > 0) {
-      price = catalog.price;
-      source = PriceSource.catalog;
+    } else if (catalogPrice != null && catalogPrice.price > 0) {
+      price = catalogPrice.price;
+      source = catalogPrice.fallback
+          ? PriceSource.catalogOtherTier
+          : PriceSource.catalog;
+    } else if (basePrice > 0) {
+      // No model price anywhere, but the shop knows roughly what a camera
+      // costs. Better than a hole in the total, as long as the line says so.
+      price = basePrice;
+      source = PriceSource.baseCost;
     } else {
       price = 0;
       source = PriceSource.none;
@@ -435,18 +618,128 @@ CostEstimate computeRoomCost({
       unpricedLines++;
       unpricedDevices += group.qty;
     }
+    if (isEstimatedSource(source)) estimatedLines++;
+    if (source == PriceSource.catalogOtherTier) otherTierLines++;
 
     equipment.add(
       CostLine(
         key: group.key,
         description: group.label,
         model: group.model,
-        category: catalog?.category ?? '',
+        category: category,
         qty: group.qty.toDouble(),
         unitPrice: price,
         source: source,
       ),
     );
+  }
+
+  // --- rack hardware: the plates, shelves and drawers in the frames --------
+  final hardware = <CostLine>[];
+  for (final line in groupRackItems(model.rackItems)) {
+    final catalog = library.templateForModel(line.catalogModel);
+    final override = settings.priceOverrides[line.key];
+
+    final catalogPrice = catalog?.priceForTier(tier);
+
+    final double price;
+    final PriceSource source;
+    if (override != null) {
+      price = override;
+      source = PriceSource.override;
+    } else if (catalogPrice != null && catalogPrice.price > 0) {
+      // The parts list is the live price; the copy on the placed item is what
+      // it was when it went in, and only stands in when the entry is gone.
+      price = catalogPrice.price;
+      source = catalogPrice.fallback
+          ? PriceSource.catalogOtherTier
+          : PriceSource.catalog;
+    } else if (line.price > 0) {
+      price = line.price;
+      source = PriceSource.override;
+    } else {
+      price = 0;
+      source = PriceSource.none;
+    }
+    if (source == PriceSource.none) {
+      unpricedLines++;
+      unpricedDevices += line.qty.toInt();
+    }
+    if (source == PriceSource.catalogOtherTier) otherTierLines++;
+    hardware.add(
+      CostLine(
+        key: line.key,
+        description: line.description,
+        model: line.catalogModel,
+        category: line.category,
+        qty: line.qty,
+        unitPrice: price,
+        source: source,
+      ),
+    );
+  }
+
+  // --- cabling: one line per signal type on the diagram, plus spares -------
+  final cabling = <CostLine>[];
+  if (settings.includeCabling) {
+    final counts = countCableRuns(model);
+    // A spare for a type with no runs drawn is still a thing being bought, so
+    // the two sets are merged rather than the spares only topping up runs.
+    final types = <SignalType>{
+      ...counts.keys,
+      for (final name in settings.cableSpares.keys) signalFromName(name),
+    }.toList()..sort((a, b) => a.index.compareTo(b.index));
+
+    for (final signal in types) {
+      final drawn = (counts[signal] ?? 0).toDouble();
+      final spares = settings.cableSpares[signal.name] ?? 0;
+      final qty = drawn + spares;
+      if (qty <= 0) continue;
+
+      final key = 'cable:${signal.name}';
+      final catalog = library.cableForSignal(signal);
+      final override = settings.priceOverrides[key];
+
+      final catalogPrice = catalog?.priceForTier(tier);
+
+      final double price;
+      final PriceSource source;
+      if (override != null) {
+        price = override;
+        source = PriceSource.override;
+      } else if (catalogPrice != null && catalogPrice.price > 0) {
+        price = catalogPrice.price;
+        source = catalogPrice.fallback
+            ? PriceSource.catalogOtherTier
+            : PriceSource.catalog;
+      } else {
+        price = 0;
+        source = PriceSource.none;
+      }
+      if (source == PriceSource.none) {
+        unpricedLines++;
+        unpricedDevices += qty.round();
+      }
+      if (source == PriceSource.catalogOtherTier) otherTierLines++;
+
+      cabling.add(
+        CostLine(
+          key: key,
+          description: [
+            catalog?.model.trim().isNotEmpty == true
+                ? catalog!.model
+                : '${kSignalLabels[signal] ?? signal.name} cable',
+            if (spares > 0)
+              '(${trimNumber(drawn)} drawn + ${trimNumber(spares)} spare)',
+          ].join(' '),
+          model: catalog?.model ?? '',
+          category: kCategoryCable,
+          qty: qty,
+          unitPrice: price,
+          source: source,
+        ),
+      );
+    }
   }
 
   final extras = [
@@ -463,7 +756,7 @@ CostEstimate computeRoomCost({
       ),
   ];
 
-  // --- labour: rate x techs x hours, off the shared rate card -------------
+  // --- labor: rate x techs x hours, off the shared rate card -------------
   final labor = <LaborCostLine>[];
   for (final line in settings.labor) {
     final rate = book.byId(line.rateId);
@@ -489,8 +782,12 @@ CostEstimate computeRoomCost({
   final equipmentTotal = _cents(
     equipment.fold(0.0, (sum, l) => sum + l.total),
   );
+  final hardwareTotal = _cents(hardware.fold(0.0, (sum, l) => sum + l.total));
+  final cablingTotal = _cents(cabling.fold(0.0, (sum, l) => sum + l.total));
   final extrasTotal = _cents(extras.fold(0.0, (sum, l) => sum + l.total));
-  final subtotal = _cents(equipmentTotal + extrasTotal + laborTotal);
+  final subtotal = _cents(
+    equipmentTotal + hardwareTotal + cablingTotal + extrasTotal + laborTotal,
+  );
 
   // Every fee is a percentage of the SAME pre-tax subtotal — they don't
   // compound onto each other, because two 5% fees quoted on a job mean 10% of
@@ -510,18 +807,30 @@ CostEstimate computeRoomCost({
   final taxableFees = _cents(
     fees.where((f) => f.fee.taxable).fold(0.0, (sum, f) => sum + f.amount),
   );
+  // Hardware and cable are goods like any other device: taxed on the same
+  // terms as the equipment they go with.
   final taxableBase = _cents(
-    equipmentTotal + taxableExtras + taxableLabor + taxableFees,
+    equipmentTotal +
+        hardwareTotal +
+        cablingTotal +
+        taxableExtras +
+        taxableLabor +
+        taxableFees,
   );
   final tax = _cents(taxableBase * settings.taxPercent / 100);
 
   return CostEstimate(
     currency: settings.currency,
+    tier: tier,
     equipment: equipment,
+    hardware: hardware,
+    cabling: cabling,
     extras: extras,
     labor: labor,
     fees: fees,
     equipmentTotal: equipmentTotal,
+    hardwareTotal: hardwareTotal,
+    cablingTotal: cablingTotal,
     extrasTotal: extrasTotal,
     laborTotal: laborTotal,
     laborHours: laborHours,
@@ -535,6 +844,8 @@ CostEstimate computeRoomCost({
     grandTotal: _cents(subtotal + feeTotal + tax),
     unpricedLines: unpricedLines,
     unpricedDevices: unpricedDevices,
+    estimatedLines: estimatedLines,
+    otherTierLines: otherTierLines,
   );
 }
 
@@ -585,6 +896,8 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
   // Nothing priced, nothing added, no fees, no tax: a totals table of zeros
   // says less than nothing. The caller shows an explanation instead.
   if (estimate.equipment.isEmpty &&
+      estimate.hardware.isEmpty &&
+      estimate.cabling.isEmpty &&
       estimate.extras.isEmpty &&
       estimate.labor.isEmpty &&
       estimate.fees.isEmpty &&
@@ -610,6 +923,50 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
           [
             line.description,
             line.model,
+            line.qty,
+            money(line.unitPrice),
+            money(line.total),
+            kPriceSourceLabels[line.source] ?? '',
+          ],
+      ],
+    ),
+    (
+      title: 'Rack Hardware',
+      header: [
+        'Item',
+        'Kind',
+        'Model',
+        'Qty',
+        'Unit price ($currency)',
+        'Extended ($currency)',
+        'Price from',
+      ],
+      rows: [
+        for (final line in estimate.hardware)
+          [
+            line.description,
+            line.category,
+            line.model,
+            line.qty,
+            money(line.unitPrice),
+            money(line.total),
+            kPriceSourceLabels[line.source] ?? '',
+          ],
+      ],
+    ),
+    (
+      title: 'Cabling',
+      header: [
+        'Cable',
+        'Runs',
+        'Unit price ($currency)',
+        'Extended ($currency)',
+        'Price from',
+      ],
+      rows: [
+        for (final line in estimate.cabling)
+          [
+            line.description,
             line.qty,
             money(line.unitPrice),
             money(line.total),
@@ -668,7 +1025,12 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
   ];
 
   final totals = <List<dynamic>>[
+    ['Priced at', kPricingTierLabels[estimate.tier] ?? estimate.tier.name],
     ['Equipment', money(estimate.equipmentTotal)],
+    if (estimate.hardware.isNotEmpty)
+      ['Rack hardware', money(estimate.hardwareTotal)],
+    if (estimate.cabling.isNotEmpty)
+      ['Cabling', money(estimate.cablingTotal)],
     if (estimate.labor.isNotEmpty) ...[
       [
         'Labor (${trimNumber(estimate.laborHours)} h)',
@@ -706,6 +1068,21 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
         '${estimate.unratedLabor} line'
             '${estimate.unratedLabor == 1 ? '' : 's'} of hours whose job type '
             'has no rate set on the rate card',
+      ],
+    if (estimate.otherTierLines > 0)
+      [
+        'Check before quoting — priced at the other tier',
+        '${estimate.otherTierLines} line'
+            '${estimate.otherTierLines == 1 ? '' : 's'} had no '
+            '${kPricingTierShort[estimate.tier]} price in the catalog and were '
+            'costed at the other one',
+      ],
+    if (estimate.estimatedLines > 0)
+      [
+        'Budget figure, not a quote',
+        '${estimate.estimatedLines} line'
+            '${estimate.estimatedLines == 1 ? '' : 's'} priced from the base '
+            'cost for the category rather than a chosen model',
       ],
   ];
 

@@ -15,26 +15,12 @@ import 'search_match.dart';
 /// Top-level (not a method) because the Devices tab, the Schematic tab and the
 /// AV Flow tab all need the same answer — "which devices does this room
 /// really have?" — and they must agree.
+/// The implementation lives in app_state.dart so the provider can answer the
+/// same question about its own config (the missing-module check needs it, and
+/// a second copy of this rule is a second answer waiting to disagree).
 List<String> getActiveDeviceKeys(
-    Map<String, dynamic> config, Map<String, String> map) {
-  List<String> activeKeys = [];
-  final systemSetup = config['SYSTEM_SETUP'] ?? {};
-
-  // hardware map comes from the UI schema's "device_types" so families
-  // added in ui_schema.json get their tabs without a recompile
-  map.forEach((countKey, prefix) {
-    if (systemSetup.containsKey(countKey)) {
-      var countVal = systemSetup[countKey];
-      int count = (countVal.toString().toLowerCase() == 'yes') ? 1 : (int.tryParse(countVal.toString()) ?? 0);
-
-      for (int i = 1; i <= count; i++) {
-        String expectedKey = '$prefix$i';
-        if (config.containsKey(expectedKey)) activeKeys.add(expectedKey);
-      }
-    }
-  });
-  return activeKeys;
-}
+        Map<String, dynamic> config, Map<String, String> map) =>
+    activeDeviceKeysIn(config, map);
 
 class DynamicDevicesTabsView extends StatefulWidget {
   const DynamicDevicesTabsView({super.key});
@@ -213,7 +199,7 @@ class DeviceConfigurationForm extends StatelessWidget {
 
     // Module changes: ask apply-defaults (new) vs keep-settings (conversion).
     final applyDefaults = await _showModelChangeDialog(context, model, preview);
-    if (applyDefaults == null || !context.mounted) return; // cancelled
+    if (applyDefaults == null || !context.mounted) return; // canceled
 
     moduleController?.text = preview.newModule;
     if (applyDefaults) {
@@ -235,7 +221,7 @@ class DeviceConfigurationForm extends StatelessWidget {
   /// Prompt shown when a model pick switches the device to a different module.
   /// Lists the fields that differ from the new module's defaults and lets the
   /// user apply the module defaults or keep the current settings.
-  /// Returns true = apply defaults, false = keep settings, null = cancelled.
+  /// Returns true = apply defaults, false = keep settings, null = canceled.
   Future<bool?> _showModelChangeDialog(
       BuildContext context, String model, ModelChangePreview preview) {
     String fmt(dynamic v) => (v == null || v == '') ? '(blank)' : v.toString();

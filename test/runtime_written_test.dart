@@ -28,7 +28,7 @@ void main() {
           'gve_room': '239',
           'morning_power_on_time': '06:30:43',
           'nightly_shutdown_time': '23:37:29',
-          'something_nobody_recognises': 'x',
+          'something_nobody_recognizes': 'x',
         },
       };
 
@@ -75,7 +75,7 @@ void main() {
       }
     });
 
-    test('still reports a key nobody recognises', () async {
+    test('still reports a key nobody recognizes', () async {
       final p = AppStateProvider(autoLoadSettings: false)
         ..uiSchema = await schema()
         ..roomConfig = downloadedRoom();
@@ -84,7 +84,7 @@ void main() {
 
       expect(
           p.systemLogs.where(
-              (l) => l.contains('something_nobody_recognises')),
+              (l) => l.contains('something_nobody_recognizes')),
           hasLength(1),
           reason: 'the audit must still earn its keep');
     });

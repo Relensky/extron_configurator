@@ -166,12 +166,12 @@ void main() {
     test('tax lands on equipment plus only the taxable items and fees', () {
       final p = room();
       p.addAvNode(device('S1', 'Switcher', 'Switcher Y')); // 2500
-      final labour = p.addAvCostItem(
-        description: 'Labour',
+      final labor = p.addAvCostItem(
+        description: 'Labor',
         qty: 10,
         unitPrice: 100,
       ); // 1000
-      p.updateAvCostItem(labour.copyWith(taxable: false));
+      p.updateAvCostItem(labor.copyWith(taxable: false));
       final freight = p.addAvCostFee(name: 'Freight', percent: 10); // 350
       final overhead = p.addAvCostFee(name: 'Overhead', percent: 10); // 350
       p.updateAvCostFee(overhead.copyWith(taxable: false));
@@ -185,7 +185,7 @@ void main() {
 
       expect(estimate.subtotal, 3500);
       expect(estimate.feeTotal, 700);
-      // 2500 equipment + 350 taxable freight; the untaxed labour and the
+      // 2500 equipment + 350 taxable freight; the untaxed labor and the
       // untaxed overhead fee stay out of the base.
       expect(estimate.taxableBase, 2850);
       expect(estimate.tax, 285);
@@ -282,7 +282,7 @@ void main() {
     final p = room();
     p.setAvCostTax(percent: 8.25, label: 'State tax', currency: r'$');
     p.addAvCostFee(name: 'Freight', percent: 4);
-    p.addAvCostItem(description: 'Labour', qty: 8, unitPrice: 95);
+    p.addAvCostItem(description: 'Labor', qty: 8, unitPrice: 95);
     p.setAvCostPrice('model:switcher y', 1900);
 
     final json = p.avCost.toJson();

@@ -11,7 +11,7 @@ import 'conversion_colors.dart';
 ///  Shown from the migration dialog after a legacy file is converted. Two
 ///  panes:
 ///
-///    LEFT   the converted config, rendered as JSON and coloured by where each
+///    LEFT   the converted config, rendered as JSON and colored by where each
 ///           value came from — see [ConversionColors] for the three states and
 ///           what each one means. Properties the conversion DROPPED are shown
 ///           in place, struck through, with the reason (an ip_address on a
@@ -131,7 +131,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
     );
   }
 
-  // --- LEFT PANE: the converted config, coloured by provenance --------------
+  // --- LEFT PANE: the converted config, colored by provenance --------------
 
   Widget _buildJsonPane(ConversionColors colors) {
     final provider = widget.provider;
@@ -169,7 +169,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
       if (block is! Map) {
         if (provider.roomConfig.containsKey(sectionKey)) {
           // A scalar at the root of the file. These ARE diffed now, so the
-          // colour means the same here as it does inside a section.
+          // color means the same here as it does inside a section.
           spans.add(TextSpan(
             text: jsonEncode(block),
             style: mono.copyWith(
@@ -338,9 +338,9 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
     );
   }
 
-  /// The row colour, matching what the JSON pane does to the same value: an
+  /// The row color, matching what the JSON pane does to the same value: an
   /// added key is written, a rewritten one is changed, and a removal keeps the
-  /// old file's colour because the old file's value is what it shows.
+  /// old file's color because the old file's value is what it shows.
   Color _kindColor(ConversionChange c, ConversionColors colors) {
     if (c.isConflict) return colors.conflict;
     switch (c.kind) {
@@ -354,7 +354,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
   }
 }
 
-/// The colour key, shown in the dialog title so the colouring in both panes
+/// The color key, shown in the dialog title so the coloring in both panes
 /// (and on the Devices / System tabs) doesn't need explaining twice.
 class _Legend extends StatelessWidget {
   final ConversionColors colors;

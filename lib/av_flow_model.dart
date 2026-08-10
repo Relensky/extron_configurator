@@ -73,11 +73,11 @@ const Map<SignalType, Color> kSignalColors = {
   SignalType.micLine: Color(0xFFFFA726), // orange
   SignalType.speaker: Color(0xFFEF5350), // red
   SignalType.usbData: Color(0xFFEC407A), // pink
-  SignalType.network: Color(0xFF78909C), // blue grey
+  SignalType.network: Color(0xFF78909C), // blue gray
   SignalType.ir: Color(0xFFFFEE58), // yellow
   SignalType.serial: Color(0xFFAB47BC), // purple
-  SignalType.power: Color(0xFF616161), // grey
-  SignalType.other: Color(0xFF90A4AE), // pale blue grey
+  SignalType.power: Color(0xFF616161), // gray
+  SignalType.other: Color(0xFF90A4AE), // pale blue gray
 };
 
 /// Legend text.
@@ -142,9 +142,9 @@ const Set<SignalType> kAudioSignals = {
   SignalType.speaker,
 };
 
-/// The colour a signal type is drawn in, honouring the room's palette.
+/// The color a signal type is drawn in, honouring the room's palette.
 ///
-/// [kSignalColors] is only the factory default. A room can recolour any type
+/// [kSignalColors] is only the factory default. A room can recolor any type
 /// — see `avSignalColors` in app_state.dart — and when it does, EVERY cable,
 /// port dot and legend entry of that type has to move together, or the key
 /// stops describing the drawing. So nothing reads [kSignalColors] directly
@@ -184,15 +184,27 @@ SignalType signalFromName(String? name) {
 //  PORTS
 // ---------------------------------------------------------------------------
 
-/// What a box on the canvas represents. Only [jackField] behaves differently:
-/// its "ports" are numbered jacks in a wall box, floor box or patch panel, so
-/// the report can say which device landed on which jack number.
-enum AvNodeKind { device, jackField }
+/// What a box on the canvas represents.
+///
+/// [jackField] and [patchPanel] both hold numbered jacks rather than a device's
+/// connectors, so the report can say which device landed on which jack number.
+/// They differ only in SHAPE, because the two things do not look alike on a
+/// wall: a wall box is a small square plate with its jacks stacked down both
+/// sides, and a patch panel is a rack-width strip with every outlet in one
+/// horizontal row. Drawing the panel as a box was the single thing that made a
+/// rack elevation and the flow diagram disagree about what the same part was.
+enum AvNodeKind { device, jackField, patchPanel }
 
-AvNodeKind nodeKindFromName(String? name) =>
-    name?.trim().toLowerCase() == 'jackfield'
-    ? AvNodeKind.jackField
-    : AvNodeKind.device;
+AvNodeKind nodeKindFromName(String? name) {
+  switch (name?.trim().toLowerCase()) {
+    case 'jackfield':
+      return AvNodeKind.jackField;
+    case 'patchpanel':
+      return AvNodeKind.patchPanel;
+    default:
+      return AvNodeKind.device;
+  }
+}
 
 /// Where a device gets its mains from. Recorded per device so the power
 /// report can separate "on the APC, outlet 3" from "straight into the wall"
@@ -277,7 +289,7 @@ AvPort powerInletPort(PowerInput input) => AvPort(
 );
 
 /// [ports] with exactly the power inlet [input] calls for: one added when it
-/// is missing, relabelled when the toggle moves, removed when the device is
+/// is missing, relabeled when the toggle moves, removed when the device is
 /// passive. Everything else keeps its order.
 List<AvPort> withPowerInlet(List<AvPort> ports, PowerInput input) {
   final others = ports
@@ -431,6 +443,24 @@ const double kAvNodePadBottom = 10;
 /// Radius of the round port handle drawn on the node edge.
 const double kAvPortHandleRadius = 5.5;
 
+/// Horizontal spacing between the outlets of a patch panel. Wide enough for a
+/// six-digit jack number underneath the dot without the numbers colliding.
+const double kAvPatchJackPitch = 46;
+
+/// A panel keeps growing sideways rather than wrapping — that is what the part
+/// looks like — but not forever; past this the jacks compress instead.
+const double kAvPatchPanelMaxWidth = 1600;
+
+/// Header aside, a panel is one strip: room for the jack numbers and the row
+/// of outlets along the bottom edge.
+const double kAvPatchPanelBodyHeight = 34;
+
+/// Below this much room per outlet the jack numbers stop being drawn: a
+/// 48-port panel compressed to fit is a row of dots, and printing six-digit
+/// numbers under them at 12px apart produces a smear rather than a label. The
+/// numbers are still on every outlet's tooltip.
+const double kAvPatchLabelMinPitch = 26;
+
 /// One piece of equipment on the AV canvas.
 class AvNode {
   /// Config section key ('SWITCHERDEVICE_1') for seeded devices, or
@@ -487,7 +517,14 @@ class AvNode {
     this.note = '',
   });
 
-  bool get isJackField => kind == AvNodeKind.jackField;
+  /// Numbered jacks rather than a device's connectors — a wall box OR a patch
+  /// panel. The jack schedule and the connector-utilization report both key off
+  /// this, and a panel is exactly as much a jack field as a wall plate is.
+  bool get isJackField =>
+      kind == AvNodeKind.jackField || kind == AvNodeKind.patchPanel;
+
+  /// Drawn as a rack-width strip with its outlets in one horizontal row.
+  bool get isPatchPanel => kind == AvNodeKind.patchPanel;
 
   /// Heat this device puts into the room: its own BTU figure when somebody
   /// recorded one, otherwise the watts converted. 0 when neither is known —
@@ -563,6 +600,12 @@ class AvNode {
   /// Width driven by the longest label that has to fit inside the box: the
   /// title, and the widest left+right port label pair sharing a row.
   double get width {
+    // A panel is as wide as its outlet row needs and no taller than a strip;
+    // the general clamp would squash twenty-four jacks into 300px.
+    if (isPatchPanel) {
+      final w = kAvPatchJackPitch * (ports.length + 1);
+      return math.max(kAvNodeMinWidth, math.min(w, kAvPatchPanelMaxWidth));
+    }
     // ~6.2px per character at the 11px port font, ~7px at the 13px title.
     double w = 24 + label.length * 7.0;
     final left = leftPorts, right = rightPorts;
@@ -576,6 +619,8 @@ class AvNode {
   }
 
   double get height {
+    // Header, one strip of room for the jack numbers, and the outlet row.
+    if (isPatchPanel) return kAvNodeHeaderHeight + kAvPatchPanelBodyHeight;
     final rows = math.max(leftPorts.length, rightPorts.length);
     final body = math.max(kAvNodeMinBodyHeight, rows * kAvPortRowHeight);
     // Top/bottom ports ride the edges and need a little breathing room.
@@ -706,7 +751,7 @@ class AvCable {
   /// Manual route overrides. Empty means "use the automatic route".
   final List<Offset> waypoints;
 
-  /// Paints this one run in a colour of its own instead of the signal type's.
+  /// Paints this one run in a color of its own instead of the signal type's.
   /// Null — the normal case — means "follow the signal type", so a later
   /// change to the palette still reaches it.
   final Color? colorOverride;
@@ -745,12 +790,12 @@ class AvCable {
         : (colorOverride ?? this.colorOverride),
   );
 
-  /// The colour this run is actually drawn in: its own override if it has
+  /// The color this run is actually drawn in: its own override if it has
   /// one, otherwise whatever the room's palette says its signal type is.
   Color colorFor([Map<SignalType, Color>? palette]) =>
       colorOverride ?? signalColor(signal, palette);
 
-  /// True when this run is drawn in something other than its signal colour —
+  /// True when this run is drawn in something other than its signal color —
   /// the legend calls those out so it doesn't quietly lie about the diagram.
   bool get hasCustomColor => colorOverride != null;
 
@@ -796,7 +841,7 @@ class AvCable {
   }
 }
 
-/// Colours offered when recolouring a single run. The signal palette first —
+/// Colors offered when recoloring a single run. The signal palette first —
 /// so "make this one look like Dante" is one click — then a few neutrals that
 /// aren't spoken for.
 const List<Color> kCableSwatches = [
@@ -853,7 +898,7 @@ class RackColumn {
   static const RackColumn full = RackColumn();
 
   /// Fraction of the rail this slice starts at and ends at, used for the
-  /// overlap test — fractions compare correctly even when two neighbouring
+  /// overlap test — fractions compare correctly even when two neighboring
   /// rows are split a different number of ways.
   double get start => column / columns;
   double get end => (column + 1) / columns;
@@ -1000,6 +1045,119 @@ class RackSlot {
 }
 
 // ---------------------------------------------------------------------------
+//  RACK HARDWARE
+// ---------------------------------------------------------------------------
+
+/// The categories a piece of rack hardware falls into. Free text underneath —
+/// [RackItem.category] is a String — but these are the ones with a button in
+/// the rack editor, and the ones the estimate groups by.
+const List<String> kRackItemCategories = [
+  'Vent plate',
+  'Blank plate',
+  'Plate',
+  'Shelf',
+  'Clamping shelf',
+  'Drawer',
+  'Cable management',
+  'Rack hardware',
+];
+
+/// A vent plate, blank plate, shelf or drawer sitting in a rack.
+///
+/// Not an [AvNode]: none of these carry signal, and putting them on the signal
+/// flow canvas would fill it with boxes nothing is ever cabled to. They occupy
+/// rack units exactly as a device does — they share [RackSlot] and the same
+/// placement rules — and they carry a price, so what the rack actually costs
+/// includes the twelve blanks nobody remembers to quote.
+///
+/// [catalogModel] points back at the catalog entry it was taken from, so a
+/// price revised on the parts list re-costs every rack that uses it. The local
+/// copies of the height and price are what the rack was BUILT with and still
+/// stand when the entry is gone.
+class RackItem {
+  /// `RACKITEM_<n>`, and the key it is stored under in the rack slot map.
+  final String id;
+
+  /// Catalog model this came from ('' for a one-off typed in by hand).
+  final String catalogModel;
+
+  final String label;
+  final String category;
+  final String partNumber;
+  final int rackUnits;
+
+  /// Unit price at the time it was placed; the catalog's price wins when the
+  /// entry is still there — see `rackItemUnitPrice` in cost_estimate.dart.
+  final double price;
+
+  final String notes;
+
+  const RackItem({
+    required this.id,
+    this.catalogModel = '',
+    required this.label,
+    this.category = '',
+    this.partNumber = '',
+    this.rackUnits = 1,
+    this.price = 0,
+    this.notes = '',
+  });
+
+  /// The same item under a different id — the rack editor's "add another".
+  RackItem withId(String newId) => RackItem(
+    id: newId,
+    catalogModel: catalogModel,
+    label: label,
+    category: category,
+    partNumber: partNumber,
+    rackUnits: rackUnits,
+    price: price,
+    notes: notes,
+  );
+
+  RackItem copyWith({
+    String? catalogModel,
+    String? label,
+    String? category,
+    String? partNumber,
+    int? rackUnits,
+    double? price,
+    String? notes,
+  }) => RackItem(
+    id: id,
+    catalogModel: catalogModel ?? this.catalogModel,
+    label: label ?? this.label,
+    category: category ?? this.category,
+    partNumber: partNumber ?? this.partNumber,
+    rackUnits: rackUnits ?? this.rackUnits,
+    price: price ?? this.price,
+    notes: notes ?? this.notes,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    if (catalogModel.isNotEmpty) 'catalogModel': catalogModel,
+    'label': label,
+    if (category.isNotEmpty) 'category': category,
+    if (partNumber.isNotEmpty) 'partNumber': partNumber,
+    'rackUnits': rackUnits,
+    if (price > 0) 'price': price,
+    if (notes.isNotEmpty) 'notes': notes,
+  };
+
+  factory RackItem.fromJson(Map<String, dynamic> json) => RackItem(
+    id: json['id']?.toString() ?? '',
+    catalogModel: json['catalogModel']?.toString() ?? '',
+    label: json['label']?.toString() ?? 'Rack item',
+    category: json['category']?.toString() ?? '',
+    partNumber: json['partNumber']?.toString() ?? '',
+    rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 1,
+    price: (json['price'] as num?)?.toDouble() ?? 0,
+    notes: json['notes']?.toString() ?? '',
+  );
+}
+
+// ---------------------------------------------------------------------------
 //  CABLE ROUTING
 // ---------------------------------------------------------------------------
 
@@ -1022,7 +1180,7 @@ List<Offset> routeCable({
   final start = fromNode.anchorOf(cable.fromPortId);
   final end = toNode.anchorOf(cable.toPortId);
 
-  // Hand-placed bends say where the run should GO; they don't licence it to
+  // Hand-placed bends say where the run should GO; they don't license it to
   // cut through a device on the way. Each leg between consecutive bends is
   // kept exactly as drawn when it's clear, and routed around when it isn't,
   // so the shape the user asked for survives without the line crossing a box.
@@ -1056,7 +1214,7 @@ List<Offset> routeCable({
   List<Offset> full(List<Offset> middle) => [start, ...middle, end];
 
   // Check the WHOLE run, stubs included. The stub leaves its port straight
-  // out of the box face, but a neighbour parked right against that face can
+  // out of the box face, but a neighbor parked right against that face can
   // still be in the way — checking only the middle is how runs kept ending
   // up drawn across a device.
   bool clear(List<Offset> middle) => !polylineHitsAny(full(middle), obstacles);
@@ -1470,6 +1628,11 @@ class AvFlowModel {
   final List<AvCable> cables;
   final List<RackFrame> racks;
   final Map<String, RackSlot> rackSlots;
+
+  /// Vent plates, blanks, shelves and drawers in those racks. Keyed into
+  /// [rackSlots] by their own ids, alongside the devices.
+  final List<RackItem> rackItems;
+
   final Size canvasSize;
   final String roomTitle;
 
@@ -1485,6 +1648,7 @@ class AvFlowModel {
     required this.canvasSize,
     required this.roomTitle,
     required this.unplaced,
+    this.rackItems = const [],
   });
 
   Map<String, AvNode> get nodesById => {for (final n in nodes) n.id: n};
@@ -1497,7 +1661,7 @@ class AvFlowModel {
   }
 
   /// Signal types the legend can honestly speak for: those with at least one
-  /// run actually drawn in the type's own colour. A run the user recoloured
+  /// run actually drawn in the type's own color. A run the user recolored
   /// by hand is not evidence that "HDMI is blue" on this page.
   List<SignalType> get usedSignals {
     final used = <SignalType>{

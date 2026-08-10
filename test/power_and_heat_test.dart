@@ -46,7 +46,7 @@ void main() {
       s.rows.firstWhere((r) => r[0].toString().startsWith(item))[1];
 
   group('the power inlet', () {
-    test('is added, relabelled and removed by the toggle', () {
+    test('is added, relabeled and removed by the toggle', () {
       const signal = AvPort(
         id: 'in_hdmi_1',
         label: 'HDMI',

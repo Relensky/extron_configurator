@@ -126,7 +126,7 @@ void main() {
     p.addAvNode(switcher().copyWith(powerWatts: 90));
     p.setAvCostTax(percent: 8.25, label: 'State tax');
     p.addAvCostFee(name: 'Freight', percent: 4);
-    p.addAvCostItem(description: 'Labour', qty: 8, unitPrice: 95);
+    p.addAvCostItem(description: 'Labor', qty: 8, unitPrice: 95);
     p.setAvCostPrice('model:sw4 hd 4k plus', 1900);
 
     expect(await p.saveAvFlow(), isNotEmpty);

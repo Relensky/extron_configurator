@@ -167,7 +167,7 @@ void main() {
       final small = avLegendHeight(1, false);
       final large = avLegendHeight(6, false);
       expect(large, greaterThan(small));
-      // The "some runs are coloured individually" note needs its own line.
+      // The "some runs are colored individually" note needs its own line.
       expect(avLegendHeight(3, true), greaterThan(avLegendHeight(3, false)));
     });
   });

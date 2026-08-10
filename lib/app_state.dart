@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'base_costs.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
 import 'cost_estimate.dart';
@@ -18,8 +19,124 @@ import 'sftp_client.dart';
 import 'ui_schema.dart';
 import 'package:file_picker/file_picker.dart';
 
+/// How far along a room is.
+///
+/// A room is usually specified long before anybody writes its control config —
+/// the drawings, the rack and the budget all exist first. [RoomMode.avOnly]
+/// says that is where this one is: it has a building, a room number and a list
+/// of devices, and no control system yet. The System and Raw JSON tabs are
+/// about the processor's config file, so they step out of the way; the
+/// schematic, the AV flow, the racks and the costs all still work, because
+/// they are about the room rather than the processor.
+///
+/// The devices are still recorded in the normal config blocks, so nothing has
+/// to be re-entered when the control side is finally built — the only thing
+/// missing is the python module for each device, which the app flags.
+enum RoomMode { full, avOnly }
+
+RoomMode roomModeFromName(String? name) =>
+    name?.trim().toLowerCase() == 'avonly' ? RoomMode.avOnly : RoomMode.full;
+
+const Map<RoomMode, String> kRoomModeLabels = {
+  RoomMode.full: 'Control system configured',
+  RoomMode.avOnly: 'AV only — no control system yet',
+};
+
+/// The config's live device blocks, in device-family order: for each dev_
+/// count key, the sections that actually exist up to that count.
+///
+/// Top-level because the Devices tab, the Schematic tab, the AV Flow tab and
+/// the provider's own missing-module check all need the same answer — "which
+/// devices does this room really have?" — and they must agree.
+List<String> activeDeviceKeysIn(
+    Map<String, dynamic> config, Map<String, String> map) {
+  final List<String> activeKeys = [];
+  final systemSetup = config['SYSTEM_SETUP'] ?? {};
+
+  // The hardware map comes from the UI schema's "device_types", so families
+  // added in ui_schema.json are covered without a recompile.
+  map.forEach((countKey, prefix) {
+    if (systemSetup is Map && systemSetup.containsKey(countKey)) {
+      final countVal = systemSetup[countKey];
+      final int count = (countVal.toString().toLowerCase() == 'yes')
+          ? 1
+          : (int.tryParse(countVal.toString()) ?? 0);
+
+      for (int i = 1; i <= count; i++) {
+        final String expectedKey = '$prefix$i';
+        if (config.containsKey(expectedKey)) activeKeys.add(expectedKey);
+      }
+    }
+  });
+  return activeKeys;
+}
+
+/// One device in the room whose control module has not been chosen yet.
+typedef UnmodularDevice = ({String key, String name, String model});
+
 /// Core State Manager for the Room Configuration Application
 class AppStateProvider extends ChangeNotifier {
+  /// Whether this room has a control system yet. See [RoomMode]; persisted in
+  /// the AV sidecar, because for an AV-only room that is the only document
+  /// that exists.
+  RoomMode roomMode = RoomMode.full;
+
+  bool get isAvOnlyRoom => roomMode == RoomMode.avOnly;
+
+  void setRoomMode(RoomMode mode) {
+    if (roomMode == mode) return;
+    roomMode = mode;
+    AppLogger.logInfo('Room mode set to ${kRoomModeLabels[mode]}.');
+    notifyListeners();
+  }
+
+  /// Devices in this room with no python module chosen — the list the app
+  /// nags about.
+  ///
+  /// This is the whole point of letting a room be drawn before its control
+  /// system exists: the devices are real and recorded, and the ONE thing
+  /// missing when the control side finally gets built is which driver each of
+  /// them runs. A processor cannot talk to a device with no module, so an
+  /// unanswered entry here is a room that will not commission.
+  List<UnmodularDevice> get devicesMissingModules {
+    final out = <UnmodularDevice>[];
+    for (final key in activeDeviceKeysIn(roomConfig, uiSchema.deviceCountMap)) {
+      final dev = roomConfig[key];
+      if (dev is! Map) continue;
+      final module = dev['module']?.toString().trim() ?? '';
+      if (module.isNotEmpty) continue;
+      out.add((
+        key: key,
+        name: dev['name']?.toString() ?? key,
+        model: dev['model']?.toString() ?? '',
+      ));
+    }
+    return out;
+  }
+
+  /// Devices drawn on the AV canvas that the room config knows nothing about.
+  ///
+  /// A room specified from the cost estimator, or one where somebody added a
+  /// box by hand, ends up with equipment on the diagram and no control block
+  /// behind it — so not only no python module, but nowhere to put one. These
+  /// are flagged alongside [devicesMissingModules] because they are the same
+  /// problem one step earlier, and because the moment to notice is now rather
+  /// than at commissioning.
+  ///
+  /// Jack fields and patch panels are left out: they are passive, and a
+  /// processor was never going to talk to them.
+  List<UnmodularDevice> get avDevicesWithoutControl {
+    final configured = activeDeviceKeysIn(
+      roomConfig,
+      uiSchema.deviceCountMap,
+    ).toSet();
+    return [
+      for (final n in avNodes)
+        if (!n.isJackField && !configured.contains(n.id))
+          (key: n.id, name: n.label, model: n.model),
+    ];
+  }
+
   // --- Application Paths & Settings ---
   String modulesPath = '';
   String processorsFilePath = '';
@@ -336,6 +453,8 @@ class AppStateProvider extends ChangeNotifier {
       'aurisColor': aurisColor,
       'classicSecondary': classicSecondary,
       'textScale': textScale,
+      'currencySymbol': currencySymbol,
+      'pricingTier': pricingTier.name,
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
     };
@@ -408,6 +527,7 @@ class AppStateProvider extends ChangeNotifier {
     await loadKeyMap();
     await loadAvDeviceLibrary();
     await loadLaborRates();
+    await loadBaseCosts();
     await loadBuildingsList();
     await loadProcessorsList();
     // ignore: unawaited_futures
@@ -441,6 +561,12 @@ class AppStateProvider extends ChangeNotifier {
   // it. Read from labor_rates.json in the Root Folder; the built-in roles
   // (CTS III / CTS IV / TSRV / FMS) stand in until that file exists.
   LaborRateBook laborRates = LaborRateBook.builtIn();
+
+  // --- Base costs (what a switcher costs before you pick a switcher) ---
+  // The coarse rate card the estimate falls back to when a device on the
+  // diagram has no model, or has one the catalog doesn't price. Read from
+  // base_costs.json in the Root Folder; ships with every figure unset.
+  BaseCostBook baseCosts = BaseCostBook.builtIn();
 
   /// The active working file on disk: the file opened locally, or the working
   /// copy chosen during an SFTP download. Empty when the session started from
@@ -494,6 +620,25 @@ class AppStateProvider extends ChangeNotifier {
   /// text scaler around the whole MaterialApp.
   double textScale = 1.0;
 
+  /// What goes in front of every figure the app prints. One app-wide answer
+  /// rather than one per room: a shop bills in one currency, and re-typing the
+  /// symbol per estimate is how two quotes for the same building end up
+  /// reading differently.
+  String currencySymbol = r'$';
+
+  /// Which of a catalog entry's two prices the estimates use. See
+  /// [PricingTier]; app-wide for the same reason as the symbol, and switchable
+  /// per estimate run rather than per device.
+  PricingTier pricingTier = PricingTier.msrp;
+
+  void setPricingTier(PricingTier tier) {
+    if (pricingTier == tier) return;
+    pricingTier = tier;
+    notifyListeners();
+    // ignore: unawaited_futures
+    _persistSettings();
+  }
+
   /// When true (default), loading a config also fills any device properties
   /// missing from the schema's "device_defaults" (e.g. a DSP without its
   /// audio group numbers). Additions are listed in the acknowledgement
@@ -534,7 +679,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// 'SECTION.key' -> where that value came from. A key absent from the map
   /// has no conversion history (a config built from the template, or a value
-  /// the user has since typed) and is drawn in the normal text colour.
+  /// the user has since typed) and is drawn in the normal text color.
   final Map<String, ValueOrigin> valueOrigins = {};
 
   /// Every reversible change the last conversion made, in section/key order.
@@ -551,15 +696,15 @@ class AppStateProvider extends ChangeNotifier {
   ValueOrigin? originFor(String sectionKey, String fieldKey) =>
       valueOrigins['$sectionKey.$fieldKey'];
 
-  /// Drops the conversion colour from a value the USER has just set.
+  /// Drops the conversion color from a value the USER has just set.
   ///
   /// The map records what the LOAD did to each value, and orange reads as
   /// "carried over from the old file, nobody has checked it against the
   /// current template yet". The moment a tech types the value themselves that
   /// is no longer true of it, so the field falls back to the theme's ordinary
-  /// colour — which is what a value with no conversion history looks like.
+  /// color — which is what a value with no conversion history looks like.
   /// Every write the user drives goes through here; the load-time migrations
-  /// deliberately do not, since colouring what they changed is the point.
+  /// deliberately do not, since coloring what they changed is the point.
   void _forgetConversionOrigin(String sectionKey, String key) {
     valueOrigins.remove('$sectionKey.$key');
   }
@@ -570,7 +715,7 @@ class AppStateProvider extends ChangeNotifier {
   set originalLoadedConfig(Map<String, dynamic> value) =>
       _originalLoadedConfig = value;
 
-  /// Drops the colouring and the preview — for a config that wasn't converted
+  /// Drops the coloring and the preview — for a config that wasn't converted
   /// (built from the template, or reloaded as-is).
   void _clearConversionProvenance() {
     valueOrigins.clear();
@@ -580,7 +725,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Applies the accept/reject choices from the preview: every REJECTED
   /// change is undone against the working config, and the provenance map is
-  /// rebuilt so the tabs recolour to match. Accepted changes stay as they are.
+  /// rebuilt so the tabs recolor to match. Accepted changes stay as they are.
   void applyConversionChoices() {
     for (final change in conversionChanges) {
       if (change.accepted) continue;
@@ -636,7 +781,7 @@ class AppStateProvider extends ChangeNotifier {
       roomConfig = jsonDecode(contents);
       systemLogs.clear();
       lastLoadHadChanges = false;
-      // Nothing was converted, so there is no provenance to colour by
+      // Nothing was converted, so there is no provenance to color by
       _clearConversionProvenance();
       _bumpConfigRevision(); // Every field now shows the on-disk value
       _preloadModulesFromConfig();
@@ -687,17 +832,18 @@ class AppStateProvider extends ChangeNotifier {
   /// panel. Persisted in the sidecar with the rest of the layout.
   final Set<String> schematicHiddenEdges = {};
 
-  /// Per-room overrides of the control schematic's line colours, keyed by
+  /// Per-room overrides of the control schematic's line colors, keyed by
   /// the connection category's index in ConnType. Stored by index because
   /// this layer must not depend on the view that defines the enum. Empty
-  /// means the built-in colours.
+  /// means the built-in colors.
   final Map<int, Color> schematicConnColors = {};
 
-  /// The colour a connection category is drawn in for this room.
+  /// The color a connection category is drawn in for this room.
   Color schematicConnColor(int connIndex, Color fallback) =>
       schematicConnColors[connIndex] ?? fallback;
 
   void setSchematicConnColor(int connIndex, Color? color) {
+    _pushSchematicUndo('Line color');
     if (color == null) {
       schematicConnColors.remove(connIndex);
     } else {
@@ -715,12 +861,64 @@ class AppStateProvider extends ChangeNotifier {
   /// configs resets the layout instead of carrying stale node spots over.
   String _schematicSyncedPath = ' never';
 
+  // --- undo (control schematic) -------------------------------------------
+  //  The layout is four small collections, so a snapshot is a handful of
+  //  copies — no need for the JSON round-trip the AV document uses.
+
+  final List<({String label, Map<String, Offset> positions,
+      List<Map<String, String>> links, Set<String> hidden,
+      Map<int, Color> colors})> _schematicUndoStack = [];
+
+  bool get canUndoSchematic => _schematicUndoStack.isNotEmpty;
+
+  String get schematicUndoLabel =>
+      _schematicUndoStack.isEmpty ? '' : _schematicUndoStack.last.label;
+
+  /// Records the layout BEFORE [label] happens.
+  void _pushSchematicUndo(String label) {
+    _schematicUndoStack.add((
+      label: label,
+      positions: Map<String, Offset>.from(schematicPositions),
+      links: [for (final l in schematicLinks) Map<String, String>.from(l)],
+      hidden: Set<String>.from(schematicHiddenEdges),
+      colors: Map<int, Color>.from(schematicConnColors),
+    ));
+    if (_schematicUndoStack.length > _kMaxUndoDepth) {
+      _schematicUndoStack.removeAt(0);
+    }
+  }
+
+  /// Puts the layout back the way it was before the last edit. Returns what
+  /// was undone, or '' when there was nothing on the stack.
+  String undoSchematic() {
+    if (_schematicUndoStack.isEmpty) return '';
+    final entry = _schematicUndoStack.removeLast();
+    schematicPositions
+      ..clear()
+      ..addAll(entry.positions);
+    schematicLinks
+      ..clear()
+      ..addAll(entry.links);
+    schematicHiddenEdges
+      ..clear()
+      ..addAll(entry.hidden);
+    schematicConnColors
+      ..clear()
+      ..addAll(entry.colors);
+    AppLogger.logInfo('Undid: ${entry.label}');
+    notifyListeners();
+    return entry.label;
+  }
+
   void setSchematicPosition(String nodeId, Offset pos) {
+    // Called once, on release: the drag itself is previewed in the view.
+    _pushSchematicUndo('Move node');
     schematicPositions[nodeId] = pos;
     notifyListeners();
   }
 
   void addSchematicLink(String from, String to, String colorHex, String label) {
+    _pushSchematicUndo('Draw line');
     schematicLinks.add(
         {'from': from, 'to': to, 'color': colorHex, 'label': label});
     notifyListeners();
@@ -728,6 +926,7 @@ class AppStateProvider extends ChangeNotifier {
 
   void removeSchematicLinkAt(int index) {
     if (index < 0 || index >= schematicLinks.length) return;
+    _pushSchematicUndo('Remove line');
     schematicLinks.removeAt(index);
     notifyListeners();
   }
@@ -736,17 +935,20 @@ class AppStateProvider extends ChangeNotifier {
   void updateSchematicLinkAt(
       int index, String from, String to, String colorHex, String label) {
     if (index < 0 || index >= schematicLinks.length) return;
+    _pushSchematicUndo('Edit line');
     schematicLinks[index] =
         {'from': from, 'to': to, 'color': colorHex, 'label': label};
     notifyListeners();
   }
 
   void hideSchematicEdge(String edgeId) {
+    _pushSchematicUndo('Hide connection');
     schematicHiddenEdges.add(edgeId);
     notifyListeners();
   }
 
   void restoreSchematicEdge(String edgeId) {
+    _pushSchematicUndo('Restore connection');
     schematicHiddenEdges.remove(edgeId);
     notifyListeners();
   }
@@ -754,6 +956,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Clears dragged positions (auto-layout takes over again). Custom lines
   /// are kept — they are removed individually from the edit panel.
   void resetSchematicPositions() {
+    _pushSchematicUndo('Reset layout');
     schematicPositions.clear();
     notifyListeners();
   }
@@ -815,6 +1018,8 @@ class AppStateProvider extends ChangeNotifier {
   /// Schematic tab visit starts from the auto-layout.
   void _resetSchematicLayout() {
     _schematicSyncedPath = currentConfigPath;
+    // A different room's edits are not this room's to undo.
+    _schematicUndoStack.clear();
     schematicPositions.clear();
     schematicLinks.clear();
     schematicHiddenEdges.clear();
@@ -982,6 +1187,48 @@ class AppStateProvider extends ChangeNotifier {
   //  both a session diagram and a saved file exist (avFlowNeedsChoice).
   // ---------------------------------------------------------------------
 
+  // --- undo (AV flow, racks and the estimate share one document) -----------
+  //  The AV sidecar IS the document — devices, cables, racks, rack hardware
+  //  and the estimate — so one stack of snapshots covers all three tabs that
+  //  edit it. Snapshots rather than inverse operations: an inverse for every
+  //  mutator is a second implementation of the model that only gets exercised
+  //  when something has already gone wrong, and re-splitting a shared rail is
+  //  exactly the kind of thing that would be got subtly wrong.
+
+  /// Past states, oldest first. Each entry is a whole [avFlowAsJson] document
+  /// plus the name of the action that was about to happen.
+  final List<({String label, Map<String, dynamic> doc})> _avUndoStack = [];
+
+  /// Deep enough to cover a run of edits, shallow enough that a big diagram
+  /// isn't held in memory thirty times over.
+  static const int _kMaxUndoDepth = 25;
+
+  bool get canUndoAvFlow => _avUndoStack.isNotEmpty;
+
+  /// What pressing Undo would put back — shown on the button so it is never a
+  /// guess ("Undo: Rack DMP 64").
+  String get avUndoLabel => _avUndoStack.isEmpty ? '' : _avUndoStack.last.label;
+
+  /// Records the state BEFORE [label] happens. Called at the top of every AV
+  /// mutator; cheap enough to do unconditionally because the document is small
+  /// next to the widget tree that is about to rebuild anyway.
+  void _pushAvUndo(String label) {
+    _avUndoStack.add((label: label, doc: avFlowAsJson()));
+    if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
+  }
+
+  /// Puts the AV document back the way it was before the last edit. Returns
+  /// what was undone, or '' when there was nothing on the stack.
+  String undoAvFlow() {
+    if (_avUndoStack.isEmpty) return '';
+    final entry = _avUndoStack.removeLast();
+    _clearAvFlowState();
+    _readAvFlowJson(entry.doc);
+    AppLogger.logInfo('Undid: ${entry.label}');
+    notifyListeners();
+    return entry.label;
+  }
+
   /// Every box on the AV canvas, in creation order.
   final List<AvNode> avNodes = [];
 
@@ -992,16 +1239,117 @@ class AppStateProvider extends ChangeNotifier {
   final List<RackFrame> avRacks = [];
 
   /// Node id -> where it sits in a rack. A device can only be in one place.
+  ///
+  /// Rack HARDWARE is keyed into this same map by its own id, because a vent
+  /// plate occupies a rail on exactly the same terms a switcher does. Anything
+  /// that reads a height out of here must go through [rackOccupantHeight].
   final Map<String, RackSlot> avRackSlots = {};
+
+  /// Vent plates, blanks, shelves and drawers placed in the racks. Not nodes:
+  /// none of them carry signal, so putting them on the flow canvas would fill
+  /// it with boxes nothing is ever cabled to.
+  final List<RackItem> avRackItems = [];
+
+  /// Counter behind rack item ids ('RACKITEM_7').
+  int _avRackItemCounter = 0;
+
+  RackItem? avRackItemById(String id) {
+    for (final i in avRackItems) {
+      if (i.id == id) return i;
+    }
+    return null;
+  }
+
+  /// How many rails whatever is stored under [id] takes up — a device, or a
+  /// piece of rack hardware. Never 0: something you are trying to rack occupies
+  /// at least one rail even when nobody filled its height in.
+  int rackOccupantHeight(String id) {
+    final node = avNodeById(id);
+    if (node != null) return math.max(1, node.rackUnits);
+    final item = avRackItemById(id);
+    if (item != null) return math.max(1, item.rackUnits);
+    return 1;
+  }
+
+  /// What to call whatever is racked at [id], for a tooltip or a message.
+  String rackOccupantLabel(String id) =>
+      avNodeById(id)?.label ?? avRackItemById(id)?.label ?? id;
+
+  /// Adds a piece of rack hardware and (optionally) drops it straight into a
+  /// frame. Returns the stored item, whose id the rack slot map keys on, or
+  /// null when a requested placement would not fit.
+  ///
+  /// A refused placement takes the item back out again rather than leaving it
+  /// floating: an unplaced plate is invisible on the elevation and would still
+  /// be priced into the estimate, which is money on a quote for a part that
+  /// nobody can point at.
+  RackItem? addAvRackItem(
+    RackItem item, {
+    String? rackId,
+    RackFace face = RackFace.front,
+    int? startU,
+  }) {
+    _pushAvUndo('Add ${item.label}');
+    String id = item.id;
+    if (id.isEmpty || avRackItemById(id) != null) {
+      do {
+        _avRackItemCounter++;
+        id = 'RACKITEM_$_avRackItemCounter';
+      } while (avRackItemById(id) != null);
+    }
+    final stored = item.withId(id);
+    avRackItems.add(stored);
+    if (rackId != null && startU != null) {
+      // Placed through the sharing placer so a 1U blank can sit beside a
+      // half-rack box on the same rail, exactly as a device would.
+      final placed = avRackPlaceSharing(
+        nodeId: id,
+        rackId: rackId,
+        face: face,
+        startU: startU,
+        recordUndo: false,
+      );
+      if (!placed) {
+        avRackItems.removeWhere((i) => i.id == id);
+        // The snapshot pushed above is now the state we are already in, so it
+        // would make Undo a no-op the user has to press twice.
+        if (_avUndoStack.isNotEmpty) _avUndoStack.removeLast();
+        notifyListeners();
+        return null;
+      }
+    }
+    notifyListeners();
+    return stored;
+  }
+
+  void updateAvRackItem(RackItem item) {
+    final index = avRackItems.indexWhere((i) => i.id == item.id);
+    if (index < 0) return;
+    _pushAvUndo('Edit ${item.label}');
+    avRackItems[index] = item;
+    notifyListeners();
+  }
+
+  void removeAvRackItem(String itemId) {
+    final item = avRackItemById(itemId);
+    if (item == null) return;
+    _pushAvUndo('Remove ${item.label}');
+    avRackItems.removeWhere((i) => i.id == itemId);
+    final vacated = avRackSlots.remove(itemId);
+    if (vacated != null) {
+      avRepackRow(vacated.rackId, vacated.face, vacated.startU);
+    }
+    notifyListeners();
+  }
 
   /// Config device keys the user deliberately removed from the canvas, so
   /// re-seeding doesn't keep dragging them back.
   final Set<String> avDismissedDevices = {};
 
-  /// Per-room overrides of the signal-type palette. Recolouring HDMI here
+  /// Per-room overrides of the signal-type palette. Recoloring HDMI here
   /// moves every HDMI cable, every HDMI port dot and the legend entry
   /// together — the point being that the key keeps describing the drawing.
-  /// Empty means the built-in colours.
+  /// Empty means the built-in colors.
   final Map<SignalType, Color> avSignalColors = {};
 
   /// This room's cost estimate: tax, percentage fees, per-room prices and any
@@ -1089,10 +1437,34 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The colour a signal type is drawn in for this room.
+  // --- cabling: counted off the diagram, topped up by hand ------------------
+
+  /// Whether the runs drawn on the AV flow are priced into the estimate.
+  void setAvCostIncludeCabling(bool value) {
+    if (avCost.includeCabling == value) return;
+    avCost.includeCabling = value;
+    notifyListeners();
+  }
+
+  /// Extra runs of [signal] to buy beyond what the diagram shows. 0 clears the
+  /// entry rather than storing a zero, so the sidecar only records decisions
+  /// somebody actually made.
+  void setAvCableSpares(SignalType signal, double qty) {
+    if (qty <= 0) {
+      avCost.cableSpares.remove(signal.name);
+    } else {
+      avCost.cableSpares[signal.name] = qty;
+    }
+    notifyListeners();
+  }
+
+  double avCableSpares(SignalType signal) =>
+      avCost.cableSpares[signal.name] ?? 0;
+
+  /// The color a signal type is drawn in for this room.
   Color avSignalColor(SignalType s) => signalColor(s, avSignalColors);
 
-  /// Recolours one signal type, or clears the override when [color] is null.
+  /// Recolors one signal type, or clears the override when [color] is null.
   void setAvSignalColor(SignalType s, Color? color) {
     if (color == null) {
       avSignalColors.remove(s);
@@ -1127,6 +1499,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Adds a node, keeping ids unique. Returns the node actually stored (the
   /// caller may have passed an id that was already taken).
   AvNode addAvNode(AvNode node) {
+    _pushAvUndo('Add ${node.label}');
     String id = node.id;
     if (id.isEmpty || avNodeById(id) != null) {
       do {
@@ -1147,6 +1520,7 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvNode(AvNode node) {
     final index = avNodes.indexWhere((n) => n.id == node.id);
     if (index < 0) return;
+    _pushAvUndo('Edit ${node.label}');
     avNodes[index] = node;
     notifyListeners();
   }
@@ -1155,6 +1529,9 @@ class AppStateProvider extends ChangeNotifier {
   void setAvNodePosition(String nodeId, Offset pos) {
     final index = avNodes.indexWhere((n) => n.id == nodeId);
     if (index < 0) return;
+    // Called once, on release — the drag itself is previewed in the view, so
+    // one undo entry per move rather than one per pointer event.
+    _pushAvUndo('Move ${avNodes[index].label}');
     avNodes[index] = avNodes[index].copyWith(pos: pos);
     notifyListeners();
   }
@@ -1165,6 +1542,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvNode(String nodeId) {
     final node = avNodeById(nodeId);
     if (node == null) return;
+    _pushAvUndo('Remove ${node.label}');
     avNodes.removeWhere((n) => n.id == nodeId);
     avCables.removeWhere((c) => c.fromNodeId == nodeId || c.toNodeId == nodeId);
     final vacated = avRackSlots.remove(nodeId);
@@ -1181,6 +1559,7 @@ class AppStateProvider extends ChangeNotifier {
   /// removals.
   void clearAvDismissedDevices() {
     if (avDismissedDevices.isEmpty) return;
+    _pushAvUndo('Place all from config');
     avDismissedDevices.clear();
     notifyListeners();
   }
@@ -1206,6 +1585,7 @@ class AppStateProvider extends ChangeNotifier {
             c.toPortId == fromPortId));
     if (duplicate) return null;
 
+    _pushAvUndo('Draw cable');
     _avCableCounter++;
     final cable = AvCable(
       id: 'C$_avCableCounter',
@@ -1221,14 +1601,21 @@ class AppStateProvider extends ChangeNotifier {
     return cable;
   }
 
-  void updateAvCable(AvCable cable) {
+  /// Replaces a cable. [recordUndo] is false on the paths that fire per
+  /// pointer event — dragging a bend would otherwise fill the undo stack with
+  /// twenty entries for one gesture and leave nothing useful in it.
+  void updateAvCable(AvCable cable, {bool recordUndo = true}) {
     final index = avCables.indexWhere((c) => c.id == cable.id);
     if (index < 0) return;
+    if (recordUndo) {
+      _pushAvUndo('Edit cable ${cable.label.isEmpty ? cable.id : cable.label}');
+    }
     avCables[index] = cable;
     notifyListeners();
   }
 
   void removeAvCable(String cableId) {
+    _pushAvUndo('Remove cable $cableId');
     avCables.removeWhere((c) => c.id == cableId);
     notifyListeners();
   }
@@ -1236,6 +1623,7 @@ class AppStateProvider extends ChangeNotifier {
   // --- racks ---
 
   RackFrame addAvRack(String name, int heightU, {String kind = ''}) {
+    _pushAvUndo('Add rack $name');
     // Frames sit side by side; the new one goes to the right of the last.
     final rack = RackFrame(
       id: 'RACK_${avRacks.length + 1}_${DateTime.now().millisecondsSinceEpoch}',
@@ -1252,12 +1640,14 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvRack(RackFrame rack) {
     final index = avRacks.indexWhere((r) => r.id == rack.id);
     if (index < 0) return;
+    _pushAvUndo('Edit rack ${rack.name}');
     avRacks[index] = rack;
     notifyListeners();
   }
 
   /// Removes a frame and un-racks everything that was in it.
   void removeAvRack(String rackId) {
+    _pushAvUndo('Remove rack');
     avRacks.removeWhere((r) => r.id == rackId);
     avRackSlots.removeWhere((_, slot) => slot.rackId == rackId);
     notifyListeners();
@@ -1265,6 +1655,9 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Places [nodeId] in a rack, or clears its placement when [slot] is null.
   void setAvRackSlot(String nodeId, RackSlot? slot) {
+    _pushAvUndo(slot == null
+        ? 'Un-rack ${rackOccupantLabel(nodeId)}'
+        : 'Move ${rackOccupantLabel(nodeId)}');
     final previous = avRackSlots[nodeId];
     if (slot == null) {
       avRackSlots.remove(nodeId);
@@ -1307,8 +1700,7 @@ class AppStateProvider extends ChangeNotifier {
       if (entry.key == ignoreNodeId) continue;
       final slot = entry.value;
       if (slot.rackId != rackId || slot.face != face) continue;
-      final other = avNodeById(entry.key);
-      final otherHeight = (other?.rackUnits ?? 1).clamp(1, 60);
+      final otherHeight = rackOccupantHeight(entry.key).clamp(1, 60);
       final otherEnd = slot.startU + otherHeight - 1;
       final usOverlap =
           startU <= otherEnd && slot.startU <= startU + heightU - 1;
@@ -1341,15 +1733,17 @@ class AppStateProvider extends ChangeNotifier {
   /// micro PC end up listed together on one shelf.
   ///
   /// Returns false when the row already holds [kMaxRackColumns] devices, or
-  /// when something spanning in from a neighbouring U is in the way.
+  /// when something spanning in from a neighboring U is in the way.
   bool avRackPlaceSharing({
     required String nodeId,
     required String rackId,
     required RackFace face,
     required int startU,
+    /// False when the caller has already taken an undo snapshot — adding a new
+    /// item and placing it is one action, not two.
+    bool recordUndo = true,
   }) {
-    final node = avNodeById(nodeId);
-    final heightU = math.max(1, node?.rackUnits ?? 1);
+    final heightU = rackOccupantHeight(nodeId);
 
     final occupants =
         avRackOccupantsAt(rackId: rackId, face: face, startU: startU)
@@ -1366,6 +1760,7 @@ class AppStateProvider extends ChangeNotifier {
       )) {
         return false;
       }
+      if (recordUndo) _pushAvUndo('Rack ${rackOccupantLabel(nodeId)}');
       avRackSlots[nodeId] =
           RackSlot(rackId: rackId, startU: startU, face: face);
       notifyListeners();
@@ -1376,20 +1771,20 @@ class AppStateProvider extends ChangeNotifier {
     if (columns > kMaxRackColumns) return false;
 
     // Re-splitting only moves devices within this row, so the one thing that
-    // can still block is a taller neighbour spanning in from another U.
+    // can still block is a taller neighbor spanning in from another U.
     final rowIds = {...occupants, nodeId};
     for (final entry in avRackSlots.entries) {
       if (rowIds.contains(entry.key)) continue;
       final slot = entry.value;
       if (slot.rackId != rackId || slot.face != face) continue;
-      final other = avNodeById(entry.key);
-      final otherHeight = (other?.rackUnits ?? 1).clamp(1, 60);
+      final otherHeight = rackOccupantHeight(entry.key).clamp(1, 60);
       final otherEnd = slot.startU + otherHeight - 1;
       if (startU <= otherEnd && slot.startU <= startU + heightU - 1) {
         return false;
       }
     }
 
+    if (recordUndo) _pushAvUndo('Rack ${rackOccupantLabel(nodeId)}');
     for (int i = 0; i < occupants.length; i++) {
       final existing = avRackSlots[occupants[i]]!;
       avRackSlots[occupants[i]] =
@@ -1406,10 +1801,11 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Moves [nodeId] to position [target] along the rail it already shares,
-  /// sliding its neighbours over rather than swapping two of them.
+  /// sliding its neighbors over rather than swapping two of them.
   void avRackReorderRow(String nodeId, int target) {
     final slot = avRackSlots[nodeId];
     if (slot == null) return;
+    _pushAvUndo('Reorder ${rackOccupantLabel(nodeId)}');
     final order = avRackOccupantsAt(
         rackId: slot.rackId, face: slot.face, startU: slot.startU);
     order.remove(nodeId);
@@ -1475,6 +1871,8 @@ class AppStateProvider extends ChangeNotifier {
       avNodes.isNotEmpty ||
       avCables.isNotEmpty ||
       avRacks.isNotEmpty ||
+      avRackItems.isNotEmpty ||
+      roomMode != RoomMode.full ||
       !avCost.isEmpty;
 
   /// True under either the current name or the pre-rename one.
@@ -1485,18 +1883,31 @@ class AppStateProvider extends ChangeNotifier {
   bool get avFlowNeedsChoice =>
       _avFlowSyncedPath != currentConfigPath && hasAvFlow && hasSavedAvFlow;
 
-  void _resetAvFlow() {
-    _avFlowSyncedPath = currentConfigPath;
+  /// Empties the AV document without touching which config it belongs to or
+  /// the undo history — what an undo needs before replaying a snapshot.
+  void _clearAvFlowState() {
     avNodes.clear();
     avCables.clear();
     avRacks.clear();
     avRackSlots.clear();
+    avRackItems.clear();
     avDismissedDevices.clear();
     avSignalColors.clear();
     avCost.clear();
+    // The currency is an app setting, not a per-room one; clear() resets the
+    // estimate to the built-in default, so put the chosen symbol back.
+    avCost.currency = currencySymbol;
     _avNodeCounter = 0;
     _avCableCounter = 0;
     _avCostCounter = 0;
+    _avRackItemCounter = 0;
+  }
+
+  void _resetAvFlow() {
+    _avFlowSyncedPath = currentConfigPath;
+    _clearAvFlowState();
+    // A different room's edits are not this room's to undo.
+    _avUndoStack.clear();
   }
 
   /// Keeps the in-memory AV diagram for the working config, ignoring the
@@ -1533,6 +1944,27 @@ class AppStateProvider extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      _readAvFlowJson(Map<String, dynamic>.from(doc));
+      AppLogger.logInfo(
+          'AV flow loaded from $sidecar (${avNodes.length} devices, '
+          '${avCables.length} cables, ${avRacks.length} racks, '
+          '${avRackItems.length} rack items)'
+          '${sidecar == legacyAvFlowSidecarPath ? ' — pre-rename file; it '
+              'moves to ${path.basename(avFlowSidecarPath)} on the next '
+              'Save AV Setup.' : '.'}');
+    } catch (e) {
+      AppLogger.logError('Failed to load AV flow from $sidecar', e);
+    }
+    notifyListeners();
+  }
+
+  /// Reads one AV sidecar document into the live state. Shared by the file
+  /// load and by [undoAvFlow], so a restored snapshot can never disagree with
+  /// a loaded file about what the document contains.
+  ///
+  /// The caller has already emptied the state.
+  void _readAvFlowJson(Map<String, dynamic> doc) {
+    try {
       for (final n in (doc['nodes'] as List? ?? [])) {
         if (n is Map) {
           final node = AvNode.fromJson(Map<String, dynamic>.from(n));
@@ -1549,6 +1981,12 @@ class AppStateProvider extends ChangeNotifier {
         if (r is Map) {
           final rack = RackFrame.fromJson(Map<String, dynamic>.from(r));
           if (rack.id.isNotEmpty) avRacks.add(rack);
+        }
+      }
+      for (final i in (doc['rackItems'] as List? ?? [])) {
+        if (i is Map) {
+          final item = RackItem.fromJson(Map<String, dynamic>.from(i));
+          if (item.id.isNotEmpty) avRackItems.add(item);
         }
       }
       final slots = doc['rackSlots'];
@@ -1581,6 +2019,10 @@ class AppStateProvider extends ChangeNotifier {
       if (cost is Map) {
         avCost.readJson(Map<String, dynamic>.from(cost));
       }
+      // The sidecar records which symbol the estimate was written with, but
+      // the app setting is what the shop bills in — an old room opened today
+      // shows today's currency rather than reviving a symbol somebody set once.
+      avCost.currency = currencySymbol;
 
       // Rebuild the id counters past everything that was loaded, so new
       // nodes and cables can never collide with restored ones.
@@ -1608,17 +2050,21 @@ class AppStateProvider extends ChangeNotifier {
               math.max(_avCostCounter, int.parse(match.group(1)!));
         }
       }
+      for (final i in avRackItems) {
+        final match = RegExp(r'^RACKITEM_(\d+)$').firstMatch(i.id);
+        if (match != null) {
+          _avRackItemCounter =
+              math.max(_avRackItemCounter, int.parse(match.group(1)!));
+        }
+      }
 
-      AppLogger.logInfo(
-          'AV flow loaded from $sidecar (${avNodes.length} devices, '
-          '${avCables.length} cables, ${avRacks.length} racks)'
-          '${sidecar == legacyAvFlowSidecarPath ? ' — pre-rename file; it '
-              'moves to ${path.basename(avFlowSidecarPath)} on the next '
-              'Save AV Flow.' : '.'}');
+      // The room mode says whether a control system was ever configured. It
+      // travels with the diagram because that is the document that exists for
+      // an AV-only room — there may be no control config at all.
+      roomMode = roomModeFromName(doc['roomMode']?.toString());
     } catch (e) {
-      AppLogger.logError('Failed to load AV flow from $sidecar', e);
+      AppLogger.logError('Failed to read the AV flow document', e);
     }
-    notifyListeners();
   }
 
   /// Writes everything that belongs to the room but not to config.json: the
@@ -1646,13 +2092,16 @@ class AppStateProvider extends ChangeNotifier {
   /// room folder without a second, drifting copy of the field list.
   Map<String, dynamic> avFlowAsJson() => {
         '__readme': 'AV signal flow for the Room Config Builder: devices with '
-            'their connectors, the cables between them, rack elevations, and '
-            "this room's cost estimate (tax, fees, labor and quoted prices).",
+            'their connectors, the cables between them, rack elevations with '
+            'their plates and shelves, and this room\'s cost estimate (tax, '
+            'fees, labor and quoted prices).',
         'nodes': avNodes.map((n) => n.toJson()).toList(),
         'cables': avCables.map((c) => c.toJson()).toList(),
         'racks': avRacks.map((r) => r.toJson()).toList(),
+        'rackItems': avRackItems.map((i) => i.toJson()).toList(),
         'rackSlots': avRackSlots.map((id, s) => MapEntry(id, s.toJson())),
         'dismissedDevices': avDismissedDevices.toList(),
+        'roomMode': roomMode.name,
         'signalColors': {
           for (final e in avSignalColors.entries)
             e.key.name: (e.value.toARGB32() & 0xFFFFFF)
@@ -1950,7 +2399,7 @@ class AppStateProvider extends ChangeNotifier {
   /// A key that existed in the corresponding ORIGINAL section with the SAME
   /// value is [ValueOrigin.legacy]; one whose value the conversion rewrote is
   /// [ValueOrigin.changed] (a rename alone is not a rewrite — the value is
-  /// what is being coloured); a key the conversion introduced is
+  /// what is being colored); a key the conversion introduced is
   /// [ValueOrigin.written]. Sections are lined up through [sectionRenames],
   /// and keys through the same lowercase/no-underscore comparison
   /// auto_case_normalization uses, so COMTYPE and com_type are recognized as
@@ -2011,7 +2460,7 @@ class AppStateProvider extends ChangeNotifier {
         return;
       }
       // Same key, new value: the conversion wrote what is on screen, so it
-      // gets its own colour as well as a rejectable change.
+      // gets its own color as well as a rejectable change.
       valueOrigins[id] = ValueOrigin.changed;
       conversionChanges.add(ConversionChange(
         section: sectionKey,
@@ -2361,6 +2810,8 @@ class AppStateProvider extends ChangeNotifier {
       aurisColor = str('aurisColor', 'F0A500');
       classicSecondary = str('classicSecondary', '');
       textScale = double.tryParse(str('textScale', '')) ?? 1.0;
+      currencySymbol = str('currencySymbol', r'$');
+      pricingTier = pricingTierFromName(str('pricingTier', ''));
       fillDeviceDefaultsOnLoad = saved['fillDeviceDefaultsOnLoad'] is bool
           ? saved['fillDeviceDefaultsOnLoad']
           : true;
@@ -2410,6 +2861,8 @@ class AppStateProvider extends ChangeNotifier {
       await loadAvDeviceLibrary();
       // Load the labor rate card (built-in roles when no file exists)
       await loadLaborRates();
+      // Load the base cost card (every category unset when no file exists)
+      await loadBaseCosts();
 
       // Load files into memory on boot. The loaders resolve their own
       // default paths (Root Folder / working directory) when no explicit
@@ -2514,7 +2967,7 @@ class AppStateProvider extends ChangeNotifier {
         allowedExtensions: ['json'],
       );
       if (savePath == null) {
-        onStatusUpdate('System: Download cancelled (no save location chosen).');
+        onStatusUpdate('System: Download canceled (no save location chosen).');
         return false;
       }
       // The dialog hands back exactly what was typed, so a name entered without
@@ -2568,7 +3021,7 @@ class AppStateProvider extends ChangeNotifier {
 
     // Snapshot the file EXACTLY as parsed, before any conversion step. Every
     // later stage mutates roomConfig in place, so this deep copy is the only
-    // record of what the room looked like on disk — the provenance colouring
+    // record of what the room looked like on disk — the provenance coloring
     // and the preview's per-change reject both diff against it.
     _originalLoadedConfig = jsonDecode(jsonEncode(parsedConfig)) as Map<String, dynamic>;
     Map<String, String> sectionRenames = const {};
@@ -2992,7 +3445,7 @@ class AppStateProvider extends ChangeNotifier {
       currentConfigPath = '';
 
       // Built from the template, not converted — every value is "written",
-      // so there is nothing to colour orange.
+      // so there is nothing to color orange.
       _clearConversionProvenance();
 
       // Nothing carried over from the previous room can be restored into this
@@ -3123,6 +3576,8 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadLaborRates();
         // ignore: unawaited_futures
+        loadBaseCosts();
+        // ignore: unawaited_futures
         loadBuildingsList();
         // ignore: unawaited_futures
         loadProcessorsList();
@@ -3181,6 +3636,18 @@ class AppStateProvider extends ChangeNotifier {
         break;
       case 'textScale':
         textScale = double.tryParse(value) ?? 1.0;
+        break;
+      case 'currencySymbol':
+        // Blank is not a currency; an estimate with no symbol in front of the
+        // numbers is a column of bare figures.
+        currencySymbol = value.trim().isEmpty ? r'$' : value.trim();
+        // The room's estimate carries the symbol it was written with, so the
+        // open room follows the setting immediately rather than after a
+        // reload.
+        avCost.currency = currencySymbol;
+        break;
+      case 'pricingTier':
+        pricingTier = pricingTierFromName(value);
         break;
     }
     notifyListeners();
@@ -3263,7 +3730,30 @@ class AppStateProvider extends ChangeNotifier {
   /// goes through here rather than each view remembering to notify.
   void laborRatesChanged() => notifyListeners();
 
-  // --- labour lines on this room's estimate ---
+  // --- base costs: one typical price per device category -------------------
+
+  /// base_costs.json: explicit choice, else `<root>/base_costs.json`.
+  String get effectiveBaseCostsPath => baseCosts.filePath.isNotEmpty
+      ? baseCosts.filePath
+      : path.join(effectiveRootFolder, 'base_costs.json');
+
+  Future<void> loadBaseCosts({String explicitPath = ''}) async {
+    baseCosts = await BaseCostBook.load(
+      explicitPath.isNotEmpty ? explicitPath : effectiveBaseCostsPath,
+    );
+    notifyListeners();
+  }
+
+  /// Writes the base cost card. Returns the file written, or '' on failure.
+  Future<String> saveBaseCosts() async {
+    final saved = await baseCosts.save(toPath: effectiveBaseCostsPath);
+    notifyListeners();
+    return saved;
+  }
+
+  void baseCostsChanged() => notifyListeners();
+
+  // --- labor lines on this room's estimate ---
 
   LaborLine addAvCostLabor({String rateId = '', double techs = 1}) {
     final line = LaborLine(
@@ -3540,7 +4030,7 @@ class AppStateProvider extends ChangeNotifier {
     if (section is Map && section.containsKey(property)) {
       section.remove(property);
       // Otherwise the entry outlives the key and Check Defaults re-adding it
-      // later would bring the old conversion colour back with it.
+      // later would bring the old conversion color back with it.
       _forgetConversionOrigin(sectionKey, property);
       notifyListeners();
     }
@@ -4029,7 +4519,7 @@ class AppStateProvider extends ChangeNotifier {
     if (dev is! Map) return applied;
     dev['model'] = model;
     // Picking a model is the user setting these values, so they lose the
-    // conversion colouring the same way a typed value does.
+    // conversion coloring the same way a typed value does.
     _forgetConversionOrigin(deviceKey, 'model');
 
     final entry = modelRegistry[model];
@@ -4445,7 +4935,7 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Restores the pre-save backup: the working file is rewritten with it and
   /// the config is reloaded from it, so disk and screen agree again. One level
-  /// deep by design — the marker is cleared afterwards, so Undo greys out
+  /// deep by design — the marker is cleared afterwards, so Undo grays out
   /// rather than turning into a redo that ping-pongs between two states.
   /// Returns false when there is no usable backup.
   Future<bool> undoLastSave() async {
@@ -4457,7 +4947,7 @@ class AppStateProvider extends ChangeNotifier {
 
       await File(currentConfigPath).writeAsString(contents);
       roomConfig = jsonDecode(contents);
-      // The colours and the rejectable change list describe the load this
+      // The colors and the rejectable change list describe the load this
       // undo just stepped back from, so they no longer describe anything.
       _clearConversionProvenance();
       _bumpConfigRevision(); // Every tab now shows the restored value
@@ -4599,7 +5089,7 @@ class AppStateProvider extends ChangeNotifier {
         allowedExtensions: ['json'],
       );
 
-      // User cancelled the picker
+      // User canceled the picker
       if (outputFile == null) return false;
       // The dialog hands back exactly what was typed, so a name entered without
       // an extension would land as a file Windows can't associate with JSON.
@@ -4616,7 +5106,7 @@ class AppStateProvider extends ChangeNotifier {
 
       // ADOPT AS WORKING FILE: exporting ties the saved file to the session
       // (a wizard-built config starts with no path at all), so later saves —
-      // and the Save Layout / Save AV Flow sidecars — have somewhere to live.
+      // and the Save Layout / Save AV Setup sidecars — have somewhere to live.
       // The synced-path markers move with it so the in-memory diagrams
       // survive instead of being reset as a "different config".
       currentConfigPath = outputFile;
@@ -4952,7 +5442,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Drops the outlet `_action` key, carrying a legacy 'Reboot' over to
   /// `_reboot_only` first so no outlet quietly stops cycling.
   ///
-  /// An outlet's behaviour used to be spread over two keys that said the same
+  /// An outlet's behavior used to be spread over two keys that said the same
   /// thing from different ends: `_action: "Reboot"` drove the panel button, and
   /// `_reboot_only` drove the remote reboot listener. The processor merged them
   /// onto `_reboot_only` — one key for both callers — which leaves `_action` as
@@ -4996,7 +5486,7 @@ class AppStateProvider extends ChangeNotifier {
       final declared = fileSetup[rebootOnlyKey];
       if (declared != null) {
         // The room itself already ruled on this outlet; say so when the two
-        // disagreed rather than changing behaviour on the way past.
+        // disagreed rather than changing behavior on the way past.
         if (declared != true) {
           systemLogs.add(
               "FLAGGED: '$rawKey' was 'Reboot' but the file also set "
@@ -5222,7 +5712,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 }
 
-/// Where a value in the working config came from. Drives the colouring in the
+/// Where a value in the working config came from. Drives the coloring in the
 /// conversion preview and on the Devices / System tabs; the palette itself
 /// lives in conversion_colors.dart.
 enum ValueOrigin {
@@ -5239,7 +5729,7 @@ enum ValueOrigin {
   changed,
 
   /// Written by the conversion from the template, the schema defaults or a
-  /// lookup — shown in the theme's ordinary text colour.
+  /// lookup — shown in the theme's ordinary text color.
   written,
 }
 

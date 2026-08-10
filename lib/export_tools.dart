@@ -159,6 +159,8 @@ Future<ProjectExport> saveProjectFolder({
     library: provider.avDeviceLibrary,
     settings: provider.avCost,
     rates: provider.laborRates,
+    baseCosts: provider.baseCosts,
+    tier: provider.pricingTier,
   );
   final costSections = costReportSections(estimate);
   if (costSections.isEmpty) {
@@ -207,6 +209,16 @@ Future<ProjectExport> saveProjectFolder({
   await write('labor_rates.json', (f) async {
     await f.writeAsString(encoder.convert(provider.laborRates.toJson()));
   });
+
+  // The category prices behind any budget lines. Without them a total that
+  // was partly a budget looks like a quote a year later.
+  if (provider.baseCosts.allUnset) {
+    skipped.add('base_costs.json — no base costs are set');
+  } else {
+    await write('base_costs.json', (f) async {
+      await f.writeAsString(encoder.convert(provider.baseCosts.toJson()));
+    });
+  }
 
   // --- what is in the folder ----------------------------------------------
   await write('README.txt', (f) async {

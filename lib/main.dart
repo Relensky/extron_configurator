@@ -7,12 +7,17 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'app_snack.dart';
 import 'app_state.dart';
+import 'av_device_library.dart';
+import 'av_only_notice.dart';
 import 'av_flow_view.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
 import 'export_tools.dart';
 import 'device_editor_view.dart';
+import 'device_start_wizard.dart';
+import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
@@ -95,7 +100,7 @@ class RoomConfigApp extends StatelessWidget {
     Color(0xFFFF9800), // orange
     Color(0xFFFF5722), // deep orange
     Color(0xFF795548), // brown
-    Color(0xFF607D8B), // blue grey
+    Color(0xFF607D8B), // blue gray
   ];
 
   /// Parses a stored RRGGBB hex into a Color (falls back to [fallback]).
@@ -232,14 +237,55 @@ class _MainDashboardState extends State<MainDashboard> {
     }
     if (!context.mounted) return;
 
+    // Two questions that change what the rest of the session looks like: is
+    // there a control system yet, and are the devices coming from the cost
+    // estimator? Both default to the old behavior.
+    final NewRoomChoice? choice = await showNewRoomDialog(context);
+    if (choice == null || !context.mounted) return;
+
     // The template path always resolves (explicit file, else config.json in
     // the Root Folder / working directory), so just attempt the create and
     // report the resolved location on failure.
     final bool success = await provider.createNewConfig();
     if (!context.mounted) return;
     if (success) {
+      // Set after the create: createNewConfig resets the AV document, and the
+      // room mode lives in it.
+      provider.setRoomMode(choice.mode);
+
+      if (choice.startFromEstimator) {
+        final placed = await showDeviceStartWizard(context, provider);
+        if (!context.mounted) return;
+        if (placed > 0) {
+          // Straight to the estimate: the list was just priced, and the
+          // numbers are what the wizard was opened for.
+          provider.selectTab(AppTab.cost.index);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '$placed device${placed == 1 ? '' : 's'} added — they are on '
+                'the Signal Flow canvas and priced here.',
+              ),
+            ),
+          );
+          return;
+        }
+      }
+
+      // An AV-only room starts on the Wizard tab, which is where its two
+      // required answers (building and room number) live.
+      if (choice.mode == RoomMode.avOnly) {
+        provider.selectTab(AppTab.wizard.index);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New config created from template.')),
+        SnackBar(
+          content: Text(
+            choice.mode == RoomMode.avOnly
+                ? 'New AV-only room created. Set the building and room '
+                      'number, then add the devices.'
+                : 'New config created from template.',
+          ),
+        ),
       );
     } else {
       provider.selectTab(AppTab.appConfig.index);
@@ -473,7 +519,7 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
           // CONVERT: the migration a legacy file needs, on demand. The load
           // already ran the conversion in memory — this is where it gets
-          // reviewed, accepted or thrown away. Greyed out when the loaded
+          // reviewed, accepted or thrown away. Grayed out when the loaded
           // file had nothing to migrate, so its state is also the answer to
           // "does this room need converting?".
           IconButton(
@@ -624,24 +670,41 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
       body: Row(
         children: [
-          NavigationRail(
-            selectedIndex: selectedIndex,
-            onDestinationSelected: (int index) {
-              provider.selectTab(index);
-            },
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
-              NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
-              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
-              NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
-              NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
-              NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
-              NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
-              NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
-              NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
-              NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
-            ],
+          // The rail is ten destinations tall and a laptop window is not.
+          // NavigationRail is a Column, so on a short window the bottom tabs
+          // were simply cut off — App Config unreachable, and a layout
+          // exception on every launch before the window is maximized.
+          //
+          // This is the documented way to make one scroll: give it the
+          // viewport's height as a MINIMUM so the normal case still fills the
+          // side of the window, and let it scroll past that when it can't fit.
+          LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: NavigationRail(
+                    selectedIndex: selectedIndex,
+                    onDestinationSelected: (int index) {
+                      provider.selectTab(index);
+                    },
+                    labelType: NavigationRailLabelType.all,
+                    destinations: const [
+                      NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
+                      NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
+                      NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
+                      NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
+                      NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
+                      NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
+                      NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
+                      NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
+                      NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
+                      NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
@@ -649,7 +712,11 @@ class _MainDashboardState extends State<MainDashboard> {
               key: _captureKey,
               child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
                   ? _buildLandingScreen(context, provider)
-                  : _buildMainContent(selectedIndex, provider.configRevision),
+                  : _buildMainContent(
+                      selectedIndex,
+                      provider.configRevision,
+                      provider.isAvOnlyRoom,
+                    ),
             ),
           )
         ],
@@ -722,7 +789,8 @@ class _MainDashboardState extends State<MainDashboard> {
   /// without this the previous room's name and number stayed on screen until
   /// the user switched tabs and came back. App Config is left unkeyed — its
   /// fields are application settings and have nothing to do with the room.
-  Widget _buildMainContent(int selectedIndex, int configRevision) {
+  Widget _buildMainContent(
+      int selectedIndex, int configRevision, bool avOnly) {
     final key = ValueKey('tab_${selectedIndex}_cfg_$configRevision');
     if (selectedIndex < 0 || selectedIndex >= AppTab.values.length) {
       return const Center(child: Text("Select a category"));
@@ -733,7 +801,11 @@ class _MainDashboardState extends State<MainDashboard> {
       case AppTab.devices:
         return DynamicDevicesTabsView(key: key);
       case AppTab.system:
-        return SystemSettingsView(key: key);
+        // An AV-only room has no processor config to edit yet — see
+        // ControlSystemPlaceholder, which says so and offers the switch.
+        return avOnly
+            ? const ControlSystemPlaceholder(tabName: 'the System tab')
+            : SystemSettingsView(key: key);
       case AppTab.schematic:
         return SchematicView(key: key);
       case AppTab.avFlow:
@@ -747,6 +819,9 @@ class _MainDashboardState extends State<MainDashboard> {
         // not be thrown away and rebuilt when a different room is opened.
         return const DeviceEditorView();
       case AppTab.rawJson:
+        if (avOnly) {
+          return const ControlSystemPlaceholder(tabName: 'the Raw JSON tab');
+        }
         // Unkeyed on purpose: the raw editor already re-reads the config in
         // didChangeDependencies, and remounting it mid-Apply would cut off its
         // own "applied/saved" feedback.
@@ -879,7 +954,12 @@ Future<void> _saveAllProject(
 /// button rather than opening it. The whole point of the change is that the
 /// user decides when to deal with the conversion.
 void _announceConversionAvailable(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
+  // Shown right after a load, and its CONVERT action opens a dialog over the
+  // top of it — both of which are how a snack bar ends up stuck. See
+  // showTimedSnackBar: it keeps a timer outside the widget tree so the notice
+  // goes away regardless.
+  showTimedSnackBar(
+    ScaffoldMessenger.of(context),
     SnackBar(
       duration: const Duration(seconds: 8),
       content: const Text(
@@ -981,7 +1061,7 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
         ),
         actions: [
           // The log above says WHAT changed; the preview shows the converted
-          // config itself, coloured by where each value came from, and lets
+          // config itself, colored by where each value came from, and lets
           // individual changes be rejected.
           if (ctx.read<AppStateProvider>().hasConversionPreview)
             TextButton.icon(
@@ -1299,6 +1379,132 @@ class AppSettingsView extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 22),
+
+        // --- ACTIVE DEPLOYMENT TARGET ---
+        // First on the tab because it is the one setting that changes between
+        // sessions: every path below is set once and forgotten, while this
+        // picks which room the next upload or download talks to. At the
+        // bottom its dropdown opened off the end of a long scrolling page,
+        // which meant scrolling to find the field and scrolling again to see
+        // what it offered.
+        Text('Active Deployment Target',
+            style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ProcessorSearchField(
+                label: 'Select Room Deployment',
+                helperText:
+                    'Search by building name, code, room number, or IP — '
+                    'rooms from processors.json, names from buildings.json.',
+                initialProcessor: provider.selectedProcessor,
+                onSelected: (proc) => provider.selectProcessor(proc),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear Active Room',
+                onPressed: () => provider.selectProcessor(null),
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 40),
+
+        // --- PRICING ---
+        // Currency and which of a catalog entry's two prices the estimates
+        // cost from. Both are app-wide: a shop bills in one currency, and
+        // whether a job is quoted at list or at education pricing is a
+        // decision about the job, not about each device.
+        Text('Pricing', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        // Wrap, not Row: three controls plus their explanation is more than a
+        // narrow window has room for on one line, and this tab is read at
+        // whatever width the app happens to be open at.
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.start,
+          children: [
+            SizedBox(
+              width: 240,
+              child: DropdownButtonFormField<String>(
+                initialValue: kCurrencySymbols.contains(provider.currencySymbol)
+                    ? provider.currencySymbol
+                    : null,
+                // A dropdown sizes itself to its WIDEST item, not the selected
+                // one, so without this the box wants the width of "New Zealand
+                // dollar" and overflows whatever it is put in.
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Currency symbol',
+                  helperText: 'Shown in front of every figure',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final c in kCurrencySymbols)
+                    DropdownMenuItem(
+                      value: c,
+                      child: Text('$c   ${kCurrencyNames[c] ?? ''}'),
+                    ),
+                ],
+                onChanged: (val) {
+                  if (val != null) provider.updateSetting('currencySymbol', val);
+                },
+              ),
+            ),
+            // Anything not on the list — a currency code, a local symbol.
+            SizedBox(
+              width: 200,
+              child: TextFormField(
+                key: ValueKey('currencySymbol_${provider.currencySymbol}'),
+                decoration: const InputDecoration(
+                  labelText: 'Or type one',
+                  helperText: 'Blank resets to \$',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.currencySymbol,
+                onChanged: (val) =>
+                    provider.updateSetting('currencySymbol', val),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Estimate prices',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                // Short labels: two full names side by side is wider than a
+                // narrow window, and a SegmentedButton does not wrap.
+                SegmentedButton<PricingTier>(
+                  segments: [
+                    for (final t in PricingTier.values)
+                      ButtonSegment(
+                        value: t,
+                        label: Text(kPricingTierShort[t] ?? t.name),
+                        tooltip: kPricingTierLabels[t],
+                      ),
+                  ],
+                  selected: {provider.pricingTier},
+                  onSelectionChanged: (s) => provider.setPricingTier(s.first),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Every catalog entry carries both prices. A price typed on a room '
+          'still wins over either; a line the catalog can only price at the '
+          'other tier is flagged on the estimate rather than quietly costed.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const Divider(height: 40),
 
         // --- THEME STYLE ---
         // Two styles, each with its own accent swatch picker below:
@@ -1815,33 +2021,6 @@ class AppSettingsView extends StatelessWidget {
         ],
         const SizedBox(height: 30),
 
-        Text('Active Deployment Target', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 20),
-        
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ProcessorSearchField(
-                label: 'Select Room Deployment',
-                helperText:
-                    'Search by building name, code, room number, or IP — '
-                    'rooms from processors.json, names from buildings.json.',
-                initialProcessor: provider.selectedProcessor,
-                onSelected: (proc) => provider.selectProcessor(proc),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: IconButton(
-                icon: const Icon(Icons.clear),
-                tooltip: 'Clear Active Room',
-                onPressed: () => provider.selectProcessor(null), 
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }

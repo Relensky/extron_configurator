@@ -8,7 +8,7 @@ import 'app_logger.dart';
 /// ============================================================================
 ///  What an hour of somebody's time costs, per job type, kept in a file of its
 ///  own (`labor_rates.json` in the Root Folder) rather than per room — a rate
-///  is a fact about the organisation and the year, and re-typing it per room
+///  is a fact about the organization and the year, and re-typing it per room
 ///  is how two estimates for the same building end up quoting different
 ///  numbers for the same work.
 ///
@@ -19,7 +19,7 @@ import 'app_logger.dart';
 ///  The shipped defaults are the roles this shop actually bills:
 ///
 ///    * CTS III / CTS IV — certified AV technicians, the bulk of an install
-///    * TSRV            — technical services / shop labour
+///    * TSRV            — technical services / shop labor
 ///    * FMS             — facilities, a placeholder so a job that needs
 ///                        conduit, ceiling work or a lift can carry a figure
 ///                        instead of pretending it is free
@@ -40,7 +40,7 @@ class LaborRate {
   /// What this role covers, shown under the name in the picker.
   final String notes;
 
-  /// Whether tax applies to this labour by default. Labour is untaxed in most
+  /// Whether tax applies to this labor by default. Labor is untaxed in most
   /// US jurisdictions; the estimate can still override per line.
   final bool taxable;
 
@@ -112,7 +112,7 @@ class LaborRateBook {
     LaborRate(
       id: 'tsrv',
       name: 'TSRV',
-      notes: 'Technical services / shop labour',
+      notes: 'Technical services / shop labor',
     ),
     LaborRate(
       id: 'fms',

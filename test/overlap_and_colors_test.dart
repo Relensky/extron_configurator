@@ -9,7 +9,7 @@ import 'package:extron_configurator/schematic_view.dart';
 
 /// Boxes that land on top of each other hide both, and a cable that cuts
 /// through the very device it plugs into is worse than no diagram. Plus the
-/// Control Schematic's own line-colour picker.
+/// Control Schematic's own line-color picker.
 void main() {
   group('boxes do not land on top of each other', () {
     const size = Size(190, 78);

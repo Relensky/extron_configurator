@@ -7,12 +7,12 @@ import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_flow_view.dart';
 
 /// The AV tab's dialogs are built inside the tab, so anything that throws
-/// while they lay out takes the whole tab down to a grey screen rather than
+/// while they lay out takes the whole tab down to a gray screen rather than
 /// showing an error in one dialog.
 ///
 /// Regression: the device and cable dialogs put a [Spacer] between their
 /// actions. AlertDialog lays actions out in an OverflowBar, which is not a
-/// Flex, so the Expanded inside Spacer asserted and greyed out the tab the
+/// Flex, so the Expanded inside Spacer asserted and grayed out the tab the
 /// moment you clicked a device's edit pencil.
 void main() {
   AvNode switcher() => const AvNode(
@@ -88,7 +88,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the device edit dialog opens instead of greying out the tab', (
+  testWidgets('the device edit dialog opens instead of graying out the tab', (
     tester,
   ) async {
     final provider = seeded();
@@ -195,7 +195,7 @@ void main() {
     expect(provider.avCables, isEmpty);
   });
 
-  testWidgets('a cable can be recoloured away from its signal type', (
+  testWidgets('a cable can be recolored away from its signal type', (
     tester,
   ) async {
     final provider = seeded();

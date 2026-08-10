@@ -90,6 +90,8 @@ ReportSection _roomSummary(AppStateProvider provider, AvFlowModel model) {
       ['Cables', model.cables.length],
       if (byType.isNotEmpty) ['Cables by type', byType],
       ['Racks', model.racks.length],
+      if (model.rackItems.isNotEmpty)
+        ['Rack hardware', model.rackItems.length],
     ],
   );
 }
@@ -218,6 +220,7 @@ List<ReportSection> _driverGap(AppStateProvider provider, AvFlowModel model) {
 /// anything else gets added to a rack.
 ReportSection _rackSummary(AvFlowModel model) {
   final byId = model.nodesById;
+  final itemById = {for (final i in model.rackItems) i.id: i};
   final rows = <List<dynamic>>[];
 
   for (final rack in model.racks) {
@@ -229,7 +232,13 @@ ReportSection _rackSummary(AvFlowModel model) {
     for (final entry in model.rackSlots.entries) {
       if (entry.value.rackId != rack.id) continue;
       final node = byId[entry.key];
-      if (node == null) continue;
+      if (node == null) {
+        // Rack hardware: it takes up rails and draws nothing, which is
+        // exactly what a blanking plate is for.
+        final item = itemById[entry.key];
+        if (item != null) usedU += item.rackUnits <= 0 ? 1 : item.rackUnits;
+        continue;
+      }
       devices++;
       watts += node.powerWatts;
       btu += node.effectiveBtu;
@@ -339,6 +348,7 @@ ReportSection _powerSummary(AvFlowModel model) {
 /// the way an elevation is read.
 ReportSection _rackInventory(AvFlowModel model) {
   final byId = model.nodesById;
+  final itemById = {for (final i in model.rackItems) i.id: i};
   final rows = <List<dynamic>>[];
 
   for (final rack in model.racks) {
@@ -354,7 +364,8 @@ ReportSection _rackInventory(AvFlowModel model) {
 
       for (final entry in entries) {
         final node = byId[entry.key];
-        final height = (node?.rackUnits ?? 1).clamp(1, 60);
+        final item = node == null ? itemById[entry.key] : null;
+        final height = (node?.rackUnits ?? item?.rackUnits ?? 1).clamp(1, 60);
         final startU = entry.value.startU;
         final endU = startU + height - 1;
         final slice = entry.value.slice;
@@ -365,8 +376,11 @@ ReportSection _rackInventory(AvFlowModel model) {
           // Which slice of the rail — the thing you need when three boxes
           // share one shelf.
           slice.label,
-          node?.label ?? entry.key,
-          node?.model ?? '',
+          node?.label ?? item?.label ?? entry.key,
+          // Hardware shows its kind where a device shows its model: reading
+          // "Blank plate" down that column is what makes an elevation
+          // check out against the rack in front of you.
+          node?.model ?? item?.category ?? '',
         ]);
       }
     }
@@ -380,10 +394,16 @@ ReportSection _rackInventory(AvFlowModel model) {
   for (final n in unracked) {
     rows.add(['(not placed)', '', '${n.rackUnits}U', '', n.label, n.model]);
   }
+  // Hardware bought but not placed. It is still on the estimate, so leaving
+  // it off this sheet would make the order and the elevation disagree.
+  for (final i in model.rackItems) {
+    if (model.rackSlots.containsKey(i.id)) continue;
+    rows.add(['(not placed)', '', '${i.rackUnits}U', '', i.label, i.category]);
+  }
 
   return (
     title: 'Rack Inventory',
-    header: ['Rack', 'Face', 'Position', 'Slice', 'Device', 'Model'],
+    header: ['Rack', 'Face', 'Position', 'Slice', 'Item', 'Model / kind'],
     rows: rows,
   );
 }

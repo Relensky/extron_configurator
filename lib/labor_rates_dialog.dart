@@ -11,7 +11,7 @@ import 'live_text_field.dart';
 /// ============================================================================
 ///  RATE CARD EDITOR
 /// ============================================================================
-///  The hourly rates every estimate costs its labour from — CTS III, CTS IV,
+///  The hourly rates every estimate costs its labor from — CTS III, CTS IV,
 ///  TSRV, FMS and whatever else this shop bills. Kept in one file so revising
 ///  a rate re-costs every room that uses it, instead of leaving last year's
 ///  number in a dozen sidecars.

@@ -12,7 +12,7 @@ import 'package:extron_configurator/av_flow_model.dart';
 /// however many are on it, closes ranks when one leaves, and the whole thing
 /// has to survive the sidecar round trip.
 ///
-/// Also covers the room's signal palette: recolouring a type moves every run
+/// Also covers the room's signal palette: recoloring a type moves every run
 /// of it, which is the difference between a legend and a decoration.
 void main() {
   late Directory dir;
@@ -176,7 +176,7 @@ void main() {
       expect(p.avRackSlots['A']!.slice.label, 'Full');
     });
 
-    test('reordering slides the neighbours rather than swapping', () {
+    test('reordering slides the neighbors rather than swapping', () {
       final p = openedOn(configPath);
       for (final id in ['A', 'B', 'C']) {
         p.addAvNode(device(id));
@@ -199,7 +199,7 @@ void main() {
       );
     });
 
-    test('a taller neighbour spanning in still blocks the rail', () {
+    test('a taller neighbor spanning in still blocks the rail', () {
       final p = openedOn(configPath);
       p.addAvNode(device('TALL', units: 3));
       p.addAvNode(device('SMALL'));
@@ -297,7 +297,7 @@ void main() {
   });
 
   group('the signal palette', () {
-    test('recolouring a type moves every run of it, and the legend', () {
+    test('recoloring a type moves every run of it, and the legend', () {
       final p = openedOn(configPath);
       expect(p.avSignalColor(SignalType.hdmi), kSignalColors[SignalType.hdmi]);
 
@@ -366,7 +366,7 @@ void main() {
     });
   });
 
-  group('cable colour overrides', () {
+  group('cable color overrides', () {
     test('a run follows its signal type until it is overridden', () {
       const cable = AvCable(
         id: 'C1',
@@ -381,19 +381,19 @@ void main() {
       expect(cable.colorFor(), kSignalColors[SignalType.hdmi]);
 
       const custom = Color(0xFFEF5350);
-      final recoloured = cable.copyWith(colorOverride: custom);
-      expect(recoloured.hasCustomColor, isTrue);
-      expect(recoloured.colorFor(), custom);
+      final recolored = cable.copyWith(colorOverride: custom);
+      expect(recolored.hasCustomColor, isTrue);
+      expect(recolored.colorFor(), custom);
 
       // Changing the signal type does NOT drag the override along with it.
-      expect(recoloured.copyWith(signal: SignalType.dante).colorFor(), custom);
+      expect(recolored.copyWith(signal: SignalType.dante).colorFor(), custom);
 
-      final reset = recoloured.copyWith(clearColorOverride: true);
+      final reset = recolored.copyWith(clearColorOverride: true);
       expect(reset.hasCustomColor, isFalse);
       expect(reset.colorFor(), kSignalColors[SignalType.hdmi]);
     });
 
-    test('the legend only speaks for runs drawn in their signal colour', () {
+    test('the legend only speaks for runs drawn in their signal color', () {
       const base = AvCable(
         id: 'C1',
         fromNodeId: 'A',

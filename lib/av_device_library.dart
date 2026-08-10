@@ -59,6 +59,90 @@ import 'av_flow_model.dart';
 ///  can export a ready-made entry).
 /// ============================================================================
 
+// ---------------------------------------------------------------------------
+//  CATEGORIES THE APP ITSELF KEYS OFF
+// ---------------------------------------------------------------------------
+//  Category is free text — a catalog can say whatever it likes — but three
+//  values have behavior attached, so they are named once here rather than
+//  spelled out at every call site:
+//
+//    * RACK HARDWARE is what the rack editor's parts list offers: vent plates,
+//      blanks, shelves, drawers. Entries carry a rack height and a price and no
+//      connectors, because none of it carries signal.
+//    * CONSUMABLE is the box of things a job eats — velcro, ties, screws,
+//      labels — priced per unit and added by quantity rather than drawn.
+//    * CABLE entries carry a [AvDeviceTemplate.cableSignal], which is how the
+//      estimate prices the runs on the AV flow: one line per signal type, the
+//      quantity counted off the diagram, plus whatever spares are asked for.
+
+const String kCategoryRackHardware = 'Rack hardware';
+const String kCategoryConsumable = 'Consumable';
+const String kCategoryCable = 'Cable';
+
+// ---------------------------------------------------------------------------
+//  PRICING TIERS
+// ---------------------------------------------------------------------------
+//  Every entry carries TWO published prices, because every quote gets written
+//  against one of two numbers: the manufacturer's list price, and the
+//  education price the institution actually pays. Keeping both on the entry —
+//  rather than one price and a discount percentage somewhere else — means an
+//  estimate can be switched between them without re-entering anything, and a
+//  year later it is still clear which one a given quote was written at.
+//
+//  Neither is a room's negotiated price. That still lives on the room (see
+//  RoomCostSettings.priceOverrides) and wins over both.
+
+enum PricingTier { msrp, education }
+
+const Map<PricingTier, String> kPricingTierLabels = {
+  PricingTier.msrp: 'MSRP (list price)',
+  PricingTier.education: 'Education price',
+};
+
+/// Short form for a table column or a report line.
+const Map<PricingTier, String> kPricingTierShort = {
+  PricingTier.msrp: 'MSRP',
+  PricingTier.education: 'Edu',
+};
+
+/// Currency symbols offered in App Config. Not a complete list of the world's
+/// currencies — the field beside it takes anything typed — just the ones worth
+/// a click.
+const List<String> kCurrencySymbols = [r'$', '€', '£', '¥', 'CHF', 'kr', 'CA\$',
+    'A\$', 'NZ\$', 'R', '₹', '₩', '₽', 'R\$'];
+
+const Map<String, String> kCurrencyNames = {
+  r'$': 'US dollar',
+  '€': 'Euro',
+  '£': 'Pound sterling',
+  '¥': 'Yen / Yuan',
+  'CHF': 'Swiss franc',
+  'kr': 'Krone / Krona',
+  'CA\$': 'Canadian dollar',
+  'A\$': 'Australian dollar',
+  'NZ\$': 'New Zealand dollar',
+  'R': 'Rand',
+  '₹': 'Rupee',
+  '₩': 'Won',
+  '₽': 'Ruble',
+  'R\$': 'Real',
+};
+
+PricingTier pricingTierFromName(String? name) =>
+    name?.trim().toLowerCase() == 'education'
+    ? PricingTier.education
+    : PricingTier.msrp;
+
+/// The categories offered even when nothing is filed under them yet. The rack
+/// kinds are listed individually ('Vent plate', 'Shelf', ...) because that is
+/// how the rack editor groups its parts list — "Rack hardware" as a single
+/// bucket would put a drawer and a blanking plate in the same drawer.
+const List<String> kWellKnownCategories = [
+  ...kRackItemCategories,
+  kCategoryConsumable,
+  kCategoryCable,
+];
+
 /// A model's connector set, and everything else about the box that the room
 /// config never records: how tall it is, what it draws, and what it costs.
 ///
@@ -90,8 +174,24 @@ class AvDeviceTemplate {
   /// switch rather than the room's circuit.
   final PowerInput powerInput;
 
-  /// Unit price in the catalog's currency; 0 = not priced.
+  /// Manufacturer's list price (MSRP) in the catalog's currency; 0 = not
+  /// priced. Kept under the plain name `price` so catalogs written before
+  /// there were two tiers still read.
   final double price;
+
+  /// The education / institutional price; 0 = not recorded. See [PricingTier].
+  final double educationPrice;
+
+  /// End-of-life: still in the catalog so old rooms keep resolving their
+  /// connectors and prices, but kept out of the pickers that specify NEW work.
+  /// Deleting the entry instead would silently strip the ports and the price
+  /// from every room that already used it.
+  final bool retired;
+
+  /// For a [kCategoryCable] entry: which signal type this cable carries, so
+  /// the estimate can count the runs of that type on the AV flow and price
+  /// them. Null on everything else.
+  final SignalType? cableSignal;
 
   final String notes;
 
@@ -112,10 +212,40 @@ class AvDeviceTemplate {
     this.btuPerHour = 0,
     this.powerInput = PowerInput.mains,
     this.price = 0,
+    this.educationPrice = 0,
+    this.retired = false,
+    this.cableSignal,
     this.notes = '',
     required this.ports,
     this.custom = false,
   });
+
+  /// True when this entry is a length of cable rather than a box.
+  bool get isCable => category.trim() == kCategoryCable;
+
+  /// True when this belongs on the rack editor's parts list — a vent plate, a
+  /// blank, a shelf, a drawer, anything in [kRackItemCategories].
+  bool get isRackHardware => kRackItemCategories.contains(category.trim());
+
+  bool get isConsumable => category.trim() == kCategoryConsumable;
+
+  /// The price for [tier], and whether it had to fall back to the other tier
+  /// because the one asked for was never recorded.
+  ///
+  /// Falling back rather than reporting nothing is deliberate: a catalog part
+  /// way through being priced should still produce a usable estimate. Saying
+  /// so is the other half — the line reports which number it used, so nobody
+  /// quotes an education job at list without noticing.
+  ({double price, bool fallback}) priceForTier(PricingTier tier) {
+    final wanted = tier == PricingTier.education ? educationPrice : price;
+    if (wanted > 0) return (price: wanted, fallback: false);
+    final other = tier == PricingTier.education ? price : educationPrice;
+    if (other > 0) return (price: other, fallback: true);
+    return (price: 0, fallback: false);
+  }
+
+  /// True when both tiers are blank.
+  bool get isUnpriced => price <= 0 && educationPrice <= 0;
 
   /// Heat this model puts into a rack: its published figure when there is
   /// one, otherwise the watts converted.
@@ -140,6 +270,10 @@ class AvDeviceTemplate {
     double? btuPerHour,
     PowerInput? powerInput,
     double? price,
+    double? educationPrice,
+    bool? retired,
+    SignalType? cableSignal,
+    bool clearCableSignal = false,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -153,6 +287,9 @@ class AvDeviceTemplate {
     btuPerHour: btuPerHour ?? this.btuPerHour,
     powerInput: powerInput ?? this.powerInput,
     price: price ?? this.price,
+    educationPrice: educationPrice ?? this.educationPrice,
+    retired: retired ?? this.retired,
+    cableSignal: clearCableSignal ? null : (cableSignal ?? this.cableSignal),
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -168,6 +305,9 @@ class AvDeviceTemplate {
     if (btuPerHour > 0) 'btuPerHour': btuPerHour,
     if (powerInput != PowerInput.mains) 'powerInput': powerInput.name,
     if (price > 0) 'price': price,
+    if (educationPrice > 0) 'educationPrice': educationPrice,
+    if (retired) 'retired': true,
+    if (cableSignal != null) 'cableSignal': cableSignal!.name,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
@@ -196,6 +336,14 @@ class AvDeviceTemplate {
         (json['price'] as num?)?.toDouble() ??
         (json['cost'] as num?)?.toDouble() ??
         0,
+    educationPrice:
+        (json['educationPrice'] as num?)?.toDouble() ??
+        (json['eduPrice'] as num?)?.toDouble() ??
+        0,
+    retired: json['retired'] == true,
+    cableSignal: json['cableSignal'] == null
+        ? null
+        : signalFromName(json['cableSignal'].toString()),
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))
@@ -295,14 +443,60 @@ class AvDeviceLibrary {
   }
 
   /// Categories in use, for the catalog filter and the "new device" form.
+  ///
+  /// The three the app keys off are always offered even when nothing is filed
+  /// under them yet — a picker that hides "Consumable" until a consumable
+  /// exists is a picker you cannot create the first consumable with.
   List<String> get categories {
     final set = <String>{
+      ...kWellKnownCategories,
       for (final t in _byModel.values)
         if (t.category.trim().isNotEmpty) t.category.trim(),
     };
     final list = set.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return list;
+  }
+
+  /// Everything still current — what the pickers that specify NEW work offer.
+  /// Retired entries stay in [all] so rooms that already use them still
+  /// resolve their ports and prices.
+  List<AvDeviceTemplate> get active =>
+      all.where((t) => !t.retired).toList();
+
+  int get retiredCount => _byModel.values.where((t) => t.retired).length;
+
+  /// The rack editor's parts list: vent plates, blanks, shelves and drawers,
+  /// shortest first so a 1U blank is the first thing offered.
+  List<AvDeviceTemplate> get rackHardware {
+    final list = active.where((t) => t.isRackHardware).toList()
+      ..sort((a, b) {
+        final byU = a.rackUnits.compareTo(b.rackUnits);
+        return byU != 0
+            ? byU
+            : a.model.toLowerCase().compareTo(b.model.toLowerCase());
+      });
+    return list;
+  }
+
+  List<AvDeviceTemplate> get consumables =>
+      active.where((t) => t.isConsumable).toList();
+
+  List<AvDeviceTemplate> get cables => active.where((t) => t.isCable).toList();
+
+  /// The cable entry priced for [signal], or null when the catalog has none —
+  /// which the estimate reports as an unpriced run rather than costing at
+  /// nothing.
+  AvDeviceTemplate? cableForSignal(SignalType signal) {
+    AvDeviceTemplate? retiredMatch;
+    for (final t in all) {
+      if (!t.isCable || t.cableSignal != signal) continue;
+      if (!t.retired) return t;
+      // A retired cable type is still better than pricing the run at nothing,
+      // but only once nothing current matches.
+      retiredMatch ??= t;
+    }
+    return retiredMatch;
   }
 
   static String _norm(String model) =>
@@ -1192,9 +1386,123 @@ class AvDeviceLibrary {
             label: 'P$i',
             signal: SignalType.network,
             direction: PortDirection.bidirectional,
-            side: i <= 6 ? PortSide.left : PortSide.right,
+            // A panel's outlets run in one horizontal row along the bottom
+            // edge — see AvNodeKind.patchPanel.
+            side: PortSide.bottom,
           ),
       ],
     ),
+
+    // --- RACK HARDWARE -----------------------------------------------------
+    //  The parts list the rack editor offers. No connectors and no power: a
+    //  blank plate is a thing you buy and a thing that occupies a rail, and
+    //  nothing else. Prices ship at 0 — "not priced" — because what a plate
+    //  costs is a fact about your supplier, not about the app.
+    ..._rackHardware,
+
+    // --- CONSUMABLES -------------------------------------------------------
+    ..._consumables,
+
+    // --- CABLE ------------------------------------------------------------
+    ..._cableTypes,
+  ];
+
+  /// One rack accessory: no ports, no power, a height and a price. [category]
+  /// is the specific kind ('Vent plate', 'Drawer'), which is how the rack
+  /// editor groups the parts list.
+  static AvDeviceTemplate _hardware(
+    String model,
+    String category,
+    int rackUnits, {
+    String notes = '',
+  }) => AvDeviceTemplate(
+    model: model,
+    category: category,
+    rackUnits: rackUnits,
+    powerInput: PowerInput.none,
+    notes: notes,
+    ports: const [],
+  );
+
+  static final List<AvDeviceTemplate> _rackHardware = [
+    for (final u in [1, 2, 3, 4])
+      _hardware('Blank plate ${u}U', 'Blank plate', u),
+    for (final u in [1, 2, 3])
+      _hardware(
+        'Vent plate ${u}U',
+        'Vent plate',
+        u,
+        notes: 'Perforated, passive',
+      ),
+    _hardware(
+      'Fan panel 1U',
+      'Vent plate',
+      1,
+      notes: 'Powered — set its watts on the catalog entry',
+    ),
+    _hardware('Rack shelf 1U', 'Shelf', 1, notes: 'Fixed'),
+    _hardware('Rack shelf 2U', 'Shelf', 2, notes: 'Fixed'),
+    _hardware(
+      'Clamping shelf 1U',
+      'Clamping shelf',
+      1,
+      notes: 'Holds a half-rack box down by the sides',
+    ),
+    _hardware('Clamping shelf 2U', 'Clamping shelf', 2),
+    _hardware('Vented shelf 2U', 'Shelf', 2, notes: 'Perforated'),
+    _hardware('Rack drawer 2U', 'Drawer', 2),
+    _hardware('Rack drawer 3U', 'Drawer', 3),
+    _hardware('Lacing bar 1U', 'Cable management', 1),
+    _hardware('Cable management panel 1U', 'Cable management', 1),
+    _hardware('Rack rail screws (pack)', 'Rack hardware', 0),
+  ];
+
+  static AvDeviceTemplate _consumable(String model, String notes) =>
+      AvDeviceTemplate(
+        model: model,
+        category: kCategoryConsumable,
+        powerInput: PowerInput.none,
+        notes: notes,
+        ports: const [],
+      );
+
+  static final List<AvDeviceTemplate> _consumables = [
+    _consumable('Hook & loop tie roll', 'Per roll'),
+    _consumable('Cable ties (bag of 100)', 'Per bag'),
+    _consumable('Cable labels (sheet)', 'Per sheet'),
+    _consumable('Heat shrink assortment', 'Per pack'),
+    _consumable('Phoenix connectors (bag)', 'Per bag'),
+    _consumable('Rack screws & cage nuts (bag)', 'Per bag'),
+  ];
+
+  /// A priced cable type. [signal] is what ties it to the runs on the AV flow:
+  /// every cable of that signal type on the diagram is quoted at this price.
+  static AvDeviceTemplate _cable(String model, SignalType signal) =>
+      AvDeviceTemplate(
+        model: model,
+        category: kCategoryCable,
+        powerInput: PowerInput.none,
+        cableSignal: signal,
+        notes: 'Priced per run; the quantity comes off the AV flow diagram.',
+        ports: const [],
+      );
+
+  static final List<AvDeviceTemplate> _cableTypes = [
+    _cable('HDMI cable', SignalType.hdmi),
+    _cable('Shielded twisted pair (HDBaseT / DTP)', SignalType.hdbaset),
+    _cable('DisplayPort cable', SignalType.displayPort),
+    _cable('USB-C cable', SignalType.usbC),
+    _cable('SDI / coax cable', SignalType.sdi),
+    _cable('VGA cable', SignalType.vga),
+    _cable('Analog audio cable', SignalType.analogAudio),
+    _cable('Digital audio cable (AES/SPDIF)', SignalType.digitalAudio),
+    _cable('Dante / AES67 patch lead', SignalType.dante),
+    _cable('Mic / line cable', SignalType.micLine),
+    _cable('Speaker cable', SignalType.speaker),
+    _cable('USB cable / extender', SignalType.usbData),
+    _cable('Network patch lead', SignalType.network),
+    _cable('IR emitter cable', SignalType.ir),
+    _cable('RS-232 cable', SignalType.serial),
+    _cable('IEC power lead', SignalType.power),
   ];
 }

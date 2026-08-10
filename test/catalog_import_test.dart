@@ -103,11 +103,47 @@ void main() {
     }
   });
 
-  test('nothing is priced or metered yet — the drawings do not say', () {
-    // Guards the import against inventing figures: a fabricated price is
+  test('nothing is metered — the drawings do not say', () {
+    // Guards the import against inventing figures: a fabricated figure is
     // worse than a blank one, because a blank is reported as missing.
-    expect(catalog.all.every((e) => e.price == 0), isTrue);
     expect(catalog.all.every((e) => e.powerWatts == 0), isTrue);
+  });
+
+  test('prices came from a price list, and only where one matched', () {
+    // MSRP is imported from a published price list by part number
+    // (tools/import_price_list.py), not read off the drawings and not
+    // guessed. Two things must stay true:
+    //
+    //   1. a priced entry has a part number — that is what it was matched on,
+    //      so a price with nothing behind it means the import went wrong;
+    //   2. plenty of entries are still unpriced, because no price list covers
+    //      the whole catalog and the importer leaves non-matches alone.
+    final priced = catalog.all.where((e) => e.price > 0).toList();
+    expect(priced, isNotEmpty, reason: 'the shipped catalog carries MSRPs');
+
+    for (final entry in priced) {
+      expect(entry.partNumber.trim(), isNotEmpty,
+          reason: '${entry.model} is priced but has no part number');
+      expect(entry.price, greaterThan(0));
+      expect(entry.price, lessThan(1000000),
+          reason: '${entry.model}: a six-figure list price is a parse error');
+    }
+
+    final unpriced = catalog.all.where((e) => e.price == 0).length;
+    expect(unpriced, greaterThan(0),
+        reason: 'a catalog with no gaps means something was invented');
+  });
+
+  test('education prices, where set, are below list', () {
+    // The second tier is a discount off MSRP. One above list is a typo or a
+    // swapped column, and it would quietly overcharge every education quote.
+    for (final entry in catalog.all) {
+      if (entry.educationPrice <= 0) continue;
+      expect(entry.price, greaterThan(0),
+          reason: '${entry.model} has an education price but no MSRP');
+      expect(entry.educationPrice, lessThanOrEqualTo(entry.price),
+          reason: '${entry.model}: education price above list');
+    }
   });
 
   test('the file is the one the app would load from the root folder', () {

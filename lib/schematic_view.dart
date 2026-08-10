@@ -14,6 +14,7 @@ import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_workbook.dart';
 import 'screenshot_tools.dart';
+import 'view_zoom.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -60,8 +61,8 @@ const Map<ConnType, String> kConnLabels = {
   ConnType.touchpanel: 'Touch Panel',
 };
 
-/// The colour a connection category is drawn in, honouring the room's
-/// overrides. Nothing reads [kConnColors] directly except this — recolouring
+/// The color a connection category is drawn in, honouring the room's
+/// overrides. Nothing reads [kConnColors] directly except this — recoloring
 /// a category has to move the lines, the box borders AND the legend together
 /// or the key stops describing the drawing.
 Color connColor(ConnType conn, AppStateProvider provider) =>
@@ -395,7 +396,7 @@ class SchematicModel {
     }
 
     // Auto edges the user deleted/re-routed are pulled aside (still listed
-    // greyed-out in the edit panel so they can be restored).
+    // grayed-out in the edit panel so they can be restored).
     final List<SchematicEdge> hiddenEdges = [];
     edges.removeWhere((e) {
       if (provider.schematicHiddenEdges.contains(e.autoId)) {
@@ -467,6 +468,20 @@ class _SchematicViewState extends State<SchematicView> {
   final GlobalKey _diagramKey = GlobalKey();
   final TransformationController _transform = TransformationController();
 
+  /// The window the canvas is looked at through, so "Fit to view" can measure
+  /// it; the drawing itself is measured through [_diagramKey].
+  final GlobalKey _viewportKey = GlobalKey();
+
+  /// Zooms out until the whole schematic is on screen.
+  void _fitToView() {
+    final fitted = fitToViewport(
+      controller: _transform,
+      contentKey: _diagramKey,
+      viewportKey: _viewportKey,
+    );
+    if (!fitted) _snack('The schematic is still drawing — try again.');
+  }
+
   bool _editMode = false;
   bool _linkMode = false;
   String? _pendingLinkFrom; // first node tapped while drawing a line
@@ -521,7 +536,7 @@ class _SchematicViewState extends State<SchematicView> {
     // A snackbar is drawn on an INVERTED surface — dark panel in light mode,
     // light panel in dark mode — so the theme accent that tints buttons
     // elsewhere lands on the wrong background and reads badly. These two use
-    // the snackbar's own text colour instead, which is the one colour
+    // the snackbar's own text color instead, which is the one color
     // guaranteed to contrast with that panel in both modes.
     final Color actionColor = Theme.of(context).snackBarTheme.actionTextColor ??
         Theme.of(context).colorScheme.onInverseSurface;
@@ -846,10 +861,12 @@ class _SchematicViewState extends State<SchematicView> {
         _buildToolbar(provider),
         const Divider(height: 1),
         Expanded(
+          key: _viewportKey,
           child: InteractiveViewer(
             transformationController: _transform,
             constrained: false,
-            minScale: 0.3,
+            // Low enough that a room full of devices fits the window.
+            minScale: 0.08,
             maxScale: 3.0,
             boundaryMargin: const EdgeInsets.all(400),
             child: RepaintBoundary(
@@ -918,7 +935,7 @@ class _SchematicViewState extends State<SchematicView> {
                       'the config, then the layout is saved beside it.');
                   final bool exported = await provider.exportRoomConfig();
                   if (!exported) {
-                    _snack('Layout not saved — the config save was cancelled.',
+                    _snack('Layout not saved — the config save was canceled.',
                         error: true);
                     return;
                   }
@@ -930,9 +947,30 @@ class _SchematicViewState extends State<SchematicView> {
               },
             ),
           OutlinedButton.icon(
+            icon: const Icon(Icons.fit_screen, size: 18),
+            label: const Text('Fit to view'),
+            onPressed: _fitToView,
+          ),
+          OutlinedButton.icon(
             icon: const Icon(Icons.palette_outlined, size: 18),
             label: const Text('Colors'),
             onPressed: () => _showColorsDialog(provider),
+          ),
+          // Undoes the last layout edit: a moved node, a drawn or deleted
+          // line, a color, a Reset Layout.
+          OutlinedButton.icon(
+            icon: const Icon(Icons.undo, size: 18),
+            label: Text(
+              provider.canUndoSchematic
+                  ? 'Undo: ${provider.schematicUndoLabel}'
+                  : 'Undo',
+            ),
+            onPressed: provider.canUndoSchematic
+                ? () {
+                    final undone = provider.undoSchematic();
+                    if (undone.isNotEmpty) _snack('Undid: $undone');
+                  }
+                : null,
           ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
@@ -1228,7 +1266,7 @@ class _SchematicViewState extends State<SchematicView> {
   /// Edit-mode line list: EVERY line on the diagram — auto-generated and
   /// user-drawn — with edit + delete on each row. Editing an auto line
   /// converts it to a user line (so its route/color/label become editable);
-  /// deleted auto lines stay listed greyed-out with a restore button.
+  /// deleted auto lines stay listed grayed-out with a restore button.
   Widget _buildEditPanel(AppStateProvider provider, SchematicModel model) {
     final theme = Theme.of(context);
     String edgeText(SchematicEdge e) =>
@@ -1330,7 +1368,7 @@ const double kLegendHeight = 16 + 5 * 18.0;
 class _NodeBox extends StatelessWidget {
   final SchematicNode node;
 
-  /// Resolved through the room's palette by the canvas, so a recoloured
+  /// Resolved through the room's palette by the canvas, so a recolored
   /// category moves its boxes as well as its lines.
   final Color connColor;
   final bool highlighted;
@@ -1587,7 +1625,7 @@ class _EdgePainter extends CustomPainter {
         ..strokeWidth = edge.width
         ..style = PaintingStyle.stroke;
 
-      // Curve around any box in the way, bending away from its centre far
+      // Curve around any box in the way, bending away from its center far
       // enough that the apex clears it whichever way the line grazes.
       final Offset? control = schematicEdgeControl(model, edge, nodeRects);
       if (control != null) {
@@ -1674,7 +1712,7 @@ class _EdgePainter extends CustomPainter {
 class _Legend extends StatelessWidget {
   final ThemeData theme;
 
-  /// The room's line colours, so the key matches what is drawn.
+  /// The room's line colors, so the key matches what is drawn.
   final AppStateProvider provider;
 
   const _Legend({required this.theme, required this.provider});

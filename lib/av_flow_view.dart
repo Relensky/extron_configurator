@@ -16,6 +16,7 @@ import 'av_port_editor.dart';
 import 'color_wheel_picker.dart';
 import 'cost_estimate.dart';
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
+import 'view_zoom.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_workbook.dart';
@@ -102,6 +103,7 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
     cables: cables,
     racks: provider.avRacks,
     rackSlots: provider.avRackSlots,
+    rackItems: provider.avRackItems,
     canvasSize: Size(maxX, maxY),
     roomTitle:
         (setup is Map ? setup['gui_full_room_name']?.toString() : '') ?? '',
@@ -164,6 +166,20 @@ class AvFlowView extends StatefulWidget {
 class _AvFlowViewState extends State<AvFlowView> {
   final GlobalKey _diagramKey = GlobalKey();
   final TransformationController _transform = TransformationController();
+
+  /// The window the canvas is looked at through, so "Fit to view" can measure
+  /// it; the drawing itself is measured through [_diagramKey].
+  final GlobalKey _viewportKey = GlobalKey();
+
+  /// Zooms out until the whole diagram is on screen.
+  void _fitToView() {
+    final fitted = fitToViewport(
+      controller: _transform,
+      contentKey: _diagramKey,
+      viewportKey: _viewportKey,
+    );
+    if (!fitted) _snack('The diagram is still drawing — try again.');
+  }
 
   bool _editMode = false;
   bool _showPalette = true;
@@ -622,12 +638,12 @@ class _AvFlowViewState extends State<AvFlowView> {
     if (provider.avFlowSidecarPath.isEmpty) {
       _snack(
         'No working config file yet — choose where to save the config, '
-        'then the AV flow is saved beside it.',
+        'then the AV setup is saved beside it.',
       );
       final bool exported = await provider.exportRoomConfig();
       if (!exported) {
         _snack(
-          'AV flow not saved — the config save was cancelled.',
+          'AV setup not saved — the config save was canceled.',
           error: true,
         );
         return;
@@ -635,7 +651,9 @@ class _AvFlowViewState extends State<AvFlowView> {
     }
     final saved = await provider.saveAvFlow();
     _snack(
-      saved.isEmpty ? 'Failed to save the AV flow.' : 'AV flow saved to $saved',
+      saved.isEmpty
+          ? 'Failed to save the AV setup.'
+          : 'AV setup saved to $saved',
     );
   }
 
@@ -661,10 +679,12 @@ class _AvFlowViewState extends State<AvFlowView> {
           child: Row(
             children: [
               Expanded(
+                key: _viewportKey,
                 child: InteractiveViewer(
                   transformationController: _transform,
                   constrained: false,
-                  minScale: 0.25,
+                  // Low enough that a twenty-device room fits the window.
+                  minScale: 0.08,
                   maxScale: 3.0,
                   boundaryMargin: const EdgeInsets.all(400),
                   child: RepaintBoundary(
@@ -734,13 +754,32 @@ class _AvFlowViewState extends State<AvFlowView> {
               onPressed: () => _autoArrange(provider),
             ),
           OutlinedButton.icon(
+            icon: const Icon(Icons.fit_screen, size: 18),
+            label: const Text('Fit to view'),
+            onPressed: _fitToView,
+          ),
+          OutlinedButton.icon(
             icon: const Icon(Icons.palette_outlined, size: 18),
             label: const Text('Colors'),
             onPressed: () => _showPaletteDialog(provider),
           ),
+          // The racks, the flow and the estimate are one document, so this is
+          // the same undo the Racks tab offers, over the same history.
+          OutlinedButton.icon(
+            icon: const Icon(Icons.undo, size: 18),
+            label: Text(
+              provider.canUndoAvFlow ? 'Undo: ${provider.avUndoLabel}' : 'Undo',
+            ),
+            onPressed: provider.canUndoAvFlow
+                ? () {
+                    final undone = provider.undoAvFlow();
+                    if (undone.isNotEmpty) _snack('Undid: $undone');
+                  }
+                : null,
+          ),
           OutlinedButton.icon(
             icon: const Icon(Icons.save, size: 18),
-            label: const Text('Save AV Flow'),
+            label: const Text('Save AV Setup'),
             onPressed: () => _saveDiagram(provider),
           ),
           ElevatedButton.icon(
@@ -1058,7 +1097,12 @@ class _AvFlowViewState extends State<AvFlowView> {
                 next[i] + d.delta,
                 [for (final n in model.nodes) n.rect],
               );
-              provider.updateAvCable(cable.copyWith(waypoints: next));
+              // Per pointer event: the snapshot was taken when the bend was
+              // added, and one drag should be one undo, not fifty.
+              provider.updateAvCable(
+                cable.copyWith(waypoints: next),
+                recordUndo: false,
+              );
             },
             onDoubleTap: () {
               final next = List<Offset>.from(cable.waypoints)..removeAt(i);
@@ -1252,6 +1296,21 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
+  /// Where a hand-added box should land: below everything already drawn, in
+  /// the left column.
+  ///
+  /// Dropping every new box at a fixed spot put it on top of whatever was
+  /// there, which is survivable for a device-sized box and not for a patch
+  /// panel — a rack-width strip laid over three devices hides them completely,
+  /// and the user's first act is to drag it off them.
+  Offset _spawnPosition(AppStateProvider provider) {
+    double bottom = 60;
+    for (final n in provider.avNodes) {
+      bottom = math.max(bottom, n.pos.dy + n.height + 30);
+    }
+    return Offset(40, bottom);
+  }
+
   /// Adds a device by picking a catalog model.
   ///
   /// A dropdown of a thousand Extron models is unusable, and the names are
@@ -1263,7 +1322,9 @@ class _AvFlowViewState extends State<AvFlowView> {
     final labelController = TextEditingController();
     final searchController = TextEditingController();
     String? selectedModel;
-    final entries = provider.avDeviceLibrary.all;
+    // Retired models are left out: adding a device is specifying new work.
+    // The Catalog tab is where a discontinued part is still visible.
+    final entries = provider.avDeviceLibrary.active;
 
     final created = await showDialog<bool>(
       context: context,
@@ -1386,7 +1447,7 @@ class _AvFlowViewState extends State<AvFlowView> {
         id: '', // provider assigns AVNODE_<n>
         label: label.isEmpty ? (model.isEmpty ? 'Device' : model) : label,
         model: model,
-        pos: const Offset(40, 60),
+        pos: _spawnPosition(provider),
         ports: withPowerInlet(
           template?.ports ??
               const [
@@ -1429,6 +1490,10 @@ class _AvFlowViewState extends State<AvFlowView> {
     final prefixController = TextEditingController(text: '1110');
     final startController = TextEditingController(text: '01');
     SignalType signal = SignalType.network;
+    // A wall box and a patch panel are the same data and two different
+    // shapes, and drawing them alike is what made the flow diagram and the
+    // rack elevation disagree about what the same part was.
+    AvNodeKind kind = AvNodeKind.jackField;
 
     final created = await showDialog<bool>(
       context: context,
@@ -1441,6 +1506,42 @@ class _AvFlowViewState extends State<AvFlowView> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                SegmentedButton<AvNodeKind>(
+                  segments: const [
+                    ButtonSegment(
+                      value: AvNodeKind.jackField,
+                      icon: Icon(Icons.dialpad, size: 16),
+                      label: Text('Wall / floor box'),
+                    ),
+                    ButtonSegment(
+                      value: AvNodeKind.patchPanel,
+                      icon: Icon(Icons.dns, size: 16),
+                      label: Text('Patch panel'),
+                    ),
+                  ],
+                  selected: {kind},
+                  onSelectionChanged: (s) => setLocal(() {
+                    kind = s.first;
+                    // The default name follows the shape, unless the user has
+                    // already typed one of their own.
+                    if (labelController.text.trim() == 'Wall box' ||
+                        labelController.text.trim() == 'Patch panel' ||
+                        labelController.text.trim().isEmpty) {
+                      labelController.text = kind == AvNodeKind.patchPanel
+                          ? 'Patch panel'
+                          : 'Wall box';
+                    }
+                  }),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  kind == AvNodeKind.patchPanel
+                      ? 'Drawn as a rack-width strip with every outlet in one '
+                            'horizontal row, the way the part looks.'
+                      : 'Drawn as a plate with its jacks down either side.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: labelController,
                   autofocus: true,
@@ -1540,14 +1641,21 @@ class _AvFlowViewState extends State<AvFlowView> {
     final width = startText.length;
     final label = labelController.text.trim();
 
+    final panel = kind == AvNodeKind.patchPanel;
+
     provider.addAvNode(
       AvNode(
         id: '',
-        label: label.isEmpty ? 'Wall box' : label,
-        model: '$count-jack ${kSignalLabels[signal] ?? signal.name} field',
-        pos: const Offset(40, 60),
-        kind: AvNodeKind.jackField,
+        label: label.isEmpty ? (panel ? 'Patch panel' : 'Wall box') : label,
+        model: panel
+            ? '$count-port ${kSignalLabels[signal] ?? signal.name} patch panel'
+            : '$count-jack ${kSignalLabels[signal] ?? signal.name} field',
+        pos: _spawnPosition(provider),
+        kind: kind,
         powerSource: PowerSource.none,
+        // A panel is usually 1U per 24 ports; anything smaller is still a
+        // rail, so the height is never 0 and it can go straight in a rack.
+        rackUnits: panel ? math.max(1, (count / 24).ceil()) : 0,
         ports: [
           for (int i = 0; i < count; i++)
             AvPort(
@@ -1555,9 +1663,12 @@ class _AvFlowViewState extends State<AvFlowView> {
               label: '$prefix${'${first + i}'.padLeft(width, '0')}',
               signal: signal,
               direction: PortDirection.bidirectional,
-              // Jacks alternate sides so a 12-way panel stays compact
+              // A panel's outlets all sit in one row along the bottom edge.
+              // A wall box alternates sides, so a 12-way plate stays compact
               // instead of running off the bottom of the page.
-              side: i.isEven ? PortSide.left : PortSide.right,
+              side: panel
+                  ? PortSide.bottom
+                  : (i.isEven ? PortSide.left : PortSide.right),
             ),
         ],
       ),
@@ -2475,6 +2586,37 @@ class _AvNodeBox extends StatelessWidget {
               child: _portRowTarget(context, entry.$1, entry.$3),
             ),
 
+          // A panel's outlets are its whole content, so they get their numbers
+          // printed above the row rather than only in a tooltip — the number
+          // is the thing you read a panel for.
+          //
+          // Except when there is no room for them. Past a certain port count
+          // the panel stops widening and the outlets compress, and six-digit
+          // jack numbers at a 12px pitch are not small text, they are a smear.
+          // The tooltip still has every number.
+          if (node.isPatchPanel && _jackPitch(node) >= kAvPatchLabelMinPitch)
+            for (final port in node.ports)
+              Positioned(
+                left: node.localAnchorOf(port.id).dx - _jackPitch(node) / 2,
+                top: kAvNodeHeaderHeight + 3,
+                width: _jackPitch(node),
+                height: 14,
+                child: IgnorePointer(
+                  child: Text(
+                    port.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: _dimmed(port)
+                          ? theme.disabledColor
+                          : theme.textTheme.bodySmall?.color,
+                    ),
+                  ),
+                ),
+              ),
+
           // Top/bottom ports have no row, so they get a square target tucked
           // just inside the edge they sit on.
           for (final port in [...node.topPorts, ...node.bottomPorts])
@@ -2492,6 +2634,11 @@ class _AvNodeBox extends StatelessWidget {
       ),
     );
   }
+
+  /// Space each outlet of a patch panel actually gets, which is the requested
+  /// pitch until the panel hits its maximum width and starts compressing.
+  static double _jackPitch(AvNode node) =>
+      node.ports.isEmpty ? kAvPatchJackPitch : node.width / (node.ports.length + 1);
 
   /// (port, rowCenterY, isLeft) for every port that gets a label row.
   static List<(AvPort, double, bool)> _rowLabels(AvNode node) {
@@ -2711,7 +2858,7 @@ class _CablePainter extends CustomPainter {
       final prev = points[i - 1], corner = points[i], next = points[i + 1];
       final inLen = (corner - prev).distance;
       final outLen = (next - corner).distance;
-      // Never eat more than half of either leg, or neighbouring corners
+      // Never eat more than half of either leg, or neighboring corners
       // would overlap and the line would visibly cut the turn.
       final r = math.min(maxRadius, math.min(inLen, outLen) / 2);
       if (r < 0.5) {

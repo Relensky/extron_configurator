@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_state.dart';
+import 'av_only_notice.dart';
 import 'schema_field_builder.dart';
 import 'search_match.dart';
 
@@ -21,9 +22,35 @@ class SetupWizardView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(32.0),
       children: [
-        Text('Room Setup Wizard', style: Theme.of(context).textTheme.headlineMedium),
+        Row(
+          children: [
+            Expanded(
+              child: Text('Room Setup Wizard',
+                  style: Theme.of(context).textTheme.headlineMedium),
+            ),
+            // What state the room is in, and a way back. An AV-only room is a
+            // deliberate choice, not an error, so this is a chip rather than
+            // a warning.
+            if (provider.isAvOnlyRoom)
+              ActionChip(
+                avatar: const Icon(Icons.videocam_outlined, size: 18),
+                label: const Text('AV only — no control system'),
+                tooltip: 'Click to set up the control system for this room',
+                onPressed: () => provider.setRoomMode(RoomMode.full),
+              ),
+          ],
+        ),
         const SizedBox(height: 10),
-        const Text("Set your core room identifiers and hardware counts here. Generating these will reset the specific device tabs."),
+        Text(provider.isAvOnlyRoom
+            ? "Set the building and room number, then the hardware counts. "
+                "That is everything an AV-only room needs — the schematic, "
+                "signal flow, racks and costs all build from it."
+            : "Set your core room identifiers and hardware counts here. "
+                "Generating these will reset the specific device tabs."),
+        // The one thing an AV-only room is missing once the control side gets
+        // built: which driver each device runs.
+        const SizedBox(height: 12),
+        const MissingModulesBanner(compact: true),
         const Divider(height: 40, thickness: 2),
 
         // --- Room Identification ---

@@ -75,7 +75,7 @@ void main() {
 
     expect(setup['power1_outlet_2_supports_reboot'], isFalse);
     expect(setup['power1_outlet_2_reboot_only'], isTrue);
-    // ...while its neighbours still get the defaults
+    // ...while its neighbors still get the defaults
     expect(setup['power1_outlet_1_supports_reboot'], isTrue);
   });
 

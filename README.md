@@ -137,7 +137,7 @@ Opening a file **opens the file**. When a legacy room needs migrating the
 conversion still runs in memory, but nothing blocks the screen: a **Convert**
 button next to New Config lights up with the number of changes waiting, and
 that is where the migration log, the change-by-change review and "Use
-Original" live. A room with nothing to migrate leaves the button greyed out,
+Original" live. A room with nothing to migrate leaves the button grayed out,
 so its state is also the answer to "does this file need converting?".
 
 ## Cost estimate (the `Cost` tab)
@@ -154,7 +154,7 @@ On top of the equipment:
   install, contingency, overhead). They do not compound onto each other: two
   5% fees are 10% of the job. Each says whether it is itself taxable.
 - **Other items** — flat lines with their own quantity and unit price for
-  labour, cable, mounts; taxable per line.
+  labor, cable, mounts; taxable per line.
 - **Tax** — one rate, applied to equipment plus the items and fees marked
   taxable.
 

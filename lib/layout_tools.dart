@@ -14,12 +14,12 @@ import 'package:flutter/painting.dart';
 ///
 /// Returns [desired] untouched when it's already clear, so a drop that lands
 /// somewhere sensible is never second-guessed. Otherwise it searches outward
-/// in rings — nearest first — so a box nudged off a neighbour lands beside
+/// in rings — nearest first — so a box nudged off a neighbor lands beside
 /// where it was dropped rather than somewhere across the page.
 /// [gap] is the clearance actually guaranteed between two boxes. The AV
 /// router treats devices as obstacles inflated by 10px and runs its cable
 /// stubs off the box faces, so the gap has to stay comfortably above that or
-/// a port anchor ends up buried inside a neighbour's obstacle and there is
+/// a port anchor ends up buried inside a neighbor's obstacle and there is
 /// no clean route out of it.
 Offset nonOverlappingPosition({
   required Offset desired,
@@ -82,7 +82,7 @@ Offset nonOverlappingPosition({
 Offset pushOutOfRects(Offset p, List<Rect> rects, {double margin = 10}) {
   var out = p;
   // A couple of passes, because sliding clear of one box can put it inside
-  // its neighbour.
+  // its neighbor.
   for (int pass = 0; pass < 3; pass++) {
     var moved = false;
     for (final r in rects) {

@@ -58,6 +58,12 @@ Uint8List buildRoomWorkbookBytes({
     model: av,
     library: provider.avDeviceLibrary,
     settings: provider.avCost,
+    // Without these the workbook costs labor at the built-in (unset) rates
+    // and skips the base costs entirely — the same room, two totals,
+    // depending on which button produced the document.
+    rates: provider.laborRates,
+    baseCosts: provider.baseCosts,
+    tier: provider.pricingTier,
   );
 
   final title = av.roomTitle.isNotEmpty ? av.roomTitle : control.roomTitle;

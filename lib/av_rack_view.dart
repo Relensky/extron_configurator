@@ -5,8 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_view.dart' show iconForAvNode;
+import 'cost_estimate.dart' show formatMoney, trimNumber;
+import 'view_zoom.dart';
 
 /// ============================================================================
 ///  RACK ELEVATIONS
@@ -46,6 +49,11 @@ class AvRackView extends StatefulWidget {
 
 class _AvRackViewState extends State<AvRackView> {
   final TransformationController _transform = TransformationController();
+
+  /// The window the elevations are looked at through, so "Fit to view" can
+  /// measure it. The canvas itself is measured through [widget.captureKey],
+  /// which is already wrapped round exactly the drawing.
+  final GlobalKey _viewportKey = GlobalKey();
 
   /// Device picked up from the unracked list or from a frame, waiting for a
   /// slot to be clicked. Click-to-place rather than drag-and-drop: a drag
@@ -98,6 +106,18 @@ class _AvRackViewState extends State<AvRackView> {
   /// occupies at least 1U even if nobody has filled in its height.
   int _heightOf(AvNode? node) => math.max(1, node?.rackUnits ?? 1);
 
+  /// Puts the whole elevation on screen at once. On a wall of 42U frames the
+  /// alternative is pinching back out and hunting for the one you want.
+  void _fitToView(AppStateProvider provider) {
+    if (provider.avRacks.isEmpty) return;
+    final fitted = fitToViewport(
+      controller: _transform,
+      contentKey: widget.captureKey,
+      viewportKey: _viewportKey,
+    );
+    if (!fitted) _snack('The elevation is still drawing — try again.');
+  }
+
   /// Puts the carried device on [startU]. Sharing is automatic: if something
   /// is already on that rail the row re-splits to fit them side by side.
   void _place(
@@ -108,8 +128,7 @@ class _AvRackViewState extends State<AvRackView> {
   ) {
     final nodeId = _carriedNodeId;
     if (nodeId == null) return;
-    final node = provider.avNodeById(nodeId);
-    final height = _heightOf(node);
+    final height = provider.rackOccupantHeight(nodeId);
 
     final placed = provider.avRackPlaceSharing(
       nodeId: nodeId,
@@ -125,7 +144,7 @@ class _AvRackViewState extends State<AvRackView> {
         occupants >= kMaxRackColumns
             ? 'U$startU of ${rack.name} already holds $occupants devices — '
                   'that is as many as one rack unit will list.'
-            : 'U$startU has no room for a ${height}U device on the '
+            : 'U$startU has no room for a ${height}U item on the '
                   '${face.name} of ${rack.name}.',
         error: true,
       );
@@ -151,18 +170,26 @@ class _AvRackViewState extends State<AvRackView> {
     final unracked = rackable
         .where((n) => !provider.avRackSlots.containsKey(n.id))
         .toList();
+    // Hardware that has been taken out of a frame but not deleted. It is
+    // invisible on the elevation and still on the estimate, so it has to be
+    // somewhere the user can see it.
+    final looseHardware = provider.avRackItems
+        .where((i) => !provider.avRackSlots.containsKey(i.id))
+        .toList();
 
     return Column(
       children: [
-        _buildRackToolbar(provider, unracked, theme),
+        _buildRackToolbar(provider, unracked, looseHardware, theme),
         const Divider(height: 1),
         Expanded(
+          key: _viewportKey,
           child: provider.avRacks.isEmpty
               ? _buildEmptyState(provider, theme)
               : InteractiveViewer(
                   transformationController: _transform,
                   constrained: false,
-                  minScale: 0.3,
+                  // Low enough that a row of 42U frames can be fitted whole.
+                  minScale: 0.08,
                   maxScale: 2.5,
                   boundaryMargin: const EdgeInsets.all(200),
                   child: RepaintBoundary(
@@ -203,6 +230,7 @@ class _AvRackViewState extends State<AvRackView> {
   Widget _buildRackToolbar(
     AppStateProvider provider,
     List<AvNode> unracked,
+    List<RackItem> loose,
     ThemeData theme,
   ) {
     return Padding(
@@ -217,12 +245,29 @@ class _AvRackViewState extends State<AvRackView> {
             label: const Text('Add rack'),
             onPressed: () => _showRackDialog(provider),
           ),
+          // Vent plates, blanks, shelves, drawers — the parts that fill a rack
+          // and never appear on a signal flow diagram.
+          if (widget.editMode)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.dashboard_customize_outlined, size: 18),
+              label: const Text('Add plate / shelf'),
+              onPressed: provider.avRacks.isEmpty
+                  ? null
+                  : () => _showAddHardwareDialog(provider),
+            ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.fit_screen, size: 18),
+            label: const Text('Fit to view'),
+            onPressed: provider.avRacks.isEmpty
+                ? null
+                : () => _fitToView(provider),
+          ),
           const SizedBox(width: 4),
           if (_carriedNodeId != null) ...[
             Chip(
               avatar: const Icon(Icons.pan_tool_alt, size: 16),
               label: Text(
-                'Placing: ${provider.avNodeById(_carriedNodeId!)?.label ?? ''}'
+                'Placing: ${provider.rackOccupantLabel(_carriedNodeId!)}'
                 ' — click a U, or type one',
               ),
               onDeleted: () => setState(() => _carriedNodeId = null),
@@ -256,7 +301,7 @@ class _AvRackViewState extends State<AvRackView> {
               onPressed: () => _placeAtTypedU(provider),
               child: const Text('Place'),
             ),
-          ] else if (unracked.isEmpty)
+          ] else if (unracked.isEmpty && loose.isEmpty)
             Text(
               provider.avNodes.any((n) => n.rackUnits > 0)
                   ? 'Every rack-mount device is placed.'
@@ -273,7 +318,7 @@ class _AvRackViewState extends State<AvRackView> {
               Draggable<String>(
                 data: n.id,
                 dragAnchorStrategy: pointerDragAnchorStrategy,
-                feedback: _dragGhost(n, theme),
+                feedback: _dragGhost(n.label, _heightOf(n), theme),
                 childWhenDragging: Opacity(
                   opacity: 0.35,
                   child: _unrackedChip(n, theme, onPressed: null),
@@ -283,6 +328,17 @@ class _AvRackViewState extends State<AvRackView> {
                   theme,
                   onPressed: () => setState(() => _carriedNodeId = n.id),
                 ),
+              ),
+            // Hardware taken back out of a frame. Listed so it can be put
+            // somewhere else — or deleted, since it is still being priced.
+            for (final i in loose)
+              InputChip(
+                avatar: Icon(iconForRackItem(i.category), size: 16),
+                label: Text('${i.label} (${i.rackUnits}U)'),
+                onPressed: () => setState(() => _carriedNodeId = i.id),
+                onDeleted: () => provider.removeAvRackItem(i.id),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                tooltip: 'Un-racked — click to place it, × to delete it',
               ),
           ],
         ],
@@ -507,8 +563,11 @@ class _AvRackViewState extends State<AvRackView> {
     RackFace face,
     int u,
   ) {
-    final node = provider.avNodeById(nodeId);
-    if (node == null) return false;
+    // A rack item is as valid a payload as a device — both take up rails.
+    if (provider.avNodeById(nodeId) == null &&
+        provider.avRackItemById(nodeId) == null) {
+      return false;
+    }
 
     final occupants = provider.avRackOccupantsAt(
       rackId: rack.id,
@@ -518,13 +577,13 @@ class _AvRackViewState extends State<AvRackView> {
     if (occupants.length >= kMaxRackColumns) return false;
 
     // Alone on the rail it needs the whole width; sharing it only needs the
-    // row not to be fouled by a taller neighbour, which the placer checks.
+    // row not to be fouled by a taller neighbor, which the placer checks.
     if (occupants.isEmpty) {
       return provider.avRackSpanIsFree(
         rackId: rack.id,
         face: face,
         startU: u,
-        heightU: _heightOf(node),
+        heightU: provider.rackOccupantHeight(nodeId),
         ignoreNodeId: nodeId,
       );
     }
@@ -557,7 +616,7 @@ class _AvRackViewState extends State<AvRackView> {
   }
 
   /// The little block that follows the cursor during a drag.
-  Widget _dragGhost(AvNode node, ThemeData theme) {
+  Widget _dragGhost(String label, int heightU, ThemeData theme) {
     // How wide it will end up depends on what is already on the target rail,
     // which isn't known mid-drag, so the ghost is a fixed, compact size.
     const width = kRackInnerWidth / 2;
@@ -567,7 +626,7 @@ class _AvRackViewState extends State<AvRackView> {
         opacity: 0.85,
         child: Container(
           width: width,
-          height: _heightOf(node) * kUHeight,
+          height: heightU * kUHeight,
           padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
             color: theme.colorScheme.primaryContainer,
@@ -576,11 +635,11 @@ class _AvRackViewState extends State<AvRackView> {
           ),
           child: Row(
             children: [
-              Icon(iconForAvNode(node.id, node.model), size: 13),
+              const Icon(Icons.drag_indicator, size: 13),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
-                  node.label,
+                  label,
                   style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -603,9 +662,23 @@ class _AvRackViewState extends State<AvRackView> {
     ThemeData theme,
   ) {
     final node = provider.avNodeById(entry.key);
-    final height = _heightOf(node);
+    // A rail can hold a device OR a piece of rack hardware; both are keyed
+    // into the same slot map, because both take up rails.
+    final item = node == null ? provider.avRackItemById(entry.key) : null;
+    if (node == null && item == null) return const SizedBox.shrink();
+    final height = node != null ? _heightOf(node) : math.max(1, item!.rackUnits);
+    final label = node?.label ?? item!.label;
     final slot = entry.value;
     final dark = theme.brightness == Brightness.dark;
+
+    // Hardware says what it is and what it costs; a device's own tooltip is
+    // already covered by the lines below.
+    final String hardwareLine = item == null
+        ? ''
+        : '${item.category.isEmpty ? 'Rack hardware' : item.category}'
+              '${item.price > 0 ? ' · '
+                    '${formatMoney(item.price, provider.avCost.currency)}' : ''}'
+              '\n';
 
     // startU is the BOTTOM rail, so the block's top is heightU - (startU + h - 1)
     // units down from the top of the frame.
@@ -625,7 +698,8 @@ class _AvRackViewState extends State<AvRackView> {
       height: height * kUHeight,
       child: Tooltip(
         message:
-            '${node?.label ?? entry.key}\n'
+            '$label\n'
+            '$hardwareLine'
             'U${slot.startU}'
             '${height == 1 ? '' : '–U${slot.startU + height - 1}'}'
             '${shared ? ' · ${slice.label} of the rail' : ''}'
@@ -643,7 +717,6 @@ class _AvRackViewState extends State<AvRackView> {
           builder: (ctx, candidate, rejected) => _draggableIfEditing(
             provider,
             entry.key,
-            node,
             theme,
             GestureDetector(
               onTap: widget.editMode
@@ -657,7 +730,9 @@ class _AvRackViewState extends State<AvRackView> {
             // Typing the position beats dragging when the frame is tall or the
             // device needs to land on an exact U.
               onDoubleTap: widget.editMode
-                  ? () => _showPlacementDialog(provider, entry.key)
+                  ? () => item != null
+                        ? _showHardwareEditDialog(provider, item)
+                        : _showPlacementDialog(provider, entry.key)
                   : null,
               onSecondaryTap: widget.editMode
                   ? () => provider.setAvRackSlot(entry.key, null)
@@ -666,8 +741,15 @@ class _AvRackViewState extends State<AvRackView> {
                 margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 decoration: BoxDecoration(
+                  // Hardware is drawn flatter and grayer than a device: a rack
+                  // full of blanking plates should read as the background it
+                  // is, with the boxes that do something standing out of it.
                   color: candidate.isNotEmpty
                       ? theme.colorScheme.primary.withValues(alpha: 0.35)
+                      : item != null
+                      ? (dark
+                            ? const Color(0xFF1C2127)
+                            : const Color(0xFFE7EAEE))
                       : (dark
                             ? const Color(0xFF283039)
                             : const Color(0xFFD7DEE8)),
@@ -676,11 +758,17 @@ class _AvRackViewState extends State<AvRackView> {
                 ),
                 child: Row(
                   children: [
-                    Icon(iconForAvNode(entry.key, node?.model ?? ''), size: 13),
+                    Icon(
+                      item != null
+                          ? iconForRackItem(item.category)
+                          : iconForAvNode(entry.key, node?.model ?? ''),
+                      size: 13,
+                      color: item != null ? theme.hintColor : null,
+                    ),
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
-                        node?.label ?? entry.key,
+                        label,
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -711,15 +799,18 @@ class _AvRackViewState extends State<AvRackView> {
   Widget _draggableIfEditing(
     AppStateProvider provider,
     String nodeId,
-    AvNode? node,
     ThemeData theme,
     Widget child,
   ) {
-    if (!widget.editMode || node == null) return child;
+    if (!widget.editMode) return child;
     return Draggable<String>(
       data: nodeId,
       dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedback: _dragGhost(node, theme),
+      feedback: _dragGhost(
+        provider.rackOccupantLabel(nodeId),
+        provider.rackOccupantHeight(nodeId),
+        theme,
+      ),
       childWhenDragging: Opacity(opacity: 0.3, child: child),
       onDragStarted: () => setState(() => _carriedNodeId = null),
       child: child,
@@ -1077,5 +1168,423 @@ class _AvRackViewState extends State<AvRackView> {
       ),
     );
     if (ok == true) provider.removeAvRack(rack.id);
+  }
+
+  // -------------------------------------------------------------------------
+  //  RACK HARDWARE — the parts list
+  // -------------------------------------------------------------------------
+
+  /// Adds a vent plate, blank, shelf or drawer from the parts list.
+  ///
+  /// The parts list IS the device catalog, filtered to the rack categories.
+  /// One store rather than two: an entry there already carries a rack height,
+  /// a part number and a price, which is exactly what a plate needs, and
+  /// keeping a second list would mean two places to revise a price and two
+  /// answers to what a 2U blank costs.
+  Future<void> _showAddHardwareDialog(AppStateProvider provider) async {
+    if (provider.avRacks.isEmpty) return;
+    final library = provider.avDeviceLibrary;
+    final parts = library.rackHardware;
+
+    final searchController = TextEditingController();
+    final uController = TextEditingController(text: '1');
+    final qtyController = TextEditingController(text: '1');
+    String? selectedModel = parts.isEmpty ? null : parts.first.model;
+    String rackId = provider.avRacks.first.id;
+    RackFace face = RackFace.front;
+    // Blanks and vents almost always go on the front; a lacing bar almost
+    // never does, but that is a click away rather than a guess worth making.
+
+    final created = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final matches = searchCatalog(parts, searchController.text,
+              limit: parts.length);
+          return AlertDialog(
+            title: const Text('Add rack hardware'),
+            content: SizedBox(
+              width: 560,
+              height: math.min(560, MediaQuery.of(ctx).size.height - 200),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Plates, shelves and drawers occupy rails like any other '
+                    'part, and are priced into the estimate. Edit or add to '
+                    'the list on the Catalog tab.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: searchController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Search the parts list',
+                      prefixIcon: Icon(Icons.search, size: 20),
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: matches.isEmpty
+                        ? Center(
+                            child: Text(
+                              parts.isEmpty
+                                  ? 'The parts list is empty. Add entries on '
+                                        'the Catalog tab under a rack '
+                                        'category (Vent plate, Blank plate, '
+                                        'Shelf, Drawer).'
+                                  : 'Nothing matches that search.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(ctx).textTheme.bodySmall,
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: matches.length,
+                            itemBuilder: (ctx, i) {
+                              final t = matches[i];
+                              return ListTile(
+                                dense: true,
+                                selected: t.model == selectedModel,
+                                leading: Icon(
+                                  iconForRackItem(t.category),
+                                  size: 20,
+                                ),
+                                title: Text(
+                                  t.model,
+                                  style: const TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  [
+                                    if (t.category.isNotEmpty) t.category,
+                                    '${t.rackUnits}U',
+                                    t.price > 0
+                                        ? formatMoney(
+                                            t.price,
+                                            provider.avCost.currency,
+                                          )
+                                        : 'not priced',
+                                    if (t.partNumber.isNotEmpty) t.partNumber,
+                                  ].join(' · '),
+                                  style: const TextStyle(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () => setLocal(() {
+                                  selectedModel = t.model;
+                                  // The height comes from the part, not from
+                                  // whatever was left in the box.
+                                  uController.text = '1';
+                                }),
+                              );
+                            },
+                          ),
+                  ),
+                  const Divider(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: rackId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Rack',
+                            isDense: true,
+                          ),
+                          items: [
+                            for (final r in provider.avRacks)
+                              DropdownMenuItem(
+                                value: r.id,
+                                child: Text('${r.name} (${r.heightU}U)'),
+                              ),
+                          ],
+                          onChanged: (v) => setLocal(() => rackId = v ?? rackId),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SegmentedButton<RackFace>(
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        segments: const [
+                          ButtonSegment(
+                            value: RackFace.front,
+                            label: Text('Front'),
+                          ),
+                          ButtonSegment(
+                            value: RackFace.rear,
+                            label: Text('Rear'),
+                          ),
+                        ],
+                        selected: {face},
+                        onSelectionChanged: (s) =>
+                            setLocal(() => face = s.first),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 130,
+                        child: TextField(
+                          controller: uController,
+                          decoration: const InputDecoration(
+                            labelText: 'Bottom rail (U)',
+                            helperText: 'U1 is the floor',
+                            isDense: true,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 130,
+                        child: TextField(
+                          controller: qtyController,
+                          decoration: const InputDecoration(
+                            labelText: 'How many',
+                            helperText: 'stacked upwards',
+                            isDense: true,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('cancel'),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: selectedModel == null
+                    ? null
+                    : () => Navigator.of(ctx).pop('add'),
+                child: const Text('Add to rack'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (created != 'add') return;
+    final template = library.templateForModel(selectedModel ?? '');
+    if (template == null) return;
+
+    final startU = math.max(1, int.tryParse(uController.text.trim()) ?? 1);
+    final qty = (int.tryParse(qtyController.text.trim()) ?? 1).clamp(1, 42);
+    final heightU = math.max(1, template.rackUnits);
+
+    // Several of the same plate stack up from the U asked for, because that is
+    // what filling the top of a rack with blanks actually is.
+    int placed = 0;
+    int u = startU;
+    for (int i = 0; i < qty; i++) {
+      final item = RackItem(
+        id: '',
+        catalogModel: template.model,
+        label: template.model,
+        category: template.category,
+        partNumber: template.partNumber,
+        rackUnits: heightU,
+        price: template.price,
+      );
+      final stored = provider.addAvRackItem(
+        item,
+        rackId: rackId,
+        face: face,
+        startU: u,
+      );
+      if (stored != null) placed++;
+      u += heightU;
+    }
+
+    if (!mounted) return;
+    _snack(
+      placed == qty
+          ? '$qty × ${template.model} added from U$startU up.'
+          : placed == 0
+          ? 'Nothing added — U$startU up is already occupied.'
+          : '$placed of $qty added; the rest had nowhere to go.',
+      error: placed < qty,
+    );
+  }
+
+  /// Edits or removes one placed piece of hardware. The price is editable
+  /// here because a plate bought for this job at a different price is a fact
+  /// about this job, and should not rewrite the parts list.
+  Future<void> _showHardwareEditDialog(
+    AppStateProvider provider,
+    RackItem item,
+  ) async {
+    final labelController = TextEditingController(text: item.label);
+    final uController = TextEditingController(
+      text: item.rackUnits.toString(),
+    );
+    final priceController = TextEditingController(
+      text: item.price <= 0 ? '' : trimNumber(item.price),
+    );
+    final notesController = TextEditingController(text: item.notes);
+    String category = kRackItemCategories.contains(item.category)
+        ? item.category
+        : kRackItemCategories.last;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(item.label),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: labelController,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: category,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Kind'),
+                  items: [
+                    for (final c in kRackItemCategories)
+                      DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: (v) => setLocal(() => category = v ?? category),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: uController,
+                        decoration: const InputDecoration(
+                          labelText: 'Height (U)',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: priceController,
+                        decoration: InputDecoration(
+                          labelText: 'Price (${provider.avCost.currency})',
+                          helperText: item.catalogModel.isEmpty
+                              ? 'blank = not priced'
+                              : 'blank = use the parts list price',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(labelText: 'Note'),
+                ),
+                if (item.catalogModel.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'From the parts list: ${item.catalogModel}',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('remove'),
+              child: const Text(
+                'Remove',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('unrack'),
+              child: const Text('Un-rack'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('cancel'),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop('save'),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null || result == 'cancel') return;
+    if (result == 'remove') {
+      provider.removeAvRackItem(item.id);
+      return;
+    }
+    if (result == 'unrack') {
+      provider.setAvRackSlot(item.id, null);
+      return;
+    }
+
+    provider.updateAvRackItem(
+      item.copyWith(
+        label: labelController.text.trim().isEmpty
+            ? item.label
+            : labelController.text.trim(),
+        category: category,
+        rackUnits: math.max(1, int.tryParse(uController.text.trim()) ?? 1),
+        price: double.tryParse(priceController.text.trim()) ?? 0,
+        notes: notesController.text.trim(),
+      ),
+    );
+  }
+}
+
+/// Icon for a piece of rack hardware, by kind. Deliberately plainer than the
+/// device icons — these are the parts that fill the gaps.
+IconData iconForRackItem(String category) {
+  switch (category.trim().toLowerCase()) {
+    case 'vent plate':
+      return Icons.grid_on;
+    case 'blank plate':
+    case 'plate':
+      return Icons.crop_16_9;
+    case 'shelf':
+    case 'clamping shelf':
+      return Icons.table_rows;
+    case 'drawer':
+      return Icons.inbox;
+    case 'cable management':
+      return Icons.cable;
+    default:
+      return Icons.hardware;
   }
 }

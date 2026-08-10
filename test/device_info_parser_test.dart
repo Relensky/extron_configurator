@@ -357,9 +357,9 @@ class DeviceClass:
       // the shipped folder is left winning by self.Models fallback. That
       // mechanism is covered against a synthetic module below, where it can't
       // be invalidated by a driver getting its DEVICE_INFO filled in.
-      final neighbour = provider.modelRegistry['DMP 128 Plus C'];
-      expect(neighbour?.module, 'extr_dsp_DMP_128_Plus_Series');
-      expect(neighbour?.explicit, isTrue);
+      final neighbor = provider.modelRegistry['DMP 128 Plus C'];
+      expect(neighbor?.module, 'extr_dsp_DMP_128_Plus_Series');
+      expect(neighbor?.explicit, isTrue);
     });
 
     test('a module with NO DEVICE_INFO still contributes its self.Models keys',

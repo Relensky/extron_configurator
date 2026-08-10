@@ -7,7 +7,7 @@ import 'package:extron_configurator/main.dart';
 
 /// The provenance palette used to be written out twice — once in the preview
 /// dialog, once in the field builder — with its own hardcoded blues, whites and
-/// greys. That is why the preview came out looking like a stock JSON viewer
+/// grays. That is why the preview came out looking like a stock JSON viewer
 /// dropped into an amber HUD. It is one theme-derived palette now, and these
 /// hold it to that.
 void main() {
@@ -39,7 +39,7 @@ void main() {
   for (final (style, dark) in themes) {
     final name = '$style ${dark ? 'dark' : 'light'}';
 
-    testWidgets('$name: a written value is the theme\'s own text colour',
+    testWidgets('$name: a written value is the theme\'s own text color',
         (tester) async {
       final colors = await paletteFor(tester, style, dark);
       final onSurface = Theme.of(tester.element(find.byType(SizedBox)))
@@ -50,7 +50,7 @@ void main() {
       expect(colors.written, onSurface);
     });
 
-    testWidgets('$name: the three origins are three different colours',
+    testWidgets('$name: the three origins are three different colors',
         (tester) async {
       final colors = await paletteFor(tester, style, dark);
       final swatches = [
@@ -59,9 +59,9 @@ void main() {
         colors.forOrigin(ValueOrigin.written),
       ];
       expect(swatches.whereType<Color>(), hasLength(3),
-          reason: 'every origin needs a colour to be flagged with');
+          reason: 'every origin needs a color to be flagged with');
       expect(swatches.toSet(), hasLength(3),
-          reason: 'two states sharing a colour flag nothing');
+          reason: 'two states sharing a color flag nothing');
     });
 
     testWidgets('$name: section headings outrank property names',
@@ -72,7 +72,7 @@ void main() {
       expect(colors.sectionName, isNot(colors.propertyName));
     });
 
-    testWidgets('$name: no origin colour is lost against the panel',
+    testWidgets('$name: no origin color is lost against the panel',
         (tester) async {
       final colors = await paletteFor(tester, style, dark);
       double luminance(Color c) => c.computeLuminance();
@@ -93,6 +93,6 @@ void main() {
   testWidgets('the legend covers every origin, in one place', (tester) async {
     expect(ConversionColors.legend.map((e) => e.$1).toSet(),
         ValueOrigin.values.toSet(),
-        reason: 'a state with no legend entry is a colour nobody can read');
+        reason: 'a state with no legend entry is a color nobody can read');
   });
 }

@@ -190,7 +190,7 @@ void main() {
         );
 
         // Random placement drops boxes on top of each other, which can bury a
-        // port inside a neighbour — no route out of that exists for anyone to
+        // port inside a neighbor — no route out of that exists for anyone to
         // find. The canvas prevents it by keeping devices apart (see
         // nonOverlappingPosition), so those layouts are out of scope.
         bool buried(Offset p) => obstacles.any(
@@ -374,7 +374,7 @@ void main() {
 
     test('a bend dropped inside a device is pushed clear of it', () {
       const box = Rect.fromLTWH(100, 100, 200, 100);
-      // Dead centre of the box: the shortest way out wins.
+      // Dead center of the box: the shortest way out wins.
       final out = pushOutOfRects(const Offset(200, 150), const [box]);
       expect(
         out.dx > box.right || out.dx < box.left ||

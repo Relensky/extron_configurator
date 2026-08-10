@@ -85,15 +85,23 @@ void main() {
 
       await tester.enterText(find.widgetWithText(TextField, 'Power'), '120');
       await tester.pumpAndSettle();
+      // Two published prices per entry now, so the box is named for the tier
+      // it holds rather than the generic "Unit price".
       await tester.enterText(
-        find.widgetWithText(TextField, 'Unit price'),
+        find.widgetWithText(TextField, 'MSRP'),
         '2799.5',
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Education price'),
+        '2100',
       );
       await tester.pumpAndSettle();
 
       final entry = provider.avDeviceLibrary.templateForModel('Switcher Y')!;
       expect(entry.powerWatts, 120);
       expect(entry.price, 2799.5);
+      expect(entry.educationPrice, 2100);
       expect(tester.takeException(), isNull);
       // Nothing has been written to disk, so the unsaved marker is up.
       expect(find.text('Unsaved changes'), findsOneWidget);

@@ -76,9 +76,29 @@ class _RackTabViewState extends State<RackTabView> {
                 selected: _editMode,
                 onSelected: (v) => setState(() => _editMode = v),
               ),
+              // One undo per tab, over the same document: the racks, the
+              // signal flow and the estimate all live in the AV sidecar, so
+              // an edit made here is undoable from here.
+              OutlinedButton.icon(
+                icon: const Icon(Icons.undo, size: 18),
+                label: Text(
+                  provider.canUndoAvFlow
+                      ? 'Undo: ${provider.avUndoLabel}'
+                      : 'Undo',
+                ),
+                onPressed: provider.canUndoAvFlow
+                    ? () {
+                        final undone = provider.undoAvFlow();
+                        if (!context.mounted || undone.isEmpty) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Undid: $undone')),
+                        );
+                      }
+                    : null,
+              ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.save, size: 18),
-                label: const Text('Save AV Flow'),
+                label: const Text('Save AV Setup'),
                 onPressed: () async {
                   final saved = await provider.saveAvFlow();
                   if (!context.mounted) return;
@@ -86,8 +106,8 @@ class _RackTabViewState extends State<RackTabView> {
                     SnackBar(
                       content: Text(
                         saved.isEmpty
-                            ? 'Failed to save the AV flow.'
-                            : 'AV flow saved to $saved',
+                            ? 'Failed to save the AV setup.'
+                            : 'AV setup saved to $saved',
                       ),
                     ),
                   );

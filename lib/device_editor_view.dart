@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -47,6 +48,12 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   String _search = '';
   String _categoryFilter = '';
   bool _customOnly = false;
+
+  /// Retired models are hidden by default. They are still IN the catalog —
+  /// rooms that already use one keep resolving its ports and price — but a
+  /// list of a thousand parts is hard enough to search without the
+  /// discontinued half of it in the way.
+  bool _showRetired = false;
 
   /// True when the catalog has been edited since the last write to disk.
   bool _dirty = false;
@@ -117,6 +124,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
   List<AvDeviceTemplate> _filtered(AvDeviceLibrary library) {
     final narrowed = library.all.where((t) {
+      if (!_showRetired && t.retired) return false;
       if (_customOnly && !t.custom) return false;
       if (_categoryFilter.isNotEmpty && t.category != _categoryFilter) {
         return false;
@@ -152,6 +160,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('New device'),
                 onPressed: () => _showNewDeviceDialog(library),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.percent, size: 18),
+                label: const Text('Education prices...'),
+                onPressed: () => _showEducationPricingDialog(provider, library),
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.merge, size: 18),
@@ -212,6 +225,17 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 selected: _customOnly,
                 onSelected: (v) => setState(() => _customOnly = v),
               ),
+              const SizedBox(width: 8),
+              FilterChip(
+                avatar: const Icon(Icons.history_toggle_off, size: 18),
+                label: Text(
+                  library.retiredCount == 0
+                      ? 'Show retired'
+                      : 'Show retired (${library.retiredCount})',
+                ),
+                selected: _showRetired,
+                onSelected: (v) => setState(() => _showRetired = v),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
@@ -255,6 +279,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         final t = entries[i];
         final key = AvDeviceLibrary.normalizeModel(t.model);
         final facts = [
+          if (t.retired) 'RETIRED',
           if (t.rackUnits > 0) '${t.rackUnits}U',
           '${t.inputCount} in / ${t.outputCount} out',
           if (t.powerWatts > 0) '${trimNumber(t.powerWatts)} W',
@@ -270,7 +295,13 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           ),
           title: Text(
             t.model,
-            style: const TextStyle(fontSize: 13),
+            style: TextStyle(
+              fontSize: 13,
+              // Struck through rather than hidden: when the filter is off,
+              // a retired part should be recognizable at a glance.
+              decoration: t.retired ? TextDecoration.lineThrough : null,
+              color: t.retired ? theme.disabledColor : null,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
           subtitle: Text(
@@ -281,12 +312,31 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             style: const TextStyle(fontSize: 11),
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: Text(
-            t.price > 0 ? formatMoney(t.price) : '—',
-            style: TextStyle(
-              fontSize: 12,
-              color: t.price > 0 ? null : theme.disabledColor,
-            ),
+          // Both tiers, so a part way through pricing the catalog is obvious
+          // from the list rather than one entry at a time.
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                t.price > 0 ? formatMoney(t.price) : '—',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: t.price > 0 ? null : theme.disabledColor,
+                ),
+              ),
+              Text(
+                t.educationPrice > 0
+                    ? '${formatMoney(t.educationPrice)} edu'
+                    : 'no edu price',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: t.educationPrice > 0
+                      ? theme.colorScheme.primary
+                      : theme.disabledColor,
+                ),
+              ),
+            ],
           ),
           onTap: () => setState(() => _selectedKey = key),
         );
@@ -381,6 +431,32 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                     setState(() => _apply(entry.copyWith(category: v))),
               ),
             ),
+            // The categories the app itself keys off. Typed text still works —
+            // this is a shortcut to the spellings that make an entry show up
+            // on the rack editor's parts list or in the cabling section, which
+            // are exactly the ones a typo silently costs you.
+            PopupMenuButton<String>(
+              tooltip: 'Use a known category',
+              icon: const Icon(Icons.arrow_drop_down),
+              onSelected: (v) => setState(
+                () => _apply(
+                  entry.copyWith(
+                    category: v,
+                    // A cable needs a signal type to be priced against the
+                    // diagram; default it to the first rather than leaving an
+                    // entry that looks priced and matches nothing.
+                    cableSignal: v == kCategoryCable
+                        ? (entry.cableSignal ?? SignalType.hdmi)
+                        : null,
+                    clearCableSignal: v != kCategoryCable,
+                  ),
+                ),
+              ),
+              itemBuilder: (ctx) => [
+                for (final c in kWellKnownCategories)
+                  PopupMenuItem(value: c, child: Text(c)),
+              ],
+            ),
             const SizedBox(width: 12),
             SizedBox(
               width: 110,
@@ -443,7 +519,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               child: LiveTextField(
                 fieldId: 'price_$key',
                 initial: entry.price == 0 ? '' : trimNumber(entry.price),
-                label: 'Unit price',
+                label: 'MSRP',
                 helper: 'list price',
                 numeric: true,
                 onChanged: (v) => setState(
@@ -453,8 +529,78 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
               ),
             ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 150,
+              child: LiveTextField(
+                fieldId: 'edu_$key',
+                initial: entry.educationPrice == 0
+                    ? ''
+                    : trimNumber(entry.educationPrice),
+                label: 'Education price',
+                helper: 'what we pay',
+                numeric: true,
+                onChanged: (v) => setState(
+                  () => _apply(
+                    entry.copyWith(
+                      educationPrice: double.tryParse(v.trim()) ?? 0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
+        const SizedBox(height: 8),
+        // Retiring a part keeps everything it knows — ports, prices, rack
+        // height — for the rooms that already have one, and takes it out of
+        // the pickers that specify new work.
+        CheckboxListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: entry.retired,
+          onChanged: (v) =>
+              setState(() => _apply(entry.copyWith(retired: v ?? false))),
+          title: const Text('Retired / discontinued'),
+          subtitle: const Text(
+            'Hidden from the device, parts and estimator pickers. Rooms that '
+            'already use it keep its connectors and price.',
+          ),
+        ),
+        // A cable entry says what it carries. That is the whole hinge of the
+        // cabling estimate: every run of this signal type on the AV flow is
+        // quoted at this entry's price.
+        if (entry.isCable) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              SizedBox(
+                width: 300,
+                child: DropdownButtonFormField<SignalType>(
+                  initialValue: entry.cableSignal ?? SignalType.hdmi,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Carries',
+                    helperText: 'runs of this type on the diagram are quoted '
+                        'at this price',
+                    isDense: true,
+                  ),
+                  items: [
+                    for (final s in SignalType.values)
+                      DropdownMenuItem(
+                        value: s,
+                        child: Text(kSignalLabels[s] ?? s.name),
+                      ),
+                  ],
+                  onChanged: (v) => setState(
+                    () => _apply(entry.copyWith(cableSignal: v)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 12),
         Row(
           children: [
@@ -746,6 +892,148 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   // --- merge ---------------------------------------------------------------
+
+  /// Sets education prices in bulk, as a discount off MSRP.
+  ///
+  /// This is how the number actually arrives: a contract says "40% off list
+  /// for these families", not a price per part. Typing that per device across
+  /// a thousand entries is the reason the second tier would otherwise stay
+  /// empty. The discount applies to whatever the list is currently filtered
+  /// to, so a contract with different rates per family is a few passes rather
+  /// than one blunt one.
+  Future<void> _showEducationPricingDialog(
+    AppStateProvider provider,
+    AvDeviceLibrary library,
+  ) async {
+    final entries = _filtered(library).where((t) => t.price > 0).toList();
+    final discountController = TextEditingController(text: '40');
+    bool overwrite = false;
+
+    final apply = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final discount = double.tryParse(discountController.text.trim()) ?? 0;
+          final targets = entries
+              .where((t) => overwrite || t.educationPrice <= 0)
+              .toList();
+          final sample = targets.isEmpty ? null : targets.first;
+          return AlertDialog(
+            title: const Text('Set education prices'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Works out each entry\'s education price as a discount off '
+                    'its MSRP. Applies to the ${entries.length} priced '
+                    'entr${entries.length == 1 ? 'y' : 'ies'} matching the '
+                    'current search and category filter — narrow those first '
+                    'if your contract discounts families differently.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 140,
+                        child: TextField(
+                          controller: discountController,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Discount',
+                            suffixText: '% off MSRP',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9.]'),
+                            ),
+                          ],
+                          onChanged: (_) => setLocal(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      if (sample != null)
+                        Expanded(
+                          child: Text(
+                            'e.g. ${sample.model}: '
+                            '${formatMoney(sample.price, provider.currencySymbol)}'
+                            ' → '
+                            '${formatMoney(sample.price * (1 - discount / 100),
+                                provider.currencySymbol)}',
+                            style: Theme.of(ctx).textTheme.bodySmall,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: overwrite,
+                    onChanged: (v) => setLocal(() => overwrite = v ?? false),
+                    title: const Text('Overwrite education prices already set'),
+                    subtitle: const Text(
+                      'Off: only fills the blanks, so a price typed by hand '
+                      'survives.',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${targets.length} entr${targets.length == 1 ? 'y' : 'ies'}'
+                    ' would change.',
+                    style: Theme.of(ctx).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: discount <= 0 || discount >= 100 || targets.isEmpty
+                    ? null
+                    : () => Navigator.of(ctx).pop(true),
+                child: const Text('Apply'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (apply != true) return;
+    final discount = double.tryParse(discountController.text.trim()) ?? 0;
+    if (discount <= 0 || discount >= 100) return;
+
+    int changed = 0;
+    for (final t in entries) {
+      if (!overwrite && t.educationPrice > 0) continue;
+      // Rounded to cents, so the catalog never carries a price that cannot be
+      // written on an invoice.
+      final price = ((t.price * (1 - discount / 100)) * 100).round() / 100;
+      provider.avDeviceLibrary.upsert(t.copyWith(educationPrice: price));
+      changed++;
+    }
+    if (changed > 0) {
+      setState(() => _dirty = true);
+      provider.avDeviceLibraryChanged();
+    }
+    _snack(
+      '$changed education price${changed == 1 ? '' : 's'} set at '
+      '${trimNumber(discount)}% off MSRP. Save the catalog to keep them.',
+    );
+  }
 
   Future<void> _startMerge(AppStateProvider provider) async {
     final picked = await FilePicker.pickFiles(

@@ -12,7 +12,7 @@ import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/export_tools.dart';
 import 'package:extron_configurator/labor_rates.dart';
 
-/// Labour on the estimate, the model search, and Save All — the parts where
+/// Labor on the estimate, the model search, and Save All — the parts where
 /// losing work or quietly mis-costing a job is the failure mode.
 void main() {
   late Directory dir;

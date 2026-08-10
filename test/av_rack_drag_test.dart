@@ -52,7 +52,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Drags from the centre of [from] to the centre of [to] in steps, the way
+  /// Drags from the center of [from] to the center of [to] in steps, the way
   /// a real pointer moves, so Draggable hands over to DragTarget.
   Future<void> dragOnto(
     WidgetTester tester,

@@ -8,11 +8,11 @@ import 'package:flutter/services.dart';
 /// ============================================================================
 ///  A self-contained HSV picker for the diagram tabs: hue and saturation on a
 ///  wheel, brightness on a slider, plus a hex box for matching an existing
-///  drawing exactly. No package — the app ships without a colour-picker
+///  drawing exactly. No package — the app ships without a color-picker
 ///  dependency and one widget is cheaper than adding one.
 /// ============================================================================
 
-/// Opens the wheel and returns the chosen colour, or null if cancelled.
+/// Opens the wheel and returns the chosen color, or null if canceled.
 Future<Color?> showColorWheelDialog(
   BuildContext context, {
   required Color initial,
@@ -163,10 +163,10 @@ class _ColorWheel extends StatelessWidget {
       builder: (ctx, constraints) {
         final size = math.min(constraints.maxWidth, constraints.maxHeight);
         final radius = size / 2;
-        final centre = Offset(radius, radius);
+        final center = Offset(radius, radius);
 
         void handle(Offset local) {
-          final v = local - centre;
+          final v = local - center;
           final distance = v.distance;
           // Clamp to the rim rather than ignoring the drag, so sliding off
           // the edge keeps tracking the hue instead of sticking.
@@ -202,8 +202,8 @@ class _WheelPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final radius = size.width / 2;
-    final centre = Offset(radius, radius);
-    final rect = Rect.fromCircle(center: centre, radius: radius);
+    final center = Offset(radius, radius);
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
     // Hue around, at the current brightness so the wheel previews what the
     // slider will actually give you.
@@ -212,14 +212,14 @@ class _WheelPainter extends CustomPainter {
         HSVColor.fromAHSV(1, i.toDouble() % 360, 1, hsv.value).toColor(),
     ];
     canvas.drawCircle(
-      centre,
+      center,
       radius,
       Paint()..shader = SweepGradient(colors: hues).createShader(rect),
     );
 
     // Saturation falls off towards the middle.
     canvas.drawCircle(
-      centre,
+      center,
       radius,
       Paint()
         ..shader = RadialGradient(
@@ -232,7 +232,7 @@ class _WheelPainter extends CustomPainter {
 
     // The current pick.
     final angle = hsv.hue * math.pi / 180;
-    final marker = centre +
+    final marker = center +
         Offset(math.cos(angle), math.sin(angle)) * (hsv.saturation * radius);
     canvas.drawCircle(
       marker,
@@ -256,8 +256,8 @@ class _WheelPainter extends CustomPainter {
   bool shouldRepaint(covariant _WheelPainter old) => old.hsv != hsv;
 }
 
-/// A colour chip with an unmistakable selected state: a heavy ring, a lift,
-/// and a tick in a contrasting colour. The old version only thickened the
+/// A color chip with an unmistakable selected state: a heavy ring, a lift,
+/// and a tick in a contrasting color. The old version only thickened the
 /// border, which was easy to miss against a row of similar swatches.
 class ColorSwatchButton extends StatelessWidget {
   final Color color;
@@ -320,7 +320,7 @@ class ColorSwatchButton extends StatelessWidget {
     final tappable = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(5),
-      // A little breathing room so neighbouring rings never touch.
+      // A little breathing room so neighboring rings never touch.
       child: Padding(padding: const EdgeInsets.all(2), child: chip),
     );
 

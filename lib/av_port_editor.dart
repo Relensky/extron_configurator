@@ -18,7 +18,7 @@ import 'av_flow_model.dart';
 class AvPortEditorRow extends StatelessWidget {
   final AvPort port;
 
-  /// The room's signal palette, so the colour dot matches the diagram.
+  /// The room's signal palette, so the color dot matches the diagram.
   final Map<SignalType, Color>? palette;
 
   final ValueChanged<AvPort> onChanged;

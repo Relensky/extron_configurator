@@ -166,7 +166,7 @@ class FieldSpec {
   final List<String> hideWhen;
 
   final String? description;      // info button text (falls back to ConfigDictionary)
-  final String? helperText;       // small grey helper line under the field
+  final String? helperText;       // small gray helper line under the field
   final List<OptionSpec> options; // for dropdown / combo
   final List<String> writes;      // for combo: config keys this field writes
   final String? moduleCommand;    // for module_states: command in self.Commands

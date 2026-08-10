@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_state.dart';
 
 /// ============================================================================
-///  CONVERSION COLOURS
+///  CONVERSION COLORS
 /// ============================================================================
 ///  The one place the provenance palette is defined. Both readers of it — the
 ///  conversion preview dialog and the field editors on the Devices / System
@@ -19,7 +19,7 @@ import 'app_state.dart';
 ///             model, the generated room name). Teal — neither purely the old
 ///             file's nor purely the template's.
 ///    WRITTEN  the conversion introduced the key: template, schema defaults,
-///             companion keys. Drawn in the theme's normal text colour,
+///             companion keys. Drawn in the theme's normal text color,
 ///             because it is what a config built from the template looks like.
 ///
 ///  Everything is resolved from the active ThemeData rather than hardcoded, so
@@ -34,7 +34,7 @@ class ConversionColors {
   /// Was in the loaded file, but the conversion rewrote the value.
   final Color changed;
 
-  /// Written by the conversion — the theme's ordinary text colour.
+  /// Written by the conversion — the theme's ordinary text color.
   final Color written;
 
   /// Braces, commas and the trailing '// removed' notes in the JSON pane.
@@ -45,7 +45,7 @@ class ConversionColors {
   final Color sectionName;
 
   /// A property name inside a section. Deliberately quieter than
-  /// [sectionName]: when both were the same colour the section headings did
+  /// [sectionName]: when both were the same color the section headings did
   /// not read as headings.
   final Color propertyName;
 
@@ -87,7 +87,7 @@ class ConversionColors {
     );
   }
 
-  /// The colour for [origin], or null when the value has no conversion history
+  /// The color for [origin], or null when the value has no conversion history
   /// (a config built from the template, or a value the user has since typed) —
   /// callers leave their normal styling alone in that case.
   Color? forOrigin(ValueOrigin? origin) {
