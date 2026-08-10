@@ -15,6 +15,7 @@ import 'av_flow_report.dart';
 import 'av_port_editor.dart';
 import 'color_wheel_picker.dart';
 import 'cost_estimate.dart';
+import 'device_recheck_dialog.dart';
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'view_zoom.dart';
 import 'layout_tools.dart';
@@ -1246,6 +1247,11 @@ class _AvFlowViewState extends State<AvFlowView> {
                   label: const Text('Place all from config'),
                   onPressed: () => _seedFromConfig(provider),
                 ),
+                const SizedBox(height: 8),
+                // A device copies the catalog's rack height and draw the day
+                // it is placed. This re-reads them, which is what a room
+                // drawn before the part numbers were known needs.
+                deviceRecheckButton(context),
                 const SizedBox(height: 16),
                 Text(
                   'Library: ${provider.avDeviceLibrary.modelCount} models',

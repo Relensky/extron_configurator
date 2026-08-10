@@ -28,6 +28,60 @@ import 'app_logger.dart';
 ///  "not set" rather than quietly costing a job at a number nobody agreed to.
 /// ============================================================================
 
+// ---------------------------------------------------------------------------
+//  INITIALISMS
+// ---------------------------------------------------------------------------
+
+/// Words that carry no weight in a shorthand: nobody says "NACAII" for a
+/// Network and Communications Analyst II.
+const Set<String> _kInitialismSkip = {'and', 'of', 'the', 'for', 'or', 'a',
+    'to', 'in', 'on'};
+
+final RegExp _kRomanNumeral = RegExp(r'^[IVX]+$');
+
+/// A leading class number off a published schedule ('0482', '18XX'), which is
+/// an index rather than part of the role's name.
+final RegExp _kClassCode = RegExp(r'^\d[\dA-Za-z]*$');
+
+/// The role's shorthand: "TSSIII" for "0482 Technology Support Specialist III
+/// — Non-state", "ACRM" for "Air Conditioning/Refrigeration Mechanic".
+///
+/// Derived rather than stored, so it is right for a rate somebody adds by hand
+/// this afternoon as well as for the ones off a published schedule, and so
+/// renaming a role can never leave a stale abbreviation behind it.
+///
+/// A leading class number and anything after the funding-tier dash are dropped
+/// — both are about which ROW of the schedule this is, not about the job.
+/// Roman numerals and numbers survive whole, because the level is the part of
+/// "TSS III" that does the work.
+String laborRateInitialism(String name, {bool dropSmallWords = true}) {
+  var text = name.trim();
+  for (final separator in const [' — ', ' – ', ' - ']) {
+    final at = text.indexOf(separator);
+    if (at > 0) {
+      text = text.substring(0, at);
+      break;
+    }
+  }
+  final words = text.split(RegExp(r'\s+'));
+  if (words.length > 1 && _kClassCode.hasMatch(words.first)) words.removeAt(0);
+
+  final buffer = StringBuffer();
+  for (final raw in words.join(' ').split(RegExp(r'[^A-Za-z0-9]+'))) {
+    if (raw.isEmpty) continue;
+    if (dropSmallWords && _kInitialismSkip.contains(raw.toLowerCase())) {
+      continue;
+    }
+    final word = raw.toUpperCase();
+    if (_kRomanNumeral.hasMatch(word) || int.tryParse(word) != null) {
+      buffer.write(word);
+    } else {
+      buffer.write(word[0]);
+    }
+  }
+  return buffer.toString();
+}
+
 class LaborRate {
   /// Stable key an estimate line references.
   final String id;
@@ -53,6 +107,38 @@ class LaborRate {
   });
 
   bool get isSet => hourlyRate > 0;
+
+  /// The shorthand people actually say for this role — TSSIII for a Technology
+  /// Support Specialist III, ACRM for an Air Conditioning/Refrigeration
+  /// Mechanic. Shown beside the name in the picker and matched by [matches].
+  String get initialism => laborRateInitialism(name);
+
+  /// True when [query] should find this rate.
+  ///
+  /// Three ways in, because a rate card off a published schedule is read three
+  /// ways: by name ("electrician"), by what the schedule calls it (a class
+  /// number, or the funding wording in the notes), and by the shorthand nobody
+  /// writes down but everybody says. The last one is why this exists — a job
+  /// type filed as "Technology Support Specialist III" is one people look for
+  /// by typing "tss".
+  bool matches(String query) {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return true;
+    if (name.toLowerCase().contains(needle) ||
+        notes.toLowerCase().contains(needle) ||
+        id.toLowerCase().contains(needle)) {
+      return true;
+    }
+    // Spaces and roman-numeral spacing are how people type an initialism, not
+    // part of it: "tss", "tssIII" and "tss iii" are the same search.
+    final squashed = needle.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (squashed.isEmpty) return false;
+    return initialism.toLowerCase().startsWith(squashed) ||
+        laborRateInitialism(
+          name,
+          dropSmallWords: false,
+        ).toLowerCase().startsWith(squashed);
+  }
 
   LaborRate copyWith({
     String? name,

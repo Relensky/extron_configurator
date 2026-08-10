@@ -9,6 +9,7 @@ import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_view.dart' show iconForAvNode;
 import 'cost_estimate.dart' show formatMoney, trimNumber;
+import 'device_recheck_dialog.dart';
 import 'view_zoom.dart';
 
 /// ============================================================================
@@ -262,6 +263,10 @@ class _AvRackViewState extends State<AvRackView> {
                 ? null
                 : () => _fitToView(provider),
           ),
+          // "I set the rack height and it still isn't here" has three separate
+          // causes and no way to tell them apart by looking. This is the
+          // button that goes and finds out.
+          deviceRecheckButton(context),
           const SizedBox(width: 4),
           if (_carriedNodeId != null) ...[
             Chip(
@@ -305,8 +310,10 @@ class _AvRackViewState extends State<AvRackView> {
             Text(
               provider.avNodes.any((n) => n.rackUnits > 0)
                   ? 'Every rack-mount device is placed.'
-                  : 'No device has a rack height yet — set "Rack U" in a '
-                        'device\'s edit dialog on the Signal Flow page.',
+                  : 'No device has a rack height yet — press "Recheck '
+                        'devices" to take the heights off the catalog, or set '
+                        '"Rack U" in a device\'s edit dialog on the Signal '
+                        'Flow page.',
               style: theme.textTheme.bodySmall,
             )
           else ...[

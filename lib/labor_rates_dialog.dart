@@ -38,6 +38,18 @@ class _LaborRatesDialog extends StatefulWidget {
 class _LaborRatesDialogState extends State<_LaborRatesDialog> {
   bool _dirty = false;
 
+  /// A card off a published schedule runs to a couple of hundred rows, and
+  /// scrolling one to check a single rate is how a rate card stops being
+  /// checked. Matches names, notes and the role's shorthand — see
+  /// [LaborRate.matches].
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   void _snack(String message, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -81,8 +93,33 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
+            TextField(
+              controller: _search,
+              decoration: InputDecoration(
+                labelText: 'Search',
+                hintText: 'name, class number, or shorthand — "tss", '
+                    '"tssIII", "electrician"',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                border: const OutlineInputBorder(),
+                suffixIcon: _search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        tooltip: 'Show every job type',
+                        onPressed: () => setState(_search.clear),
+                      ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
+                SizedBox(
+                  width: 62,
+                  child: Text('Short', style: theme.textTheme.labelSmall),
+                ),
+                const SizedBox(width: 8),
                 SizedBox(
                   width: 200,
                   child: Text('Job type', style: theme.textTheme.labelSmall),
@@ -109,10 +146,28 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
               child: ListView(
                 children: [
                   for (final rate in book.rates)
+                    if (rate.matches(_search.text))
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
                       child: Row(
                         children: [
+                          // Derived from the name, so it follows a rename
+                          // rather than going stale beside it.
+                          SizedBox(
+                            width: 62,
+                            child: Text(
+                              rate.initialism,
+                              textAlign: TextAlign.right,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           SizedBox(
                             width: 200,
                             child: LiveTextField(

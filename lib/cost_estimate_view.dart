@@ -4,7 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -1348,8 +1350,29 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       } else {
         await File(outputFile).writeAsString(renderTextReport(title, sections));
       }
-      messenger.showSnackBar(
-        SnackBar(content: Text('Cost estimate saved to $outputFile')),
+      // OPEN rather than just a path: the point of writing a workbook is to
+      // look at it, and hunting the folder down afterwards is the one step
+      // between saving an estimate and reading it.
+      final saved = outputFile;
+      showTimedSnackBar(
+        messenger,
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text('Cost estimate saved to $saved'),
+          action: SnackBarAction(
+            label: 'OPEN',
+            onPressed: () async {
+              if (!await launchUrl(
+                Uri.file(saved),
+                mode: LaunchMode.externalApplication,
+              )) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Could not open $saved')),
+                );
+              }
+            },
+          ),
+        ),
       );
     } catch (e) {
       messenger.showSnackBar(
@@ -2016,7 +2039,23 @@ class _JobTypeField extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final rate = book.byId(rateId);
-    return InkWell(
+    // The cell is 182 wide and a published job title is not; the full name,
+    // its shorthand and the rate live on the tooltip so the row can still be
+    // identified without opening the picker.
+    final tip = rate == null
+        ? 'No job type picked'
+        : [
+            if (rate.initialism.isNotEmpty) '${rate.initialism} — ${rate.name}'
+            else rate.name,
+            rate.isSet
+                ? '${formatMoney(rate.hourlyRate, currency)}/hr'
+                : 'no rate set',
+            if (rate.notes.isNotEmpty) rate.notes,
+          ].join('\n');
+    return Tooltip(
+      message: tip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: InkWell(
       onTap: () async {
         final picked = await _pickJobType(context, book, currency, rateId);
         if (picked != null) onChanged(picked);
@@ -2051,6 +2090,7 @@ class _JobTypeField extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 }
@@ -2069,17 +2109,14 @@ Future<String?> _pickJobType(
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) {
         final theme = Theme.of(ctx);
-        final needle = search.text.trim().toLowerCase();
-        // Notes are searched as well as names, so the class number and the
-        // funding wording on a published schedule both find their rows.
-        final matches = needle.isEmpty
-            ? book.rates
-            : [
-                for (final r in book.rates)
-                  if (r.name.toLowerCase().contains(needle) ||
-                      r.notes.toLowerCase().contains(needle))
-                    r,
-              ];
+        // Name, notes and shorthand all match — see [LaborRate.matches]. The
+        // shorthand is the one that matters in practice: "tss" and "tssIII"
+        // are what people type for a Technology Support Specialist III.
+        final needle = search.text;
+        final matches = [
+          for (final r in book.rates)
+            if (r.matches(needle)) r,
+        ];
         return AlertDialog(
           title: const Text('Job type'),
           content: SizedBox(
@@ -2100,6 +2137,8 @@ Future<String?> _pickJobType(
                   autofocus: true,
                   decoration: const InputDecoration(
                     labelText: 'Search the rate card',
+                    hintText: 'name, class number, or shorthand — "tss", '
+                        '"tssIII", "electrician"',
                     prefixIcon: Icon(Icons.search, size: 20),
                     isDense: true,
                     border: OutlineInputBorder(),
@@ -2119,9 +2158,31 @@ Future<String?> _pickJobType(
                           itemCount: matches.length,
                           itemBuilder: (ctx, i) {
                             final r = matches[i];
+                            final short = r.initialism;
                             return ListTile(
                               dense: true,
                               selected: r.id == current,
+                              // The shorthand is shown, not just matched: a
+                              // card of sixty-odd published job titles is
+                              // read by people who know them as TSS III and
+                              // ITC, and seeing the letters is what tells you
+                              // they are the ones to type.
+                              leading: short.isEmpty
+                                  ? null
+                                  : SizedBox(
+                                      width: 62,
+                                      child: Text(
+                                        short,
+                                        textAlign: TextAlign.right,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                      ),
+                                    ),
                               title: Text(
                                 r.name,
                                 style: const TextStyle(fontSize: 13),

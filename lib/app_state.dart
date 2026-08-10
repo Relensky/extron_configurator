@@ -1481,6 +1481,109 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Turns a quoted-but-undrawn equipment line into real devices on the
+  /// diagram, one per unit, and drops the cost line.
+  ///
+  /// Dropping the line is the point, not a side effect: the diagram is priced,
+  /// so leaving both would quote the room twice for the same box. Any price
+  /// typed on the line moves across to the devices' line key, because a
+  /// negotiated figure is about the gear, not about which list it was on.
+  ///
+  /// Returns the nodes added.
+  List<AvNode> promoteAvCostEquipmentToDiagram(
+    String itemId, {
+    required Offset at,
+  }) {
+    final item = avCost.extraEquipment
+        .where((i) => i.id == itemId)
+        .firstOrNull;
+    if (item == null) return const [];
+    final template = avDeviceLibrary.templateForModel(item.catalogModel);
+    if (template == null) return const [];
+
+    final typed = avCost.priceOverrides[item.id];
+    final count = item.qty < 1 ? 1 : item.qty.round();
+    final label = item.description.trim().isEmpty
+        ? template.model
+        : item.description.trim();
+
+    final added = <AvNode>[];
+    for (int i = 0; i < count; i++) {
+      added.add(
+        addAvNode(
+          AvNode(
+            id: '',
+            label: count == 1 ? label : '$label ${i + 1}',
+            model: template.model,
+            pos: Offset(at.dx, at.dy + i * 140),
+            ports: withPowerInlet(template.ports, template.powerInput),
+            rackUnits: template.rackUnits,
+            powerWatts: template.powerWatts,
+            btuPerHour: template.btuPerHour,
+            powerSource: powerSourceForInput(template.powerInput),
+          ),
+        ),
+      );
+    }
+
+    removeAvCostExtraEquipment(item.id);
+    // Devices group by model on the estimate — the key the diagram will price
+    // them under, and where the typed figure has to land to survive.
+    if (typed != null && template.model.trim().isNotEmpty) {
+      avCost.priceOverrides['model:${template.model.trim().toLowerCase()}'] =
+          typed;
+    }
+    notifyListeners();
+    return added;
+  }
+
+  /// Turns a quoted-but-unplaced rack part into real rack hardware, one per
+  /// unit, left out of any frame so the Racks tab lists it as waiting to be
+  /// placed. Same trade as [promoteAvCostEquipmentToDiagram]: the cost line
+  /// goes, because placed hardware is priced off the rack.
+  List<RackItem> promoteAvCostHardwareToRacks(String itemId) {
+    final item = avCost.extraHardware.where((i) => i.id == itemId).firstOrNull;
+    if (item == null) return const [];
+    final template = avDeviceLibrary.templateForModel(item.catalogModel);
+    if (template == null) return const [];
+
+    final typed = avCost.priceOverrides[item.id];
+    final count = item.qty < 1 ? 1 : item.qty.round();
+    final label = item.description.trim().isEmpty
+        ? template.model
+        : item.description.trim();
+
+    final added = <RackItem>[];
+    for (int i = 0; i < count; i++) {
+      final placed = addAvRackItem(
+        RackItem(
+          id: '',
+          catalogModel: template.model,
+          label: label,
+          category: template.category,
+          partNumber: template.partNumber,
+          rackUnits: math.max(1, template.rackUnits),
+          price: typed ?? template.priceForTier(pricingTier).price,
+        ),
+      );
+      if (placed != null) added.add(placed);
+    }
+
+    removeAvCostExtraHardware(item.id);
+    notifyListeners();
+    return added;
+  }
+
+  /// Forgets a rack placement that nothing can draw — the frame it names is
+  /// gone, or its occupant is. Whatever was in it goes back to the Racks tab's
+  /// "to place" list instead of being invisible in both places at once.
+  void clearAvRackPlacement(String occupantId) {
+    if (!avRackSlots.containsKey(occupantId)) return;
+    _pushAvUndo('Un-rack ${rackOccupantLabel(occupantId)}');
+    avRackSlots.remove(occupantId);
+    notifyListeners();
+  }
+
   CostLineItem addAvCostExtraHardware({
     String catalogModel = '',
     String description = '',
