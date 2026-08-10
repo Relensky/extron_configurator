@@ -22,10 +22,32 @@ typedef ReportSection = ({
   List<List<dynamic>> rows,
 });
 
+/// When a report was produced, as it is stamped on every one of them.
+///
+/// A report with no date on it is a report nobody can tell is out of date —
+/// and these get printed, mailed and filed next to older ones for the same
+/// room. Sortable and unambiguous rather than pretty, and local time because
+/// that is the clock the person reading it was working to.
+String reportTimestamp([DateTime? at]) {
+  final t = (at ?? DateTime.now()).toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${t.year}-${two(t.month)}-${two(t.day)} '
+      '${two(t.hour)}:${two(t.minute)}';
+}
+
 /// Fixed-width plain-text rendering — the .txt export and the clipboard copy.
-String renderTextReport(String title, List<ReportSection> sections) {
+///
+/// [generated] is the stamp under the title; it defaults to now and is passed
+/// in only by tests and by callers writing several documents that should all
+/// carry the same moment.
+String renderTextReport(
+  String title,
+  List<ReportSection> sections, {
+  DateTime? generated,
+}) {
   final buffer = StringBuffer();
   buffer.writeln(title); // the room and nothing else, like the xlsx
+  buffer.writeln('Generated ${reportTimestamp(generated)}');
   buffer.writeln();
   for (final s in sections) {
     buffer.writeln(s.title);
@@ -73,6 +95,9 @@ XlsxSheet buildStackedReportSheet({
   /// Called once the row count is known, so the diagram lands below the
   /// tables. Returning null (unreadable PNG) simply omits the image.
   XlsxImage? Function(int anchorRow)? imageBuilder,
+  /// The stamp under the title band. Defaults to now; passed in when a whole
+  /// book of sheets should agree on the moment it was produced.
+  DateTime? generated,
 }) {
   List<dynamic> pad(List<dynamic> row, int width) =>
       [...row, ...List.filled(math.max(0, width - row.length), '')];
@@ -85,9 +110,11 @@ XlsxSheet buildStackedReportSheet({
   final int reportWidth = sections.fold(1, (w, s) => math.max(w, widthOf(s)));
 
   // Row 1 carries the room and nothing else, merged across A:E so the title
-  // band reads as one cell instead of a value stuck in column A.
+  // band reads as one cell instead of a value stuck in column A. Row 2 says
+  // when the sheet was produced, plainly, below the band rather than in it.
   rows.add(pad([title], reportWidth));
   rowStyles[0] = XlsxRowStyle.title;
+  rows.add(pad(['Generated ${reportTimestamp(generated)}'], reportWidth));
 
   for (final s in sections) {
     final bool twoColumn = s.header.length == 2;

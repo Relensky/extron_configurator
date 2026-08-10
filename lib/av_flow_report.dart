@@ -152,6 +152,9 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
     rows.add([
       group.label,
       first.model,
+      // The ordering code off the catalog entry, next to the model it belongs
+      // to: the pack list is what a purchase order gets typed from.
+      provider.avDeviceLibrary.templateForModel(first.model)?.partNumber ?? '',
       group.qty,
       first.rackUnits == 0 ? '' : '${first.rackUnits}U',
       '$ins / $outs',
@@ -168,6 +171,7 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
     header: [
       'Device',
       'Model',
+      'Part number',
       'Qty',
       'Rack U',
       'In / Out',

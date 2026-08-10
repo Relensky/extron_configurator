@@ -37,6 +37,7 @@ void main() {
       ..upsert(
         const AvDeviceTemplate(
           model: 'Switcher Y',
+          partNumber: '60-1234-01',
           rackUnits: 2,
           powerWatts: 90,
           price: 2500,
@@ -149,6 +150,57 @@ void main() {
     expect(cost, contains('Sales tax (10%)'));
     // 2500 + 100 freight + 260 tax on 2600
     expect(cost, contains('<v>2860.0</v>'));
+  });
+
+  test('money is a number Excel can sum, formatted as currency', () {
+    final p = room();
+    final archive = ZipDecoder().decodeBytes(
+      buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
+    );
+
+    final styles = utf8.decode(
+      archive.files.firstWhere((f) => f.name == 'xl/styles.xml').content
+          as List<int>,
+    );
+    expect(styles, contains(r'formatCode="&quot;$&quot;#,##0.00"'));
+
+    // The grand total: still <v>2860.0</v> — a figure that adds up — but
+    // wearing one of the currency styles rather than reading as bare 2860.
+    final total = RegExp(r'<c r="B\d+" s="(\d+)"><v>2860\.0</v></c>')
+        .firstMatch(sheetText(archive, 4));
+    expect(total, isNotNull, reason: 'the total is a numeric cell');
+    expect(
+      int.parse(total!.group(1)!),
+      greaterThanOrEqualTo(5),
+      reason: 'the currency styles start after the five row styles',
+    );
+  });
+
+  test('every sheet says when it was produced', () {
+    final p = room();
+    final archive = ZipDecoder().decodeBytes(
+      buildRoomWorkbookBytes(
+        provider: p,
+        av: buildAvFlowModel(p),
+        generated: DateTime(2026, 8, 10, 14, 32),
+      ),
+    );
+    for (int i = 1; i <= kRoomWorkbookSheets.length; i++) {
+      expect(
+        sheetText(archive, i),
+        contains('Generated 2026-08-10 14:32'),
+        reason: kRoomWorkbookSheets[i - 1],
+      );
+    }
+  });
+
+  test('the part number rides along with the model it belongs to', () {
+    final p = room();
+    final archive = ZipDecoder().decodeBytes(
+      buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
+    );
+    expect(sheetText(archive, 2), contains('60-1234-01')); // pack list
+    expect(sheetText(archive, 4), contains('60-1234-01')); // equipment lines
   });
 
   test('a room with no racks still gets a readable Racks tab', () {

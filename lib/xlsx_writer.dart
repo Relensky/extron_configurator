@@ -12,8 +12,9 @@ import 'package:archive/archive.dart';
 ///  only needs styled rows plus one embedded image, so this hand-rolled
 ///  writer covers it.
 ///
-///  Cells: num -> numeric cell, everything else -> inline string (no shared
-///  strings table needed).
+///  Cells: num -> numeric cell, [XlsxMoney] -> numeric cell carrying a
+///  currency format, everything else -> inline string (no shared strings
+///  table needed).
 ///
 ///  Row styles (see [XlsxRowStyle]): normal, bold, section title (white on
 ///  dark blue fill), and column header (bold on light blue fill).
@@ -32,6 +33,31 @@ class XlsxRowStyle {
   static const int title = 2; // bold white on dark blue
   static const int header = 3; // bold on light blue
   static const int zebra = 4; // normal on light gray (alternating data rows)
+}
+
+/// A money value in a cell.
+///
+/// Written as a NUMBER so Excel can sum it, with a currency number format
+/// applied so it READS as money — a totals column of bare `2860` invites the
+/// question of what unit it is in. [text] is the same figure already formatted
+/// for a plain-text report, and is what [toString] (and therefore the column
+/// width calculation) uses.
+class XlsxMoney {
+  final double value;
+  final String text;
+
+  /// The currency symbol the cell format is built around. One per workbook in
+  /// practice; a book carrying two gets a number format for each.
+  final String symbol;
+
+  const XlsxMoney({
+    required this.value,
+    required this.text,
+    this.symbol = r'$',
+  });
+
+  @override
+  String toString() => text;
 }
 
 /// A PNG image anchored with its top-left corner at (anchorCol, anchorRow),
@@ -80,7 +106,9 @@ class XlsxSheet {
   /// computation: that value overflows into the empty cells to its right
   /// instead of stretching the shared column — used for long free-text
   /// values (room/building names) that would otherwise blow up a column
-  /// other sections also use. The row's other cells still size normally.
+  /// other sections also use. The row's other cells still size normally, and
+  /// a NUMBER in that position is sized anyway — it has nowhere to overflow
+  /// to and would come out as ###.
   final Set<int> overflowRows;
 
   /// Cell ranges to merge, in A1 notation ("A1:E1"). The merged block takes
@@ -177,13 +205,56 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '$relTags'
       '</Relationships>'));
 
+  // --- currency formats ---
+  // One number format per distinct currency in the book, so a money cell can
+  // be a number Excel sums AND show its symbol. The three cellXfs per symbol
+  // are the row styles a money cell can land in: plain, zebra, bold.
+  final currencies = <String>[];
+  for (final sheet in sheets) {
+    for (final row in sheet.rows) {
+      for (final value in row) {
+        if (value is XlsxMoney && !currencies.contains(value.symbol)) {
+          currencies.add(value.symbol);
+        }
+      }
+    }
+  }
+  const int firstMoneyStyle = 5; // cellXfs index after the XlsxRowStyle block
+  const int firstNumFmtId = 164; // 0..163 are Excel's built-in formats
+
+  /// The cellXfs index for a money cell sitting in a [rowStyle] row.
+  int moneyStyle(String symbol, int rowStyle) {
+    final base = firstMoneyStyle + currencies.indexOf(symbol) * 3;
+    if (rowStyle == XlsxRowStyle.zebra) return base + 1;
+    if (rowStyle == XlsxRowStyle.bold) return base + 2;
+    return base;
+  }
+
+  final numFmts = StringBuffer();
+  final moneyXfs = StringBuffer();
+  if (currencies.isNotEmpty) {
+    numFmts.write('<numFmts count="${currencies.length}">');
+    for (int i = 0; i < currencies.length; i++) {
+      final id = firstNumFmtId + i;
+      final code = '&quot;${esc(currencies[i])}&quot;#,##0.00';
+      numFmts.write('<numFmt numFmtId="$id" formatCode="$code"/>');
+      moneyXfs.write(
+          '<xf numFmtId="$id" applyNumberFormat="1" xfId="0"/>'
+          '<xf numFmtId="$id" fillId="4" applyNumberFormat="1" applyFill="1" xfId="0"/>'
+          '<xf numFmtId="$id" fontId="1" applyNumberFormat="1" applyFont="1" xfId="0"/>');
+    }
+    numFmts.write('</numFmts>');
+  }
+  final int cellXfCount = firstMoneyStyle + currencies.length * 3;
+
   // --- xl/styles.xml ---
   // fonts:  0 normal, 1 bold, 2 bold white
   // fills:  0 none, 1 gray125 (Excel convention), 2 dark blue, 3 light blue
-  // cellXfs: see XlsxRowStyle
+  // cellXfs: see XlsxRowStyle, then three per currency (see moneyStyle)
   archive.add(ArchiveFile.string('xl/styles.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      '$numFmts'
       '<fonts count="3">'
       '<font><sz val="11"/><name val="Calibri"/></font>'
       '<font><b/><sz val="11"/><name val="Calibri"/></font>'
@@ -198,12 +269,13 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '</fills>'
       '<borders count="1"><border/></borders>'
       '<cellStyleXfs count="1"><xf/></cellStyleXfs>'
-      '<cellXfs count="5">'
+      '<cellXfs count="$cellXfCount">'
       '<xf xfId="0"/>'
       '<xf fontId="1" applyFont="1" xfId="0"/>'
       '<xf fontId="2" fillId="2" applyFont="1" applyFill="1" xfId="0"/>'
       '<xf fontId="1" fillId="3" applyFont="1" applyFill="1" xfId="0"/>'
       '<xf fillId="4" applyFill="1" xfId="0"/>'
+      '$moneyXfs'
       '</cellXfs>'
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
       '</styleSheet>'));
@@ -270,10 +342,19 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     for (int r = 0; r < sheet.rows.length; r++) {
       if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
       final cells = sheet.rows[r];
-      final int limit =
-          sheet.overflowRows.contains(r) ? cells.length - 1 : cells.length;
-      for (int c = 0; c < limit; c++) {
-        final len = cells[c]?.toString().length ?? 0;
+      final bool overflow = sheet.overflowRows.contains(r);
+      for (int c = 0; c < cells.length; c++) {
+        final cell = cells[c];
+        // The excluded cell of an overflow row is only excused when it is
+        // TEXT: text spills into the empty cells to its right, but a number
+        // too wide for its column comes out as ###, so figures always size.
+        if (overflow &&
+            c == cells.length - 1 &&
+            cell is! num &&
+            cell is! XlsxMoney) {
+          continue;
+        }
+        final len = cell?.toString().length ?? 0;
         if (len > (maxLen[c] ?? 0)) maxLen[c] = len;
       }
     }
@@ -305,7 +386,11 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
           continue;
         }
         if (value == null) continue;
-        if (value is num) {
+        if (value is XlsxMoney) {
+          // Its own style id: the row's banding plus the currency format.
+          body.write(
+              '<c r="$ref" s="${moneyStyle(value.symbol, style)}"><v>${value.value}</v></c>');
+        } else if (value is num) {
           body.write('<c r="$ref"$styleAttr><v>$value</v></c>');
         } else {
           body.write(

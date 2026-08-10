@@ -3,6 +3,7 @@ import 'av_flow_model.dart';
 import 'base_costs.dart';
 import 'labor_rates.dart';
 import 'report_tools.dart';
+import 'xlsx_writer.dart' show XlsxMoney;
 
 /// ============================================================================
 ///  ROOM COST ESTIMATE
@@ -373,6 +374,11 @@ class RackItemGroup {
   final String category;
   final double qty;
 
+  /// The part number recorded on the placed items. Like [price], a copy of
+  /// what the catalog said when the item went in — used only when the entry
+  /// it came from has gone.
+  final String partNumber;
+
   /// The unit price recorded on the placed items. Used only when the catalog
   /// entry it came from has gone.
   final double price;
@@ -383,6 +389,7 @@ class RackItemGroup {
     required this.description,
     required this.category,
     required this.qty,
+    this.partNumber = '',
     required this.price,
   });
 }
@@ -405,6 +412,7 @@ List<RackItemGroup> groupRackItems(List<RackItem> items) {
         catalogModel: e.value.first.catalogModel,
         description: e.value.first.label,
         category: e.value.first.category,
+        partNumber: e.value.first.partNumber,
         qty: e.value.length.toDouble(),
         // The highest recorded price rather than the first: an item re-placed
         // after a price rise should not quote the room at the old figure.
@@ -471,6 +479,11 @@ class CostLine {
   final String key;
   final String description;
   final String model;
+
+  /// The manufacturer's ordering code, off the catalog entry. Carried on the
+  /// line rather than looked up when the report is written, so the number on
+  /// the estimate is the one the price came from.
+  final String partNumber;
   final String category;
   final double qty;
   final double unitPrice;
@@ -481,6 +494,7 @@ class CostLine {
     required this.key,
     required this.description,
     this.model = '',
+    this.partNumber = '',
     this.category = '',
     required this.qty,
     required this.unitPrice,
@@ -697,6 +711,7 @@ CostEstimate computeRoomCost({
         key: group.key,
         description: group.label,
         model: group.model,
+        partNumber: catalog?.partNumber ?? '',
         category: category,
         qty: group.qty.toDouble(),
         unitPrice: price,
@@ -742,6 +757,11 @@ CostEstimate computeRoomCost({
         key: line.key,
         description: line.description,
         model: line.catalogModel,
+        // The catalog's number, or — when the entry it came from is gone —
+        // the one recorded on the placed item, same as its price.
+        partNumber: catalog?.partNumber.isNotEmpty == true
+            ? catalog!.partNumber
+            : line.partNumber,
         category: line.category,
         qty: line.qty,
         unitPrice: price,
@@ -789,6 +809,7 @@ CostEstimate computeRoomCost({
                 : item.catalogModel)
           : item.description,
       model: item.catalogModel,
+      partNumber: catalog?.partNumber ?? '',
       category: item.category.trim().isEmpty
           ? fallbackCategory
           : item.category,
@@ -864,6 +885,7 @@ CostEstimate computeRoomCost({
               '(${trimNumber(drawn)} drawn + ${trimNumber(spares)} spare)',
           ].join(' '),
           model: catalog?.model ?? '',
+          partNumber: catalog?.partNumber ?? '',
           category: kCategoryCable,
           qty: qty,
           unitPrice: price,
@@ -1014,9 +1036,18 @@ String trimNumber(num value) {
 /// Trims a percentage to something a quote would print: 8.25%, 3%, 0.5%.
 String formatPercent(double value) => '${trimNumber(value)}%';
 
-/// Money as a NUMBER for the workbook, so the cells can be summed in Excel
-/// rather than being text that merely looks like money.
-double money(double value) => _cents(value);
+/// Money for a report cell: a NUMBER, so the workbook can be summed in Excel
+/// rather than being text that merely looks like money, carrying the currency
+/// format so the cell still READS as money — and its own formatted text, which
+/// is what the plain-text report and the clipboard copy print.
+XlsxMoney money(double value, [String currency = r'$']) {
+  final rounded = _cents(value);
+  return XlsxMoney(
+    value: rounded,
+    text: formatMoney(rounded, currency),
+    symbol: currency,
+  );
+}
 
 // ---------------------------------------------------------------------------
 //  REPORT SECTIONS
@@ -1039,15 +1070,23 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
 
   final currency = estimate.currency;
 
+  /// Every figure on the sheet, in the room's currency: a number Excel can
+  /// sum, formatted so the cell says what it is. The columns no longer repeat
+  /// the symbol in their headings because the cells now carry it.
+  XlsxMoney cash(double value) => money(value, currency);
+
   final sections = <ReportSection>[
     (
       title: 'Equipment',
-      header: [
+      header: const [
         'Device',
         'Model',
+        // What actually goes on the purchase order — a model name is what the
+        // room is designed around, a part number is what gets ordered.
+        'Part number',
         'Qty',
-        'Unit price ($currency)',
-        'Extended ($currency)',
+        'Unit price',
+        'Extended',
         'Price from',
       ],
       rows: [
@@ -1055,22 +1094,24 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
           [
             line.description,
             line.model,
+            line.partNumber,
             line.qty,
-            money(line.unitPrice),
-            money(line.total),
+            cash(line.unitPrice),
+            cash(line.total),
             kPriceSourceLabels[line.source] ?? '',
           ],
       ],
     ),
     (
       title: 'Rack Hardware',
-      header: [
+      header: const [
         'Item',
         'Kind',
         'Model',
+        'Part number',
         'Qty',
-        'Unit price ($currency)',
-        'Extended ($currency)',
+        'Unit price',
+        'Extended',
         'Price from',
       ],
       rows: [
@@ -1079,43 +1120,46 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             line.description,
             line.category,
             line.model,
+            line.partNumber,
             line.qty,
-            money(line.unitPrice),
-            money(line.total),
+            cash(line.unitPrice),
+            cash(line.total),
             kPriceSourceLabels[line.source] ?? '',
           ],
       ],
     ),
     (
       title: 'Cabling',
-      header: [
+      header: const [
         'Cable',
+        'Part number',
         'Runs',
-        'Unit price ($currency)',
-        'Extended ($currency)',
+        'Unit price',
+        'Extended',
         'Price from',
       ],
       rows: [
         for (final line in estimate.cabling)
           [
             line.description,
+            line.partNumber,
             line.qty,
-            money(line.unitPrice),
-            money(line.total),
+            cash(line.unitPrice),
+            cash(line.total),
             kPriceSourceLabels[line.source] ?? '',
           ],
       ],
     ),
     (
       title: 'Labor',
-      header: [
+      header: const [
         'Role',
         'Scope',
         'Techs',
         'Hours ea.',
         'Total hours',
-        'Rate ($currency/hr)',
-        'Extended ($currency)',
+        'Rate per hour',
+        'Extended',
         'Taxable',
       ],
       rows: [
@@ -1126,20 +1170,21 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             line.techs,
             line.hours,
             line.totalHours,
-            line.unrated ? 'no rate set' : money(line.hourlyRate),
-            money(line.total),
+            line.unrated ? 'no rate set' : cash(line.hourlyRate),
+            cash(line.total),
             line.taxable ? 'Yes' : 'No',
           ],
       ],
     ),
     (
       title: 'Other Items',
-      header: [
+      header: const [
         'Description',
         'Category',
+        'Part number',
         'Qty',
-        'Unit price ($currency)',
-        'Extended ($currency)',
+        'Unit price',
+        'Extended',
         'Taxable',
       ],
       rows: [
@@ -1147,9 +1192,10 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
           [
             line.description,
             line.category,
+            line.partNumber,
             line.qty,
-            money(line.unitPrice),
-            money(line.total),
+            cash(line.unitPrice),
+            cash(line.total),
             line.taxable ? 'Yes' : 'No',
           ],
       ],
@@ -1158,34 +1204,34 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
 
   final totals = <List<dynamic>>[
     ['Priced at', kPricingTierLabels[estimate.tier] ?? estimate.tier.name],
-    ['Equipment', money(estimate.equipmentTotal)],
+    ['Equipment', cash(estimate.equipmentTotal)],
     if (estimate.hardware.isNotEmpty)
-      ['Rack hardware', money(estimate.hardwareTotal)],
+      ['Rack hardware', cash(estimate.hardwareTotal)],
     if (estimate.cabling.isNotEmpty)
-      ['Cabling', money(estimate.cablingTotal)],
+      ['Cabling', cash(estimate.cablingTotal)],
     if (estimate.labor.isNotEmpty) ...[
       [
         'Labor (${trimNumber(estimate.laborHours)} h)',
-        money(estimate.laborTotal),
+        cash(estimate.laborTotal),
       ],
     ],
-    if (estimate.extras.isNotEmpty) ['Other items', money(estimate.extrasTotal)],
-    ['Subtotal (before fees and tax)', money(estimate.subtotal)],
+    if (estimate.extras.isNotEmpty) ['Other items', cash(estimate.extrasTotal)],
+    ['Subtotal (before fees and tax)', cash(estimate.subtotal)],
     for (final f in estimate.fees)
       [
         '${f.fee.name} (${formatPercent(f.fee.percent)} of subtotal)'
             '${f.fee.taxable ? '' : ' — not taxed'}',
-        money(f.amount),
+        cash(f.amount),
       ],
-    if (estimate.fees.length > 1) ['Fees total', money(estimate.feeTotal)],
+    if (estimate.fees.length > 1) ['Fees total', cash(estimate.feeTotal)],
     if (estimate.taxPercent > 0) ...[
-      ['Taxable amount', money(estimate.taxableBase)],
+      ['Taxable amount', cash(estimate.taxableBase)],
       [
         '${estimate.taxLabel} (${formatPercent(estimate.taxPercent)})',
-        money(estimate.tax),
+        cash(estimate.tax),
       ],
     ],
-    ['TOTAL ($currency)', money(estimate.grandTotal)],
+    ['TOTAL', cash(estimate.grandTotal)],
     if (estimate.unpricedLines > 0)
       [
         'Not included — devices with no price',

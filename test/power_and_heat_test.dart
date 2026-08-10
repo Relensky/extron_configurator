@@ -205,8 +205,19 @@ void main() {
       expect(gap.rows.single[1], 'Wall display');
       expect(gap.rows.single[3], contains('No Python module'));
 
+      // By header name rather than position: the pack list gains columns as
+      // the sheet grows, and this test is about the module, not the layout.
       final pack = sectionNamed(sections, 'Pack List');
-      expect(pack.rows.single[7], 'none', reason: 'the Control module column');
+      expect(
+        pack.rows.single[pack.header.indexOf('Control module')],
+        'none',
+        reason: 'the Control module column',
+      );
+      expect(
+        pack.header,
+        contains('Part number'),
+        reason: 'what a purchase order is typed from',
+      );
     });
   });
 

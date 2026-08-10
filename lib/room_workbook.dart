@@ -52,7 +52,11 @@ Uint8List buildRoomWorkbookBytes({
   Uint8List? controlPng,
   Uint8List? avFlowPng,
   Uint8List? rackPng,
+  /// Stamped on every sheet. One moment for the whole book — four tabs of the
+  /// same export dated a minute apart would read as four documents.
+  DateTime? generated,
 }) {
+  final stamp = generated ?? DateTime.now();
   final control = SchematicModel.build(provider);
   final estimate = computeRoomCost(
     model: av,
@@ -80,12 +84,14 @@ Uint8List buildRoomWorkbookBytes({
         ...powerSections(av),
       ],
       imageBuilder: image(controlPng),
+      generated: stamp,
     ),
     buildStackedReportSheet(
       sheetName: kRoomWorkbookSheets[1],
       title: title,
       sections: avFlowSections(provider, av),
       imageBuilder: image(avFlowPng),
+      generated: stamp,
     ),
     buildStackedReportSheet(
       sheetName: kRoomWorkbookSheets[2],
@@ -96,6 +102,7 @@ Uint8List buildRoomWorkbookBytes({
         'No rack frames have been drawn for this room.',
       ),
       imageBuilder: image(rackPng),
+      generated: stamp,
     ),
     buildStackedReportSheet(
       sheetName: kRoomWorkbookSheets[3],
@@ -105,6 +112,7 @@ Uint8List buildRoomWorkbookBytes({
         'Cost Estimate',
         'No devices on the diagram to price.',
       ),
+      generated: stamp,
     ),
   ]);
 }

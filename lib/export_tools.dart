@@ -102,6 +102,10 @@ Future<ProjectExport> saveProjectFolder({
   final folder = Directory(path.join(parentFolder, roomFolderName(provider)));
   await folder.create(recursive: true);
 
+  // One moment for the whole folder: every document in it is the same export,
+  // and stamps a few seconds apart would read as documents from two of them.
+  final generated = DateTime.now();
+
   final written = <String>[];
   final skipped = <String>[];
   final stem = roomFileStem(provider, '').replaceAll(RegExp(r'_+$'), '');
@@ -139,6 +143,7 @@ Future<ProjectExport> saveProjectFolder({
         controlPng: schematicPng,
         avFlowPng: avFlowPng,
         rackPng: rackPng,
+        generated: generated,
       ),
     );
   });
@@ -148,10 +153,18 @@ Future<ProjectExport> saveProjectFolder({
   final title = av.roomTitle.isNotEmpty ? av.roomTitle : control.roomTitle;
 
   await write('${named('device_report')}.txt', (f) async {
-    await f.writeAsString(renderTextReport(title, reportSections(provider, control)));
+    await f.writeAsString(renderTextReport(
+      title,
+      reportSections(provider, control),
+      generated: generated,
+    ));
   });
   await write('${named('av_report')}.txt', (f) async {
-    await f.writeAsString(renderTextReport(title, avReportSections(provider, av)));
+    await f.writeAsString(renderTextReport(
+      title,
+      avReportSections(provider, av),
+      generated: generated,
+    ));
   });
 
   final estimate = computeRoomCost(
@@ -167,7 +180,9 @@ Future<ProjectExport> saveProjectFolder({
     skipped.add('${named('cost_estimate')}.txt — nothing priced yet');
   } else {
     await write('${named('cost_estimate')}.txt', (f) async {
-      await f.writeAsString(renderTextReport(title, costSections));
+      await f.writeAsString(
+        renderTextReport(title, costSections, generated: generated),
+      );
     });
   }
 
@@ -226,7 +241,7 @@ Future<ProjectExport> saveProjectFolder({
       ..writeln(title.isEmpty ? 'Room project' : title)
       ..writeln('=' * (title.isEmpty ? 12 : title.length))
       ..writeln()
-      ..writeln('Saved ${DateTime.now().toLocal().toString().split('.').first} '
+      ..writeln('Saved ${reportTimestamp(generated)} '
           'by the Room Config Builder.')
       ..writeln()
       ..writeln('Files')
