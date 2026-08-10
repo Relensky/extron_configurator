@@ -309,6 +309,116 @@ void main() {
     });
   });
 
+  /// Not everything on the drawing is being bought. An existing display, an
+  /// owner-furnished codec, the building's network switch: all of them have to
+  /// be drawn, because the signal goes through them, and none of them belongs
+  /// on the quote.
+  group('devices marked not on the cost estimate', () {
+    test('are left off the total and reported', () {
+      final p = room();
+      p.addAvNode(device('D1', 'New display', 'Display X'));
+      p.addAvNode(device('S1', 'Existing switcher', 'Switcher Y'));
+      p.updateAvNode(
+        p.avNodeById('S1')!.copyWith(excludeFromCost: true),
+      );
+
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+      );
+
+      expect(estimate.equipment.single.model, 'Display X');
+      expect(estimate.equipmentTotal, 1000);
+      expect(estimate.grandTotal, 1000);
+      // Short on purpose is still short — the estimate says so rather than
+      // leaving the next reader hunting for the missing switcher.
+      expect(estimate.excludedLines, 1);
+      expect(estimate.excludedDevices, 1);
+      // And it is not counted as a hole in the pricing, which is a different
+      // problem with a different fix.
+      expect(estimate.unpricedLines, 0);
+      expect(estimate.isComplete, isTrue);
+    });
+
+    test('one of two identical models does not drag the other off', () {
+      final p = room();
+      p.addAvNode(device('D1', 'Existing display', 'Display X'));
+      p.addAvNode(device('D2', 'New display', 'Display X'));
+      p.updateAvNode(
+        p.avNodeById('D1')!.copyWith(excludeFromCost: true),
+      );
+
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+      );
+
+      // Two of a model where one is bought and one is not are two lines, not
+      // one of quantity two.
+      expect(estimate.equipment.single.qty, 1);
+      expect(estimate.equipmentTotal, 1000);
+      expect(estimate.excludedDevices, 1);
+    });
+
+    test('the room still owns its power, heat and rack space', () {
+      final p = room();
+      p.addAvNode(device('S1', 'Existing switcher', 'Switcher Y', watts: 90));
+      p.updateAvNode(
+        p.avNodeById('S1')!.copyWith(excludeFromCost: true, rackUnits: 2),
+      );
+
+      // Whoever paid for it, it draws current and takes two rails.
+      final node = p.avNodeById('S1')!;
+      expect(node.powerWatts, 90);
+      expect(node.rackUnits, 2);
+      expect(p.avNodes.where((n) => n.rackUnits > 0).length, 1);
+    });
+
+    test('the flag survives a round trip through the sidecar', () {
+      final p = room();
+      p.addAvNode(device('S1', 'Existing switcher', 'Switcher Y'));
+      p.updateAvNode(
+        p.avNodeById('S1')!.copyWith(excludeFromCost: true),
+      );
+
+      final back = AvNode.fromJson(p.avNodeById('S1')!.toJson());
+      expect(back.excludeFromCost, isTrue);
+      // Absent in every file written before this existed, and the default has
+      // to be "quote it" so an old room's total does not change.
+      expect(
+        AvNode.fromJson({'id': 'X', 'label': 'X'}).excludeFromCost,
+        isFalse,
+      );
+      // withId rebuilds the node field by field; a new field dropped there is
+      // silently lost on the way into the room.
+      expect(p.avNodeById('S1')!.withId('S2').excludeFromCost, isTrue);
+    });
+
+    test('the totals sheet names them', () {
+      final p = room();
+      p.addAvNode(device('D1', 'New display', 'Display X'));
+      p.addAvNode(device('S1', 'Existing switcher', 'Switcher Y'));
+      p.updateAvNode(p.avNodeById('S1')!.copyWith(excludeFromCost: true));
+
+      final totals = sectionNamed(
+        costReportSections(
+          computeRoomCost(
+            model: buildAvFlowModel(p),
+            library: catalog(),
+            settings: p.avCost,
+          ),
+        ),
+        'Totals',
+      );
+      expect(
+        totals.rows.any((r) => r[0].toString().startsWith('Not quoted')),
+        isTrue,
+      );
+    });
+  });
+
   /// The base-cost card is the last rung the estimate falls back to, and it
   /// carries both published prices for the same reason the catalog does: an
   /// early budget still gets quoted at one tier or the other.

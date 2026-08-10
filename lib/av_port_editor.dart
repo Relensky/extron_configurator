@@ -13,7 +13,30 @@ import 'av_flow_model.dart';
 ///  tab (the catalog entry every room starts from). They have to agree on
 ///  what a port is editable to, or a device would gain and lose connectors
 ///  depending on which screen you happened to open.
+///
+///  Connector order is the order the sockets are drawn down the side of the
+///  box, so getting it to match the real panel is ordinary work — and doing
+///  that a step at a time with two arrows is a lot of clicks for a sixteen-
+///  input matrix. Grab the handle instead. The arrows stay for the single-step
+///  nudge, which is still quicker than a drag.
 /// ============================================================================
+
+/// Row keys for a port list.
+///
+/// The port's own id, so a row's text field and focus travel with the port it
+/// is editing when the list is reordered rather than staying at the index.
+///
+/// Repeats get a suffix, which matters more than it looks: a reorderable list
+/// keys its children globally, so two rows claiming the same key is a crash
+/// rather than a cosmetic mix-up — and these ids come out of a catalog file
+/// people hand-edit.
+List<Key> avPortRowKeys(List<AvPort> ports, {String prefix = ''}) {
+  final seen = <String, int>{};
+  return [
+    for (final p in ports)
+      ValueKey('$prefix${p.id}#${seen[p.id] = (seen[p.id] ?? 0) + 1}'),
+  ];
+}
 
 class AvPortEditorRow extends StatelessWidget {
   final AvPort port;
@@ -26,6 +49,11 @@ class AvPortEditorRow extends StatelessWidget {
   final VoidCallback? onMoveUp;
   final VoidCallback? onMoveDown;
 
+  /// This row's index in the enclosing reorderable list, which is what a drag
+  /// has to report. Null when the list is not reorderable — then no handle is
+  /// drawn, because a grip that does nothing is worse than none.
+  final int? dragIndex;
+
   const AvPortEditorRow({
     super.key,
     required this.port,
@@ -34,6 +62,7 @@ class AvPortEditorRow extends StatelessWidget {
     this.palette,
     this.onMoveUp,
     this.onMoveDown,
+    this.dragIndex,
   });
 
   @override
@@ -42,6 +71,24 @@ class AvPortEditorRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
+          if (dragIndex != null)
+            ReorderableDragStartListener(
+              index: dragIndex!,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: Tooltip(
+                  message: 'Drag to reorder',
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.drag_indicator,
+                      size: 18,
+                      color: Theme.of(context).disabledColor,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Container(
             width: 10,
             height: 10,

@@ -765,32 +765,56 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               style: theme.textTheme.bodySmall,
             ),
           ),
-        for (int i = 0; i < ports.length; i++)
-          AvPortEditorRow(
-            key: ValueKey('${key}_${ports[i].id}'),
-            port: ports[i],
-            onChanged: (p) {
-              final next = List<AvPort>.from(ports)..[i] = p;
-              setState(() => _apply(entry.copyWith(ports: next)));
-            },
-            onDelete: () {
-              final next = List<AvPort>.from(ports)..removeAt(i);
-              setState(() => _apply(entry.copyWith(ports: next)));
-            },
-            onMoveUp: i == 0
-                ? null
-                : () {
-                    final next = List<AvPort>.from(ports);
-                    next.insert(i - 1, next.removeAt(i));
+        if (ports.isNotEmpty)
+          Builder(
+            builder: (context) {
+              final keys = avPortRowKeys(ports, prefix: '${key}_');
+              return ReorderableListView.builder(
+                // This list sits inside the entry page's own scroll view, so
+                // it lays itself out at full height and does not scroll.
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                // The row draws its own grip; the stock desktop handle floats
+                // over the bottom-right of the tile, on top of the delete
+                // button.
+                buildDefaultDragHandles: false,
+                itemCount: ports.length,
+                // onReorderItem hands over an index already corrected for the
+                // dragged row having left the list.
+                onReorderItem: (from, to) {
+                  final next = List<AvPort>.from(ports);
+                  next.insert(to, next.removeAt(from));
+                  setState(() => _apply(entry.copyWith(ports: next)));
+                },
+                itemBuilder: (context, i) => AvPortEditorRow(
+                  key: keys[i],
+                  dragIndex: i,
+                  port: ports[i],
+                  onChanged: (p) {
+                    final next = List<AvPort>.from(ports)..[i] = p;
                     setState(() => _apply(entry.copyWith(ports: next)));
                   },
-            onMoveDown: i == ports.length - 1
-                ? null
-                : () {
-                    final next = List<AvPort>.from(ports);
-                    next.insert(i + 1, next.removeAt(i));
+                  onDelete: () {
+                    final next = List<AvPort>.from(ports)..removeAt(i);
                     setState(() => _apply(entry.copyWith(ports: next)));
                   },
+                  onMoveUp: i == 0
+                      ? null
+                      : () {
+                          final next = List<AvPort>.from(ports);
+                          next.insert(i - 1, next.removeAt(i));
+                          setState(() => _apply(entry.copyWith(ports: next)));
+                        },
+                  onMoveDown: i == ports.length - 1
+                      ? null
+                      : () {
+                          final next = List<AvPort>.from(ports);
+                          next.insert(i + 1, next.removeAt(i));
+                          setState(() => _apply(entry.copyWith(ports: next)));
+                        },
+                ),
+              );
+            },
           ),
         const SizedBox(height: 24),
         Row(

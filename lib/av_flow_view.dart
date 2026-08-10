@@ -1782,6 +1782,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
     final ports = List<AvPort>.from(node.ports);
     PowerSource powerSource = node.powerSource;
+    bool excludeFromCost = node.excludeFromCost;
 
     final result = await showDialog<String>(
       context: context,
@@ -1906,7 +1907,53 @@ class _AvFlowViewState extends State<AvFlowView> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
+                // Drawn but not bought. The box still has to be on the page —
+                // the signal goes through it and the rack has to hold it — and
+                // it has no business on the quote.
+                Row(
+                  children: [
+                    Checkbox(
+                      value: excludeFromCost,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) =>
+                          setLocal(() => excludeFromCost = v ?? false),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () =>
+                            setLocal(() => excludeFromCost = !excludeFromCost),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                text: 'Not on the cost estimate',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              TextSpan(
+                                text: '  — existing gear, owner-furnished, or '
+                                    'somebody else\'s contract. It stays on '
+                                    'the diagram, the cable schedule, the rack '
+                                    'and the power report; only the money '
+                                    'comes off.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(ctx).hintColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Text(
@@ -1962,30 +2009,50 @@ class _AvFlowViewState extends State<AvFlowView> {
                 Expanded(
                   child: ports.isEmpty
                       ? const Center(child: Text('No connectors defined.'))
-                      : ListView.builder(
-                          itemCount: ports.length,
-                          itemBuilder: (ctx, i) => AvPortEditorRow(
-                            // Keyed on the port so reordering moves each row's
-                            // field state with it rather than leaving the
-                            // values behind at the old index.
-                            key: ValueKey(ports[i].id),
-                            port: ports[i],
-                            palette: palette,
-                            onChanged: (p) => setLocal(() => ports[i] = p),
-                            onDelete: () => setLocal(() => ports.removeAt(i)),
-                            onMoveUp: i == 0
-                                ? null
-                                : () => setLocal(() {
-                                    final p = ports.removeAt(i);
-                                    ports.insert(i - 1, p);
-                                  }),
-                            onMoveDown: i == ports.length - 1
-                                ? null
-                                : () => setLocal(() {
-                                    final p = ports.removeAt(i);
-                                    ports.insert(i + 1, p);
-                                  }),
-                          ),
+                      : Builder(
+                          builder: (ctx) {
+                            // Keyed on the port so a drag carries each row's
+                            // text field and focus with it, rather than
+                            // leaving the values behind at the old index.
+                            final keys = avPortRowKeys(ports);
+                            return ReorderableListView.builder(
+                              // The stock desktop handle is an icon floated
+                              // over the bottom-right of the tile, which on a
+                              // row this dense lands on top of the delete
+                              // button. The row draws its own grip instead.
+                              buildDefaultDragHandles: false,
+                              itemCount: ports.length,
+                              // onReorderItem, not onReorder: it hands over an
+                              // index already corrected for the dragged row
+                              // having left the list, so the off-by-one the
+                              // old callback made every caller write by hand
+                              // cannot be got wrong.
+                              onReorderItem: (from, to) => setLocal(
+                                () => ports.insert(to, ports.removeAt(from)),
+                              ),
+                              itemBuilder: (ctx, i) => AvPortEditorRow(
+                                key: keys[i],
+                                dragIndex: i,
+                                port: ports[i],
+                                palette: palette,
+                                onChanged: (p) => setLocal(() => ports[i] = p),
+                                onDelete: () =>
+                                    setLocal(() => ports.removeAt(i)),
+                                onMoveUp: i == 0
+                                    ? null
+                                    : () => setLocal(() {
+                                        final p = ports.removeAt(i);
+                                        ports.insert(i - 1, p);
+                                      }),
+                                onMoveDown: i == ports.length - 1
+                                    ? null
+                                    : () => setLocal(() {
+                                        final p = ports.removeAt(i);
+                                        ports.insert(i + 1, p);
+                                      }),
+                              ),
+                            );
+                          },
                         ),
                 ),
               ],
@@ -2041,6 +2108,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       powerWatts: double.tryParse(wattsController.text.trim()) ?? 0,
       btuPerHour: double.tryParse(btuController.text.trim()) ?? 0,
       powerSource: powerSource,
+      excludeFromCost: excludeFromCost,
       ports: ports,
     );
 
@@ -2533,6 +2601,21 @@ class _AvNodeBox extends StatelessWidget {
                               ],
                             ),
                           ),
+                          // Marked on the box itself, because "why is the
+                          // total short" is a question asked at the diagram,
+                          // not at the dialog it was set in.
+                          if (node.excludeFromCost)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 2),
+                              child: Tooltip(
+                                message: 'Not on the cost estimate',
+                                child: Icon(
+                                  Icons.money_off,
+                                  size: 13,
+                                  color: theme.hintColor,
+                                ),
+                              ),
+                            ),
                           if (racked)
                             Padding(
                               padding: const EdgeInsets.only(right: 2),

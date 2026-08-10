@@ -333,6 +333,10 @@ class DeviceGroup {
   int get qty => nodes.length;
   String get model => first.model.trim();
 
+  /// True when these are drawn but not bought — see [AvNode.excludeFromCost].
+  /// A group is all one or all the other, because the key says so.
+  bool get excludeFromCost => first.excludeFromCost;
+
   /// One name, or every name when several devices share the model — the
   /// pack list is read to find the boxes, so the names have to be there.
   String get label =>
@@ -355,9 +359,13 @@ class DeviceGroup {
 List<DeviceGroup> groupDevices(AvFlowModel model) {
   final grouped = <String, List<AvNode>>{};
   for (final node in model.nodes) {
-    final key = node.model.trim().isEmpty
+    final base = node.model.trim().isEmpty
         ? 'device:${node.id}'
         : 'model:${node.model.trim().toLowerCase()}';
+    // Two of the same model where one is being bought and one is already in
+    // the room are two lines, not one of quantity two — merging them would
+    // put the existing unit on the quote or take the new one off it.
+    final key = node.excludeFromCost ? 'nocost:$base' : base;
     grouped.putIfAbsent(key, () => []).add(node);
   }
   return [
@@ -593,6 +601,13 @@ class CostEstimate {
   /// the total can be labeled a budget rather than a quote.
   final int estimatedLines;
 
+  /// Devices on the diagram deliberately kept off this estimate — existing
+  /// gear, owner-furnished kit, somebody else's contract. Reported rather than
+  /// silent: a total that is short on purpose still has to say so, or the next
+  /// person to read it goes looking for the missing switcher.
+  final int excludedLines;
+  final int excludedDevices;
+
   /// Lines the catalog could only price at the OTHER tier. Worth a look before
   /// the total goes anywhere: an education job with list prices in it reads
   /// high, and the reverse reads low.
@@ -625,6 +640,8 @@ class CostEstimate {
     required this.unpricedDevices,
     required this.estimatedLines,
     this.otherTierLines = 0,
+    this.excludedLines = 0,
+    this.excludedDevices = 0,
   });
 
   bool get isComplete => unpricedLines == 0 && unratedLabor == 0;
@@ -657,11 +674,21 @@ CostEstimate computeRoomCost({
   int unpricedDevices = 0;
   int estimatedLines = 0;
   int otherTierLines = 0;
+  int excludedLines = 0;
+  int excludedDevices = 0;
 
   final groups = groupDevices(model)
     ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
 
   for (final group in groups) {
+    // Drawn but not bought. Off the estimate entirely rather than listed at
+    // zero: a line of nothing on a quote is a question, and the count below
+    // answers it once instead of once per row.
+    if (group.excludeFromCost) {
+      excludedLines++;
+      excludedDevices += group.qty;
+      continue;
+    }
     final catalog = library.templateForModel(group.model);
     final override = settings.priceOverrides[group.key];
 
@@ -1000,6 +1027,8 @@ CostEstimate computeRoomCost({
     unpricedDevices: unpricedDevices,
     estimatedLines: estimatedLines,
     otherTierLines: otherTierLines,
+    excludedLines: excludedLines,
+    excludedDevices: excludedDevices,
   );
 }
 
@@ -1239,6 +1268,15 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             '${estimate.unpricedDevices == 1 ? '' : 's'} '
             'on ${estimate.unpricedLines} line'
             '${estimate.unpricedLines == 1 ? '' : 's'}',
+      ],
+    if (estimate.excludedDevices > 0)
+      [
+        'Not quoted — on the drawing, not on this contract',
+        '${estimate.excludedDevices} device'
+            '${estimate.excludedDevices == 1 ? '' : 's'} '
+            'on ${estimate.excludedLines} line'
+            '${estimate.excludedLines == 1 ? '' : 's'} marked as existing, '
+            'owner-furnished or by others',
       ],
     if (estimate.unratedLabor > 0)
       [

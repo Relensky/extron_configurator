@@ -502,6 +502,23 @@ class AvNode {
   /// Free-text note carried into the pack list.
   final String note;
 
+  /// Keep this device off the cost estimate.
+  ///
+  /// Not everything on the diagram is being bought. A display the room already
+  /// has, a codec the customer is supplying, the building's network switch, a
+  /// box somebody else's contract covers — all of them have to be DRAWN,
+  /// because the signal goes through them and the cable schedule and the rack
+  /// elevation are wrong without them, and none of them belongs on the quote.
+  ///
+  /// Deleting them from the canvas to keep the total honest was the only way
+  /// to do this before, and it costs the drawing the very connections it
+  /// exists to record. The estimate leaves these out and says how many it left
+  /// out, so a total that reads low reads low for a stated reason.
+  ///
+  /// They still count everywhere else — power, heat, rack space and the pack
+  /// list are facts about the room, not about the invoice.
+  final bool excludeFromCost;
+
   const AvNode({
     required this.id,
     required this.label,
@@ -515,6 +532,7 @@ class AvNode {
     this.kind = AvNodeKind.device,
     this.powerSource = PowerSource.unspecified,
     this.note = '',
+    this.excludeFromCost = false,
   });
 
   /// Numbered jacks rather than a device's connectors — a wall box OR a patch
@@ -552,6 +570,7 @@ class AvNode {
     kind: kind,
     powerSource: powerSource,
     note: note,
+    excludeFromCost: excludeFromCost,
   );
 
   AvNode copyWith({
@@ -566,6 +585,7 @@ class AvNode {
     AvNodeKind? kind,
     PowerSource? powerSource,
     String? note,
+    bool? excludeFromCost,
   }) => AvNode(
     id: id,
     label: label ?? this.label,
@@ -579,6 +599,7 @@ class AvNode {
     kind: kind ?? this.kind,
     powerSource: powerSource ?? this.powerSource,
     note: note ?? this.note,
+    excludeFromCost: excludeFromCost ?? this.excludeFromCost,
   );
 
   List<AvPort> get leftPorts =>
@@ -704,6 +725,7 @@ class AvNode {
     if (kind != AvNodeKind.device) 'kind': kind.name,
     if (powerSource != PowerSource.unspecified) 'power': powerSource.name,
     if (note.isNotEmpty) 'note': note,
+    if (excludeFromCost) 'excludeFromCost': true,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
 
@@ -722,6 +744,7 @@ class AvNode {
     kind: nodeKindFromName(json['kind']?.toString()),
     powerSource: powerSourceFromName(json['power']?.toString()),
     note: json['note']?.toString() ?? '',
+    excludeFromCost: json['excludeFromCost'] == true,
     ports: [
       for (final p in (json['ports'] as List? ?? []))
         if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),

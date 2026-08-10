@@ -705,6 +705,32 @@ class AppStateProvider extends ChangeNotifier {
   /// stays silent.
   bool lastLoadHadChanges = false;
 
+  /// True once the user has dealt with that conversion — read the log and
+  /// acknowledged it, or been through the preview and applied their choices.
+  ///
+  /// Separate from [lastLoadHadChanges] because the two answer different
+  /// questions. "Did this file need converting?" stays true for the session,
+  /// and keeps the log reachable from the toolbar. "Is there anything still
+  /// wanting attention?" is what the red count on the button is for, and a
+  /// count that stays up after the work is done stops meaning anything.
+  ///
+  /// Reset by the next load, so reopening a file that still needs converting
+  /// lights the count again.
+  bool conversionAcknowledged = false;
+
+  /// Whether the toolbar's Convert button should still be showing its count.
+  bool get conversionNeedsAttention =>
+      lastLoadHadChanges && !conversionAcknowledged;
+
+  /// Marks the conversion as dealt with and repaints the toolbar. Called when
+  /// the acknowledgement dialog is closed or the preview's choices are
+  /// applied; both mean the same thing to the button.
+  void acknowledgeConversion() {
+    if (conversionAcknowledged) return;
+    conversionAcknowledged = true;
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------
   //  CONVERSION PROVENANCE
   //  Filled at the end of every load: where each value in the working config
@@ -817,6 +843,7 @@ class AppStateProvider extends ChangeNotifier {
       roomConfig = jsonDecode(contents);
       systemLogs.clear();
       lastLoadHadChanges = false;
+      conversionAcknowledged = false;
       // Nothing was converted, so there is no provenance to color by
       _clearConversionProvenance();
       _bumpConfigRevision(); // Every field now shows the on-disk value
@@ -3473,6 +3500,9 @@ class AppStateProvider extends ChangeNotifier {
     // The acknowledgement dialog keys off this: a clean re-load of an
     // already-migrated file (backup + OK lines only) shows no dialog.
     lastLoadHadChanges = hasChanges;
+    // A fresh load is a fresh conversion to deal with, so the count comes
+    // back — which is the other half of clearing it when the work is done.
+    conversionAcknowledged = false;
     if (hasChanges) {
       String logBase = changeLogBaseName ?? backupBaseName ?? '';
       if (logBase.isEmpty) {

@@ -161,7 +161,14 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
       first.powerWatts <= 0 ? '' : first.powerWatts,
       first.effectiveBtu <= 0 ? '' : first.effectiveBtu.round(),
       module.isEmpty ? 'none' : module,
-      first.fromConfig ? 'Room config' : 'Added manually',
+      // The pack list keeps a device the estimate leaves out: it is in the
+      // room and it has to be found, wired and racked whoever paid for it.
+      // Saying so here is what stops the two sheets looking like they
+      // disagree about the same box.
+      [
+        first.fromConfig ? 'Room config' : 'Added manually',
+        if (first.excludeFromCost) 'not quoted',
+      ].join(' · '),
       group.notes,
     ]);
   }

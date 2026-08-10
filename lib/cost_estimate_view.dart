@@ -1928,6 +1928,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
                 ),
               ),
+            // Short on purpose is still short: said plainly, and in the plain
+            // text colour rather than the error one, because this one is a
+            // decision somebody made rather than something missing.
+            if (estimate.excludedDevices > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Not quoted: ${estimate.excludedDevices} device'
+                  '${estimate.excludedDevices == 1 ? '' : 's'} on the diagram '
+                  '${estimate.excludedDevices == 1 ? 'is' : 'are'} marked as '
+                  'existing, owner-furnished or by others.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
             if (estimate.unratedLabor > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 8),

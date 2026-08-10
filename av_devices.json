@@ -57703,7 +57703,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1908-01",
       "category": "Control Systems",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 1210.0,
       "notes": "IP Link Pro Expansion Interface — Serial, IR/S, Relays, D I/O, eBUS",
       "ports": [
@@ -57763,7 +57763,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1956-01",
       "category": "Control Systems",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 1940.0,
       "notes": "IP Link Pro Expansion Interface — Four 100/240 VAC IEC Outlets",
       "ports": [
@@ -57823,7 +57823,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1928-01",
       "category": "Control Systems",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 1250.0,
       "notes": "Control System Power Expansion Interface — Eight 12V Captive Screw Outlets",
       "ports": [
@@ -57904,7 +57904,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1907-01",
       "category": "Control Systems",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 1210.0,
       "notes": "IP Link Pro Expansion Interface — D I/O, Relays, Power",
       "ports": [
@@ -57936,7 +57936,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1905-01",
       "category": "Control Systems",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 610.0,
       "notes": "IP Link Pro Expansion Interface — Two Serial Ports",
       "ports": [
@@ -57961,7 +57961,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1906-01",
       "category": "Control Systems",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 1100.0,
       "notes": "IP Link Pro Expansion Interface — Five Serial Ports",
       "ports": [

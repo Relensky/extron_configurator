@@ -494,13 +494,25 @@ class _MainDashboardState extends State<MainDashboard> {
           // "does this room need converting?".
           IconButton(
             icon: Badge(
-              isLabelVisible: provider.lastLoadHadChanges,
+              // The count is "there is something here to deal with", not "this
+              // file was once converted". Once the log has been acknowledged
+              // or the preview applied it comes down, and the next load of a
+              // file that needs converting puts it back.
+              isLabelVisible: provider.conversionNeedsAttention,
               label: Text('${provider.conversionChanges.length}'),
               child: const Icon(Icons.compare_arrows),
             ),
-            tooltip: provider.lastLoadHadChanges
-                ? 'Convert — review the changes this file needs'
-                : 'Nothing to convert in this file',
+            // The button itself stays live for the whole session: the log is
+            // worth being able to reread, and greying it out the moment it was
+            // acknowledged would take that away to hide a number.
+            tooltip: switch ((
+              provider.lastLoadHadChanges,
+              provider.conversionAcknowledged,
+            )) {
+              (false, _) => 'Nothing to convert in this file',
+              (true, false) => 'Convert — review the changes this file needs',
+              (true, true) => 'Conversion reviewed — open the log again',
+            },
             onPressed: provider.lastLoadHadChanges
                 ? () => _showMigrationLogDialog(context, provider.systemLogs)
                 : null,
@@ -1028,7 +1040,10 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
                     await showConversionPreviewDialog(ctx, provider);
                 // Choices are applied inside the preview; closing the
                 // acknowledgement too avoids re-confirming the same load.
-                if (applied == true && ctx.mounted) Navigator.of(ctx).pop();
+                if (applied == true) {
+                  provider.acknowledgeConversion();
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                }
               },
             ),
           // DENY: throw away the key-mapping/migration changes and reload the
@@ -1050,7 +1065,12 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
             child: const Text('Use Original (discard changes)'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () {
+              // Acknowledging IS dealing with it: the changes stay, and the
+              // toolbar stops flagging them.
+              ctx.read<AppStateProvider>().acknowledgeConversion();
+              Navigator.of(ctx).pop();
+            },
             child: const Text('Acknowledge'),
           ),
         ],
