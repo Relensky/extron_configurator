@@ -12,11 +12,15 @@ import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
+import 'av_port_editor.dart';
 import 'av_rack_view.dart';
 import 'color_wheel_picker.dart';
+import 'cost_estimate.dart';
+import 'cost_estimate_view.dart';
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'layout_tools.dart';
 import 'report_tools.dart';
+import 'room_workbook.dart';
 import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
 
@@ -45,7 +49,7 @@ import 'xlsx_writer.dart';
 /// ============================================================================
 
 /// Which page of the tab is showing.
-enum AvPage { flow, racks }
+enum AvPage { flow, racks, cost }
 
 // ---------------------------------------------------------------------------
 //  MODEL BUILDING
@@ -315,6 +319,7 @@ class _AvFlowViewState extends State<AvFlowView> {
         ports: template.ports,
         fromConfig: true,
         rackUnits: template.rackUnits,
+        powerWatts: template.powerWatts,
       );
       provider.addAvNode(node);
       columnY[col] = y + node.height + 30;
@@ -574,6 +579,39 @@ class _AvFlowViewState extends State<AvFlowView> {
     }
   }
 
+  /// The whole job in one book: control, AV flow, racks, cost. The diagram
+  /// image can only come from the page currently on screen, so the sheet it
+  /// belongs to gets it and the others come out as tables — switching to the
+  /// Racks page and exporting again is what illustrates that one.
+  Future<void> _exportWorkbook(AppStateProvider provider) async {
+    final model = buildAvFlowModel(provider);
+
+    String? outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Save Room Workbook',
+      fileName: '${_fileStem(provider, 'room_workbook')}.xlsx',
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+    );
+    if (outputFile == null) return;
+    if (!outputFile.toLowerCase().endsWith('.xlsx')) outputFile += '.xlsx';
+
+    try {
+      final png = _page == AvPage.cost
+          ? null
+          : await captureBoundary(_diagramKey, pixelRatio: 1.5);
+      final bytes = buildRoomWorkbookBytes(
+        provider: provider,
+        av: model,
+        avFlowPng: _page == AvPage.flow ? png : null,
+        rackPng: _page == AvPage.racks ? png : null,
+      );
+      await File(outputFile).writeAsBytes(bytes);
+      _savedSnack(provider, 'Room workbook', outputFile);
+    } catch (e) {
+      _snack('Failed to save the workbook: $e', error: true);
+    }
+  }
+
   Future<void> _saveDiagram(AppStateProvider provider) async {
     // A wizard-built session has no file for the sidecar to sit beside yet.
     if (provider.avFlowSidecarPath.isEmpty) {
@@ -617,22 +655,11 @@ class _AvFlowViewState extends State<AvFlowView> {
         Expanded(
           child: Row(
             children: [
-              Expanded(
-                child: _page == AvPage.racks
-                    ? AvRackView(captureKey: _diagramKey, editMode: _editMode)
-                    : InteractiveViewer(
-                        transformationController: _transform,
-                        constrained: false,
-                        minScale: 0.25,
-                        maxScale: 3.0,
-                        boundaryMargin: const EdgeInsets.all(400),
-                        child: RepaintBoundary(
-                          key: _diagramKey,
-                          child: _buildCanvas(provider, model, theme),
-                        ),
-                      ),
-              ),
-              if (_showPalette) ...[
+              Expanded(child: _buildPage(provider, model, theme)),
+              // The cost page is a full-width table; the device palette is
+              // about drawing, and squeezing it in beside the estimate only
+              // costs the prices their column width.
+              if (_showPalette && _page != AvPage.cost) ...[
                 const VerticalDivider(width: 1, thickness: 1),
                 _buildPalette(provider, model),
               ],
@@ -643,6 +670,34 @@ class _AvFlowViewState extends State<AvFlowView> {
           _buildCablePanel(provider, model),
       ],
     );
+  }
+
+  /// The selected page. Only the two diagram pages carry [_diagramKey] — the
+  /// PNG capture and the workbook's diagram image both come off whichever one
+  /// is on screen, and the cost page has nothing to draw.
+  Widget _buildPage(
+    AppStateProvider provider,
+    AvFlowModel model,
+    ThemeData theme,
+  ) {
+    switch (_page) {
+      case AvPage.racks:
+        return AvRackView(captureKey: _diagramKey, editMode: _editMode);
+      case AvPage.cost:
+        return CostEstimateView(model: model);
+      case AvPage.flow:
+        return InteractiveViewer(
+          transformationController: _transform,
+          constrained: false,
+          minScale: 0.25,
+          maxScale: 3.0,
+          boundaryMargin: const EdgeInsets.all(400),
+          child: RepaintBoundary(
+            key: _diagramKey,
+            child: _buildCanvas(provider, model, theme),
+          ),
+        );
+    }
   }
 
   Widget _buildToolbar(AppStateProvider provider, AvFlowModel model) {
@@ -666,6 +721,11 @@ class _AvFlowViewState extends State<AvFlowView> {
                 value: AvPage.racks,
                 icon: Icon(Icons.view_day, size: 18),
                 label: Text('Racks'),
+              ),
+              ButtonSegment(
+                value: AvPage.cost,
+                icon: Icon(Icons.request_quote_outlined, size: 18),
+                label: Text('Cost'),
               ),
             ],
             selected: {_page},
@@ -701,12 +761,13 @@ class _AvFlowViewState extends State<AvFlowView> {
                 _pendingPort = null;
               }),
             ),
-          FilterChip(
-            avatar: const Icon(Icons.view_sidebar, size: 18),
-            label: Text('Devices (${model.unplaced.length})'),
-            selected: _showPalette,
-            onSelected: (v) => setState(() => _showPalette = v),
-          ),
+          if (_page != AvPage.cost)
+            FilterChip(
+              avatar: const Icon(Icons.view_sidebar, size: 18),
+              label: Text('Devices (${model.unplaced.length})'),
+              selected: _showPalette,
+              onSelected: (v) => setState(() => _showPalette = v),
+            ),
           if (_editMode && _page == AvPage.flow)
             OutlinedButton.icon(
               icon: const Icon(Icons.auto_fix_high, size: 18),
@@ -723,18 +784,26 @@ class _AvFlowViewState extends State<AvFlowView> {
             label: const Text('Save AV Flow'),
             onPressed: () => _saveDiagram(provider),
           ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.image, size: 18),
-            label: const Text('Export PNG'),
-            onPressed: () => _exportPng(provider),
-          ),
+          if (_page != AvPage.cost)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.image, size: 18),
+              label: const Text('Export PNG'),
+              onPressed: () => _exportPng(provider),
+            ),
           PopupMenuButton<String>(
-            tooltip: 'Export cable schedule & pack list',
-            onSelected: (v) => v == 'copy'
-                ? _copyReportText(provider)
-                : _exportReport(provider, v == 'xlsx'),
+            tooltip: 'Export the room report',
+            onSelected: (v) => switch (v) {
+              'copy' => _copyReportText(provider),
+              'workbook' => _exportWorkbook(provider),
+              _ => _exportReport(provider, v == 'xlsx'),
+            },
             itemBuilder: (ctx) => const [
-              PopupMenuItem(value: 'xlsx', child: Text('Excel report (.xlsx)')),
+              PopupMenuItem(
+                value: 'workbook',
+                child: Text('Full room workbook (.xlsx, 4 sheets)'),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'xlsx', child: Text('AV report (.xlsx)')),
               PopupMenuItem(
                 value: 'txt',
                 child: Text('Plain text report (.txt)'),
@@ -1200,6 +1269,7 @@ class _AvFlowViewState extends State<AvFlowView> {
         ports: template.ports,
         fromConfig: true,
         rackUnits: template.rackUnits,
+        powerWatts: template.powerWatts,
       ),
     );
   }
@@ -1292,6 +1362,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               ),
             ],
         rackUnits: template?.rackUnits ?? 0,
+        powerWatts: template?.powerWatts ?? 0,
       ),
     );
   }
@@ -1546,6 +1617,9 @@ class _AvFlowViewState extends State<AvFlowView> {
     final rackUnitsController = TextEditingController(
       text: node.rackUnits.toString(),
     );
+    final wattsController = TextEditingController(
+      text: node.powerWatts <= 0 ? '' : trimNumber(node.powerWatts),
+    );
     final ports = List<AvPort>.from(node.ports);
     PowerSource powerSource = node.powerSource;
 
@@ -1589,6 +1663,28 @@ class _AvFlowViewState extends State<AvFlowView> {
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Seeded from the catalog, editable here: the same model
+                    // can sit behind a different supply room to room, and the
+                    // power estimate is only as good as this number.
+                    SizedBox(
+                      width: 110,
+                      child: TextField(
+                        controller: wattsController,
+                        decoration: const InputDecoration(
+                          labelText: 'Watts',
+                          helperText: 'blank = unknown',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[0-9.]'),
+                          ),
                         ],
                       ),
                     ),
@@ -1651,23 +1747,25 @@ class _AvFlowViewState extends State<AvFlowView> {
                           ports
                             ..clear()
                             ..addAll(template.ports);
+                          // The catalog's rack height and draw come back with
+                          // the connectors — they describe the same box, and
+                          // resetting half of it is how a device ends up 2U
+                          // with a 1U model's ports.
+                          rackUnitsController.text = template.rackUnits
+                              .toString();
+                          if (template.powerWatts > 0) {
+                            wattsController.text = trimNumber(
+                              template.powerWatts,
+                            );
+                          }
                         });
                       },
                     ),
                     TextButton.icon(
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Add port'),
-                      onPressed: () => setLocal(
-                        () => ports.add(
-                          AvPort(
-                            id: 'port_${DateTime.now().microsecondsSinceEpoch}',
-                            label: 'NEW ${ports.length + 1}',
-                            signal: SignalType.hdmi,
-                            direction: PortDirection.input,
-                            side: PortSide.left,
-                          ),
-                        ),
-                      ),
+                      onPressed: () =>
+                          setLocal(() => ports.add(newAvPort(index: ports.length))),
                     ),
                   ],
                 ),
@@ -1677,8 +1775,13 @@ class _AvFlowViewState extends State<AvFlowView> {
                       ? const Center(child: Text('No connectors defined.'))
                       : ListView.builder(
                           itemCount: ports.length,
-                          itemBuilder: (ctx, i) => _portEditorRow(
-                            ports[i],
+                          itemBuilder: (ctx, i) => AvPortEditorRow(
+                            // Keyed on the port so reordering moves each row's
+                            // field state with it rather than leaving the
+                            // values behind at the old index.
+                            key: ValueKey(ports[i].id),
+                            port: ports[i],
+                            palette: palette,
                             onChanged: (p) => setLocal(() => ports[i] = p),
                             onDelete: () => setLocal(() => ports.removeAt(i)),
                             onMoveUp: i == 0
@@ -1708,8 +1811,12 @@ class _AvFlowViewState extends State<AvFlowView> {
               ),
             ),
             TextButton(
+              onPressed: () => Navigator.of(ctx).pop('catalog'),
+              child: const Text('Save to catalog'),
+            ),
+            TextButton(
               onPressed: () => Navigator.of(ctx).pop('copy'),
-              child: const Text('Copy as av_devices.json'),
+              child: const Text('Copy as JSON'),
             ),
             // No Spacer here: AlertDialog lays its actions out in an
             // OverflowBar, which is not a Flex, so an Expanded inside it
@@ -1742,25 +1849,53 @@ class _AvFlowViewState extends State<AvFlowView> {
       model: modelController.text.trim(),
       note: noteController.text.trim(),
       rackUnits: int.tryParse(rackUnitsController.text.trim()) ?? 0,
+      powerWatts: double.tryParse(wattsController.text.trim()) ?? 0,
       powerSource: powerSource,
       ports: ports,
     );
 
-    if (result == 'copy') {
+    if (result == 'catalog' || result == 'copy') {
       final entry = AvDeviceTemplate(
         model: updated.model.isEmpty ? updated.label : updated.model,
         rackUnits: updated.rackUnits,
+        powerWatts: updated.powerWatts,
         ports: updated.ports,
       );
-      await Clipboard.setData(
-        ClipboardData(
-          text: const JsonEncoder.withIndent('  ').convert(entry.toJson()),
-        ),
-      );
-      _snack(
-        'Library entry copied — paste it into the "devices" array of '
-        'av_devices.json.',
-      );
+      if (result == 'copy') {
+        await Clipboard.setData(
+          ClipboardData(
+            text: const JsonEncoder.withIndent('  ').convert(entry.toJson()),
+          ),
+        );
+        _snack(
+          'Catalog entry copied — paste it into the "devices" array of '
+          'av_devices.json.',
+        );
+      } else {
+        // Straight into the catalog, keeping whatever price and part number
+        // that model already carries: this button is about the connectors and
+        // the physical facts, not about repricing the model.
+        final existing = provider.avDeviceLibrary.templateForModel(entry.model);
+        provider.avDeviceLibrary.upsert(
+          existing == null
+              ? entry
+              : existing.copyWith(
+                  rackUnits: entry.rackUnits,
+                  powerWatts: entry.powerWatts > 0
+                      ? entry.powerWatts
+                      : existing.powerWatts,
+                  ports: entry.ports,
+                ),
+        );
+        final saved = await provider.saveAvDeviceLibrary();
+        _snack(
+          saved.isEmpty
+              ? 'Could not save the device catalog.'
+              : '${entry.model} saved to the device catalog '
+                    '(${path.basename(saved)}).',
+          error: saved.isEmpty,
+        );
+      }
     }
 
     // Cables referencing a port that was deleted or re-id'd disappear on the
@@ -1796,162 +1931,6 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// change from the Colors dialog while a port editor is open.
   Map<SignalType, Color> get palette =>
       context.read<AppStateProvider>().avSignalColors;
-
-  /// Tight icon button for the port rows — the stock 48px ones plus the
-  /// fields no longer fit across the dialog.
-  Widget _rowIcon(
-    IconData icon,
-    String tooltip,
-    VoidCallback? onPressed, {
-    bool danger = false,
-  }) {
-    return IconButton(
-      icon: Icon(icon, size: 18),
-      color: danger ? Colors.red.shade400 : null,
-      onPressed: onPressed,
-      tooltip: tooltip,
-      visualDensity: VisualDensity.compact,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-    );
-  }
-
-  Widget _portEditorRow(
-    AvPort port, {
-    required ValueChanged<AvPort> onChanged,
-    required VoidCallback onDelete,
-    VoidCallback? onMoveUp,
-    VoidCallback? onMoveDown,
-  }) {
-    return Padding(
-      // Keyed on the port so reordering moves each row's field state with it
-      // rather than leaving the values behind at the old index.
-      key: ValueKey(port.id),
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: signalColor(port.signal, palette),
-              shape: BoxShape.circle,
-            ),
-          ),
-          // Flexible, not fixed: the fixed widths used to add up to more than
-          // the dialog, which pushed the delete button off the right edge
-          // where it could not be seen OR clicked.
-          Expanded(
-            child: _PortLabelField(
-              portId: port.id,
-              initialLabel: port.label,
-              onChanged: (v) => onChanged(port.copyWith(label: v)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 150,
-            child: DropdownButtonFormField<SignalType>(
-              initialValue: port.signal,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final s in SignalType.values)
-                  DropdownMenuItem(
-                    value: s,
-                    child: Text(
-                      kSignalLabels[s] ?? s.name,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-              ],
-              onChanged: (v) =>
-                  v == null ? null : onChanged(port.copyWith(signal: v)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 104,
-            child: DropdownButtonFormField<PortDirection>(
-              initialValue: port.direction,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: PortDirection.input,
-                  child: Text('Input', style: TextStyle(fontSize: 12)),
-                ),
-                DropdownMenuItem(
-                  value: PortDirection.output,
-                  child: Text('Output', style: TextStyle(fontSize: 12)),
-                ),
-                DropdownMenuItem(
-                  value: PortDirection.bidirectional,
-                  child: Text('Both', style: TextStyle(fontSize: 12)),
-                ),
-              ],
-              onChanged: (v) => v == null
-                  ? null
-                  : onChanged(
-                      port.copyWith(
-                        direction: v,
-                        // Keep the box readable: an output that stays on the
-                        // left reads as an input at a glance.
-                        side: v == PortDirection.output
-                            ? PortSide.right
-                            : (port.side == PortSide.right
-                                  ? PortSide.left
-                                  : port.side),
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 96,
-            child: DropdownButtonFormField<PortSide>(
-              initialValue: port.side,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: PortSide.left,
-                  child: Text('Left', style: TextStyle(fontSize: 12)),
-                ),
-                DropdownMenuItem(
-                  value: PortSide.right,
-                  child: Text('Right', style: TextStyle(fontSize: 12)),
-                ),
-                DropdownMenuItem(
-                  value: PortSide.top,
-                  child: Text('Top', style: TextStyle(fontSize: 12)),
-                ),
-                DropdownMenuItem(
-                  value: PortSide.bottom,
-                  child: Text('Bottom', style: TextStyle(fontSize: 12)),
-                ),
-              ],
-              onChanged: (v) =>
-                  v == null ? null : onChanged(port.copyWith(side: v)),
-            ),
-          ),
-          _rowIcon(Icons.arrow_upward, 'Move up', onMoveUp),
-          _rowIcon(Icons.arrow_downward, 'Move down', onMoveDown),
-          _rowIcon(Icons.delete_outline, 'Delete port', onDelete, danger: true),
-        ],
-      ),
-    );
-  }
 
   // --- cable list ---------------------------------------------------------
 
@@ -2208,56 +2187,6 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
-}
-
-/// The port editor's name field. It owns its controller so typing doesn't
-/// rebuild the text out from under the cursor — the row above it rebuilds on
-/// every keystroke to keep the live port list in sync.
-class _PortLabelField extends StatefulWidget {
-  final String portId;
-  final String initialLabel;
-  final ValueChanged<String> onChanged;
-
-  const _PortLabelField({
-    required this.portId,
-    required this.initialLabel,
-    required this.onChanged,
-  });
-
-  @override
-  State<_PortLabelField> createState() => _PortLabelFieldState();
-}
-
-class _PortLabelFieldState extends State<_PortLabelField> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialLabel,
-  );
-
-  @override
-  void didUpdateWidget(covariant _PortLabelField old) {
-    super.didUpdateWidget(old);
-    // Only when this row now represents a DIFFERENT port (Reset from library
-    // replaces the whole list) — never on the user's own keystrokes.
-    if (old.portId != widget.portId) {
-      _controller.text = widget.initialLabel;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => TextField(
-    controller: _controller,
-    decoration: const InputDecoration(
-      isDense: true,
-      border: OutlineInputBorder(),
-    ),
-    onChanged: widget.onChanged,
-  );
 }
 
 // ---------------------------------------------------------------------------

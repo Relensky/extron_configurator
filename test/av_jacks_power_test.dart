@@ -190,17 +190,17 @@ void main() {
 
       final power = sectionNamed(
         avReportSections(p, buildAvFlowModel(p)),
-        'Power',
+        'Power Schedule',
       );
 
       final switcher = power.rows.firstWhere((r) => r[0] == 'Switcher');
       expect(switcher[2], kPowerSourceLabels[PowerSource.controller]);
-      expect(switcher[3], 'APC');
-      expect(switcher[4], 'OUTLET 3');
+      expect(switcher[4], 'APC');
+      expect(switcher[5], 'OUTLET 3');
 
       final projector = power.rows.firstWhere((r) => r[0] == 'Projector');
       expect(projector[2], kPowerSourceLabels[PowerSource.wall]);
-      expect(projector[3], '', reason: 'a wall outlet has nothing to trace to');
+      expect(projector[4], '', reason: 'a wall outlet has nothing to trace to');
 
       final camera = power.rows.firstWhere((r) => r[0] == 'Camera');
       expect(camera[2], kPowerSourceLabels[PowerSource.poe]);
@@ -219,7 +219,7 @@ void main() {
       );
       final power = sectionNamed(
         avReportSections(p, buildAvFlowModel(p)),
-        'Power',
+        'Power Schedule',
       );
       expect(power.rows.single[0], 'DSP');
       expect(power.rows.single[2], kPowerSourceLabels[PowerSource.unspecified]);
@@ -230,7 +230,7 @@ void main() {
       p.addAvNode(wallBox('WB1', 'Wall box', 2));
       final power = sectionNamed(
         avReportSections(p, buildAvFlowModel(p)),
-        'Power',
+        'Power Schedule',
       );
       expect(power.rows, isEmpty);
     });

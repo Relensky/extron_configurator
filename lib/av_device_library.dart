@@ -27,7 +27,9 @@ import 'av_flow_model.dart';
 ///  {
 ///    "devices": [
 ///      { "model": "DTP CrossPoint 108 4K IPCP MA 70",
-///        "manufacturer": "Extron", "rackUnits": 2,
+///        "manufacturer": "Extron", "partNumber": "60-1439-13",
+///        "category": "Switcher", "rackUnits": 2,
+///        "powerWatts": 90, "price": 8500,
 ///        "ports": [
 ///          {"id":"in_hdmi_1","label":"HDMI IN 1","signal":"hdmi","direction":"input"},
 ///          {"id":"out_dtp_1","label":"DTP OUT 1","signal":"hdbaset","direction":"output"}
@@ -37,6 +39,13 @@ import 'av_flow_model.dart';
 ///      "CAMERADEVICE_": { "rackUnits": 0, "ports": [ ... ] }
 ///    }
 ///  }
+///
+///  `powerWatts` and `price` are what the power estimate and the room cost
+///  estimate are built from; both default to 0, meaning "not recorded", and
+///  the reports say how many devices are still missing them rather than
+///  totalling a blank as free and cold. The **Device Editor** tab writes this
+///  file, so none of it has to be typed by hand — and can merge another
+///  engineer's copy of it into yours, one difference at a time.
 ///
 ///  "signal" accepts any [SignalType] name plus the friendly aliases in
 ///  [signalFromName] (dtp, hdbt, dp, aes, rs232, ...). "direction" is
@@ -50,38 +59,121 @@ import 'av_flow_model.dart';
 ///  can export a ready-made entry).
 /// ============================================================================
 
-/// A model's connector set.
+/// A model's connector set, and everything else about the box that the room
+/// config never records: how tall it is, what it draws, and what it costs.
+///
+/// [powerWatts] and [price] are estimates a room is planned from, not
+/// measurements — 0 means "nobody has filled this in", which is why the
+/// reports count unpriced and unmetered devices instead of quietly totalling
+/// them as free and cold.
 class AvDeviceTemplate {
   final String model;
   final String manufacturer;
+
+  /// Manufacturer part / SKU, so a price list line can be matched to a quote.
+  final String partNumber;
+
+  /// Free-text grouping for the catalog list and the cost estimate
+  /// ('Switcher', 'Camera', 'Cable & connectivity', ...).
+  final String category;
+
   final int rackUnits;
 
+  /// Typical draw in watts; 0 = not recorded.
+  final double powerWatts;
+
+  /// Unit price in the catalog's currency; 0 = not priced.
+  final double price;
+
+  final String notes;
+
   final List<AvPort> ports;
+
+  /// True when this entry came from av_devices.json or was edited in the
+  /// Device Editor — i.e. it is the user's, and gets written back on save.
+  /// Built-in entries stay false so a later app build can still improve them.
+  final bool custom;
 
   const AvDeviceTemplate({
     required this.model,
     this.manufacturer = '',
+    this.partNumber = '',
+    this.category = '',
     this.rackUnits = 0,
+    this.powerWatts = 0,
+    this.price = 0,
+    this.notes = '',
     required this.ports,
+    this.custom = false,
   });
+
+  int get inputCount =>
+      ports.where((p) => p.direction != PortDirection.output).length;
+  int get outputCount =>
+      ports.where((p) => p.direction != PortDirection.input).length;
+
+  AvDeviceTemplate copyWith({
+    String? model,
+    String? manufacturer,
+    String? partNumber,
+    String? category,
+    int? rackUnits,
+    double? powerWatts,
+    double? price,
+    String? notes,
+    List<AvPort>? ports,
+    bool? custom,
+  }) => AvDeviceTemplate(
+    model: model ?? this.model,
+    manufacturer: manufacturer ?? this.manufacturer,
+    partNumber: partNumber ?? this.partNumber,
+    category: category ?? this.category,
+    rackUnits: rackUnits ?? this.rackUnits,
+    powerWatts: powerWatts ?? this.powerWatts,
+    price: price ?? this.price,
+    notes: notes ?? this.notes,
+    ports: ports ?? this.ports,
+    custom: custom ?? this.custom,
+  );
 
   Map<String, dynamic> toJson() => {
     'model': model,
     if (manufacturer.isNotEmpty) 'manufacturer': manufacturer,
+    if (partNumber.isNotEmpty) 'partNumber': partNumber,
+    if (category.isNotEmpty) 'category': category,
     'rackUnits': rackUnits,
+    if (powerWatts > 0) 'powerWatts': powerWatts,
+    if (price > 0) 'price': price,
+    if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
 
-  factory AvDeviceTemplate.fromJson(Map<String, dynamic> json) =>
-      AvDeviceTemplate(
-        model: json['model']?.toString() ?? '',
-        manufacturer: json['manufacturer']?.toString() ?? '',
-        rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
-        ports: [
-          for (final p in (json['ports'] as List? ?? []))
-            if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
-        ],
-      );
+  factory AvDeviceTemplate.fromJson(
+    Map<String, dynamic> json, {
+    bool custom = false,
+  }) => AvDeviceTemplate(
+    model: json['model']?.toString() ?? '',
+    manufacturer: json['manufacturer']?.toString() ?? '',
+    partNumber: json['partNumber']?.toString() ?? '',
+    category: json['category']?.toString() ?? '',
+    rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
+    // 'watts' and 'cost' are read as aliases: they are what people write by
+    // hand in a price list before they see the documented spelling.
+    powerWatts:
+        (json['powerWatts'] as num?)?.toDouble() ??
+        (json['watts'] as num?)?.toDouble() ??
+        0,
+    price:
+        (json['price'] as num?)?.toDouble() ??
+        (json['cost'] as num?)?.toDouble() ??
+        0,
+    notes: json['notes']?.toString() ?? '',
+    ports: [
+      for (final p in (json['ports'] as List? ?? []))
+        if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
+    ],
+    custom: custom,
+  );
 }
 
 class AvDeviceLibrary {
@@ -95,7 +187,36 @@ class AvDeviceLibrary {
   /// Where the library came from, for the App Config / toolbar hint.
   String source = 'Built-in defaults';
 
+  /// The av_devices.json this library was READ from, or '' when nothing but
+  /// the built-ins is loaded. [save] writes here when it is set.
+  String filePath = '';
+
   int get modelCount => _byModel.length;
+
+  /// Entries that belong to the user — loaded from av_devices.json or edited
+  /// in the Device Editor. Only these are written back, so an untouched
+  /// built-in can still be improved by a later app build.
+  int get customCount => _byModel.values.where((t) => t.custom).length;
+
+  /// Every entry, ordered the way the catalog list reads: manufacturer, then
+  /// model.
+  List<AvDeviceTemplate> get all {
+    final list = _byModel.values.toList();
+    list.sort((a, b) {
+      final byMaker = a.manufacturer.toLowerCase().compareTo(
+        b.manufacturer.toLowerCase(),
+      );
+      return byMaker != 0
+          ? byMaker
+          : a.model.toLowerCase().compareTo(b.model.toLowerCase());
+    });
+    return list;
+  }
+
+  /// The family fallbacks read from the file, kept so a save round-trips
+  /// them instead of quietly dropping the block.
+  Map<String, AvDeviceTemplate> get familyDefaults =>
+      Map.unmodifiable(_familyDefaults);
 
   /// Every known model name, for the "add custom device" model picker.
   List<String> get knownModels {
@@ -104,13 +225,130 @@ class AvDeviceLibrary {
     return names;
   }
 
+  /// Categories in use, for the catalog filter and the "new device" form.
+  List<String> get categories {
+    final set = <String>{
+      for (final t in _byModel.values)
+        if (t.category.trim().isNotEmpty) t.category.trim(),
+    };
+    final list = set.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
   static String _norm(String model) =>
       model.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
+
+  /// The key an entry is stored under — exposed so callers comparing two
+  /// libraries agree with this one on what "the same model" means.
+  static String normalizeModel(String model) => _norm(model);
 
   AvDeviceLibrary.builtIn() {
     for (final t in _builtInTemplates) {
       _byModel[_norm(t.model)] = t;
     }
+  }
+
+  /// An empty library — the starting point when reading somebody else's file
+  /// for a merge, where built-ins would masquerade as their entries.
+  AvDeviceLibrary.empty();
+
+  // -------------------------------------------------------------------------
+  //  EDITING
+  // -------------------------------------------------------------------------
+
+  /// Adds or replaces an entry, marking it as the user's so it is saved.
+  /// [previousModel] renames: the old key is dropped rather than left behind
+  /// as a duplicate under its former name.
+  void upsert(AvDeviceTemplate template, {String previousModel = ''}) {
+    if (template.model.trim().isEmpty) return;
+    if (previousModel.isNotEmpty &&
+        _norm(previousModel) != _norm(template.model)) {
+      _byModel.remove(_norm(previousModel));
+    }
+    _byModel[_norm(template.model)] = template.copyWith(custom: true);
+  }
+
+  /// Forgets an entry. A built-in comes back on the next launch — the file is
+  /// a layer over the built-ins, not a replacement for them.
+  void remove(String model) => _byModel.remove(_norm(model));
+
+  /// Replaces the family fallbacks (the Device Editor round-trips these).
+  void setFamilyDefault(String prefix, AvDeviceTemplate? template) {
+    if (template == null) {
+      _familyDefaults.remove(prefix);
+    } else {
+      _familyDefaults[prefix] = template;
+    }
+  }
+
+  /// Writes the user's entries to [toPath] (defaults to [filePath]). Returns
+  /// the file written, or '' when there was nowhere to write / the write
+  /// failed.
+  ///
+  /// [rebind] false writes a COPY without adopting it: handing your catalog
+  /// to a colleague shouldn't quietly repoint your own saves at their folder.
+  Future<String> save({String toPath = '', bool rebind = true}) async {
+    final target = toPath.isNotEmpty ? toPath : filePath;
+    if (target.isEmpty) return '';
+    try {
+      final custom = all.where((t) => t.custom).toList();
+      const encoder = JsonEncoder.withIndent('  ');
+      await File(target).parent.create(recursive: true);
+      await File(target).writeAsString(
+        encoder.convert({
+          '__readme':
+              'AV device catalog for the Room Config Builder: connectors, '
+              'rack height, estimated power draw and unit price per model. '
+              'Edited on the Device Editor tab; entries here override the '
+              "app's built-in models.",
+          'devices': [for (final t in custom) t.toJson()],
+          if (_familyDefaults.isNotEmpty)
+            'familyDefaults': {
+              for (final e in _familyDefaults.entries)
+                e.key: e.value.toJson()..remove('model'),
+            },
+        }),
+      );
+      if (rebind) {
+        filePath = target;
+        source = target;
+      }
+      AppLogger.logInfo(
+        'AV device catalog saved to $target (${custom.length} entries).',
+      );
+      return target;
+    } catch (e, stack) {
+      AppLogger.logError(
+        'Failed to save the AV device catalog to $target',
+        e,
+        stack,
+      );
+      return '';
+    }
+  }
+
+  /// Reads a catalog file on its own, with no built-ins underneath — what a
+  /// merge needs, since a built-in in the other engineer's copy would
+  /// otherwise read as something they had filled in.
+  static Future<AvDeviceLibrary> readFile(String filePath) async {
+    final library = AvDeviceLibrary.empty();
+    final doc = jsonDecode(await File(filePath).readAsString());
+    if (doc is! Map) {
+      throw const FormatException('Root of the catalog file must be an object.');
+    }
+    for (final d in (doc['devices'] as List? ?? [])) {
+      if (d is! Map) continue;
+      final t = AvDeviceTemplate.fromJson(
+        Map<String, dynamic>.from(d),
+        custom: true,
+      );
+      if (t.model.isEmpty) continue;
+      library._byModel[_norm(t.model)] = t;
+    }
+    library.filePath = filePath;
+    library.source = filePath;
+    return library;
   }
 
   /// Loads `av_devices.json`, layering it over the built-ins. Mirrors
@@ -148,8 +386,13 @@ class AvDeviceLibrary {
         int added = 0;
         for (final d in (doc['devices'] as List? ?? [])) {
           if (d is! Map) continue;
-          final t = AvDeviceTemplate.fromJson(Map<String, dynamic>.from(d));
-          if (t.model.isEmpty || t.ports.isEmpty) continue;
+          final t = AvDeviceTemplate.fromJson(
+            Map<String, dynamic>.from(d),
+            custom: true,
+          );
+          // A priced entry with no connectors is still worth keeping: a price
+          // list is filled in long before anybody draws that model's ports.
+          if (t.model.isEmpty) continue;
           library._byModel[_norm(t.model)] = t;
           added++;
         }
@@ -166,6 +409,7 @@ class AvDeviceLibrary {
             }
           });
         }
+        library.filePath = candidate;
         library.source = candidate;
         AppLogger.logInfo(
           'AV device library loaded from $candidate ($added models, '
@@ -206,11 +450,7 @@ class AvDeviceLibrary {
 
     for (final entry in _familyDefaults.entries) {
       if (configKey.startsWith(entry.key)) {
-        return AvDeviceTemplate(
-          model: model.isEmpty ? entry.key : model,
-          rackUnits: entry.value.rackUnits,
-          ports: entry.value.ports,
-        );
+        return entry.value.copyWith(model: model.isEmpty ? entry.key : model);
       }
     }
     return _familyFallback(configKey, model);

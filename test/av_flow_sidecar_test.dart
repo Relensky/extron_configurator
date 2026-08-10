@@ -120,6 +120,31 @@ void main() {
     expect(reopened.avRacks.single.name, 'Main Rack');
   });
 
+  test('a round trip preserves the power figures and the cost estimate',
+      () async {
+    final p = openedOn(configPath);
+    p.addAvNode(switcher().copyWith(powerWatts: 90));
+    p.setAvCostTax(percent: 8.25, label: 'State tax');
+    p.addAvCostFee(name: 'Freight', percent: 4);
+    p.addAvCostItem(description: 'Labour', qty: 8, unitPrice: 95);
+    p.setAvCostPrice('model:sw4 hd 4k plus', 1900);
+
+    expect(await p.saveAvFlow(), isNotEmpty);
+
+    final reopened = openedOn(configPath)..loadAvFlowForCurrentConfig();
+
+    expect(reopened.avNodeById('SWITCHERDEVICE_1')!.powerWatts, 90);
+    expect(reopened.avCost.taxPercent, 8.25);
+    expect(reopened.avCost.taxLabel, 'State tax');
+    expect(reopened.avCost.fees.single.percent, 4);
+    expect(reopened.avCost.items.single.unitPrice, 95);
+    expect(reopened.avCost.priceOverrides['model:sw4 hd 4k plus'], 1900);
+
+    // Restored fee/item ids must not be handed out again to new ones.
+    final added = reopened.addAvCostFee(name: 'Install', percent: 10);
+    expect(added.id, isNot(reopened.avCost.fees.first.id));
+  });
+
   test('restored ids do not collide with newly created ones', () async {
     final p = openedOn(configPath);
     p.addAvNode(switcher());

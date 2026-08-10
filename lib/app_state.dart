@@ -10,6 +10,7 @@ import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
+import 'cost_estimate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
@@ -995,6 +996,91 @@ class AppStateProvider extends ChangeNotifier {
   /// Empty means the built-in colours.
   final Map<SignalType, Color> avSignalColors = {};
 
+  /// This room's cost estimate: tax, percentage fees, per-room prices and any
+  /// non-device lines. Stored with the diagram it prices — a negotiated price
+  /// is a fact about the job, not about the model — see the Cost page on the
+  /// AV Flow tab.
+  final RoomCostSettings avCost = RoomCostSettings();
+
+  /// Counter behind fee and line-item ids.
+  int _avCostCounter = 0;
+
+  String _nextCostId(String prefix) {
+    _avCostCounter++;
+    return '$prefix$_avCostCounter';
+  }
+
+  // --- cost estimate edits (each one notifies; the page rebuilds off state) --
+
+  void setAvCostTax({double? percent, String? label, String? currency}) {
+    if (percent != null) avCost.taxPercent = math.max(0, percent);
+    if (label != null) avCost.taxLabel = label;
+    if (currency != null && currency.isNotEmpty) avCost.currency = currency;
+    notifyListeners();
+  }
+
+  CostFee addAvCostFee({String name = 'Fee', double percent = 0}) {
+    final fee = CostFee(id: _nextCostId('FEE_'), name: name, percent: percent);
+    avCost.fees.add(fee);
+    notifyListeners();
+    return fee;
+  }
+
+  void updateAvCostFee(CostFee fee) {
+    final index = avCost.fees.indexWhere((f) => f.id == fee.id);
+    if (index < 0) return;
+    avCost.fees[index] = fee;
+    notifyListeners();
+  }
+
+  void removeAvCostFee(String feeId) {
+    avCost.fees.removeWhere((f) => f.id == feeId);
+    notifyListeners();
+  }
+
+  /// Sets this room's price for one estimate line, or clears it back to the
+  /// catalog price when [price] is null.
+  void setAvCostPrice(String lineKey, double? price) {
+    if (price == null) {
+      avCost.priceOverrides.remove(lineKey);
+    } else {
+      avCost.priceOverrides[lineKey] = price;
+    }
+    notifyListeners();
+  }
+
+  CostLineItem addAvCostItem({
+    String description = '',
+    String category = '',
+    double qty = 1,
+    double unitPrice = 0,
+    bool taxable = true,
+  }) {
+    final item = CostLineItem(
+      id: _nextCostId('ITEM_'),
+      description: description,
+      category: category,
+      qty: qty,
+      unitPrice: unitPrice,
+      taxable: taxable,
+    );
+    avCost.items.add(item);
+    notifyListeners();
+    return item;
+  }
+
+  void updateAvCostItem(CostLineItem item) {
+    final index = avCost.items.indexWhere((i) => i.id == item.id);
+    if (index < 0) return;
+    avCost.items[index] = item;
+    notifyListeners();
+  }
+
+  void removeAvCostItem(String itemId) {
+    avCost.items.removeWhere((i) => i.id == itemId);
+    notifyListeners();
+  }
+
   /// The colour a signal type is drawn in for this room.
   Color avSignalColor(SignalType s) => signalColor(s, avSignalColors);
 
@@ -1048,6 +1134,7 @@ class AppStateProvider extends ChangeNotifier {
       ports: node.ports,
       fromConfig: node.fromConfig,
       rackUnits: node.rackUnits,
+      powerWatts: node.powerWatts,
       kind: node.kind,
       powerSource: node.powerSource,
       note: node.note,
@@ -1373,9 +1460,14 @@ class AppStateProvider extends ChangeNotifier {
     return '';
   }
 
-  /// True when the session holds an AV diagram worth protecting.
+  /// True when the session holds an AV diagram worth protecting. A cost
+  /// estimate counts: tax, fees and quoted prices are work that took as long
+  /// to enter as the cabling did.
   bool get hasAvFlow =>
-      avNodes.isNotEmpty || avCables.isNotEmpty || avRacks.isNotEmpty;
+      avNodes.isNotEmpty ||
+      avCables.isNotEmpty ||
+      avRacks.isNotEmpty ||
+      !avCost.isEmpty;
 
   /// True under either the current name or the pre-rename one.
   bool get hasSavedAvFlow => _readableAvFlowSidecar.isNotEmpty;
@@ -1393,8 +1485,10 @@ class AppStateProvider extends ChangeNotifier {
     avRackSlots.clear();
     avDismissedDevices.clear();
     avSignalColors.clear();
+    avCost.clear();
     _avNodeCounter = 0;
     _avCableCounter = 0;
+    _avCostCounter = 0;
   }
 
   /// Keeps the in-memory AV diagram for the working config, ignoring the
@@ -1475,6 +1569,11 @@ class AppStateProvider extends ChangeNotifier {
         });
       }
 
+      final cost = doc['cost'];
+      if (cost is Map) {
+        avCost.readJson(Map<String, dynamic>.from(cost));
+      }
+
       // Rebuild the id counters past everything that was loaded, so new
       // nodes and cables can never collide with restored ones.
       for (final n in avNodes) {
@@ -1489,6 +1588,16 @@ class AppStateProvider extends ChangeNotifier {
         if (match != null) {
           _avCableCounter =
               math.max(_avCableCounter, int.parse(match.group(1)!));
+        }
+      }
+      for (final id in [
+        for (final f in avCost.fees) f.id,
+        for (final i in avCost.items) i.id,
+      ]) {
+        final match = RegExp(r'_(\d+)$').firstMatch(id);
+        if (match != null) {
+          _avCostCounter =
+              math.max(_avCostCounter, int.parse(match.group(1)!));
         }
       }
 
@@ -1513,7 +1622,8 @@ class AppStateProvider extends ChangeNotifier {
       const encoder = JsonEncoder.withIndent('  ');
       await File(sidecar).writeAsString(encoder.convert({
         '__readme': 'AV signal flow for the Room Config Builder: devices with '
-            'their connectors, the cables between them, and rack elevations.',
+            'their connectors, the cables between them, rack elevations, and '
+            "this room's cost estimate (tax, fees and quoted prices).",
         'nodes': avNodes.map((n) => n.toJson()).toList(),
         'cables': avCables.map((c) => c.toJson()).toList(),
         'racks': avRacks.map((r) => r.toJson()).toList(),
@@ -1525,6 +1635,7 @@ class AppStateProvider extends ChangeNotifier {
                 .toRadixString(16)
                 .padLeft(6, '0'),
         },
+        'cost': avCost.toJson(),
       }));
 
       // The write succeeded, so the pre-rename file is now a stale duplicate
@@ -3065,13 +3176,34 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// (Re)loads av_devices.json, the connector sets the AV Flow tab draws ports
-  /// from. Same contract as [loadUiSchema]: built-ins stay active on any
-  /// failure and the error is logged.
+  /// from and the price list the cost estimate reads. Same contract as
+  /// [loadUiSchema]: built-ins stay active on any failure and the error is
+  /// logged.
   Future<void> loadAvDeviceLibrary() async {
     avDeviceLibrary = await AvDeviceLibrary.load(
         explicitPath: _resolveOptionalFile('', 'av_devices.json'));
     notifyListeners();
   }
+
+  /// Where the Device Editor writes the catalog: the file it was read from
+  /// when there is one, otherwise `<root>/av_devices.json` — so a first save
+  /// lands next to ui_schema.json and processors.json rather than wherever
+  /// the app happened to be launched from.
+  String get effectiveAvDevicesPath => avDeviceLibrary.filePath.isNotEmpty
+      ? avDeviceLibrary.filePath
+      : path.join(effectiveRootFolder, 'av_devices.json');
+
+  /// Writes the device catalog. Returns the file written, or '' on failure.
+  Future<String> saveAvDeviceLibrary() async {
+    final saved = await avDeviceLibrary.save(toPath: effectiveAvDevicesPath);
+    notifyListeners();
+    return saved;
+  }
+
+  /// Marks the catalog changed so the views that read it repaint. The library
+  /// is a plain object rather than a listenable, so every edit path goes
+  /// through here instead of each view remembering to notify.
+  void avDeviceLibraryChanged() => notifyListeners();
 
   /// Validates the template file and registers it as the default WITHOUT
   /// loading its contents into the active room config. The file is only

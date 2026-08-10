@@ -1,5 +1,6 @@
 import 'app_state.dart';
 import 'av_flow_model.dart';
+import 'cost_estimate.dart';
 import 'report_tools.dart';
 
 /// ============================================================================
@@ -11,10 +12,19 @@ import 'report_tools.dart';
 ///
 ///  Sections:
 ///    * Cable schedule    — the pull sheet: what plugs into what
-///    * Pack list         — the equipment order, with rack heights
-///    * Rack inventory    — U positions per frame and face
+///    * Pack list         — the equipment order, with rack heights and watts
+///    * Rack inventory    — U positions per frame and face, plus how full and
+///                          how hot each frame is
+///    * Jack schedule     — which device landed on which numbered jack
+///    * Power             — where each device's mains comes from, what the
+///                          room draws, and what that is in amps and BTU/hr
 ///    * Port utilization  — used/total per device, so spare switcher inputs
 ///                          and unfed DSP channels are visible at a glance
+///
+///  [avReportSections] is the whole stack, for the AV tab's own single-sheet
+///  report. The three grouped getters below it are what the multi-sheet room
+///  workbook deals each sheet from — same functions, so a figure can never
+///  differ between the two exports.
 /// ============================================================================
 
 List<ReportSection> avReportSections(
@@ -22,15 +32,36 @@ List<ReportSection> avReportSections(
   AvFlowModel model,
 ) {
   return [
-    _roomSummary(provider, model),
-    _cableSchedule(model),
-    _packList(model),
-    if (model.racks.isNotEmpty) _rackInventory(model),
-    if (model.nodes.any((n) => n.isJackField)) _jackSchedule(model),
-    _powerSchedule(model),
-    _portUtilization(model),
+    ...avFlowSections(provider, model),
+    ...rackSections(model),
+    ...powerSections(model),
   ];
 }
+
+/// The signal-path half: what is in the room and how it is cabled.
+List<ReportSection> avFlowSections(
+  AppStateProvider provider,
+  AvFlowModel model,
+) => [
+  _roomSummary(provider, model),
+  _cableSchedule(model),
+  _packList(model),
+  if (model.nodes.any((n) => n.isJackField)) _jackSchedule(model),
+  _portUtilization(model),
+];
+
+/// The rack elevation half: how full each frame is and what sits where.
+List<ReportSection> rackSections(AvFlowModel model) => [
+  if (model.racks.isNotEmpty) _rackSummary(model),
+  if (model.racks.isNotEmpty || model.nodes.any((n) => n.rackUnits > 0))
+    _rackInventory(model),
+];
+
+/// The power half: the estimate, then the device-by-device detail.
+List<ReportSection> powerSections(AvFlowModel model) => [
+  _powerSummary(model),
+  _powerSchedule(model),
+];
 
 /// Two-column header block: which room this schedule belongs to, and the
 /// totals worth seeing before the tables.
@@ -98,41 +129,148 @@ ReportSection _cableSchedule(AvFlowModel model) {
 }
 
 /// The equipment order. Devices of the same model collapse into one row with
-/// a quantity, which is what a pack list is actually read for.
+/// a quantity, which is what a pack list is actually read for. The grouping is
+/// [groupDevices] — shared with the cost estimate, so the quantity you order
+/// and the quantity you are quoted for are the same number by construction.
 ReportSection _packList(AvFlowModel model) {
-  // Key on model when there is one; devices with no model stay separate so a
-  // pair of unnamed boxes doesn't silently merge.
-  final grouped = <String, List<AvNode>>{};
-  for (final node in model.nodes) {
-    final key = node.model.trim().isEmpty
-        ? 'device:${node.id}'
-        : 'model:${node.model.trim().toLowerCase()}';
-    grouped.putIfAbsent(key, () => []).add(node);
-  }
-
   final rows = <List<dynamic>>[];
-  for (final group in grouped.values) {
+  for (final group in groupDevices(model)) {
     final first = group.first;
-    final notes = group
-        .map((n) => n.note)
-        .where((n) => n.trim().isNotEmpty)
-        .toSet()
-        .join('; ');
+    // Connector counts come straight off the device, so the sheet says what
+    // the box has to have — not just what this room happened to use.
+    final ins = first.ports
+        .where((p) => p.direction != PortDirection.output)
+        .length;
+    final outs = first.ports
+        .where((p) => p.direction != PortDirection.input)
+        .length;
     rows.add([
-      group.length == 1 ? first.label : group.map((n) => n.label).join(', '),
+      group.label,
       first.model,
-      group.length,
+      group.qty,
       first.rackUnits == 0 ? '' : '${first.rackUnits}U',
+      '$ins / $outs',
+      first.powerWatts <= 0 ? '' : first.powerWatts,
       first.fromConfig ? 'Room config' : 'Added manually',
-      notes,
+      group.notes,
     ]);
   }
 
   return (
     title: 'Pack List',
-    header: ['Device', 'Model', 'Qty', 'Rack U', 'Source', 'Notes'],
+    header: [
+      'Device',
+      'Model',
+      'Qty',
+      'Rack U',
+      'In / Out',
+      'Watts ea.',
+      'Source',
+      'Notes',
+    ],
     rows: rows,
   );
+}
+
+/// How full and how hot each frame is: the two questions asked before
+/// anything else gets added to a rack.
+ReportSection _rackSummary(AvFlowModel model) {
+  final byId = model.nodesById;
+  final rows = <List<dynamic>>[];
+
+  for (final rack in model.racks) {
+    int usedU = 0;
+    double watts = 0;
+    int devices = 0;
+    for (final entry in model.rackSlots.entries) {
+      if (entry.value.rackId != rack.id) continue;
+      final node = byId[entry.key];
+      if (node == null) continue;
+      devices++;
+      watts += node.powerWatts;
+      // A shared rail is one U of rack space however many boxes are on it,
+      // so a device on a split row only claims its fraction.
+      usedU += (node.rackUnits <= 0 ? 1 : node.rackUnits);
+    }
+    rows.add([
+      rack.name,
+      rack.kind,
+      '${rack.heightU}U',
+      devices,
+      '$usedU of ${rack.heightU}U',
+      watts <= 0 ? '' : watts.round(),
+      watts <= 0 ? '' : (watts * 3.412).round(),
+    ]);
+  }
+
+  return (
+    title: 'Rack Summary',
+    header: [
+      'Rack',
+      'Type',
+      'Height',
+      'Devices',
+      'Space used',
+      'Watts',
+      'BTU/hr',
+    ],
+    rows: rows,
+  );
+}
+
+/// What the room draws, and what that means for the circuit it lands on.
+///
+/// Watts come off each device ([AvNode.powerWatts], seeded from the catalog),
+/// so this is an estimate built from the equipment list rather than a
+/// measurement — the last row says how many devices have no figure at all,
+/// because a total that quietly treats unknowns as zero is worse than no
+/// total.
+ReportSection _powerSummary(AvFlowModel model) {
+  double total = 0;
+  int unmetered = 0;
+  final bySource = <PowerSource, double>{};
+  final unmeteredBySource = <PowerSource, int>{};
+
+  for (final node in model.nodes) {
+    if (node.isJackField) continue;
+    if (node.powerWatts <= 0) {
+      unmetered++;
+      unmeteredBySource[node.powerSource] =
+          (unmeteredBySource[node.powerSource] ?? 0) + 1;
+      continue;
+    }
+    total += node.powerWatts;
+    bySource[node.powerSource] = (bySource[node.powerSource] ?? 0) +
+        node.powerWatts;
+  }
+
+  // Mains-fed gear is what sizes the circuit; PoE comes off the switch's
+  // budget and "no mains needed" is nothing at all.
+  final mains = (bySource[PowerSource.controller] ?? 0) +
+      (bySource[PowerSource.wall] ?? 0) +
+      (bySource[PowerSource.unspecified] ?? 0);
+
+  final rows = <List<dynamic>>[
+    ['Estimated total draw (W)', total.round()],
+    ['Mains-fed draw (W)', mains.round()],
+    ['Estimated current @ 120 V (A)', (mains / 120).toStringAsFixed(1)],
+    ['Estimated current @ 208 V (A)', (mains / 208).toStringAsFixed(1)],
+    ['Heat load (BTU/hr)', (total * 3.412).round()],
+    for (final source in PowerSource.values)
+      if ((bySource[source] ?? 0) > 0 || (unmeteredBySource[source] ?? 0) > 0)
+        [
+          '${kPowerSourceLabels[source] ?? source.name} (W)',
+          '${(bySource[source] ?? 0).round()}'
+              '${(unmeteredBySource[source] ?? 0) > 0 ? ' + ${unmeteredBySource[source]} not recorded' : ''}',
+        ],
+    if (unmetered > 0)
+      [
+        'Devices with no power figure',
+        '$unmetered — the total above is short by whatever they draw',
+      ],
+  ];
+
+  return (title: 'Power Estimate', header: ['Item', 'Value'], rows: rows);
 }
 
 /// Where each device sits, per frame and face, listed top of rack downward
@@ -272,14 +410,15 @@ ReportSection _powerSchedule(AvFlowModel model) {
       node.label,
       node.model,
       kPowerSourceLabels[node.powerSource] ?? node.powerSource.name,
+      node.powerWatts <= 0 ? '' : node.powerWatts,
       feed,
       outlet,
     ]);
   }
 
   return (
-    title: 'Power',
-    header: ['Device', 'Model', 'Source', 'Fed from', 'Outlet'],
+    title: 'Power Schedule',
+    header: ['Device', 'Model', 'Source', 'Watts', 'Fed from', 'Outlet'],
     rows: rows,
   );
 }

@@ -375,6 +375,12 @@ class AvNode {
   /// Rack height; 0 means "not rack mounted" and keeps it out of the racks.
   final int rackUnits;
 
+  /// Estimated draw in watts, seeded from the device catalog and overridable
+  /// here — the same box can sit on a different power supply room to room.
+  /// 0 means "not recorded", which the power report counts rather than
+  /// totalling as zero.
+  final double powerWatts;
+
   /// Device or numbered jack field (wall box / floor box / patch panel).
   final AvNodeKind kind;
 
@@ -392,6 +398,7 @@ class AvNode {
     required this.ports,
     this.fromConfig = false,
     this.rackUnits = 0,
+    this.powerWatts = 0,
     this.kind = AvNodeKind.device,
     this.powerSource = PowerSource.unspecified,
     this.note = '',
@@ -406,6 +413,7 @@ class AvNode {
     List<AvPort>? ports,
     bool? fromConfig,
     int? rackUnits,
+    double? powerWatts,
     AvNodeKind? kind,
     PowerSource? powerSource,
     String? note,
@@ -417,6 +425,7 @@ class AvNode {
     ports: ports ?? this.ports,
     fromConfig: fromConfig ?? this.fromConfig,
     rackUnits: rackUnits ?? this.rackUnits,
+    powerWatts: powerWatts ?? this.powerWatts,
     kind: kind ?? this.kind,
     powerSource: powerSource ?? this.powerSource,
     note: note ?? this.note,
@@ -532,6 +541,7 @@ class AvNode {
     'y': pos.dy,
     'fromConfig': fromConfig,
     'rackUnits': rackUnits,
+    if (powerWatts > 0) 'powerWatts': powerWatts,
     if (kind != AvNodeKind.device) 'kind': kind.name,
     if (powerSource != PowerSource.unspecified) 'power': powerSource.name,
     if (note.isNotEmpty) 'note': note,
@@ -548,6 +558,7 @@ class AvNode {
     ),
     fromConfig: json['fromConfig'] == true,
     rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
+    powerWatts: (json['powerWatts'] as num?)?.toDouble() ?? 0,
     kind: nodeKindFromName(json['kind']?.toString()),
     powerSource: powerSourceFromName(json['power']?.toString()),
     note: json['note']?.toString() ?? '',

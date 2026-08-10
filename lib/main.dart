@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'av_flow_view.dart';
 import 'conversion_preview_view.dart';
+import 'device_editor_view.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
@@ -29,12 +30,20 @@ enum AppTab {
   system('system'),
   schematic('schematic'),
   avFlow('av_flow'),
+  deviceEditor('device_editor'),
   rawJson('raw_json'),
   appConfig('app_config');
 
   /// Token used in screenshot file names.
   final String token;
   const AppTab(this.token);
+
+  /// Tabs that work with no room loaded. App Config is settings; the Device
+  /// Editor is the equipment catalog — both are about the app and the price
+  /// list, not about a room, so the "No Configuration Loaded" screen must not
+  /// stand in front of them.
+  bool get worksWithoutConfig =>
+      this == AppTab.appConfig || this == AppTab.deviceEditor;
 }
 
 void main() {
@@ -588,6 +597,7 @@ class _MainDashboardState extends State<MainDashboard> {
               NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
               NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
               NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
+              NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
               NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
               NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
             ],
@@ -596,7 +606,7 @@ class _MainDashboardState extends State<MainDashboard> {
           Expanded(
             child: RepaintBoundary(
               key: _captureKey,
-              child: (!hasConfig && selectedIndex != AppTab.appConfig.index)
+              child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
                   ? _buildLandingScreen(context, provider)
                   : _buildMainContent(selectedIndex, provider.configRevision),
             ),
@@ -605,6 +615,11 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
     );
   }
+
+  static bool _tabWorksWithoutConfig(int index) =>
+      index >= 0 &&
+      index < AppTab.values.length &&
+      AppTab.values[index].worksWithoutConfig;
 
   Widget _buildLandingScreen(BuildContext context, AppStateProvider provider) {
     return Center(
@@ -682,6 +697,10 @@ class _MainDashboardState extends State<MainDashboard> {
         return SchematicView(key: key);
       case AppTab.avFlow:
         return AvFlowView(key: key);
+      case AppTab.deviceEditor:
+        // Unkeyed: the catalog is application data, not room data, so it must
+        // not be thrown away and rebuilt when a different room is opened.
+        return const DeviceEditorView();
       case AppTab.rawJson:
         // Unkeyed on purpose: the raw editor already re-reads the config in
         // didChangeDependencies, and remounting it mid-Apply would cut off its

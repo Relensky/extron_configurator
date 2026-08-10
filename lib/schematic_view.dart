@@ -8,9 +8,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
+import 'av_flow_view.dart' show buildAvFlowModel;
 import 'color_wheel_picker.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
+import 'room_workbook.dart';
 import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
 
@@ -645,6 +647,39 @@ class _SchematicViewState extends State<SchematicView> {
     }
   }
 
+  /// The whole job in one book: control (with the room's estimated power
+  /// draw), AV flow, racks and the cost estimate. Exported from here the
+  /// control schematic is the diagram that gets embedded; exporting from the
+  /// AV Flow tab embeds that page's diagram instead.
+  Future<void> _exportWorkbook(AppStateProvider provider) async {
+    // The AV data lives in the provider whether or not that tab has been
+    // opened this session, but the sidecar is only read on the tab's first
+    // visit — so make sure it has been.
+    provider.ensureAvFlowForCurrentConfig();
+
+    String? outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Save Room Workbook',
+      fileName: '${_fileStem(provider, 'room_workbook')}.xlsx',
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+    );
+    if (outputFile == null) return;
+    if (!outputFile.toLowerCase().endsWith('.xlsx')) outputFile += '.xlsx';
+
+    try {
+      final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
+      final bytes = buildRoomWorkbookBytes(
+        provider: provider,
+        av: buildAvFlowModel(provider),
+        controlPng: png,
+      );
+      await File(outputFile).writeAsBytes(bytes);
+      _savedSnack(provider, 'Room workbook', outputFile);
+    } catch (e) {
+      _snack('Failed to save the workbook: $e', error: true);
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  EDIT MODE — drawing custom lines
   // -------------------------------------------------------------------------
@@ -907,12 +942,18 @@ class _SchematicViewState extends State<SchematicView> {
           ),
           PopupMenuButton<String>(
             tooltip: 'Export device report',
-            onSelected: (v) => v == 'copy'
-                ? _copyReportText(provider)
-                : _exportReport(provider, v == 'xlsx'),
+            onSelected: (v) => switch (v) {
+              'copy' => _copyReportText(provider),
+              'workbook' => _exportWorkbook(provider),
+              _ => _exportReport(provider, v == 'xlsx'),
+            },
             itemBuilder: (ctx) => const [
               PopupMenuItem(
-                  value: 'xlsx', child: Text('Excel report (.xlsx)')),
+                  value: 'workbook',
+                  child: Text('Full room workbook (.xlsx, 4 sheets)')),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                  value: 'xlsx', child: Text('Device report (.xlsx)')),
               PopupMenuItem(
                   value: 'txt', child: Text('Plain text report (.txt)')),
               PopupMenuItem(
