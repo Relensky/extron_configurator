@@ -82,6 +82,14 @@ class AvDeviceTemplate {
   /// Typical draw in watts; 0 = not recorded.
   final double powerWatts;
 
+  /// Published heat output in BTU/hr; 0 = derive it from [powerWatts].
+  final double btuPerHour;
+
+  /// How the box takes power. Every entry has an inlet unless it is genuinely
+  /// passive, and [PowerInput.poe] is the toggle for gear fed off the network
+  /// switch rather than the room's circuit.
+  final PowerInput powerInput;
+
   /// Unit price in the catalog's currency; 0 = not priced.
   final double price;
 
@@ -101,14 +109,24 @@ class AvDeviceTemplate {
     this.category = '',
     this.rackUnits = 0,
     this.powerWatts = 0,
+    this.btuPerHour = 0,
+    this.powerInput = PowerInput.mains,
     this.price = 0,
     this.notes = '',
     required this.ports,
     this.custom = false,
   });
 
-  int get inputCount =>
-      ports.where((p) => p.direction != PortDirection.output).length;
+  /// Heat this model puts into a rack: its published figure when there is
+  /// one, otherwise the watts converted.
+  double get effectiveBtu =>
+      btuPerHour > 0 ? btuPerHour : powerWatts * kWattsToBtu;
+
+  /// Signal connectors only — the power inlet is not something you patch, so
+  /// counting it as an input would overstate every device by one.
+  int get inputCount => ports
+      .where((p) => p.direction != PortDirection.output && !p.isPowerInlet)
+      .length;
   int get outputCount =>
       ports.where((p) => p.direction != PortDirection.input).length;
 
@@ -119,6 +137,8 @@ class AvDeviceTemplate {
     String? category,
     int? rackUnits,
     double? powerWatts,
+    double? btuPerHour,
+    PowerInput? powerInput,
     double? price,
     String? notes,
     List<AvPort>? ports,
@@ -130,6 +150,8 @@ class AvDeviceTemplate {
     category: category ?? this.category,
     rackUnits: rackUnits ?? this.rackUnits,
     powerWatts: powerWatts ?? this.powerWatts,
+    btuPerHour: btuPerHour ?? this.btuPerHour,
+    powerInput: powerInput ?? this.powerInput,
     price: price ?? this.price,
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
@@ -143,6 +165,8 @@ class AvDeviceTemplate {
     if (category.isNotEmpty) 'category': category,
     'rackUnits': rackUnits,
     if (powerWatts > 0) 'powerWatts': powerWatts,
+    if (btuPerHour > 0) 'btuPerHour': btuPerHour,
+    if (powerInput != PowerInput.mains) 'powerInput': powerInput.name,
     if (price > 0) 'price': price,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
@@ -163,6 +187,11 @@ class AvDeviceTemplate {
         (json['powerWatts'] as num?)?.toDouble() ??
         (json['watts'] as num?)?.toDouble() ??
         0,
+    btuPerHour:
+        (json['btuPerHour'] as num?)?.toDouble() ??
+        (json['btu'] as num?)?.toDouble() ??
+        0,
+    powerInput: powerInputFromName(json['powerInput']?.toString()),
     price:
         (json['price'] as num?)?.toDouble() ??
         (json['cost'] as num?)?.toDouble() ??
@@ -198,9 +227,19 @@ class AvDeviceLibrary {
   /// built-in can still be improved by a later app build.
   int get customCount => _byModel.values.where((t) => t.custom).length;
 
+  /// Sorted view of [_byModel], rebuilt only when the catalog changes.
+  /// The Device Editor reads [all] on every keystroke of its search box, and
+  /// re-sorting a thousand entries per character is a thousand entries of
+  /// work nobody asked for.
+  List<AvDeviceTemplate>? _sorted;
+
+  void _invalidate() => _sorted = null;
+
   /// Every entry, ordered the way the catalog list reads: manufacturer, then
   /// model.
   List<AvDeviceTemplate> get all {
+    final cached = _sorted;
+    if (cached != null) return cached;
     final list = _byModel.values.toList();
     list.sort((a, b) {
       final byMaker = a.manufacturer.toLowerCase().compareTo(
@@ -210,7 +249,7 @@ class AvDeviceLibrary {
           ? byMaker
           : a.model.toLowerCase().compareTo(b.model.toLowerCase());
     });
-    return list;
+    return _sorted = List.unmodifiable(list);
   }
 
   /// The family fallbacks read from the file, kept so a save round-trips
@@ -247,6 +286,7 @@ class AvDeviceLibrary {
     for (final t in _builtInTemplates) {
       _byModel[_norm(t.model)] = t;
     }
+    _invalidate();
   }
 
   /// An empty library — the starting point when reading somebody else's file
@@ -267,11 +307,15 @@ class AvDeviceLibrary {
       _byModel.remove(_norm(previousModel));
     }
     _byModel[_norm(template.model)] = template.copyWith(custom: true);
+    _invalidate();
   }
 
   /// Forgets an entry. A built-in comes back on the next launch — the file is
   /// a layer over the built-ins, not a replacement for them.
-  void remove(String model) => _byModel.remove(_norm(model));
+  void remove(String model) {
+    _byModel.remove(_norm(model));
+    _invalidate();
+  }
 
   /// Replaces the family fallbacks (the Device Editor round-trips these).
   void setFamilyDefault(String prefix, AvDeviceTemplate? template) {
@@ -346,6 +390,7 @@ class AvDeviceLibrary {
       if (t.model.isEmpty) continue;
       library._byModel[_norm(t.model)] = t;
     }
+    library._invalidate();
     library.filePath = filePath;
     library.source = filePath;
     return library;
@@ -394,6 +439,7 @@ class AvDeviceLibrary {
           // list is filled in long before anybody draws that model's ports.
           if (t.model.isEmpty) continue;
           library._byModel[_norm(t.model)] = t;
+          library._invalidate();
           added++;
         }
         final families = doc['familyDefaults'];
@@ -758,7 +804,7 @@ class AvDeviceLibrary {
     AvDeviceTemplate(
       model: 'DTP CrossPoint 108 4K IPCP MA 70',
       manufacturer: 'Extron',
-      rackUnits: 2,
+      rackUnits: 3,
       ports: [
         for (int i = 1; i <= 6; i++)
           _videoIn('in_hdmi_$i', 'HDMI IN $i', SignalType.hdmi),

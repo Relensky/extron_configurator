@@ -222,6 +222,75 @@ PowerSource powerSourceFromName(String? name) {
   }
 }
 
+/// How a CATALOG entry takes power — the fact about the model, as opposed to
+/// [PowerSource], which is where this room happens to plug it in.
+///
+/// Every device gets a power inlet unless it is genuinely passive (a speaker,
+/// a cable, a blanking plate), because a device with no recorded inlet is a
+/// device the rack load quietly forgets. [PowerInput.poe] is the toggle for
+/// gear fed off the network switch instead of a mains outlet: it still has a
+/// power inlet on the drawing, it just doesn't land on the room's circuit.
+enum PowerInput { mains, poe, none }
+
+const Map<PowerInput, String> kPowerInputLabels = {
+  PowerInput.mains: 'Mains (AC)',
+  PowerInput.poe: 'PoE',
+  PowerInput.none: 'None (passive)',
+};
+
+PowerInput powerInputFromName(String? name) {
+  switch (name?.trim().toLowerCase()) {
+    case 'poe':
+      return PowerInput.poe;
+    case 'none':
+      return PowerInput.none;
+    default:
+      return PowerInput.mains;
+  }
+}
+
+/// The room-level power source a catalog entry implies. Mains stays
+/// [PowerSource.unspecified] on purpose: the model can't know whether this
+/// room puts it on the controller or straight into the wall.
+PowerSource powerSourceForInput(PowerInput input) => switch (input) {
+  PowerInput.poe => PowerSource.poe,
+  PowerInput.none => PowerSource.none,
+  PowerInput.mains => PowerSource.unspecified,
+};
+
+/// The id every power inlet uses, so adding one twice is impossible and the
+/// toggle can always find the one already there.
+const String kPowerPortId = 'in_power';
+
+/// Watts to BTU/hr. Electrical power becomes heat essentially one for one, so
+/// the conversion is just the unit change — 1 W = 3.412 BTU/hr.
+const double kWattsToBtu = 3.412;
+
+/// A device's power inlet, on the bottom edge so it stays clear of the signal
+/// columns down either side.
+AvPort powerInletPort(PowerInput input) => AvPort(
+  id: kPowerPortId,
+  label: input == PowerInput.poe ? 'POWER (PoE)' : 'POWER',
+  signal: SignalType.power,
+  direction: PortDirection.input,
+  side: PortSide.bottom,
+);
+
+/// [ports] with exactly the power inlet [input] calls for: one added when it
+/// is missing, relabelled when the toggle moves, removed when the device is
+/// passive. Everything else keeps its order.
+List<AvPort> withPowerInlet(List<AvPort> ports, PowerInput input) {
+  final others = ports
+      .where(
+        (p) =>
+            p.id != kPowerPortId &&
+            !(p.signal == SignalType.power && p.isInput),
+      )
+      .toList();
+  if (input == PowerInput.none) return others;
+  return [...others, powerInletPort(input)];
+}
+
 enum PortDirection { input, output, bidirectional }
 
 /// Which edge of the node box a port sits on. Inputs default to the left and
@@ -276,6 +345,12 @@ class AvPort {
 
   bool get isOutput => direction == PortDirection.output;
   bool get isInput => direction == PortDirection.input;
+
+  /// The device's mains (or PoE) inlet rather than a signal connector. Kept
+  /// out of the in/out counts and the connector-utilization report, where
+  /// counting it would overstate every device by one input.
+  bool get isPowerInlet =>
+      signal == SignalType.power && direction != PortDirection.output;
 
   AvPort copyWith({
     String? id,
@@ -381,6 +456,13 @@ class AvNode {
   /// totalling as zero.
   final double powerWatts;
 
+  /// Heat output in BTU/hr. 0 means "derive it from [powerWatts]", which is
+  /// right for almost everything — a box turns its input power into heat. It
+  /// is a separate field because it isn't always: an amplifier's rated draw
+  /// goes partly out of the speaker terminals as sound, and a manufacturer
+  /// who publishes a BTU figure should be believed over the arithmetic.
+  final double btuPerHour;
+
   /// Device or numbered jack field (wall box / floor box / patch panel).
   final AvNodeKind kind;
 
@@ -399,12 +481,41 @@ class AvNode {
     this.fromConfig = false,
     this.rackUnits = 0,
     this.powerWatts = 0,
+    this.btuPerHour = 0,
     this.kind = AvNodeKind.device,
     this.powerSource = PowerSource.unspecified,
     this.note = '',
   });
 
   bool get isJackField => kind == AvNodeKind.jackField;
+
+  /// Heat this device puts into the room: its own BTU figure when somebody
+  /// recorded one, otherwise the watts converted. 0 when neither is known —
+  /// which the reports count rather than adding in as "runs cold".
+  double get effectiveBtu =>
+      btuPerHour > 0 ? btuPerHour : powerWatts * kWattsToBtu;
+
+  /// The same device under a different id.
+  ///
+  /// [copyWith] deliberately cannot change the id — it is the node's identity
+  /// — but adding a node has to re-key one whose id is taken. That rebuild
+  /// lives HERE, next to the fields, rather than in the provider: twice now a
+  /// new field (watts, then BTU) was added to the class and silently dropped
+  /// by a field-by-field rebuild somewhere else in the app.
+  AvNode withId(String newId) => AvNode(
+    id: newId,
+    label: label,
+    model: model,
+    pos: pos,
+    ports: ports,
+    fromConfig: fromConfig,
+    rackUnits: rackUnits,
+    powerWatts: powerWatts,
+    btuPerHour: btuPerHour,
+    kind: kind,
+    powerSource: powerSource,
+    note: note,
+  );
 
   AvNode copyWith({
     String? label,
@@ -414,6 +525,7 @@ class AvNode {
     bool? fromConfig,
     int? rackUnits,
     double? powerWatts,
+    double? btuPerHour,
     AvNodeKind? kind,
     PowerSource? powerSource,
     String? note,
@@ -426,6 +538,7 @@ class AvNode {
     fromConfig: fromConfig ?? this.fromConfig,
     rackUnits: rackUnits ?? this.rackUnits,
     powerWatts: powerWatts ?? this.powerWatts,
+    btuPerHour: btuPerHour ?? this.btuPerHour,
     kind: kind ?? this.kind,
     powerSource: powerSource ?? this.powerSource,
     note: note ?? this.note,
@@ -542,6 +655,7 @@ class AvNode {
     'fromConfig': fromConfig,
     'rackUnits': rackUnits,
     if (powerWatts > 0) 'powerWatts': powerWatts,
+    if (btuPerHour > 0) 'btuPerHour': btuPerHour,
     if (kind != AvNodeKind.device) 'kind': kind.name,
     if (powerSource != PowerSource.unspecified) 'power': powerSource.name,
     if (note.isNotEmpty) 'note': note,
@@ -559,6 +673,7 @@ class AvNode {
     fromConfig: json['fromConfig'] == true,
     rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
     powerWatts: (json['powerWatts'] as num?)?.toDouble() ?? 0,
+    btuPerHour: (json['btuPerHour'] as num?)?.toDouble() ?? 0,
     kind: nodeKindFromName(json['kind']?.toString()),
     powerSource: powerSourceFromName(json['power']?.toString()),
     note: json['note']?.toString() ?? '',

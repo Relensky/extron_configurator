@@ -1126,19 +1126,9 @@ class AppStateProvider extends ChangeNotifier {
         id = 'AVNODE_$_avNodeCounter';
       } while (avNodeById(id) != null);
     }
-    final stored = AvNode(
-      id: id,
-      label: node.label,
-      model: node.model,
-      pos: node.pos,
-      ports: node.ports,
-      fromConfig: node.fromConfig,
-      rackUnits: node.rackUnits,
-      powerWatts: node.powerWatts,
-      kind: node.kind,
-      powerSource: node.powerSource,
-      note: node.note,
-    );
+    // withId rather than a rebuild here: the field list belongs next to the
+    // fields, so a new one can't be quietly lost on the way in.
+    final stored = node.withId(id);
     avNodes.add(stored);
     avDismissedDevices.remove(id);
     notifyListeners();
@@ -3204,6 +3194,25 @@ class AppStateProvider extends ChangeNotifier {
   /// is a plain object rather than a listenable, so every edit path goes
   /// through here instead of each view remembering to notify.
   void avDeviceLibraryChanged() => notifyListeners();
+
+  /// The Python driver module that claims [model], or '' when none does.
+  ///
+  /// The catalog covers everything you can buy; the module library covers
+  /// what the control system can actually drive. The gap between the two is
+  /// worth reporting — a display with no module is a display somebody has to
+  /// switch on by hand — so the AV report lists it rather than leaving it to
+  /// be discovered on site. Matching is case-forgiving for the same reason
+  /// module resolution is: people type 'TR311hw' for 'TR311HW'.
+  String moduleForModel(String model) {
+    final name = model.trim();
+    if (name.isEmpty) return '';
+    final entry = modelRegistry[name] ??
+        modelRegistry.values.cast<ModelEntry?>().firstWhere(
+              (e) => e!.model.toLowerCase().trim() == name.toLowerCase(),
+              orElse: () => null,
+            );
+    return entry == null ? '' : normalizeModuleName(entry.module);
+  }
 
   /// Validates the template file and registers it as the default WITHOUT
   /// loading its contents into the active room config. The file is only

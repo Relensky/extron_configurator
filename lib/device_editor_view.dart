@@ -419,6 +419,27 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             ),
             const SizedBox(width: 12),
             SizedBox(
+              width: 140,
+              child: LiveTextField(
+                fieldId: 'btu_$key',
+                initial: entry.btuPerHour == 0
+                    ? ''
+                    : trimNumber(entry.btuPerHour),
+                label: 'Heat',
+                suffix: 'BTU/hr',
+                helper: entry.powerWatts > 0
+                    ? 'blank = ${trimNumber(entry.powerWatts * kWattsToBtu)}'
+                    : 'blank = from W',
+                numeric: true,
+                onChanged: (v) => setState(
+                  () => _apply(
+                    entry.copyWith(btuPerHour: double.tryParse(v.trim()) ?? 0),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
               width: 150,
               child: LiveTextField(
                 fieldId: 'price_$key',
@@ -430,6 +451,61 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   () => _apply(
                     entry.copyWith(price: double.tryParse(v.trim()) ?? 0),
                   ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text('Power in', style: theme.textTheme.titleSmall),
+            const SizedBox(width: 12),
+            // The toggle keeps the inlet connector in step with itself: pick
+            // PoE and the port relabels, pick None and it goes away, so the
+            // drawing and the rack load can never disagree about whether this
+            // box is plugged into anything.
+            SegmentedButton<PowerInput>(
+              segments: const [
+                ButtonSegment(
+                  value: PowerInput.mains,
+                  icon: Icon(Icons.power, size: 16),
+                  label: Text('Mains'),
+                ),
+                ButtonSegment(
+                  value: PowerInput.poe,
+                  icon: Icon(Icons.lan, size: 16),
+                  label: Text('PoE'),
+                ),
+                ButtonSegment(
+                  value: PowerInput.none,
+                  icon: Icon(Icons.power_off, size: 16),
+                  label: Text('None'),
+                ),
+              ],
+              selected: {entry.powerInput},
+              onSelectionChanged: (s) => setState(
+                () => _apply(
+                  entry.copyWith(
+                    powerInput: s.first,
+                    ports: withPowerInlet(entry.ports, s.first),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                switch (entry.powerInput) {
+                  PowerInput.mains =>
+                    'Lands on the room circuit; counted in the rack load.',
+                  PowerInput.poe =>
+                    'Fed off the network switch; kept out of the mains total.',
+                  PowerInput.none =>
+                    'Passive — a speaker, a cable, a blanking plate.',
+                },
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.disabledColor,
                 ),
               ),
             ),
@@ -656,10 +732,16 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       _snack('"$name" is already in the catalog.', error: true);
       return;
     }
+    final base = copyFrom ?? const AvDeviceTemplate(model: '', ports: []);
     setState(
       () => _apply(
-        (copyFrom ?? const AvDeviceTemplate(model: '', ports: []))
-            .copyWith(model: name),
+        base.copyWith(
+          model: name,
+          // A new entry starts with a mains inlet, like everything else in
+          // the catalog — a device with no recorded inlet is a device the
+          // rack load quietly forgets.
+          ports: withPowerInlet(base.ports, base.powerInput),
+        ),
       ),
     );
   }

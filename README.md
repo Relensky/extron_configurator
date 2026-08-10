@@ -70,17 +70,47 @@ DEVICE_INFO = {
 ## Device Editor (the `Catalog` tab)
 
 The room config describes control and nothing else — it knows a device's IP
-address, never that it has four HDMI inputs, is 2U, draws 90 W and lists at
-$8,500. Those four facts drive the AV diagram, the rack elevation, the power
-estimate and the cost estimate, so they live once in a device catalog rather
-than being re-typed per room.
+address, never that it has four HDMI inputs, is 3U, draws 90 W and lists at
+$8,500. Those facts drive the AV diagram, the rack elevation, the power and
+heat estimates and the cost estimate, so they live once in a device catalog
+rather than being re-typed per room.
 
 The tab edits `av_devices.json` (Root Folder, or wherever the loaded one came
 from). Per model: **connectors** (in/out, signal type, which edge of the box),
-**rack units**, **estimated power draw**, **unit price**, plus manufacturer,
-part number, category and notes. Entries here override the app's built-in
-models; a built-in you never touch stays built-in, so a later app build can
-still improve it, and **Save catalog** only writes the entries that are yours.
+**rack units**, **power in** (mains / PoE / none), **estimated power draw**,
+**heat output**, **unit price**, plus manufacturer, part number, category and
+notes. Entries here override the app's built-in models; a built-in you never
+touch stays built-in, so a later app build can still improve it, and **Save
+catalog** only writes the entries that are yours.
+
+### Power in, and heat out
+
+Every catalog entry carries a **power inlet** unless it is genuinely passive
+(a speaker, a cable, a blanking plate). The **Mains / PoE / None** toggle keeps
+the inlet connector in step with itself — pick PoE and the port relabels, pick
+None and it goes away — so the drawing and the rack load can never disagree
+about whether a box is plugged into anything. PoE devices are counted in the
+room's total draw but kept out of the mains current, because they come off the
+switch's budget rather than the room's circuit.
+
+**Heat** defaults to the watts converted (1 W = 3.412 BTU/hr) and can be
+overridden per model where the manufacturer publishes a figure — an
+amplifier's rated draw is not all heat, since some of it leaves through the
+speaker terminals. The rack report totals it per frame, in BTU/hr and in tons,
+which is what sizing a cabinet fan or a closet mini-split actually asks for.
+
+### Where the catalog came from
+
+The shipped `av_devices.json` holds **990 Extron models** imported from the
+engineering stencils in `drawings_library/`: model, part number, description,
+product family and the connector set read straight off each drawing. See
+[DEVICE_CATALOG_IMPORT.md](DEVICE_CATALOG_IMPORT.md) for what came in and what
+is still blank, and [tools/](tools/README.md) for re-running the import
+against a refreshed stencil pack.
+
+Rack heights, watts, BTU and prices are **not** in the drawings. They are left
+at 0 — "not recorded" — rather than guessed, and every report counts what is
+still missing instead of totalling a blank as free and cold.
 
 Nothing is written to disk until **Save catalog** — a mistyped price never
 reaches a shared drive on its own.
@@ -140,6 +170,27 @@ Every sheet is dealt from the same section builders the single-sheet exports
 use, so a figure cannot differ between the two buttons. The diagram image can
 only be captured from the page on screen, so the tab you export from is the one
 that gets illustrated.
+
+## Devices without a control module
+
+The catalog covers everything you can buy; the module library under `device/`
+covers what the control system can actually drive. The gap between them is
+reported rather than left to be found on site:
+
+- the **Pack List** carries a `Control module` column, naming the module or
+  saying `none`;
+- a **Devices Without a Control Module** section lists the room's undriven
+  devices, and drops out entirely when there are none.
+
+This is resolved live rather than recorded in `av_devices.json`, because which
+models have a driver changes every time a module is added to the library.
+
+## Wall boxes and patch panels
+
+**Add wall box / patch panel** numbers its jacks `<prefix><number>`, defaulting
+to the room-number scheme: prefix `1110`, first number `01`, giving `111001`,
+`111002`, … The first number's width sets the padding, so `01` keeps two
+digits and `1` numbers plainly.
 
 ## In-app PDF manuals
 

@@ -316,10 +316,12 @@ class _AvFlowViewState extends State<AvFlowView> {
         label: dev['name']?.toString() ?? key,
         model: model,
         pos: Offset(40 + col * 340.0, y),
-        ports: template.ports,
+        ports: withPowerInlet(template.ports, template.powerInput),
         fromConfig: true,
         rackUnits: template.rackUnits,
         powerWatts: template.powerWatts,
+        btuPerHour: template.btuPerHour,
+        powerSource: powerSourceForInput(template.powerInput),
       );
       provider.addAvNode(node);
       columnY[col] = y + node.height + 30;
@@ -1266,10 +1268,12 @@ class _AvFlowViewState extends State<AvFlowView> {
         label: d.label,
         model: d.model,
         pos: Offset(40 + col * 340.0, y),
-        ports: template.ports,
+        ports: withPowerInlet(template.ports, template.powerInput),
         fromConfig: true,
         rackUnits: template.rackUnits,
         powerWatts: template.powerWatts,
+        btuPerHour: template.btuPerHour,
+        powerSource: powerSourceForInput(template.powerInput),
       ),
     );
   }
@@ -1343,26 +1347,32 @@ class _AvFlowViewState extends State<AvFlowView> {
         label: label.isEmpty ? (model.isEmpty ? 'Device' : model) : label,
         model: model,
         pos: const Offset(40, 60),
-        ports:
-            template?.ports ??
-            const [
-              AvPort(
-                id: 'in_1',
-                label: 'IN 1',
-                signal: SignalType.hdmi,
-                direction: PortDirection.input,
-                side: PortSide.left,
-              ),
-              AvPort(
-                id: 'out_1',
-                label: 'OUT 1',
-                signal: SignalType.hdmi,
-                direction: PortDirection.output,
-                side: PortSide.right,
-              ),
-            ],
+        ports: withPowerInlet(
+          template?.ports ??
+              const [
+                AvPort(
+                  id: 'in_1',
+                  label: 'IN 1',
+                  signal: SignalType.hdmi,
+                  direction: PortDirection.input,
+                  side: PortSide.left,
+                ),
+                AvPort(
+                  id: 'out_1',
+                  label: 'OUT 1',
+                  signal: SignalType.hdmi,
+                  direction: PortDirection.output,
+                  side: PortSide.right,
+                ),
+              ],
+          template?.powerInput ?? PowerInput.mains,
+        ),
         rackUnits: template?.rackUnits ?? 0,
         powerWatts: template?.powerWatts ?? 0,
+        btuPerHour: template?.btuPerHour ?? 0,
+        powerSource: powerSourceForInput(
+          template?.powerInput ?? PowerInput.mains,
+        ),
       ),
     );
   }
@@ -1374,8 +1384,10 @@ class _AvFlowViewState extends State<AvFlowView> {
   Future<void> _showAddJackFieldDialog(AppStateProvider provider) async {
     final labelController = TextEditingController(text: 'Wall box');
     final countController = TextEditingController(text: '6');
-    final prefixController = TextEditingController(text: 'J');
-    final startController = TextEditingController(text: '1');
+    // The site numbering scheme: the room number is the prefix and the jack
+    // is a two-digit position under it, so jack 1 of room 1110 is "111001".
+    final prefixController = TextEditingController(text: '1110');
+    final startController = TextEditingController(text: '01');
     SignalType signal = SignalType.network;
 
     final created = await showDialog<bool>(
@@ -1427,6 +1439,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                         controller: startController,
                         decoration: const InputDecoration(
                           labelText: 'First number',
+                          helperText: '01 = 2 digits',
                         ),
                         keyboardType: TextInputType.number,
                         inputFormatters: [
@@ -1478,8 +1491,13 @@ class _AvFlowViewState extends State<AvFlowView> {
     if (created != true) return;
 
     final count = (int.tryParse(countController.text.trim()) ?? 0).clamp(1, 96);
-    final first = int.tryParse(startController.text.trim()) ?? 1;
+    final startText = startController.text.trim();
+    final first = int.tryParse(startText) ?? 1;
     final prefix = prefixController.text.trim();
+    // "01" means two digits: jack 2 is 02, not 2, and jack 12 is still 12.
+    // The width comes from what was typed, so "1" keeps the old unpadded
+    // numbering for anyone who wants it.
+    final width = startText.length;
     final label = labelController.text.trim();
 
     provider.addAvNode(
@@ -1494,7 +1512,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           for (int i = 0; i < count; i++)
             AvPort(
               id: 'jack_${first + i}',
-              label: '$prefix${first + i}',
+              label: '$prefix${'${first + i}'.padLeft(width, '0')}',
               signal: signal,
               direction: PortDirection.bidirectional,
               // Jacks alternate sides so a 12-way panel stays compact
@@ -1620,6 +1638,9 @@ class _AvFlowViewState extends State<AvFlowView> {
     final wattsController = TextEditingController(
       text: node.powerWatts <= 0 ? '' : trimNumber(node.powerWatts),
     );
+    final btuController = TextEditingController(
+      text: node.btuPerHour <= 0 ? '' : trimNumber(node.btuPerHour),
+    );
     final ports = List<AvPort>.from(node.ports);
     PowerSource powerSource = node.powerSource;
 
@@ -1677,6 +1698,25 @@ class _AvFlowViewState extends State<AvFlowView> {
                         decoration: const InputDecoration(
                           labelText: 'Watts',
                           helperText: 'blank = unknown',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[0-9.]'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 120,
+                      child: TextField(
+                        controller: btuController,
+                        decoration: const InputDecoration(
+                          labelText: 'BTU/hr',
+                          helperText: 'blank = from W',
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
@@ -1746,7 +1786,12 @@ class _AvFlowViewState extends State<AvFlowView> {
                         setLocal(() {
                           ports
                             ..clear()
-                            ..addAll(template.ports);
+                            ..addAll(
+                              withPowerInlet(
+                                template.ports,
+                                template.powerInput,
+                              ),
+                            );
                           // The catalog's rack height and draw come back with
                           // the connectors — they describe the same box, and
                           // resetting half of it is how a device ends up 2U
@@ -1756,6 +1801,11 @@ class _AvFlowViewState extends State<AvFlowView> {
                           if (template.powerWatts > 0) {
                             wattsController.text = trimNumber(
                               template.powerWatts,
+                            );
+                          }
+                          if (template.btuPerHour > 0) {
+                            btuController.text = trimNumber(
+                              template.btuPerHour,
                             );
                           }
                         });
@@ -1850,6 +1900,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       note: noteController.text.trim(),
       rackUnits: int.tryParse(rackUnitsController.text.trim()) ?? 0,
       powerWatts: double.tryParse(wattsController.text.trim()) ?? 0,
+      btuPerHour: double.tryParse(btuController.text.trim()) ?? 0,
       powerSource: powerSource,
       ports: ports,
     );
@@ -1859,6 +1910,12 @@ class _AvFlowViewState extends State<AvFlowView> {
         model: updated.model.isEmpty ? updated.label : updated.model,
         rackUnits: updated.rackUnits,
         powerWatts: updated.powerWatts,
+        btuPerHour: updated.btuPerHour,
+        powerInput: updated.ports.any((p) => p.isPowerInlet)
+            ? (updated.powerSource == PowerSource.poe
+                  ? PowerInput.poe
+                  : PowerInput.mains)
+            : PowerInput.none,
         ports: updated.ports,
       );
       if (result == 'copy') {
@@ -1884,6 +1941,10 @@ class _AvFlowViewState extends State<AvFlowView> {
                   powerWatts: entry.powerWatts > 0
                       ? entry.powerWatts
                       : existing.powerWatts,
+                  btuPerHour: entry.btuPerHour > 0
+                      ? entry.btuPerHour
+                      : existing.btuPerHour,
+                  powerInput: entry.powerInput,
                   ports: entry.ports,
                 ),
         );

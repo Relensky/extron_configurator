@@ -45,9 +45,10 @@ List<ReportSection> avFlowSections(
 ) => [
   _roomSummary(provider, model),
   _cableSchedule(model),
-  _packList(model),
+  _packList(provider, model),
   if (model.nodes.any((n) => n.isJackField)) _jackSchedule(model),
   _portUtilization(model),
+  ..._driverGap(provider, model),
 ];
 
 /// The rack elevation half: how full each frame is and what sits where.
@@ -132,18 +133,20 @@ ReportSection _cableSchedule(AvFlowModel model) {
 /// a quantity, which is what a pack list is actually read for. The grouping is
 /// [groupDevices] — shared with the cost estimate, so the quantity you order
 /// and the quantity you are quoted for are the same number by construction.
-ReportSection _packList(AvFlowModel model) {
+ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
   final rows = <List<dynamic>>[];
   for (final group in groupDevices(model)) {
     final first = group.first;
     // Connector counts come straight off the device, so the sheet says what
-    // the box has to have — not just what this room happened to use.
+    // the box has to have — not just what this room happened to use. The
+    // power inlet is not a signal connector and stays out of the count.
     final ins = first.ports
-        .where((p) => p.direction != PortDirection.output)
+        .where((p) => p.direction != PortDirection.output && !p.isPowerInlet)
         .length;
     final outs = first.ports
         .where((p) => p.direction != PortDirection.input)
         .length;
+    final module = provider.moduleForModel(first.model);
     rows.add([
       group.label,
       first.model,
@@ -151,6 +154,8 @@ ReportSection _packList(AvFlowModel model) {
       first.rackUnits == 0 ? '' : '${first.rackUnits}U',
       '$ins / $outs',
       first.powerWatts <= 0 ? '' : first.powerWatts,
+      first.effectiveBtu <= 0 ? '' : first.effectiveBtu.round(),
+      module.isEmpty ? 'none' : module,
       first.fromConfig ? 'Room config' : 'Added manually',
       group.notes,
     ]);
@@ -165,11 +170,48 @@ ReportSection _packList(AvFlowModel model) {
       'Rack U',
       'In / Out',
       'Watts ea.',
+      'BTU/hr ea.',
+      'Control module',
       'Source',
       'Notes',
     ],
     rows: rows,
   );
+}
+
+/// Devices no Python driver claims.
+///
+/// The catalog covers everything you can buy; the module library covers what
+/// the control system can actually drive. A device in the first and not the
+/// second is not necessarily wrong — a passive speaker never had a driver —
+/// but it IS the list somebody needs before commissioning, because every
+/// entry on it is a box the processor cannot touch. Empty sections drop out,
+/// so a fully driven room never grows this table.
+List<ReportSection> _driverGap(AppStateProvider provider, AvFlowModel model) {
+  final rows = <List<dynamic>>[];
+  for (final group in groupDevices(model)) {
+    final node = group.first;
+    if (node.isJackField) continue;
+    if (node.model.trim().isEmpty) {
+      rows.add([group.label, '(no model set)', group.qty, 'Model not recorded']);
+      continue;
+    }
+    if (provider.moduleForModel(node.model).isNotEmpty) continue;
+    rows.add([
+      group.label,
+      node.model,
+      group.qty,
+      'No Python module claims this model',
+    ]);
+  }
+  if (rows.isEmpty) return const [];
+  return [
+    (
+      title: 'Devices Without a Control Module',
+      header: ['Device', 'Model', 'Qty', 'Note'],
+      rows: rows,
+    ),
+  ];
 }
 
 /// How full and how hot each frame is: the two questions asked before
@@ -181,13 +223,19 @@ ReportSection _rackSummary(AvFlowModel model) {
   for (final rack in model.racks) {
     int usedU = 0;
     double watts = 0;
+    double btu = 0;
     int devices = 0;
+    int unmetered = 0;
     for (final entry in model.rackSlots.entries) {
       if (entry.value.rackId != rack.id) continue;
       final node = byId[entry.key];
       if (node == null) continue;
       devices++;
       watts += node.powerWatts;
+      btu += node.effectiveBtu;
+      if (node.effectiveBtu <= 0 && node.powerSource != PowerSource.none) {
+        unmetered++;
+      }
       // A shared rail is one U of rack space however many boxes are on it,
       // so a device on a split row only claims its fraction.
       usedU += (node.rackUnits <= 0 ? 1 : node.rackUnits);
@@ -199,7 +247,11 @@ ReportSection _rackSummary(AvFlowModel model) {
       devices,
       '$usedU of ${rack.heightU}U',
       watts <= 0 ? '' : watts.round(),
-      watts <= 0 ? '' : (watts * 3.412).round(),
+      btu <= 0 ? '' : btu.round(),
+      // What somebody sizing the cabinet fan or the closet's mini-split
+      // actually asks for.
+      btu <= 0 ? '' : (btu / 12000).toStringAsFixed(2),
+      unmetered == 0 ? '' : '$unmetered not recorded',
     ]);
   }
 
@@ -212,7 +264,9 @@ ReportSection _rackSummary(AvFlowModel model) {
       'Devices',
       'Space used',
       'Watts',
-      'BTU/hr',
+      'Cooling (BTU/hr)',
+      'Cooling (tons)',
+      'Missing figures',
     ],
     rows: rows,
   );
@@ -227,14 +281,18 @@ ReportSection _rackSummary(AvFlowModel model) {
 /// total.
 ReportSection _powerSummary(AvFlowModel model) {
   double total = 0;
+  double btu = 0;
   int unmetered = 0;
   final bySource = <PowerSource, double>{};
   final unmeteredBySource = <PowerSource, int>{};
 
   for (final node in model.nodes) {
     if (node.isJackField) continue;
+    btu += node.effectiveBtu;
     if (node.powerWatts <= 0) {
-      unmetered++;
+      // A device that is not plugged into anything is not a gap in the
+      // estimate — it genuinely draws nothing.
+      if (node.powerSource != PowerSource.none) unmetered++;
       unmeteredBySource[node.powerSource] =
           (unmeteredBySource[node.powerSource] ?? 0) + 1;
       continue;
@@ -255,7 +313,11 @@ ReportSection _powerSummary(AvFlowModel model) {
     ['Mains-fed draw (W)', mains.round()],
     ['Estimated current @ 120 V (A)', (mains / 120).toStringAsFixed(1)],
     ['Estimated current @ 208 V (A)', (mains / 208).toStringAsFixed(1)],
-    ['Heat load (BTU/hr)', (total * 3.412).round()],
+    // Heat comes off each device's own BTU figure where there is one and its
+    // watts where there isn't — an amplifier's published heat output is well
+    // below its rated draw, so the arithmetic is a fallback, not the truth.
+    ['Heat load (BTU/hr)', btu.round()],
+    ['Cooling required (tons)', (btu / 12000).toStringAsFixed(2)],
     for (final source in PowerSource.values)
       if ((bySource[source] ?? 0) > 0 || (unmeteredBySource[source] ?? 0) > 0)
         [
@@ -411,6 +473,7 @@ ReportSection _powerSchedule(AvFlowModel model) {
       node.model,
       kPowerSourceLabels[node.powerSource] ?? node.powerSource.name,
       node.powerWatts <= 0 ? '' : node.powerWatts,
+      node.effectiveBtu <= 0 ? '' : node.effectiveBtu.round(),
       feed,
       outlet,
     ]);
@@ -418,7 +481,15 @@ ReportSection _powerSchedule(AvFlowModel model) {
 
   return (
     title: 'Power Schedule',
-    header: ['Device', 'Model', 'Source', 'Watts', 'Fed from', 'Outlet'],
+    header: [
+      'Device',
+      'Model',
+      'Source',
+      'Watts',
+      'BTU/hr',
+      'Fed from',
+      'Outlet',
+    ],
     rows: rows,
   );
 }
@@ -440,6 +511,9 @@ ReportSection _portUtilization(AvFlowModel model) {
     final used = usedPorts[node.id] ?? const <String>{};
     int inTotal = 0, inUsed = 0, outTotal = 0, outUsed = 0;
     for (final p in node.ports) {
+      // The power inlet is not a signal connector; counting it would report
+      // every device as having one more input than it can be patched with.
+      if (p.isPowerInlet) continue;
       // Bidirectional connectors (Dante, network, USB-C) count on both sides,
       // since either role is what they are there for.
       if (p.direction != PortDirection.output) {
