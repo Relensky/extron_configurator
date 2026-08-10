@@ -116,17 +116,16 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   }
 
   List<AvDeviceTemplate> _filtered(AvDeviceLibrary library) {
-    final needle = _search.trim().toLowerCase();
-    return library.all.where((t) {
+    final narrowed = library.all.where((t) {
       if (_customOnly && !t.custom) return false;
       if (_categoryFilter.isNotEmpty && t.category != _categoryFilter) {
         return false;
       }
-      if (needle.isEmpty) return true;
-      return '${t.model} ${t.manufacturer} ${t.partNumber} ${t.category}'
-          .toLowerCase()
-          .contains(needle);
+      return true;
     }).toList();
+    // Same matching as the AV tab's model picker: spaces, dashes and case are
+    // ignored, so "dtpcross108" finds "DTP CrossPoint 108".
+    return searchCatalog(narrowed, _search, limit: narrowed.length);
   }
 
   Widget _buildToolbar(AppStateProvider provider, AvDeviceLibrary library) {

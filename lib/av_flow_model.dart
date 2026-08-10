@@ -1525,9 +1525,16 @@ class AvUnplacedDevice {
   final String label;
   final String model;
 
+  /// True when this device was taken OFF the canvas by hand. It still belongs
+  /// to the room, so the palette keeps listing it — marked, so it is obvious
+  /// why the automatic seed leaves it alone — rather than hiding it and
+  /// leaving no way back short of editing the sidecar.
+  final bool dismissed;
+
   const AvUnplacedDevice({
     required this.key,
     required this.label,
     required this.model,
+    this.dismissed = false,
   });
 }

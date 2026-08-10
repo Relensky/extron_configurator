@@ -11,6 +11,7 @@ import 'av_flow_model.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
 import 'cost_estimate.dart';
+import 'labor_rates.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
@@ -406,6 +407,7 @@ class AppStateProvider extends ChangeNotifier {
     await loadUiSchema();
     await loadKeyMap();
     await loadAvDeviceLibrary();
+    await loadLaborRates();
     await loadBuildingsList();
     await loadProcessorsList();
     // ignore: unawaited_futures
@@ -433,6 +435,12 @@ class AppStateProvider extends ChangeNotifier {
   // device shows on the AV canvas come from here. Built-ins cover the common
   // models; av_devices.json in the Root Folder overrides and extends them.
   AvDeviceLibrary avDeviceLibrary = AvDeviceLibrary.builtIn();
+
+  // --- Labor rates (what an hour costs, per job type) ---
+  // Shared across rooms so revising a rate re-costs every estimate that uses
+  // it. Read from labor_rates.json in the Root Folder; the built-in roles
+  // (CTS III / CTS IV / TSRV / FMS) stand in until that file exists.
+  LaborRateBook laborRates = LaborRateBook.builtIn();
 
   /// The active working file on disk: the file opened locally, or the working
   /// copy chosen during an SFTP download. Empty when the session started from
@@ -1167,6 +1175,16 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Forgets which config devices were taken off the canvas by hand, so the
+  /// next seed places every one of them. This is what "Place all from config"
+  /// means, as opposed to the automatic first-visit seed, which respects the
+  /// removals.
+  void clearAvDismissedDevices() {
+    if (avDismissedDevices.isEmpty) return;
+    avDismissedDevices.clear();
+    notifyListeners();
+  }
+
   /// Draws a cable. Returns the created cable, or null when the same pair of
   /// ports is already joined (drawing it twice is always a slip).
   AvCable? addAvCable({
@@ -1603,17 +1621,33 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Writes the AV sidecar. Returns the saved path, or '' when there is no
-  /// working config file to sit next to (or the write failed).
-  Future<String> saveAvFlow() async {
-    final sidecar = avFlowSidecarPath;
-    if (sidecar.isEmpty) return '';
-    try {
-      const encoder = JsonEncoder.withIndent('  ');
-      await File(sidecar).writeAsString(encoder.convert({
+  /// Writes everything that belongs to the room but not to config.json: the
+  /// AV diagram with its cost estimate, and the control schematic layout.
+  /// Returns the files written.
+  ///
+  /// Called by every config save, so "save the project" means the project —
+  /// the sidecars are not optional extras with their own buttons to forget.
+  /// Each one no-ops when there is nothing to write.
+  Future<List<String>> saveProjectSidecars() async {
+    final written = <String>[];
+    if (hasAvFlow) {
+      final saved = await saveAvFlow();
+      if (saved.isNotEmpty) written.add(saved);
+    }
+    if (hasSchematicLayout) {
+      final saved = await saveSchematicLayout();
+      if (saved.isNotEmpty) written.add(saved);
+    }
+    return written;
+  }
+
+  /// The AV diagram as it goes to disk: devices, cables, racks and the cost
+  /// estimate. Public so a project export can write the same document into a
+  /// room folder without a second, drifting copy of the field list.
+  Map<String, dynamic> avFlowAsJson() => {
         '__readme': 'AV signal flow for the Room Config Builder: devices with '
             'their connectors, the cables between them, rack elevations, and '
-            "this room's cost estimate (tax, fees and quoted prices).",
+            "this room's cost estimate (tax, fees, labor and quoted prices).",
         'nodes': avNodes.map((n) => n.toJson()).toList(),
         'cables': avCables.map((c) => c.toJson()).toList(),
         'racks': avRacks.map((r) => r.toJson()).toList(),
@@ -1626,7 +1660,16 @@ class AppStateProvider extends ChangeNotifier {
                 .padLeft(6, '0'),
         },
         'cost': avCost.toJson(),
-      }));
+      };
+
+  /// Writes the AV sidecar. Returns the saved path, or '' when there is no
+  /// working config file to sit next to (or the write failed).
+  Future<String> saveAvFlow() async {
+    final sidecar = avFlowSidecarPath;
+    if (sidecar.isEmpty) return '';
+    try {
+      const encoder = JsonEncoder.withIndent('  ');
+      await File(sidecar).writeAsString(encoder.convert(avFlowAsJson()));
 
       // The write succeeded, so the pre-rename file is now a stale duplicate
       // that would quietly diverge. Retire it — but only ever AFTER the new
@@ -2365,6 +2408,8 @@ class AppStateProvider extends ChangeNotifier {
       await loadKeyMap();
       // Load the AV connector library (built-ins when no file exists)
       await loadAvDeviceLibrary();
+      // Load the labor rate card (built-in roles when no file exists)
+      await loadLaborRates();
 
       // Load files into memory on boot. The loaders resolve their own
       // default paths (Root Folder / working directory) when no explicit
@@ -3076,6 +3121,8 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadAvDeviceLibrary();
         // ignore: unawaited_futures
+        loadLaborRates();
+        // ignore: unawaited_futures
         loadBuildingsList();
         // ignore: unawaited_futures
         loadProcessorsList();
@@ -3188,6 +3235,59 @@ class AppStateProvider extends ChangeNotifier {
     final saved = await avDeviceLibrary.save(toPath: effectiveAvDevicesPath);
     notifyListeners();
     return saved;
+  }
+
+  /// labor_rates.json: explicit choice, else `<root>/labor_rates.json`.
+  String get effectiveLaborRatesPath =>
+      laborRates.filePath.isNotEmpty
+          ? laborRates.filePath
+          : path.join(effectiveRootFolder, 'labor_rates.json');
+
+  /// (Re)loads the rate card. [explicitPath] opens somebody else's card —
+  /// rates are per contract as often as they are per year.
+  Future<void> loadLaborRates({String explicitPath = ''}) async {
+    laborRates = await LaborRateBook.load(
+      explicitPath.isNotEmpty ? explicitPath : effectiveLaborRatesPath,
+    );
+    notifyListeners();
+  }
+
+  /// Writes the rate card. Returns the file written, or '' on failure.
+  Future<String> saveLaborRates() async {
+    final saved = await laborRates.save(toPath: effectiveLaborRatesPath);
+    notifyListeners();
+    return saved;
+  }
+
+  /// The rate card is a plain object, not a listenable, so every edit path
+  /// goes through here rather than each view remembering to notify.
+  void laborRatesChanged() => notifyListeners();
+
+  // --- labour lines on this room's estimate ---
+
+  LaborLine addAvCostLabor({String rateId = '', double techs = 1}) {
+    final line = LaborLine(
+      id: _nextCostId('LABOR_'),
+      rateId: rateId.isEmpty
+          ? (laborRates.rates.isEmpty ? '' : laborRates.rates.first.id)
+          : rateId,
+      techs: techs,
+    );
+    avCost.labor.add(line);
+    notifyListeners();
+    return line;
+  }
+
+  void updateAvCostLabor(LaborLine line) {
+    final index = avCost.labor.indexWhere((l) => l.id == line.id);
+    if (index < 0) return;
+    avCost.labor[index] = line;
+    notifyListeners();
+  }
+
+  void removeAvCostLabor(String lineId) {
+    avCost.labor.removeWhere((l) => l.id == lineId);
+    notifyListeners();
   }
 
   /// Marks the catalog changed so the views that read it repaint. The library
@@ -4313,6 +4413,11 @@ class AppStateProvider extends ChangeNotifier {
       await File(currentConfigPath)
           .writeAsString(encoder.convert(_sortJson(roomConfig)));
       AppLogger.logInfo("Saved current config to working file $currentConfigPath");
+      // Saving the project saves the WHOLE project: the AV diagram and its
+      // cost estimate, and the control schematic, both of which live in
+      // sidecars beside this file. Leaving them to their own buttons meant a
+      // careful save could still lose an afternoon of pricing.
+      await saveProjectSidecars();
       notifyListeners(); // The Undo button becomes available
       return currentConfigPath;
     } catch (e, stack) {
@@ -4517,6 +4622,8 @@ class AppStateProvider extends ChangeNotifier {
       currentConfigPath = outputFile;
       _schematicSyncedPath = outputFile;
       _avFlowSyncedPath = outputFile;
+      // The diagrams and the cost estimate follow the config to its new home.
+      await saveProjectSidecars();
       notifyListeners();
       return true;
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
@@ -9,7 +10,10 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'av_flow_view.dart';
 import 'conversion_preview_view.dart';
+import 'cost_estimate_view.dart';
+import 'export_tools.dart';
 import 'device_editor_view.dart';
+import 'rack_tab_view.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
@@ -30,6 +34,8 @@ enum AppTab {
   system('system'),
   schematic('schematic'),
   avFlow('av_flow'),
+  racks('racks'),
+  cost('cost'),
   deviceEditor('device_editor'),
   rawJson('raw_json'),
   appConfig('app_config');
@@ -465,6 +471,24 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'New Config (from template)',
             onPressed: () => _createNewConfig(context, provider),
           ),
+          // CONVERT: the migration a legacy file needs, on demand. The load
+          // already ran the conversion in memory — this is where it gets
+          // reviewed, accepted or thrown away. Greyed out when the loaded
+          // file had nothing to migrate, so its state is also the answer to
+          // "does this room need converting?".
+          IconButton(
+            icon: Badge(
+              isLabelVisible: provider.lastLoadHadChanges,
+              label: Text('${provider.conversionChanges.length}'),
+              child: const Icon(Icons.compare_arrows),
+            ),
+            tooltip: provider.lastLoadHadChanges
+                ? 'Convert — review the changes this file needs'
+                : 'Nothing to convert in this file',
+            onPressed: provider.lastLoadHadChanges
+                ? () => _showMigrationLogDialog(context, provider.systemLogs)
+                : null,
+          ),
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: 'Open Existing Config',
@@ -473,10 +497,12 @@ class _MainDashboardState extends State<MainDashboard> {
               if (!loaded || !context.mounted) return;
               // The schematic saved next to the config comes back with it.
               await _syncDiagramsAfterLoad(context, provider);
-              // Only when the load actually changed/flagged something — a
-              // clean re-load of an already-migrated file stays silent.
+              // The conversion is NOT shown here. Opening a file should open
+              // the file; a migration dialog in front of it makes every load
+              // of a legacy room a dialog to dismiss before any work starts.
+              // The Convert button in the toolbar lights up instead.
               if (provider.lastLoadHadChanges && context.mounted) {
-                _showMigrationLogDialog(context, provider.systemLogs);
+                _announceConversionAvailable(context);
               }
             },
           ),
@@ -492,9 +518,10 @@ class _MainDashboardState extends State<MainDashboard> {
               if (result != true || !context.mounted) return;
               // Working copy on disk now — pick up any schematic beside it.
               await _syncDiagramsAfterLoad(context, provider);
-              // On a successful download, show the migration/audit log like a local load does
+              // Same as a local open: the download lands, and Convert offers
+              // the migration when the user is ready for it.
               if (provider.lastLoadHadChanges && context.mounted) {
-                _showMigrationLogDialog(context, provider.systemLogs);
+                _announceConversionAvailable(context);
               }
             },
           ),
@@ -569,6 +596,18 @@ class _MainDashboardState extends State<MainDashboard> {
                     ));
                   },
           ),
+          // SAVE ALL: the whole job into one folder named for the room —
+          // config, diagrams, reports, workbook, images, and a copy of the
+          // catalog entries and rate card the prices came from.
+          IconButton(
+            icon: const Icon(Icons.drive_folder_upload),
+            tooltip: hasConfig
+                ? 'Save All — write the whole project to a room folder'
+                : 'Save All — nothing loaded yet',
+            onPressed: hasConfig
+                ? () => _saveAllProject(context, provider, _captureKey)
+                : null,
+          ),
           IconButton(
             icon: const Icon(Icons.save_alt),
             tooltip: 'Export Config Locally',
@@ -597,6 +636,8 @@ class _MainDashboardState extends State<MainDashboard> {
               NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
               NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
               NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
+              NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
+              NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
               NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
               NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
               NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
@@ -662,7 +703,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     if (!loaded || !context.mounted) return;
                     await _syncDiagramsAfterLoad(context, provider);
                     if (provider.lastLoadHadChanges && context.mounted) {
-                      _showMigrationLogDialog(context, provider.systemLogs);
+                      _announceConversionAvailable(context);
                     }
                   },
                 ),
@@ -697,6 +738,10 @@ class _MainDashboardState extends State<MainDashboard> {
         return SchematicView(key: key);
       case AppTab.avFlow:
         return AvFlowView(key: key);
+      case AppTab.racks:
+        return RackTabView(key: key);
+      case AppTab.cost:
+        return CostEstimateView(key: key);
       case AppTab.deviceEditor:
         // Unkeyed: the catalog is application data, not room data, so it must
         // not be thrown away and rebuilt when a different room is opened.
@@ -710,6 +755,146 @@ class _MainDashboardState extends State<MainDashboard> {
         return const AppSettingsView();
     }
   }
+}
+
+/// SAVE ALL — everything this room has produced, into one folder.
+///
+/// The diagram images can only be rendered from a widget that is on screen,
+/// so this walks the diagram tabs, capturing each in turn, and puts the user
+/// back where they started. Anything that could not be captured is reported
+/// in the result rather than quietly missing from the folder.
+Future<void> _saveAllProject(
+    BuildContext context, AppStateProvider provider, GlobalKey captureKey) async {
+  final parent = await FilePicker.getDirectoryPath(
+    dialogTitle: 'Where should the room folder go?',
+  );
+  if (parent == null || !context.mounted) return;
+
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(const SnackBar(
+    duration: Duration(seconds: 2),
+    content: Text('Capturing the diagrams...'),
+  ));
+
+  final int startingTab = provider.selectedTabIndex;
+  Future<Uint8List?> capture(AppTab tab) async {
+    provider.selectTab(tab.index);
+    // Two frames plus a beat: the tab has to be built, laid out and painted
+    // before its RepaintBoundary has anything to hand over.
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    await WidgetsBinding.instance.endOfFrame;
+    return captureBoundary(captureKey, pixelRatio: 2.0);
+  }
+
+  final schematicPng = await capture(AppTab.schematic);
+  final avFlowPng = await capture(AppTab.avFlow);
+  final rackPng = await capture(AppTab.racks);
+  provider.selectTab(startingTab);
+  await WidgetsBinding.instance.endOfFrame;
+
+  ProjectExport result;
+  try {
+    result = await saveProjectFolder(
+      provider: provider,
+      parentFolder: parent,
+      schematicPng: schematicPng,
+      avFlowPng: avFlowPng,
+      rackPng: rackPng,
+    );
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(
+      content: Text('Save All failed: $e'),
+      backgroundColor: Colors.red,
+    ));
+    return;
+  }
+
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Project saved'),
+      content: SizedBox(
+        width: 620,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(result.folder,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text('${result.written.length} files written',
+                style: Theme.of(ctx).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final name in result.written)
+                      Text('  $name',
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 12)),
+                    if (result.skipped.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text('Not included',
+                          style: Theme.of(ctx).textTheme.titleSmall),
+                      const SizedBox(height: 4),
+                      for (final note in result.skipped)
+                        Text('  $note',
+                            style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                                color: Theme.of(ctx).disabledColor)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            final error = await provider.revealInFileManager(result.folder);
+            if (error != null && ctx.mounted) {
+              ScaffoldMessenger.of(ctx)
+                  .showSnackBar(SnackBar(content: Text(error)));
+            }
+          },
+          child: const Text('OPEN FOLDER'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// A quiet nudge that the file needed migrating, pointing at the Convert
+/// button rather than opening it. The whole point of the change is that the
+/// user decides when to deal with the conversion.
+void _announceConversionAvailable(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: const Text(
+        'This file needs converting to the current format. The changes are '
+        'ready in memory — press Convert in the toolbar to review them.',
+      ),
+      action: SnackBarAction(
+        label: 'CONVERT',
+        onPressed: () {
+          final provider = context.read<AppStateProvider>();
+          _showMigrationLogDialog(context, provider.systemLogs);
+        },
+      ),
+    ),
+  );
 }
 
 /// Displays a scrollable log of actions taken to make an older config compatible

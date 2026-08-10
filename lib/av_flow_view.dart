@@ -13,10 +13,8 @@ import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_port_editor.dart';
-import 'av_rack_view.dart';
 import 'color_wheel_picker.dart';
 import 'cost_estimate.dart';
-import 'cost_estimate_view.dart';
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'layout_tools.dart';
 import 'report_tools.dart';
@@ -40,16 +38,17 @@ import 'xlsx_writer.dart';
 ///  and draw the runs.
 ///
 ///  Signal types color the cables and drive a compatibility check when two
-///  ports are joined. The Racks toggle swaps the canvas for front/rear rack
-///  elevations. Exports: the diagram as a PNG, and a cable schedule + pack
-///  list as .xlsx / .txt / clipboard.
+///  ports are joined. Exports: the diagram as a PNG, and a cable schedule +
+///  pack list as .xlsx / .txt / clipboard.
+///
+///  The rack elevations and the cost estimate used to be pages of this tab and
+///  are now tabs of their own (rack_tab_view.dart, cost_estimate_view.dart):
+///  they answer different questions, get read by different people, and a
+///  three-way segmented control was hiding two of them behind the third.
 ///
 ///  Persists to `<config>_av_flow.json` beside the working config — see the
 ///  AV FLOW TAB STATE block in app_state.dart.
 /// ============================================================================
-
-/// Which page of the tab is showing.
-enum AvPage { flow, racks, cost }
 
 // ---------------------------------------------------------------------------
 //  MODEL BUILDING
@@ -76,14 +75,17 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
   final unplaced = <AvUnplacedDevice>[];
   for (final key in activeKeys) {
     if (byId.containsKey(key)) continue;
-    if (provider.avDismissedDevices.contains(key)) continue;
     final dev = config[key];
     if (dev is! Map) continue;
+    // Devices removed by hand are listed too, flagged. They are still in the
+    // room config, so a palette that hid them made a device look as though it
+    // had left the room when all that happened was somebody deleted the box.
     unplaced.add(
       AvUnplacedDevice(
         key: key,
         label: dev['name']?.toString() ?? key,
         model: dev['model']?.toString() ?? '',
+        dismissed: provider.avDismissedDevices.contains(key),
       ),
     );
   }
@@ -163,7 +165,6 @@ class _AvFlowViewState extends State<AvFlowView> {
   final GlobalKey _diagramKey = GlobalKey();
   final TransformationController _transform = TransformationController();
 
-  AvPage _page = AvPage.flow;
   bool _editMode = false;
   bool _showPalette = true;
 
@@ -282,10 +283,18 @@ class _AvFlowViewState extends State<AvFlowView> {
 
   /// Adds every active config device that isn't on the canvas yet, with ports
   /// from the AV device library and a position in its signal-flow column.
-  /// Devices the user removed stay removed — they are in avDismissedDevices.
+  ///
+  /// [silent] is the automatic first-visit seed, and it leaves hand-removed
+  /// devices off — dragging back a box somebody deliberately deleted every
+  /// time the tab opens is not helpful. Pressing **Place all from config** is
+  /// the opposite instruction: it means ALL of them, so it clears those
+  /// removals first. That distinction is the whole point of the two paths —
+  /// a matrix deleted from the canvas used to be unreachable afterwards,
+  /// because both the button and the palette skipped it.
   void _seedFromConfig(AppStateProvider provider, {bool silent = false}) {
     final config = provider.roomConfig;
     if (config.isEmpty) return;
+    if (!silent) provider.clearAvDismissedDevices();
     final keys = getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
     final existing = {for (final n in provider.avNodes) n.id};
 
@@ -299,7 +308,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     int added = 0;
     for (final key in keys) {
       if (existing.contains(key)) continue;
-      if (provider.avDismissedDevices.contains(key)) continue;
+      if (silent && provider.avDismissedDevices.contains(key)) continue;
       final dev = config[key];
       if (dev is! Map) continue;
 
@@ -510,12 +519,9 @@ class _AvFlowViewState extends State<AvFlowView> {
       _snack('Could not render the diagram to an image.', error: true);
       return;
     }
-    final suffix = _page == AvPage.racks ? 'racks' : 'av_flow';
     String? outputFile = await FilePicker.saveFile(
-      dialogTitle: _page == AvPage.racks
-          ? 'Save Rack Elevation Image'
-          : 'Save AV Flow Image',
-      fileName: '${_fileStem(provider, suffix)}.png',
+      dialogTitle: 'Save AV Flow Image',
+      fileName: '${_fileStem(provider, 'av_flow')}.png',
       type: FileType.custom,
       allowedExtensions: ['png'],
     );
@@ -598,14 +604,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     if (!outputFile.toLowerCase().endsWith('.xlsx')) outputFile += '.xlsx';
 
     try {
-      final png = _page == AvPage.cost
-          ? null
-          : await captureBoundary(_diagramKey, pixelRatio: 1.5);
+      final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
       final bytes = buildRoomWorkbookBytes(
         provider: provider,
         av: model,
-        avFlowPng: _page == AvPage.flow ? png : null,
-        rackPng: _page == AvPage.racks ? png : null,
+        avFlowPng: png,
       );
       await File(outputFile).writeAsBytes(bytes);
       _savedSnack(provider, 'Room workbook', outputFile);
@@ -657,49 +660,29 @@ class _AvFlowViewState extends State<AvFlowView> {
         Expanded(
           child: Row(
             children: [
-              Expanded(child: _buildPage(provider, model, theme)),
-              // The cost page is a full-width table; the device palette is
-              // about drawing, and squeezing it in beside the estimate only
-              // costs the prices their column width.
-              if (_showPalette && _page != AvPage.cost) ...[
+              Expanded(
+                child: InteractiveViewer(
+                  transformationController: _transform,
+                  constrained: false,
+                  minScale: 0.25,
+                  maxScale: 3.0,
+                  boundaryMargin: const EdgeInsets.all(400),
+                  child: RepaintBoundary(
+                    key: _diagramKey,
+                    child: _buildCanvas(provider, model, theme),
+                  ),
+                ),
+              ),
+              if (_showPalette) ...[
                 const VerticalDivider(width: 1, thickness: 1),
                 _buildPalette(provider, model),
               ],
             ],
           ),
         ),
-        if (_editMode && _page == AvPage.flow)
-          _buildCablePanel(provider, model),
+        if (_editMode) _buildCablePanel(provider, model),
       ],
     );
-  }
-
-  /// The selected page. Only the two diagram pages carry [_diagramKey] — the
-  /// PNG capture and the workbook's diagram image both come off whichever one
-  /// is on screen, and the cost page has nothing to draw.
-  Widget _buildPage(
-    AppStateProvider provider,
-    AvFlowModel model,
-    ThemeData theme,
-  ) {
-    switch (_page) {
-      case AvPage.racks:
-        return AvRackView(captureKey: _diagramKey, editMode: _editMode);
-      case AvPage.cost:
-        return CostEstimateView(model: model);
-      case AvPage.flow:
-        return InteractiveViewer(
-          transformationController: _transform,
-          constrained: false,
-          minScale: 0.25,
-          maxScale: 3.0,
-          boundaryMargin: const EdgeInsets.all(400),
-          child: RepaintBoundary(
-            key: _diagramKey,
-            child: _buildCanvas(provider, model, theme),
-          ),
-        );
-    }
   }
 
   Widget _buildToolbar(AppStateProvider provider, AvFlowModel model) {
@@ -712,31 +695,6 @@ class _AvFlowViewState extends State<AvFlowView> {
         children: [
           Text('AV Signal Flow', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(width: 4),
-          SegmentedButton<AvPage>(
-            segments: const [
-              ButtonSegment(
-                value: AvPage.flow,
-                icon: Icon(Icons.cable, size: 18),
-                label: Text('Signal Flow'),
-              ),
-              ButtonSegment(
-                value: AvPage.racks,
-                icon: Icon(Icons.view_day, size: 18),
-                label: Text('Racks'),
-              ),
-              ButtonSegment(
-                value: AvPage.cost,
-                icon: Icon(Icons.request_quote_outlined, size: 18),
-                label: Text('Cost'),
-              ),
-            ],
-            selected: {_page},
-            onSelectionChanged: (s) => setState(() {
-              _page = s.first;
-              _pendingPort = null;
-              _selectedCableId = null;
-            }),
-          ),
           FilterChip(
             avatar: Icon(
               _editMode ? Icons.edit : Icons.edit_outlined,
@@ -751,7 +709,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               _selectedCableId = null;
             }),
           ),
-          if (_editMode && _page == AvPage.flow)
+          if (_editMode)
             FilterChip(
               avatar: const Icon(Icons.cable, size: 18),
               label: Text(
@@ -763,14 +721,13 @@ class _AvFlowViewState extends State<AvFlowView> {
                 _pendingPort = null;
               }),
             ),
-          if (_page != AvPage.cost)
-            FilterChip(
+          FilterChip(
               avatar: const Icon(Icons.view_sidebar, size: 18),
               label: Text('Devices (${model.unplaced.length})'),
               selected: _showPalette,
               onSelected: (v) => setState(() => _showPalette = v),
             ),
-          if (_editMode && _page == AvPage.flow)
+          if (_editMode)
             OutlinedButton.icon(
               icon: const Icon(Icons.auto_fix_high, size: 18),
               label: const Text('Auto-arrange'),
@@ -786,12 +743,11 @@ class _AvFlowViewState extends State<AvFlowView> {
             label: const Text('Save AV Flow'),
             onPressed: () => _saveDiagram(provider),
           ),
-          if (_page != AvPage.cost)
-            ElevatedButton.icon(
-              icon: const Icon(Icons.image, size: 18),
-              label: const Text('Export PNG'),
-              onPressed: () => _exportPng(provider),
-            ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.image, size: 18),
+            label: const Text('Export PNG'),
+            onPressed: () => _exportPng(provider),
+          ),
           PopupMenuButton<String>(
             tooltip: 'Export the room report',
             onSelected: (v) => switch (v) {
@@ -1198,18 +1154,33 @@ class _AvFlowViewState extends State<AvFlowView> {
                     margin: const EdgeInsets.only(bottom: 6),
                     child: ListTile(
                       dense: true,
-                      leading: Icon(iconForAvNode(d.key, d.model), size: 20),
+                      leading: Icon(
+                        iconForAvNode(d.key, d.model),
+                        size: 20,
+                        color: d.dismissed ? theme.disabledColor : null,
+                      ),
                       title: Text(
                         d.label,
-                        style: const TextStyle(fontSize: 13),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: d.dismissed ? theme.disabledColor : null,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        d.model.isEmpty ? d.key : d.model,
-                        style: const TextStyle(fontSize: 11),
+                        d.dismissed
+                            ? 'Removed from the canvas — tap to put it back'
+                            : (d.model.isEmpty ? d.key : d.model),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontStyle: d.dismissed ? FontStyle.italic : null,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: const Icon(Icons.add, size: 18),
+                      trailing: Icon(
+                        d.dismissed ? Icons.undo : Icons.add,
+                        size: 18,
+                      ),
                       onTap: () => _placeConfigDevice(provider, d),
                     ),
                   ),
@@ -1250,6 +1221,9 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
+  /// Puts a config device on the canvas. addAvNode drops it from the
+  /// dismissed set, so re-adding one by hand also stops the automatic seed
+  /// skipping it from then on.
   void _placeConfigDevice(AppStateProvider provider, AvUnplacedDevice d) {
     final template = provider.avDeviceLibrary.resolve(
       configKey: d.key,
@@ -1278,62 +1252,128 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
+  /// Adds a device by picking a catalog model.
+  ///
+  /// A dropdown of a thousand Extron models is unusable, and the names are
+  /// exactly the sort people mistype: "DTP CrossPoint 108" / "DTPCrossPoint108"
+  /// / "dtp-crosspoint-108" are the same box. So this is a search box, and
+  /// matching ignores spaces, dashes, underscores and case on both sides —
+  /// type the digits and the right row is there.
   Future<void> _showAddCustomDeviceDialog(AppStateProvider provider) async {
     final labelController = TextEditingController();
+    final searchController = TextEditingController();
     String? selectedModel;
-    final models = provider.avDeviceLibrary.knownModels;
+    final entries = provider.avDeviceLibrary.all;
 
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Add device'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: labelController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Name on the diagram',
-                    hintText: 'e.g. Lectern wall plate',
+        builder: (ctx, setLocal) {
+          final matches = searchCatalog(entries, searchController.text);
+          return AlertDialog(
+            title: const Text('Add device'),
+            content: SizedBox(
+              width: 560,
+              height: math.min(560, MediaQuery.of(ctx).size.height - 200),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: labelController,
+                    decoration: const InputDecoration(
+                      labelText: 'Name on the diagram',
+                      hintText: 'e.g. Lectern wall plate',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedModel,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Model (supplies the connectors)',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: searchController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Search the catalog',
+                      hintText: 'model, part number or maker',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () => setLocal(
+                                () => searchController.clear(),
+                              ),
+                            ),
+                      helperText:
+                          'Spaces and dashes are ignored — "dtpcross108" '
+                          'finds "DTP CrossPoint 108".',
+                    ),
+                    onChanged: (_) => setLocal(() {}),
                   ),
-                  items: [
-                    for (final m in models)
-                      DropdownMenuItem(value: m, child: Text(m)),
-                  ],
-                  onChanged: (v) => setLocal(() => selectedModel = v),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Pick the closest model — the ports it brings can be edited '
-                  'on the device afterwards.',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: matches.isEmpty
+                        ? Center(
+                            child: Text(
+                              searchController.text.trim().isEmpty
+                                  ? 'The catalog is empty.'
+                                  : 'No model matches — add it on the Catalog '
+                                        'tab, or leave the search blank and '
+                                        'name the device by hand.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(ctx).textTheme.bodySmall,
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: matches.length,
+                            itemBuilder: (ctx, i) {
+                              final t = matches[i];
+                              return ListTile(
+                                dense: true,
+                                selected: t.model == selectedModel,
+                                title: Text(
+                                  t.model,
+                                  style: const TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  [
+                                    if (t.manufacturer.isNotEmpty)
+                                      t.manufacturer,
+                                    if (t.partNumber.isNotEmpty) t.partNumber,
+                                    '${t.inputCount} in / ${t.outputCount} out',
+                                    if (t.rackUnits > 0) '${t.rackUnits}U',
+                                  ].join(' · '),
+                                  style: const TextStyle(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () =>
+                                    setLocal(() => selectedModel = t.model),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    selectedModel == null
+                        ? 'Pick the closest model — the connectors it brings '
+                              'can be edited on the device afterwards.'
+                        : 'Selected: $selectedModel',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Add'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
       ),
     );
 

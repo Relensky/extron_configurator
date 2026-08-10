@@ -131,7 +131,16 @@ all**). Applying copies exactly what is ticked.
 **Export a copy...** hands your catalog to someone else without repointing
 your own saves at their folder.
 
-## Cost estimate (AV Flow tab → `Cost`)
+## Opening and converting
+
+Opening a file **opens the file**. When a legacy room needs migrating the
+conversion still runs in memory, but nothing blocks the screen: a **Convert**
+button next to New Config lights up with the number of changes waiting, and
+that is where the migration log, the change-by-change review and "Use
+Original" live. A room with nothing to migrate leaves the button greyed out,
+so its state is also the answer to "does this file need converting?".
+
+## Cost estimate (the `Cost` tab)
 
 Prices the room that is drawn on the AV canvas. Quantities are the devices on
 the diagram, grouped exactly as the pack list groups them, so the estimate and
@@ -152,7 +161,23 @@ On top of the equipment:
 Devices nobody has priced are counted and called out rather than being quietly
 totalled as free.
 
-Saved with the diagram in `<config>_av_flow.json`.
+Saved with the diagram in `<config>_av_flow.json` — and **every config save
+writes that sidecar**, so saving the project saves the estimate. It is not a
+separate button to forget.
+
+## Save All
+
+The toolbar's **Save All** writes the whole job into `<folder>/<room name>/`,
+the room name coming from the wizard. It contains the config, the AV sidecar
+(diagram + estimate), the four-sheet workbook, plain-text device / AV / cost
+reports, PNGs of the control schematic, signal flow and rack elevation, and a
+copy of the custom catalog entries and the rate card — so the figures behind
+the numbers travel with them and the estimate is auditable a year later.
+
+Diagram images can only be rendered from a tab that is on screen, so Save All
+walks the three diagram tabs to capture them and puts you back where you
+started. Anything it could not capture is listed in the result dialog and in
+the folder's `README.txt`, rather than being quietly missing.
 
 ## The room workbook
 

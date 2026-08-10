@@ -205,6 +205,36 @@ class AvDeviceTemplate {
   );
 }
 
+/// Catalog entries matching a typed search, best first: an exact-ish model
+/// match above a match that only landed on the part number or the maker.
+List<AvDeviceTemplate> searchCatalog(
+  List<AvDeviceTemplate> entries,
+  String query, {
+  int limit = 300,
+}) {
+  final matched = entries
+      .where((e) => AvDeviceLibrary.matchesSearch(e, query))
+      .toList();
+  final needle = AvDeviceLibrary.normalizeModel(query);
+  if (needle.isNotEmpty) {
+    int rank(AvDeviceTemplate e) {
+      final model = AvDeviceLibrary.normalizeModel(e.model);
+      if (model == needle) return 0;
+      if (model.startsWith(needle)) return 1;
+      if (model.contains(needle)) return 2;
+      return 3;
+    }
+
+    matched.sort((a, b) {
+      final byRank = rank(a).compareTo(rank(b));
+      return byRank != 0
+          ? byRank
+          : a.model.toLowerCase().compareTo(b.model.toLowerCase());
+    });
+  }
+  return matched.length > limit ? matched.sublist(0, limit) : matched;
+}
+
 class AvDeviceLibrary {
   /// Model (normalized) -> template.
   final Map<String, AvDeviceTemplate> _byModel = {};
@@ -281,6 +311,24 @@ class AvDeviceLibrary {
   /// The key an entry is stored under — exposed so callers comparing two
   /// libraries agree with this one on what "the same model" means.
   static String normalizeModel(String model) => _norm(model);
+
+  /// Whether [entry] matches a typed search, ignoring spaces, dashes,
+  /// underscores and case.
+  ///
+  /// Extron model names are exactly the sort people mistype — "DTP CrossPoint
+  /// 108", "DTPCrossPoint108" and "dtp-crosspoint-108" are the same box — so
+  /// an exact-substring search finds nothing about half the time. Both sides
+  /// are squashed to letters and digits before comparing, and the part number
+  /// and manufacturer are searched too.
+  static bool matchesSearch(AvDeviceTemplate entry, String query) {
+    final needle = _norm(query);
+    if (needle.isEmpty) return true;
+    final haystack = _norm(
+      '${entry.model} ${entry.manufacturer} ${entry.partNumber} '
+      '${entry.category}',
+    );
+    return haystack.contains(needle);
+  }
 
   AvDeviceLibrary.builtIn() {
     for (final t in _builtInTemplates) {

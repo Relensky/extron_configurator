@@ -22,6 +22,7 @@ void main() {
           'gui_full_room_name': 'Bessey 103',
           'gve_bldg': 'BSS',
           'gve_room': '103',
+          'dev_switchers': '1',
         },
         'SWITCHERDEVICE_1': {
           'name': 'Main Switcher',
@@ -29,7 +30,6 @@ void main() {
           'com_type': 'Network',
           'ip_address': '10.0.0.5',
         },
-        'dev_count': {'switcher': 1},
       };
     p.loadAvFlowForCurrentConfig();
 

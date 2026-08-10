@@ -4,13 +4,15 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'av_flow_model.dart';
+import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cost_estimate.dart';
+import 'labor_rates_dialog.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
 
 /// ============================================================================
-///  COST ESTIMATE PAGE  (AV Flow tab -> "Cost")
+///  COST ESTIMATE TAB
 /// ============================================================================
 ///  Prices the room that is drawn on the AV canvas. Quantities are not typed
 ///  in — they are the devices on the diagram, grouped exactly as the pack list
@@ -25,28 +27,53 @@ import 'report_tools.dart';
 ///  taxable part.
 /// ============================================================================
 
-class CostEstimateView extends StatelessWidget {
-  final AvFlowModel model;
+class CostEstimateView extends StatefulWidget {
+  /// The diagram to price. Null means "read it from the provider", which is
+  /// what the tab does; the parameter is kept so a caller that has already
+  /// resolved the model can hand it straight over.
+  final AvFlowModel? model;
 
-  const CostEstimateView({super.key, required this.model});
+  const CostEstimateView({super.key, this.model});
+
+  @override
+  State<CostEstimateView> createState() => _CostEstimateViewState();
+}
+
+class _CostEstimateViewState extends State<CostEstimateView> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // The estimate lives in the AV sidecar, which is only read on the first
+      // visit to whichever tab gets there first.
+      context.read<AppStateProvider>().ensureAvFlowForCurrentConfig();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
+    if (provider.roomConfig.isEmpty) {
+      return const Center(child: Text('No configuration loaded.'));
+    }
+    final model = widget.model ?? buildAvFlowModel(provider);
     final settings = provider.avCost;
     final estimate = computeRoomCost(
       model: model,
       library: provider.avDeviceLibrary,
       settings: settings,
+      rates: provider.laborRates,
     );
     final theme = Theme.of(context);
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
-        _header(context, provider, estimate),
+        _header(context, provider, estimate, model),
         const SizedBox(height: 12),
         _equipmentCard(context, provider, estimate),
+        const SizedBox(height: 12),
+        _laborCard(context, provider, estimate),
         const SizedBox(height: 12),
         _itemsCard(context, provider, estimate),
         const SizedBox(height: 12),
@@ -55,10 +82,7 @@ class CostEstimateView extends StatelessWidget {
           children: [
             Expanded(child: _feesCard(context, provider, settings)),
             const SizedBox(width: 12),
-            SizedBox(
-              width: 380,
-              child: _totalsCard(context, estimate, theme),
-            ),
+            SizedBox(width: 380, child: _totalsCard(context, estimate, theme)),
           ],
         ),
       ],
@@ -66,15 +90,14 @@ class CostEstimateView extends StatelessWidget {
   }
 
   // --- header: currency, tax, and the copy button --------------------------
-
   Widget _header(
     BuildContext context,
     AppStateProvider provider,
     CostEstimate estimate,
+    AvFlowModel model,
   ) {
     final theme = Theme.of(context);
     final settings = provider.avCost;
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -83,8 +106,32 @@ class CostEstimateView extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text('Room cost estimate', style: theme.textTheme.titleMedium),
+                Text('Room Cost Estimate', style: theme.textTheme.titleLarge),
                 const Spacer(),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.engineering, size: 18),
+                  label: const Text('Labor rates'),
+                  onPressed: () => showLaborRatesDialog(context, provider),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.save, size: 18),
+                  label: const Text('Save'),
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final saved = await provider.saveAvFlow();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          saved.isEmpty
+                              ? 'Failed to save the estimate.'
+                              : 'Estimate saved with the AV flow: $saved',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.copy_all, size: 18),
                   label: const Text('Copy estimate'),
@@ -146,9 +193,8 @@ class CostEstimateView extends StatelessWidget {
                     label: 'Tax rate',
                     suffix: '%',
                     numeric: true,
-                    onChanged: (v) => provider.setAvCostTax(
-                      percent: double.tryParse(v) ?? 0,
-                    ),
+                    onChanged: (v) =>
+                        provider.setAvCostTax(percent: double.tryParse(v) ?? 0),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -185,7 +231,6 @@ class CostEstimateView extends StatelessWidget {
   }
 
   // --- equipment -----------------------------------------------------------
-
   Widget _equipmentCard(
     BuildContext context,
     AppStateProvider provider,
@@ -193,7 +238,6 @@ class CostEstimateView extends StatelessWidget {
   ) {
     final theme = Theme.of(context);
     final currency = estimate.currency;
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -317,8 +361,227 @@ class CostEstimateView extends StatelessWidget {
     );
   }
 
-  // --- other items ---------------------------------------------------------
+  // --- labor ---------------------------------------------------------------
 
+  /// Crews, priced as rate x techs x hours. The head count and the hours stay
+  /// visible next to the money because that is what gets checked: "two CTS III
+  /// for three days" is arguable, a lump sum is not.
+  Widget _laborCard(
+    BuildContext context,
+    AppStateProvider provider,
+    CostEstimate estimate,
+  ) {
+    final theme = Theme.of(context);
+    final currency = estimate.currency;
+    final book = provider.laborRates;
+    final lines = provider.avCost.labor;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('Labor', style: theme.textTheme.titleSmall),
+                const SizedBox(width: 8),
+                Text(
+                  estimate.labor.isEmpty
+                      ? 'rate x techs x hours, off the shared rate card'
+                      : '${trimNumber(estimate.laborHours)} tech-hours',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.disabledColor,
+                  ),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add crew'),
+                  onPressed: () => provider.addAvCostLabor(),
+                ),
+              ],
+            ),
+            if (book.allUnset)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'No job type has an hourly rate yet — open '
+                        '"Labor rates" and set them once, and every room '
+                        'costs from the same card.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (lines.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _headerRow(theme, const [
+                (width: 190.0, flex: 0, text: 'Job type'),
+                (width: 0.0, flex: 3, text: 'Scope'),
+                (width: 86.0, flex: 0, text: 'Techs'),
+                (width: 94.0, flex: 0, text: 'Hours ea.'),
+                (width: 84.0, flex: 0, text: 'Rate/hr'),
+                (width: 122.0, flex: 0, text: 'Extended'),
+                (width: 92.0, flex: 0, text: 'Taxable'),
+                (width: 34.0, flex: 0, text: ''),
+              ]),
+              const Divider(height: 12),
+            ],
+            for (final line in lines)
+              Builder(
+                builder: (context) {
+                  final costed = estimate.labor.firstWhere(
+                    (l) => l.id == line.id,
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 182,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: book.byId(line.rateId) == null
+                                ? null
+                                : line.rateId,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              for (final r in book.rates)
+                                DropdownMenuItem(
+                                  value: r.id,
+                                  child: Text(
+                                    r.isSet
+                                        ? '${r.name} '
+                                              '(${formatMoney(r.hourlyRate, currency)})'
+                                        : '${r.name} (no rate)',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                            ],
+                            onChanged: (v) => provider.updateAvCostLabor(
+                              line.copyWith(rateId: v ?? ''),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: LiveTextField(
+                            fieldId: 'labor_desc_${line.id}',
+                            initial: line.description,
+                            hint: 'e.g. Rack build and termination',
+                            onChanged: (v) => provider.updateAvCostLabor(
+                              line.copyWith(description: v),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 78,
+                          child: LiveTextField(
+                            fieldId: 'labor_techs_${line.id}',
+                            initial: trimNumber(line.techs),
+                            numeric: true,
+                            onChanged: (v) => provider.updateAvCostLabor(
+                              line.copyWith(techs: double.tryParse(v) ?? 0),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 86,
+                          child: LiveTextField(
+                            fieldId: 'labor_hours_${line.id}',
+                            initial: line.hours == 0
+                                ? ''
+                                : trimNumber(line.hours),
+                            numeric: true,
+                            onChanged: (v) => provider.updateAvCostLabor(
+                              line.copyWith(hours: double.tryParse(v) ?? 0),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 76,
+                          child: LiveTextField(
+                            // Blank follows the card; a figure here is what
+                            // THIS job pays, which is how overtime and a
+                            // one-off subcontract rate get recorded.
+                            fieldId: 'labor_rate_${line.id}',
+                            initial: line.customRate == 0
+                                ? ''
+                                : trimNumber(line.customRate),
+                            hint: costed.unrated
+                                ? 'set'
+                                : trimNumber(costed.hourlyRate),
+                            numeric: true,
+                            onChanged: (v) => provider.updateAvCostLabor(
+                              line.copyWith(
+                                customRate: double.tryParse(v) ?? 0,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 110,
+                          child: Text(
+                            costed.unrated
+                                ? 'no rate'
+                                : formatMoney(costed.total, currency),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: costed.unrated
+                                  ? theme.colorScheme.error
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 92,
+                          child: Checkbox(
+                            value: line.taxable,
+                            onChanged: (v) => provider.updateAvCostLabor(
+                              line.copyWith(taxable: v ?? false),
+                            ),
+                          ),
+                        ),
+                        avRowIcon(
+                          Icons.delete_outline,
+                          'Remove crew',
+                          () => provider.removeAvCostLabor(line.id),
+                          danger: true,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- other items ---------------------------------------------------------
   Widget _itemsCard(
     BuildContext context,
     AppStateProvider provider,
@@ -327,7 +590,6 @@ class CostEstimateView extends StatelessWidget {
     final theme = Theme.of(context);
     final currency = estimate.currency;
     final items = provider.avCost.items;
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -457,14 +719,12 @@ class CostEstimateView extends StatelessWidget {
   }
 
   // --- fees ----------------------------------------------------------------
-
   Widget _feesCard(
     BuildContext context,
     AppStateProvider provider,
     RoomCostSettings settings,
   ) {
     final theme = Theme.of(context);
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -572,15 +832,18 @@ class CostEstimateView extends StatelessWidget {
   }
 
   // --- totals --------------------------------------------------------------
-
   Widget _totalsCard(
     BuildContext context,
     CostEstimate estimate,
     ThemeData theme,
   ) {
     final currency = estimate.currency;
-
-    Widget row(String label, double value, {bool bold = false, bool big = false}) {
+    Widget row(
+      String label,
+      double value, {
+      bool bold = false,
+      bool big = false,
+    }) {
       final style = TextStyle(
         fontSize: big ? 16 : 13,
         fontWeight: bold || big ? FontWeight.bold : FontWeight.normal,
@@ -606,6 +869,11 @@ class CostEstimateView extends StatelessWidget {
             Text('Totals', style: theme.textTheme.titleSmall),
             const SizedBox(height: 6),
             row('Equipment', estimate.equipmentTotal),
+            if (estimate.labor.isNotEmpty)
+              row(
+                'Labor (${trimNumber(estimate.laborHours)} h)',
+                estimate.laborTotal,
+              ),
             if (estimate.extras.isNotEmpty)
               row('Other items', estimate.extrasTotal),
             const Divider(),
@@ -626,14 +894,26 @@ class CostEstimateView extends StatelessWidget {
             ],
             const Divider(),
             row('TOTAL', estimate.grandTotal, big: true),
-            if (!estimate.isComplete)
+            if (estimate.unpricedLines > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   'Excludes ${estimate.unpricedDevices} device'
                   '${estimate.unpricedDevices == 1 ? '' : 's'} with no price. '
-                  'Set prices in the table above, or once in the Device '
-                  'Editor tab so every room gets them.',
+                  'Set prices in the table above, or once in the Catalog tab '
+                  'so every room gets them.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            if (estimate.unratedLabor > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Excludes ${estimate.unratedLabor} labor line'
+                  '${estimate.unratedLabor == 1 ? '' : 's'} whose job type '
+                  'has no hourly rate set.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.error,
                   ),
@@ -658,9 +938,15 @@ class CostEstimateView extends StatelessWidget {
       children: [
         for (final c in columns)
           if (c.flex > 0)
-            Expanded(flex: c.flex, child: Text(c.text, style: style))
+            Expanded(
+              flex: c.flex,
+              child: Text(c.text, style: style),
+            )
           else
-            SizedBox(width: c.width, child: Text(c.text, style: style)),
+            SizedBox(
+              width: c.width,
+              child: Text(c.text, style: style),
+            ),
       ],
     );
   }
