@@ -444,6 +444,30 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
+  /// Where a new bend belongs in a cable's waypoint list: the leg of the
+  /// guide line (port, bends, port) that [at] sits closest to.
+  int _bendInsertIndex(AvFlowModel model, AvCable cable, Offset at) {
+    final from = model.nodeById(cable.fromNodeId);
+    final to = model.nodeById(cable.toNodeId);
+    if (from == null || to == null) return cable.waypoints.length;
+
+    final guide = [
+      from.anchorOf(cable.fromPortId),
+      ...cable.waypoints,
+      to.anchorOf(cable.toPortId),
+    ];
+    int best = 0;
+    double bestDistance = double.infinity;
+    for (int i = 0; i < guide.length - 1; i++) {
+      final d = _distanceToSegment(at, guide[i], guide[i + 1]);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = i;
+      }
+    }
+    return best.clamp(0, cable.waypoints.length);
+  }
+
   /// Nearest cable within [tolerance] of [point], or null.
   String? _cableAt(Offset point, {double tolerance = 9}) {
     String? best;
@@ -1000,7 +1024,13 @@ class _AvFlowViewState extends State<AvFlowView> {
           child: GestureDetector(
             onPanUpdate: (d) {
               final next = List<Offset>.from(cable.waypoints);
-              next[i] = next[i] + d.delta;
+              // Nudged clear of the devices: a bend dropped inside a box is
+              // the one place the router cannot route out of, so the line
+              // would have to cross the device to reach it.
+              next[i] = pushOutOfRects(
+                next[i] + d.delta,
+                [for (final n in model.nodes) n.rect],
+              );
               provider.updateAvCable(cable.copyWith(waypoints: next));
             },
             onDoubleTap: () {
@@ -1032,11 +1062,16 @@ class _AvFlowViewState extends State<AvFlowView> {
           top: mid.dy - r,
           child: GestureDetector(
             onTap: () {
-              // With no waypoints yet the whole route is automatic, so the first
-              // one simply becomes the single bend. After that the segment index
-              // is the insertion point in [start, ...waypoints, end].
+              // The drawn path can hold more points than the user's bends —
+              // detours around devices add their own — so the insertion slot
+              // is worked out against the GUIDE line (start, bends, end)
+              // rather than the rendered one, which would put the new bend in
+              // the wrong place as soon as a leg had been rerouted.
               final next = List<Offset>.from(cable.waypoints);
-              next.insert(next.isEmpty ? 0 : i.clamp(0, next.length), mid);
+              next.insert(
+                _bendInsertIndex(model, cable, mid),
+                pushOutOfRects(mid, [for (final n in model.nodes) n.rect]),
+              );
               provider.updateAvCable(cable.copyWith(waypoints: next));
             },
             child: Tooltip(

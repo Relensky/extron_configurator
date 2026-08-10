@@ -884,9 +884,8 @@ class RackSlot {
 /// steps into the destination port along its normal. [lane] shifts that
 /// vertical leg so cables sharing a corridor don't stack on one line.
 ///
-/// Full A* obstacle avoidance (what EasySchematic does) is deliberately not
-/// attempted here — lane offsets plus manual waypoints handle the real cases
-/// without the complexity, and the user can always drag a waypoint.
+/// When the quick shapes all cut through something, a real pathfinder takes
+/// over ([latticeRoute]), so a run cannot end up drawn behind a device.
 List<Offset> routeCable({
   required AvNode fromNode,
   required AvNode toNode,
@@ -897,8 +896,29 @@ List<Offset> routeCable({
   final start = fromNode.anchorOf(cable.fromPortId);
   final end = toNode.anchorOf(cable.toPortId);
 
+  // Hand-placed bends say where the run should GO; they don't licence it to
+  // cut through a device on the way. Each leg between consecutive bends is
+  // kept exactly as drawn when it's clear, and routed around when it isn't,
+  // so the shape the user asked for survives without the line crossing a box.
   if (cable.waypoints.isNotEmpty) {
-    return [start, ...cable.waypoints, end];
+    final guide = [start, ...cable.waypoints, end];
+    if (obstacles.isEmpty) return guide;
+
+    final out = <Offset>[guide.first];
+    for (int i = 0; i < guide.length - 1; i++) {
+      final p = guide[i], q = guide[i + 1];
+      if (!_segmentBlocked(p, q, obstacles)) {
+        out.add(q);
+        continue;
+      }
+      final detour = latticeRoute(p, q, obstacles);
+      if (detour == null) {
+        out.add(q); // nowhere to go; the straight leg is the best on offer
+        continue;
+      }
+      out.addAll(detour.skip(1));
+    }
+    return _mergeCollinear(out);
   }
 
   const stub = 18.0;
@@ -907,75 +927,64 @@ List<Offset> routeCable({
   final a = start + Offset(sN.dx * stub, sN.dy * stub);
   final b = end + Offset(eN.dx * stub, eN.dy * stub);
 
-  bool clear(List<Offset> route) => !polylineHitsAny(route, obstacles);
+  List<Offset> full(List<Offset> middle) => [start, ...middle, end];
 
-  // Both stubs horizontal (the common case: output right -> input left).
+  // Check the WHOLE run, stubs included. The stub leaves its port straight
+  // out of the box face, but a neighbour parked right against that face can
+  // still be in the way — checking only the middle is how runs kept ending
+  // up drawn across a device.
+  bool clear(List<Offset> middle) => !polylineHitsAny(full(middle), obstacles);
+
+  // --- the quick shapes, tried nearest-to-ideal first --------------------
+  final candidates = <List<Offset>>[];
+
   if (sN.dy == 0 && eN.dy == 0) {
-    if ((a.dy - b.dy).abs() < 1) {
-      final direct = [start, a, b, end];
-      if (clear(direct)) return direct;
-    }
-    // Slide the vertical leg sideways until it misses whatever is in the
-    // way. The ideal lane is tried first, so an unobstructed diagram routes
-    // exactly as before.
+    if ((a.dy - b.dy).abs() < 1) candidates.add([a, b]);
     final ideal = (a.dx + b.dx) / 2 + lane;
     for (final shift in _kDetourShifts) {
       final midX = ideal + shift;
-      final route = [start, a, Offset(midX, a.dy), Offset(midX, b.dy), b, end];
-      if (clear(route)) return route;
+      candidates.add([a, Offset(midX, a.dy), Offset(midX, b.dy), b]);
     }
-    // Nothing sideways worked: go over or under the whole obstruction.
     final band = _clearBand(obstacles, a, b, horizontal: true);
     if (band != null) {
-      final route = [
-        start,
-        a,
-        Offset(a.dx, band),
-        Offset(b.dx, band),
-        b,
-        end,
-      ];
-      if (clear(route)) return route;
+      candidates.add([a, Offset(a.dx, band), Offset(b.dx, band), b]);
     }
-    return [start, a, Offset(ideal, a.dy), Offset(ideal, b.dy), b, end];
-  }
-
-  // Both stubs vertical.
-  if (sN.dx == 0 && eN.dx == 0) {
-    if ((a.dx - b.dx).abs() < 1) {
-      final direct = [start, a, b, end];
-      if (clear(direct)) return direct;
-    }
+  } else if (sN.dx == 0 && eN.dx == 0) {
+    if ((a.dx - b.dx).abs() < 1) candidates.add([a, b]);
     final ideal = (a.dy + b.dy) / 2 + lane;
     for (final shift in _kDetourShifts) {
       final midY = ideal + shift;
-      final route = [start, a, Offset(a.dx, midY), Offset(b.dx, midY), b, end];
-      if (clear(route)) return route;
+      candidates.add([a, Offset(a.dx, midY), Offset(b.dx, midY), b]);
     }
     final band = _clearBand(obstacles, a, b, horizontal: false);
     if (band != null) {
-      final route = [
-        start,
-        a,
-        Offset(band, a.dy),
-        Offset(band, b.dy),
-        b,
-        end,
-      ];
-      if (clear(route)) return route;
+      candidates.add([a, Offset(band, a.dy), Offset(band, b.dy), b]);
     }
-    return [start, a, Offset(a.dx, ideal), Offset(b.dx, ideal), b, end];
+  } else {
+    candidates
+        .add([a, sN.dy == 0 ? Offset(b.dx, a.dy) : Offset(a.dx, b.dy), b]);
+    candidates
+        .add([a, sN.dy == 0 ? Offset(a.dx, b.dy) : Offset(b.dx, a.dy), b]);
   }
 
-  // Mixed: turn once at the corner that keeps both stubs straight, and take
-  // the other corner when the first one cuts through something.
-  final corner = sN.dy == 0 ? Offset(b.dx, a.dy) : Offset(a.dx, b.dy);
-  final first = [start, a, corner, b, end];
-  if (clear(first)) return first;
-  final other = sN.dy == 0 ? Offset(a.dx, b.dy) : Offset(b.dx, a.dy);
-  final second = [start, a, other, b, end];
-  if (clear(second)) return second;
-  return first;
+  for (final middle in candidates) {
+    if (clear(middle)) return full(middle);
+  }
+
+  // --- nothing simple fits: find an actual way through -------------------
+  // First keeping the tidy stubs, since a run that leaves its port squarely
+  // reads far better than one that sets off at the first opportunity.
+  final viaStubs = latticeRoute(a, b, obstacles);
+  if (viaStubs != null && clear(viaStubs)) return full(viaStubs);
+
+  // The stub itself is fouled by something parked against the port, so let
+  // the search start at the port instead of 18px out from it.
+  final direct = latticeRoute(start, end, obstacles);
+  if (direct != null && !polylineHitsAny(direct, obstacles)) return direct;
+
+  // Genuinely nowhere to go (a port walled in on every side). Draw the
+  // straight run rather than nothing, so the connection is still visible.
+  return full([a, b]);
 }
 
 /// How far sideways the router will slide a leg looking for a clear line,
@@ -1011,21 +1020,288 @@ double? _clearBand(
   return (mid - over).abs() <= (mid - under).abs() ? over : under;
 }
 
-/// True when any leg of [route] crosses any of [obstacles]. Sampled along
-/// each segment — cheap, and box-sized obstacles don't need better.
-bool polylineHitsAny(List<Offset> route, List<Rect> obstacles) {
-  if (obstacles.isEmpty) return false;
-  for (int i = 0; i < route.length - 1; i++) {
-    final p = route[i], q = route[i + 1];
-    final steps = math.max(8, ((q - p).distance / 8).ceil());
-    for (int s = 0; s <= steps; s++) {
-      final point = Offset.lerp(p, q, s / steps)!;
-      for (final r in obstacles) {
-        if (r.contains(point)) return true;
+// ---------------------------------------------------------------------------
+//  GUARANTEED ORTHOGONAL ROUTING
+// ---------------------------------------------------------------------------
+
+/// Clearance kept between a route and the boxes it passes.
+const double _kLatticeMargin = 14.0;
+
+/// Ceilings on the search, so a very busy page can never stall a repaint.
+const int _kMaxLatticeNodes = 22000;
+const int _kMaxExpansions = 60000;
+
+/// An orthogonal path from [a] to [b] that touches none of [obstacles], or
+/// null when there genuinely isn't one.
+///
+/// A* over the lattice formed by the obstacle edges: every useful turning
+/// point in an orthogonal layout lies on a line just outside some box, so
+/// searching only those coordinates finds a route when one exists without
+/// paying for a fine pixel grid. This is the backstop behind the quick shapes
+/// in [routeCable] — those handle the common cases, this one guarantees the
+/// result is never drawn through a device.
+List<Offset>? latticeRoute(Offset a, Offset b, List<Rect> allObstacles) {
+  // A box that swallows one of the stub points can't be respected — there
+  // would be no way out of it — so it is dropped for this run rather than
+  // making the whole search fail and fall back to a straight line.
+  bool swallows(Rect r, Offset p) =>
+      p.dx > r.left && p.dx < r.right && p.dy > r.top && p.dy < r.bottom;
+  final obstacles = [
+    for (final r in allObstacles)
+      if (!swallows(r, a) && !swallows(r, b)) r,
+  ];
+  if (obstacles.isEmpty) return [a, b];
+
+  // Candidate turning coordinates: the two endpoints, plus a channel just
+  // outside every box on all four sides.
+  final xs = <double>{a.dx, b.dx};
+  final ys = <double>{a.dy, b.dy};
+  for (final r in obstacles) {
+    xs.add(r.left - _kLatticeMargin);
+    xs.add(r.right + _kLatticeMargin);
+    ys.add(r.top - _kLatticeMargin);
+    ys.add(r.bottom + _kLatticeMargin);
+  }
+
+  final xList = xs.toList()..sort();
+  final yList = ys.toList()..sort();
+  final nx = xList.length, ny = yList.length;
+  if (nx * ny > _kMaxLatticeNodes) return null;
+
+  int nearest(List<double> values, double v) {
+    int best = 0;
+    double bestGap = double.infinity;
+    for (int i = 0; i < values.length; i++) {
+      final gap = (values[i] - v).abs();
+      if (gap < bestGap) {
+        bestGap = gap;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  final startI = nearest(xList, a.dx);
+  final startJ = nearest(yList, a.dy);
+  final goalI = nearest(xList, b.dx);
+  final goalJ = nearest(yList, b.dy);
+
+  // State carries the direction it arrived from, so turns can be charged for
+  // and the result comes out with as few bends as the geometry allows.
+  // 0 = start (no direction yet), 1 = horizontal, 2 = vertical.
+  int key(int i, int j, int dir) => (i * ny + j) * 3 + dir;
+
+  final gScore = <int, double>{};
+  final cameFrom = <int, int>{};
+  final open = _MinHeap();
+
+  double heuristic(int i, int j) =>
+      (xList[i] - xList[goalI]).abs() + (yList[j] - yList[goalJ]).abs();
+
+  final startKey = key(startI, startJ, 0);
+  gScore[startKey] = 0;
+  open.push(startKey, heuristic(startI, startJ));
+
+  const turnPenalty = 30.0;
+  int expansions = 0;
+  int? goalKey;
+
+  while (!open.isEmpty) {
+    final current = open.pop();
+    final ci = current ~/ 3 ~/ ny;
+    final cj = (current ~/ 3) % ny;
+    final cdir = current % 3;
+
+    if (ci == goalI && cj == goalJ) {
+      goalKey = current;
+      break;
+    }
+    if (++expansions > _kMaxExpansions) return null;
+
+    final g = gScore[current]!;
+    for (int step = 0; step < 4; step++) {
+      final ni = ci + (step == 0 ? 1 : (step == 1 ? -1 : 0));
+      final nj = cj + (step == 2 ? 1 : (step == 3 ? -1 : 0));
+      if (ni < 0 || ni >= nx || nj < 0 || nj >= ny) continue;
+
+      final from = Offset(xList[ci], yList[cj]);
+      final to = Offset(xList[ni], yList[nj]);
+      if (_segmentBlocked(from, to, obstacles)) continue;
+
+      final ndir = step < 2 ? 1 : 2;
+      final cost =
+          (to - from).distance + (cdir != 0 && cdir != ndir ? turnPenalty : 0);
+      final nKey = key(ni, nj, ndir);
+      final tentative = g + cost;
+      if (tentative < (gScore[nKey] ?? double.infinity)) {
+        gScore[nKey] = tentative;
+        cameFrom[nKey] = current;
+        open.push(nKey, tentative + heuristic(ni, nj));
       }
     }
   }
+
+  if (goalKey == null) return null;
+
+  final points = <Offset>[];
+  int? cursor = goalKey;
+  while (cursor != null) {
+    final i = cursor ~/ 3 ~/ ny;
+    final j = (cursor ~/ 3) % ny;
+    points.add(Offset(xList[i], yList[j]));
+    cursor = cameFrom[cursor];
+  }
+  final route = points.reversed.toList();
+
+  // The lattice snapped the ends to the nearest coordinate; put the real stub
+  // points back so the run meets its ports exactly.
+  route.first = a;
+  route.last = b;
+  return _mergeCollinear(route);
+}
+
+/// Drops points sitting in the middle of a straight run, so the painter
+/// doesn't round a corner that isn't there.
+List<Offset> _mergeCollinear(List<Offset> points) {
+  if (points.length < 3) return points;
+  final out = <Offset>[points.first];
+  for (int i = 1; i < points.length - 1; i++) {
+    final prev = out.last, here = points[i], next = points[i + 1];
+    final straight =
+        ((prev.dx - here.dx).abs() < 0.01 &&
+                (here.dx - next.dx).abs() < 0.01) ||
+            ((prev.dy - here.dy).abs() < 0.01 &&
+                (here.dy - next.dy).abs() < 0.01);
+    if (!straight) out.add(here);
+  }
+  out.add(points.last);
+  return out;
+}
+
+bool _segmentBlocked(Offset p, Offset q, List<Rect> obstacles) {
+  for (final r in obstacles) {
+    if (segmentHitsRect(p, q, r)) return true;
+  }
   return false;
+}
+
+/// True when the segment [p]->[q] passes through the INTERIOR of [r].
+///
+/// Exact (Liang-Barsky clipping) rather than sampled: a sampled test can step
+/// straight over a thin sliver of a box and call a blocked run clear, which
+/// is exactly how cables ended up drawn behind devices.
+///
+/// Touching an edge is allowed — routes are meant to run along the channel
+/// just outside a box — so only a genuine crossing of the inside counts.
+bool segmentHitsRect(Offset p, Offset q, Rect r) {
+  if (r.width <= 0 || r.height <= 0) return false;
+
+  const eps = 0.01;
+  final inner = Rect.fromLTRB(
+    r.left + eps,
+    r.top + eps,
+    r.right - eps,
+    r.bottom - eps,
+  );
+  if (inner.width <= 0 || inner.height <= 0) return false;
+
+  double t0 = 0, t1 = 1;
+  final dx = q.dx - p.dx, dy = q.dy - p.dy;
+
+  for (int edge = 0; edge < 4; edge++) {
+    final double pp, qq;
+    switch (edge) {
+      case 0:
+        pp = -dx;
+        qq = p.dx - inner.left;
+      case 1:
+        pp = dx;
+        qq = inner.right - p.dx;
+      case 2:
+        pp = -dy;
+        qq = p.dy - inner.top;
+      default:
+        pp = dy;
+        qq = inner.bottom - p.dy;
+    }
+    if (pp == 0) {
+      if (qq < 0) return false; // parallel to this edge and outside it
+      continue;
+    }
+    final t = qq / pp;
+    if (pp < 0) {
+      if (t > t1) return false;
+      if (t > t0) t0 = t;
+    } else {
+      if (t < t0) return false;
+      if (t < t1) t1 = t;
+    }
+  }
+  return t0 < t1;
+}
+
+/// True when any leg of [route] crosses a box. Exact, so "clear" means clear.
+bool polylineHitsAny(List<Offset> route, List<Rect> obstacles) {
+  if (obstacles.isEmpty) return false;
+  for (int i = 0; i < route.length - 1; i++) {
+    if (_segmentBlocked(route[i], route[i + 1], obstacles)) return true;
+  }
+  return false;
+}
+
+/// Minimal binary heap — Dart has no priority queue in the core library and
+/// the routing search wants one.
+class _MinHeap {
+  final List<int> _items = [];
+  final List<double> _priorities = [];
+
+  bool get isEmpty => _items.isEmpty;
+
+  void push(int item, double priority) {
+    _items.add(item);
+    _priorities.add(priority);
+    int i = _items.length - 1;
+    while (i > 0) {
+      final parent = (i - 1) ~/ 2;
+      if (_priorities[parent] <= _priorities[i]) break;
+      _swap(i, parent);
+      i = parent;
+    }
+  }
+
+  int pop() {
+    final top = _items.first;
+    final lastItem = _items.removeLast();
+    final lastPriority = _priorities.removeLast();
+    if (_items.isNotEmpty) {
+      _items[0] = lastItem;
+      _priorities[0] = lastPriority;
+      int i = 0;
+      while (true) {
+        final l = i * 2 + 1, r = i * 2 + 2;
+        int smallest = i;
+        if (l < _items.length && _priorities[l] < _priorities[smallest]) {
+          smallest = l;
+        }
+        if (r < _items.length && _priorities[r] < _priorities[smallest]) {
+          smallest = r;
+        }
+        if (smallest == i) break;
+        _swap(i, smallest);
+        i = smallest;
+      }
+    }
+    return top;
+  }
+
+  void _swap(int i, int j) {
+    final item = _items[i];
+    _items[i] = _items[j];
+    _items[j] = item;
+    final priority = _priorities[i];
+    _priorities[i] = _priorities[j];
+    _priorities[j] = priority;
+  }
 }
 
 /// Assigns each cable a lane offset so runs sharing the same corridor are

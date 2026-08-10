@@ -102,16 +102,18 @@ void main() {
       expect(polylineHitsAny(routed, wall), isFalse);
     });
 
-    test('manual bends are always respected, obstacles or not', () {
+    test('a manual bend on a clear leg is kept exactly as drawn', () {
       final from = box('LEFT', const Offset(0, 0));
       final to = box('RIGHT', const Offset(600, 0));
       final bent = cable.copyWith(waypoints: const [Offset(300, 400)]);
 
+      // The blocker is nowhere near the legs through the bend, so nothing is
+      // rerouted and the user's shape survives untouched.
       final routed = routeCable(
         fromNode: from,
         toNode: to,
         cable: bent,
-        obstacles: [box('MIDDLE', const Offset(280, -20)).rect],
+        obstacles: [box('FAR', const Offset(0, 1200)).rect],
       );
       expect(routed.length, 3);
       expect(routed[1], const Offset(300, 400));
