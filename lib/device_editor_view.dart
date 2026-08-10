@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
 import 'av_device_library.dart';
@@ -63,6 +64,25 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
     );
+  }
+
+  /// Opens a catalog entry's product page in the system browser.
+  ///
+  /// Only http(s) is launched. The field is free text in a file the user can
+  /// hand-edit or import, and handing an arbitrary scheme to the shell is how
+  /// a catalog entry turns into "open anything on this machine".
+  Future<void> _openUrl(String raw) async {
+    final text = raw.trim();
+    final uri = Uri.tryParse(text);
+    if (uri == null ||
+        !uri.hasScheme ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
+      _snack('Not a web address: $text', error: true);
+      return;
+    }
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) _snack('Could not open $text', error: true);
+    }
   }
 
   // --- editing helpers ------------------------------------------------------
@@ -160,6 +180,14 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('New device'),
                 onPressed: () => _showNewDeviceDialog(library),
+              ),
+              // A billable line that is not a box: it needs a name, a price
+              // and nothing else, so it skips the connector and rack-height
+              // half of the editor rather than being filled in with zeroes.
+              OutlinedButton.icon(
+                icon: const Icon(Icons.receipt_long, size: 18),
+                label: const Text('New cost item'),
+                onPressed: () => _showNewDeviceDialog(library, costItem: true),
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.percent, size: 18),
@@ -657,6 +685,32 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           ],
         ),
         const SizedBox(height: 12),
+        // The page the numbers above were read off. Kept beside them because
+        // a price and a heat figure both go stale, and the question a year
+        // from now is "where did this come from", not "what is it".
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: LiveTextField(
+                fieldId: 'url_$key',
+                initial: entry.url,
+                label: 'Product page',
+                hint: 'https://...',
+                onChanged: (v) =>
+                    setState(() => _apply(entry.copyWith(url: v.trim()))),
+              ),
+            ),
+            avRowIcon(
+              Icons.open_in_new,
+              entry.url.trim().isEmpty
+                  ? 'No product page recorded'
+                  : 'Open ${entry.url}',
+              entry.url.trim().isEmpty ? null : () => _openUrl(entry.url),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         LiveTextField(
           fieldId: 'notes_$key',
           initial: entry.notes,
@@ -821,6 +875,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   Future<void> _showNewDeviceDialog(
     AvDeviceLibrary library, {
     AvDeviceTemplate? copyFrom,
+    bool costItem = false,
   }) async {
     final controller = TextEditingController(
       text: copyFrom == null ? '' : '${copyFrom.model} (copy)',
@@ -829,7 +884,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(copyFrom == null ? 'New device' : 'Duplicate device'),
+        title: Text(
+          costItem
+              ? 'New cost item'
+              : (copyFrom == null ? 'New device' : 'Duplicate device'),
+        ),
         content: SizedBox(
           width: 420,
           child: Column(
@@ -839,15 +898,22 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               TextField(
                 controller: controller,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Model name',
-                  hintText: 'Exactly as the config and quotes spell it',
+                decoration: InputDecoration(
+                  labelText: costItem ? 'Item name' : 'Model name',
+                  hintText: costItem
+                      ? 'How it should read on a quote'
+                      : 'Exactly as the config and quotes spell it',
                 ),
                 onSubmitted: (_) => Navigator.of(ctx).pop(true),
               ),
               const SizedBox(height: 8),
               Text(
-                copyFrom == null
+                costItem
+                    ? 'A billable line rather than a box — a licence, a '
+                          'mount, a rental, a trip charge. Filed under '
+                          '"$kCategoryMisc" with a price and no connectors, '
+                          'and offered on the estimate\'s Other items.'
+                    : copyFrom == null
                     ? 'Everything else — connectors, rack height, power, '
                           'price — is filled in on the next screen.'
                     : 'Starts as a copy of ${copyFrom.model}, connectors '
@@ -875,6 +941,21 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     if (name.isEmpty) return;
     if (library.templateForModel(name) != null) {
       _snack('"$name" is already in the catalog.', error: true);
+      return;
+    }
+    if (costItem) {
+      // No inlet and no connectors: a licence does not draw power, and giving
+      // it a mains plug would put it in the rack load and the power report.
+      setState(
+        () => _apply(
+          AvDeviceTemplate(
+            model: name,
+            category: kCategoryMisc,
+            powerInput: PowerInput.none,
+            ports: const [],
+          ),
+        ),
+      );
       return;
     }
     final base = copyFrom ?? const AvDeviceTemplate(model: '', ports: []);

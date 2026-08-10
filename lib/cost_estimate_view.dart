@@ -35,6 +35,11 @@ import 'xlsx_writer.dart';
 ///  taxable part.
 /// ============================================================================
 
+/// What the "add a part that isn't on the drawing" picker is being opened for.
+/// The three differ in which slice of the catalog they offer and which list on
+/// the estimate the result lands on, and nothing else.
+enum _ExtraPart { cable, hardware, misc }
+
 class CostEstimateView extends StatefulWidget {
   /// The diagram to price. Null means "read it from the provider", which is
   /// what the tab does; the parameter is kept so a caller that has already
@@ -442,7 +447,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add hardware'),
                   onPressed: () => _addExtraPart(context, provider,
-                      cable: false),
+                      kind: _ExtraPart.hardware),
                 ),
               ],
             ),
@@ -654,7 +659,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add cable'),
                   onPressed: () => _addExtraPart(context, provider,
-                      cable: true),
+                      kind: _ExtraPart.cable),
                 ),
                 const SizedBox(width: 8),
                 Switch(
@@ -954,10 +959,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   Future<void> _addExtraPart(
     BuildContext context,
     AppStateProvider provider, {
-    required bool cable,
+    required _ExtraPart kind,
   }) async {
     final library = provider.avDeviceLibrary;
-    final parts = cable ? library.cables : library.rackHardware;
+    final parts = switch (kind) {
+      _ExtraPart.cable => library.cables,
+      _ExtraPart.hardware => library.rackHardware,
+      _ExtraPart.misc => library.miscItems,
+    };
     final searchController = TextEditingController();
     final qtyController = TextEditingController(text: '1');
     final nameController = TextEditingController();
@@ -970,7 +979,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           final matches =
               searchCatalog(parts, searchController.text, limit: parts.length);
           return AlertDialog(
-            title: Text(cable ? 'Add cable' : 'Add rack hardware'),
+            title: Text(switch (kind) {
+              _ExtraPart.cable => 'Add cable',
+              _ExtraPart.hardware => 'Add rack hardware',
+              _ExtraPart.misc => 'Add a cost item',
+            }),
             content: SizedBox(
               width: 560,
               height: 520,
@@ -978,14 +991,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    cable
-                        ? 'Cable that is not a run on the diagram — a spool, '
-                              'a bag of patch leads, a drop somebody else is '
-                              'pulling. Quoted with the counted runs and '
-                              'marked as miscellaneous.'
-                        : 'Hardware bought for the job without going into a '
-                              'frame here. Quoted with the racked hardware and '
-                              'marked as not racked.',
+                    switch (kind) {
+                      _ExtraPart.cable =>
+                        'Cable that is not a run on the diagram — a spool, '
+                            'a bag of patch leads, a drop somebody else is '
+                            'pulling. Quoted with the counted runs and '
+                            'marked as miscellaneous.',
+                      _ExtraPart.hardware =>
+                        'Hardware bought for the job without going into a '
+                            'frame here. Quoted with the racked hardware and '
+                            'marked as not racked.',
+                      _ExtraPart.misc =>
+                        'A billable line off the catalog — a licence, a '
+                            'mount, a rental, a trip charge. It keeps its '
+                            'catalog price, so a revision reaches every '
+                            'estimate that uses it. Add them on the Device '
+                            'Editor with "New cost item".',
+                    },
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 10),
@@ -993,9 +1015,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     controller: searchController,
                     autofocus: true,
                     decoration: InputDecoration(
-                      labelText: cable
-                          ? 'Search the cable types'
-                          : 'Search the parts list',
+                      labelText: switch (kind) {
+                        _ExtraPart.cable => 'Search the cable types',
+                        _ExtraPart.hardware => 'Search the parts list',
+                        _ExtraPart.misc => 'Search the cost items',
+                      },
                       prefixIcon: const Icon(Icons.search, size: 20),
                       isDense: true,
                       border: const OutlineInputBorder(),
@@ -1023,9 +1047,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 dense: true,
                                 selected: t.model == selectedModel,
                                 leading: Icon(
-                                  cable
-                                      ? Icons.cable
-                                      : iconForRackItem(t.category),
+                                  switch (kind) {
+                                    _ExtraPart.cable => Icons.cable,
+                                    _ExtraPart.hardware =>
+                                      iconForRackItem(t.category),
+                                    _ExtraPart.misc => Icons.receipt_long,
+                                  },
                                   size: 20,
                                 ),
                                 title: Text(
@@ -1061,9 +1088,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           controller: nameController,
                           decoration: InputDecoration(
                             labelText: 'Name on the estimate',
-                            hintText: cable
-                                ? 'e.g. Cat6A spool, 1000 ft'
-                                : 'e.g. Spare 2U shelf',
+                            hintText: switch (kind) {
+                              _ExtraPart.cable => 'e.g. Cat6A spool, 1000 ft',
+                              _ExtraPart.hardware => 'e.g. Spare 2U shelf',
+                              _ExtraPart.misc => 'e.g. Display mount',
+                            },
                             isDense: true,
                           ),
                           onChanged: (_) => setLocal(() {}),
@@ -1124,19 +1153,27 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         : nameController.text.trim();
     final template = library.templateForModel(selectedModel ?? '');
 
-    if (cable) {
-      provider.addAvCostExtraCable(
-        catalogModel: selectedModel ?? '',
-        description: name,
-        qty: qty,
-      );
-    } else {
-      provider.addAvCostExtraHardware(
-        catalogModel: selectedModel ?? '',
-        description: name,
-        category: template?.category ?? '',
-        qty: qty,
-      );
+    switch (kind) {
+      case _ExtraPart.cable:
+        provider.addAvCostExtraCable(
+          catalogModel: selectedModel ?? '',
+          description: name,
+          qty: qty,
+        );
+      case _ExtraPart.hardware:
+        provider.addAvCostExtraHardware(
+          catalogModel: selectedModel ?? '',
+          description: name,
+          category: template?.category ?? '',
+          qty: qty,
+        );
+      case _ExtraPart.misc:
+        provider.addAvCostItem(
+          catalogModel: selectedModel ?? '',
+          description: name,
+          category: template?.category ?? '',
+          qty: qty,
+        );
     }
   }
 
@@ -1473,6 +1510,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
                 ),
                 const Spacer(),
+                // Two ways on: off the catalog, so a price agreed once is not
+                // retyped per room and follows a revision; or a blank line for
+                // the one-off nobody will ever quote again.
+                TextButton.icon(
+                  icon: const Icon(Icons.playlist_add, size: 16),
+                  label: const Text('Add from catalog'),
+                  onPressed: () => _addExtraPart(
+                    context,
+                    provider,
+                    kind: _ExtraPart.misc,
+                  ),
+                ),
                 TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add item'),

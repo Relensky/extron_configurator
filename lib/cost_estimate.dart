@@ -845,18 +845,13 @@ CostEstimate computeRoomCost({
     cabling.add(extraLine(item, kCategoryCable));
   }
 
+  // Other items go through the same ladder as everything else, so a line
+  // picked off the catalog (an AV/Misc entry, a licence, a mount) follows a
+  // catalog price revision instead of freezing whatever was typed the day it
+  // was added. A line typed by hand has no catalog model and lands on its own
+  // unit price exactly as before.
   final extras = [
-    for (final item in settings.items)
-      CostLine(
-        key: item.id,
-        description: item.description.trim().isEmpty
-            ? '(unnamed item)'
-            : item.description,
-        category: item.category,
-        qty: item.qty,
-        unitPrice: item.unitPrice,
-        taxable: item.taxable,
-      ),
+    for (final item in settings.items) extraLine(item, ''),
   ];
 
   // --- labor: rate x techs x hours, off the shared rate card -------------

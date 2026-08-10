@@ -34,4 +34,34 @@ or wattage.
 
 Rack units, power draw, heat output and price are not in the stencils. They
 are left at 0, meaning "not recorded", and the reports count what is missing
-rather than treating a blank as zero. Fill them in on the **Catalog** tab.
+rather than treating a blank as zero. Fill them in on the **Catalog** tab, or
+import them:
+
+```bash
+python tools/import_price_list.py "Extron price list.pdf" av_devices.json
+python tools/scrape_extron_web.py --profile <firefox profile> --urls product_urls.json --out scraped.jsonl
+python tools/import_extron_web.py scraped.jsonl av_devices.json --fill-msrp --report import.txt
+```
+
+**`import_price_list.py`** turns a published price list (PDF or CSV) into MSRP.
+
+**`scrape_extron_web.py`** reads extron.com product pages for the things a
+price list does not carry: the **education contract price**, the published
+**thermal dissipation**, and the product page's own URL. Two things make it
+awkward, and both are inherent rather than fixable:
+
+* extron.com rejects scripted HTTP clients — `requests` and headless browsers
+  get a bot-defense page — so it drives a real Firefox through Selenium
+  (`pip install selenium`). One page at a time, ~6s each; ~1800 pages is about
+  three hours. It is somebody else's website.
+* Education pricing is only visible to a signed-in School & University
+  account. **Sign in by hand once** in the profile passed to `--profile`; the
+  script never touches credentials. Get the URL list from
+  `https://www.extron.com/sitemap.xml` — model-name slugs cannot be guessed,
+  since variants share a page.
+
+**`import_extron_web.py`** lands the crawl in the catalog, matching on part
+number and requiring the model name to agree before it writes anything.
+Existing MSRP is left alone (it carries the price list's date); `--fill-msrp`
+fills entries that have none. Everything it declines to match is listed in the
+report.

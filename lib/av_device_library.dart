@@ -74,10 +74,17 @@ import 'av_flow_model.dart';
 //    * CABLE entries carry a [AvDeviceTemplate.cableSignal], which is how the
 //      estimate prices the runs on the AV flow: one line per signal type, the
 //      quantity counted off the diagram, plus whatever spares are asked for.
+//    * AV / MISC is the catch-all for things a job is billed for that are not
+//      a box on a diagram and not one of the above: a mount, a licence, a
+//      subscription, a rental, a trip charge somebody quoted as a figure. They
+//      carry a price and nothing else, and the estimate's "Other items" card
+//      picks them off the catalog so a price agreed once is not retyped per
+//      room.
 
 const String kCategoryRackHardware = 'Rack hardware';
 const String kCategoryConsumable = 'Consumable';
 const String kCategoryCable = 'Cable';
+const String kCategoryMisc = 'AV / Misc';
 
 // ---------------------------------------------------------------------------
 //  PRICING TIERS
@@ -141,6 +148,7 @@ const List<String> kWellKnownCategories = [
   ...kRackItemCategories,
   kCategoryConsumable,
   kCategoryCable,
+  kCategoryMisc,
 ];
 
 /// A model's connector set, and everything else about the box that the room
@@ -193,6 +201,13 @@ class AvDeviceTemplate {
   /// them. Null on everything else.
   final SignalType? cableSignal;
 
+  /// The manufacturer's page for this model. A price, a rack height and a heat
+  /// figure all came off a page somebody read, and next year somebody has to
+  /// check whether they still hold — keeping the link on the entry is the
+  /// difference between re-checking a spec and hunting for it. Empty when
+  /// nobody has recorded one.
+  final String url;
+
   final String notes;
 
   final List<AvPort> ports;
@@ -215,6 +230,7 @@ class AvDeviceTemplate {
     this.educationPrice = 0,
     this.retired = false,
     this.cableSignal,
+    this.url = '',
     this.notes = '',
     required this.ports,
     this.custom = false,
@@ -222,6 +238,11 @@ class AvDeviceTemplate {
 
   /// True when this entry is a length of cable rather than a box.
   bool get isCable => category.trim() == kCategoryCable;
+
+  /// True when this entry is a billable line rather than a piece of equipment
+  /// — a licence, a mount, a trip charge. It has a price and no connectors,
+  /// and never appears in a picker that puts something on a diagram.
+  bool get isMiscItem => category.trim() == kCategoryMisc;
 
   /// True when this belongs on the rack editor's parts list — a vent plate, a
   /// blank, a shelf, a drawer, anything in [kRackItemCategories].
@@ -274,6 +295,7 @@ class AvDeviceTemplate {
     bool? retired,
     SignalType? cableSignal,
     bool clearCableSignal = false,
+    String? url,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -290,6 +312,7 @@ class AvDeviceTemplate {
     educationPrice: educationPrice ?? this.educationPrice,
     retired: retired ?? this.retired,
     cableSignal: clearCableSignal ? null : (cableSignal ?? this.cableSignal),
+    url: url ?? this.url,
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -308,6 +331,7 @@ class AvDeviceTemplate {
     if (educationPrice > 0) 'educationPrice': educationPrice,
     if (retired) 'retired': true,
     if (cableSignal != null) 'cableSignal': cableSignal!.name,
+    if (url.isNotEmpty) 'url': url,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
@@ -344,6 +368,9 @@ class AvDeviceTemplate {
     cableSignal: json['cableSignal'] == null
         ? null
         : signalFromName(json['cableSignal'].toString()),
+    // 'link' is read as an alias for the same reason 'watts' and 'cost' are:
+    // it is what a hand-written entry tends to say.
+    url: (json['url'] ?? json['link'])?.toString() ?? '',
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))
@@ -483,6 +510,14 @@ class AvDeviceLibrary {
       active.where((t) => t.isConsumable).toList();
 
   List<AvDeviceTemplate> get cables => active.where((t) => t.isCable).toList();
+
+  /// The billable lines that are not equipment — licences, mounts, trip
+  /// charges — by name, since the list is read as a rate card.
+  List<AvDeviceTemplate> get miscItems {
+    final list = active.where((t) => t.isMiscItem).toList()
+      ..sort((a, b) => a.model.toLowerCase().compareTo(b.model.toLowerCase()));
+    return list;
+  }
 
   /// The cable entry priced for [signal], or null when the catalog has none —
   /// which the estimate reports as an unpriced run rather than costing at

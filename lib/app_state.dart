@@ -1411,6 +1411,7 @@ class AppStateProvider extends ChangeNotifier {
     double qty = 1,
     double unitPrice = 0,
     bool taxable = true,
+    String catalogModel = '',
   }) {
     final item = CostLineItem(
       id: _nextCostId('ITEM_'),
@@ -1419,6 +1420,7 @@ class AppStateProvider extends ChangeNotifier {
       qty: qty,
       unitPrice: unitPrice,
       taxable: taxable,
+      catalogModel: catalogModel,
     );
     avCost.items.add(item);
     notifyListeners();
