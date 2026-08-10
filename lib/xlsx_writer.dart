@@ -31,7 +31,7 @@ class XlsxRowStyle {
   static const int bold = 1;
   static const int title = 2; // bold white on dark blue
   static const int header = 3; // bold on light blue
-  static const int zebra = 4; // normal on light grey (alternating data rows)
+  static const int zebra = 4; // normal on light gray (alternating data rows)
 }
 
 /// A PNG image anchored with its top-left corner at (anchorCol, anchorRow),

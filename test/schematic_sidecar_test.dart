@@ -7,7 +7,8 @@ import 'package:path/path.dart' as path;
 import 'package:extron_configurator/app_state.dart';
 
 /// The schematic belongs to the config file it was drawn for: it is saved as
-/// `<config>_schematic.json` beside it, and must come back from that folder
+/// `<config>_control_schematic.json` beside it, and must come back from that
+/// folder
 /// when the config is opened — not only when the Schematic tab is visited.
 /// The one judgement call is a session that already has a diagram of its own;
 /// that is the case the UI prompts about, driven by [schematicLayoutNeedsChoice].
@@ -29,7 +30,7 @@ void main() {
 
   /// Writes a sidecar next to [configPath] holding one node and one line.
   void writeSidecar() {
-    File(path.join(dir.path, 'BSS103_config_schematic.json'))
+    File(path.join(dir.path, 'BSS103_config_control_schematic.json'))
         .writeAsStringSync(jsonEncode({
       'positions': {
         'PROJECTORDEVICE_1': [120.0, 340.0]
@@ -47,7 +48,7 @@ void main() {
   test('the sidecar path sits next to the working config', () {
     final p = openedOn(configPath);
     expect(p.schematicSidecarPath,
-        path.join(dir.path, 'BSS103_config_schematic.json'));
+        path.join(dir.path, 'BSS103_config_control_schematic.json'));
   });
 
   test('opening a config loads the layout saved in its folder', () {
@@ -118,7 +119,7 @@ void main() {
   });
 
   test('a corrupt sidecar leaves a blank diagram instead of throwing', () {
-    File(path.join(dir.path, 'BSS103_config_schematic.json'))
+    File(path.join(dir.path, 'BSS103_config_control_schematic.json'))
         .writeAsStringSync('not json at all');
     final p = openedOn(configPath);
 
@@ -142,5 +143,89 @@ void main() {
     expect(reopened.schematicPositions['DSPDEVICE_1'], const Offset(64, 96));
     expect(reopened.schematicLinks.single['label'], 'COM1');
     expect(reopened.schematicHiddenEdges, contains('PROCESSOR>IDF'));
+  });
+
+  group('the rename from <config>_schematic.json', () {
+    String legacyPath() => path.join(dir.path, 'BSS103_config_schematic.json');
+    String currentPath() =>
+        path.join(dir.path, 'BSS103_config_control_schematic.json');
+
+    void writeLegacy() {
+      File(legacyPath()).writeAsStringSync(jsonEncode({
+        'positions': {
+          'DSPDEVICE_1': [11.0, 22.0]
+        },
+        'links': [
+          {'from': 'PROCESSOR', 'to': 'IDF', 'color': '42A5F5', 'label': 'old'}
+        ],
+        'hiddenEdges': <String>[],
+      }));
+    }
+
+    test('a pre-rename file is still found and read', () {
+      writeLegacy();
+      final p = openedOn(configPath);
+
+      expect(p.hasSavedSchematicLayout, isTrue);
+      p.loadSchematicLayoutForCurrentConfig();
+
+      expect(p.schematicPositions['DSPDEVICE_1'], const Offset(11, 22));
+      expect(p.schematicLinks.single['label'], 'old');
+    });
+
+    test('loading one does NOT move it — a read leaves the folder alone', () {
+      writeLegacy();
+      openedOn(configPath).loadSchematicLayoutForCurrentConfig();
+
+      expect(File(legacyPath()).existsSync(), isTrue);
+      expect(File(currentPath()).existsSync(), isFalse);
+    });
+
+    test('saving moves it: new file written, old one retired', () async {
+      writeLegacy();
+      final p = openedOn(configPath)..loadSchematicLayoutForCurrentConfig();
+
+      final saved = await p.saveSchematicLayout();
+
+      expect(saved, currentPath());
+      expect(File(currentPath()).existsSync(), isTrue);
+      expect(
+        File(legacyPath()).existsSync(),
+        isFalse,
+        reason: 'a stale duplicate would quietly diverge from the real one',
+      );
+
+      // And the content survived the move.
+      final reopened = openedOn(configPath)
+        ..loadSchematicLayoutForCurrentConfig();
+      expect(reopened.schematicPositions['DSPDEVICE_1'], const Offset(11, 22));
+      expect(reopened.schematicLinks.single['label'], 'old');
+    });
+
+    test('the current name wins when both are present', () {
+      writeLegacy();
+      File(currentPath()).writeAsStringSync(jsonEncode({
+        'positions': {
+          'DSPDEVICE_1': [99.0, 99.0]
+        },
+        'links': <Map<String, String>>[],
+        'hiddenEdges': <String>[],
+      }));
+
+      final p = openedOn(configPath)..loadSchematicLayoutForCurrentConfig();
+
+      expect(p.schematicPositions['DSPDEVICE_1'], const Offset(99, 99));
+      expect(p.schematicLinks, isEmpty);
+    });
+
+    test('a room with no sidecar at all is unaffected', () async {
+      final p = openedOn(configPath);
+      p.setSchematicPosition('IDF', const Offset(5, 5));
+
+      final saved = await p.saveSchematicLayout();
+
+      expect(saved, currentPath());
+      expect(File(legacyPath()).existsSync(), isFalse);
+    });
   });
 }

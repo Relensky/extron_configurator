@@ -38,9 +38,11 @@ import 'config_dictionary.dart';
 ///  DEVICE-TYPE SCOPING: a top-level "device_fields" object holds field
 ///  definitions that apply ONLY to matching config sections (device blocks),
 ///  keyed by a section pattern like "PROJECTORDEVICE_*". Scoped entries win
-///  over the global "fields" entries for those sections, and entries marked
+///  over the global "fields" entries for those sections. Entries marked
 ///  "addIfMissing": true are rendered on the device tab even when the key
-///  does not exist in the device block yet (the first edit writes it).
+///  does not exist in the device block yet (the first edit writes it) —
+///  allowed on a global "fields" entry too, which is how serial_port reaches
+///  every family's tab rather than one.
 ///  "section_fields" is the same thing under a clearer name for NON-device
 ///  blocks (e.g. "METRICS_CONFIG"); both are parsed into the same list.
 ///
@@ -65,6 +67,14 @@ import 'config_dictionary.dart';
 ///  dev_ key + section prefix) can be added without recompiling: it gets a
 ///  wizard count dropdown, device tabs, pruning, count audits, and the
 ///  "0" migration default automatically.
+///
+///  CONDITIONAL FIELDS: a field's optional "hideWhen" list names the
+///  conditions under which the key means nothing for the block it sits in —
+///  ["com_type=Network", "com_type=SerialOverEthernet"] on serial_port. Any
+///  one holding and the key is not drawn, not written into a new device, not
+///  offered by Check Defaults, and not copied over by a module's DEVICE_INFO
+///  defaults; changing the gating value removes the keys that just became
+///  irrelevant. Same condition syntax as "labelWhen".
 ///
 ///  CONDITIONAL LABELS: a field's optional "labelWhen" map gives it a
 ///  different label depending on OTHER values in the same config section —
@@ -150,13 +160,18 @@ class FieldSpec {
   /// Checked against the field's own config section; first match wins.
   final Map<String, String> labelWhen;
 
+  /// Conditions ("com_type=Network") that make this key irrelevant to the
+  /// block it sits in. Any one holding and the key is not drawn, not added to
+  /// a new device, and not offered by Check Defaults — see [isHiddenIn].
+  final List<String> hideWhen;
+
   final String? description;      // info button text (falls back to ConfigDictionary)
-  final String? helperText;       // small grey helper line under the field
+  final String? helperText;       // small gray helper line under the field
   final List<OptionSpec> options; // for dropdown / combo
   final List<String> writes;      // for combo: config keys this field writes
   final String? moduleCommand;    // for module_states: command in self.Commands
-  final bool addIfMissing;        // device_fields only: render even when the
-                                  // key is absent from the device block
+  final bool addIfMissing;        // render on a device tab even when the key
+                                  // is absent from the device block
 
   RegExp? _patternRegex;
 
@@ -165,6 +180,7 @@ class FieldSpec {
     this.type = 'auto',
     this.label,
     this.labelWhen = const {},
+    this.hideWhen = const [],
     this.description,
     this.helperText,
     this.options = const [],
@@ -185,6 +201,16 @@ class FieldSpec {
     return label;
   }
 
+  /// True when one of this field's [hideWhen] conditions holds in [section] —
+  /// the key means nothing for this block as it currently stands (serial_port
+  /// on a device whose com_type is Network).
+  bool isHiddenIn(Map<String, dynamic> section) {
+    for (final condition in hideWhen) {
+      if (_conditionHolds(condition, section)) return true;
+    }
+    return false;
+  }
+
   /// True when a wildcard spec like "power1_outlet_*" covers [configKey].
   bool matches(String configKey) {
     if (!isPattern) return key == configKey;
@@ -202,6 +228,12 @@ class FieldSpec {
           ? (json['labelWhen'] as Map)
               .map((k, v) => MapEntry(k.toString(), v.toString()))
           : const {},
+      // A single condition may be written as a bare string
+      hideWhen: (json['hideWhen'] is List)
+          ? (json['hideWhen'] as List).map((e) => e.toString()).toList()
+          : (json['hideWhen'] is String)
+              ? [json['hideWhen'] as String]
+              : const [],
       description: json['description']?.toString(),
       helperText: json['helperText']?.toString(),
       options: (json['options'] is List)
@@ -552,18 +584,34 @@ class UiSchema {
     return null;
   }
 
-  /// Device-scoped specs marked addIfMissing for [sectionKey] whose keys are
-  /// NOT in [existingKeys] — the device tab renders these as extra fields so
-  /// a device-type-only setting appears before it exists in config.json.
+  /// Specs marked addIfMissing whose keys are NOT in [existingKeys] — the
+  /// device tab renders these as extra fields so a setting appears before it
+  /// exists in config.json. Global "fields" entries count as well as
+  /// device-scoped ones: serial_port belongs to every family, not one, and a
+  /// device switched to Serial needs somewhere to type the port.
+  ///
+  /// [section] is the live block, so a spec its "hideWhen" rules out is left
+  /// off too: a placeholder field is still a field, and offering one the
+  /// connection can't use is the thing hideWhen exists to stop.
   List<FieldSpec> missingFieldsFor(
-      String sectionKey, Iterable<String> existingKeys) {
+      String sectionKey, Iterable<String> existingKeys,
+      {Map<String, dynamic> section = const {}}) {
     final existing = existingKeys.toSet();
     final Map<String, FieldSpec> result = {};
+
+    void offer(FieldSpec spec) {
+      if (existing.contains(spec.key)) return;
+      if (spec.isHiddenIn(section)) return;
+      result[spec.key] = spec;
+    }
+
+    // Global entries first, so a device-scoped one of the same name wins.
+    for (final spec in _exact.values) {
+      if (spec.addIfMissing) offer(spec);
+    }
     for (final scoped in _deviceScoped) { // later (file) entries override
       if (!scoped.matchesSection(sectionKey)) continue;
-      for (final spec in scoped.addIfMissingSpecs) {
-        if (!existing.contains(spec.key)) result[spec.key] = spec;
-      }
+      scoped.addIfMissingSpecs.forEach(offer);
     }
     return result.values.toList();
   }
@@ -591,6 +639,21 @@ class UiSchema {
   String? labelFor(String configKey, Map<String, dynamic> section,
           {String? sectionKey}) =>
       specFor(configKey, sectionKey: sectionKey)?.labelIn(section);
+
+  /// True when [configKey]'s schema entry says the key means nothing for
+  /// [section] as it currently stands — "hideWhen". The one question every
+  /// path asks before drawing, adding, offering or copying in a property, so
+  /// a Network device never acquires a serial_port from any direction.
+  bool isHiddenFor(String configKey, Map<String, dynamic> section,
+          {String? sectionKey}) =>
+      specFor(configKey, sectionKey: sectionKey)?.isHiddenIn(section) ?? false;
+
+  /// The keys [section] currently holds that [isHiddenFor] rejects — what a
+  /// com_type change leaves behind. Callers remove them and log what went.
+  List<String> staleKeysIn(String sectionKey, Map<String, dynamic> section) =>
+      section.keys
+          .where((k) => isHiddenFor(k, section, sectionKey: sectionKey))
+          .toList();
 
   /// The friendly label a dropdown gives [value] (e.g. gui_tab "3_Cams_Dev" ->
   /// "Menu Tabs: 3 - Cameras & Devices"). Falls back to [value] itself when the

@@ -22,9 +22,21 @@
     "               module whose states become the options. Parsed live from the",
     "               module's self.Commands dictionary ('AllowedValues'), falling",
     "               back to the Set<Command> / __Match<Command> ValueStateValues.",
-    "  addIfMissing: device_fields only - render the field on matching device tabs",
-    "               even when the key does not exist in that device block yet;",
-    "               the first edit writes it into config.json.",
+    "  addIfMissing: render the field on a device tab even when the key does not",
+    "               exist in that device block yet; the first edit writes it into",
+    "               config.json. Works on a 'fields' entry (every device tab, as",
+    "               serial_port uses) and on a 'device_fields' one (only the",
+    "               matching family). Device tabs only - the System tab draws",
+    "               exactly the keys the block holds.",
+    "  hideWhen:    List of conditions (same 'key=value' / 'key~text' form as",
+    "               labelWhen) that make the key IRRELEVANT to this block. Any one",
+    "               matching and the field is not drawn, the key is not added to a",
+    "               new device, Check Defaults does not offer it, and applying a",
+    "               module's DEVICE_INFO defaults skips it - so serial_port and",
+    "               baud never reach a Network or SerialOverEthernet device, which",
+    "               reaches its hardware by ip_address + net_port instead. Changing",
+    "               the gating value (com_type) in the editor REMOVES the keys that",
+    "               just became irrelevant, and says so in the log.",
     "Keys may contain '*' wildcards (e.g. 'power1_outlet_*') to cover a whole",
     "family of properties. Exact keys always win over wildcard matches.",
     "Keys starting with '__' are ignored (use them for comments).",
@@ -101,7 +113,8 @@
     "dev_projectors": {
       "prefix": "PROJECTORDEVICE_",
       "label": "Projectors / Displays",
-      "max": 8,
+      "max": 13,
+      "__comment": "13, not 8: a share room (active_share_room) drives a wall of panels off one grid page and the processor builds ProjectorHandler_1..13 for it. Slots 1-4 are the only ones with a projector detail page.",
       "keepAlivePreference": [ "Power" ]
     },
     "dev_cameras": {
@@ -181,7 +194,12 @@
     "reboot_listener_port": 3510,
     "reboot_listener_interface": "LAN",
     "reboot_listener_token": "",
-    "reboot_listener_client_password": ""
+    "reboot_listener_client_password": "",
+    "active_share_room": false,
+    "share_room_default_mode": "combined",
+    "sub_switch_sources": "",
+    "input_sub_switcher": "",
+    "sub_switch_switcher": "2"
   },
   "section_defaults": {
     "__readme": [
@@ -253,6 +271,7 @@
     ],
     "PROJECTORDEVICE_*": {
       "input": "",
+      "device_role": "",
       "relay_host": "processor1",
       "speaker_mute": true,
       "speaker_mute_method": "volume",
@@ -293,7 +312,27 @@
         "moduleCommand": "Input",
         "label": "Input",
         "addIfMissing": true,
-        "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed)."
+        "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed). In a share room this is the COMBINED-mode input — the leg of the room's distribution that reaches this screen — and input_individual is what it shows in individual mode."
+      },
+      "device_role": {
+        "type": "dropdown",
+        "label": "Device Role (device_role)",
+        "addIfMissing": true,
+        "options": [
+          { "value": "", "label": "(auto — decide from the model list)" },
+          { "value": "projector", "label": "projector (lamp hours, detail page, box-power relay)" },
+          { "value": "display", "label": "display (flat panel — no lamp hours, no relay)" }
+        ],
+        "helperText": "Blank falls back to the processor's display-model list",
+        "description": "Whether this slot is a flat panel or a lamp projector. The processor asks that question in three places — whether to read lamp hours, whether to build a box-power relay, and whether the panel says 'Display' or 'Projector' — and this key answers all three at once. Left blank it falls back to the processor's display-model list, which is demonstrably incomplete (the Sharp PN-C603D and PN-LE601 are panels and are not on it), so set it explicitly on anything the list gets wrong. An unrecognised value is logged and falls back to the list."
+      },
+      "input_individual": {
+        "type": "module_states",
+        "moduleCommand": "Input",
+        "label": "Individual-Mode Input (input_individual)",
+        "addIfMissing": true,
+        "helperText": "SHARE ROOMS ONLY — leave blank and this screen is not a station",
+        "description": "The station's own local input (usually HDMI 1), shown when a share room is switched to individual mode; 'input' is what the same screen shows in combined mode. Setting this is what MAKES a screen a station: leave it blank and the screen keeps one configured input and holds it, exactly as every non-share room's displays already do. The room-wide Combined/Individual toggle on the grid page drives every station at once, and share_room_default_mode picks which one the room starts in."
       },
       "speaker_mute": {
         "type": "bool",
@@ -411,12 +450,13 @@
       "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."
     },
     "com_type": {
-      "description": "Type of connection as a string (Serial, SerialOverEthernet, Network).",
+      "description": "Type of connection as a string. 'Serial' opens a COM port on the host processor/spdevice (the only one that reads serial_port and baud); 'SerialOverEthernet' and 'Network' both reach the device by ip_address + net_port; 'HTTP' posts to it over ip_address + net_port with the user/password credentials.",
       "type": "dropdown",
       "options": [
         "Serial",
         "SerialOverEthernet",
-        "Network"
+        "Network",
+        "HTTP"
       ]
     },
     "host": {
@@ -425,7 +465,22 @@
     "relay_host": {
       "description": "The processor in use for the relay power control."
     },
+    "__connection_note": {
+      "__comment": [
+        "The two halves of a device's connection, each gated by 'hideWhen' on",
+        "com_type and each 'addIfMissing' so the fields the device DOES need",
+        "are always on its tab, whether or not the block carries them yet:",
+        "  Serial only     serial_port, baud",
+        "  Network / SoE   ip_address, net_port, protocol, service_port,",
+        "                  user, password",
+        "Switching com_type in the editor removes whichever set just became",
+        "irrelevant, and key_map.json applies the same split on conversion.",
+        "'host' is on neither list - it names the processor/spdevice a serial",
+        "line is wired to and is harmless (ignored) on a network device."
+      ]
+    },
     "device_id": {
+      "addIfMissing": true,
       "description": "The ID to be sent to the device if it is required."
     },
     "gve_id": {
@@ -435,7 +490,9 @@
       "description": "Input for the device. The subscribe status will change to this input. (Examples: HDBaseT, HDMI 1, Digital Link)."
     },
     "ip_address": {
-      "description": "IP address for the device as a string."
+      "addIfMissing": true,
+      "hideWhen": [ "com_type=Serial" ],
+      "description": "IP address for the device as a string. Network, SerialOverEthernet and HTTP all reach the device through it; a Serial device is wired to a COM port on its host instead and does not carry the key."
     },
     "keep_alive_command": {
       "description": "Command as a string to send to the device once connected. Chosen from the dictionary of commands in the module."
@@ -445,18 +502,24 @@
       "type": "int"
     },
     "keep_alive_qualifier": {
+      "addIfMissing": true,
       "description": "Only needed if the command requires a qualifier (Example checking an audio group such as '1' as the qualifier)."
     },
     "lbl_name": {
+      "addIfMissing": true,
       "description": "Name for the GUI object that will be written for connection status."
     },
     "manual_disconnect": {
+      "type": "bool",
+      "addIfMissing": true,
       "description": "Flag to disconnect the item. Used if a projector or item is temporarily removed from a room."
     },
     "model": {
+      "addIfMissing": true,
       "description": "Model of the device. Picking a model from the dropdown switches 'module' to that model's default python file and applies the module's DEVICE_INFO connection + standard defaults (protocol, port, keep-alive, input, ...). The list is built from each module's DEVICE_INFO \"models\" list (falling back to its self.Models keys) and is filtered to this tab's device family via DEVICE_INFO \"device_type\"; the browse dialog can show all types."
     },
     "keep_alive_trigger": {
+      "addIfMissing": true,
       "description": "Delay the keep_alive_command until the trigger is received such as the APC needing to complete the login before polling."
     },
     "default_cc_aud_cam": {
@@ -488,9 +551,6 @@
     "output_audio_ald": {
       "description": "Switcher output feeding the Assisted Listening system. It gets the same audio tie as output_audio on every source change and at startup, so the ALD hears whatever the room hears. Blank in a room without one. Non-digits are stripped, so '4A' reaches the switcher as 4."
     },
-    "pcmac": {
-      "description": "MAC address of the room PC, for a future wake-on-LAN feature. Recorded for reference — the current ControlScript template does not read this key, so filling it in changes nothing yet."
-    },
     "gui_demo_mode": {
       "type": "bool",
       "description": "Bring the room up with every device faked: each one gets a dummy connection handler, so the panel is fully usable while nothing is actually talked to. For demonstrating or exercising a panel off the hardware. Leave it false in a live room — no command reaches a device while it is on."
@@ -502,34 +562,64 @@
       "description": "Name of the device as it will appear in the logger."
     },
     "net_port": {
-      "description": "Network Port used to send communications on network connected devices.",
-      "type": "int"
+      "type": "int",
+      "addIfMissing": true,
+      "hideWhen": [ "com_type=Serial" ],
+      "description": "Network Port used to send communications on network connected devices. Not carried by a Serial device, which talks over serial_port at the baud rate instead."
     },
     "protocol": {
-      "description": "Protocol in use for network connections (TCP, SSH, or UDP).",
       "type": "dropdown",
+      "addIfMissing": true,
+      "hideWhen": [ "com_type=Serial" ],
       "options": [
         "TCP",
         "SSH",
         "UDP"
-      ]
+      ],
+      "description": "Protocol in use for network connections (TCP, SSH, or UDP). SSH is what makes the processor send user + password as credentials on connect. Not carried by a Serial device."
     },
     "serial_port": {
-      "description": "Serial port in use if using Serial as the com type."
+      "addIfMissing": true,
+      "hideWhen": [
+        "com_type=Network",
+        "com_type=SerialOverEthernet",
+        "com_type=HTTP"
+      ],
+      "helperText": "Serial connections only",
+      "description": "Serial port in use if using Serial as the com type (e.g. COM1). Only the Serial connection opens a port on the host — a Network or SerialOverEthernet device reaches its hardware by ip_address + net_port, so the field is not offered and the key is not written for those."
+    },
+    "baud": {
+      "type": "int",
+      "label": "Baud Rate (baud)",
+      "addIfMissing": true,
+      "hideWhen": [
+        "com_type=Network",
+        "com_type=SerialOverEthernet",
+        "com_type=HTTP"
+      ],
+      "helperText": "Serial connections only. Processor default 9600",
+      "description": "Line speed of the serial connection, passed to the processor's SerialInterface when the port is opened (default 9600). Match whatever the device's own RS-232 settings say. Serial-only, like serial_port."
     },
     "service_port": {
-      "description": "Port for the response from the device. 0 is automatically assigned by the processor.",
-      "type": "int"
+      "type": "int",
+      "addIfMissing": true,
+      "hideWhen": [ "com_type=Serial" ],
+      "description": "Port for the response from the device. 0 is automatically assigned by the processor. Not carried by a Serial device — the processor has no service port to open for a COM line."
     },
     "use_device_mute": {
       "type": "bool",
+      "addIfMissing": true,
       "description": "Whether pressing Video Mute also mutes the PICTURE at this display itself — the processor sends the module's AV mute / video mute / shutter command on top of muting the switcher output feeding it. Turn it on for a display that must black out even when it isn't fed from the switcher, or one whose own blanking is cleaner than dropping the signal. Not to be confused with speaker_mute, which is the same idea for the display's SPEAKERS."
     },
     "user": {
-      "description": "Username for the device when using a network connection."
+      "addIfMissing": true,
+      "hideWhen": [ "com_type=Serial" ],
+      "description": "Username for the device when using a network connection. Sent as a credential on an SSH or HTTP connection, and pushed into the module's deviceUsername on a plain TCP/UDP one when the driver has that field. Not carried by a Serial device."
     },
     "password": {
-      "description": "Password in use while using a network connection that requires authentication."
+      "addIfMissing": true,
+      "hideWhen": [ "com_type=Serial" ],
+      "description": "Password in use while using a network connection that requires authentication. Paired with 'user' — see that key for how each connection sends it. Not carried by a Serial device."
     },
     "__group_keys_note": {
       "__comment": [
@@ -604,6 +694,46 @@
       "label": "Reboot Listener Debug Password (reboot_listener_client_password)",
       "helperText": "Blank = the stock debug password shipped with the template",
       "description": "Handshake password for the debug-client protocol on the reboot listener's port - the part that makes the debugger's Reboot buttons work by changing only the port. Blank means the processor falls back to the stock DebugServer password, which is a constant in the template source, so set this AND a token for anything reachable off a trusted VLAN."
+    },
+    "active_share_room": {
+      "type": "bool",
+      "label": "Share Room (active_share_room)",
+      "helperText": "Swaps the projector pages for one grid of up to 13 screens",
+      "description": "Drive the room's screens from a single grid page instead of the four projector detail pages. The screens are still PROJECTORDEVICE_n blocks counted by dev_projectors — what this changes is which manager runs them: the DisplayManager gives every slot one power button with a name under it (display_name_n) and polls one screen per 5s tick instead of all of them at once, which is what a wall of 8-13 panels needs. Slots 1-4 keep their detail page when they are projectors. Turn it on for a divisible/share space; leave it off and a normal room behaves exactly as before."
+    },
+    "share_room_default_mode": {
+      "type": "dropdown",
+      "label": "Share Room Startup Mode (share_room_default_mode)",
+      "options": [
+        { "value": "combined", "label": "combined (every station shows the room's source)" },
+        { "value": "individual", "label": "individual (every station shows its own local input)" }
+      ],
+      "helperText": "Only read when a screen carries input_individual — see the projector tabs",
+      "description": "Which mode a share room comes up in. 'combined' (the default) puts every station on the room's source — the 'input' set on each PROJECTORDEVICE block; 'individual' puts each one on its own local input (input_individual). The panel's Combined/Individual toggle switches every station at once from then on. A room where no screen has an input_individual has no stations and ignores this."
+    },
+    "display_name_*": {
+      "helperText": "Share room grid button label — \\r starts a new line",
+      "description": "Label under screen n's button on the share room grid page (display_name_1 ... display_name_13). Falls back to PROJECTORDEVICE_n's 'name' when it is absent, and then to 'Display n' / 'Projector n', so it only needs setting where the logger name is not what should be printed on the button. A \\r puts the rest on a second line.",
+      "__comment": "Share rooms only (active_share_room). Not in the template — absent means 'use the device name'."
+    },
+    "input_sub_switcher": {
+      "helperText": "The MAIN switcher input the sub switcher feeds",
+      "description": "Switcher input the sub switcher is plugged into on the MAIN switcher — the input the main switcher parks on while the sub switcher does the source picking. Required whenever sub_switch_sources names anything: without it the processor logs an error and turns sub-switching off, because there is no input to park on. Nothing to do with sub_switch_CC, which is a separate feature."
+    },
+    "sub_switch_sources": {
+      "helperText": "Comma-separated source names, e.g. \"pc,hdmi,usb\". Blank = off",
+      "description": "Sources that arrive through a SECOND switcher hanging off one input of the first (OCNL346's DTP T USW 333 feeding input 8 of an IN1608). For every source named here, the matching input_<name> is the SUB switcher's input number rather than the main one, and pressing that source drives both boxes: the sub switcher picks the source, the main switcher stays on input_sub_switcher. Names match the panel's own source names — pc, hdmi, usb, doc_cam and so on; an unrecognised name is logged and ignored. Blank or absent turns the whole feature off and every input_* means what it always did. Not the same as sub_switch_CC, which only diverts capture-card routing; the two can be used together.",
+      "__comment": "The processor also accepts a JSON list here; the comma string is what this app writes."
+    },
+    "sub_switch_switcher": {
+      "type": "dropdown",
+      "label": "Sub Switcher Number (sub_switch_switcher)",
+      "options": [
+        { "value": "2", "label": "2 — SWITCHERDEVICE_2" },
+        { "value": "3", "label": "3 — SWITCHERDEVICE_3" }
+      ],
+      "helperText": "Which switcher block is the sub switcher (default 2)",
+      "description": "Which switcher handler does the source picking for sub_switch_sources: SWITCHERDEVICE_2 or SWITCHERDEVICE_3. Defaults to 2. Only read when sub_switch_sources names at least one source, and the chosen block has to exist — check dev_switchers covers it."
     },
     "METRICS_CONFIG": {
       "label": "Metrics (Python Metric Tracking)",

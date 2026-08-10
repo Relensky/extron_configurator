@@ -47,4 +47,44 @@ void main() {
       expect(setup['gve_room'], '103');
     });
   });
+
+  group('gve_id_wireless_1 is retired', () {
+    test('the template no longer offers it as a default', () {
+      expect(systemSetup().containsKey('gve_id_wireless_1'), isFalse,
+          reason: "a device's GVE id belongs in that device's own block");
+    });
+
+    test('the wireless device block is where the gve_id lives', () {
+      final wireless = template()['WIRELESSDEVICE_1'];
+      expect(wireless, isA<Map>());
+      expect((wireless as Map)['gve_id'].toString(), isNotEmpty);
+    });
+
+    test('a legacy config that still has it is cleaned on load', () async {
+      final keyMap = await ConfigKeyMap.load(explicitPath: 'key_map.json');
+      final result = keyMap.apply({
+        'SYSTEM_SETUP': {'gve_id_wireless_1': 'Wireless1', 'gve_room': '103'},
+      });
+      final setup = (result.config['SYSTEM_SETUP'] as Map);
+      expect(setup.containsKey('gve_id_wireless_1'), isFalse);
+      expect(setup['gve_room'], '103');
+    });
+  });
+
+  group('pcmac is retired', () {
+    test('the template no longer offers it as a default', () {
+      expect(systemSetup().containsKey('pcmac'), isFalse,
+          reason: 'no ControlScript template reads it');
+    });
+
+    test('a legacy config that still has it is cleaned on load', () async {
+      final keyMap = await ConfigKeyMap.load(explicitPath: 'key_map.json');
+      final result = keyMap.apply({
+        'SYSTEM_SETUP': {'pcmac': '00:11:22:33:44:55', 'gve_room': '103'},
+      });
+      final setup = (result.config['SYSTEM_SETUP'] as Map);
+      expect(setup.containsKey('pcmac'), isFalse);
+      expect(setup['gve_room'], '103');
+    });
+  });
 }

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/config_key_mapper.dart';
 
-/// The colouring on the conversion screen (and on the Devices / System tabs)
+/// The coloring on the conversion screen (and on the Devices / System tabs)
 /// is only worth anything if it says the right thing about each value. Three
 /// states, and this pins what puts a value in each one:
 ///
@@ -72,7 +72,7 @@ void main() {
 
     test('a renamed key with the same value is still legacy', () {
       // auto_case_normalization renames COMTYPE -> com_type. The VALUE is what
-      // is being coloured, and it did not move.
+      // is being colored, and it did not move.
       final p = diffed(
         {'PROJECTORDEVICE': {'COMTYPE': 'Serial'}},
         {'PROJECTORDEVICE_1': {'com_type': 'Serial'}},
@@ -138,7 +138,7 @@ void main() {
     });
   });
 
-  group('rejecting a change recolours the field', () {
+  group('rejecting a change recolors the field', () {
     test('a rejected rewrite reads as the old file again', () {
       final p = diffed(
         {'SYSTEM_SETUP': {'gve_bldg': 'BEHAVIORAL AND SOCIAL SCIENCE'}},
@@ -153,7 +153,7 @@ void main() {
           reason: 'the value on screen is the old file\'s again');
     });
 
-    test('a rejected addition has no colour at all', () {
+    test('a rejected addition has no color at all', () {
       final p = diffed(
         {'SYSTEM_SETUP': {}},
         {'SYSTEM_SETUP': {'use_qos': true}},
@@ -165,10 +165,10 @@ void main() {
     });
   });
 
-  group('a value the user sets loses its colour', () {
+  group('a value the user sets loses its color', () {
     // Orange says "carried over from the old file, nobody has checked it".
     // Once the tech has set the value themselves that is no longer true of
-    // it, so the field goes back to the theme's ordinary colour — otherwise
+    // it, so the field goes back to the theme's ordinary color — otherwise
     // the one signal telling them what still needs checking never shrinks.
     test('typing over a legacy value clears it', () {
       final p = diffed(
@@ -181,7 +181,7 @@ void main() {
       expect(p.originFor('SYSTEM_SETUP', 'gve_room'), isNull);
     });
 
-    test('the neighbours keep theirs', () {
+    test('the neighbors keep theirs', () {
       final p = diffed(
         {'SYSTEM_SETUP': {'gve_room': '125B', 'gve_bldg': 'AJH'}},
         {'SYSTEM_SETUP': {'gve_room': '125B', 'gve_bldg': 'AJH'}},
@@ -209,7 +209,7 @@ void main() {
         {'PROJECTORDEVICE_1': {'model': 'Old Model', 'protocol': 'TCP'}},
       );
       // No registry entry in a bare provider, so only the model itself is
-      // written — which is exactly the value whose colour must go.
+      // written — which is exactly the value whose color must go.
       p.applyModuleDefaults('PROJECTORDEVICE_1', 'VPL-PHZ60');
 
       expect(p.originFor('PROJECTORDEVICE_1', 'model'), isNull);
@@ -217,9 +217,9 @@ void main() {
           reason: 'a value the model change did not touch is still the file\'s');
     });
 
-    test('deleting a key takes its colour with it', () {
+    test('deleting a key takes its color with it', () {
       // Check Defaults can re-add the key later; it should come back as a
-      // fresh value, not wearing the colour the conversion gave the old one.
+      // fresh value, not wearing the color the conversion gave the old one.
       final p = diffed(
         {'SYSTEM_SETUP': {'pcmac': 'aa-bb-cc'}},
         {'SYSTEM_SETUP': {'pcmac': 'aa-bb-cc'}},

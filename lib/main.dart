@@ -1,13 +1,24 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'app_snack.dart';
 import 'app_state.dart';
+import 'av_device_library.dart';
+import 'av_only_notice.dart';
+import 'av_flow_view.dart';
 import 'conversion_preview_view.dart';
+import 'cost_estimate_view.dart';
+import 'export_tools.dart';
+import 'device_editor_view.dart';
+import 'device_start_wizard.dart';
+import 'new_room_dialog.dart';
+import 'rack_tab_view.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
@@ -15,6 +26,36 @@ import 'json_editor_view.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
 import 'system_settings_view.dart';
+
+/// The navigation rail's tabs, in rail order.
+///
+/// Several places key off the selected tab (the view switch, the landing-screen
+/// bypass for App Config, the screenshot file name). They used to compare bare
+/// integers, which meant inserting a tab silently repointed all of them — so
+/// the index lives here once and everything reads it through [index].
+enum AppTab {
+  wizard('wizard'),
+  devices('devices'),
+  system('system'),
+  schematic('schematic'),
+  avFlow('av_flow'),
+  racks('racks'),
+  cost('cost'),
+  deviceEditor('device_editor'),
+  rawJson('raw_json'),
+  appConfig('app_config');
+
+  /// Token used in screenshot file names.
+  final String token;
+  const AppTab(this.token);
+
+  /// Tabs that work with no room loaded. App Config is settings; the Device
+  /// Editor is the equipment catalog — both are about the app and the price
+  /// list, not about a room, so the "No Configuration Loaded" screen must not
+  /// stand in front of them.
+  bool get worksWithoutConfig =>
+      this == AppTab.appConfig || this == AppTab.deviceEditor;
+}
 
 void main() {
   runApp(
@@ -59,7 +100,7 @@ class RoomConfigApp extends StatelessWidget {
     Color(0xFFFF9800), // orange
     Color(0xFFFF5722), // deep orange
     Color(0xFF795548), // brown
-    Color(0xFF607D8B), // blue grey
+    Color(0xFF607D8B), // blue gray
   ];
 
   /// Parses a stored RRGGBB hex into a Color (falls back to [fallback]).
@@ -157,10 +198,10 @@ class _MainDashboardState extends State<MainDashboard> {
   /// Captures the current content area and opens the annotation editor. The
   /// default file name embeds the active tab + date.
   void _takeScreenshot(BuildContext context, int selectedIndex) {
-    const tabNames = ['wizard', 'devices', 'system', 'schematic', 'raw_json', 'app_config'];
-    final tabToken = (selectedIndex >= 0 && selectedIndex < tabNames.length)
-        ? tabNames[selectedIndex]
-        : 'view';
+    final tabToken =
+        (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+            ? AppTab.values[selectedIndex].token
+            : 'view';
     final dateToken = DateTime.now().toLocal().toIso8601String().split('T').first;
     captureAndAnnotate(context, _captureKey,
         defaultFileName: '${tabToken}_screenshot_$dateToken.png');
@@ -196,17 +237,58 @@ class _MainDashboardState extends State<MainDashboard> {
     }
     if (!context.mounted) return;
 
+    // Two questions that change what the rest of the session looks like: is
+    // there a control system yet, and are the devices coming from the cost
+    // estimator? Both default to the old behavior.
+    final NewRoomChoice? choice = await showNewRoomDialog(context);
+    if (choice == null || !context.mounted) return;
+
     // The template path always resolves (explicit file, else config.json in
     // the Root Folder / working directory), so just attempt the create and
     // report the resolved location on failure.
     final bool success = await provider.createNewConfig();
     if (!context.mounted) return;
     if (success) {
+      // Set after the create: createNewConfig resets the AV document, and the
+      // room mode lives in it.
+      provider.setRoomMode(choice.mode);
+
+      if (choice.startFromEstimator) {
+        final placed = await showDeviceStartWizard(context, provider);
+        if (!context.mounted) return;
+        if (placed > 0) {
+          // Straight to the estimate: the list was just priced, and the
+          // numbers are what the wizard was opened for.
+          provider.selectTab(AppTab.cost.index);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '$placed device${placed == 1 ? '' : 's'} added — they are on '
+                'the Signal Flow canvas and priced here.',
+              ),
+            ),
+          );
+          return;
+        }
+      }
+
+      // An AV-only room starts on the Wizard tab, which is where its two
+      // required answers (building and room number) live.
+      if (choice.mode == RoomMode.avOnly) {
+        provider.selectTab(AppTab.wizard.index);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New config created from template.')),
+        SnackBar(
+          content: Text(
+            choice.mode == RoomMode.avOnly
+                ? 'New AV-only room created. Set the building and room '
+                      'number, then add the devices.'
+                : 'New config created from template.',
+          ),
+        ),
       );
     } else {
-      provider.selectTab(5); // Route to App Config
+      provider.selectTab(AppTab.appConfig.index);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
               "Place config.json there or set a Template file in App Config."),
@@ -306,7 +388,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   /// Brings the schematic in line with the config that was just opened.
   ///
-  /// A saved `<config>_schematic.json` belongs to the config file, so it is
+  /// A saved `<config>_control_schematic.json` belongs to the config file, so
   /// loaded from that folder as soon as the config is — no need to visit the
   /// Schematic tab first. The one case that isn't obvious is a session that has
   /// already arranged a diagram of its own: then the user is asked whether to
@@ -320,12 +402,12 @@ class _MainDashboardState extends State<MainDashboard> {
     final bool? loadSaved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Saved schematic found'),
+        title: const Text('Saved control schematic found'),
         content: Text(
-            'This config has a saved schematic beside it:\n\n'
+            'This config has a saved control schematic beside it:\n\n'
             '${provider.schematicSidecarPath}\n\n'
-            'You also have a schematic arranged in this session. Load the '
-            'saved one, or discard it and keep yours?'),
+            'You also have a control schematic arranged in this session. '
+            'Load the saved one, or discard it and keep yours?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -333,7 +415,7 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Load saved schematic'),
+            child: const Text('Load saved control schematic'),
           ),
         ],
       ),
@@ -344,6 +426,51 @@ class _MainDashboardState extends State<MainDashboard> {
     } else {
       provider.loadSchematicLayoutForCurrentConfig();
     }
+  }
+
+  /// The AV Flow equivalent of [_syncSchematicAfterLoad], for the
+  /// `<config>_av_flow.json` sidecar. Same rule: load it silently unless the
+  /// session already has a diagram of its own worth protecting.
+  Future<void> _syncAvFlowAfterLoad(
+      BuildContext context, AppStateProvider provider) async {
+    if (!provider.avFlowNeedsChoice) {
+      provider.loadAvFlowForCurrentConfig();
+      return;
+    }
+    final bool? loadSaved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Saved AV flow found'),
+        content: Text('This config has a saved AV signal flow beside it:\n\n'
+            '${provider.avFlowSidecarPath}\n\n'
+            'You also have an AV flow drawn in this session. Load the saved '
+            'one, or discard it and keep yours?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Discard saved, keep mine'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Load saved AV flow'),
+          ),
+        ],
+      ),
+    );
+    if (loadSaved == false) {
+      provider.keepAvFlowForCurrentConfig();
+    } else {
+      provider.loadAvFlowForCurrentConfig();
+    }
+  }
+
+  /// Both diagrams belong to the config file, so both sidecars are picked up
+  /// together whenever a config is opened or downloaded.
+  Future<void> _syncDiagramsAfterLoad(
+      BuildContext context, AppStateProvider provider) async {
+    await _syncSchematicAfterLoad(context, provider);
+    if (!context.mounted) return;
+    await _syncAvFlowAfterLoad(context, provider);
   }
 
   @override
@@ -390,6 +517,24 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'New Config (from template)',
             onPressed: () => _createNewConfig(context, provider),
           ),
+          // CONVERT: the migration a legacy file needs, on demand. The load
+          // already ran the conversion in memory — this is where it gets
+          // reviewed, accepted or thrown away. Grayed out when the loaded
+          // file had nothing to migrate, so its state is also the answer to
+          // "does this room need converting?".
+          IconButton(
+            icon: Badge(
+              isLabelVisible: provider.lastLoadHadChanges,
+              label: Text('${provider.conversionChanges.length}'),
+              child: const Icon(Icons.compare_arrows),
+            ),
+            tooltip: provider.lastLoadHadChanges
+                ? 'Convert — review the changes this file needs'
+                : 'Nothing to convert in this file',
+            onPressed: provider.lastLoadHadChanges
+                ? () => _showMigrationLogDialog(context, provider.systemLogs)
+                : null,
+          ),
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: 'Open Existing Config',
@@ -397,11 +542,13 @@ class _MainDashboardState extends State<MainDashboard> {
               bool loaded = await provider.loadExistingConfig();
               if (!loaded || !context.mounted) return;
               // The schematic saved next to the config comes back with it.
-              await _syncSchematicAfterLoad(context, provider);
-              // Only when the load actually changed/flagged something — a
-              // clean re-load of an already-migrated file stays silent.
+              await _syncDiagramsAfterLoad(context, provider);
+              // The conversion is NOT shown here. Opening a file should open
+              // the file; a migration dialog in front of it makes every load
+              // of a legacy room a dialog to dismiss before any work starts.
+              // The Convert button in the toolbar lights up instead.
               if (provider.lastLoadHadChanges && context.mounted) {
-                _showMigrationLogDialog(context, provider.systemLogs);
+                _announceConversionAvailable(context);
               }
             },
           ),
@@ -416,10 +563,11 @@ class _MainDashboardState extends State<MainDashboard> {
               );
               if (result != true || !context.mounted) return;
               // Working copy on disk now — pick up any schematic beside it.
-              await _syncSchematicAfterLoad(context, provider);
-              // On a successful download, show the migration/audit log like a local load does
+              await _syncDiagramsAfterLoad(context, provider);
+              // Same as a local open: the download lands, and Convert offers
+              // the migration when the user is ready for it.
               if (provider.lastLoadHadChanges && context.mounted) {
-                _showMigrationLogDialog(context, provider.systemLogs);
+                _announceConversionAvailable(context);
               }
             },
           ),
@@ -494,6 +642,18 @@ class _MainDashboardState extends State<MainDashboard> {
                     ));
                   },
           ),
+          // SAVE ALL: the whole job into one folder named for the room —
+          // config, diagrams, reports, workbook, images, and a copy of the
+          // catalog entries and rate card the prices came from.
+          IconButton(
+            icon: const Icon(Icons.drive_folder_upload),
+            tooltip: hasConfig
+                ? 'Save All — write the whole project to a room folder'
+                : 'Save All — nothing loaded yet',
+            onPressed: hasConfig
+                ? () => _saveAllProject(context, provider, _captureKey)
+                : null,
+          ),
           IconButton(
             icon: const Icon(Icons.save_alt),
             tooltip: 'Export Config Locally',
@@ -510,34 +670,64 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
       body: Row(
         children: [
-          NavigationRail(
-            selectedIndex: selectedIndex,
-            onDestinationSelected: (int index) {
-              provider.selectTab(index);
-            },
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
-              NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
-              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
-              NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
-              NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
-              NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
-            ],
+          // The rail is ten destinations tall and a laptop window is not.
+          // NavigationRail is a Column, so on a short window the bottom tabs
+          // were simply cut off — App Config unreachable, and a layout
+          // exception on every launch before the window is maximized.
+          //
+          // This is the documented way to make one scroll: give it the
+          // viewport's height as a MINIMUM so the normal case still fills the
+          // side of the window, and let it scroll past that when it can't fit.
+          LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: NavigationRail(
+                    selectedIndex: selectedIndex,
+                    onDestinationSelected: (int index) {
+                      provider.selectTab(index);
+                    },
+                    labelType: NavigationRailLabelType.all,
+                    destinations: const [
+                      NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
+                      NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
+                      NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
+                      NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
+                      NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
+                      NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
+                      NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
+                      NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
+                      NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
+                      NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
             child: RepaintBoundary(
               key: _captureKey,
-              child: (!hasConfig && selectedIndex != 5)
+              child: (!hasConfig && !_tabWorksWithoutConfig(selectedIndex))
                   ? _buildLandingScreen(context, provider)
-                  : _buildMainContent(selectedIndex, provider.configRevision),
+                  : _buildMainContent(
+                      selectedIndex,
+                      provider.configRevision,
+                      provider.isAvOnlyRoom,
+                    ),
             ),
           )
         ],
       ),
     );
   }
+
+  static bool _tabWorksWithoutConfig(int index) =>
+      index >= 0 &&
+      index < AppTab.values.length &&
+      AppTab.values[index].worksWithoutConfig;
 
   Widget _buildLandingScreen(BuildContext context, AppStateProvider provider) {
     return Center(
@@ -578,9 +768,9 @@ class _MainDashboardState extends State<MainDashboard> {
                   onPressed: () async {
                     bool loaded = await provider.loadExistingConfig();
                     if (!loaded || !context.mounted) return;
-                    await _syncSchematicAfterLoad(context, provider);
+                    await _syncDiagramsAfterLoad(context, provider);
                     if (provider.lastLoadHadChanges && context.mounted) {
-                      _showMigrationLogDialog(context, provider.systemLogs);
+                      _announceConversionAvailable(context);
                     }
                   },
                 ),
@@ -599,28 +789,192 @@ class _MainDashboardState extends State<MainDashboard> {
   /// without this the previous room's name and number stayed on screen until
   /// the user switched tabs and came back. App Config is left unkeyed — its
   /// fields are application settings and have nothing to do with the room.
-  Widget _buildMainContent(int selectedIndex, int configRevision) {
+  Widget _buildMainContent(
+      int selectedIndex, int configRevision, bool avOnly) {
     final key = ValueKey('tab_${selectedIndex}_cfg_$configRevision');
-    switch (selectedIndex) {
-      case 0:
+    if (selectedIndex < 0 || selectedIndex >= AppTab.values.length) {
+      return const Center(child: Text("Select a category"));
+    }
+    switch (AppTab.values[selectedIndex]) {
+      case AppTab.wizard:
         return SetupWizardView(key: key);
-      case 1:
+      case AppTab.devices:
         return DynamicDevicesTabsView(key: key);
-      case 2:
-        return SystemSettingsView(key: key);
-      case 3:
+      case AppTab.system:
+        // An AV-only room has no processor config to edit yet — see
+        // ControlSystemPlaceholder, which says so and offers the switch.
+        return avOnly
+            ? const ControlSystemPlaceholder(tabName: 'the System tab')
+            : SystemSettingsView(key: key);
+      case AppTab.schematic:
         return SchematicView(key: key);
-      case 4:
+      case AppTab.avFlow:
+        return AvFlowView(key: key);
+      case AppTab.racks:
+        return RackTabView(key: key);
+      case AppTab.cost:
+        return CostEstimateView(key: key);
+      case AppTab.deviceEditor:
+        // Unkeyed: the catalog is application data, not room data, so it must
+        // not be thrown away and rebuilt when a different room is opened.
+        return const DeviceEditorView();
+      case AppTab.rawJson:
+        if (avOnly) {
+          return const ControlSystemPlaceholder(tabName: 'the Raw JSON tab');
+        }
         // Unkeyed on purpose: the raw editor already re-reads the config in
         // didChangeDependencies, and remounting it mid-Apply would cut off its
         // own "applied/saved" feedback.
         return const JsonEditorView();
-      case 5:
+      case AppTab.appConfig:
         return const AppSettingsView();
-      default:
-        return const Center(child: Text("Select a category"));
     }
   }
+}
+
+/// SAVE ALL — everything this room has produced, into one folder.
+///
+/// The diagram images can only be rendered from a widget that is on screen,
+/// so this walks the diagram tabs, capturing each in turn, and puts the user
+/// back where they started. Anything that could not be captured is reported
+/// in the result rather than quietly missing from the folder.
+Future<void> _saveAllProject(
+    BuildContext context, AppStateProvider provider, GlobalKey captureKey) async {
+  final parent = await FilePicker.getDirectoryPath(
+    dialogTitle: 'Where should the room folder go?',
+  );
+  if (parent == null || !context.mounted) return;
+
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(const SnackBar(
+    duration: Duration(seconds: 2),
+    content: Text('Capturing the diagrams...'),
+  ));
+
+  final int startingTab = provider.selectedTabIndex;
+  Future<Uint8List?> capture(AppTab tab) async {
+    provider.selectTab(tab.index);
+    // Two frames plus a beat: the tab has to be built, laid out and painted
+    // before its RepaintBoundary has anything to hand over.
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    await WidgetsBinding.instance.endOfFrame;
+    return captureBoundary(captureKey, pixelRatio: 2.0);
+  }
+
+  final schematicPng = await capture(AppTab.schematic);
+  final avFlowPng = await capture(AppTab.avFlow);
+  final rackPng = await capture(AppTab.racks);
+  provider.selectTab(startingTab);
+  await WidgetsBinding.instance.endOfFrame;
+
+  ProjectExport result;
+  try {
+    result = await saveProjectFolder(
+      provider: provider,
+      parentFolder: parent,
+      schematicPng: schematicPng,
+      avFlowPng: avFlowPng,
+      rackPng: rackPng,
+    );
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(
+      content: Text('Save All failed: $e'),
+      backgroundColor: Colors.red,
+    ));
+    return;
+  }
+
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Project saved'),
+      content: SizedBox(
+        width: 620,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(result.folder,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text('${result.written.length} files written',
+                style: Theme.of(ctx).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final name in result.written)
+                      Text('  $name',
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 12)),
+                    if (result.skipped.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text('Not included',
+                          style: Theme.of(ctx).textTheme.titleSmall),
+                      const SizedBox(height: 4),
+                      for (final note in result.skipped)
+                        Text('  $note',
+                            style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                                color: Theme.of(ctx).disabledColor)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            final error = await provider.revealInFileManager(result.folder);
+            if (error != null && ctx.mounted) {
+              ScaffoldMessenger.of(ctx)
+                  .showSnackBar(SnackBar(content: Text(error)));
+            }
+          },
+          child: const Text('OPEN FOLDER'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// A quiet nudge that the file needed migrating, pointing at the Convert
+/// button rather than opening it. The whole point of the change is that the
+/// user decides when to deal with the conversion.
+void _announceConversionAvailable(BuildContext context) {
+  // Shown right after a load, and its CONVERT action opens a dialog over the
+  // top of it — both of which are how a snack bar ends up stuck. See
+  // showTimedSnackBar: it keeps a timer outside the widget tree so the notice
+  // goes away regardless.
+  showTimedSnackBar(
+    ScaffoldMessenger.of(context),
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: const Text(
+        'This file needs converting to the current format. The changes are '
+        'ready in memory — press Convert in the toolbar to review them.',
+      ),
+      action: SnackBarAction(
+        label: 'CONVERT',
+        onPressed: () {
+          final provider = context.read<AppStateProvider>();
+          _showMigrationLogDialog(context, provider.systemLogs);
+        },
+      ),
+    ),
+  );
 }
 
 /// Displays a scrollable log of actions taken to make an older config compatible
@@ -707,7 +1061,7 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
         ),
         actions: [
           // The log above says WHAT changed; the preview shows the converted
-          // config itself, coloured by where each value came from, and lets
+          // config itself, colored by where each value came from, and lets
           // individual changes be rejected.
           if (ctx.read<AppStateProvider>().hasConversionPreview)
             TextButton.icon(
@@ -1025,6 +1379,132 @@ class AppSettingsView extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 22),
+
+        // --- ACTIVE DEPLOYMENT TARGET ---
+        // First on the tab because it is the one setting that changes between
+        // sessions: every path below is set once and forgotten, while this
+        // picks which room the next upload or download talks to. At the
+        // bottom its dropdown opened off the end of a long scrolling page,
+        // which meant scrolling to find the field and scrolling again to see
+        // what it offered.
+        Text('Active Deployment Target',
+            style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ProcessorSearchField(
+                label: 'Select Room Deployment',
+                helperText:
+                    'Search by building name, code, room number, or IP — '
+                    'rooms from processors.json, names from buildings.json.',
+                initialProcessor: provider.selectedProcessor,
+                onSelected: (proc) => provider.selectProcessor(proc),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear Active Room',
+                onPressed: () => provider.selectProcessor(null),
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 40),
+
+        // --- PRICING ---
+        // Currency and which of a catalog entry's two prices the estimates
+        // cost from. Both are app-wide: a shop bills in one currency, and
+        // whether a job is quoted at list or at education pricing is a
+        // decision about the job, not about each device.
+        Text('Pricing', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        // Wrap, not Row: three controls plus their explanation is more than a
+        // narrow window has room for on one line, and this tab is read at
+        // whatever width the app happens to be open at.
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.start,
+          children: [
+            SizedBox(
+              width: 240,
+              child: DropdownButtonFormField<String>(
+                initialValue: kCurrencySymbols.contains(provider.currencySymbol)
+                    ? provider.currencySymbol
+                    : null,
+                // A dropdown sizes itself to its WIDEST item, not the selected
+                // one, so without this the box wants the width of "New Zealand
+                // dollar" and overflows whatever it is put in.
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Currency symbol',
+                  helperText: 'Shown in front of every figure',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final c in kCurrencySymbols)
+                    DropdownMenuItem(
+                      value: c,
+                      child: Text('$c   ${kCurrencyNames[c] ?? ''}'),
+                    ),
+                ],
+                onChanged: (val) {
+                  if (val != null) provider.updateSetting('currencySymbol', val);
+                },
+              ),
+            ),
+            // Anything not on the list — a currency code, a local symbol.
+            SizedBox(
+              width: 200,
+              child: TextFormField(
+                key: ValueKey('currencySymbol_${provider.currencySymbol}'),
+                decoration: const InputDecoration(
+                  labelText: 'Or type one',
+                  helperText: 'Blank resets to \$',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: provider.currencySymbol,
+                onChanged: (val) =>
+                    provider.updateSetting('currencySymbol', val),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Estimate prices',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                // Short labels: two full names side by side is wider than a
+                // narrow window, and a SegmentedButton does not wrap.
+                SegmentedButton<PricingTier>(
+                  segments: [
+                    for (final t in PricingTier.values)
+                      ButtonSegment(
+                        value: t,
+                        label: Text(kPricingTierShort[t] ?? t.name),
+                        tooltip: kPricingTierLabels[t],
+                      ),
+                  ],
+                  selected: {provider.pricingTier},
+                  onSelectionChanged: (s) => provider.setPricingTier(s.first),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Every catalog entry carries both prices. A price typed on a room '
+          'still wins over either; a line the catalog can only price at the '
+          'other tier is flagged on the estimate rather than quietly costed.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const Divider(height: 40),
 
         // --- THEME STYLE ---
         // Two styles, each with its own accent swatch picker below:
@@ -1541,33 +2021,6 @@ class AppSettingsView extends StatelessWidget {
         ],
         const SizedBox(height: 30),
 
-        Text('Active Deployment Target', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 20),
-        
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ProcessorSearchField(
-                label: 'Select Room Deployment',
-                helperText:
-                    'Search by building name, code, room number, or IP — '
-                    'rooms from processors.json, names from buildings.json.',
-                initialProcessor: provider.selectedProcessor,
-                onSelected: (proc) => provider.selectProcessor(proc),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: IconButton(
-                icon: const Icon(Icons.clear),
-                tooltip: 'Clear Active Room',
-                onPressed: () => provider.selectProcessor(null), 
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }

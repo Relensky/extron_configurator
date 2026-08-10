@@ -8,13 +8,22 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
 import 'app_state.dart';
+import 'av_flow_view.dart' show buildAvFlowModel;
+import 'color_wheel_picker.dart';
+import 'layout_tools.dart';
+import 'report_tools.dart';
+import 'room_workbook.dart';
 import 'screenshot_tools.dart';
+import 'view_zoom.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
-///  ROOM SCHEMATIC TAB
+///  CONTROL SCHEMATIC TAB
 /// ============================================================================
-///  Auto-draws the room's control topology from the loaded config:
+///  Auto-draws the room's CONTROL topology from the loaded config — how each
+///  device talks to the processor. The signal path (what plugs into what) is
+///  the AV Flow tab's job; these two are deliberately separate documents.
+///
 ///    * every active device block (same dev_ count logic as the Devices tab)
 ///      becomes a node with a device-type icon
 ///    * Network devices (com_type "Network") connect to a Network IDF node,
@@ -27,7 +36,9 @@ import 'xlsx_writer.dart';
 ///  Each connection type has its own color (legend bottom-left, included in
 ///  the PNG export). Edit mode allows dragging nodes and drawing extra lines
 ///  in any color between any two nodes; the layout persists to a
-///  `<config>_schematic.json` sidecar via Save Layout.
+///  `<config>_control_schematic.json` sidecar via Save Layout. (Diagrams
+///  saved before the rename used `<config>_schematic.json`; those are read
+///  as-is and move to the new name the next time the layout is saved.)
 ///  Exports: the diagram as a PNG, and a device report as .xlsx or .txt.
 /// ============================================================================
 
@@ -49,6 +60,13 @@ const Map<ConnType, String> kConnLabels = {
   ConnType.relay: 'Relay',
   ConnType.touchpanel: 'Touch Panel',
 };
+
+/// The color a connection category is drawn in, honouring the room's
+/// overrides. Nothing reads [kConnColors] directly except this — recoloring
+/// a category has to move the lines, the box borders AND the legend together
+/// or the key stops describing the drawing.
+Color connColor(ConnType conn, AppStateProvider provider) =>
+    provider.schematicConnColor(conn.index, kConnColors[conn]!);
 
 /// Swatches offered when drawing a custom line.
 const List<Color> kLinkSwatches = [
@@ -81,6 +99,19 @@ class SchematicNode {
   });
 
   Offset get center => pos + const Offset(kNodeWidth / 2, kNodeHeight / 2);
+
+  /// The same node at a different spot — used for the live drag preview,
+  /// which moves a box (and the lines attached to it) without writing the
+  /// new position to the provider on every pointer event.
+  SchematicNode movedTo(Offset newPos) => SchematicNode(
+        id: id,
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        conn: conn,
+        tabCount: tabCount,
+        pos: newPos,
+      );
 }
 
 /// One line on the diagram.
@@ -257,7 +288,7 @@ class SchematicModel {
       edges.add(SchematicEdge(
         fromId: 'IDF',
         toId: 'PROCESSOR',
-        color: kConnColors[ConnType.network]!,
+        color: connColor(ConnType.network, provider),
         width: 3.5,
         kind: ConnType.network,
       ));
@@ -289,7 +320,7 @@ class SchematicModel {
           edges.add(SchematicEdge(
             fromId: key,
             toId: 'IDF',
-            color: kConnColors[ConnType.network]!,
+            color: connColor(ConnType.network, provider),
             label: [protocol, if (netPort.isNotEmpty && netPort != '0') netPort]
                 .where((s) => s.isNotEmpty)
                 .join(' '),
@@ -300,7 +331,7 @@ class SchematicModel {
           edges.add(SchematicEdge(
             fromId: key,
             toId: 'PROCESSOR',
-            color: kConnColors[ConnType.serial]!,
+            color: connColor(ConnType.serial, provider),
             label: dev['serial_port']?.toString() ?? 'COM?',
             kind: ConnType.serial,
           ));
@@ -311,8 +342,12 @@ class SchematicModel {
             // The room switcher carries the serial line; no switcher in the
             // room (or the switcher itself is SoE) -> straight to processor.
             toId: soeTarget == key ? 'PROCESSOR' : soeTarget,
-            color: kConnColors[ConnType.soe]!,
-            label: dev['serial_port']?.toString() ?? 'SoE',
+            color: connColor(ConnType.soe, provider),
+            // An SoE device reaches its hardware by ip_address + net_port and
+            // carries no serial_port of its own, so the plain label is normal.
+            label: (dev['serial_port']?.toString().trim().isNotEmpty ?? false)
+                ? dev['serial_port'].toString()
+                : 'SoE',
             kind: ConnType.soe,
           ));
           break;
@@ -325,7 +360,7 @@ class SchematicModel {
           edges.add(SchematicEdge(
             fromId: key,
             toId: 'PROCESSOR',
-            color: kConnColors[ConnType.relay]!,
+            color: connColor(ConnType.relay, provider),
             label: relays.isEmpty ? 'Relay' : relays,
             kind: ConnType.relay,
           ));
@@ -354,14 +389,14 @@ class SchematicModel {
       edges.add(SchematicEdge(
         fromId: 'TOUCHPANEL',
         toId: hasIdf ? 'IDF' : 'PROCESSOR',
-        color: kConnColors[ConnType.touchpanel]!,
+        color: connColor(ConnType.touchpanel, provider),
         label: 'PoE',
         kind: ConnType.touchpanel,
       ));
     }
 
     // Auto edges the user deleted/re-routed are pulled aside (still listed
-    // greyed-out in the edit panel so they can be restored).
+    // grayed-out in the edit panel so they can be restored).
     final List<SchematicEdge> hiddenEdges = [];
     edges.removeWhere((e) {
       if (provider.schematicHiddenEdges.contains(e.autoId)) {
@@ -383,7 +418,7 @@ class SchematicModel {
         fromId: from,
         toId: to,
         color: colorVal == null
-            ? kConnColors[ConnType.network]!
+            ? connColor(ConnType.network, provider)
             : Color(0xFF000000 | colorVal),
         label: link['label'] ?? '',
         custom: true,
@@ -433,9 +468,30 @@ class _SchematicViewState extends State<SchematicView> {
   final GlobalKey _diagramKey = GlobalKey();
   final TransformationController _transform = TransformationController();
 
+  /// The window the canvas is looked at through, so "Fit to view" can measure
+  /// it; the drawing itself is measured through [_diagramKey].
+  final GlobalKey _viewportKey = GlobalKey();
+
+  /// Zooms out until the whole schematic is on screen.
+  void _fitToView() {
+    final fitted = fitToViewport(
+      controller: _transform,
+      contentKey: _diagramKey,
+      viewportKey: _viewportKey,
+    );
+    if (!fitted) _snack('The schematic is still drawing — try again.');
+  }
+
   bool _editMode = false;
   bool _linkMode = false;
   String? _pendingLinkFrom; // first node tapped while drawing a line
+
+  /// Live drag, held locally: writing the position to the provider on every
+  /// pointer move rebuilt every listener in the app (nav rail, app bar, the
+  /// lot) for each frame of the drag. Committed once on release.
+  String? _dragNodeId;
+  Offset _dragStartPos = Offset.zero;
+  Offset _dragOffset = Offset.zero;
 
   @override
   void initState() {
@@ -480,7 +536,7 @@ class _SchematicViewState extends State<SchematicView> {
     // A snackbar is drawn on an INVERTED surface — dark panel in light mode,
     // light panel in dark mode — so the theme accent that tints buttons
     // elsewhere lands on the wrong background and reads badly. These two use
-    // the snackbar's own text colour instead, which is the one colour
+    // the snackbar's own text color instead, which is the one color
     // guaranteed to contrast with that panel in both modes.
     final Color actionColor = Theme.of(context).snackBarTheme.actionTextColor ??
         Theme.of(context).colorScheme.onInverseSurface;
@@ -532,12 +588,13 @@ class _SchematicViewState extends State<SchematicView> {
   Future<void> _exportPng(AppStateProvider provider) async {
     final bytes = await captureBoundary(_diagramKey, pixelRatio: 2.0);
     if (bytes == null) {
-      _snack('Could not render the schematic to an image.', error: true);
+      _snack('Could not render the control schematic to an image.',
+          error: true);
       return;
     }
     String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save Schematic Image',
-      fileName: '${_fileStem(provider, 'schematic')}.png',
+      dialogTitle: 'Save Control Schematic Image',
+      fileName: '${_fileStem(provider, 'control_schematic')}.png',
       type: FileType.custom,
       allowedExtensions: ['png'],
     );
@@ -545,7 +602,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
     try {
       await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(provider, 'Schematic image', outputFile);
+      _savedSnack(provider, 'Control schematic image', outputFile);
     } catch (e) {
       _snack('Failed to save image: $e', error: true);
     }
@@ -556,7 +613,8 @@ class _SchematicViewState extends State<SchematicView> {
   /// the .txt export writes, without touching the disk.
   Future<void> _copyReportText(AppStateProvider provider) async {
     final model = SchematicModel.build(provider);
-    final text = _textReport(model.roomTitle, reportSections(provider, model));
+    final text =
+        renderTextReport(model.roomTitle, reportSections(provider, model));
     await Clipboard.setData(ClipboardData(text: text));
     _snack('Device report copied to clipboard '
         '(${text.split('\n').length} lines).');
@@ -579,75 +637,24 @@ class _SchematicViewState extends State<SchematicView> {
     try {
       if (asXlsx) {
         // ONE sheet, sections stacked like the text report, with the
-        // schematic image dropped in underneath. Title/header rows are
-        // padded with blank cells to the section's widest row, so their
-        // background band runs the full width of the data beneath them
-        // (auto column widths already size each column to its longest
-        // value); data rows are padded the same and zebra-striped.
-        List<dynamic> pad(List<dynamic> row, int width) =>
-            [...row, ...List.filled(math.max(0, width - row.length), '')];
-        int widthOf(ReportSection s) =>
-            s.rows.fold(s.header.length,
-                (m, r) => math.max(m, r.length));
-
-        final rows = <List<dynamic>>[];
-        final rowStyles = <int, int>{};
-        final overflowRows = <int>{};
-        final int reportWidth =
-            sections.fold(1, (w, s) => math.max(w, widthOf(s)));
-        // Row 1 carries the room and nothing else, merged across A:E so the
-        // title band reads as one cell instead of a value stuck in column A.
-        rows.add(pad([model.roomTitle], reportWidth));
-        rowStyles[0] = XlsxRowStyle.title;
-        for (final s in sections) {
-          // 2-column sections (System) sit in columns A and B. Their VALUE
-          // cell is excluded from column auto-sizing, so a long room/building
-          // name overflows right into the empty cells instead of stretching
-          // column B, which the Devices table also uses.
-          final bool twoColumn = s.header.length == 2;
-          final int width = twoColumn ? 2 : widthOf(s);
-          rows.add([]);
-          rowStyles[rows.length] = XlsxRowStyle.title;
-          rows.add(pad([s.title], width));
-          rowStyles[rows.length] = XlsxRowStyle.header;
-          rows.add(pad(s.header, width));
-          for (int i = 0; i < s.rows.length; i++) {
-            if (i.isOdd) rowStyles[rows.length] = XlsxRowStyle.zebra;
-            if (twoColumn) overflowRows.add(rows.length);
-            rows.add(pad(s.rows[i], width));
-          }
-        }
-
-        // Diagram image below the tables, scaled to ~900px wide.
-        XlsxImage? image;
+        // schematic image dropped in underneath. The banding, padding and
+        // column-width rules are shared with the AV Flow tab's cable
+        // schedule — see buildStackedReportSheet.
         final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
-        if (png != null) {
-          final size = XlsxImage.pngSize(png);
-          if (size != null) {
-            const targetW = 900;
-            image = XlsxImage(
-              pngBytes: png,
-              anchorCol: 0,
-              anchorRow: rows.length + 1,
-              widthPx: targetW,
-              heightPx: (size.$2 * targetW / size.$1).round(),
-            );
-          }
-        }
-
         final bytes = buildXlsx([
-          XlsxSheet(
-            name: 'Room Report',
-            rows: rows,
-            rowStyles: rowStyles,
-            overflowRows: overflowRows,
-            merges: const ['A1:E1'],
-            image: image,
+          buildStackedReportSheet(
+            sheetName: 'Room Report',
+            title: model.roomTitle,
+            sections: sections,
+            imageBuilder: png == null
+                ? null
+                : (anchorRow) => scaledSheetImage(png, anchorRow),
           ),
         ]);
         await File(outputFile).writeAsBytes(bytes);
       } else {
-        await File(outputFile).writeAsString(_textReport(model.roomTitle, sections));
+        await File(outputFile)
+            .writeAsString(renderTextReport(model.roomTitle, sections));
       }
       _savedSnack(provider, 'Device report', outputFile);
     } catch (e) {
@@ -655,38 +662,37 @@ class _SchematicViewState extends State<SchematicView> {
     }
   }
 
-  /// Fixed-width plain-text rendering of the same report sections.
-  String _textReport(
-      String roomTitle,
-      List<ReportSection> sections) {
-    final buffer = StringBuffer();
-    buffer.writeln(roomTitle); // the room and nothing else, like the xlsx
-    buffer.writeln();
-    for (final s in sections) {
-      buffer.writeln(s.title);
-      buffer.writeln('=' * s.title.length);
-      final all = [s.header, ...s.rows];
-      final widths = <int>[];
-      for (final row in all) {
-        for (int c = 0; c < row.length; c++) {
-          final len = row[c].toString().length;
-          if (c >= widths.length) {
-            widths.add(len);
-          } else if (len > widths[c]) {
-            widths[c] = len;
-          }
-        }
-      }
-      for (int r = 0; r < all.length; r++) {
-        buffer.writeln([
-          for (int c = 0; c < all[r].length; c++)
-            all[r][c].toString().padRight(widths[c]),
-        ].join('  '));
-        if (r == 0) buffer.writeln(widths.map((w) => '-' * w).join('  '));
-      }
-      buffer.writeln();
+  /// The whole job in one book: control (with the room's estimated power
+  /// draw), AV flow, racks and the cost estimate. Exported from here the
+  /// control schematic is the diagram that gets embedded; exporting from the
+  /// AV Flow tab embeds that page's diagram instead.
+  Future<void> _exportWorkbook(AppStateProvider provider) async {
+    // The AV data lives in the provider whether or not that tab has been
+    // opened this session, but the sidecar is only read on the tab's first
+    // visit — so make sure it has been.
+    provider.ensureAvFlowForCurrentConfig();
+
+    String? outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Save Room Workbook',
+      fileName: '${_fileStem(provider, 'room_workbook')}.xlsx',
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+    );
+    if (outputFile == null) return;
+    if (!outputFile.toLowerCase().endsWith('.xlsx')) outputFile += '.xlsx';
+
+    try {
+      final png = await captureBoundary(_diagramKey, pixelRatio: 1.5);
+      final bytes = buildRoomWorkbookBytes(
+        provider: provider,
+        av: buildAvFlowModel(provider),
+        controlPng: png,
+      );
+      await File(outputFile).writeAsBytes(bytes);
+      _savedSnack(provider, 'Room workbook', outputFile);
+    } catch (e) {
+      _snack('Failed to save the workbook: $e', error: true);
     }
-    return buffer.toString();
   }
 
   // -------------------------------------------------------------------------
@@ -846,7 +852,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = SchematicModel.build(provider);
+    final model = _withDragPreview(SchematicModel.build(provider));
     final theme = Theme.of(context);
 
     return Column(
@@ -855,10 +861,12 @@ class _SchematicViewState extends State<SchematicView> {
         _buildToolbar(provider),
         const Divider(height: 1),
         Expanded(
+          key: _viewportKey,
           child: InteractiveViewer(
             transformationController: _transform,
             constrained: false,
-            minScale: 0.3,
+            // Low enough that a room full of devices fits the window.
+            minScale: 0.08,
             maxScale: 3.0,
             boundaryMargin: const EdgeInsets.all(400),
             child: RepaintBoundary(
@@ -880,7 +888,7 @@ class _SchematicViewState extends State<SchematicView> {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('Room Schematic',
+          Text('Control Schematic',
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(width: 12),
           FilterChip(
@@ -927,7 +935,7 @@ class _SchematicViewState extends State<SchematicView> {
                       'the config, then the layout is saved beside it.');
                   final bool exported = await provider.exportRoomConfig();
                   if (!exported) {
-                    _snack('Layout not saved — the config save was cancelled.',
+                    _snack('Layout not saved — the config save was canceled.',
                         error: true);
                     return;
                   }
@@ -938,6 +946,32 @@ class _SchematicViewState extends State<SchematicView> {
                     : 'Layout saved to $saved');
               },
             ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.fit_screen, size: 18),
+            label: const Text('Fit to view'),
+            onPressed: _fitToView,
+          ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.palette_outlined, size: 18),
+            label: const Text('Colors'),
+            onPressed: () => _showColorsDialog(provider),
+          ),
+          // Undoes the last layout edit: a moved node, a drawn or deleted
+          // line, a color, a Reset Layout.
+          OutlinedButton.icon(
+            icon: const Icon(Icons.undo, size: 18),
+            label: Text(
+              provider.canUndoSchematic
+                  ? 'Undo: ${provider.schematicUndoLabel}'
+                  : 'Undo',
+            ),
+            onPressed: provider.canUndoSchematic
+                ? () {
+                    final undone = provider.undoSchematic();
+                    if (undone.isNotEmpty) _snack('Undid: $undone');
+                  }
+                : null,
+          ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
             icon: const Icon(Icons.image, size: 18),
@@ -946,12 +980,18 @@ class _SchematicViewState extends State<SchematicView> {
           ),
           PopupMenuButton<String>(
             tooltip: 'Export device report',
-            onSelected: (v) => v == 'copy'
-                ? _copyReportText(provider)
-                : _exportReport(provider, v == 'xlsx'),
+            onSelected: (v) => switch (v) {
+              'copy' => _copyReportText(provider),
+              'workbook' => _exportWorkbook(provider),
+              _ => _exportReport(provider, v == 'xlsx'),
+            },
             itemBuilder: (ctx) => const [
               PopupMenuItem(
-                  value: 'xlsx', child: Text('Excel report (.xlsx)')),
+                  value: 'workbook',
+                  child: Text('Full room workbook (.xlsx, 4 sheets)')),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                  value: 'xlsx', child: Text('Device report (.xlsx)')),
               PopupMenuItem(
                   value: 'txt', child: Text('Plain text report (.txt)')),
               PopupMenuItem(
@@ -971,14 +1011,122 @@ class _SchematicViewState extends State<SchematicView> {
     );
   }
 
+  /// Recolors the connection categories for this room. Changing Network
+  /// here moves every network line, every network box border AND the legend
+  /// entry together, so the key never stops describing the drawing.
+  Future<void> _showColorsDialog(AppStateProvider provider) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Line colors'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'A color set here applies to every line of that kind, to '
+                  'the device boxes, and to the legend.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                for (final conn in ConnType.values)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 168,
+                          child: Text(kConnLabels[conn]!,
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              for (final c in kLinkSwatches)
+                                ColorSwatchButton(
+                                  key: ValueKey('conn_color_${conn.name}_'
+                                      '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}'),
+                                  color: c,
+                                  width: 24,
+                                  height: 20,
+                                  selected:
+                                      connColor(conn, provider).toARGB32() ==
+                                          c.toARGB32(),
+                                  onTap: () => setLocal(() => provider
+                                      .setSchematicConnColor(conn.index, c)),
+                                ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.colorize, size: 16),
+                          tooltip: 'Pick a custom color',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () async {
+                            final picked = await showColorWheelDialog(
+                              ctx,
+                              initial: connColor(conn, provider),
+                              title: 'Color for ${kConnLabels[conn]}',
+                            );
+                            if (picked != null) {
+                              setLocal(() => provider.setSchematicConnColor(
+                                  conn.index, picked));
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.restart_alt, size: 16),
+                          tooltip: 'Back to the default color',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => setLocal(() =>
+                              provider.setSchematicConnColor(conn.index, null)),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  setLocal(() => provider.resetSchematicConnColors()),
+              child: const Text('Reset all'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCanvas(
       AppStateProvider provider, SchematicModel model, ThemeData theme) {
     final surface = theme.brightness == Brightness.dark
         ? const Color(0xFF15181C)
         : const Color(0xFFFAFAFA);
+    // The legend sits BELOW the diagram rather than floating over the
+    // bottom-left corner, where it covered whatever box happened to be
+    // there. The canvas grows to make room for it.
+    // Includes the curves, not just the boxes: a line bending around an
+    // obstacle can reach lower than anything else on the page. Recomputed
+    // every build, so it stays clear while a box is being dragged.
+    final contentBottom = schematicContentBottom(model);
+    final legendTop = contentBottom + 28;
+    final canvasHeight = math.max(
+        model.canvasSize.height, legendTop + kLegendHeight + 20);
+
     return Container(
       width: model.canvasSize.width,
-      height: model.canvasSize.height,
+      height: canvasHeight,
       color: surface,
       child: Stack(
         children: [
@@ -993,38 +1141,123 @@ class _SchematicViewState extends State<SchematicView> {
             left: 24,
             top: 16,
             child: Text(
-              model.roomTitle.isEmpty ? 'Room Schematic' : model.roomTitle,
+              model.roomTitle.isEmpty ? 'Control Schematic' : model.roomTitle,
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-          // Nodes.
+          // Nodes. Each gets its own RepaintBoundary so dragging one doesn't
+          // force the others to repaint with it.
           for (final node in model.nodes)
             Positioned(
               left: node.pos.dx,
               top: node.pos.dy,
-              child: GestureDetector(
-                onTap: () => _onNodeTap(provider, node),
-                onPanUpdate: _editMode && !_linkMode
-                    ? (details) {
-                        // delta is already in canvas coordinates (the
-                        // GestureDetector lives inside the InteractiveViewer
-                        // transform). Clamp to the canvas origin — it only
-                        // grows right/down, so negative spots would clip.
-                        final p = node.pos + details.delta;
-                        provider.setSchematicPosition(node.id,
-                            Offset(math.max(0, p.dx), math.max(0, p.dy)));
-                      }
-                    : null,
-                child: _NodeBox(
-                  node: node,
-                  highlighted: _pendingLinkFrom == node.id,
-                  editMode: _editMode,
+              child: RepaintBoundary(
+                child: GestureDetector(
+                  onTap: () => _onNodeTap(provider, node),
+                  onPanStart: _canDrag
+                      ? (_) => _onNodeDragStart(node.id, node.pos)
+                      : null,
+                  onPanUpdate:
+                      _canDrag ? (d) => _onNodeDragUpdate(d.delta) : null,
+                  onPanEnd: _canDrag ? (_) => _onNodeDragEnd(provider) : null,
+                  onPanCancel: _canDrag ? () => _onNodeDragEnd(provider) : null,
+                  child: MouseRegion(
+                    cursor: _canDrag
+                        ? (_dragNodeId == node.id
+                            ? SystemMouseCursors.grabbing
+                            : SystemMouseCursors.grab)
+                        : MouseCursor.defer,
+                    child: _NodeBox(
+                      node: node,
+                      connColor: connColor(node.conn, provider),
+                      highlighted: _pendingLinkFrom == node.id,
+                      editMode: _editMode,
+                      dragging: _dragNodeId == node.id,
+                    ),
+                  ),
                 ),
               ),
             ),
-          // Legend bottom-left (also part of the PNG export).
-          Positioned(left: 16, bottom: 12, child: _Legend(theme: theme)),
+          // Legend under the diagram (also part of the PNG export).
+          Positioned(left: 16, top: legendTop, child: _Legend(theme: theme, provider: provider)),
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  //  DRAGGING
+  // -------------------------------------------------------------------------
+
+  /// Boxes move in edit mode, except while a line is being drawn — then a
+  /// click is picking the line's endpoints, not grabbing a box.
+  bool get _canDrag => _editMode && !_linkMode;
+
+  /// The canvas only grows right and down, so a box can't be pushed past the
+  /// origin where it would be clipped.
+  static Offset _clamped(Offset p) =>
+      Offset(math.max(0, p.dx), math.max(0, p.dy));
+
+  /// The model as it should be drawn right now: the box under the cursor sits
+  /// at its dragged spot, so it AND the lines attached to it follow live while
+  /// the provider stays untouched until release.
+  SchematicModel _withDragPreview(SchematicModel model) {
+    final id = _dragNodeId;
+    if (id == null || _dragOffset == Offset.zero) return model;
+
+    final nodes = [
+      for (final n in model.nodes)
+        n.id == id ? n.movedTo(_clamped(n.pos + _dragOffset)) : n,
+    ];
+    double maxX = model.canvasSize.width, maxY = model.canvasSize.height;
+    for (final n in nodes) {
+      maxX = math.max(maxX, n.pos.dx + kNodeWidth + 30);
+      maxY = math.max(maxY, n.pos.dy + kNodeHeight + 30);
+    }
+    return SchematicModel(nodes, model.edges, Size(maxX, maxY), model.roomTitle,
+        model.hiddenEdges);
+  }
+
+  /// [startPos] is captured here rather than read back on release: by then
+  /// the model the view holds is the PREVIEW, whose position already includes
+  /// the drag, and committing from that would apply the offset twice.
+  void _onNodeDragStart(String nodeId, Offset startPos) {
+    setState(() {
+      _dragNodeId = nodeId;
+      _dragStartPos = startPos;
+      _dragOffset = Offset.zero;
+    });
+  }
+
+  void _onNodeDragUpdate(Offset delta) {
+    // delta is already in canvas coordinates — the GestureDetector lives
+    // inside the InteractiveViewer transform.
+    setState(() => _dragOffset += delta);
+  }
+
+  void _onNodeDragEnd(AppStateProvider provider) {
+    final id = _dragNodeId;
+    final offset = _dragOffset;
+    final startPos = _dragStartPos;
+    setState(() {
+      _dragNodeId = null;
+      _dragOffset = Offset.zero;
+    });
+    if (id == null || offset == Offset.zero) return;
+
+    // Land clear of the other boxes: dropping one on top of another hides
+    // both and makes the lines impossible to follow.
+    final model = SchematicModel.build(provider);
+    provider.setSchematicPosition(
+      id,
+      nonOverlappingPosition(
+        desired: _clamped(startPos + offset),
+        size: const Size(kNodeWidth, kNodeHeight),
+        others: [
+          for (final n in model.nodes)
+            if (n.id != id)
+              Rect.fromLTWH(n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight),
         ],
       ),
     );
@@ -1033,7 +1266,7 @@ class _SchematicViewState extends State<SchematicView> {
   /// Edit-mode line list: EVERY line on the diagram — auto-generated and
   /// user-drawn — with edit + delete on each row. Editing an auto line
   /// converts it to a user line (so its route/color/label become editable);
-  /// deleted auto lines stay listed greyed-out with a restore button.
+  /// deleted auto lines stay listed grayed-out with a restore button.
   Widget _buildEditPanel(AppStateProvider provider, SchematicModel model) {
     final theme = Theme.of(context);
     String edgeText(SchematicEdge e) =>
@@ -1126,19 +1359,36 @@ class _SchematicViewState extends State<SchematicView> {
   }
 }
 
+/// How tall [_Legend] is, so the canvas can reserve room for it beneath the
+/// diagram. An estimate: one row per connection type, plus the container's
+/// own padding. Over-shooting just leaves a little blank canvas.
+const double kLegendHeight = 16 + 5 * 18.0;
+
 /// One device/processor/IDF box.
 class _NodeBox extends StatelessWidget {
   final SchematicNode node;
+
+  /// Resolved through the room's palette by the canvas, so a recolored
+  /// category moves its boxes as well as its lines.
+  final Color connColor;
   final bool highlighted;
   final bool editMode;
 
+  /// This box is the one under the cursor: it lifts off the page a little so
+  /// it reads as picked up.
+  final bool dragging;
+
   const _NodeBox(
-      {required this.node, required this.highlighted, required this.editMode});
+      {required this.node,
+      required this.connColor,
+      required this.highlighted,
+      required this.editMode,
+      this.dragging = false});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final connColor = kConnColors[node.conn]!;
+    final connColor = this.connColor;
     return Container(
       width: kNodeWidth,
       height: kNodeHeight,
@@ -1147,14 +1397,16 @@ class _NodeBox extends StatelessWidget {
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: highlighted ? theme.colorScheme.primary : connColor,
-          width: highlighted ? 3 : 1.6,
+          color: (highlighted || dragging)
+              ? theme.colorScheme.primary
+              : connColor,
+          width: highlighted ? 3 : (dragging ? 2.4 : 1.6),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 4,
-            offset: const Offset(1, 2),
+            color: Colors.black.withValues(alpha: dragging ? 0.4 : 0.25),
+            blurRadius: dragging ? 11 : 4,
+            offset: Offset(1, dragging ? 5 : 2),
           ),
         ],
       ),
@@ -1253,6 +1505,85 @@ class _TabbedWindowIconPainter extends CustomPainter {
 ///   * labels are painted in a SECOND pass — no line ever covers a label —
 ///     and each label slides along its line to a spot clear of node boxes
 ///     and of the labels already placed
+/// Node boxes inflated into obstacles — what lines bend around and what
+/// labels keep clear of.
+Map<String, Rect> schematicNodeRects(SchematicModel model) => {
+      for (final n in model.nodes)
+        n.id: Rect.fromLTWH(n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight)
+            .inflate(6),
+    };
+
+/// The control point a line bends through to get around a box in its way, or
+/// null when the straight run is clear.
+///
+/// Extracted from the painter so the canvas can work out how far down the
+/// drawing actually reaches — the legend sits below all of it, and a curve
+/// swinging around a box can dip lower than any box.
+Offset? schematicEdgeControl(
+  SchematicModel model,
+  SchematicEdge edge,
+  Map<String, Rect> nodeRects,
+) {
+  final from = model.nodeById(edge.fromId);
+  final to = model.nodeById(edge.toId);
+  if (from == null || to == null) return null;
+  final a = from.center;
+  final b = to.center;
+
+  Rect? blocked;
+  for (final entry in nodeRects.entries) {
+    if (entry.key == edge.fromId || entry.key == edge.toId) continue;
+    if (_EdgePainter._segmentHitsRect(a, b, entry.value)) {
+      blocked = entry.value;
+      break;
+    }
+  }
+  if (blocked == null) return null;
+
+  final mid = Offset.lerp(a, b, 0.5)!;
+  final dir = b - a;
+  final len = dir.distance;
+  if (len <= 1) return null;
+
+  Offset perp = Offset(-dir.dy / len, dir.dx / len);
+  if ((blocked.center - mid).dx * perp.dx +
+          (blocked.center - mid).dy * perp.dy >
+      0) {
+    perp = -perp; // push away from the obstacle, not into it
+  }
+  return mid + perp * (kNodeHeight * 2.4);
+}
+
+/// The lowest point anything drawn reaches: boxes, straight lines, and the
+/// curves that bend around them.
+double schematicContentBottom(SchematicModel model) {
+  double bottom = 0;
+  for (final n in model.nodes) {
+    bottom = math.max(bottom, n.pos.dy + kNodeHeight);
+  }
+
+  final rects = schematicNodeRects(model);
+  for (final edge in model.edges) {
+    final from = model.nodeById(edge.fromId);
+    final to = model.nodeById(edge.toId);
+    if (from == null || to == null) continue;
+    final a = from.center;
+    final b = to.center;
+    final control = schematicEdgeControl(model, edge, rects);
+    if (control == null) {
+      bottom = math.max(bottom, math.max(a.dy, b.dy));
+      continue;
+    }
+    // Sample the curve rather than solving it — nine points is plenty for
+    // deciding where a legend goes.
+    for (int i = 0; i <= 8; i++) {
+      bottom = math.max(
+          bottom, _EdgePainter._bezier(a, control, b, i / 8).dy);
+    }
+  }
+  return bottom;
+}
+
 class _EdgePainter extends CustomPainter {
   final SchematicModel model;
   final Brightness brightness;
@@ -1278,12 +1609,7 @@ class _EdgePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // Inflated node boxes = obstacles for lines and no-go zones for labels.
-    final Map<String, Rect> nodeRects = {
-      for (final n in model.nodes)
-        n.id: Rect.fromLTWH(
-                n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight)
-            .inflate(6),
-    };
+    final Map<String, Rect> nodeRects = schematicNodeRects(model);
 
     // --- PASS 1: lines (collect each edge's label-anchor curve) ------------
     final List<(SchematicEdge, Offset, Offset?, Offset)> labeled = [];
@@ -1294,43 +1620,21 @@ class _EdgePainter extends CustomPainter {
       final a = from.center;
       final b = to.center;
 
-      // Nodes (other than the endpoints) the straight line would cut through.
-      Rect? blocked;
-      for (final entry in nodeRects.entries) {
-        if (entry.key == edge.fromId || entry.key == edge.toId) continue;
-        if (_segmentHitsRect(a, b, entry.value)) {
-          blocked = entry.value;
-          break;
-        }
-      }
-
       final paint = Paint()
         ..color = edge.color
         ..strokeWidth = edge.width
         ..style = PaintingStyle.stroke;
 
-      Offset? control;
-      if (blocked != null) {
-        // Curve around the box: bend away from its center, far enough that
-        // the curve's apex clears the box whichever way the line grazes it.
-        final mid = Offset.lerp(a, b, 0.5)!;
-        final dir = b - a;
-        final len = dir.distance;
-        if (len > 1) {
-          Offset perp = Offset(-dir.dy / len, dir.dx / len);
-          if ((blocked.center - mid).dx * perp.dx +
-                  (blocked.center - mid).dy * perp.dy >
-              0) {
-            perp = -perp; // push away from the obstacle, not into it
-          }
-          control = mid + perp * (kNodeHeight * 2.4);
-          final path = Path()
+      // Curve around any box in the way, bending away from its center far
+      // enough that the apex clears it whichever way the line grazes.
+      final Offset? control = schematicEdgeControl(model, edge, nodeRects);
+      if (control != null) {
+        canvas.drawPath(
+          Path()
             ..moveTo(a.dx, a.dy)
-            ..quadraticBezierTo(control.dx, control.dy, b.dx, b.dy);
-          canvas.drawPath(path, paint);
-        } else {
-          canvas.drawLine(a, b, paint);
-        }
+            ..quadraticBezierTo(control.dx, control.dy, b.dx, b.dy),
+          paint,
+        );
       } else {
         canvas.drawLine(a, b, paint);
       }
@@ -1408,7 +1712,10 @@ class _EdgePainter extends CustomPainter {
 class _Legend extends StatelessWidget {
   final ThemeData theme;
 
-  const _Legend({required this.theme});
+  /// The room's line colors, so the key matches what is drawn.
+  final AppStateProvider provider;
+
+  const _Legend({required this.theme, required this.provider});
 
   @override
   Widget build(BuildContext context) {
@@ -1430,7 +1737,7 @@ class _Legend extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                      width: 22, height: 3.5, color: kConnColors[conn]),
+                      width: 22, height: 3.5, color: connColor(conn, provider)),
                   const SizedBox(width: 8),
                   Text(kConnLabels[conn]!,
                       style: const TextStyle(fontSize: 11)),
@@ -1452,12 +1759,8 @@ class _Legend extends StatelessWidget {
 //  .txt and the clipboard copy all render the same thing — and it can be
 //  tested without pumping a widget.
 
-/// One report section: a title, a header row, and data rows.
-typedef ReportSection = ({
-  String title,
-  List<String> header,
-  List<List<dynamic>> rows,
-});
+//  [ReportSection], the fixed-width text renderer and the banded .xlsx sheet
+//  builder are shared with the AV Flow tab — see report_tools.dart.
 
 /// Friendly display name for a config key: the schema label when one is
 /// defined, otherwise the key title-cased with common AV acronyms upper-

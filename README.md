@@ -67,6 +67,156 @@ DEVICE_INFO = {
   conversion — leaves the device untouched and lists which fields differ from
   the module defaults).
 
+## Device Editor (the `Catalog` tab)
+
+The room config describes control and nothing else — it knows a device's IP
+address, never that it has four HDMI inputs, is 3U, draws 90 W and lists at
+$8,500. Those facts drive the AV diagram, the rack elevation, the power and
+heat estimates and the cost estimate, so they live once in a device catalog
+rather than being re-typed per room.
+
+The tab edits `av_devices.json` (Root Folder, or wherever the loaded one came
+from). Per model: **connectors** (in/out, signal type, which edge of the box),
+**rack units**, **power in** (mains / PoE / none), **estimated power draw**,
+**heat output**, **unit price**, plus manufacturer, part number, category and
+notes. Entries here override the app's built-in models; a built-in you never
+touch stays built-in, so a later app build can still improve it, and **Save
+catalog** only writes the entries that are yours.
+
+### Power in, and heat out
+
+Every catalog entry carries a **power inlet** unless it is genuinely passive
+(a speaker, a cable, a blanking plate). The **Mains / PoE / None** toggle keeps
+the inlet connector in step with itself — pick PoE and the port relabels, pick
+None and it goes away — so the drawing and the rack load can never disagree
+about whether a box is plugged into anything. PoE devices are counted in the
+room's total draw but kept out of the mains current, because they come off the
+switch's budget rather than the room's circuit.
+
+**Heat** defaults to the watts converted (1 W = 3.412 BTU/hr) and can be
+overridden per model where the manufacturer publishes a figure — an
+amplifier's rated draw is not all heat, since some of it leaves through the
+speaker terminals. The rack report totals it per frame, in BTU/hr and in tons,
+which is what sizing a cabinet fan or a closet mini-split actually asks for.
+
+### Where the catalog came from
+
+The shipped `av_devices.json` holds **990 Extron models** imported from the
+engineering stencils in `drawings_library/`: model, part number, description,
+product family and the connector set read straight off each drawing. See
+[DEVICE_CATALOG_IMPORT.md](DEVICE_CATALOG_IMPORT.md) for what came in and what
+is still blank, and [tools/](tools/README.md) for re-running the import
+against a refreshed stencil pack.
+
+Rack heights, watts, BTU and prices are **not** in the drawings. They are left
+at 0 — "not recorded" — rather than guessed, and every report counts what is
+still missing instead of totalling a blank as free and cold.
+
+Nothing is written to disk until **Save catalog** — a mistyped price never
+reaches a shared drive on its own.
+
+### Merging another engineer's catalog
+
+Two people keep two copies of this file: one has priced the switchers, the
+other has drawn their connectors. Neither is authoritative, so **Merge from
+file...** compares the two entry by entry *and field by field* and shows only
+what actually differs, each difference with its own checkbox (or **Select
+all**). Applying copies exactly what is ticked.
+
+- a model you have and they don't is left alone — a merge adds and updates,
+  it never deletes
+- a field you filled in is never overwritten by a blank they never got to
+- merged entries become yours, so the next save writes them
+
+**Export a copy...** hands your catalog to someone else without repointing
+your own saves at their folder.
+
+## Opening and converting
+
+Opening a file **opens the file**. When a legacy room needs migrating the
+conversion still runs in memory, but nothing blocks the screen: a **Convert**
+button next to New Config lights up with the number of changes waiting, and
+that is where the migration log, the change-by-change review and "Use
+Original" live. A room with nothing to migrate leaves the button grayed out,
+so its state is also the answer to "does this file need converting?".
+
+## Cost estimate (the `Cost` tab)
+
+Prices the room that is drawn on the AV canvas. Quantities are the devices on
+the diagram, grouped exactly as the pack list groups them, so the estimate and
+the equipment order cannot drift apart. Unit prices come from the catalog; a
+price typed on this page is a **room override** — what this job was quoted —
+kept in the room's sidecar and never written back over the catalog.
+
+On top of the equipment:
+
+- **Fees** — any number, each a percentage of the pre-tax subtotal (freight,
+  install, contingency, overhead). They do not compound onto each other: two
+  5% fees are 10% of the job. Each says whether it is itself taxable.
+- **Other items** — flat lines with their own quantity and unit price for
+  labor, cable, mounts; taxable per line.
+- **Tax** — one rate, applied to equipment plus the items and fees marked
+  taxable.
+
+Devices nobody has priced are counted and called out rather than being quietly
+totalled as free.
+
+Saved with the diagram in `<config>_av_flow.json` — and **every config save
+writes that sidecar**, so saving the project saves the estimate. It is not a
+separate button to forget.
+
+## Save All
+
+The toolbar's **Save All** writes the whole job into `<folder>/<room name>/`,
+the room name coming from the wizard. It contains the config, the AV sidecar
+(diagram + estimate), the four-sheet workbook, plain-text device / AV / cost
+reports, PNGs of the control schematic, signal flow and rack elevation, and a
+copy of the custom catalog entries and the rate card — so the figures behind
+the numbers travel with them and the estimate is auditable a year later.
+
+Diagram images can only be rendered from a tab that is on screen, so Save All
+walks the three diagram tabs to capture them and puts you back where you
+started. Anything it could not capture is listed in the result dialog and in
+the folder's `README.txt`, rather than being quietly missing.
+
+## The room workbook
+
+**Report → Full room workbook (.xlsx)**, on both the Schematic and AV Flow
+tabs, writes one book with a tab per question:
+
+| Sheet | Contents |
+|---|---|
+| Control | the control system as configured, plus the room's estimated power draw, current at 120/208 V, heat load and per-device power schedule |
+| AV Flow | cable schedule, pack list (with rack U, in/out and watts), jack schedule, connector utilization |
+| Racks | how full and how hot each frame is, and what sits on which U |
+| Cost Estimate | equipment, other items, fees, tax, total |
+
+Every sheet is dealt from the same section builders the single-sheet exports
+use, so a figure cannot differ between the two buttons. The diagram image can
+only be captured from the page on screen, so the tab you export from is the one
+that gets illustrated.
+
+## Devices without a control module
+
+The catalog covers everything you can buy; the module library under `device/`
+covers what the control system can actually drive. The gap between them is
+reported rather than left to be found on site:
+
+- the **Pack List** carries a `Control module` column, naming the module or
+  saying `none`;
+- a **Devices Without a Control Module** section lists the room's undriven
+  devices, and drops out entirely when there are none.
+
+This is resolved live rather than recorded in `av_devices.json`, because which
+models have a driver changes every time a module is added to the library.
+
+## Wall boxes and patch panels
+
+**Add wall box / patch panel** numbers its jacks `<prefix><number>`, defaulting
+to the room-number scheme: prefix `1110`, first number `01`, giving `111001`,
+`111002`, … The first number's width sets the padding, so `01` keeps two
+digits and `1` numbers plainly.
+
 ## In-app PDF manuals
 
 Each device form has a **Manual (PDF)** button. It opens

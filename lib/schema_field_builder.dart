@@ -38,6 +38,13 @@ class SchemaFieldBuilder {
 
     if (type == 'hidden') return null;
 
+    // "hideWhen": the key is irrelevant to this block as it currently stands —
+    // serial_port on a device whose com_type is Network, which reaches its
+    // hardware by ip_address + net_port and never opens a COM port.
+    if (spec != null && spec.isHiddenIn(_sectionMap(provider, sectionKey))) {
+      return null;
+    }
+
     // UNKNOWN KEY: no schema entry (exact or wildcard) AND no legacy
     // dictionary description. Rendered with a red outline + warning icon so
     // unrecognized config items stand out for schema maintenance.
@@ -184,7 +191,7 @@ class SchemaFieldBuilder {
     );
   }
 
-  /// The label colour for a converted value, from the one palette the
+  /// The label color for a converted value, from the one palette the
   /// conversion preview also draws with — so a field the preview showed as
   /// rewritten looks rewritten here too. Null for a config with no conversion
   /// history, which leaves the field's normal styling alone.
@@ -194,9 +201,9 @@ class SchemaFieldBuilder {
         .forOrigin(provider.originFor(sectionKey, fieldKey));
   }
 
-  /// Shared InputDecoration: normal grey outline, or red in every state (with
+  /// Shared InputDecoration: normal gray outline, or red in every state (with
   /// a red helper line) when the current value doesn't match the schema.
-  /// [labelColor] tints only the label, so provenance colouring never fights
+  /// [labelColor] tints only the label, so provenance coloring never fights
   /// the red mismatch outline.
   static InputDecoration _decoration(String label, String? helperText,
       {bool mismatch = false, String? mismatchText, Color? labelColor}) {
@@ -561,7 +568,7 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
       decoration: InputDecoration(
         labelText: widget.label,
         // Orange label = carried over from the loaded file; white = written by
-        // the conversion. Null (no conversion) leaves the theme's own colour.
+        // the conversion. Null (no conversion) leaves the theme's own color.
         labelStyle: labelColor == null ? null : TextStyle(color: labelColor),
         floatingLabelStyle:
             labelColor == null ? null : TextStyle(color: labelColor),

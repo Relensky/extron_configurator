@@ -47,7 +47,7 @@ void main() {
       ..currentConfigPath = configPath
       ..settingsLoaded = true
       ..firstRunSetupNeeded = false;
-    provider.selectTab(4); // Raw JSON
+    provider.selectTab(AppTab.rawJson.index);
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppStateProvider>.value(
@@ -114,7 +114,7 @@ void main() {
     await tester.enterText(find.byType(TextField), edited('555'));
     await tester.pump();
 
-    provider.selectTab(2); // System — the editor is disposed mid-debounce
+    provider.selectTab(AppTab.system.index); // the editor is disposed mid-debounce
     await tester.pump();
     await tester.pump(); // the post-frame flush runs
 

@@ -75,13 +75,26 @@
   },
   "escape_carriage_returns": true,
   "connection_fields": {
-    "__comment": "Keyed by com_type (after value_map normalizes it): the properties a device on that connection must NOT carry. Removed on convert; one that held a real value is reported as a CONFLICT first so nothing disappears quietly. device_id and keep_alive_trigger are deliberately NOT listed - they describe the module, not the link.",
+    "__comment": "Keyed by com_type (after value_map normalizes it): the properties a device on that connection must NOT carry. Removed on convert; one that held a real value is reported as a CONFLICT first so nothing disappears quietly. device_id and keep_alive_trigger are deliberately NOT listed - they describe the module, not the link. The reverse direction (serial_port / baud on a device that never opens a COM port) is also enforced live in the editor by the 'hideWhen' entries on those keys in ui_schema.json.",
     "serial": [
       "ip_address",
       "net_port",
       "protocol",
+      "service_port",
       "password",
       "user"
+    ],
+    "network": [
+      "serial_port",
+      "baud"
+    ],
+    "serialoverethernet": [
+      "serial_port",
+      "baud"
+    ],
+    "http": [
+      "serial_port",
+      "baud"
     ]
   },
   "removals": [
@@ -94,6 +107,16 @@
       "__comment": "Generic room label; the room identity lives in gve_bldg + gve_room.",
       "key_match": "ROOM",
       "reason": "room identity comes from gve_bldg + gve_room"
+    },
+    {
+      "__comment": "A device's GVE id belongs in that device's own block, the way every other device already does it. This SYSTEM_SETUP copy is from an older build; WIRELESSDEVICE_n.gve_id is the one to fill in.",
+      "key_match": "gve_id_wireless_.*",
+      "reason": "the wireless device's gve_id lives in its own block"
+    },
+    {
+      "__comment": "Recorded for a wake-on-LAN feature that was never built; no ControlScript template reads it.",
+      "key_match": "pcmac",
+      "reason": "unused - no template reads it"
     },
     {
       "__comment": "With no power controller in the room the outlet names and their actions are dead data. Fires only when dev_power_controllers actually says none - a missing count never triggers it.",
