@@ -224,11 +224,11 @@ class RoomLocation {
 /// get used and one where the field stays blank.
 const List<({String name, RoomZone zone, String callout})>
 kDefaultRoomLocations = [
-  (name: 'Instructor station', zone: RoomZone.lectern, callout: 'A'),
-  (name: 'Front floor box', zone: RoomZone.floor, callout: 'B'),
-  (name: 'Front wall', zone: RoomZone.wall, callout: 'C'),
-  (name: 'Ceiling', zone: RoomZone.ceiling, callout: 'D'),
-  (name: 'Equipment rack', zone: RoomZone.rack, callout: 'E'),
+  (name: 'Equipment rack', zone: RoomZone.rack, callout: 'A'),
+  (name: 'Instructor station', zone: RoomZone.lectern, callout: 'B'),
+  (name: 'Projector box', zone: RoomZone.ceiling, callout: 'C'),
+  (name: 'Projector screen', zone: RoomZone.wall, callout: 'D'),
+  (name: 'Ceiling mic', zone: RoomZone.ceiling, callout: 'E'),
 ];
 
 // ---------------------------------------------------------------------------

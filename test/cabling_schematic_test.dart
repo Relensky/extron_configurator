@@ -251,6 +251,195 @@ void main() {
     });
   });
 
+  /// "Six Cat 6a and five Cat 5e from the lectern to the pathway" is two lines
+  /// of cable on one route. The drawing has to say both, tell them apart, and
+  /// let either be clicked.
+  group('more than one cable type on one route', () {
+    test('two runs share an edge and are fanned apart', () {
+      final p = room(runs: 0);
+      final a = p.addCablingBox(kind: CablingBoxKind.pullBox, label: 'Lectern');
+      final b = p.addCablingBox(kind: CablingBoxKind.pathway, label: 'Pathway');
+      final six = p.addCablingBundle(
+        fromBoxId: a.id,
+        toBoxId: b.id,
+        count: 6,
+        cableType: 'Cat 6a',
+      )!;
+      final five = p.addCablingBundle(
+        fromBoxId: a.id,
+        toBoxId: b.id,
+        count: 5,
+        cableType: 'Cat 5e',
+      )!;
+
+      final drawing = drawingOf(p);
+      expect(drawing.bundlesBetween(a.id, b.id), hasLength(2));
+      expect(drawing.bundles.map((x) => x.label),
+          containsAll(['6x Cat 6a', '5x Cat 5e']));
+
+      // Fanned either side of where a single run would sit, so one cannot
+      // hide the other.
+      final lanes = drawing.bundleLanes;
+      expect(lanes[six.id], isNot(lanes[five.id]));
+      expect(lanes[six.id]! + lanes[five.id]!, 0);
+
+      // And they are drawn on different lines.
+      final one = drawing.endsOf(drawing.bundles.first, lanes[six.id]!)!;
+      final two = drawing.endsOf(drawing.bundles.last, lanes[five.id]!)!;
+      expect(one.from, isNot(two.from));
+    });
+
+    test('a single run is not pushed off centre for no reason', () {
+      final p = room(runs: 0);
+      final a = p.addCablingBox(kind: CablingBoxKind.pullBox);
+      final b = p.addCablingBox(kind: CablingBoxKind.pathway);
+      final only = p.addCablingBundle(fromBoxId: a.id, toBoxId: b.id)!;
+      expect(drawingOf(p).bundleLanes[only.id], 0);
+    });
+  });
+
+  group('colour', () {
+    test('a derived run takes the room colour for its signal', () {
+      // The cabling sheet and the signal flow describe the same run, so they
+      // describe it in the same colour without anybody keeping two palettes
+      // in step.
+      final p = room(runs: 2);
+      final bundle = drawingOf(p).bundles.single;
+      expect(bundle.color, p.avSignalColor(SignalType.network).toARGB32());
+    });
+
+    test('a run can be recoloured, and put back', () {
+      final p = room(runs: 2);
+      final bundle = drawingOf(p).bundles.single;
+      p.setCablingBundleColor(bundle.id, 0xFF00FF00);
+      expect(drawingOf(p).bundles.single.color, 0xFF00FF00);
+
+      // Recolouring is how the sheet is DRAWN, not a disagreement with what
+      // the room counted — so it does not badge the run as edited.
+      expect(drawingOf(p).overridden, isEmpty);
+
+      p.setCablingBundleColor(bundle.id, null);
+      expect(
+        drawingOf(p).bundles.single.color,
+        p.avSignalColor(SignalType.network).toARGB32(),
+      );
+    });
+
+    test('the colour goes to disk with the other edits', () {
+      final p = room(runs: 2);
+      p.setCablingBundleColor(drawingOf(p).bundles.single.id, 0xFF123456);
+
+      final back = CablingOverrides()..readJson(p.avCabling.toJson());
+      expect(back.colors.values.single, 0xFF123456);
+    });
+  });
+
+  /// A screen switch and the motor it drives are two places in this room with
+  /// cable between them. Before this they lived only in a table at the back of
+  /// the report, which is exactly why they turned up as a surprise at rough-in.
+  group('screen and shade control runs', () {
+    AppStateProvider withScreenRun({String cableType = ''}) {
+      final p = room(runs: 0);
+      p.addAvScreenSwitch(
+        const ScreenSwitch(
+          id: '',
+          label: 'Front screen',
+          startLocationId: 'LOC_1',
+          endLocationId: 'LOC_2',
+        ),
+      );
+      if (cableType.isNotEmpty) {
+        final s = p.avScreenSwitches.single;
+        p.updateAvScreenSwitch(s.copyWith(cableType: cableType));
+      }
+      return p;
+    }
+
+    test('it is drawn as a run between the two places', () {
+      final drawing = drawingOf(withScreenRun());
+      final run = drawing.bundles.single;
+      expect(run.isControlRun, isTrue);
+      expect(run.count, 1);
+      // Both ends earn a box, even though neither is a device on the flow.
+      expect(drawing.boxes.map((b) => b.label), containsAll(['Lectern', 'Rack']));
+    });
+
+    test('it says what cable it is, and takes a typed one', () {
+      expect(drawingOf(withScreenRun()).bundles.single.cableType,
+          kCablingControlRunType);
+      // The point of the field: somebody types Cat 5e and the drawing says so.
+      expect(
+        drawingOf(withScreenRun(cableType: 'Cat 5e')).bundles.single.cableType,
+        'Cat 5e',
+      );
+    });
+
+    test('it is drawn in the control colour, not the signal palette', () {
+      // A control run landed on a data switch is the mistake this colour
+      // exists to prevent.
+      expect(drawingOf(withScreenRun()).bundles.single.color,
+          kCablingControlRunColor);
+    });
+
+    test('it is the room\'s, so the drawing hides it rather than deleting it',
+        () {
+      final p = withScreenRun();
+      final id = drawingOf(p).bundles.single.id;
+      p.removeCablingItem(id);
+      expect(drawingOf(p).bundles, isEmpty);
+      expect(p.avCabling.hidden, contains(id));
+      p.restoreCablingItem(id);
+      expect(drawingOf(p).bundles, hasLength(1));
+    });
+
+    test('a run with only one end recorded is not drawn', () {
+      final p = room(runs: 0);
+      p.addAvScreenSwitch(
+        const ScreenSwitch(
+          id: '',
+          label: 'Rear shade',
+          startLocationId: 'LOC_1',
+          endNote: 'somewhere above the whiteboard',
+        ),
+      );
+      // A line to nowhere is worse than a missing line.
+      expect(drawingOf(p).bundles, isEmpty);
+    });
+  });
+
+  group('the sheet reads', () {
+    test('a notes block grows to hold what is in it', () {
+      const short = CablingBox(
+        id: 'box:1',
+        label: 'Scope',
+        kind: CablingBoxKind.note,
+        body: 'One line',
+      );
+      final long = CablingBox(
+        id: 'box:2',
+        label: 'Scope',
+        kind: CablingBoxKind.note,
+        body: List.filled(20, 'A line of scope note text').join('\n'),
+      );
+      expect(long.size.height, greaterThan(short.size.height));
+      // Same column width either way — a notes block down the side of a sheet
+      // is a column, not a paragraph that reflows.
+      expect(long.size.width, short.size.width);
+    });
+
+    test('a label sits halfway along the run, not between its ends', () {
+      // A run detouring around a rack has a straight-line middle that can be
+      // well off the line it is supposed to be labelling.
+      const dogleg = [Offset(0, 0), Offset(0, 100), Offset(100, 100)];
+      expect(polylineMidpoint(dogleg), const Offset(0, 100));
+      expect(
+        polylineMidpoint(const [Offset(0, 0), Offset(10, 0)]),
+        const Offset(5, 0),
+      );
+      expect(polylineMidpoint(const []), Offset.zero);
+    });
+  });
+
   group('on disk', () {
     test('only the edits are saved, and they come back on top', () async {
       final dir = Directory.systemTemp.createTempSync('cabling_schematic_');

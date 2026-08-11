@@ -143,7 +143,11 @@ class CablingBox {
 
   Size get size => switch (kind) {
     CablingBoxKind.pathway => const Size(46, 420),
-    CablingBoxKind.note => const Size(250, 260),
+    // Sized to what is IN it. The scope notes down the side of a cabling sheet
+    // are the part that says whose contract each half of the job is, and a
+    // fixed box either clipped a long one or left a short one floating in a
+    // rectangle of nothing.
+    CablingBoxKind.note => _noteSize(body),
     // Narrower than a place: a device box is an icon with a name under it, the
     // way it reads on the schematic. Tall enough for the icon plus TWO lines
     // of label — "Transmitter / wall plate" is a real entry in
@@ -153,6 +157,28 @@ class CablingBox {
   };
 
   Rect get rect => pos & size;
+
+  /// How big a notes block has to be to hold [body].
+  ///
+  /// Estimated from the character count rather than measured, because [size]
+  /// is model geometry — the router, the hit targets and the report all read
+  /// it, and none of them has a text painter to hand. The estimate runs a
+  /// little generous on purpose: a box slightly too tall is a margin, a box
+  /// slightly too short is text nobody can read.
+  static Size _noteSize(String body) {
+    const width = 250.0;
+    const charsPerLine = 34;
+    const lineHeight = 15.0;
+    var lines = 0;
+    for (final paragraph in body.split('\n')) {
+      lines += paragraph.isEmpty
+          ? 1
+          : (paragraph.length + charsPerLine - 1) ~/ charsPerLine;
+    }
+    // padding + the label + the gap under it + the body itself.
+    final height = 16 + 20 + 4 + lines * lineHeight;
+    return Size(width, height.clamp(110.0, 1400.0));
+  }
 
   CablingBox copyWith({
     String? label,
@@ -218,6 +244,11 @@ class CablingBundle {
 
   /// ARGB. The reference drawing reads by colour — the AV bundles in one, the
   /// network in another — so the colour is part of the drawing, not decoration.
+  ///
+  /// A derived run takes the room's colour for its signal, so the cabling sheet
+  /// and the signal flow describe the same run in the same colour without
+  /// anybody keeping two palettes in step. A hand-drawn one takes whatever it
+  /// was given, and either can be recoloured on the drawing.
   final int color;
 
   const CablingBundle({
@@ -230,7 +261,17 @@ class CablingBundle {
     this.color = 0xFFD32F2F,
   });
 
-  bool get isDerived => id.startsWith('bundle:');
+  /// True when the ROOM produced this run rather than somebody drawing it —
+  /// counted off the signal flow (`bundle:`) or read off a screen / shade
+  /// control run (`screen:`). Either way deleting it would only bring it back
+  /// on the next rebuild, so the drawing hides it instead.
+  bool get isDerived =>
+      id.startsWith('bundle:') || id.startsWith(kCablingScreenRunPrefix);
+
+  /// True when this run is a low-voltage control run rather than signal
+  /// cable. It is counted per RUN, not per cable on the flow, so the schedule
+  /// can say what it is without implying the signal flow knows about it.
+  bool get isControlRun => id.startsWith(kCablingScreenRunPrefix);
 
   /// "2x AV cabling" — what gets printed on the run.
   String get label {
@@ -311,6 +352,13 @@ class CablingOverrides {
   /// Bundle id -> a cable type typed over the derived one.
   final Map<String, String> cableTypes;
 
+  /// Bundle id -> ARGB picked for this run on the drawing.
+  ///
+  /// Separate from [cableTypes] because recolouring is not a disagreement with
+  /// the room the way a typed count is — it is how the sheet is drawn, and the
+  /// run is still whatever the signal flow says it is.
+  final Map<String, int> colors;
+
   /// Derived boxes and bundles taken off the drawing. Hidden rather than
   /// deleted, because a rebuild would only bring a deleted one back.
   final Set<String> hidden;
@@ -325,6 +373,7 @@ class CablingOverrides {
     Map<String, String>? bodies,
     Map<String, double>? counts,
     Map<String, String>? cableTypes,
+    Map<String, int>? colors,
     Set<String>? hidden,
     List<CablingBox>? extraBoxes,
     List<CablingBundle>? extraBundles,
@@ -333,6 +382,7 @@ class CablingOverrides {
        bodies = bodies ?? {},
        counts = counts ?? {},
        cableTypes = cableTypes ?? {},
+       colors = colors ?? {},
        hidden = hidden ?? {},
        extraBoxes = extraBoxes ?? [],
        extraBundles = extraBundles ?? [];
@@ -343,6 +393,7 @@ class CablingOverrides {
       bodies.isEmpty &&
       counts.isEmpty &&
       cableTypes.isEmpty &&
+      colors.isEmpty &&
       hidden.isEmpty &&
       extraBoxes.isEmpty &&
       extraBundles.isEmpty;
@@ -353,6 +404,7 @@ class CablingOverrides {
     bodies.clear();
     counts.clear();
     cableTypes.clear();
+    colors.clear();
     hidden.clear();
     extraBoxes.clear();
     extraBundles.clear();
@@ -368,6 +420,7 @@ class CablingOverrides {
     if (bodies.isNotEmpty) 'bodies': bodies,
     if (counts.isNotEmpty) 'counts': counts,
     if (cableTypes.isNotEmpty) 'cableTypes': cableTypes,
+    if (colors.isNotEmpty) 'colors': colors,
     if (hidden.isNotEmpty) 'hidden': hidden.toList(),
     if (extraBoxes.isNotEmpty)
       'boxes': [for (final b in extraBoxes) b.toJson()],
@@ -406,6 +459,13 @@ class CablingOverrides {
         if (n != null) counts[key.toString()] = n;
       });
     }
+    final rgb = json['colors'];
+    if (rgb is Map) {
+      rgb.forEach((key, value) {
+        final n = (value as num?)?.toInt();
+        if (n != null) colors[key.toString()] = n;
+      });
+    }
     for (final h in (json['hidden'] as List? ?? [])) {
       hidden.add(h.toString());
     }
@@ -442,7 +502,125 @@ class CablingSchematic {
     }
     return null;
   }
+
+  /// Every run between the same two boxes, in drawing order.
+  ///
+  /// A location feeding the pathway with six Cat 6a and five Cat 5e is TWO
+  /// runs on one edge, and both have to be visible: one line hiding another is
+  /// the drawing quietly under-reporting the job.
+  List<CablingBundle> bundlesBetween(String boxA, String boxB) => [
+    for (final b in bundles)
+      if ((b.fromBoxId == boxA && b.toBoxId == boxB) ||
+          (b.fromBoxId == boxB && b.toBoxId == boxA))
+        b,
+  ];
+
+  /// How far off the centre line each run is drawn, by bundle id.
+  ///
+  /// Runs sharing an edge are fanned out either side of where a single run
+  /// would sit, so a pair reads as two cables rather than one thick one. The
+  /// same map feeds the painter and the click targets, so what you see and
+  /// what you can hit can never come apart.
+  Map<String, double> get bundleLanes {
+    final byEdge = <String, List<CablingBundle>>{};
+    for (final b in bundles) {
+      final ends = [b.fromBoxId, b.toBoxId]..sort();
+      byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(b);
+    }
+    final lanes = <String, double>{};
+    for (final group in byEdge.values) {
+      for (int i = 0; i < group.length; i++) {
+        lanes[group[i].id] = (i - (group.length - 1) / 2) * kCablingLaneStep;
+      }
+    }
+    return lanes;
+  }
+
+  /// Where [bundle] is actually drawn: its two ends, already pushed onto its
+  /// lane. Null when either box has gone off the drawing.
+  ({Offset from, Offset to})? endsOf(CablingBundle bundle, double lane) {
+    final a = boxById(bundle.fromBoxId);
+    final b = boxById(bundle.toBoxId);
+    if (a == null || b == null) return null;
+    final from = a.rect.center;
+    final to = b.rect.center;
+    if (lane == 0) return (from: from, to: to);
+    // Perpendicular to the run, so the fan opens across the line rather than
+    // along it however the two boxes happen to be arranged.
+    final d = to - from;
+    final length = d.distance;
+    if (length == 0) return (from: from, to: to);
+    final normal = Offset(-d.dy / length, d.dx / length) * lane;
+    return (from: from + normal, to: to + normal);
+  }
 }
+
+/// How far apart runs sharing an edge are fanned. Wide enough to read as
+/// separate cables at the zoom a cabling sheet is looked at, tight enough that
+/// four of them still look like one bundle.
+const double kCablingLaneStep = 13;
+
+/// The point halfway ALONG [route], measured by distance travelled.
+///
+/// Not the midpoint of the two ends: a run that detours around a rack has a
+/// straight-line middle that can sit well off the line itself, and a label
+/// anchored there is a label pointing at nothing.
+Offset polylineMidpoint(List<Offset> route) {
+  if (route.isEmpty) return Offset.zero;
+  if (route.length == 1) return route.first;
+
+  var total = 0.0;
+  for (int i = 0; i < route.length - 1; i++) {
+    total += (route[i + 1] - route[i]).distance;
+  }
+  if (total == 0) return route.first;
+
+  var travelled = 0.0;
+  for (int i = 0; i < route.length - 1; i++) {
+    final leg = (route[i + 1] - route[i]).distance;
+    if (travelled + leg >= total / 2) {
+      final into = leg == 0 ? 0.0 : (total / 2 - travelled) / leg;
+      return route[i] + (route[i + 1] - route[i]) * into;
+    }
+    travelled += leg;
+  }
+  return route.last;
+}
+
+/// Bundle ids for the runs read off the room's screen and shade control runs.
+const String kCablingScreenRunPrefix = 'screen:';
+
+/// What a screen / shade control run is drawn in before anybody recolours it.
+///
+/// Deliberately nothing like the signal palette: a control run is not program
+/// signal, it is pulled by different people to a different spec, and a drawing
+/// that painted it the same colour as the AV would be inviting somebody to
+/// land it on a switch.
+const int kCablingControlRunColor = 0xFFFFA726;
+
+/// What a control run is called when nobody has said what cable it is.
+const String kCablingControlRunType = 'Control cable';
+
+/// The cable types offered on a run before anybody types their own.
+///
+/// A list rather than a free field alone because "Cat5e" gets typed a hundred
+/// times a year and misspelled a dozen of them, and a schedule that has
+/// "Cat5e", "cat 5e" and "CAT5E" on it is three lines on a purchase order. The
+/// field still takes anything — the presets are a shortcut, not a whitelist.
+const List<String> kCablingCableTypes = [
+  'Cat 5e',
+  'Cat 6',
+  'Cat 6a',
+  'Cat 7',
+  'Fiber (OM4)',
+  'Fiber (OS2)',
+  'Coax (RG6)',
+  '18/2 plenum',
+  '16/2 speaker',
+  '14/2 speaker',
+  'HDMI',
+  'Line voltage',
+];
 
 /// Where a box is put before anybody drags it.
 ///
@@ -479,6 +657,11 @@ CablingSchematic buildCablingSchematic({
   required AvFlowModel model,
   required List<RoomLocation> locations,
   required CablingOverrides overrides,
+
+  /// The room's signal colours, so a derived run is drawn the colour the
+  /// signal flow already draws it. Omitted only where there is no room to ask
+  /// — the tests and the reports, which do not care what colour anything is.
+  Map<SignalType, Color>? palette,
 }) {
   final nodeLocation = <String, String>{
     for (final n in model.nodes) n.id: n.locationId,
@@ -488,7 +671,14 @@ CablingSchematic buildCablingSchematic({
   final used = <String>{
     for (final n in model.nodes)
       if (n.locationId.isNotEmpty) n.locationId,
-  };
+    // A screen switch and the motor it drives are both places cable lands,
+    // and neither is a device on the signal flow. Without this the control
+    // run would be a line between two boxes that were never drawn.
+    for (final s in model.screenSwitches) ...[
+      if (s.startLocationId.isNotEmpty) s.startLocationId,
+      if (s.endLocationId.isNotEmpty) s.endLocationId,
+    ],
+  }..remove(kNoLocationId);
   final derivedBoxes = <CablingBox>[];
   var locationIndex = 0;
   var pullIndex = 0;
@@ -538,8 +728,35 @@ CablingSchematic buildCablingSchematic({
         // sub-heading underneath.
         cableType: cableTypeLabel(e.value.signal),
         signal: e.value.signal,
-        color: 0xFFD32F2F,
+        // The room's own colour for that signal, so the AV runs and the
+        // network runs read apart on the cabling sheet exactly the way they do
+        // on the signal flow. One line in one colour was the drawing saying
+        // every cable in the room was the same thing.
+        color: signalColor(e.value.signal, palette).toARGB32(),
       ),
+    // The screen and shade control runs, on the drawing rather than only in a
+    // table at the back. They are cable somebody has to pull between two
+    // places in this room, which is exactly what this sheet is for — and they
+    // used to turn up as a surprise at rough-in precisely because no drawing
+    // showed them.
+    for (final s in model.screenSwitches)
+      if (s.startLocationId.isNotEmpty &&
+          s.endLocationId.isNotEmpty &&
+          s.startLocationId != kNoLocationId &&
+          s.endLocationId != kNoLocationId &&
+          s.startLocationId != s.endLocationId)
+        CablingBundle(
+          id: '$kCablingScreenRunPrefix${s.id}',
+          fromBoxId: 'loc:${s.startLocationId}',
+          toBoxId: 'loc:${s.endLocationId}',
+          count: 1,
+          // Whatever the run was specified as — "Cat 5e", "18/2 plenum" — and
+          // a name that says what it is when nobody has specified it yet.
+          cableType: s.cableType.trim().isEmpty
+              ? kCablingControlRunType
+              : s.cableType.trim(),
+          color: kCablingControlRunColor,
+        ),
   ]..sort((a, b) => a.id.compareTo(b.id));
 
   // --- overrides on top ----------------------------------------------------
@@ -571,6 +788,10 @@ CablingSchematic buildCablingSchematic({
       out = out.copyWith(cableType: type);
       if (bundle.isDerived) overridden.add(bundle.id);
     }
+    // Recolouring is NOT a disagreement with the room — the run still carries
+    // what the signal flow says it carries — so it does not badge the bundle.
+    final color = overrides.colors[bundle.id];
+    if (color != null) out = out.copyWith(color: color);
     return out;
   }
 

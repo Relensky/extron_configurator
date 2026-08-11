@@ -12,6 +12,7 @@ import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
+import 'cabling_schematic.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'plan_annotations.dart';
@@ -89,6 +90,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   Size _imageSize = const Size(1200, 900);
 
   String? _selectedCalloutId;
+
+  /// Which cable runs are drawn over the plan: [_kLayerOff], [_kLayerAll], or
+  /// one cable type on its own.
+  ///
+  /// One type at a time is how a cabling set is actually issued — the network
+  /// contractor gets the network sheet and the AV contractor gets theirs — and
+  /// a plan with every run on it at once is a plan nobody can trace a single
+  /// pull from.
+  String _cableLayer = _kLayerAll;
 
   @override
   void initState() {
@@ -279,6 +289,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     }
     final model = buildAvFlowModel(provider);
     final plan = provider.activeFloorPlan;
+    // Built once and handed down: the layer chips, the runs and the count of
+    // what could not be placed are three readings of the same drawing.
+    final drawing = provider.cablingSchematic(model);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncImage(provider);
@@ -289,6 +302,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       children: [
         _toolbar(provider, plan),
         _sheetBar(provider, plan),
+        if (plan != null) _layerBar(provider, drawing),
         if (_tool == _PlanTool.notation && plan != null)
           _notationBar(provider, plan),
         const Divider(height: 1),
@@ -316,7 +330,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           boundaryMargin: const EdgeInsets.all(400),
                           child: RepaintBoundary(
                             key: _planKey,
-                            child: _plan(provider, model, plan),
+                            child: _plan(provider, model, plan, drawing),
                           ),
                         ),
                       ),
@@ -727,10 +741,26 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 : null,
           ),
           if (plan != null)
-            ElevatedButton.icon(
-              icon: const Icon(Icons.image, size: 18),
-              label: const Text('Export PNG'),
-              onPressed: () => _exportPng(provider),
+            PopupMenuButton<String>(
+              tooltip: 'Export the plan',
+              onSelected: (v) =>
+                  v == 'layers' ? _exportLayers(provider) : _exportPng(provider),
+              itemBuilder: (ctx) => const [
+                PopupMenuItem(value: 'one', child: Text('This view (.png)')),
+                // A sheet per trade: the network contractor gets the network
+                // drawing, the AV contractor gets theirs.
+                PopupMenuItem(
+                  value: 'layers',
+                  child: Text('One image per cable type...'),
+                ),
+              ],
+              child: IgnorePointer(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.image, size: 18),
+                  label: const Text('Export PNG'),
+                  onPressed: () {},
+                ),
+              ),
             ),
           ElevatedButton.icon(
             icon: const Icon(Icons.summarize, size: 18),
@@ -781,11 +811,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     ),
   );
 
-  /// The plan itself: image, location markers, callouts.
+  /// The plan itself: image, cable runs, location markers, callouts.
   Widget _plan(
     AppStateProvider provider,
     AvFlowModel model,
     FloorPlan plan,
+    CablingSchematic drawing,
   ) {
     final size = _imageSize;
     final theme = Theme.of(context);
@@ -826,6 +857,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     )
                   : Image(image: _image!, fit: BoxFit.fill),
             ),
+            // Under the markers: a run ends AT a location, so the dot it lands
+            // on should sit on top of it rather than the line crossing over.
+            if (_cableLayer != _kLayerOff)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _PlanCablePainter(
+                      runs: _runsOnPlan(provider, drawing),
+                      dark: theme.brightness == Brightness.dark,
+                    ),
+                  ),
+                ),
+              ),
             for (final location in provider.avLocations)
               if (location.isPlaced)
                 _locationMarker(provider, model, location),
@@ -850,6 +894,214 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ],
         ),
       ),
+    );
+  }
+
+  // --- cable runs over the plan ---------------------------------------------
+
+  /// The runs the cabling drawing knows about, resolved onto this sheet.
+  ///
+  /// Only runs whose BOTH ends are locations somebody has placed can be drawn
+  /// — a line to a location that is not on the plan would have to point
+  /// somewhere arbitrary, and a plan that invents where cable goes is worse
+  /// than one that leaves it out. [_unplacedRunCount] says how many were left
+  /// out, so the omission is visible rather than silent.
+  List<_PlanRun> _runsOnPlan(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+  ) {
+    final placed = {
+      for (final l in provider.avLocations)
+        if (l.isPlaced) 'loc:${l.id}': l.planPos,
+    };
+
+    final drawable = [
+      for (final b in drawing.bundles)
+        if (placed.containsKey(b.fromBoxId) &&
+            placed.containsKey(b.toBoxId) &&
+            _layerMatches(b.cableType))
+          b,
+    ];
+
+    // Runs sharing a pair of markers are fanned apart, the same way the
+    // cabling drawing fans them, so six Cat 6a and five Cat 5e between the
+    // same two places read as two pulls.
+    final byEdge = <String, List<CablingBundle>>{};
+    for (final b in drawable) {
+      final ends = [b.fromBoxId, b.toBoxId]..sort();
+      byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(b);
+    }
+    final lanes = <String, double>{};
+    for (final group in byEdge.values) {
+      for (int i = 0; i < group.length; i++) {
+        lanes[group[i].id] = (i - (group.length - 1) / 2) * kCablingLaneStep;
+      }
+    }
+
+    return [
+      for (final b in drawable)
+        (
+          from: placed[b.fromBoxId]!,
+          to: placed[b.toBoxId]!,
+          color: Color(b.color),
+          label: b.label,
+          lane: lanes[b.id] ?? 0,
+        ),
+    ];
+  }
+
+  bool _layerMatches(String cableType) =>
+      _cableLayer == _kLayerAll || _cableLayer == cableType;
+
+  /// The cable types this sheet could show, in the order the drawing lists
+  /// them, each with the colour it is drawn in.
+  List<({String type, Color color})> _cableLayers(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+  ) {
+    final placed = {
+      for (final l in provider.avLocations)
+        if (l.isPlaced) 'loc:${l.id}',
+    };
+    final seen = <String, Color>{};
+    for (final b in drawing.bundles) {
+      if (!placed.contains(b.fromBoxId) || !placed.contains(b.toBoxId)) {
+        continue;
+      }
+      seen.putIfAbsent(b.cableType, () => Color(b.color));
+    }
+    final types = seen.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return [for (final t in types) (type: t, color: seen[t]!)];
+  }
+
+  /// How many runs cannot be drawn because an end has no marker on the plan.
+  int _unplacedRunCount(AppStateProvider provider, CablingSchematic drawing) {
+    final placed = {
+      for (final l in provider.avLocations)
+        if (l.isPlaced) 'loc:${l.id}',
+    };
+    return drawing.bundles
+        .where(
+          (b) =>
+              !placed.contains(b.fromBoxId) || !placed.contains(b.toBoxId),
+        )
+        .length;
+  }
+
+  /// The layer picker: off, everything, or one cable type on its own.
+  Widget _layerBar(AppStateProvider provider, CablingSchematic drawing) {
+    final theme = Theme.of(context);
+    final layers = _cableLayers(provider, drawing);
+    final missing = _unplacedRunCount(provider, drawing);
+    // The bar has to survive having nothing to draw: a room whose markers are
+    // not placed yet is exactly the room that needs telling how many runs are
+    // missing, and hiding the bar would take the warning with it.
+    if (layers.isEmpty && missing == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('Cable runs', style: theme.textTheme.bodySmall),
+          if (layers.isNotEmpty) ...[
+            ChoiceChip(
+              label: const Text('Off'),
+              visualDensity: VisualDensity.compact,
+              selected: _cableLayer == _kLayerOff,
+              onSelected: (_) => setState(() => _cableLayer = _kLayerOff),
+            ),
+            ChoiceChip(
+              label: const Text('All'),
+              visualDensity: VisualDensity.compact,
+              selected: _cableLayer == _kLayerAll,
+              onSelected: (_) => setState(() => _cableLayer = _kLayerAll),
+            ),
+          ],
+          for (final layer in layers)
+            ChoiceChip(
+              key: ValueKey('plan_layer_${layer.type}'),
+              avatar: CircleAvatar(backgroundColor: layer.color, radius: 7),
+              label: Text(layer.type),
+              visualDensity: VisualDensity.compact,
+              selected: _cableLayer == layer.type,
+              onSelected: (_) => setState(() => _cableLayer = layer.type),
+            ),
+          if (missing > 0)
+            Tooltip(
+              message: 'Both ends of a run have to be placed on the plan '
+                  'before it can be drawn.',
+              child: Text(
+                '$missing run${missing == 1 ? '' : 's'} not on the plan',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Writes one PNG per cable type into a folder the user picks.
+  ///
+  /// A sheet per trade is the whole point of the layers: the network
+  /// contractor gets the network drawing and the AV contractor gets theirs,
+  /// and neither has to read around the other's runs.
+  Future<void> _exportLayers(AppStateProvider provider) async {
+    final model = buildAvFlowModel(provider);
+    final layers = _cableLayers(provider, provider.cablingSchematic(model));
+    if (layers.isEmpty) {
+      _snack('No cable runs land on this plan yet.');
+      return;
+    }
+
+    final folder = await FilePicker.getDirectoryPath(
+      dialogTitle: 'Where should the layer images go?',
+    );
+    if (folder == null) return;
+
+    final was = _cableLayer;
+    final written = <String>[];
+    final failed = <String>[];
+    // "All" first, then one per type, so the folder reads as a set.
+    for (final layer in [_kLayerAll, ...layers.map((l) => l.type)]) {
+      setState(() => _cableLayer = layer);
+      // Let the change actually paint before the boundary is captured;
+      // without this every image would be of whatever was on screen when the
+      // loop started.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+
+      final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
+      final name = layer == _kLayerAll ? 'all_runs' : layer;
+      final safe = name.replaceAll(RegExp(r'[^\w\-]+'), '_');
+      if (bytes == null) {
+        failed.add(name);
+        continue;
+      }
+      try {
+        final file = File(
+          '$folder${Platform.pathSeparator}'
+          '${roomFileStem(provider, 'floor_plan')}_$safe.png',
+        );
+        await file.writeAsBytes(bytes);
+        written.add(file.uri.pathSegments.last);
+      } catch (e) {
+        failed.add('$name — $e');
+      }
+    }
+
+    if (mounted) setState(() => _cableLayer = was);
+    _snack(
+      failed.isEmpty
+          ? 'Wrote ${written.length} layer image'
+            '${written.length == 1 ? '' : 's'} to $folder'
+          : 'Wrote ${written.length}; could not write ${failed.join(', ')}',
+      error: failed.isNotEmpty,
     );
   }
 
@@ -1628,7 +1880,83 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 }
 
 /// What clicking the plan does.
+/// One cable run as it lands on a plan sheet.
+typedef _PlanRun = ({
+  Offset from,
+  Offset to,
+  Color color,
+  String label,
+  double lane,
+});
+
+/// Draws the cable runs over the plan, each in the colour the cabling drawing
+/// gives it and labelled with what it carries.
+class _PlanCablePainter extends CustomPainter {
+  final List<_PlanRun> runs;
+  final bool dark;
+
+  const _PlanCablePainter({required this.runs, required this.dark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final run in runs) {
+      var from = run.from;
+      var to = run.to;
+      final d = to - from;
+      final length = d.distance;
+      if (length > 0 && run.lane != 0) {
+        final normal = Offset(-d.dy / length, d.dx / length) * run.lane;
+        from += normal;
+        to += normal;
+      }
+
+      canvas.drawLine(
+        from,
+        to,
+        Paint()
+          ..color = run.color
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round,
+      );
+
+      final text = TextPainter(
+        text: TextSpan(
+          text: run.label,
+          style: TextStyle(
+            color: dark ? Colors.white : Colors.black87,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final mid = (from + to) / 2;
+      final at = Offset(mid.dx - text.width / 2, mid.dy - text.height - 3);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(at.dx, at.dy, text.width, text.height).inflate(3),
+          const Radius.circular(3),
+        ),
+        // The plan underneath is a drawing, not a background — the label needs
+        // something solid behind it or it lands on top of a wall line.
+        Paint()..color = dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
+      );
+      text.paint(canvas, at);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PlanCablePainter old) =>
+      old.runs != runs || old.dark != dark;
+}
+
 enum _PlanTool { none, location, callout, notation }
+
+/// Sentinels for [_FloorPlanViewState._cableLayer]. Not cable types, so they
+/// are spelled in a way no cable ever will be.
+const String _kLayerOff = ' off';
+const String _kLayerAll = ' all';
 
 /// The sheets a callout can point into. The room workbook's four, plus the
 /// location sheet this tab adds — named rather than indexed so adding a tab

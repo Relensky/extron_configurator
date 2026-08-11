@@ -1763,6 +1763,9 @@ class AppStateProvider extends ChangeNotifier {
     model: model,
     locations: avLocations,
     overrides: avCabling,
+    // The room's palette, so recolouring HDBaseT on the signal flow moves the
+    // AV runs on the cabling sheet with it.
+    palette: avSignalColors,
   );
 
   /// [recordUndo] false while a drag is in flight — one entry for the move.
@@ -1806,6 +1809,18 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Colours one run on the drawing. Null puts it back to the colour the room
+  /// gives that signal, which is the only way out of a recolour.
+  void setCablingBundleColor(String id, int? argb) {
+    _pushAvUndo('Set cable colour');
+    if (argb == null) {
+      avCabling.colors.remove(id);
+    } else {
+      avCabling.colors[id] = argb;
+    }
+    notifyListeners();
+  }
+
   /// Takes something off the drawing. A derived box or run is HIDDEN rather
   /// than deleted, because deleting one would only bring it back next time the
   /// drawing was built.
@@ -1826,6 +1841,7 @@ class AppStateProvider extends ChangeNotifier {
     avCabling.bodies.remove(id);
     avCabling.counts.remove(id);
     avCabling.cableTypes.remove(id);
+    avCabling.colors.remove(id);
     notifyListeners();
   }
 

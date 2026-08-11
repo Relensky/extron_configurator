@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'av_flow_model.dart' show kCableSwatches, latticeRoute;
 import 'av_flow_report.dart' show cablingSections;
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
+import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
+import 'layout_tools.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
@@ -416,6 +419,11 @@ class _CablingViewState extends State<CablingView> {
           ),
         ),
       ),
+      // Typed, not picked from a list: the field takes anything, because the
+      // cable on a job is whatever the spec says and no list survives contact
+      // with a real one. The menu beside it is only a shortcut for the dozen
+      // types that get typed over and over — and it is what stops a schedule
+      // carrying "Cat5e", "cat 5e" and "CAT5E" as three lines of a PO.
       SizedBox(
         width: 180,
         child: LiveTextField(
@@ -423,9 +431,20 @@ class _CablingViewState extends State<CablingView> {
           fieldId: 'type:${bundle.id}',
           initial: bundle.cableType,
           label: 'Cable',
+          hint: 'e.g. Cat 5e',
           onChanged: (_) {},
           onSubmitted: (v) => provider.setCablingBundleType(bundle.id, v),
         ),
+      ),
+      PopupMenuButton<String>(
+        key: ValueKey('cabling_type_menu_${bundle.id}'),
+        tooltip: 'Common cable types',
+        icon: const Icon(Icons.arrow_drop_down, size: 22),
+        onSelected: (v) => provider.setCablingBundleType(bundle.id, v),
+        itemBuilder: (ctx) => [
+          for (final type in kCablingCableTypes)
+            PopupMenuItem(value: type, child: Text(type)),
+        ],
       ),
       // What the family name covers, when it covers more than one thing.
       if (bundle.signalSubLabel.isNotEmpty)
@@ -434,6 +453,26 @@ class _CablingViewState extends State<CablingView> {
           visualDensity: VisualDensity.compact,
           labelStyle: const TextStyle(fontSize: 11),
         ),
+      ..._colorPicker(provider, bundle),
+      // The whole point of an edge holding more than one run: "six Cat 6a AND
+      // five Cat 5e from the lectern to the pathway" is two lines of cable on
+      // one route, and the drawing has to be able to say both.
+      TextButton.icon(
+        key: ValueKey('cabling_add_type_${bundle.id}'),
+        icon: const Icon(Icons.playlist_add, size: 16),
+        label: const Text('Add cable type'),
+        onPressed: () {
+          final added = provider.addCablingBundle(
+            fromBoxId: bundle.fromBoxId,
+            toBoxId: bundle.toBoxId,
+            cableType: '',
+            // Not the run it was added beside: two lines the same colour on
+            // one edge is the drawing saying they are the same cable.
+            color: _nextRunColor(drawing, bundle).toARGB32(),
+          );
+          if (added != null) setState(() => _selectedId = added.id);
+        },
+      ),
       if (drawing.overridden.contains(bundle.id))
         TextButton.icon(
           icon: const Icon(Icons.restart_alt, size: 16),
@@ -453,6 +492,64 @@ class _CablingViewState extends State<CablingView> {
         danger: true,
       ),
     ];
+  }
+
+  /// The colours a run can be drawn in. The signal palette first — so "make
+  /// this one look like the network runs" is one click — then the picker for
+  /// anything the drawing set uses that the app has never heard of.
+  List<Widget> _colorPicker(AppStateProvider provider, CablingBundle bundle) {
+    final current = Color(bundle.color);
+    return [
+      const SizedBox(width: 4),
+      for (final c in kCableSwatches)
+        ColorSwatchButton(
+          key: ValueKey(
+            'cabling_color_${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
+          ),
+          color: c,
+          selected: current.toARGB32() == c.toARGB32(),
+          width: 22,
+          height: 20,
+          onTap: () =>
+              provider.setCablingBundleColor(bundle.id, c.toARGB32()),
+        ),
+      avRowIcon(
+        Icons.colorize,
+        'Any other colour',
+        () async {
+          final picked = await showColorWheelDialog(
+            context,
+            initial: current,
+            title: 'Colour for ${bundle.label}',
+          );
+          if (picked != null) {
+            provider.setCablingBundleColor(bundle.id, picked.toARGB32());
+          }
+        },
+      ),
+      // Only offered once there is something to go back to: a derived run
+      // takes the room's colour for its signal, and a recolour is the one
+      // thing that hides it.
+      if (provider.avCabling.colors.containsKey(bundle.id))
+        avRowIcon(
+          Icons.format_color_reset,
+          'Back to the colour the room gives this signal',
+          () => provider.setCablingBundleColor(bundle.id, null),
+        ),
+    ];
+  }
+
+  /// A colour for a run being added beside [beside]: the first swatch nothing
+  /// on that edge is already using, so a new line is visibly a new line.
+  Color _nextRunColor(CablingSchematic drawing, CablingBundle beside) {
+    final taken = {
+      for (final b in drawing.bundlesBetween(beside.fromBoxId, beside.toBoxId))
+        b.color,
+    };
+    for (final c in kCableSwatches) {
+      if (!taken.contains(c.toARGB32())) return c;
+    }
+    return kCableSwatches.first;
   }
 
   // --- devices --------------------------------------------------------------
@@ -620,6 +717,14 @@ class _CablingViewState extends State<CablingView> {
   Widget _canvas(AppStateProvider provider, CablingSchematic drawing) {
     final size = _canvasSize(drawing);
     final theme = Theme.of(context);
+    // Worked out once and handed to both the painter and the click targets, so
+    // the line you see and the line you can hit are the same line.
+    final lanes = drawing.bundleLanes;
+    // And the routes with them: a run goes AROUND the boxes between its two
+    // ends rather than straight through them, the same guarantee the signal
+    // flow gives. Computed here rather than in paint() so a repaint — a
+    // hover, a selection — is not an A* search.
+    final routes = _routes(drawing, lanes);
     return SizedBox(
       width: size.width,
       height: size.height,
@@ -639,6 +744,8 @@ class _CablingViewState extends State<CablingView> {
               child: CustomPaint(
                 painter: _BundlePainter(
                   drawing: drawing,
+                  lanes: lanes,
+                  routes: routes,
                   selectedId: _selectedId,
                   overridden: drawing.overridden,
                   dark: theme.brightness == Brightness.dark,
@@ -647,7 +754,7 @@ class _CablingViewState extends State<CablingView> {
             ),
           ),
           for (final bundle in drawing.bundles)
-            _bundleHitTarget(drawing, bundle),
+            _bundleHitTarget(drawing, bundle, routes[bundle.id]),
           for (final box in drawing.boxes) _box(provider, drawing, box),
         ],
       ),
@@ -660,16 +767,54 @@ class _CablingViewState extends State<CablingView> {
   /// Sized to cover the LABEL as well as the line: the label is the part of a
   /// run people aim at, and a target that only covered the wire itself was the
   /// reason a run looked unselectable and its count unreachable.
-  Widget _bundleHitTarget(CablingSchematic drawing, CablingBundle bundle) {
-    final from = drawing.boxById(bundle.fromBoxId);
-    final to = drawing.boxById(bundle.toBoxId);
-    if (from == null || to == null) return const SizedBox.shrink();
-    final mid = (from.rect.center + to.rect.center) / 2;
+  /// Every run's drawn path, by bundle id.
+  ///
+  /// A run steps around the boxes it passes instead of crossing them: a line
+  /// through the middle of the equipment rack is a line nobody can follow, and
+  /// it is exactly the reason the signal flow grew a router of its own. The
+  /// two boxes a run LANDS on are not obstacles to it — it has to reach them.
+  Map<String, List<Offset>> _routes(
+    CablingSchematic drawing,
+    Map<String, double> lanes,
+  ) {
+    final rects = {for (final b in drawing.boxes) b.id: b.rect};
+    final out = <String, List<Offset>>{};
+    for (final bundle in drawing.bundles) {
+      final ends = drawing.endsOf(bundle, lanes[bundle.id] ?? 0);
+      if (ends == null) continue;
+      final obstacles = [
+        for (final e in rects.entries)
+          if (e.key != bundle.fromBoxId && e.key != bundle.toBoxId) e.value,
+      ];
+      out[bundle.id] =
+          latticeRoute(ends.from, ends.to, obstacles) ??
+          // No way through — a straight line at least says the two ends are
+          // joined, which beats dropping the run off the drawing.
+          [ends.from, ends.to];
+    }
+    return out;
+  }
+
+  ///
+  /// Runs sharing an edge are fanned onto their own lanes, so each one has a
+  /// pad of its own: on a location feeding the pathway with six Cat 6a and
+  /// five Cat 5e, both lines are selectable rather than only the top one.
+  Widget _bundleHitTarget(
+    CablingSchematic drawing,
+    CablingBundle bundle,
+    List<Offset>? route,
+  ) {
+    if (route == null || route.isEmpty) return const SizedBox.shrink();
+    final mid = polylineMidpoint(route);
     const w = 150.0;
-    const h = 48.0;
+    // Kept to a lane's width when there are runs either side, so two pads on
+    // one edge cannot cover each other and steal the click.
+    final h = drawing.bundlesBetween(bundle.fromBoxId, bundle.toBoxId).length > 1
+        ? kCablingLaneStep
+        : 48.0;
     return Positioned(
       left: mid.dx - w / 2,
-      top: mid.dy - h / 2 - 8,
+      top: mid.dy - h / 2 - (h > kCablingLaneStep ? 8 : 0),
       width: w,
       height: h,
       child: MouseRegion(
@@ -730,8 +875,22 @@ class _CablingViewState extends State<CablingView> {
           box.pos + d.delta,
           recordUndo: false,
         ),
-        onPanEnd: (_) =>
-            provider.setCablingBoxPosition(box.id, box.pos, recordUndo: true),
+        // Land clear of the other boxes, the way the signal flow does. A box
+        // dropped on top of another hides both and makes the runs between
+        // them unreadable, so a drop that would overlap slides to the nearest
+        // free spot instead.
+        onPanEnd: (_) => provider.setCablingBoxPosition(
+          box.id,
+          nonOverlappingPosition(
+            desired: box.pos,
+            size: box.size,
+            others: [
+              for (final other in drawing.boxes)
+                if (other.id != box.id) other.rect,
+            ],
+          ),
+          recordUndo: true,
+        ),
         child: MouseRegion(
           cursor: SystemMouseCursors.grab,
           child: Container(
@@ -821,8 +980,12 @@ class _CablingViewState extends State<CablingView> {
                                   : Colors.black87,
                               height: 1.35,
                             ),
+                            // The box is sized to the text, so the text is
+                            // allowed to use it. The cap is a backstop for a
+                            // note somebody pasted a page into, not a limit
+                            // anybody should meet.
                             overflow: TextOverflow.ellipsis,
-                            maxLines: 14,
+                            maxLines: isNote ? 90 : 14,
                           ),
                         ),
                       ],
@@ -836,14 +999,27 @@ class _CablingViewState extends State<CablingView> {
 }
 
 /// Draws the bundles and their labels.
+///
+/// Runs sharing an edge are drawn as parallel lines in their own colours, and
+/// their labels are stacked into ONE block beside the middle of the edge —
+/// "6x Cat 6a" over "5x Cat 5e", each with a dash of its own colour. Two
+/// captions at the same midpoint would sit on top of each other, which is how
+/// a drawing quietly loses half of what it is supposed to be ordering.
 class _BundlePainter extends CustomPainter {
   final CablingSchematic drawing;
+  final Map<String, double> lanes;
+
+  /// The path each run actually takes, routed around the boxes in its way.
+  final Map<String, List<Offset>> routes;
+
   final String selectedId;
   final Set<String> overridden;
   final bool dark;
 
   const _BundlePainter({
     required this.drawing,
+    required this.lanes,
+    required this.routes,
     required this.selectedId,
     required this.overridden,
     required this.dark,
@@ -851,73 +1027,162 @@ class _BundlePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // --- the lines ---------------------------------------------------------
     for (final bundle in drawing.bundles) {
-      final from = drawing.boxById(bundle.fromBoxId);
-      final to = drawing.boxById(bundle.toBoxId);
-      if (from == null || to == null) continue;
+      final route = routes[bundle.id];
+      if (route == null || route.length < 2) continue;
 
-      final a = from.rect.center;
-      final b = to.rect.center;
-      final selected = bundle.id == selectedId;
-      canvas.drawLine(
-        a,
-        b,
+      final path = Path()..moveTo(route.first.dx, route.first.dy);
+      for (int i = 1; i < route.length; i++) {
+        // Rounded corners rather than square ones: a cabling drawing shows
+        // cable, and cable does not turn a right angle in a ceiling.
+        final corner = route[i];
+        if (i == route.length - 1) {
+          path.lineTo(corner.dx, corner.dy);
+          break;
+        }
+        final next = route[i + 1];
+        final into = _stepBack(corner, route[i - 1]);
+        final outOf = _stepBack(corner, next);
+        path
+          ..lineTo(into.dx, into.dy)
+          ..quadraticBezierTo(corner.dx, corner.dy, outOf.dx, outOf.dy);
+      }
+
+      canvas.drawPath(
+        path,
         Paint()
+          ..style = PaintingStyle.stroke
           ..color = Color(bundle.color)
-          ..strokeWidth = selected ? 4 : 2.4
+          ..strokeWidth = bundle.id == selectedId ? 4 : 2.4
+          ..strokeJoin = StrokeJoin.round
           ..strokeCap = StrokeCap.round,
       );
+    }
 
-      // "4x AV cabling", set beside the middle of the run in the bold italic a
-      // cabling drawing labels its bundles in — with the signal on a second,
-      // lighter line under it, because "AV cabling" is what gets pulled and
-      // "HDBaseT / DTP" is what gets landed.
-      final edited = overridden.contains(bundle.id);
+    // --- one caption block per edge ----------------------------------------
+    final byEdge = <String, List<CablingBundle>>{};
+    for (final bundle in drawing.bundles) {
+      final ends = [bundle.fromBoxId, bundle.toBoxId]..sort();
+      byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(bundle);
+    }
+
+    for (final group in byEdge.values) {
+      // Halfway ALONG the route rather than halfway between the boxes: on a
+      // run that detours around a rack the straight-line midpoint can land
+      // well off the line it is supposed to be labelling.
+      final route = routes[group.first.id];
+      if (route == null || route.isEmpty) continue;
+      _paintCaption(canvas, group, polylineMidpoint(route));
+    }
+  }
+
+  /// A point [radius] back from [corner] towards [towards], for the bend
+  /// curve. Never more than half the leg, so a short one cannot overshoot into
+  /// the corner beyond it.
+  static Offset _stepBack(Offset corner, Offset towards, {double radius = 9}) {
+    final d = towards - corner;
+    final length = d.distance;
+    if (length == 0) return corner;
+    final r = radius > length / 2 ? length / 2 : radius;
+    return corner + d / length * r;
+  }
+
+  /// The stacked label block: one row per run, each with a colour dash.
+  void _paintCaption(
+    Canvas canvas,
+    List<CablingBundle> group,
+    Offset edgeMiddle,
+  ) {
+    const dash = 14.0;
+    const gap = 5.0;
+    const rowGap = 2.0;
+
+    final rows = <({TextPainter text, Color color})>[];
+    for (final bundle in group) {
+      // "4x AV cabling" in the bold italic a cabling drawing labels its
+      // bundles in, with the signal on a second, lighter line under it:
+      // "AV cabling" is what gets pulled, "HDBaseT / DTP" is what gets landed.
       final sub = bundle.signalSubLabel;
-      final painter = TextPainter(
-        text: TextSpan(
-          text: '${bundle.label}${edited ? '  ✎' : ''}',
-          style: TextStyle(
-            color: dark ? Colors.white : Colors.black87,
-            fontSize: 11.5,
-            fontWeight: FontWeight.bold,
-            fontStyle: FontStyle.italic,
-          ),
-          children: sub.isEmpty
-              ? null
-              : [
-                  TextSpan(
-                    text: '\n$sub',
-                    style: TextStyle(
-                      color: dark ? Colors.white70 : Colors.black54,
-                      fontSize: 10,
-                      fontWeight: FontWeight.normal,
-                      fontStyle: FontStyle.italic,
+      final edited = overridden.contains(bundle.id);
+      final selected = bundle.id == selectedId;
+      rows.add((
+        color: Color(bundle.color),
+        text: TextPainter(
+          text: TextSpan(
+            text: '${bundle.label}${edited ? '  ✎' : ''}',
+            style: TextStyle(
+              color: dark ? Colors.white : Colors.black87,
+              fontSize: selected ? 12.5 : 11.5,
+              fontWeight: FontWeight.bold,
+              fontStyle: FontStyle.italic,
+              // The selected run is underlined rather than recoloured: its
+              // colour is data on this drawing and must not move to say
+              // "picked".
+              decoration: selected ? TextDecoration.underline : null,
+            ),
+            children: sub.isEmpty
+                ? null
+                : [
+                    TextSpan(
+                      text: '\n$sub',
+                      style: TextStyle(
+                        color: dark ? Colors.white70 : Colors.black54,
+                        fontSize: 10,
+                        fontWeight: FontWeight.normal,
+                        fontStyle: FontStyle.italic,
+                        decoration: TextDecoration.none,
+                      ),
                     ),
-                  ),
-                ],
-        ),
-        textAlign: TextAlign.center,
-        textDirection: TextDirection.ltr,
-      )..layout();
+                  ],
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+      ));
+    }
 
-      final mid = (a + b) / 2;
-      final at = Offset(mid.dx - painter.width / 2, mid.dy - painter.height - 4);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(at.dx, at.dy, painter.width, painter.height)
-              .inflate(3),
-          const Radius.circular(3),
-        ),
-        Paint()..color = dark ? const Color(0xE614181C) : const Color(0xE6FFFFFF),
+    double width = 0;
+    double height = 0;
+    for (final row in rows) {
+      final w = dash + gap + row.text.width;
+      if (w > width) width = w;
+      height += row.text.height + rowGap;
+    }
+    height -= rowGap;
+
+    final left = edgeMiddle.dx - width / 2;
+    final top = edgeMiddle.dy - height - 6;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(left, top, width, height).inflate(3),
+        const Radius.circular(3),
+      ),
+      Paint()..color = dark ? const Color(0xE614181C) : const Color(0xE6FFFFFF),
+    );
+
+    double y = top;
+    for (final row in rows) {
+      // The dash is the key: it is what ties "6x Cat 6a" to the line it names
+      // when three run side by side.
+      canvas.drawLine(
+        Offset(left, y + row.text.height / 2),
+        Offset(left + dash, y + row.text.height / 2),
+        Paint()
+          ..color = row.color
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round,
       );
-      painter.paint(canvas, at);
+      row.text.paint(canvas, Offset(left + dash + gap, y));
+      y += row.text.height + rowGap;
     }
   }
 
   @override
   bool shouldRepaint(_BundlePainter old) =>
       old.drawing != drawing ||
+      old.lanes != lanes ||
+      old.routes != routes ||
       old.selectedId != selectedId ||
       old.dark != dark;
 }

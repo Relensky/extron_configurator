@@ -476,4 +476,38 @@ void main() {
       );
     });
   });
+
+  /// A room that starts with the places gear actually lands in is a room where
+  /// the location field gets used; one that starts with a blank list is a room
+  /// where it stays blank.
+  group('the locations a new room starts with', () {
+    test('are the five a teaching space always has', () {
+      expect(kDefaultRoomLocations.map((d) => d.name), [
+        'Equipment rack',
+        'Instructor station',
+        'Projector box',
+        'Projector screen',
+        'Ceiling mic',
+      ]);
+      // Distinct callouts, because the plan points at them by letter.
+      expect(
+        kDefaultRoomLocations.map((d) => d.callout).toSet(),
+        hasLength(kDefaultRoomLocations.length),
+      );
+    });
+
+    test('are seeded once and never on top of a room that has some', () {
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gui_full_room_name': 'Fresh'},
+        };
+      p.loadAvFlowForCurrentConfig();
+
+      expect(p.seedDefaultAvLocations(), kDefaultRoomLocations.length);
+      expect(p.avLocations.map((l) => l.name).first, 'Equipment rack');
+      // Seeding again would double the list.
+      expect(p.seedDefaultAvLocations(), 0);
+      expect(p.avLocations, hasLength(kDefaultRoomLocations.length));
+    });
+  });
 }

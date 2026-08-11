@@ -85,6 +85,78 @@ void main() {
     });
   });
 
+  group('more than one cable type on one route', () {
+    /// Selects the only run on the drawing by clicking it.
+    Future<void> selectTheRun(
+      WidgetTester tester,
+      AppStateProvider provider,
+    ) async {
+      final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
+      final origin = tester.getTopLeft(find.byType(InteractiveViewer));
+      final from = drawing.boxes.first.rect.center;
+      final to = drawing.boxes.last.rect.center;
+      await tester.tapAt(origin + (from + to) / 2 - const Offset(0, 8));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a second type is added to the same pair of boxes', (
+      tester,
+    ) async {
+      final provider = room();
+      final a = provider.addCablingBox(kind: CablingBoxKind.pullBox);
+      final b = provider.addCablingBox(kind: CablingBoxKind.pathway);
+      final first = provider.addCablingBundle(
+        fromBoxId: a.id,
+        toBoxId: b.id,
+        count: 6,
+        cableType: 'Cat 6a',
+      )!;
+      await pumpTab(tester, provider);
+      await selectTheRun(tester, provider);
+
+      await tester.tap(
+        find.byKey(ValueKey('cabling_add_type_${first.id}')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
+      expect(drawing.bundlesBetween(a.id, b.id), hasLength(2));
+      // Not the colour of the run it was added beside — two lines the same
+      // colour on one edge is the drawing saying they are the same cable.
+      final colors = drawing.bundlesBetween(a.id, b.id).map((x) => x.color);
+      expect(colors.toSet(), hasLength(2));
+    });
+
+    testWidgets('a run can be typed as Cat 5e and recoloured', (tester) async {
+      final provider = room();
+      final a = provider.addCablingBox(kind: CablingBoxKind.pullBox);
+      final b = provider.addCablingBox(kind: CablingBoxKind.pathway);
+      final run = provider.addCablingBundle(fromBoxId: a.id, toBoxId: b.id)!;
+      await pumpTab(tester, provider);
+      await selectTheRun(tester, provider);
+
+      // Typed, because the cable on a job is whatever the spec says.
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Cable'),
+        'Cat 5e',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('cabling_color_66bb6a')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final drawn = provider
+          .cablingSchematic(buildAvFlowModel(provider))
+          .bundles
+          .firstWhere((x) => x.id == run.id);
+      expect(drawn.cableType, 'Cat 5e');
+      expect(drawn.color, 0xFF66BB6A);
+    });
+  });
+
   group('devices on the drawing', () {
     testWidgets('the picker drops the gear it was asked for', (tester) async {
       final provider = room();
