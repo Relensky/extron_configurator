@@ -43,6 +43,11 @@ const List<String> kRoomWorkbookSheets = [
   'Control',
   'AV Flow',
   'Locations',
+  // The drawing the trades are handed, and the run schedule under it. Its own
+  // sheet for the same reason Locations has one: it is read by different
+  // people at a different time — rough-in, by whoever is pulling cable — and
+  // a callout can point at it by name.
+  'Cabling',
   'Racks',
   'Cost Estimate',
 ];
@@ -57,6 +62,7 @@ Uint8List buildRoomWorkbookBytes({
   Uint8List? avFlowPng,
   Uint8List? rackPng,
   Uint8List? floorPlanPng,
+  Uint8List? cablingPng,
   /// Stamped on every sheet. One moment for the whole book — four tabs of the
   /// same export dated a minute apart would read as four documents.
   DateTime? generated,
@@ -117,6 +123,20 @@ Uint8List buildRoomWorkbookBytes({
       sheetName: kRoomWorkbookSheets[3],
       title: title,
       sections: _orPlaceholder(
+        cablingSections(av),
+        'Cabling',
+        'No cabling drawing for this room yet. It builds itself from where '
+            'things are: name the places in the room, say which place each '
+            'device is in, and the runs between them are counted off the '
+            'signal flow.',
+      ),
+      imageBuilder: image(cablingPng),
+      generated: stamp,
+    ),
+    buildStackedReportSheet(
+      sheetName: kRoomWorkbookSheets[4],
+      title: title,
+      sections: _orPlaceholder(
         rackSections(av),
         'Racks',
         'No rack frames have been drawn for this room.',
@@ -125,7 +145,7 @@ Uint8List buildRoomWorkbookBytes({
       generated: stamp,
     ),
     buildStackedReportSheet(
-      sheetName: kRoomWorkbookSheets[4],
+      sheetName: kRoomWorkbookSheets[5],
       title: title,
       sections: _orPlaceholder(
         costReportSections(estimate),

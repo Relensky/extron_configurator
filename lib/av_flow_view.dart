@@ -116,6 +116,7 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
     locations: provider.avLocations,
     screenSwitches: provider.avScreenSwitches,
     floorPlans: provider.avFloorPlans,
+    cabling: provider.avCabling,
   );
 }
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'print_mode.dart';
+
 /// A text field that edits live state without losing the cursor.
 ///
 /// The tables on the Cost and Device Editor pages write every keystroke
@@ -69,7 +71,31 @@ class _LiveTextFieldState extends State<LiveTextField> {
   }
 
   @override
-  Widget build(BuildContext context) => TextField(
+  Widget build(BuildContext context) {
+    // Being photographed: print the VALUE, not an input box round it. Blank
+    // means the row is taking the catalog or base-cost figure, and that figure
+    // is the hint — which makes the hint the thing that belongs on the page.
+    if (PrintMode.of(context)) {
+      final shown = _controller.text.trim().isEmpty
+          ? (widget.hint ?? '')
+          : _controller.text;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        child: Text(
+          shown.isEmpty
+              ? ''
+              : '${widget.prefix ?? ''}$shown${widget.suffix ?? ''}',
+          textAlign: widget.numeric ? TextAlign.right : TextAlign.left,
+          style: const TextStyle(fontSize: 13),
+          maxLines: widget.maxLines,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+    return _field();
+  }
+
+  Widget _field() => TextField(
     controller: _controller,
     autofocus: widget.autofocus,
     maxLines: widget.maxLines,

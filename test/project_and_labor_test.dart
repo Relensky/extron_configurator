@@ -372,8 +372,8 @@ void main() {
         parentFolder: dir.path,
       );
       // No PNGs were handed in — the folder says so rather than being
-      // quietly short of the four drawings.
-      expect(result.skipped.where((s) => s.endsWith('captured')).length, 4);
+      // quietly short of the five drawings.
+      expect(result.skipped.where((s) => s.endsWith('captured')).length, 5);
       final readme = File(
         p.join(result.folder, 'README.txt'),
       ).readAsStringSync();
@@ -414,7 +414,12 @@ void main() {
     // The plain "save the working file" path, not a diagram button.
     expect(await provider.saveCurrentConfigToFile(), configPath);
 
-    final sidecar = File(p.join(dir.path, 'BSS103_config_av_flow.json'));
+    // The room's document is written across several files now, and the
+    // estimate has one of its own — so "send me the cost estimate" is one
+    // file rather than the whole room.
+    expect(File(p.join(dir.path, 'BSS103_config_av_flow.json')).existsSync(),
+        isTrue);
+    final sidecar = File(p.join(dir.path, 'BSS103_config_cost.json'));
     expect(sidecar.existsSync(), isTrue,
         reason: 'the cost estimate is part of the project');
     final cost = jsonDecode(sidecar.readAsStringSync())['cost'] as Map;

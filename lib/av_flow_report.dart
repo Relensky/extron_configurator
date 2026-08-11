@@ -1,5 +1,6 @@
 import 'app_state.dart';
 import 'av_flow_model.dart';
+import 'cabling_schematic.dart';
 import 'cost_estimate.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
@@ -42,6 +43,7 @@ List<ReportSection> avReportSections(
 ) {
   return [
     ...avFlowSections(provider, model),
+    ...cablingSections(model),
     ...rackSections(model),
     ...powerSections(model),
   ];
@@ -75,6 +77,103 @@ List<ReportSection> locationSections(AvFlowModel model) => [
   if (model.screenSwitches.isNotEmpty) _screenSwitchSchedule(model),
   ..._floorPlanCallouts(model),
 ];
+
+/// The cabling drawing, as tables.
+///
+/// The drawing on the Cabling tab is what the trades are handed; this is the
+/// same thing in a form somebody can price, order and check off. It is built
+/// from exactly the same call the tab makes, so the sheet and the picture can
+/// never disagree about how many cables run where.
+///
+/// Two columns earn their place beyond the obvious ones:
+///
+///   * WHERE THE FIGURE CAME FROM says whether each count was read off the
+///     signal flow or typed over it. A schedule that hides which of its
+///     numbers were overridden is a schedule nobody can audit.
+///   * The totals table adds the runs up per cable type, which is the number a
+///     purchase order is actually written against.
+///
+/// Empty sections drop out, so a room with no cabling drawing grows no tables.
+List<ReportSection> cablingSections(AvFlowModel model) {
+  final drawing = buildCablingSchematic(
+    model: model,
+    locations: model.locations,
+    overrides: model.cablingEdits,
+  );
+  if (drawing.boxes.isEmpty) return const [];
+
+  String nameOf(String id) => drawing.boxById(id)?.label ?? id;
+
+  final runs = [...drawing.bundles]..sort((a, b) {
+    final byFrom = nameOf(a.fromBoxId).toLowerCase().compareTo(
+      nameOf(b.fromBoxId).toLowerCase(),
+    );
+    return byFrom != 0
+        ? byFrom
+        : nameOf(a.toBoxId).toLowerCase().compareTo(
+            nameOf(b.toBoxId).toLowerCase(),
+          );
+  });
+
+  // Per cable type, which is the line a purchase order is written against.
+  final byType = <String, double>{};
+  for (final r in runs) {
+    final type = r.cableType.trim().isEmpty ? '(unspecified)' : r.cableType;
+    byType[type] = (byType[type] ?? 0) + r.count;
+  }
+
+  final sections = <ReportSection>[
+    (
+      title: 'Cabling Runs',
+      header: ['From', 'To', 'Cables', 'Type', 'Where the figure came from'],
+      rows: [
+        for (final r in runs)
+          [
+            nameOf(r.fromBoxId),
+            nameOf(r.toBoxId),
+            r.count,
+            r.cableType,
+            if (!r.isDerived)
+              'Added on the drawing'
+            else if (drawing.overridden.contains(r.id))
+              'Counted, then typed over'
+            else
+              'Counted off the signal flow',
+          ],
+      ],
+    ),
+    (
+      title: 'Cable Totals by Type',
+      header: ['Cable type', 'Runs'],
+      rows: [
+        for (final e in (byType.entries.toList()
+              ..sort((a, b) => a.key.toLowerCase().compareTo(
+                    b.key.toLowerCase(),
+                  ))))
+          [e.key, e.value],
+      ],
+    ),
+    (
+      title: 'Cabling Drawing — Boxes',
+      header: ['Box', 'Kind', 'Runs on it', 'Notes'],
+      rows: [
+        for (final b in drawing.boxes)
+          [
+            b.label,
+            kCablingBoxKindLabels[b.kind] ?? b.kind.name,
+            drawing.bundles
+                .where((r) => r.fromBoxId == b.id || r.toBoxId == b.id)
+                .fold<double>(0, (sum, r) => sum + r.count),
+            // The scope notes down the side of the sheet are content, not
+            // decoration — they say whose contract each part of the job is.
+            b.body.replaceAll('\n', ' · '),
+          ],
+      ],
+    ),
+  ];
+
+  return sections.where((s) => s.rows.isNotEmpty).toList();
+}
 
 /// The rack elevation half: how full each frame is and what sits where.
 List<ReportSection> rackSections(AvFlowModel model) => [

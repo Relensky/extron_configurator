@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'av_flow_view.dart' show buildAvFlowModel;
 import 'screenshot_tools.dart';
 
 /// ============================================================================
@@ -46,11 +47,17 @@ typedef DiagramImages = ({
   Uint8List? avFlow,
   Uint8List? racks,
   Uint8List? floorPlan,
+  Uint8List? cabling,
 });
 
 /// No drawings at all — for the callers that skip the capture entirely.
-const DiagramImages kNoDiagramImages =
-    (schematic: null, avFlow: null, racks: null, floorPlan: null);
+const DiagramImages kNoDiagramImages = (
+  schematic: null,
+  avFlow: null,
+  racks: null,
+  floorPlan: null,
+  cabling: null,
+);
 
 /// Visits each diagram tab, captures its canvas, and returns to the tab the
 /// user was on.
@@ -89,6 +96,15 @@ Future<DiagramImages> captureDiagramTabs(
   final floorPlan = provider.primaryFloorPlan?.hasImage == true
       ? await capture(AppTab.floorPlan)
       : null;
+  // Same rule again: with nowhere for the drawing to come from, the Cabling
+  // page is an invitation to name some locations, and a picture of an
+  // invitation illustrates nothing.
+  final cabling = provider
+          .cablingSchematic(buildAvFlowModel(provider))
+          .boxes
+          .isEmpty
+      ? null
+      : await capture(AppTab.cabling);
 
   provider.selectTab(startingTab);
   await WidgetsBinding.instance.endOfFrame;
@@ -98,5 +114,6 @@ Future<DiagramImages> captureDiagramTabs(
     avFlow: avFlow,
     racks: racks,
     floorPlan: floorPlan,
+    cabling: cabling,
   );
 }

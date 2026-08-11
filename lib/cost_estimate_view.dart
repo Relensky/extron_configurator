@@ -20,6 +20,7 @@ import 'export_tools.dart';
 import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
 import 'live_text_field.dart';
+import 'print_mode.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
@@ -51,7 +52,19 @@ class CostEstimateView extends StatefulWidget {
   /// resolved the model can hand it straight over.
   final AvFlowModel? model;
 
-  const CostEstimateView({super.key, this.model});
+  /// Builds straight into the capture frame, at this brightness.
+  ///
+  /// A testing seam, because the real path runs through a native save dialog
+  /// and a widget test has no business opening one — and the frame is the part
+  /// worth checking: what it hides, how tall it is, what colour it is.
+  @visibleForTesting
+  final Brightness? debugCaptureBrightness;
+
+  const CostEstimateView({
+    super.key,
+    this.model,
+    this.debugCaptureBrightness,
+  });
 
   @override
   State<CostEstimateView> createState() => _CostEstimateViewState();
@@ -73,6 +86,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   @override
   void initState() {
     super.initState();
+    if (widget.debugCaptureBrightness != null) {
+      _capturing = true;
+      _captureBrightness = widget.debugCaptureBrightness!;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // The estimate lives in the AV sidecar, which is only read on the first
@@ -81,10 +98,28 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     });
   }
 
+  /// Which way round the captured image is rendered. Independent of the app's
+  /// theme: a quote pasted into a document usually wants to be white whatever
+  /// the person making it has the app set to, and sometimes has to match a
+  /// dark deck instead.
+  Brightness _captureBrightness = Brightness.light;
+
+  /// The paper the image is printed on. Not [Colors.black] for the dark one —
+  /// a pure black sheet with hairline table rules on it loses the rules.
+  Color get _capturePaper => _captureBrightness == Brightness.dark
+      ? const Color(0xFF16191D)
+      : Colors.white;
+
   /// Renders the estimate to a PNG with the controls out of the way.
-  Future<void> _screenshot(AppStateProvider provider) async {
+  Future<void> _screenshot(
+    AppStateProvider provider, {
+    required Brightness brightness,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
-    setState(() => _capturing = true);
+    setState(() {
+      _captureBrightness = brightness;
+      _capturing = true;
+    });
     // Two frames: one to lay the page out without the buttons, one to paint
     // it. Without the second the capture can catch the frame that still has
     // them.
@@ -112,7 +147,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
     String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Save the cost estimate image',
-      fileName: '${roomFileStem(provider, 'cost_estimate')}.png',
+      fileName: '${roomFileStem(provider, 'cost_estimate')}'
+          '${brightness == Brightness.dark ? '_dark' : ''}.png',
       type: FileType.custom,
       allowedExtensions: const ['png'],
     );
@@ -165,24 +201,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       tier: provider.pricingTier,
     );
     final theme = Theme.of(context);
-    return RepaintBoundary(
-      key: _sheetKey,
-      // The captured image is a document, not a screenshot of a dark app —
-      // a quote printed white reads the way a quote is expected to read.
-      child: Container(
-        color: _capturing ? Colors.white : null,
-        child: Theme(
-          data: _capturing ? ThemeData.light(useMaterial3: true) : theme,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-            // A capture has to render the WHOLE estimate, not the part that
-            // happens to be scrolled into view, so the list stops being a
-            // viewport for the frame that gets photographed.
-            physics: _capturing
-                ? const NeverScrollableScrollPhysics()
-                : null,
-            shrinkWrap: _capturing,
-            children: [
+    final cards = <Widget>[
               _header(context, provider, estimate, model),
               const SizedBox(height: 12),
               _equipmentCard(context, provider, estimate),
@@ -206,9 +225,61 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
                 ],
               ),
-            ],
+    ];
+
+    // --- the frame that gets photographed ---------------------------------
+    //  Not the ListView. A ListView is a viewport, and a viewport is exactly
+    //  as tall as the window however it is configured — shrinkWrap only sizes
+    //  a list to its content when the incoming constraint is UNBOUNDED, and
+    //  inside a tab body it never is. The capture came out cut off at the
+    //  bottom of the screen because of it.
+    //
+    //  OverflowBox is what makes the height unbounded: it sizes itself to the
+    //  tab and hands its child infinity, so the Column below lays out at its
+    //  full natural height, the RepaintBoundary is that tall, and toImage gets
+    //  the whole estimate. On screen it overruns for the two frames the
+    //  capture takes, and nobody sees it.
+    if (_capturing) {
+      return ClipRect(
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minHeight: 0,
+          maxHeight: double.infinity,
+          child: RepaintBoundary(
+            key: _sheetKey,
+            child: Container(
+              color: _capturePaper,
+              child: Theme(
+                data: ThemeData(
+                  brightness: _captureBrightness,
+                  useMaterial3: true,
+                ),
+                // Everything below asks this on the way past: the price boxes
+                // print their figure instead of an input outline, and the
+                // reset and delete icons print as empty space.
+                child: PrintMode(
+                  printing: true,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: cards,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
+      );
+    }
+
+    return RepaintBoundary(
+      key: _sheetKey,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        children: cards,
       ),
     );
   }
@@ -247,10 +318,43 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     onPressed: () => showBaseCostsDialog(context, provider),
                   ),
                   const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                    label: const Text('Screenshot'),
-                    onPressed: () => _screenshot(provider),
+                  // Two ways round, because the image lands in two kinds of
+                  // document: white for a quote that gets printed or pasted
+                  // into a Word file, dark to sit in a dark deck without a
+                  // slab of white in the middle of it.
+                  PopupMenuButton<Brightness>(
+                    tooltip: 'Save the estimate as an image',
+                    onSelected: (b) => _screenshot(provider, brightness: b),
+                    itemBuilder: (ctx) => const [
+                      PopupMenuItem(
+                        value: Brightness.light,
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.light_mode, size: 18),
+                          title: Text('Light image'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: Brightness.dark,
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.dark_mode, size: 18),
+                          title: Text('Dark image'),
+                        ),
+                      ),
+                    ],
+                    child: IgnorePointer(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(
+                          Icons.photo_camera_outlined,
+                          size: 18,
+                        ),
+                        label: const Text('Screenshot'),
+                        onPressed: () {},
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
@@ -346,10 +450,25 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             const SizedBox(height: 12),
             Row(
               children: [
+                // On the image these three are settings, not figures — the
+                // tier and the tax rate both say themselves again down in the
+                // totals. One line of prose instead of a button and two boxes.
+                if (_capturing)
+                  Text(
+                    [
+                      'Priced at '
+                          '${kPricingTierLabels[provider.pricingTier] ?? ''}',
+                      if (settings.taxPercent > 0)
+                        '${settings.taxLabel} '
+                            '${formatPercent(settings.taxPercent)}',
+                    ].join('  ·  '),
+                    style: theme.textTheme.bodySmall,
+                  ),
                 // Which of the catalog's two published prices this estimate is
                 // costed from. On the page rather than only in App Config
                 // because it is a question about THIS quote, and the answer
                 // changes every figure below it.
+                if (!_capturing) ...[
                 SegmentedButton<PricingTier>(
                   style: const ButtonStyle(
                     visualDensity: VisualDensity.compact,
@@ -389,6 +508,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         provider.setAvCostTax(percent: double.tryParse(v) ?? 0),
                   ),
                 ),
+                ],
                 const SizedBox(width: 16),
                 if (!estimate.isComplete)
                   Expanded(
@@ -458,17 +578,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 // off the catalog, so the price follows a revision; or a plain
                 // line for the box that has no catalog entry and a figure
                 // somebody was quoted over the phone.
-                TextButton.icon(
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.playlist_add, size: 16),
                   label: const Text('Add from catalog'),
                   onPressed: () => _addExtraPart(context, provider,
                       kind: _ExtraPart.equipment),
-                ),
-                TextButton.icon(
+                )),
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add line'),
                   onPressed: () => provider.addAvCostExtraEquipment(),
-                ),
+                )),
               ],
             ),
             const SizedBox(height: 8),
@@ -665,12 +785,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     ),
                   ),
                 ),
-                TextButton.icon(
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add hardware'),
                   onPressed: () => _addExtraPart(context, provider,
                       kind: _ExtraPart.hardware),
-                ),
+                )),
               ],
             ),
             if (estimate.hardware.isEmpty)
@@ -877,18 +997,22 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
                 ),
                 const Spacer(),
-                TextButton.icon(
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add cable'),
                   onPressed: () => _addExtraPart(context, provider,
                       kind: _ExtraPart.cable),
-                ),
+                )),
                 const SizedBox(width: 8),
-                Switch(
-                  value: settings.includeCabling,
-                  onChanged: (v) => provider.setAvCostIncludeCabling(v),
+                PrintHide(
+                  child: Switch(
+                    value: settings.includeCabling,
+                    onChanged: (v) => provider.setAvCostIncludeCabling(v),
+                  ),
                 ),
-                const Text('Include', style: TextStyle(fontSize: 12)),
+                const PrintHide(
+                  child: Text('Include', style: TextStyle(fontSize: 12)),
+                ),
               ],
             ),
             if (!settings.includeCabling)
@@ -1560,11 +1684,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
                 ),
                 const Spacer(),
-                TextButton.icon(
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add crew'),
                   onPressed: () => provider.addAvCostLabor(),
-                ),
+                )),
               ],
             ),
             if (book.allUnset)
@@ -1705,7 +1829,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         ),
                         SizedBox(
                           width: 92,
-                          child: Checkbox(
+                          child: PrintableCheckbox(
                             value: line.taxable,
                             onChanged: (v) => provider.updateAvCostLabor(
                               line.copyWith(taxable: v ?? false),
@@ -1758,7 +1882,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 // Two ways on: off the catalog, so a price agreed once is not
                 // retyped per room and follows a revision; or a blank line for
                 // the one-off nobody will ever quote again.
-                TextButton.icon(
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.playlist_add, size: 16),
                   label: const Text('Add from catalog'),
                   onPressed: () => _addExtraPart(
@@ -1766,12 +1890,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     provider,
                     kind: _ExtraPart.misc,
                   ),
-                ),
-                TextButton.icon(
+                )),
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add item'),
                   onPressed: () => provider.addAvCostItem(),
-                ),
+                )),
               ],
             ),
             if (items.isNotEmpty) ...[
@@ -1856,7 +1980,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     ),
                     SizedBox(
                       width: 92,
-                      child: Checkbox(
+                      child: PrintableCheckbox(
                         value: item.taxable,
                         onChanged: (v) => provider.updateAvCostItem(
                           item.copyWith(taxable: v ?? true),
@@ -1902,11 +2026,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
                 ),
                 const Spacer(),
-                TextButton.icon(
+                PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add fee'),
                   onPressed: () => provider.addAvCostFee(),
-                ),
+                )),
               ],
             ),
             if (settings.fees.isEmpty)
@@ -1956,11 +2080,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       width: 96,
                       child: Row(
                         children: [
-                          Checkbox(
+                          PrintableCheckbox(
+                            dense: true,
                             value: fee.taxable,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
                             onChanged: (v) => provider.updateAvCostFee(
                               fee.copyWith(taxable: v ?? true),
                             ),

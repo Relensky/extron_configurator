@@ -103,6 +103,9 @@ void main() {
       'Control',
       'AV Flow',
       'Locations',
+      // The cabling drawing and its run schedule, between where things are
+      // and what they are racked in — which is the order rough-in reads.
+      'Cabling',
       'Racks',
       'Cost Estimate',
     ]);

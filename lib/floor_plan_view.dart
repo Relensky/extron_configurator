@@ -10,8 +10,10 @@ import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
+import 'av_port_editor.dart' show avRowIcon;
 import 'diagram_capture.dart';
 import 'export_tools.dart';
+import 'plan_annotations.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
 import 'room_locations_view.dart';
@@ -64,6 +66,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// leaves a marker behind is a page people stop clicking on.
   _PlanTool _tool = _PlanTool.none;
 
+  /// What the notation tool draws, and in what. Sticky between shapes: a
+  /// drawing gets marked up in bursts of the same colour.
+  PlanShape _shape = PlanShape.arrow;
+  int _noteColor = kPlanAnnotationColors.first;
+  double _noteStroke = 3;
+
+  /// The shape being dragged out right now, and the one under the cursor.
+  PlanAnnotation? _draft;
+  String _selectedNoteId = '';
+  AnnotationGrip _grip = AnnotationGrip.none;
+
   /// The decoded plan image, and the file it came from.
   ImageProvider? _image;
   String _imagePath = '';
@@ -98,7 +111,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   }
 
   void _syncImage(AppStateProvider provider) {
-    final plan = provider.primaryFloorPlan;
+    final plan = provider.activeFloorPlan;
     final resolved = plan == null
         ? ''
         : provider.resolveFloorPlanImage(plan.imageFile);
@@ -144,7 +157,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final stored = await provider.importFloorPlanImage(picked);
     if (!mounted) return;
 
-    final existing = provider.primaryFloorPlan;
+    final existing = provider.activeFloorPlan;
     if (existing == null) {
       provider.addAvFloorPlan(
         FloorPlan(
@@ -233,7 +246,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       return const Center(child: Text('No configuration loaded.'));
     }
     final model = buildAvFlowModel(provider);
-    final plan = provider.primaryFloorPlan;
+    final plan = provider.activeFloorPlan;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncImage(provider);
@@ -243,6 +256,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _toolbar(provider, plan),
+        _sheetBar(provider, plan),
+        if (_tool == _PlanTool.notation && plan != null)
+          _notationBar(provider, plan),
         const Divider(height: 1),
         _CountStrip(model: model),
         const Divider(height: 1),
@@ -256,6 +272,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     : InteractiveViewer(
                         transformationController: _transform,
                         constrained: false,
+                        // A drag has to draw rather than shove the sheet
+                        // sideways while the notation tool is on. Zoom still
+                        // works — that is the scroll wheel, not a drag.
+                        panEnabled: _tool != _PlanTool.notation,
                         minScale: 0.08,
                         maxScale: 4.0,
                         boundaryMargin: const EdgeInsets.all(400),
@@ -275,6 +295,317 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         ),
       ],
     );
+  }
+
+  /// What the notation tool is about to draw, and what to do with whatever is
+  /// selected. Only on screen while the tool is, so the page stays as quiet as
+  /// it was for somebody who only came to look at the plan.
+  Widget _notationBar(AppStateProvider provider, FloorPlan plan) {
+    final theme = Theme.of(context);
+    final selected =
+        plan.annotations.where((a) => a.id == _selectedNoteId).firstOrNull;
+
+    /// Edits the selected shape, or sets the default for the next one when
+    /// nothing is selected — so the same two controls do both jobs.
+    void apply({int? color, double? stroke}) {
+      setState(() {
+        if (color != null) _noteColor = color;
+        if (stroke != null) _noteStroke = stroke;
+      });
+      if (selected == null) return;
+      provider.updateAvAnnotation(
+        plan.id,
+        selected.copyWith(color: color, strokeWidth: stroke),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SegmentedButton<PlanShape>(
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [
+              for (final s in PlanShape.values)
+                ButtonSegment(
+                  value: s,
+                  icon: Icon(
+                    switch (s) {
+                      PlanShape.arrow => Icons.arrow_outward,
+                      PlanShape.line => Icons.horizontal_rule,
+                      PlanShape.rectangle => Icons.crop_square,
+                      PlanShape.ellipse => Icons.circle_outlined,
+                      PlanShape.text => Icons.title,
+                    },
+                    size: 16,
+                  ),
+                  tooltip: kPlanShapeLabels[s],
+                ),
+            ],
+            selected: {_shape},
+            onSelectionChanged: (s) => setState(() => _shape = s.first),
+            showSelectedIcon: false,
+          ),
+          for (final c in kPlanAnnotationColors)
+            Tooltip(
+              message: 'Draw in this colour',
+              child: InkWell(
+                onTap: () => apply(color: c),
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: Color(c),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: (selected?.color ?? _noteColor) == c
+                          ? theme.colorScheme.primary
+                          : theme.dividerColor,
+                      width: (selected?.color ?? _noteColor) == c ? 3 : 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          SizedBox(
+            width: 130,
+            child: Slider(
+              value: (selected?.strokeWidth ?? _noteStroke).clamp(1, 10),
+              min: 1,
+              max: 10,
+              divisions: 9,
+              label: 'Weight '
+                  '${(selected?.strokeWidth ?? _noteStroke).round()}',
+              onChanged: (v) => apply(stroke: v),
+            ),
+          ),
+          if (selected == null)
+            Text(
+              _shape == PlanShape.text
+                  ? 'Drag out a box for the text.'
+                  : 'Drag to draw. Click a shape to pick it up.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.disabledColor,
+              ),
+            )
+          else ...[
+            TextButton.icon(
+              icon: const Icon(Icons.text_fields, size: 16),
+              label: Text(
+                selected.text.trim().isEmpty ? 'Add label' : 'Edit label',
+              ),
+              onPressed: () async {
+                final text = await _askForText(selected.text);
+                if (text == null) return;
+                provider.updateAvAnnotation(
+                  plan.id,
+                  selected.copyWith(text: text.trim()),
+                );
+              },
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('Delete'),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () {
+                provider.removeAvAnnotation(plan.id, selected.id);
+                setState(() => _selectedNoteId = '');
+              },
+            ),
+          ],
+          const SizedBox(width: 4),
+          Text(
+            '${plan.annotations.length} on this sheet',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.disabledColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The sheet bar: one chip per plan, plus the ways to get another.
+  ///
+  /// A room has more than one sheet as soon as it has more than one storey, a
+  /// reflected ceiling plan beside the furniture plan, or a demolition sheet
+  /// beside the new work. The model always held a LIST of plans; until now the
+  /// page only ever opened the first one, so the second was unreachable.
+  ///
+  /// Hidden entirely when there is nothing to choose between: a bar with one
+  /// chip on it is a row of pixels asking to be ignored.
+  Widget _sheetBar(AppStateProvider provider, FloorPlan? active) {
+    final sheets = provider.avFloorPlans;
+    if (sheets.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          Icon(Icons.layers_outlined, size: 16, color: theme.disabledColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (int i = 0; i < sheets.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InputChip(
+                        selected: sheets[i].id == active?.id,
+                        showCheckmark: false,
+                        avatar: Icon(
+                          sheets[i].hasImage
+                              ? Icons.map_outlined
+                              // A sheet with no drawing behind it yet is still
+                              // a sheet — named and ordered before the PDF for
+                              // it turns up.
+                              : Icons.insert_drive_file_outlined,
+                          size: 16,
+                        ),
+                        label: Text(
+                          sheets[i].name.trim().isEmpty
+                              ? 'Sheet ${i + 1}'
+                              : sheets[i].name,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () => provider.selectFloorPlan(sheets[i].id),
+                        onDeleted: sheets.length == 1
+                            ? null
+                            : () => _confirmRemoveSheet(provider, sheets[i]),
+                        deleteIcon: const Icon(Icons.close, size: 14),
+                        deleteButtonTooltipMessage: 'Remove this sheet',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add sheet'),
+            onPressed: () => _renameSheet(
+              provider,
+              provider.addFloorPlanSheet(),
+              title: 'New sheet',
+            ),
+          ),
+          if (active != null) ...[
+            avRowIcon(
+              Icons.drive_file_rename_outline,
+              'Rename this sheet',
+              () => _renameSheet(provider, active, title: 'Rename sheet'),
+            ),
+            avRowIcon(
+              Icons.copy_all_outlined,
+              'Duplicate this sheet with its callouts',
+              () => provider.duplicateFloorPlanSheet(active.id),
+            ),
+            avRowIcon(
+              Icons.arrow_back,
+              'Move this sheet earlier',
+              sheets.first.id == active.id
+                  ? null
+                  : () => provider.moveFloorPlanSheet(
+                        active.id,
+                        sheets.indexWhere((p) => p.id == active.id) - 1,
+                      ),
+            ),
+            avRowIcon(
+              Icons.arrow_forward,
+              'Move this sheet later',
+              sheets.last.id == active.id
+                  ? null
+                  : () => provider.moveFloorPlanSheet(
+                        active.id,
+                        sheets.indexWhere((p) => p.id == active.id) + 1,
+                      ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _renameSheet(
+    AppStateProvider provider,
+    FloorPlan sheet, {
+    required String title,
+  }) async {
+    final controller = TextEditingController(text: sheet.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Sheet name',
+              hintText: 'e.g. Level 2, Reflected ceiling, Demolition',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (v) => Navigator.of(ctx).pop(v),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.trim().isEmpty) return;
+    provider.updateAvFloorPlan(sheet.copyWith(name: name.trim()));
+  }
+
+  Future<void> _confirmRemoveSheet(
+    AppStateProvider provider,
+    FloorPlan sheet,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove ${sheet.name}?'),
+        content: Text(
+          sheet.callouts.isEmpty
+              ? 'The sheet goes; the drawing file it points at stays where it '
+                  'is.'
+              : 'The sheet and its ${sheet.callouts.length} callout'
+                  '${sheet.callouts.length == 1 ? '' : 's'} go. The drawing '
+                  'file it points at stays where it is, and the room\'s '
+                  'locations are not touched — they belong to the room, not '
+                  'to this sheet.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(
+              'Remove',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) provider.removeAvFloorPlan(sheet.id);
   }
 
   Widget _toolbar(AppStateProvider provider, FloorPlan? plan) {
@@ -308,6 +639,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               onSelected: (v) => setState(
                 () => _tool = v ? _PlanTool.callout : _PlanTool.none,
               ),
+            ),
+            // Everything a drawing has to say that a marker cannot: which way
+            // the cable leaves, which corner is out of scope, "core drill
+            // here".
+            FilterChip(
+              avatar: const Icon(Icons.draw_outlined, size: 18),
+              label: const Text('Notation'),
+              selected: _tool == _PlanTool.notation,
+              onSelected: (v) => setState(() {
+                _tool = v ? _PlanTool.notation : _PlanTool.none;
+                if (!v) _selectedNoteId = '';
+              }),
             ),
             OutlinedButton.icon(
               icon: const Icon(Icons.fit_screen, size: 18),
@@ -414,6 +757,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapUp: (details) => _onPlanTap(provider, details.localPosition),
+        // Drawing and dragging notation. Only wired up while the tool is on,
+        // so an ordinary visit still pans the sheet with the same gesture.
+        onPanStart: _tool == _PlanTool.notation
+            ? (d) => _noteDragStart(plan, d.localPosition)
+            : null,
+        onPanUpdate: _tool == _PlanTool.notation
+            ? (d) => _noteDragUpdate(provider, plan, d)
+            : null,
+        onPanEnd: _tool == _PlanTool.notation
+            ? (_) => _noteDragEnd(provider, plan)
+            : null,
         child: Stack(
           children: [
             Container(
@@ -438,8 +792,142 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 _locationMarker(provider, model, location),
             for (final callout in plan.callouts)
               _calloutMarker(provider, model, plan, callout),
+            // Over the markers: notation is a mark-up ON the drawing, and an
+            // arrow that disappeared behind a location dot would be pointing
+            // at nothing anybody can see.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: PlanAnnotationPainter(
+                    notes: plan.annotations,
+                    draft: _draft,
+                    selectedId: _tool == _PlanTool.notation
+                        ? _selectedNoteId
+                        : '',
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- drawing notation -----------------------------------------------------
+
+  /// Takes hold of whatever is under the pointer: a handle or the body of the
+  /// selected shape, or — on empty drawing — the start of a new one.
+  void _noteDragStart(FloorPlan plan, Offset at) {
+    final selected = plan.annotations
+        .where((a) => a.id == _selectedNoteId)
+        .firstOrNull;
+    if (selected != null) {
+      final grip = gripAt(selected, at);
+      if (grip != AnnotationGrip.none) {
+        setState(() => _grip = grip);
+        return;
+      }
+    }
+    final under = annotationAt(plan.annotations, at);
+    if (under != null) {
+      setState(() {
+        _selectedNoteId = under.id;
+        _grip = AnnotationGrip.body;
+      });
+      return;
+    }
+    setState(() {
+      _selectedNoteId = '';
+      _grip = AnnotationGrip.none;
+      _draft = PlanAnnotation(
+        id: '',
+        shape: _shape,
+        start: at,
+        end: at,
+        color: _noteColor,
+        strokeWidth: _noteStroke,
+      );
+    });
+  }
+
+  void _noteDragUpdate(
+    AppStateProvider provider,
+    FloorPlan plan,
+    DragUpdateDetails d,
+  ) {
+    if (_draft != null) {
+      setState(() => _draft = _draft!.copyWith(end: d.localPosition));
+      return;
+    }
+    if (_grip == AnnotationGrip.none) return;
+    final note = plan.annotations
+        .where((a) => a.id == _selectedNoteId)
+        .firstOrNull;
+    if (note == null) return;
+    // recordUndo false: one entry for the whole drag, pushed when it ends.
+    provider.updateAvAnnotation(
+      plan.id,
+      dragAnnotation(note, _grip, d.delta),
+      recordUndo: false,
+    );
+  }
+
+  Future<void> _noteDragEnd(AppStateProvider provider, FloorPlan plan) async {
+    final draft = _draft;
+    setState(() {
+      _draft = null;
+      _grip = AnnotationGrip.none;
+    });
+    if (draft == null) return;
+    // A click rather than a drag: nothing was drawn, so nothing is added.
+    // Text is exempt — it sizes itself to what gets typed.
+    if (draft.isDegenerate) return;
+
+    if (draft.shape == PlanShape.text) {
+      final text = await _askForText('');
+      if (text == null || text.trim().isEmpty) return;
+      final stored = provider.addAvAnnotation(
+        plan.id,
+        draft.copyWith(text: text.trim()),
+      );
+      if (stored != null) setState(() => _selectedNoteId = stored.id);
+      return;
+    }
+
+    final stored = provider.addAvAnnotation(plan.id, draft);
+    if (stored != null) setState(() => _selectedNoteId = stored.id);
+  }
+
+  Future<String?> _askForText(String initial) {
+    final controller = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Note text'),
+        content: SizedBox(
+          width: 460,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 4,
+            minLines: 1,
+            decoration: const InputDecoration(
+              hintText: 'e.g. Core drill here — conduit up to ceiling',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
@@ -573,12 +1061,20 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   void _onPlanTap(AppStateProvider provider, Offset at) {
     switch (_tool) {
+      case _PlanTool.notation:
+        final plan = provider.activeFloorPlan;
+        if (plan == null) return;
+        // Selecting, not drawing: a shape is dragged out, and a tap is how you
+        // pick one up to recolour, relabel or delete it.
+        setState(
+          () => _selectedNoteId = annotationAt(plan.annotations, at)?.id ?? '',
+        );
       case _PlanTool.none:
         setState(() => _selectedCalloutId = null);
       case _PlanTool.location:
         _placeLocationAt(provider, at);
       case _PlanTool.callout:
-        final plan = provider.primaryFloorPlan;
+        final plan = provider.activeFloorPlan;
         if (plan == null) return;
         provider.addAvCallout(
           plan.id,
@@ -1093,7 +1589,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 }
 
 /// What clicking the plan does.
-enum _PlanTool { none, location, callout }
+enum _PlanTool { none, location, callout, notation }
 
 /// The sheets a callout can point into. The room workbook's four, plus the
 /// location sheet this tab adds — named rather than indexed so adding a tab

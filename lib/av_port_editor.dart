@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'av_flow_model.dart';
+import 'print_mode.dart';
 
 /// ============================================================================
 ///  CONNECTOR EDITOR ROW
@@ -226,14 +227,24 @@ Widget avRowIcon(
   VoidCallback? onPressed, {
   bool danger = false,
 }) {
-  return IconButton(
-    icon: Icon(icon, size: 18),
-    color: danger ? Colors.red.shade400 : null,
-    onPressed: onPressed,
-    tooltip: tooltip,
-    visualDensity: VisualDensity.compact,
-    padding: EdgeInsets.zero,
-    constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+  return Builder(
+    builder: (context) {
+      // Being photographed. The column still has to be there or every row
+      // above and below shifts left by 34 and the table stops lining up —
+      // it just has to be empty.
+      if (PrintMode.of(context)) {
+        return const SizedBox(width: 34, height: 34);
+      }
+      return IconButton(
+        icon: Icon(icon, size: 18),
+        color: danger ? Colors.red.shade400 : null,
+        onPressed: onPressed,
+        tooltip: tooltip,
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+      );
+    },
   );
 }
 

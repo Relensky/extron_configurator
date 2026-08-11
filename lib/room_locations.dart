@@ -47,6 +47,12 @@ enum RoomZone {
   table,
   credenza,
   equipmentRoom,
+
+  /// A pull box: the junction cable is routed THROUGH rather than terminated
+  /// in. It has no gear in it, which is why it never turned up as a location
+  /// before — and it is exactly what a cabling drawing is built around, so it
+  /// has to be a place the room knows about like any other.
+  pullBox,
 }
 
 const Map<RoomZone, String> kRoomZoneLabels = {
@@ -59,6 +65,7 @@ const Map<RoomZone, String> kRoomZoneLabels = {
   RoomZone.table: 'Table / desk',
   RoomZone.credenza: 'Credenza / cabinet',
   RoomZone.equipmentRoom: 'Equipment room / IDF',
+  RoomZone.pullBox: 'Pull box',
 };
 
 /// Short form for a report column that has to stay narrow.
@@ -72,6 +79,7 @@ const Map<RoomZone, String> kRoomZoneCodes = {
   RoomZone.table: 'TBL',
   RoomZone.credenza: 'CRED',
   RoomZone.equipmentRoom: 'IDF',
+  RoomZone.pullBox: 'PULL',
 };
 
 const Map<RoomZone, IconData> kRoomZoneIcons = {
@@ -84,6 +92,7 @@ const Map<RoomZone, IconData> kRoomZoneIcons = {
   RoomZone.table: Icons.table_restaurant,
   RoomZone.credenza: Icons.inventory_2,
   RoomZone.equipmentRoom: Icons.meeting_room,
+  RoomZone.pullBox: Icons.check_box_outline_blank,
 };
 
 RoomZone roomZoneFromName(String? name) {
@@ -106,6 +115,10 @@ RoomZone roomZoneFromName(String? name) {
     'credenza': RoomZone.credenza,
     'idf': RoomZone.equipmentRoom,
     'equipmentroom': RoomZone.equipmentRoom,
+    'pullbox': RoomZone.pullBox,
+    'pull': RoomZone.pullBox,
+    'jbox': RoomZone.pullBox,
+    'junctionbox': RoomZone.pullBox,
   };
   return aliases[key] ?? RoomZone.unspecified;
 }
@@ -493,6 +506,167 @@ class FloorPlanCallout {
       );
 }
 
+// ---------------------------------------------------------------------------
+//  PLAN NOTATION
+// ---------------------------------------------------------------------------
+
+/// What a piece of notation is.
+///
+/// A callout says "this spot is that thing"; notation says everything else a
+/// drawing has to say and a marker cannot — which way the cable leaves the
+/// room, which wall the conduit runs up, which corner is out of scope, "core
+/// drill here". Without it that all ends up in an email that gets separated
+/// from the plan.
+enum PlanShape {
+  /// Two points and a head. The one everybody actually wants.
+  arrow,
+
+  /// Two points, no head — a lead line from a note to what it means.
+  line,
+
+  /// Ringing an area: "this whole corner is by others".
+  rectangle,
+  ellipse,
+
+  /// Free text with no shape round it.
+  text,
+}
+
+const Map<PlanShape, String> kPlanShapeLabels = {
+  PlanShape.arrow: 'Arrow',
+  PlanShape.line: 'Line',
+  PlanShape.rectangle: 'Box',
+  PlanShape.ellipse: 'Ellipse',
+  PlanShape.text: 'Text',
+};
+
+PlanShape planShapeFromName(String? name) => PlanShape.values.firstWhere(
+  (s) => s.name == name?.trim(),
+  orElse: () => PlanShape.arrow,
+);
+
+/// One drawn annotation on a sheet.
+///
+/// Everything is stored in the PLAN IMAGE'S coordinates, exactly as callouts
+/// and location markers are, so notation stays where it was put when the page
+/// is zoomed, when the window changes size, and when the same drawing is
+/// re-imported at the same size after a revision.
+///
+/// [start] and [end] carry the whole geometry: for an arrow or a line they are
+/// its two ends, and for a box, an ellipse or a text block they are opposite
+/// corners. One pair of points rather than a shape-specific record because
+/// every edit gesture — draw, move, drag either handle — is then the same code
+/// for all five.
+class PlanAnnotation {
+  /// `NOTE_<n>`.
+  final String id;
+  final PlanShape shape;
+  final Offset start;
+  final Offset end;
+
+  /// Printed with the shape: beside a line, inside a box, on its own for text.
+  final String text;
+
+  /// ARGB. Stored per annotation because a drawing marks scope in one colour
+  /// and cable routes in another, and one palette for the sheet would make
+  /// that impossible to say.
+  final int color;
+
+  /// Stroke width in plan pixels.
+  final double strokeWidth;
+
+  const PlanAnnotation({
+    required this.id,
+    this.shape = PlanShape.arrow,
+    this.start = Offset.zero,
+    this.end = Offset.zero,
+    this.text = '',
+    this.color = 0xFFE53935,
+    this.strokeWidth = 3,
+  });
+
+  /// The box the shape occupies, however its two points are ordered.
+  Rect get bounds => Rect.fromPoints(start, end);
+
+  /// True when the two points are close enough together that the shape has no
+  /// real extent — a click rather than a drag. Text is exempt: a text block
+  /// placed with a single click is a legitimate thing to do, and it sizes
+  /// itself to what gets typed.
+  bool get isDegenerate =>
+      shape != PlanShape.text && (start - end).distance < 4;
+
+  PlanAnnotation copyWith({
+    PlanShape? shape,
+    Offset? start,
+    Offset? end,
+    String? text,
+    int? color,
+    double? strokeWidth,
+  }) => PlanAnnotation(
+    id: id,
+    shape: shape ?? this.shape,
+    start: start ?? this.start,
+    end: end ?? this.end,
+    text: text ?? this.text,
+    color: color ?? this.color,
+    strokeWidth: strokeWidth ?? this.strokeWidth,
+  );
+
+  PlanAnnotation withId(String newId) => PlanAnnotation(
+    id: newId,
+    shape: shape,
+    start: start,
+    end: end,
+    text: text,
+    color: color,
+    strokeWidth: strokeWidth,
+  );
+
+  /// Moves the whole thing by [delta], keeping its shape.
+  PlanAnnotation shifted(Offset delta) =>
+      copyWith(start: start + delta, end: end + delta);
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'shape': shape.name,
+    'x1': start.dx,
+    'y1': start.dy,
+    'x2': end.dx,
+    'y2': end.dy,
+    if (text.isNotEmpty) 'text': text,
+    'color': color,
+    'stroke': strokeWidth,
+  };
+
+  factory PlanAnnotation.fromJson(Map<String, dynamic> json) => PlanAnnotation(
+    id: json['id']?.toString() ?? '',
+    shape: planShapeFromName(json['shape']?.toString()),
+    start: Offset(
+      (json['x1'] as num?)?.toDouble() ?? 0,
+      (json['y1'] as num?)?.toDouble() ?? 0,
+    ),
+    end: Offset(
+      (json['x2'] as num?)?.toDouble() ?? 0,
+      (json['y2'] as num?)?.toDouble() ?? 0,
+    ),
+    text: json['text']?.toString() ?? '',
+    color: (json['color'] as num?)?.toInt() ?? 0xFFE53935,
+    strokeWidth: (json['stroke'] as num?)?.toDouble() ?? 3,
+  );
+}
+
+/// The colours the notation toolbar offers. Not a full picker: a drawing set
+/// reads better for having five colours used consistently than for having any
+/// colour used once.
+const List<int> kPlanAnnotationColors = [
+  0xFFE53935, // red — the default, and what a markup is expected to be
+  0xFF1E88E5, // blue
+  0xFF43A047, // green
+  0xFFF9A825, // amber
+  0xFF6A1B9A, // purple
+  0xFF212121, // near-black, for a note that is not an exception
+];
+
 /// A floor plan image the room's locations and callouts are placed on.
 ///
 /// The image is referenced by FILE NAME, not embedded. A room folder is
@@ -523,6 +697,11 @@ class FloorPlan {
 
   final List<FloorPlanCallout> callouts;
 
+  /// Arrows, boxes and text drawn on this sheet. Per sheet rather than per
+  /// room: an arrow saying which way the conduit leaves is about THIS drawing,
+  /// and would be nonsense on the reflected ceiling plan.
+  final List<PlanAnnotation> annotations;
+
   const FloorPlan({
     required this.id,
     required this.name,
@@ -531,6 +710,7 @@ class FloorPlan {
     this.opacity = 0.35,
     this.pixelsPerFoot = 0,
     this.callouts = const [],
+    this.annotations = const [],
   });
 
   bool get hasImage => imageFile.trim().isNotEmpty;
@@ -542,6 +722,7 @@ class FloorPlan {
     double? opacity,
     double? pixelsPerFoot,
     List<FloorPlanCallout>? callouts,
+    List<PlanAnnotation>? annotations,
   }) => FloorPlan(
     id: id,
     name: name ?? this.name,
@@ -550,6 +731,7 @@ class FloorPlan {
     opacity: opacity ?? this.opacity,
     pixelsPerFoot: pixelsPerFoot ?? this.pixelsPerFoot,
     callouts: callouts ?? this.callouts,
+    annotations: annotations ?? this.annotations,
   );
 
   FloorPlan withId(String newId) => FloorPlan(
@@ -560,6 +742,7 @@ class FloorPlan {
     opacity: opacity,
     pixelsPerFoot: pixelsPerFoot,
     callouts: callouts,
+    annotations: annotations,
   );
 
   Map<String, dynamic> toJson() => {
@@ -571,6 +754,8 @@ class FloorPlan {
     'opacity': opacity,
     if (pixelsPerFoot > 0) 'pixelsPerFoot': pixelsPerFoot,
     'callouts': [for (final c in callouts) c.toJson()],
+    if (annotations.isNotEmpty)
+      'annotations': [for (final a in annotations) a.toJson()],
   };
 
   factory FloorPlan.fromJson(Map<String, dynamic> json) => FloorPlan(
@@ -586,6 +771,10 @@ class FloorPlan {
     callouts: [
       for (final c in (json['callouts'] as List? ?? []))
         if (c is Map) FloorPlanCallout.fromJson(Map<String, dynamic>.from(c)),
+    ],
+    annotations: [
+      for (final a in (json['annotations'] as List? ?? []))
+        if (a is Map) PlanAnnotation.fromJson(Map<String, dynamic>.from(a)),
     ],
   );
 }

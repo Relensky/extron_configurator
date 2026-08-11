@@ -17,6 +17,7 @@ import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'device_editor_view.dart';
 import 'device_start_wizard.dart';
+import 'cabling_view.dart';
 import 'floor_plan_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
@@ -714,6 +715,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
                       NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
                       NavigationRailDestination(icon: Icon(Icons.map), label: Text('Floor Plan')),
+                      NavigationRailDestination(icon: Icon(Icons.account_tree_outlined), label: Text('Cabling')),
                       NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
                       NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
                       NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
@@ -831,6 +833,8 @@ class _MainDashboardState extends State<MainDashboard> {
         return AvFlowView(key: key);
       case AppTab.floorPlan:
         return FloorPlanView(key: key);
+      case AppTab.cabling:
+        return CablingView(key: key);
       case AppTab.racks:
         return RackTabView(key: key);
       case AppTab.cost:
@@ -883,6 +887,7 @@ Future<void> _saveAllProject(
       avFlowPng: shots.avFlow,
       rackPng: shots.racks,
       floorPlanPng: shots.floorPlan,
+      cablingPng: shots.cabling,
     );
   } catch (e) {
     messenger.showSnackBar(SnackBar(

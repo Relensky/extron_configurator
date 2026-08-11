@@ -99,6 +99,7 @@ Future<ProjectExport> saveProjectFolder({
   Uint8List? avFlowPng,
   Uint8List? rackPng,
   Uint8List? floorPlanPng,
+  Uint8List? cablingPng,
 }) async {
   final folder = Directory(path.join(parentFolder, roomFolderName(provider)));
   await folder.create(recursive: true);
@@ -145,6 +146,7 @@ Future<ProjectExport> saveProjectFolder({
         avFlowPng: avFlowPng,
         rackPng: rackPng,
         floorPlanPng: floorPlanPng,
+        cablingPng: cablingPng,
         generated: generated,
       ),
     );
@@ -201,17 +203,31 @@ Future<ProjectExport> saveProjectFolder({
   await image('av_flow', avFlowPng, 'the signal flow diagram');
   await image('racks', rackPng, 'the rack elevation');
   await image('floor_plan', floorPlanPng, 'the floor plan');
+  await image('cabling', cablingPng, 'the cabling drawing');
 
   // The plan image itself, so the marked-up drawing and the drawing it was
   // marked up on both travel with the room. The sidecar names the file by
   // its bare name, and a folder that carries the reference without the file
   // is a room that opens with a broken plan on somebody else's machine.
-  final plan = provider.primaryFloorPlan;
-  if (plan != null && plan.hasImage) {
-    final source = File(provider.resolveFloorPlanImage(plan.imageFile));
+  //
+  // Every sheet, not just the one that happened to be open: a room with a
+  // furniture plan and a reflected ceiling plan is a room whose folder needs
+  // both drawings in it, and copying one of them is how the other goes missing
+  // on somebody else's machine.
+  final sheets = provider.floorPlanSheetsWithImages;
+  if (sheets.isEmpty) {
+    skipped.add('the floor plan drawings — no sheet has an image');
+  }
+  final copied = <String>{};
+  for (final sheet in sheets) {
+    final source = File(provider.resolveFloorPlanImage(sheet.imageFile));
     final name = path.basename(source.path);
+    // Two sheets can point at the same drawing; copy it once.
+    if (!copied.add(name)) continue;
     if (!source.existsSync()) {
-      skipped.add('$name — the floor plan image is not where the room says');
+      skipped.add(
+        '$name — the drawing for "${sheet.name}" is not where the room says',
+      );
     } else {
       await write(name, (f) async => source.copy(f.path));
     }

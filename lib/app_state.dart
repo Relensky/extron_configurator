@@ -11,10 +11,12 @@ import 'av_flow_model.dart';
 import 'base_costs.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
+import 'cabling_schematic.dart';
 import 'cost_estimate.dart';
 import 'labor_rates.dart';
 import 'room_locations.dart';
 import 'room_presets.dart';
+import 'room_sidecar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
@@ -40,6 +42,7 @@ enum AppTab {
   schematic('schematic'),
   avFlow('av_flow'),
   floorPlan('floor_plan'),
+  cabling('cabling'),
   racks('racks'),
   cost('cost'),
   deviceEditor('device_editor'),
@@ -1589,11 +1592,74 @@ class AppStateProvider extends ChangeNotifier {
     return null;
   }
 
-  /// The plan the AV canvas draws behind itself and the Floor Plan tab opens
-  /// on: the first one, since a room with several is rare and the first is the
-  /// one somebody imported.
-  FloorPlan? get primaryFloorPlan =>
-      avFloorPlans.isEmpty ? null : avFloorPlans.first;
+  /// The sheet being worked on. Session state, not saved: which drawing you
+  /// had open is not a fact about the room.
+  String _activeFloorPlanId = '';
+
+  /// The sheet the Floor Plan tab is showing and the AV canvas draws behind
+  /// itself.
+  ///
+  /// A room has more than one sheet as soon as it has more than one storey, or
+  /// a reflected ceiling plan next to the furniture plan, or a demolition
+  /// sheet beside the new work. Falls back to the first, which is what a room
+  /// with one sheet has always used.
+  FloorPlan? get activeFloorPlan {
+    if (avFloorPlans.isEmpty) return null;
+    return avFloorPlanById(_activeFloorPlanId) ?? avFloorPlans.first;
+  }
+
+  /// Kept under its old name for the callers that want "the room's plan"
+  /// without caring which sheet is open — the exports and the workbook.
+  FloorPlan? get primaryFloorPlan => activeFloorPlan;
+
+  /// Every sheet that has a drawing behind it, for the exports that produce
+  /// one image per sheet.
+  List<FloorPlan> get floorPlanSheetsWithImages =>
+      avFloorPlans.where((p) => p.hasImage).toList();
+
+  void selectFloorPlan(String id) {
+    if (_activeFloorPlanId == id) return;
+    _activeFloorPlanId = id;
+    notifyListeners();
+  }
+
+  /// Adds an empty sheet and opens it. The drawing is imported afterwards, so
+  /// a sheet can be named and ordered before anybody has the PDF for it.
+  FloorPlan addFloorPlanSheet({String name = ''}) {
+    final n = avFloorPlans.length + 1;
+    final sheet = addAvFloorPlan(
+      FloorPlan(id: '', name: name.trim().isEmpty ? 'Sheet $n' : name.trim()),
+    );
+    _activeFloorPlanId = sheet.id;
+    notifyListeners();
+    return sheet;
+  }
+
+  /// Copies a sheet with its callouts — the way a reflected ceiling plan gets
+  /// started from the furniture plan that already has every location on it.
+  FloorPlan? duplicateFloorPlanSheet(String id) {
+    final source = avFloorPlanById(id);
+    if (source == null) return null;
+    final copy = addAvFloorPlan(
+      source.copyWith(name: '${source.name} copy').withId(''),
+    );
+    _activeFloorPlanId = copy.id;
+    notifyListeners();
+    return copy;
+  }
+
+  /// Moves a sheet in the running order. Sheets are read in order — Level 1,
+  /// Level 2, RCP — and a set that will not reorder is a set that gets
+  /// rebuilt instead.
+  void moveFloorPlanSheet(String id, int toIndex) {
+    final from = avFloorPlans.indexWhere((p) => p.id == id);
+    if (from < 0) return;
+    final to = toIndex.clamp(0, avFloorPlans.length - 1);
+    if (from == to) return;
+    _pushAvUndo('Reorder floor plans');
+    avFloorPlans.insert(to, avFloorPlans.removeAt(from));
+    notifyListeners();
+  }
 
   FloorPlan addAvFloorPlan(FloorPlan plan) {
     _pushAvUndo('Add ${plan.name}');
@@ -1623,6 +1689,10 @@ class AppStateProvider extends ChangeNotifier {
     if (plan == null) return;
     _pushAvUndo('Remove ${plan.name}');
     avFloorPlans.removeWhere((p) => p.id == id);
+    // Land on a sheet that still exists rather than on nothing.
+    if (_activeFloorPlanId == id) {
+      _activeFloorPlanId = avFloorPlans.isEmpty ? '' : avFloorPlans.first.id;
+    }
     // The locations keep their marker coordinates: they are meaningless
     // without a plan but harmless, and re-importing the same drawing puts
     // every marker straight back where it was.
@@ -1674,6 +1744,218 @@ class AppStateProvider extends ChangeNotifier {
       callouts: [
         for (final c in plan.callouts)
           if (c.id != calloutId) c,
+      ],
+    );
+    notifyListeners();
+  }
+
+  // --- the cabling schematic ------------------------------------------------
+  //  Only what somebody typed or moved is kept; the drawing itself is derived
+  //  from the room every time it is shown (see cabling_schematic.dart).
+
+  final CablingOverrides avCabling = CablingOverrides();
+
+  int _avCablingBoxCounter = 0;
+  int _avCablingRunCounter = 0;
+
+  /// The drawing as it should be shown: derived from the room, overrides on.
+  CablingSchematic cablingSchematic(AvFlowModel model) => buildCablingSchematic(
+    model: model,
+    locations: avLocations,
+    overrides: avCabling,
+  );
+
+  /// [recordUndo] false while a drag is in flight — one entry for the move.
+  void setCablingBoxPosition(String id, Offset pos, {bool recordUndo = true}) {
+    if (recordUndo) _pushAvUndo('Move box');
+    avCabling.positions[id] = pos;
+    notifyListeners();
+  }
+
+  void setCablingBoxLabel(String id, String label) {
+    _pushAvUndo('Rename box');
+    avCabling.labels[id] = label;
+    notifyListeners();
+  }
+
+  void setCablingBoxBody(String id, String body) {
+    _pushAvUndo('Edit notes');
+    avCabling.bodies[id] = body;
+    notifyListeners();
+  }
+
+  /// Types a count over the one the room worked out. Passing null puts the
+  /// derived figure back, which is the only way out of an override.
+  void setCablingBundleCount(String id, double? count) {
+    _pushAvUndo('Set cable count');
+    if (count == null) {
+      avCabling.counts.remove(id);
+    } else {
+      avCabling.counts[id] = count;
+    }
+    notifyListeners();
+  }
+
+  void setCablingBundleType(String id, String? type) {
+    _pushAvUndo('Set cable type');
+    if (type == null || type.trim().isEmpty) {
+      avCabling.cableTypes.remove(id);
+    } else {
+      avCabling.cableTypes[id] = type.trim();
+    }
+    notifyListeners();
+  }
+
+  /// Takes something off the drawing. A derived box or run is HIDDEN rather
+  /// than deleted, because deleting one would only bring it back next time the
+  /// drawing was built.
+  void removeCablingItem(String id) {
+    _pushAvUndo('Remove from the cabling drawing');
+    if (id.startsWith('box:')) {
+      avCabling.extraBoxes.removeWhere((b) => b.id == id);
+      avCabling.extraBundles.removeWhere(
+        (b) => b.fromBoxId == id || b.toBoxId == id,
+      );
+    } else if (id.startsWith('run:')) {
+      avCabling.extraBundles.removeWhere((b) => b.id == id);
+    } else {
+      avCabling.hidden.add(id);
+    }
+    avCabling.positions.remove(id);
+    avCabling.labels.remove(id);
+    avCabling.bodies.remove(id);
+    avCabling.counts.remove(id);
+    avCabling.cableTypes.remove(id);
+    notifyListeners();
+  }
+
+  /// Puts a hidden derived item back.
+  void restoreCablingItem(String id) {
+    if (!avCabling.hidden.remove(id)) return;
+    _pushAvUndo('Restore to the cabling drawing');
+    notifyListeners();
+  }
+
+  CablingBox addCablingBox({
+    required CablingBoxKind kind,
+    String label = '',
+    Offset pos = const Offset(360, 60),
+    String body = '',
+  }) {
+    _pushAvUndo('Add ${kCablingBoxKindLabels[kind]?.toLowerCase() ?? 'box'}');
+    _avCablingBoxCounter++;
+    final box = CablingBox(
+      id: 'box:$_avCablingBoxCounter',
+      label: label.trim().isEmpty
+          ? (kCablingBoxKindLabels[kind] ?? 'Box')
+          : label.trim(),
+      kind: kind,
+      pos: pos,
+      body: body,
+    );
+    avCabling.extraBoxes.add(box);
+    notifyListeners();
+    return box;
+  }
+
+  /// A run the room cannot know about — a spare conduit, somebody else's
+  /// contract, a pull string.
+  CablingBundle? addCablingBundle({
+    required String fromBoxId,
+    required String toBoxId,
+    double count = 1,
+    String cableType = '',
+    int color = 0xFFD32F2F,
+  }) {
+    if (fromBoxId.isEmpty || toBoxId.isEmpty || fromBoxId == toBoxId) {
+      return null;
+    }
+    _pushAvUndo('Add cable run');
+    _avCablingRunCounter++;
+    final bundle = CablingBundle(
+      id: 'run:$_avCablingRunCounter',
+      fromBoxId: fromBoxId,
+      toBoxId: toBoxId,
+      count: count,
+      cableType: cableType,
+      color: color,
+    );
+    avCabling.extraBundles.add(bundle);
+    notifyListeners();
+    return bundle;
+  }
+
+  void updateCablingBundle(CablingBundle bundle) {
+    final at = avCabling.extraBundles.indexWhere((b) => b.id == bundle.id);
+    if (at < 0) return;
+    _pushAvUndo('Edit cable run');
+    avCabling.extraBundles[at] = bundle;
+    notifyListeners();
+  }
+
+  /// Throws away every edit and goes back to what the room says.
+  void resetCablingSchematic() {
+    _pushAvUndo('Reset the cabling drawing');
+    avCabling.clear();
+    notifyListeners();
+  }
+
+  // --- notation on a sheet --------------------------------------------------
+
+  /// Counter behind annotation ids ('NOTE_7'). Shared across sheets so an id
+  /// stays unique when notation is copied from one to another.
+  int _avAnnotationCounter = 0;
+
+  /// Adds notation to [planId]. Returns it, or null when the sheet is gone.
+  PlanAnnotation? addAvAnnotation(String planId, PlanAnnotation note) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return null;
+    _pushAvUndo('Add ${kPlanShapeLabels[note.shape]?.toLowerCase() ?? 'note'}');
+    final plan = avFloorPlans[index];
+    final taken = {for (final a in plan.annotations) a.id};
+    String id = note.id;
+    if (id.isEmpty || taken.contains(id)) {
+      do {
+        _avAnnotationCounter++;
+        id = 'NOTE_$_avAnnotationCounter';
+      } while (taken.contains(id));
+    }
+    final stored = note.withId(id);
+    avFloorPlans[index] = plan.copyWith(
+      annotations: [...plan.annotations, stored],
+    );
+    notifyListeners();
+    return stored;
+  }
+
+  /// [recordUndo] is false while a drag is in flight: one undo entry for the
+  /// move, not one per pointer event.
+  void updateAvAnnotation(
+    String planId,
+    PlanAnnotation note, {
+    bool recordUndo = true,
+  }) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    final plan = avFloorPlans[index];
+    final at = plan.annotations.indexWhere((a) => a.id == note.id);
+    if (at < 0) return;
+    if (recordUndo) _pushAvUndo('Edit notation');
+    final next = List<PlanAnnotation>.from(plan.annotations);
+    next[at] = note;
+    avFloorPlans[index] = plan.copyWith(annotations: next);
+    notifyListeners();
+  }
+
+  void removeAvAnnotation(String planId, String noteId) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    _pushAvUndo('Remove notation');
+    final plan = avFloorPlans[index];
+    avFloorPlans[index] = plan.copyWith(
+      annotations: [
+        for (final a in plan.annotations)
+          if (a.id != noteId) a,
       ],
     );
     notifyListeners();
@@ -2678,14 +2960,19 @@ class AppStateProvider extends ChangeNotifier {
 
   // --- persistence ---
 
-  /// Sidecar the AV diagram persists to ('' when the session has no working
+  /// Sidecar the signal flow persists to ('' when the session has no working
   /// file yet — Create New that was never saved).
-  String get avFlowSidecarPath {
-    if (currentConfigPath.isEmpty) return '';
-    final dir = path.dirname(currentConfigPath);
-    final base = path.basenameWithoutExtension(currentConfigPath);
-    return path.join(dir, '${base}_av_flow.json');
-  }
+  ///
+  /// The room's document is spread across several files now (see
+  /// room_sidecar.dart); this is the one that holds the diagram and the one a
+  /// room saved before the split holds ALL of, so it stays the file the app
+  /// names when it has to name one.
+  String get avFlowSidecarPath =>
+      roomSidecarPath(currentConfigPath, RoomSidecarPart.flow);
+
+  /// Every file the room's document is written across, by part.
+  Map<RoomSidecarPart, String> get avSidecarPaths =>
+      roomSidecarPaths(currentConfigPath);
 
   /// The name this sidecar used before it was brought in line with
   /// `<config>_control_schematic.json`. Read when the current name is absent,
@@ -2721,8 +3008,17 @@ class AppStateProvider extends ChangeNotifier {
       roomMode != RoomMode.full ||
       !avCost.isEmpty;
 
-  /// True under either the current name or the pre-rename one.
-  bool get hasSavedAvFlow => _readableAvFlowSidecar.isNotEmpty;
+  /// True when anything of this room's document is on disk — the flow file
+  /// under either name, or any of the companion parts. A room whose only saved
+  /// artifact is its cost estimate still has something worth not overwriting.
+  bool get hasSavedAvFlow {
+    if (_readableAvFlowSidecar.isNotEmpty) return true;
+    for (final entry in avSidecarPaths.entries) {
+      if (entry.key == RoomSidecarPart.flow) continue;
+      if (entry.value.isNotEmpty && File(entry.value).existsSync()) return true;
+    }
+    return false;
+  }
 
   /// Same prompt rule as [schematicLayoutNeedsChoice]: only ask when the
   /// session has its own diagram AND the opened config has one saved.
@@ -2754,6 +3050,12 @@ class AppStateProvider extends ChangeNotifier {
     _avScreenSwitchCounter = 0;
     _avFloorPlanCounter = 0;
     _avCalloutCounter = 0;
+    _avAnnotationCounter = 0;
+    avCabling.clear();
+    _avCablingBoxCounter = 0;
+    _avCablingRunCounter = 0;
+    // Another room's sheet is not this room's to be looking at.
+    _activeFloorPlanId = '';
   }
 
   void _resetAvFlow() {
@@ -2783,31 +3085,56 @@ class AppStateProvider extends ChangeNotifier {
   /// config (blank when there is no sidecar).
   void loadAvFlowForCurrentConfig() {
     _resetAvFlow();
-    // Reads whichever name is on disk, so a room documented before the
-    // rename opens untouched. Nothing is moved here — a read should not
-    // rewrite the user's folder; the file moves on the next save.
-    final sidecar = _readableAvFlowSidecar;
-    if (sidecar.isEmpty) {
+
+    /// One part file, or null when it is absent or unreadable. A broken part
+    /// costs its own section and nothing else — losing the rack elevation
+    /// because the cost file has a stray comma in it would be absurd.
+    Map<String, dynamic>? readPart(String file, String what) {
+      if (file.isEmpty || !File(file).existsSync()) return null;
+      try {
+        final doc = jsonDecode(File(file).readAsStringSync());
+        if (doc is! Map) throw const FormatException('Root must be an object.');
+        return Map<String, dynamic>.from(doc);
+      } catch (e) {
+        AppLogger.logError('Failed to read the $what from $file', e);
+        return null;
+      }
+    }
+
+    // The flow file under whichever name is on disk, so a room documented
+    // before the rename opens untouched. Nothing is moved here — a read should
+    // not rewrite the user's folder; the file moves on the next save.
+    final flowFile = _readableAvFlowSidecar;
+    final parts = <RoomSidecarPart, Map<String, dynamic>?>{
+      RoomSidecarPart.flow: readPart(flowFile, 'signal flow'),
+    };
+    final paths = avSidecarPaths;
+    for (final part in RoomSidecarPart.values) {
+      if (part == RoomSidecarPart.flow) continue;
+      parts[part] = readPart(paths[part] ?? '', kRoomSidecarSuffix[part]!);
+    }
+
+    if (parts.values.every((p) => p == null)) {
       notifyListeners();
       return;
     }
-    try {
-      final doc = jsonDecode(File(sidecar).readAsStringSync());
-      if (doc is! Map) {
-        notifyListeners();
-        return;
-      }
-      _readAvFlowJson(Map<String, dynamic>.from(doc));
-      AppLogger.logInfo(
-          'AV flow loaded from $sidecar (${avNodes.length} devices, '
-          '${avCables.length} cables, ${avRacks.length} racks, '
-          '${avRackItems.length} rack items)'
-          '${sidecar == legacyAvFlowSidecarPath ? ' — pre-rename file; it '
-              'moves to ${path.basename(avFlowSidecarPath)} on the next '
-              'Save AV Setup.' : '.'}');
-    } catch (e) {
-      AppLogger.logError('Failed to load AV flow from $sidecar', e);
-    }
+
+    // An older room's flow file holds every key and has no companions to
+    // overlay it, so this hands back exactly that document.
+    _readAvFlowJson(mergeRoomSidecar(parts));
+
+    final found = [
+      for (final part in RoomSidecarPart.values)
+        if (parts[part] != null) kRoomSidecarSuffix[part]!,
+    ];
+    AppLogger.logInfo(
+        'Room document loaded from ${found.join(', ')} beside '
+        '$currentConfigPath (${avNodes.length} devices, '
+        '${avCables.length} cables, ${avRacks.length} racks, '
+        '${avRackItems.length} rack items, ${avFloorPlans.length} plans)'
+        '${flowFile == legacyAvFlowSidecarPath ? ' — pre-rename file; it '
+            'moves to ${path.basename(avFlowSidecarPath)} on the next '
+            'Save AV Setup.' : '.'}');
     notifyListeners();
   }
 
@@ -2962,6 +3289,32 @@ class AppStateProvider extends ChangeNotifier {
                 math.max(_avCalloutCounter, int.parse(cm.group(1)!));
           }
         }
+        for (final a in p.annotations) {
+          final am = RegExp(r'^NOTE_(\d+)$').firstMatch(a.id);
+          if (am != null) {
+            _avAnnotationCounter =
+                math.max(_avAnnotationCounter, int.parse(am.group(1)!));
+          }
+        }
+      }
+
+      final cabling = doc['cablingSchematic'];
+      if (cabling is Map) {
+        avCabling.readJson(Map<String, dynamic>.from(cabling));
+        for (final b in avCabling.extraBoxes) {
+          final m = RegExp(r'^box:(\d+)$').firstMatch(b.id);
+          if (m != null) {
+            _avCablingBoxCounter =
+                math.max(_avCablingBoxCounter, int.parse(m.group(1)!));
+          }
+        }
+        for (final b in avCabling.extraBundles) {
+          final m = RegExp(r'^run:(\d+)$').firstMatch(b.id);
+          if (m != null) {
+            _avCablingRunCounter =
+                math.max(_avCablingRunCounter, int.parse(m.group(1)!));
+          }
+        }
       }
 
       // The room mode says whether a control system was ever configured. It
@@ -3009,6 +3362,7 @@ class AppStateProvider extends ChangeNotifier {
         'rackSlots': avRackSlots.map((id, s) => MapEntry(id, s.toJson())),
         'locations': avLocations.map((l) => l.toJson()).toList(),
         'screenSwitches': avScreenSwitches.map((s) => s.toJson()).toList(),
+        if (!avCabling.isEmpty) 'cablingSchematic': avCabling.toJson(),
         'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
         'dismissedDevices': avDismissedDevices.toList(),
         'roomMode': roomMode.name,
@@ -3028,7 +3382,24 @@ class AppStateProvider extends ChangeNotifier {
     if (sidecar.isEmpty) return '';
     try {
       const encoder = JsonEncoder.withIndent('  ');
-      await File(sidecar).writeAsString(encoder.convert(avFlowAsJson()));
+
+      // One file per part. The flow file is written LAST: it is the one the
+      // loader always reads and the one an older room holds everything in, so
+      // until it has been rewritten without them, its stale copies of the
+      // companions' keys are still the truth. Writing it first would leave a
+      // window where a crash had split the document but left the flow file
+      // claiming to own all of it.
+      final parts = splitRoomSidecar(avFlowAsJson());
+      final paths = avSidecarPaths;
+      for (final part in RoomSidecarPart.values) {
+        if (part == RoomSidecarPart.flow) continue;
+        final file = paths[part];
+        if (file == null || file.isEmpty) continue;
+        await File(file).writeAsString(encoder.convert(parts[part]));
+      }
+      await File(sidecar).writeAsString(
+        encoder.convert(parts[RoomSidecarPart.flow]),
+      );
 
       // The write succeeded, so the pre-rename file is now a stale duplicate
       // that would quietly diverge. Retire it — but only ever AFTER the new

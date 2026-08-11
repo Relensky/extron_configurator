@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'cabling_schematic.dart';
 import 'room_locations.dart';
 
 /// ============================================================================
@@ -1689,6 +1690,17 @@ class AvFlowModel {
   /// Floor plans with their callouts.
   final List<FloorPlan> floorPlans;
 
+  /// What was moved, renamed or typed on the cabling drawing. The drawing
+  /// itself is derived from [cables] and [locations] every time it is built,
+  /// so only the edits travel — see cabling_schematic.dart.
+  ///
+  /// Nullable so this class can keep its const constructor: the overrides hold
+  /// mutable maps and cannot be a const default. Read it through [cablingEdits].
+  final CablingOverrides? cabling;
+
+  /// The edits, or an empty set when a room has none.
+  CablingOverrides get cablingEdits => cabling ?? CablingOverrides();
+
   const AvFlowModel({
     required this.nodes,
     required this.cables,
@@ -1701,6 +1713,7 @@ class AvFlowModel {
     this.locations = const [],
     this.screenSwitches = const [],
     this.floorPlans = const [],
+    this.cabling,
   });
 
   Map<String, AvNode> get nodesById => {for (final n in nodes) n.id: n};
