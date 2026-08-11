@@ -45,11 +45,12 @@ typedef DiagramImages = ({
   Uint8List? schematic,
   Uint8List? avFlow,
   Uint8List? racks,
+  Uint8List? floorPlan,
 });
 
 /// No drawings at all — for the callers that skip the capture entirely.
 const DiagramImages kNoDiagramImages =
-    (schematic: null, avFlow: null, racks: null);
+    (schematic: null, avFlow: null, racks: null, floorPlan: null);
 
 /// Visits each diagram tab, captures its canvas, and returns to the tab the
 /// user was on.
@@ -83,9 +84,19 @@ Future<DiagramImages> captureDiagramTabs(
   // An empty Racks page is a sentence saying there are no racks. The sheet
   // already says that in words, and a picture of the sentence helps nobody.
   final racks = provider.avRacks.isEmpty ? null : await capture(AppTab.racks);
+  // Same rule for the plan: with no image imported the page is an invitation
+  // to import one, which is not an illustration of this room.
+  final floorPlan = provider.primaryFloorPlan?.hasImage == true
+      ? await capture(AppTab.floorPlan)
+      : null;
 
   provider.selectTab(startingTab);
   await WidgetsBinding.instance.endOfFrame;
 
-  return (schematic: schematic, avFlow: avFlow, racks: racks);
+  return (
+    schematic: schematic,
+    avFlow: avFlow,
+    racks: racks,
+    floorPlan: floorPlan,
+  );
 }

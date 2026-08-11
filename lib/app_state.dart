@@ -13,6 +13,8 @@ import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
 import 'cost_estimate.dart';
 import 'labor_rates.dart';
+import 'room_locations.dart';
+import 'room_presets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
@@ -37,6 +39,7 @@ enum AppTab {
   system('system'),
   schematic('schematic'),
   avFlow('av_flow'),
+  floorPlan('floor_plan'),
   racks('racks'),
   cost('cost'),
   deviceEditor('device_editor'),
@@ -1409,6 +1412,561 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // --- where things are in the room ----------------------------------------
+  //  Locations, the screen/shade control runs between them, and the floor
+  //  plans they are drawn on. All three live in the AV sidecar with the
+  //  diagram, because they describe the same room and are useless apart from
+  //  it: a location list with no devices naming it counts nothing.
+
+  /// Named places in the room, in the order the user arranged them.
+  final List<RoomLocation> avLocations = [];
+
+  /// Screen and shade control runs — two ends and no signal.
+  final List<ScreenSwitch> avScreenSwitches = [];
+
+  /// Floor plans, with their callouts.
+  final List<FloorPlan> avFloorPlans = [];
+
+  int _avLocationCounter = 0;
+  int _avScreenSwitchCounter = 0;
+  int _avFloorPlanCounter = 0;
+  int _avCalloutCounter = 0;
+
+  RoomLocation? avLocationById(String id) {
+    for (final l in avLocations) {
+      if (l.id == id) return l;
+    }
+    return null;
+  }
+
+  /// What to print for a location id: its display name, or '' when the id is
+  /// blank or names a location that has since been deleted.
+  String avLocationName(String id) =>
+      id.isEmpty ? '' : (avLocationById(id)?.displayName ?? '');
+
+  RoomLocation addAvLocation(RoomLocation location) {
+    _pushAvUndo('Add ${location.name}');
+    String id = location.id;
+    if (id.isEmpty || avLocationById(id) != null) {
+      do {
+        _avLocationCounter++;
+        id = 'LOC_$_avLocationCounter';
+      } while (avLocationById(id) != null);
+    }
+    final stored = location.withId(id);
+    avLocations.add(stored);
+    notifyListeners();
+    return stored;
+  }
+
+  void updateAvLocation(RoomLocation location) {
+    final index = avLocations.indexWhere((l) => l.id == location.id);
+    if (index < 0) return;
+    _pushAvUndo('Edit ${location.name}');
+    avLocations[index] = location;
+    notifyListeners();
+  }
+
+  /// Moves a location's marker on the floor plan without an undo entry per
+  /// pointer event — one drag should be one undo, the same bargain the cable
+  /// waypoint handles make.
+  void moveAvLocationMarker(String id, Offset planPos,
+      {bool recordUndo = true}) {
+    final index = avLocations.indexWhere((l) => l.id == id);
+    if (index < 0) return;
+    if (recordUndo) _pushAvUndo('Move ${avLocations[index].name}');
+    avLocations[index] = avLocations[index].copyWith(planPos: planPos);
+    notifyListeners();
+  }
+
+  /// Removes a location and unsets it everywhere it was named.
+  ///
+  /// Leaving the id behind on the devices would give them a location that
+  /// resolves to nothing — which reads in the report as a blank cell that
+  /// cannot be filled in from the location list, because the entry it names
+  /// is gone. Clearing them makes the devices honestly unassigned again.
+  void removeAvLocation(String id) {
+    final location = avLocationById(id);
+    if (location == null) return;
+    _pushAvUndo('Remove ${location.name}');
+    avLocations.removeWhere((l) => l.id == id);
+    for (int i = 0; i < avNodes.length; i++) {
+      if (avNodes[i].locationId == id) {
+        avNodes[i] = avNodes[i].copyWith(locationId: kNoLocationId);
+      }
+    }
+    for (int i = 0; i < avScreenSwitches.length; i++) {
+      final s = avScreenSwitches[i];
+      avScreenSwitches[i] = s.copyWith(
+        startLocationId: s.startLocationId == id ? kNoLocationId : null,
+        endLocationId: s.endLocationId == id ? kNoLocationId : null,
+      );
+    }
+    // A callout pointing at a location that no longer exists becomes a plain
+    // note rather than a dangling reference nobody can resolve on site.
+    for (int p = 0; p < avFloorPlans.length; p++) {
+      final plan = avFloorPlans[p];
+      avFloorPlans[p] = plan.copyWith(
+        callouts: [
+          for (final c in plan.callouts)
+            if (c.target == CalloutTarget.location && c.targetId == id)
+              c.copyWith(target: CalloutTarget.note, targetId: '')
+            else
+              c,
+        ],
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Puts a device in a location (or takes it out of one when [locationId]
+  /// is blank).
+  void setAvNodeLocation(String nodeId, String locationId) {
+    final index = avNodes.indexWhere((n) => n.id == nodeId);
+    if (index < 0) return;
+    if (avNodes[index].locationId == locationId) return;
+    _pushAvUndo('Locate ${avNodes[index].label}');
+    avNodes[index] = avNodes[index].copyWith(locationId: locationId);
+    notifyListeners();
+  }
+
+  /// Creates the starter location list for a room that has none. Returns how
+  /// many were added, so the caller can say nothing happened.
+  int seedDefaultAvLocations() {
+    if (avLocations.isNotEmpty) return 0;
+    for (final d in kDefaultRoomLocations) {
+      addAvLocation(
+        RoomLocation(
+          id: '',
+          name: d.name,
+          zone: d.zone,
+          callout: d.callout,
+        ),
+      );
+    }
+    return kDefaultRoomLocations.length;
+  }
+
+  // --- screen / shade control runs -----------------------------------------
+
+  ScreenSwitch addAvScreenSwitch(ScreenSwitch item) {
+    _pushAvUndo('Add ${item.label}');
+    String id = item.id;
+    if (id.isEmpty || avScreenSwitches.any((s) => s.id == id)) {
+      do {
+        _avScreenSwitchCounter++;
+        id = 'SCRSW_$_avScreenSwitchCounter';
+      } while (avScreenSwitches.any((s) => s.id == id));
+    }
+    final stored = item.withId(id);
+    avScreenSwitches.add(stored);
+    notifyListeners();
+    return stored;
+  }
+
+  void updateAvScreenSwitch(ScreenSwitch item) {
+    final index = avScreenSwitches.indexWhere((s) => s.id == item.id);
+    if (index < 0) return;
+    _pushAvUndo('Edit ${item.label}');
+    avScreenSwitches[index] = item;
+    notifyListeners();
+  }
+
+  void removeAvScreenSwitch(String id) {
+    final index = avScreenSwitches.indexWhere((s) => s.id == id);
+    if (index < 0) return;
+    _pushAvUndo('Remove ${avScreenSwitches[index].label}');
+    avScreenSwitches.removeAt(index);
+    notifyListeners();
+  }
+
+  // --- floor plans ---------------------------------------------------------
+
+  FloorPlan? avFloorPlanById(String id) {
+    for (final p in avFloorPlans) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  /// The plan the AV canvas draws behind itself and the Floor Plan tab opens
+  /// on: the first one, since a room with several is rare and the first is the
+  /// one somebody imported.
+  FloorPlan? get primaryFloorPlan =>
+      avFloorPlans.isEmpty ? null : avFloorPlans.first;
+
+  FloorPlan addAvFloorPlan(FloorPlan plan) {
+    _pushAvUndo('Add ${plan.name}');
+    String id = plan.id;
+    if (id.isEmpty || avFloorPlanById(id) != null) {
+      do {
+        _avFloorPlanCounter++;
+        id = 'PLAN_$_avFloorPlanCounter';
+      } while (avFloorPlanById(id) != null);
+    }
+    final stored = plan.withId(id);
+    avFloorPlans.add(stored);
+    notifyListeners();
+    return stored;
+  }
+
+  void updateAvFloorPlan(FloorPlan plan) {
+    final index = avFloorPlans.indexWhere((p) => p.id == plan.id);
+    if (index < 0) return;
+    _pushAvUndo('Edit ${plan.name}');
+    avFloorPlans[index] = plan;
+    notifyListeners();
+  }
+
+  void removeAvFloorPlan(String id) {
+    final plan = avFloorPlanById(id);
+    if (plan == null) return;
+    _pushAvUndo('Remove ${plan.name}');
+    avFloorPlans.removeWhere((p) => p.id == id);
+    // The locations keep their marker coordinates: they are meaningless
+    // without a plan but harmless, and re-importing the same drawing puts
+    // every marker straight back where it was.
+    notifyListeners();
+  }
+
+  /// Adds a callout to [planId]. Returns it, or null when the plan is gone.
+  FloorPlanCallout? addAvCallout(String planId, FloorPlanCallout callout) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return null;
+    _pushAvUndo('Add callout');
+    final plan = avFloorPlans[index];
+    final taken = {for (final c in plan.callouts) c.id};
+    String id = callout.id;
+    if (id.isEmpty || taken.contains(id)) {
+      do {
+        _avCalloutCounter++;
+        id = 'CALLOUT_$_avCalloutCounter';
+      } while (taken.contains(id));
+    }
+    final stored = callout.withId(id);
+    avFloorPlans[index] = plan.copyWith(
+      callouts: [...plan.callouts, stored],
+    );
+    notifyListeners();
+    return stored;
+  }
+
+  void updateAvCallout(String planId, FloorPlanCallout callout,
+      {bool recordUndo = true}) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    final plan = avFloorPlans[index];
+    final at = plan.callouts.indexWhere((c) => c.id == callout.id);
+    if (at < 0) return;
+    if (recordUndo) _pushAvUndo('Edit callout ${callout.tag}');
+    final next = List<FloorPlanCallout>.from(plan.callouts);
+    next[at] = callout;
+    avFloorPlans[index] = plan.copyWith(callouts: next);
+    notifyListeners();
+  }
+
+  void removeAvCallout(String planId, String calloutId) {
+    final index = avFloorPlans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    _pushAvUndo('Remove callout');
+    final plan = avFloorPlans[index];
+    avFloorPlans[index] = plan.copyWith(
+      callouts: [
+        for (final c in plan.callouts)
+          if (c.id != calloutId) c,
+      ],
+    );
+    notifyListeners();
+  }
+
+  /// The next unused callout tag on [planId] — '1', '2', … so adding one does
+  /// not start by asking the user to remember what the last number was.
+  String nextCalloutTag(String planId) {
+    final plan = avFloorPlanById(planId);
+    final used = {
+      for (final c in plan?.callouts ?? const <FloorPlanCallout>[])
+        c.tag.trim(),
+    };
+    for (int n = 1; n < 500; n++) {
+      if (!used.contains('$n')) return '$n';
+    }
+    return '';
+  }
+
+  /// Copies [sourcePath] in beside the working config and returns the file
+  /// name to store on the plan — or the absolute path unchanged when there is
+  /// nowhere to copy it to (no config saved yet) or the copy failed.
+  ///
+  /// Copying rather than linking is the point: a room folder is the unit that
+  /// gets zipped and mailed, and a plan referenced off somebody's desktop is a
+  /// broken image the moment it leaves this machine. Falling back to the
+  /// original path rather than failing keeps an unsaved room usable — the plan
+  /// is imported on the next save, when there is a folder to put it in.
+  Future<String> importFloorPlanImage(String sourcePath) async {
+    if (currentConfigPath.isEmpty) return sourcePath;
+    try {
+      final dir = path.dirname(currentConfigPath);
+      final stem = path.basenameWithoutExtension(currentConfigPath);
+      final ext = path.extension(sourcePath);
+      // Numbered so importing a second plan doesn't overwrite the first.
+      String name = '${stem}_floorplan$ext';
+      int n = 1;
+      while (File(path.join(dir, name)).existsSync()) {
+        n++;
+        name = '${stem}_floorplan$n$ext';
+      }
+      await File(sourcePath).copy(path.join(dir, name));
+      AppLogger.logInfo('Floor plan image copied in as $name.');
+      return name;
+    } catch (e, stack) {
+      AppLogger.logError('Could not copy the floor plan image in', e, stack);
+      return sourcePath;
+    }
+  }
+
+  /// Where a floor plan image is resolved from: an absolute path as given,
+  /// otherwise beside the working config, which is where the importer puts it.
+  String resolveFloorPlanImage(String imageFile) {
+    if (imageFile.trim().isEmpty) return '';
+    if (path.isAbsolute(imageFile)) return imageFile;
+    final dir = currentConfigPath.isEmpty
+        ? effectiveRootFolder
+        : path.dirname(currentConfigPath);
+    return path.join(dir, imageFile);
+  }
+
+  // --- room type presets ----------------------------------------------------
+
+  /// The folder presets are read from and written to.
+  String get roomPresetFolder =>
+      path.join(effectiveRootFolder, kRoomPresetFolder);
+
+  /// Every preset on disk, with the four built-ins written out first if the
+  /// folder has never been used.
+  List<RoomPreset> availableRoomPresets() {
+    ensureBuiltInRoomPresets(effectiveRootFolder);
+    return loadRoomPresets(effectiveRootFolder);
+  }
+
+  /// Stamps [preset] into the current room.
+  ///
+  /// Everything gets FRESH ids: a preset's `AVNODE_1` is a placeholder, and
+  /// applying two presets — or a preset into a room that already has gear —
+  /// must not have the second silently take the first's boxes. The cables and
+  /// rack slots are remapped through the same table, so a preset's wiring
+  /// survives the renumbering intact.
+  ///
+  /// [jackPrefix] renumbers the preset's jacks into this room's scheme. Left
+  /// blank, the preset's own numbering is used as written — which is right
+  /// when somebody has saved a preset FOR a specific building.
+  ///
+  /// Returns a short summary of what landed, for the message afterwards.
+  ({int devices, int jacks, int cables, int racks, int locations})
+  applyRoomPreset(RoomPreset preset, {String jackPrefix = ''}) {
+    _pushAvUndo('Apply ${preset.name}');
+
+    // --- locations first: the nodes reference them ---------------------------
+    final locationMap = <String, String>{};
+    for (final location in preset.locations) {
+      // A location with the same name already in the room is REUSED rather
+      // than duplicated. Two entries called "Ceiling" is the fastest way to
+      // make every per-location count meaningless, and applying a preset to a
+      // room that already has locations is the normal case, not the odd one.
+      final existing = avLocations
+          .where(
+            (l) =>
+                l.name.trim().toLowerCase() ==
+                location.name.trim().toLowerCase(),
+          )
+          .firstOrNull;
+      if (existing != null) {
+        locationMap[location.id] = existing.id;
+        continue;
+      }
+      final stored = addAvLocation(
+        RoomLocation(
+          id: '',
+          name: location.name,
+          zone: location.zone,
+          callout: location.callout,
+          note: location.note,
+        ),
+      );
+      locationMap[location.id] = stored.id;
+    }
+
+    // --- devices and jack fields ---------------------------------------------
+    final nodeMap = <String, String>{};
+    // Where to drop the preset so it doesn't land on top of whatever is
+    // already drawn.
+    double offsetY = 0;
+    for (final n in avNodes) {
+      offsetY = math.max(offsetY, n.pos.dy + n.height + 60);
+    }
+
+    for (final node in preset.nodes) {
+      final relocated = node.copyWith(
+        pos: Offset(node.pos.dx, node.pos.dy + offsetY),
+        locationId: locationMap[node.locationId] ?? kNoLocationId,
+        ports: node.isJackField && jackPrefix.isNotEmpty
+            ? _renumberedJacks(node.ports, preset.jackPrefix, jackPrefix)
+            : node.ports,
+      );
+      // addAvNode re-keys anything whose id is taken, which is what makes
+      // applying a preset twice give eight jacks rather than four.
+      final stored = addAvNode(relocated, recordUndo: false);
+      nodeMap[node.id] = stored.id;
+    }
+
+    // --- cables, remapped onto the stored ids --------------------------------
+    int cables = 0;
+    for (final cable in preset.cables) {
+      final from = nodeMap[cable.fromNodeId];
+      final to = nodeMap[cable.toNodeId];
+      if (from == null || to == null) continue;
+      final added = addAvCable(
+        fromNodeId: from,
+        fromPortId: cable.fromPortId,
+        toNodeId: to,
+        toPortId: cable.toPortId,
+        signal: cable.signal,
+        label: cable.label,
+        recordUndo: false,
+      );
+      if (added != null) cables++;
+    }
+
+    // --- racks, their hardware, and who sits where ---------------------------
+    final rackMap = <String, String>{};
+    for (final rack in preset.racks) {
+      final stored = addAvRack(rack.name, rack.heightU, kind: rack.kind);
+      rackMap[rack.id] = stored.id;
+    }
+    for (final item in preset.rackItems) {
+      final stored = addAvRackItem(item.withId(''));
+      if (stored != null) nodeMap[item.id] = stored.id;
+    }
+    preset.rackSlots.forEach((occupantId, slot) {
+      final occupant = nodeMap[occupantId];
+      final rack = rackMap[slot.rackId];
+      if (occupant == null || rack == null) return;
+      avRackSlots[occupant] = slot.copyWith(rackId: rack);
+    });
+
+    for (final s in preset.screenSwitches) {
+      addAvScreenSwitch(
+        s.copyWith(
+          startLocationId: locationMap[s.startLocationId] ?? kNoLocationId,
+          endLocationId: locationMap[s.endLocationId] ?? kNoLocationId,
+        ).withId(''),
+      );
+    }
+
+    AppLogger.logInfo(
+      'Applied the "${preset.name}" room type: ${preset.nodes.length} boxes, '
+      '$cables cables, ${preset.racks.length} racks.',
+    );
+    notifyListeners();
+
+    return (
+      devices: preset.deviceCount,
+      jacks: preset.jackCount,
+      cables: cables,
+      racks: preset.racks.length,
+      locations: locationMap.length,
+    );
+  }
+
+  /// A preset's jack labels under this room's prefix.
+  ///
+  /// The preset writes 'RM01'; a room numbered 1110 wants '111001'. Only the
+  /// leading prefix is swapped — the position number and its padding are the
+  /// preset's design and stay exactly as saved.
+  List<AvPort> _renumberedJacks(
+    List<AvPort> ports,
+    String from,
+    String to,
+  ) => [
+    for (final p in ports)
+      p.copyWith(
+        label: from.isNotEmpty && p.label.startsWith(from)
+            ? '$to${p.label.substring(from.length)}'
+            : p.label,
+      ),
+  ];
+
+  /// The current room as a reusable room type.
+  ///
+  /// Deliberately drops the cost estimate, the floor plan and the room's
+  /// identity: a negotiated price belongs to a job, a drawing belongs to a
+  /// building, and a preset that carried "Bessey 103" into every room built
+  /// from it would be a preset nobody could use twice.
+  RoomPreset currentRoomAsPreset({
+    required String name,
+    String description = '',
+  }) {
+    final jackPrefix = _dominantJackPrefix();
+    return RoomPreset(
+      name: name,
+      description: description,
+      jackPrefix: jackPrefix,
+      locations: List<RoomLocation>.from(avLocations),
+      // The markers go: they are positions on a plan this preset does not
+      // carry, and a location that claims to be placed with no plan behind it
+      // reads as a bug on the Floor Plan tab.
+      nodes: [for (final n in avNodes) n],
+      cables: List<AvCable>.from(avCables),
+      racks: List<RackFrame>.from(avRacks),
+      rackItems: List<RackItem>.from(avRackItems),
+      rackSlots: Map<String, RackSlot>.from(avRackSlots),
+      screenSwitches: List<ScreenSwitch>.from(avScreenSwitches),
+    );
+  }
+
+  /// The prefix this room's jacks share, so a preset saved from it can be
+  /// renumbered into another room. '' when there isn't one, which correctly
+  /// means "don't try to renumber these".
+  ///
+  /// The room NUMBER is asked first, because from the labels alone there is no
+  /// way to tell where the prefix ends: '111001'..'111003' share the leading
+  /// '11100', and only the room knows that '1110' is the part that changes
+  /// room to room and '01' is the jack. When the room's number is what the
+  /// jacks are actually numbered with, that is the answer. Only a room with no
+  /// number falls back to the shared-run guess, which then has to drop the
+  /// trailing digits because it cannot tell them from the numbering.
+  String _dominantJackPrefix() {
+    final labels = [
+      for (final n in avNodes)
+        if (n.isJackField)
+          for (final p in n.ports) p.label.trim(),
+    ].where((l) => l.isNotEmpty).toList();
+    if (labels.isEmpty) return '';
+
+    final setup = roomConfig['SYSTEM_SETUP'];
+    final roomNumber = ((setup is Map ? setup['gve_room']?.toString() : null) ??
+            '')
+        .replaceAll(RegExp(r'[^0-9]'), '');
+    if (roomNumber.isNotEmpty &&
+        labels.every((l) => l.startsWith(roomNumber))) {
+      return roomNumber;
+    }
+
+    // The longest leading run every label shares.
+    String prefix = labels.first;
+    for (final label in labels) {
+      int i = 0;
+      while (i < prefix.length && i < label.length && prefix[i] == label[i]) {
+        i++;
+      }
+      prefix = prefix.substring(0, i);
+      if (prefix.isEmpty) return '';
+    }
+    // Trailing digits shared by every label could belong to either side, and
+    // guessing wrong renumbers the room to nonsense. Dropped, so 'AV-01' gives
+    // 'AV-' and a purely numeric scheme with no room number gives nothing.
+    return prefix.replaceAll(RegExp(r'\d+$'), '');
+  }
+
   /// Config device keys the user deliberately removed from the canvas, so
   /// re-seeding doesn't keep dragging them back.
   final Set<String> avDismissedDevices = {};
@@ -1779,8 +2337,11 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Adds a node, keeping ids unique. Returns the node actually stored (the
   /// caller may have passed an id that was already taken).
-  AvNode addAvNode(AvNode node) {
-    _pushAvUndo('Add ${node.label}');
+  /// [recordUndo] false is for a batch that has already taken its own snapshot
+  /// — applying a room type adds twenty boxes, and twenty presses of Undo to
+  /// get back to before it is not an undo anybody uses.
+  AvNode addAvNode(AvNode node, {bool recordUndo = true}) {
+    if (recordUndo) _pushAvUndo('Add ${node.label}');
     String id = node.id;
     if (id.isEmpty || avNodeById(id) != null) {
       do {
@@ -1854,6 +2415,7 @@ class AppStateProvider extends ChangeNotifier {
     required String toPortId,
     required SignalType signal,
     String label = '',
+    bool recordUndo = true,
   }) {
     final duplicate = avCables.any((c) =>
         (c.fromNodeId == fromNodeId &&
@@ -1866,7 +2428,7 @@ class AppStateProvider extends ChangeNotifier {
             c.toPortId == fromPortId));
     if (duplicate) return null;
 
-    _pushAvUndo('Draw cable');
+    if (recordUndo) _pushAvUndo('Draw cable');
     _avCableCounter++;
     final cable = AvCable(
       id: 'C$_avCableCounter',
@@ -2153,6 +2715,9 @@ class AppStateProvider extends ChangeNotifier {
       avCables.isNotEmpty ||
       avRacks.isNotEmpty ||
       avRackItems.isNotEmpty ||
+      avLocations.isNotEmpty ||
+      avScreenSwitches.isNotEmpty ||
+      avFloorPlans.isNotEmpty ||
       roomMode != RoomMode.full ||
       !avCost.isEmpty;
 
@@ -2172,6 +2737,9 @@ class AppStateProvider extends ChangeNotifier {
     avRacks.clear();
     avRackSlots.clear();
     avRackItems.clear();
+    avLocations.clear();
+    avScreenSwitches.clear();
+    avFloorPlans.clear();
     avDismissedDevices.clear();
     avSignalColors.clear();
     avCost.clear();
@@ -2182,6 +2750,10 @@ class AppStateProvider extends ChangeNotifier {
     _avCableCounter = 0;
     _avCostCounter = 0;
     _avRackItemCounter = 0;
+    _avLocationCounter = 0;
+    _avScreenSwitchCounter = 0;
+    _avFloorPlanCounter = 0;
+    _avCalloutCounter = 0;
   }
 
   void _resetAvFlow() {
@@ -2270,6 +2842,25 @@ class AppStateProvider extends ChangeNotifier {
           if (item.id.isNotEmpty) avRackItems.add(item);
         }
       }
+      for (final l in (doc['locations'] as List? ?? [])) {
+        if (l is Map) {
+          final location =
+              RoomLocation.fromJson(Map<String, dynamic>.from(l));
+          if (location.id.isNotEmpty) avLocations.add(location);
+        }
+      }
+      for (final s in (doc['screenSwitches'] as List? ?? [])) {
+        if (s is Map) {
+          final item = ScreenSwitch.fromJson(Map<String, dynamic>.from(s));
+          if (item.id.isNotEmpty) avScreenSwitches.add(item);
+        }
+      }
+      for (final p in (doc['floorPlans'] as List? ?? [])) {
+        if (p is Map) {
+          final plan = FloorPlan.fromJson(Map<String, dynamic>.from(p));
+          if (plan.id.isNotEmpty) avFloorPlans.add(plan);
+        }
+      }
       final slots = doc['rackSlots'];
       if (slots is Map) {
         slots.forEach((nodeId, value) {
@@ -2341,6 +2932,37 @@ class AppStateProvider extends ChangeNotifier {
               math.max(_avRackItemCounter, int.parse(match.group(1)!));
         }
       }
+      // Same rebuild for the room's places, control runs and plans, so a
+      // location added after a reload can never take an id a device is
+      // already pointing at.
+      for (final l in avLocations) {
+        final match = RegExp(r'^LOC_(\d+)$').firstMatch(l.id);
+        if (match != null) {
+          _avLocationCounter =
+              math.max(_avLocationCounter, int.parse(match.group(1)!));
+        }
+      }
+      for (final s in avScreenSwitches) {
+        final match = RegExp(r'^SCRSW_(\d+)$').firstMatch(s.id);
+        if (match != null) {
+          _avScreenSwitchCounter =
+              math.max(_avScreenSwitchCounter, int.parse(match.group(1)!));
+        }
+      }
+      for (final p in avFloorPlans) {
+        final match = RegExp(r'^PLAN_(\d+)$').firstMatch(p.id);
+        if (match != null) {
+          _avFloorPlanCounter =
+              math.max(_avFloorPlanCounter, int.parse(match.group(1)!));
+        }
+        for (final c in p.callouts) {
+          final cm = RegExp(r'^CALLOUT_(\d+)$').firstMatch(c.id);
+          if (cm != null) {
+            _avCalloutCounter =
+                math.max(_avCalloutCounter, int.parse(cm.group(1)!));
+          }
+        }
+      }
 
       // The room mode says whether a control system was ever configured. It
       // travels with the diagram because that is the document that exists for
@@ -2376,14 +2998,18 @@ class AppStateProvider extends ChangeNotifier {
   /// room folder without a second, drifting copy of the field list.
   Map<String, dynamic> avFlowAsJson() => {
         '__readme': 'AV signal flow for the Room Config Builder: devices with '
-            'their connectors, the cables between them, rack elevations with '
-            'their plates and shelves, and this room\'s cost estimate (tax, '
-            'fees, labor and quoted prices).',
+            'their connectors, the cables between them, where each of them is '
+            'in the room, rack elevations with their plates and shelves, the '
+            'floor plans and their callouts, and this room\'s cost estimate '
+            '(tax, fees, labor and quoted prices).',
         'nodes': avNodes.map((n) => n.toJson()).toList(),
         'cables': avCables.map((c) => c.toJson()).toList(),
         'racks': avRacks.map((r) => r.toJson()).toList(),
         'rackItems': avRackItems.map((i) => i.toJson()).toList(),
         'rackSlots': avRackSlots.map((id, s) => MapEntry(id, s.toJson())),
+        'locations': avLocations.map((l) => l.toJson()).toList(),
+        'screenSwitches': avScreenSwitches.map((s) => s.toJson()).toList(),
+        'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
         'dismissedDevices': avDismissedDevices.toList(),
         'roomMode': roomMode.name,
         'signalColors': {
@@ -2553,19 +3179,19 @@ class AppStateProvider extends ChangeNotifier {
     if (spec == null) return true; // unknown family: no device_type to filter on
     if (entry.deviceTypes.isEmpty) return false; // untyped: checkbox-only
     final Set<String> familyTokens = {
-      _normalizeTypeToken(spec.prefix),
-      _normalizeTypeToken(spec.countKey.replaceFirst('dev_', '')),
+      normalizeDeviceTypeToken(spec.prefix),
+      normalizeDeviceTypeToken(spec.countKey.replaceFirst('dev_', '')),
       for (final w in spec.label.split(RegExp(r'[^A-Za-z0-9]+')))
-        if (w.isNotEmpty) _normalizeTypeToken(w),
+        if (w.isNotEmpty) normalizeDeviceTypeToken(w),
     }..remove('');
     return entry.deviceTypes
-        .any((t) => familyTokens.contains(_normalizeTypeToken(t)));
+        .any((t) => familyTokens.contains(normalizeDeviceTypeToken(t)));
   }
 
   /// Lowercases, strips non-alphanumerics, and drops 'device' / plural-s
   /// suffixes: 'PROJECTORDEVICE_', 'Projectors', 'projector' all become
   /// 'projector'.
-  static String _normalizeTypeToken(String s) {
+  static String normalizeDeviceTypeToken(String s) {
     var t = s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
     if (t.endsWith('device')) t = t.substring(0, t.length - 6);
     if (t.endsWith('s') && t.length > 1) t = t.substring(0, t.length - 1);
@@ -5483,6 +6109,105 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Updates the device count in SYSTEM_SETUP and generates/removes device blocks
+  /// Finishes a device block that has just been dropped into [sectionKey]:
+  /// the trailing-index substitutions, the schema's `device_defaults` for
+  /// anything the block left out, the removal of keys this connection type
+  /// can't use, and the keep-alive command off the module.
+  ///
+  /// Lifted out of [setDeviceCount] so the control-side prefill can create a
+  /// block on exactly the same terms without going through the wizard's
+  /// wipe-and-rebuild — which would discard the blocks it is adding to. Two
+  /// routes to a device block that filled it in differently would be two
+  /// kinds of room, and the difference would only show up at commissioning.
+  void applyDeviceBlockDefaults(String sectionKey) {
+    final device = roomConfig[sectionKey];
+    if (device is! Map) return;
+    final block = device is Map<String, dynamic>
+        ? device
+        : Map<String, dynamic>.from(device);
+
+    _indexSubstitute(block, sectionKey);
+
+    int added = 0;
+    uiSchema.defaultsFor(sectionKey).forEach((prop, defaultValue) {
+      if (block.containsKey(prop)) return;
+      if (uiSchema.isHiddenFor(prop, block, sectionKey: sectionKey)) return;
+      block[prop] = defaultValue;
+      added++;
+    });
+    if (added > 0) {
+      AppLogger.logInfo(
+          'Applied $added schema default(s) from device_defaults to '
+          '$sectionKey');
+    }
+
+    roomConfig[sectionKey] = block;
+    _dropKeysHiddenByConnection(sectionKey);
+    // ignore: unawaited_futures
+    _applyKeepAliveDefaults([sectionKey]);
+  }
+
+  /// Moves the AV node at [oldId] onto [newId], bringing its cables and its
+  /// rack placement with it.
+  ///
+  /// Used when a drawn device gains a config block: the two are one device,
+  /// and leaving the node under its `AVNODE_7` id would keep it on every
+  /// "on the diagram but not in the config" list forever. Returns false when
+  /// there is no such node or the new id is already taken.
+  bool rekeyAvNode(String oldId, String newId) {
+    final index = avNodes.indexWhere((n) => n.id == oldId);
+    if (index < 0 || oldId == newId) return false;
+    if (avNodeById(newId) != null) return false;
+
+    // fromConfig true: it mirrors a config block now, which is what makes it
+    // vanish from the canvas if that block is later removed.
+    avNodes[index] = avNodes[index].withId(newId).copyWith(fromConfig: true);
+
+    for (int i = 0; i < avCables.length; i++) {
+      final c = avCables[i];
+      if (c.fromNodeId != oldId && c.toNodeId != oldId) continue;
+      avCables[i] = AvCable(
+        id: c.id,
+        fromNodeId: c.fromNodeId == oldId ? newId : c.fromNodeId,
+        fromPortId: c.fromPortId,
+        toNodeId: c.toNodeId == oldId ? newId : c.toNodeId,
+        toPortId: c.toPortId,
+        signal: c.signal,
+        label: c.label,
+        waypoints: c.waypoints,
+        colorOverride: c.colorOverride,
+      );
+    }
+
+    final slot = avRackSlots.remove(oldId);
+    if (slot != null) avRackSlots[newId] = slot;
+
+    // A dismissal followed the old id; the device is in the config now, so
+    // carrying it over would hide the very block that was just created.
+    avDismissedDevices.remove(oldId);
+
+    // Callouts pointing at the device follow it, or they become dangling
+    // references on the floor plan.
+    for (int p = 0; p < avFloorPlans.length; p++) {
+      final plan = avFloorPlans[p];
+      if (!plan.callouts.any(
+        (c) => c.target == CalloutTarget.device && c.targetId == oldId,
+      )) {
+        continue;
+      }
+      avFloorPlans[p] = plan.copyWith(
+        callouts: [
+          for (final c in plan.callouts)
+            if (c.target == CalloutTarget.device && c.targetId == oldId)
+              c.copyWith(targetId: newId)
+            else
+              c,
+        ],
+      );
+    }
+    return true;
+  }
+
   void setDeviceCount(String devKey, String devicePrefix, int count, Map<String, dynamic> defaultTemplateBlock) {
     if (!roomConfig.containsKey('SYSTEM_SETUP')) return;
     

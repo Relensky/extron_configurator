@@ -161,6 +161,11 @@ On top of the equipment:
 Devices nobody has priced are counted and called out rather than being quietly
 totalled as free.
 
+**Screenshot** renders the estimate as a PNG with every control hidden and the
+page forced light — the image is the quote, not a picture of the app with an
+Export button on it — and stamps the date on it, because a quote nobody can
+tell the age of is one somebody quotes back at you next year.
+
 Saved with the diagram in `<config>_av_flow.json` — and **every config save
 writes that sidecar**, so saving the project saves the estimate. It is not a
 separate button to forget.
@@ -179,6 +184,104 @@ walks the three diagram tabs to capture them and puts you back where you
 started. Anything it could not capture is listed in the result dialog and in
 the folder's `README.txt`, rather than being quietly missing.
 
+## Where things are in the room (the `Floor Plan` tab)
+
+The signal flow says what is cabled to what. It does not say where anything
+**is** — and that is what the installer, the electrician and whoever pulls the
+cable actually ask. "Six network jacks" is not something you can order conduit
+against; "six network jacks in the front floor box" is.
+
+So a room carries a short list of **locations** — the instructor station, the
+front floor box, the ceiling, the rack — each with a **mounting surface**
+(ceiling / wall / floor / rack / lectern / table / credenza / IDF), because
+that is what changes the work. Every device, jack field and control run names
+one, from a field on its own editor, and three things fall out of it:
+
+- the reports count **jacks and cable runs per location**, grouped by surface,
+  and count runs per **cable label** ("AV-" ×6, "NET-" ×12) — the numbers a
+  rough-in is estimated from;
+- the AV canvas can draw the **floor plan behind the diagram** so the boxes
+  group by where they physically are;
+- the Floor Plan tab carries **callouts** — a numbered marker that says "the
+  rack here is Rack 1, described on the Racks tab of the workbook". The app
+  resolves the target's name itself, so renaming a rack cannot leave the plan
+  pointing at a name that no longer exists.
+
+The counts run live across the top of the plan, from the same function the
+report uses, so the page and the export cannot disagree.
+
+The plan image is copied in beside the config and travels in the room folder;
+it is not embedded, so the sidecar stays hand-readable and a 4 MB architectural
+export stays out of it.
+
+### Screen and shade control runs
+
+A three-position screen switch by the door and a motor above the board is a run
+with two ends and no signal — neither end is a box on the signal flow, so there
+was nowhere to record it and it turned up as a surprise at rough-in. Each run
+names where it **starts** and where it **ends**, what cable it is and how long,
+and comes out on its own sheet.
+
+### Jack numbering
+
+A jack number is the room's addressing scheme: an installer at the plate finds
+it on the report and expects one thing behind it. **Adding a wall box or patch
+panel checks every number against every other jack in the room** — ignoring
+case and separators, so `AV-01`, `av 01` and `AV01` are one jack — and refuses
+a clash, with the next free block one click away. Renaming a jack by hand gets
+the same check as a confirm rather than a refusal: a room really can have two
+plates numbered alike because that is what is on the wall, it just must not
+happen by accident. New boxes default to the room's own number as the prefix.
+
+## Room type presets
+
+A shop builds the same four or five rooms over and over, and starting each from
+an empty canvas is how two rooms of the same type end up with different jack
+prefixes and cable counts nobody can compare. A **room type** is a document —
+the equipment, the locations, the jack fields with their numbering, the cabling,
+the racks and the screen runs — offered when a room is created.
+
+Presets are files under `room_presets/` in the Root Folder, so they sit on the
+same drive the catalog and the rate card already do. Four ship with the app —
+**basic classroom, hyflex classroom, huddle space, active learning space** —
+written out on first use rather than compiled in, because the first thing
+anybody will do is change them; an edited copy is never overwritten. **Report →
+Save this room as a room type** writes the room you are looking at as another.
+
+Applying one renumbers its jacks into this room's scheme, re-keys everything so
+applying twice gives twice the gear rather than a collision, and reuses a
+location that already exists by name rather than creating a second "Ceiling".
+The room number, the building and the control config are left alone.
+
+## Building the control side of a room that was only budgeted
+
+A room is usually specified long before its control config: somebody walks the
+space, lists the gear, draws a rack and puts a number on it. That leaves a full
+diagram and a priced estimate and **no control blocks** — so building the
+control side has meant typing every device in a second time.
+
+**Build the control side from the diagram** (on the Cost tab, the System-tab
+placeholder, and the missing-modules banner) does it from what is already
+drawn: one config block per device, in the right family, carrying the same
+`ui_schema` defaults the Setup Wizard writes, named **sequentially per family**
+("Projector 1", "Projector 2") rather than from whatever was typed on the
+canvas. The diagram node is re-keyed onto its block, so the two become one
+device and the cables come with it.
+
+Everything is shown before anything is written, with two things called out:
+
+- devices **no python module claims** — created with the module blank, never
+  guessed, so they stay on every missing-module list in the app and in the
+  **Devices Without a Control Module** section of the report. This covers
+  generic boxes (a projector, a power controller, a screen) exactly as it
+  covers catalog models;
+- devices **no device family claims**, which usually means a speaker or a wall
+  plate that never had a control block — but a projector on that list means its
+  catalog category is what needs fixing.
+
+Nothing is destructive: existing blocks are left alone and the family counts are
+raised rather than reset.
+
 ## The room workbook
 
 **Report → Full room workbook (.xlsx)**, on both the Schematic and AV Flow
@@ -187,7 +290,8 @@ tabs, writes one book with a tab per question:
 | Sheet | Contents |
 |---|---|
 | Control | the control system as configured, plus the room's estimated power draw, current at 120/208 V, heat load and per-device power schedule |
-| AV Flow | cable schedule, pack list (with rack U, in/out and watts), jack schedule, connector utilization |
+| AV Flow | cable schedule (every run with its source, destination and the location of each end), pack list (with rack U, in/out, watts and location), jack schedule, connector utilization |
+| Locations | what is where, jacks and runs counted per location and grouped by mounting surface, runs per cable label, the screen and shade runs, and the floor plan's callouts |
 | Racks | how full and how hot each frame is, and what sits on which U |
 | Cost Estimate | equipment, other items, fees, tax, total |
 

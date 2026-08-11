@@ -2,6 +2,7 @@ import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'cost_estimate.dart';
 import 'report_tools.dart';
+import 'room_locations.dart';
 
 /// ============================================================================
 ///  AV FLOW REPORTS
@@ -11,11 +12,19 @@ import 'report_tools.dart';
 ///  a widget. Same contract as reportSections() on the Schematic tab.
 ///
 ///  Sections:
-///    * Cable schedule    — the pull sheet: what plugs into what
+///    * Cable schedule    — the pull sheet: what plugs into what, and WHERE
+///                          each end of the run is in the room
 ///    * Pack list         — the equipment order, with rack heights and watts
 ///    * Rack inventory    — U positions per frame and face, plus how full and
 ///                          how hot each frame is
 ///    * Jack schedule     — which device landed on which numbered jack
+///    * Locations         — what is where, and how many jacks and cable runs
+///                          land at each place, grouped by ceiling / wall /
+///                          floor / rack
+///    * Line counts       — runs per location per signal type, and per cable
+///                          label, which is the number that gets ordered
+///    * Screen switches   — the low-voltage control runs, start and end
+///    * Floor plan        — the callouts and what each one points at
 ///    * Power             — where each device's mains comes from, what the
 ///                          room draws, and what that is in amps and BTU/hr
 ///    * Port utilization  — used/total per device, so spare switcher inputs
@@ -47,8 +56,24 @@ List<ReportSection> avFlowSections(
   _cableSchedule(model),
   _packList(provider, model),
   if (model.nodes.any((n) => n.isJackField)) _jackSchedule(model),
+  ...locationSections(model),
   _portUtilization(model),
   ..._driverGap(provider, model),
+];
+
+/// The where-is-it half: the room's places, what lands at each of them, and
+/// the counts somebody orders cable and back boxes against.
+///
+/// Its own group so the Floor Plan tab can export exactly these sheets without
+/// dragging the whole cable schedule along, and so the room workbook can put
+/// them on a tab of their own.
+List<ReportSection> locationSections(AvFlowModel model) => [
+  if (model.locations.isNotEmpty) _locationSummary(model),
+  if (model.locations.isNotEmpty) _jackCountsByLocation(model),
+  _lineCountsByLocation(model),
+  ..._lineCountsByLabel(model),
+  if (model.screenSwitches.isNotEmpty) _screenSwitchSchedule(model),
+  ..._floorPlanCallouts(model),
 ];
 
 /// The rack elevation half: how full each frame is and what sits where.
@@ -92,12 +117,38 @@ ReportSection _roomSummary(AppStateProvider provider, AvFlowModel model) {
       ['Racks', model.racks.length],
       if (model.rackItems.isNotEmpty)
         ['Rack hardware', model.rackItems.length],
+      if (model.locations.isNotEmpty) ['Locations', model.locations.length],
+      // A count of what has NOT been located, up front rather than buried:
+      // every per-location figure below is short by exactly this much, and
+      // that is worth knowing before reading them.
+      if (model.locations.isNotEmpty &&
+          model.nodes.any((n) => n.locationId.isEmpty))
+        [
+          'Devices with no location',
+          '${model.nodes.where((n) => n.locationId.isEmpty).length} — the '
+              'per-location counts below leave these out',
+        ],
+      if (model.screenSwitches.isNotEmpty)
+        ['Screen / shade control runs', model.screenSwitches.length],
+      if (model.floorPlans.isNotEmpty)
+        [
+          'Floor plans',
+          '${model.floorPlans.length} '
+              '(${model.floorPlans.fold(0, (n, p) => n + p.callouts.length)} '
+              'callouts)',
+        ],
     ],
   );
 }
 
 /// The pull sheet. Cables are listed in creation order, which is the order
 /// their IDs were handed out, so C1..Cn read top to bottom.
+///
+/// Every run names its SOURCE and its DESTINATION — the device and port at
+/// each end, and the place in the room each end is. The two ends of a run are
+/// what somebody pulling cable needs before anything else, and a schedule that
+/// only says "switcher to display" leaves them to work out whether that is six
+/// feet inside a rack or a hundred through a ceiling.
 ReportSection _cableSchedule(AvFlowModel model) {
   final byId = model.nodesById;
 
@@ -109,26 +160,408 @@ ReportSection _cableSchedule(AvFlowModel model) {
     title: 'Cable Schedule',
     header: [
       'Cable',
+      'Label',
       'Signal',
-      'From device',
-      'From port',
-      'To device',
-      'To port',
-      'Notes',
+      'Source device',
+      'Source port',
+      'Source location',
+      'Destination device',
+      'Destination port',
+      'Destination location',
     ],
     rows: [
       for (final c in model.cables)
         [
           c.id,
+          c.label,
           kSignalCodes[c.signal] ?? c.signal.name,
           deviceName(c.fromNodeId),
           portName(c.fromNodeId, c.fromPortId),
+          model.locationNameOf(c.fromNodeId),
           deviceName(c.toNodeId),
           portName(c.toNodeId, c.toPortId),
-          c.label,
+          model.locationNameOf(c.toNodeId),
         ],
     ],
   );
+}
+
+/// What is where: one row per location, with the counts that get ordered
+/// against it.
+///
+/// The zone column is the grouping the request asked for — ceiling, wall,
+/// rack — and it is on every row rather than only in the section title,
+/// because a spreadsheet gets sorted and filtered and a heading does not
+/// survive that.
+ReportSection _locationSummary(AvFlowModel model) {
+  final rows = <List<dynamic>>[];
+
+  // Zone order rather than insertion order: a rough-in drawing is read one
+  // surface at a time, and all the ceiling work belongs together.
+  final ordered = [
+    for (final zone in RoomZone.values)
+      ...model.locations.where((l) => l.zone == zone),
+  ];
+
+  for (final location in ordered) {
+    final here = model.nodes.where((n) => n.locationId == location.id).toList();
+    final jacks = here
+        .where((n) => n.isJackField)
+        .fold(0, (sum, n) => sum + n.ports.length);
+    final devices = here.where((n) => !n.isJackField).length;
+    final runs = model.cables
+        .where(
+          (c) =>
+              model.nodesById[c.fromNodeId]?.locationId == location.id ||
+              model.nodesById[c.toNodeId]?.locationId == location.id,
+        )
+        .length;
+
+    rows.add([
+      location.callout,
+      location.name,
+      kRoomZoneLabels[location.zone] ?? location.zone.name,
+      devices,
+      here.where((n) => n.isJackField).length,
+      jacks,
+      runs,
+      location.isPlaced ? 'yes' : '',
+      location.note,
+    ]);
+  }
+
+  // Anything nobody has placed. Counted rather than dropped: a room where
+  // half the gear has no location is a room whose per-location counts are
+  // half the story, and saying so is the only honest way to print them.
+  final unplaced = model.nodes.where((n) => n.locationId.isEmpty).toList();
+  if (unplaced.isNotEmpty) {
+    rows.add([
+      '',
+      '(no location recorded)',
+      '',
+      unplaced.where((n) => !n.isJackField).length,
+      unplaced.where((n) => n.isJackField).length,
+      unplaced
+          .where((n) => n.isJackField)
+          .fold(0, (sum, n) => sum + n.ports.length),
+      '',
+      '',
+      'These are not counted under any location above',
+    ]);
+  }
+
+  return (
+    title: 'Locations',
+    header: [
+      'Callout',
+      'Location',
+      'Zone',
+      'Devices',
+      'Jack fields',
+      'Jacks',
+      'Cable ends',
+      'On plan',
+      'Notes',
+    ],
+    rows: rows,
+  );
+}
+
+/// Jacks per location, split by what they carry.
+///
+/// This is the sheet that sizes the back boxes and the conduit: "four network
+/// and two AV in the front floor box" is an order; "six jacks somewhere" is
+/// not. Grouped under the zone so all the wall plates read together.
+ReportSection _jackCountsByLocation(AvFlowModel model) {
+  final rows = <List<dynamic>>[];
+
+  for (final zone in RoomZone.values) {
+    final inZone = model.locations.where((l) => l.zone == zone).toList();
+    if (inZone.isEmpty) continue;
+
+    int zoneTotal = 0;
+    final zoneRows = <List<dynamic>>[];
+
+    for (final location in inZone) {
+      final fields = model.nodes.where(
+        (n) => n.isJackField && n.locationId == location.id,
+      );
+      // Per signal type, because a jack field can mix them and "12 jacks" is
+      // not something anybody can buy a plate for.
+      final byType = <SignalType, int>{};
+      int used = 0;
+      for (final field in fields) {
+        for (final jack in field.ports) {
+          byType[jack.signal] = (byType[jack.signal] ?? 0) + 1;
+          final patched = model.cables.any(
+            (c) =>
+                (c.fromNodeId == field.id && c.fromPortId == jack.id) ||
+                (c.toNodeId == field.id && c.toPortId == jack.id),
+          );
+          if (patched) used++;
+        }
+      }
+      if (byType.isEmpty) continue;
+
+      final total = byType.values.fold(0, (a, b) => a + b);
+      zoneTotal += total;
+      zoneRows.add([
+        location.displayName,
+        byType.entries
+            .map((e) => '${kSignalCodes[e.key] ?? e.key.name} ×${e.value}')
+            .join(', '),
+        total,
+        used,
+        total - used,
+      ]);
+    }
+
+    if (zoneRows.isEmpty) continue;
+    rows.add(['— ${kRoomZoneLabels[zone] ?? zone.name} —', '', zoneTotal, '', '']);
+    rows.addAll(zoneRows);
+  }
+
+  return (
+    title: 'Jack Counts by Location',
+    header: ['Location', 'By signal', 'Jacks', 'Patched', 'Spare'],
+    rows: rows,
+  );
+}
+
+/// Cable runs landing at each location, per signal type — "AV lines on the
+/// floor box, network lines on the floor box", which is the count the request
+/// asked for and the one a rough-in estimate is built from.
+///
+/// A run is counted at BOTH its ends when they are in different places,
+/// because both ends are a termination somebody has to make. A run with both
+/// ends in the same location counts once there rather than twice, since it
+/// never leaves the box.
+ReportSection _lineCountsByLocation(AvFlowModel model) {
+  final byId = model.nodesById;
+  // location id (or '' for unplaced) -> signal -> count
+  final counts = <String, Map<SignalType, int>>{};
+
+  void bump(String locationId, SignalType signal) {
+    counts.putIfAbsent(locationId, () => {});
+    counts[locationId]![signal] = (counts[locationId]![signal] ?? 0) + 1;
+  }
+
+  for (final c in model.cables) {
+    final from = byId[c.fromNodeId]?.locationId ?? kNoLocationId;
+    final to = byId[c.toNodeId]?.locationId ?? kNoLocationId;
+    bump(from, c.signal);
+    if (to != from) bump(to, c.signal);
+  }
+
+  final rows = <List<dynamic>>[];
+  final ordered = [
+    for (final zone in RoomZone.values)
+      ...model.locations.where((l) => l.zone == zone),
+  ];
+
+  for (final location in ordered) {
+    final here = counts[location.id];
+    if (here == null || here.isEmpty) continue;
+    final total = here.values.fold(0, (a, b) => a + b);
+    rows.add([
+      location.displayName,
+      kRoomZoneCodes[location.zone] ?? '-',
+      total,
+      for (final signal in _reportedSignals(model)) here[signal] ?? '',
+    ]);
+  }
+
+  final unplaced = counts[kNoLocationId];
+  if (unplaced != null && unplaced.isNotEmpty) {
+    rows.add([
+      '(no location recorded)',
+      '',
+      unplaced.values.fold(0, (a, b) => a + b),
+      for (final signal in _reportedSignals(model)) unplaced[signal] ?? '',
+    ]);
+  }
+
+  return (
+    title: 'Line Counts by Location',
+    header: [
+      'Location',
+      'Zone',
+      'Total ends',
+      for (final s in _reportedSignals(model)) kSignalCodes[s] ?? s.name,
+    ],
+    rows: rows,
+  );
+}
+
+/// The signal types actually present, in enum order, so the count table has a
+/// column per type in use and none for the fifteen that aren't.
+List<SignalType> _reportedSignals(AvFlowModel model) {
+  final used = {for (final c in model.cables) c.signal};
+  return SignalType.values.where(used.contains).toList();
+}
+
+/// How many runs carry each label.
+///
+/// Cable labels are how a job is actually counted at the far end — a spool of
+/// "AV-" runs and a spool of "NET-" runs are two orders — so the labels are
+/// grouped by their non-numeric stem ('AV-01', 'AV-02' → 'AV-') as well as
+/// listed in full. Runs with no label at all are counted and named, because an
+/// unlabeled run is one nobody can find again.
+List<ReportSection> _lineCountsByLabel(AvFlowModel model) {
+  if (model.cables.isEmpty) return const [];
+
+  final byStem = <String, List<AvCable>>{};
+  int unlabeled = 0;
+  for (final c in model.cables) {
+    final label = c.label.trim();
+    if (label.isEmpty) {
+      unlabeled++;
+      continue;
+    }
+    byStem.putIfAbsent(cableLabelStem(label), () => []).add(c);
+  }
+
+  if (byStem.isEmpty && unlabeled == 0) return const [];
+
+  final stems = byStem.keys.toList()..sort();
+  final rows = <List<dynamic>>[
+    for (final stem in stems)
+      [
+        stem,
+        byStem[stem]!.length,
+        // Which signal types travel under this label — a stem carrying two is
+        // usually a labeling slip worth seeing.
+        {
+          for (final c in byStem[stem]!) kSignalCodes[c.signal] ?? c.signal.name,
+        }.join(', '),
+        (byStem[stem]!.map((c) => c.label).toList()..sort()).join(', '),
+      ],
+    if (unlabeled > 0)
+      [
+        '(no label)',
+        unlabeled,
+        '',
+        'These runs have no cable ID — they cannot be found from this sheet',
+      ],
+  ];
+
+  return [
+    (
+      title: 'Line Counts by Label',
+      header: ['Label group', 'Runs', 'Signal types', 'Labels'],
+      rows: rows,
+    ),
+  ];
+}
+
+/// The non-numeric stem of a cable label: 'AV-01' → 'AV-', 'NET12' → 'NET'.
+/// A label that is nothing but digits groups under itself, since there is no
+/// stem to take.
+String cableLabelStem(String label) {
+  final trimmed = label.trim();
+  final match = RegExp(r'^(.*?)(\d+)\s*$').firstMatch(trimmed);
+  if (match == null) return trimmed;
+  final stem = match.group(1)!;
+  return stem.isEmpty ? trimmed : stem;
+}
+
+/// The low-voltage control runs: what each one drives, where the switch is and
+/// where the thing it drives is.
+///
+/// Neither end is a device on the signal flow, so without this sheet a screen
+/// switch is a run nobody drew, nobody costed and nobody pulled.
+ReportSection _screenSwitchSchedule(AvFlowModel model) {
+  String place(String locationId, String note) {
+    final name = locationId.isEmpty
+        ? ''
+        : (model.locationById(locationId)?.displayName ?? '');
+    if (name.isNotEmpty) return name;
+    return note;
+  }
+
+  return (
+    title: 'Screen / Shade Control Runs',
+    header: [
+      'Run',
+      'Controls',
+      'Start (switch)',
+      'End (motor / screen)',
+      'Cable',
+      'Run (ft)',
+      'Notes',
+    ],
+    rows: [
+      for (final s in model.screenSwitches)
+        [
+          s.id,
+          s.label,
+          place(s.startLocationId, s.startNote),
+          place(s.endLocationId, s.endNote),
+          s.cableType,
+          s.runFeet <= 0 ? '' : s.runFeet,
+          s.note,
+        ],
+    ],
+  );
+}
+
+/// The floor plan's callouts and what each one refers to.
+///
+/// This is the cross-reference the drawing set is read by: the plan says "see
+/// 3", and this table says 3 is the equipment rack, described on the Racks tab
+/// of the workbook. Resolving the target NAME here rather than making somebody
+/// type it on the plan is what stops the two drifting apart when a rack is
+/// renamed.
+List<ReportSection> _floorPlanCallouts(AvFlowModel model) {
+  final rows = <List<dynamic>>[];
+  for (final plan in model.floorPlans) {
+    for (final c in plan.callouts) {
+      rows.add([
+        c.tag,
+        plan.name,
+        kCalloutTargetLabels[c.target] ?? c.target.name,
+        _calloutTargetName(model, c),
+        c.workbookSheet,
+        c.workbookRef,
+        c.note,
+      ]);
+    }
+  }
+  if (rows.isEmpty) return const [];
+  return [
+    (
+      title: 'Floor Plan Callouts',
+      header: [
+        'Callout',
+        'Plan',
+        'Refers to',
+        'Name',
+        'Workbook sheet',
+        'Reference',
+        'Notes',
+      ],
+      rows: rows,
+    ),
+  ];
+}
+
+String _calloutTargetName(AvFlowModel model, FloorPlanCallout c) {
+  switch (c.target) {
+    case CalloutTarget.rack:
+      for (final r in model.racks) {
+        if (r.id == c.targetId) return r.name;
+      }
+      return c.targetId.isEmpty ? '' : '(rack no longer in this room)';
+    case CalloutTarget.device:
+      return model.nodesById[c.targetId]?.label ??
+          (c.targetId.isEmpty ? '' : '(device no longer on the diagram)');
+    case CalloutTarget.location:
+      return model.locationById(c.targetId)?.displayName ??
+          (c.targetId.isEmpty ? '' : '(location removed)');
+    case CalloutTarget.sheet:
+    case CalloutTarget.note:
+      return '';
+  }
 }
 
 /// The equipment order. Devices of the same model collapse into one row with
@@ -161,6 +594,14 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
       first.powerWatts <= 0 ? '' : first.powerWatts,
       first.effectiveBtu <= 0 ? '' : first.effectiveBtu.round(),
       module.isEmpty ? 'none' : module,
+      // Where the units of this line go. A group can straddle places — four
+      // identical ceiling mics in two rows — so the distinct locations are
+      // listed rather than the first one, which would quietly send them all
+      // to one end of the room.
+      {
+        for (final n in group.nodes)
+          if (n.locationId.isNotEmpty) model.locationNameOf(n.id),
+      }.where((s) => s.isNotEmpty).join(', '),
       // The pack list keeps a device the estimate leaves out: it is in the
       // room and it has to be found, wired and racked whoever paid for it.
       // Saying so here is what stops the two sheets looking like they
@@ -185,6 +626,7 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
       'Watts ea.',
       'BTU/hr ea.',
       'Control module',
+      'Location',
       'Source',
       'Notes',
     ],
@@ -202,26 +644,84 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
 /// so a fully driven room never grows this table.
 List<ReportSection> _driverGap(AppStateProvider provider, AvFlowModel model) {
   final rows = <List<dynamic>>[];
+
+  // A config block whose `module` field is blank is the sharper version of the
+  // same problem: the device HAS a place for a driver and nobody has chosen
+  // one, so it will not commission. Collected first so the config's own answer
+  // wins over the catalog lookup for the same device.
+  final assigned = <String, String>{};
+  for (final key in activeDeviceKeysIn(
+    provider.roomConfig,
+    provider.uiSchema.deviceCountMap,
+  )) {
+    final dev = provider.roomConfig[key];
+    if (dev is! Map) continue;
+    assigned[key] = dev['module']?.toString().trim() ?? '';
+  }
+
   for (final group in groupDevices(model)) {
     final node = group.first;
     if (node.isJackField) continue;
+
+    // Devices seeded from the config carry the config's verdict. A generic
+    // box added by hand — a projector, a power controller, a screen — has no
+    // config block, so the catalog lookup is the only answer available and it
+    // is reported the same way rather than being left off.
+    final configModule = assigned[node.id];
+    if (configModule != null && configModule.isNotEmpty) continue;
+
     if (node.model.trim().isEmpty) {
-      rows.add([group.label, '(no model set)', group.qty, 'Model not recorded']);
+      rows.add([
+        group.label,
+        '(no model set)',
+        group.qty,
+        configModule == null ? 'Added by hand' : 'Room config',
+        'No model recorded, so no module can be matched',
+      ]);
       continue;
     }
-    if (provider.moduleForModel(node.model).isNotEmpty) continue;
+    final claimed = provider.moduleForModel(node.model);
+    if (claimed.isNotEmpty && configModule == null) continue;
+    if (claimed.isNotEmpty && configModule != null && configModule.isEmpty) {
+      rows.add([
+        group.label,
+        node.model,
+        group.qty,
+        'Room config',
+        'No module set on the device — $claimed matches this model',
+      ]);
+      continue;
+    }
     rows.add([
       group.label,
       node.model,
       group.qty,
+      configModule == null ? 'Added by hand' : 'Room config',
       'No Python module claims this model',
     ]);
   }
+
+  // Config devices with no module that never made it onto the diagram. They
+  // are still in the room and still undriven, and a list that only covers what
+  // somebody remembered to draw is a list that misses exactly the devices
+  // nobody has got to yet.
+  final drawn = {for (final n in model.nodes) n.id};
+  for (final device in provider.devicesMissingModules) {
+    if (drawn.contains(device.key)) continue;
+    rows.add([
+      device.name,
+      device.model.isEmpty ? '(no model set)' : device.model,
+      1,
+      'Room config',
+      'No module set on the device; not on the signal flow either',
+    ]);
+  }
+
   if (rows.isEmpty) return const [];
   return [
     (
       title: 'Devices Without a Control Module',
-      header: ['Device', 'Model', 'Qty', 'Note'],
+      header: ['Device', 'Model', 'Qty', 'From', 'Note'],
       rows: rows,
     ),
   ];
@@ -437,9 +937,11 @@ ReportSection _jackSchedule(AvFlowModel model) {
       if (uses.isEmpty) {
         rows.add([
           field.label,
+          model.locationNameOf(field.id),
           jack.label,
           kSignalCodes[jack.signal] ?? jack.signal.name,
           '(spare)',
+          '',
           '',
           '',
         ]);
@@ -450,10 +952,14 @@ ReportSection _jackSchedule(AvFlowModel model) {
         final farPort = c.fromNodeId == field.id ? c.toPortId : c.fromPortId;
         rows.add([
           field.label,
+          model.locationNameOf(field.id),
           jack.label,
           kSignalCodes[c.signal] ?? c.signal.name,
           byId[farNode]?.label ?? farNode,
           byId[farNode]?.portById(farPort)?.label ?? farPort,
+          // Where the far end lands — the second half of "where does this
+          // jack go", which is the whole question the sheet is read for.
+          model.locationNameOf(farNode),
           c.id,
         ]);
       }
@@ -464,10 +970,12 @@ ReportSection _jackSchedule(AvFlowModel model) {
     title: 'Jack Schedule',
     header: [
       'Wall box / panel',
+      'Location',
       'Jack',
       'Signal',
       'Connected device',
       'Device port',
+      'Device location',
       'Cable',
     ],
     rows: rows,

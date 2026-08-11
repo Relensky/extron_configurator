@@ -372,8 +372,8 @@ void main() {
         parentFolder: dir.path,
       );
       // No PNGs were handed in — the folder says so rather than being
-      // quietly short of three images.
-      expect(result.skipped.where((s) => s.endsWith('captured')).length, 3);
+      // quietly short of the four drawings.
+      expect(result.skipped.where((s) => s.endsWith('captured')).length, 4);
       final readme = File(
         p.join(result.folder, 'README.txt'),
       ).readAsStringSync();

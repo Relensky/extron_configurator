@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'room_locations.dart';
+
 /// ============================================================================
 ///  AV SIGNAL FLOW — DATA MODEL
 /// ============================================================================
@@ -519,6 +521,15 @@ class AvNode {
   /// list are facts about the room, not about the invoice.
   final bool excludeFromCost;
 
+  /// Which of the room's [RoomLocation]s this box physically sits in, or ''
+  /// when nobody has said.
+  ///
+  /// An id rather than a name so renaming "Front floor box" to "FB-1" moves
+  /// every device, every jack count and every cable endpoint with it, instead
+  /// of stranding the ones typed before the rename under the old spelling —
+  /// which is exactly what makes a per-location count untrustworthy.
+  final String locationId;
+
   const AvNode({
     required this.id,
     required this.label,
@@ -533,6 +544,7 @@ class AvNode {
     this.powerSource = PowerSource.unspecified,
     this.note = '',
     this.excludeFromCost = false,
+    this.locationId = kNoLocationId,
   });
 
   /// Numbered jacks rather than a device's connectors — a wall box OR a patch
@@ -571,6 +583,7 @@ class AvNode {
     powerSource: powerSource,
     note: note,
     excludeFromCost: excludeFromCost,
+    locationId: locationId,
   );
 
   AvNode copyWith({
@@ -586,6 +599,7 @@ class AvNode {
     PowerSource? powerSource,
     String? note,
     bool? excludeFromCost,
+    String? locationId,
   }) => AvNode(
     id: id,
     label: label ?? this.label,
@@ -600,6 +614,7 @@ class AvNode {
     powerSource: powerSource ?? this.powerSource,
     note: note ?? this.note,
     excludeFromCost: excludeFromCost ?? this.excludeFromCost,
+    locationId: locationId ?? this.locationId,
   );
 
   List<AvPort> get leftPorts =>
@@ -726,6 +741,7 @@ class AvNode {
     if (powerSource != PowerSource.unspecified) 'power': powerSource.name,
     if (note.isNotEmpty) 'note': note,
     if (excludeFromCost) 'excludeFromCost': true,
+    if (locationId.isNotEmpty) 'location': locationId,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
 
@@ -745,6 +761,7 @@ class AvNode {
     powerSource: powerSourceFromName(json['power']?.toString()),
     note: json['note']?.toString() ?? '',
     excludeFromCost: json['excludeFromCost'] == true,
+    locationId: json['location']?.toString() ?? kNoLocationId,
     ports: [
       for (final p in (json['ports'] as List? ?? []))
         if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),
@@ -1663,6 +1680,15 @@ class AvFlowModel {
   /// the palette lists these.
   final List<AvUnplacedDevice> unplaced;
 
+  /// Where things are in the room, in the order the user arranged them.
+  final List<RoomLocation> locations;
+
+  /// Screen / shade control runs, which have two ends and no signal.
+  final List<ScreenSwitch> screenSwitches;
+
+  /// Floor plans with their callouts.
+  final List<FloorPlan> floorPlans;
+
   const AvFlowModel({
     required this.nodes,
     required this.cables,
@@ -1672,9 +1698,42 @@ class AvFlowModel {
     required this.roomTitle,
     required this.unplaced,
     this.rackItems = const [],
+    this.locations = const [],
+    this.screenSwitches = const [],
+    this.floorPlans = const [],
   });
 
   Map<String, AvNode> get nodesById => {for (final n in nodes) n.id: n};
+
+  Map<String, RoomLocation> get locationsById => {
+    for (final l in locations) l.id: l,
+  };
+
+  RoomLocation? locationById(String id) {
+    for (final l in locations) {
+      if (l.id == id) return l;
+    }
+    return null;
+  }
+
+  /// What a report prints in a location column for whatever is at [nodeId]:
+  /// the location's display name, or a blank when nobody said where it is.
+  ///
+  /// Blank rather than "unknown" on purpose — a column of "unknown" reads as
+  /// an error in the export, where an empty cell reads as a question nobody
+  /// has answered yet, which is what it is.
+  String locationNameOf(String nodeId) {
+    final id = nodesById[nodeId]?.locationId ?? kNoLocationId;
+    if (id.isEmpty) return '';
+    return locationById(id)?.displayName ?? '';
+  }
+
+  /// The zone whatever is at [nodeId] sits in.
+  RoomZone zoneOf(String nodeId) {
+    final id = nodesById[nodeId]?.locationId ?? kNoLocationId;
+    if (id.isEmpty) return RoomZone.unspecified;
+    return locationById(id)?.zone ?? RoomZone.unspecified;
+  }
 
   AvNode? nodeById(String id) {
     for (final n in nodes) {
@@ -1704,6 +1763,122 @@ class AvFlowModel {
   static bool cableIsResolvable(AvCable c, Map<String, AvNode> byId) =>
       byId[c.fromNodeId]?.portById(c.fromPortId) != null &&
       byId[c.toNodeId]?.portById(c.toPortId) != null;
+}
+
+// ---------------------------------------------------------------------------
+//  JACK NUMBERING
+// ---------------------------------------------------------------------------
+
+/// Where one jack label is already in use.
+typedef JackUse = ({String nodeId, String nodeLabel, String portId});
+
+/// Every jack label already spoken for in [nodes], keyed by the normalized
+/// label, with the box each one is on.
+///
+/// Jack numbers are the room's addressing scheme: an installer at the wall
+/// plate finds "111004" on the report and expects exactly one thing at the
+/// other end of it. Two boxes numbered the same is not a cosmetic problem —
+/// it is a patch that gets made to the wrong jack, found at commissioning.
+///
+/// Only jack fields and patch panels count. A device's HDMI 1 is not a jack
+/// number, and every switcher in the room having one is not a clash.
+Map<String, List<JackUse>> jackLabelIndex(Iterable<AvNode> nodes) {
+  final index = <String, List<JackUse>>{};
+  for (final node in nodes) {
+    if (!node.isJackField) continue;
+    for (final port in node.ports) {
+      final key = normalizeJackLabel(port.label);
+      if (key.isEmpty) continue;
+      index
+          .putIfAbsent(key, () => [])
+          .add((nodeId: node.id, nodeLabel: node.label, portId: port.id));
+    }
+  }
+  return index;
+}
+
+/// The form two jack labels are compared in.
+///
+/// Case and separators are dropped because "AV-01", "av 01" and "AV01" are one
+/// jack written three ways, and a duplicate check that misses those is a check
+/// nobody can rely on. Leading zeros are KEPT: 01 and 1 are genuinely different
+/// labels in a scheme that pads, and silently merging them would refuse a
+/// legitimate number.
+String normalizeJackLabel(String label) =>
+    label.trim().toLowerCase().replaceAll(RegExp(r'[\s\-_./]'), '');
+
+/// The labels in [candidates] that are already used somewhere in [nodes],
+/// ignoring anything on [exceptNodeId] — which is what an EDIT of an existing
+/// box needs, since its own current numbers must not read as clashes with
+/// themselves.
+///
+/// Also catches duplicates WITHIN [candidates]: a badly chosen prefix and
+/// start number can collide a new box with itself before it ever reaches the
+/// canvas.
+List<({String label, String usedBy})> duplicateJackLabels(
+  Iterable<String> candidates,
+  Iterable<AvNode> nodes, {
+  String exceptNodeId = '',
+}) {
+  final index = jackLabelIndex(nodes);
+  final clashes = <({String label, String usedBy})>[];
+  final seen = <String, String>{};
+
+  for (final label in candidates) {
+    final key = normalizeJackLabel(label);
+    if (key.isEmpty) continue;
+
+    if (seen.containsKey(key)) {
+      clashes.add((label: label, usedBy: 'twice in this box'));
+      continue;
+    }
+    seen[key] = label;
+
+    final uses = (index[key] ?? const <JackUse>[])
+        .where((u) => u.nodeId != exceptNodeId)
+        .toList();
+    if (uses.isNotEmpty) {
+      clashes.add((
+        label: label,
+        usedBy: uses.map((u) => u.nodeLabel).toSet().join(', '),
+      ));
+    }
+  }
+  return clashes;
+}
+
+/// The first number at or after [start] that gives [count] consecutive jack
+/// labels none of which clash, or null when there isn't one within a sane
+/// search.
+///
+/// This is what makes the duplicate check usable rather than merely correct:
+/// being told "111001 is taken" and left to guess is worse than being offered
+/// the next free block outright.
+int? nextFreeJackStart({
+  required String prefix,
+  required int start,
+  required int count,
+  required int width,
+  required Iterable<AvNode> nodes,
+  String exceptNodeId = '',
+}) {
+  final index = jackLabelIndex(nodes);
+  bool free(int first) {
+    for (int i = 0; i < count; i++) {
+      final label = '$prefix${'${first + i}'.padLeft(width, '0')}';
+      final uses = (index[normalizeJackLabel(label)] ?? const <JackUse>[])
+          .where((u) => u.nodeId != exceptNodeId);
+      if (uses.isNotEmpty) return false;
+    }
+    return true;
+  }
+
+  // Far enough to step over any plausible existing numbering, and bounded so a
+  // pathological prefix can't spin the UI.
+  for (int first = start; first < start + 2000; first++) {
+    if (free(first)) return first;
+  }
+  return null;
 }
 
 /// A config device that has ports available but isn't on the canvas yet.

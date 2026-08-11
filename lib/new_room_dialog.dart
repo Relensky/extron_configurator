@@ -1,6 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'room_presets.dart';
 
 /// ============================================================================
 ///  NEW ROOM — THE TWO QUESTIONS WORTH ASKING UP FRONT
@@ -29,12 +33,25 @@ import 'app_state.dart';
 ///       flow diagram, the racks and the estimate all need. One list, entered
 ///       once.
 ///
-///  Both default to the old behavior, so pressing Create without reading
+///    3. WHAT KIND OF ROOM IS IT? Most of what goes in a basic classroom is
+///       the same as the last basic classroom — the same locations, the same
+///       jack numbering scheme, very nearly the same cable count. A ROOM TYPE
+///       stamps all of that in at once, so two rooms of the same kind come out
+///       comparable instead of diverging by whoever drew them. The types are
+///       files in the project root, so a shop edits ours or saves its own.
+///
+///  All three default to the old behavior, so pressing Create without reading
 ///  anything gives exactly what it always gave.
 /// ============================================================================
 
 /// What the user chose. Null when they canceled.
-typedef NewRoomChoice = ({RoomMode mode, bool startFromEstimator});
+///
+/// [preset] null means "start empty", which is the default.
+typedef NewRoomChoice = ({
+  RoomMode mode,
+  bool startFromEstimator,
+  RoomPreset? preset,
+});
 
 Future<NewRoomChoice?> showNewRoomDialog(BuildContext context) =>
     showDialog<NewRoomChoice>(
@@ -52,17 +69,27 @@ class _NewRoomDialog extends StatefulWidget {
 class _NewRoomDialogState extends State<_NewRoomDialog> {
   RoomMode _mode = RoomMode.full;
   bool _startFromEstimator = false;
+  RoomPreset? _preset;
+
+  /// Read once. Touching the disk on every rebuild of a dialog that rebuilds
+  /// on every radio press is not something to do to a network drive.
+  List<RoomPreset>? _presets;
+
+  List<RoomPreset> _availablePresets(AppStateProvider provider) =>
+      _presets ??= provider.availableRoomPresets();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
+    final presets = _availablePresets(provider);
+
     return AlertDialog(
       title: const Text('New room'),
       content: SizedBox(
-        width: 560,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        width: 620,
+        height: math.min(620, MediaQuery.of(context).size.height - 180),
+        child: ListView(
           children: [
             Text(
               'Will a control system be set up for this room?',
@@ -100,6 +127,80 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
               ),
             ),
             const Divider(height: 28),
+            Text('What kind of room is it?', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 2),
+            Text(
+              'A room type brings its usual equipment, locations, jack '
+              'numbering and cable runs. The room number, the building and the '
+              'control config are left alone.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            RadioGroup<String>(
+              // Keyed on the name rather than the object: the list is rebuilt
+              // from disk, and a radio group comparing instances would lose
+              // its selection the moment anything reloaded it.
+              groupValue: _preset?.name ?? '',
+              onChanged: (v) => setState(
+                () => _preset = (v == null || v.isEmpty)
+                    ? null
+                    : presets.where((p) => p.name == v).firstOrNull,
+              ),
+              child: Column(
+                children: [
+                  const RadioListTile<String>(
+                    value: '',
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Start empty'),
+                    subtitle: Text(
+                      'Just the room. Add the equipment yourself.',
+                    ),
+                  ),
+                  for (final preset in presets)
+                    RadioListTile<String>(
+                      value: preset.name,
+                      contentPadding: EdgeInsets.zero,
+                      title: Row(
+                        children: [
+                          Text(preset.name),
+                          if (!preset.builtIn) ...[
+                            const SizedBox(width: 8),
+                            Chip(
+                              label: const Text('yours'),
+                              visualDensity: VisualDensity.compact,
+                              labelStyle: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
+                      subtitle: Text(
+                        [
+                          preset.description,
+                          '${preset.deviceCount} device'
+                              '${preset.deviceCount == 1 ? '' : 's'} · '
+                              '${preset.jackCount} jack'
+                              '${preset.jackCount == 1 ? '' : 's'} · '
+                              '${preset.cables.length} run'
+                              '${preset.cables.length == 1 ? '' : 's'}',
+                        ].where((s) => s.isNotEmpty).join('\n'),
+                      ),
+                      isThreeLine: preset.description.isNotEmpty,
+                    ),
+                ],
+              ),
+            ),
+            if (presets.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 16, top: 4),
+                child: Text(
+                  'No room types found in the project root. They are written '
+                  'to "$kRoomPresetFolder" under the Root Folder set in App '
+                  'Config, and the four shipped ones appear there the first '
+                  'time this dialog can reach it.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            const Divider(height: 28),
             CheckboxListTile(
               value: _startFromEstimator,
               onChanged: (v) =>
@@ -111,7 +212,8 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
                 'Pick the devices out of the catalog with quantities and a '
                 'running total first. They become the boxes on the signal '
                 'flow, the gear in the racks and the lines on the estimate — '
-                'one list, entered once.',
+                'one list, entered once. Runs after the room type, so both '
+                'can be used together.',
               ),
             ),
           ],
@@ -126,6 +228,7 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
           onPressed: () => Navigator.of(context).pop((
             mode: _mode,
             startFromEstimator: _startFromEstimator,
+            preset: _preset,
           )),
           child: const Text('Create'),
         ),

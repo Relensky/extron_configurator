@@ -87,6 +87,12 @@ void main() {
         as List<int>,
   );
 
+  /// A sheet by NAME. The book gains tabs — Locations landed between AV Flow
+  /// and Racks — and every test pinned to sheet3.xml failed on that without
+  /// anything being wrong with the sheet it meant.
+  String sheetNamed(Archive archive, String name) =>
+      sheetText(archive, kRoomWorkbookSheets.indexOf(name) + 1);
+
   test('the book has one tab per question, in order', () {
     final p = room();
     final archive = ZipDecoder().decodeBytes(
@@ -96,6 +102,7 @@ void main() {
     expect(kRoomWorkbookSheets, [
       'Control',
       'AV Flow',
+      'Locations',
       'Racks',
       'Cost Estimate',
     ]);
@@ -106,7 +113,7 @@ void main() {
     final archive = ZipDecoder().decodeBytes(
       buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
     );
-    final control = sheetText(archive, 1);
+    final control = sheetNamed(archive, 'Control');
 
     expect(control, contains('Bessey 103'));
     expect(control, contains('Main Switcher'));
@@ -121,7 +128,7 @@ void main() {
     final archive = ZipDecoder().decodeBytes(
       buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
     );
-    final av = sheetText(archive, 2);
+    final av = sheetNamed(archive, 'AV Flow');
     expect(av, contains('Cable Schedule'));
     expect(av, contains('Pack List'));
     expect(av, contains('Switcher Y'));
@@ -132,7 +139,7 @@ void main() {
     final archive = ZipDecoder().decodeBytes(
       buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
     );
-    final racks = sheetText(archive, 3);
+    final racks = sheetNamed(archive, 'Racks');
     expect(racks, contains('Rack Summary'));
     expect(racks, contains('Lectern rack'));
     expect(racks, contains('Rack Inventory'));
@@ -144,7 +151,7 @@ void main() {
     final archive = ZipDecoder().decodeBytes(
       buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
     );
-    final cost = sheetText(archive, 4);
+    final cost = sheetNamed(archive, 'Cost Estimate');
 
     expect(cost, contains('Equipment'));
     expect(cost, contains('Freight (4% of subtotal)'));
@@ -168,7 +175,7 @@ void main() {
     // The grand total: still <v>2860.0</v> — a figure that adds up — but
     // wearing one of the currency styles rather than reading as bare 2860.
     final total = RegExp(r'<c r="B\d+" s="(\d+)"><v>2860\.0</v></c>')
-        .firstMatch(sheetText(archive, 4));
+        .firstMatch(sheetNamed(archive, 'Cost Estimate'));
     expect(total, isNotNull, reason: 'the total is a numeric cell');
     expect(
       int.parse(total!.group(1)!),
@@ -200,8 +207,8 @@ void main() {
     final archive = ZipDecoder().decodeBytes(
       buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
     );
-    expect(sheetText(archive, 2), contains('60-1234-01')); // pack list
-    expect(sheetText(archive, 4), contains('60-1234-01')); // equipment lines
+    expect(sheetNamed(archive, 'AV Flow'), contains('60-1234-01'));
+    expect(sheetNamed(archive, 'Cost Estimate'), contains('60-1234-01'));
   });
 
   test('the rack elevation is embedded on the Racks sheet', () {
@@ -234,7 +241,7 @@ void main() {
       reason: 'the elevation travels inside the book',
     );
     expect(
-      sheetText(archive, 3),
+      sheetNamed(archive, 'Racks'),
       contains('<drawing'),
       reason: 'and hangs off the Racks sheet, under its tables',
     );
@@ -251,7 +258,10 @@ void main() {
       buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
     );
     expect(tabNames(archive), kRoomWorkbookSheets);
-    expect(sheetText(archive, 3), contains('No rack frames'));
-    expect(sheetText(archive, 4), contains('No devices on the diagram'));
+    expect(sheetNamed(archive, 'Racks'), contains('No rack frames'));
+    expect(
+      sheetNamed(archive, 'Cost Estimate'),
+      contains('No devices on the diagram'),
+    );
   });
 }

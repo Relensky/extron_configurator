@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'control_prefill_dialog.dart';
 
 /// ============================================================================
 ///  AV-ONLY ROOMS
@@ -74,18 +75,40 @@ class ControlSystemPlaceholder extends StatelessWidget {
               const SizedBox(height: 24),
               const MissingModulesBanner(),
               const SizedBox(height: 24),
+              // The one that does the work, first. A room budgeted before its
+              // control config already has every device recorded on the
+              // diagram; typing them all in again is the step this replaces,
+              // and offering only the bare mode switch left that job to
+              // whoever pressed it.
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: BuildControlSideButton(prominent: true),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Creates a control block for every device on the signal flow, '
+                'prefilled from this application\'s defaults for its family '
+                'and named in order. Devices no python module claims are '
+                'created with the module blank and flagged, here and on the '
+                'exported report.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.disabledColor,
+                ),
+              ),
+              const SizedBox(height: 20),
               Align(
                 alignment: Alignment.centerLeft,
-                child: ElevatedButton.icon(
+                child: OutlinedButton.icon(
                   icon: const Icon(Icons.play_arrow, size: 18),
-                  label: const Text('Set up the control system now'),
+                  label: const Text('Just turn the tabs on'),
                   onPressed: () => provider.setRoomMode(RoomMode.full),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Turns the System and Raw JSON tabs back on. Nothing is '
-                'discarded either way — the mode is recorded with the room.',
+                'Turns the System and Raw JSON tabs back on without creating '
+                'anything. Nothing is discarded either way — the mode is '
+                'recorded with the room.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.disabledColor,
                 ),
@@ -194,12 +217,19 @@ class MissingModulesBanner extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 'On the AV diagram but not in the room config, so there is '
-                'nowhere to put a module yet. Add the matching device count '
-                'on the Wizard tab when the control side is built.',
+                'nowhere to put a module yet.',
                 style: theme.textTheme.bodySmall?.copyWith(color: onError),
               ),
               const SizedBox(height: 6),
               chips(uncontrolled),
+              // The fix, next to the problem. Raising each device count by
+              // hand on the Wizard tab is the same work done slower and with
+              // the names left to whoever types them.
+              const SizedBox(height: 8),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: BuildControlSideButton(),
+              ),
             ],
           ],
         ),

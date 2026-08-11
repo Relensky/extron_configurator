@@ -14,12 +14,14 @@ import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'av_rack_view.dart' show iconForRackItem;
 import 'base_costs_dialog.dart';
+import 'control_prefill_dialog.dart';
 import 'cost_estimate.dart';
 import 'export_tools.dart';
 import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
+import 'screenshot_tools.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -56,6 +58,18 @@ class CostEstimateView extends StatefulWidget {
 }
 
 class _CostEstimateViewState extends State<CostEstimateView> {
+  /// Wrapped round the estimate itself, for the screenshot button.
+  final GlobalKey _sheetKey = GlobalKey();
+
+  /// True while a screenshot is being taken. Every control on the page reads
+  /// this and stands down for the one frame that gets captured.
+  ///
+  /// A rendered PNG is what goes in an email or a ticket, and a picture of a
+  /// quote with an "Export" button and a row of delete icons on it is a
+  /// picture somebody has to apologize for. Hiding them rather than cropping
+  /// keeps the numbers laid out exactly as they are on screen.
+  bool _capturing = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +79,73 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       // visit to whichever tab gets there first.
       context.read<AppStateProvider>().ensureAvFlowForCurrentConfig();
     });
+  }
+
+  /// Renders the estimate to a PNG with the controls out of the way.
+  Future<void> _screenshot(AppStateProvider provider) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _capturing = true);
+    // Two frames: one to lay the page out without the buttons, one to paint
+    // it. Without the second the capture can catch the frame that still has
+    // them.
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+
+    Uint8List? bytes;
+    try {
+      bytes = await captureBoundary(_sheetKey, pixelRatio: 2.0);
+    } finally {
+      // In a finally, because a page left permanently without its buttons is
+      // a far worse outcome than a failed screenshot.
+      if (mounted) setState(() => _capturing = false);
+    }
+
+    if (bytes == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not render the estimate to an image.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    String? outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Save the cost estimate image',
+      fileName: '${roomFileStem(provider, 'cost_estimate')}.png',
+      type: FileType.custom,
+      allowedExtensions: const ['png'],
+    );
+    if (outputFile == null) return;
+    if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
+    try {
+      await File(outputFile).writeAsBytes(bytes);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Cost estimate image saved as $outputFile')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to save the image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// True when this room has priced equipment that no control block backs.
+  ///
+  /// Restricted to rooms that are AV-only or have no control devices at all,
+  /// because in a finished room a box on the diagram without a block is
+  /// usually deliberate — a display, a laptop input, a speaker — and prompting
+  /// about those every visit is how a prompt becomes wallpaper.
+  static bool _needsControlSide(AppStateProvider provider) {
+    if (provider.avDevicesWithoutControl.isEmpty) return false;
+    if (provider.isAvOnlyRoom) return true;
+    return activeDeviceKeysIn(
+      provider.roomConfig,
+      provider.uiSchema.deviceCountMap,
+    ).isEmpty;
   }
 
   @override
@@ -84,30 +165,51 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       tier: provider.pricingTier,
     );
     final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      children: [
-        _header(context, provider, estimate, model),
-        const SizedBox(height: 12),
-        _equipmentCard(context, provider, estimate),
-        const SizedBox(height: 12),
-        _hardwareCard(context, provider, estimate),
-        const SizedBox(height: 12),
-        _cablingCard(context, provider, estimate, model),
-        const SizedBox(height: 12),
-        _laborCard(context, provider, estimate),
-        const SizedBox(height: 12),
-        _itemsCard(context, provider, estimate),
-        const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _feesCard(context, provider, settings)),
-            const SizedBox(width: 12),
-            SizedBox(width: 380, child: _totalsCard(context, estimate, theme)),
-          ],
+    return RepaintBoundary(
+      key: _sheetKey,
+      // The captured image is a document, not a screenshot of a dark app —
+      // a quote printed white reads the way a quote is expected to read.
+      child: Container(
+        color: _capturing ? Colors.white : null,
+        child: Theme(
+          data: _capturing ? ThemeData.light(useMaterial3: true) : theme,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            // A capture has to render the WHOLE estimate, not the part that
+            // happens to be scrolled into view, so the list stops being a
+            // viewport for the frame that gets photographed.
+            physics: _capturing
+                ? const NeverScrollableScrollPhysics()
+                : null,
+            shrinkWrap: _capturing,
+            children: [
+              _header(context, provider, estimate, model),
+              const SizedBox(height: 12),
+              _equipmentCard(context, provider, estimate),
+              const SizedBox(height: 12),
+              _hardwareCard(context, provider, estimate),
+              const SizedBox(height: 12),
+              _cablingCard(context, provider, estimate, model),
+              const SizedBox(height: 12),
+              _laborCard(context, provider, estimate),
+              const SizedBox(height: 12),
+              _itemsCard(context, provider, estimate),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _feesCard(context, provider, settings)),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 380,
+                    child: _totalsCard(context, estimate, theme),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 
@@ -130,65 +232,81 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               children: [
                 Text('Room Cost Estimate', style: theme.textTheme.titleLarge),
                 const Spacer(),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.engineering, size: 18),
-                  label: const Text('Labor rates'),
-                  onPressed: () => showLaborRatesDialog(context, provider),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.price_change_outlined, size: 18),
-                  label: const Text('Base costs'),
-                  onPressed: () => showBaseCostsDialog(context, provider),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.save, size: 18),
-                  label: const Text('Save AV Setup'),
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final saved = await provider.saveAvFlow();
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          saved.isEmpty
-                              ? 'Failed to save the estimate.'
-                              : 'Estimate saved with the AV setup: $saved',
+                // Every control drops out for the frame the screenshot
+                // catches, so the image is the quote and nothing else.
+                if (!_capturing) ...[
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.engineering, size: 18),
+                    label: const Text('Labor rates'),
+                    onPressed: () => showLaborRatesDialog(context, provider),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.price_change_outlined, size: 18),
+                    label: const Text('Base costs'),
+                    onPressed: () => showBaseCostsDialog(context, provider),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                    label: const Text('Screenshot'),
+                    onPressed: () => _screenshot(provider),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.save, size: 18),
+                    label: const Text('Save AV Setup'),
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final saved = await provider.saveAvFlow();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            saved.isEmpty
+                                ? 'Failed to save the estimate.'
+                                : 'Estimate saved with the AV setup: $saved',
+                          ),
                         ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  // Three ways out, because an estimate gets read in three
+                  // places: a spreadsheet somebody sums, a text file that goes
+                  // in a ticket, and a paste into an email.
+                  PopupMenuButton<String>(
+                    tooltip: 'Export the estimate',
+                    onSelected: (v) =>
+                        _exportEstimate(context, provider, estimate, model, v),
+                    itemBuilder: (ctx) => const [
+                      PopupMenuItem(
+                        value: 'xlsx',
+                        child: Text('Excel workbook (.xlsx)'),
                       ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                // Three ways out, because an estimate gets read in three
-                // places: a spreadsheet somebody sums, a text file that goes
-                // in a ticket, and a paste into an email.
-                PopupMenuButton<String>(
-                  tooltip: 'Export the estimate',
-                  onSelected: (v) =>
-                      _exportEstimate(context, provider, estimate, model, v),
-                  itemBuilder: (ctx) => const [
-                    PopupMenuItem(
-                      value: 'xlsx',
-                      child: Text('Excel workbook (.xlsx)'),
-                    ),
-                    PopupMenuItem(
-                      value: 'txt',
-                      child: Text('Plain text (.txt)'),
-                    ),
-                    PopupMenuItem(
-                      value: 'copy',
-                      child: Text('Copy text to clipboard'),
-                    ),
-                  ],
-                  child: IgnorePointer(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.ios_share, size: 18),
-                      label: const Text('Export'),
-                      onPressed: () {},
+                      PopupMenuItem(
+                        value: 'txt',
+                        child: Text('Plain text (.txt)'),
+                      ),
+                      PopupMenuItem(
+                        value: 'copy',
+                        child: Text('Copy text to clipboard'),
+                      ),
+                    ],
+                    child: IgnorePointer(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.ios_share, size: 18),
+                        label: const Text('Export'),
+                        onPressed: () {},
+                      ),
                     ),
                   ),
-                ),
+                ] else
+                  // The image needs a date on it: a quote nobody can tell the
+                  // age of is a quote somebody quotes back at you next year.
+                  Text(
+                    reportTimestamp(),
+                    style: theme.textTheme.bodySmall,
+                  ),
               ],
             ),
             const SizedBox(height: 4),
@@ -200,6 +318,31 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               'symbol is set in App Config.',
               style: theme.textTheme.bodySmall,
             ),
+            // A budgeted room is the one that has gear on the diagram and no
+            // control blocks behind it, and this is the page somebody is on
+            // when they decide to go and build them. Offering it here rather
+            // than only on the System tab saves the trip to a tab that is
+            // switched off in exactly the room that needs this.
+            if (!_capturing && _needsControlSide(provider)) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const BuildControlSideButton(),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${provider.avDevicesWithoutControl.length} device'
+                      '${provider.avDevicesWithoutControl.length == 1 ? '' : 's'} '
+                      'on this estimate have no control block yet. This '
+                      'creates one each, prefilled from the application '
+                      'defaults and named in order, and flags any the module '
+                      'library does not claim.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [

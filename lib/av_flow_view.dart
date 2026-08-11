@@ -21,6 +21,9 @@ import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'view_zoom.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
+import 'room_locations.dart';
+import 'room_locations_view.dart';
+import 'room_presets.dart';
 import 'screenshot_tools.dart';
 import 'workbook_export.dart';
 import 'xlsx_writer.dart';
@@ -110,6 +113,9 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
     roomTitle:
         (setup is Map ? setup['gui_full_room_name']?.toString() : '') ?? '',
     unplaced: unplaced,
+    locations: provider.avLocations,
+    screenSwitches: provider.avScreenSwitches,
+    floorPlans: provider.avFloorPlans,
   );
 }
 
@@ -207,6 +213,20 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// Polylines from the last build, for cable hit-testing and handles.
   Map<String, List<Offset>> _paths = {};
 
+  /// Where the last double-click landed. onDoubleTap carries no position and
+  /// onDoubleTapDown carries no "it was a double" — so the two are paired.
+  Offset? _doubleTapAt;
+
+  /// Whether the floor plan is drawn behind the diagram.
+  bool _showFloorPlan = false;
+
+  /// The decoded plan, held so it isn't re-read from disk on every repaint.
+  ImageProvider? _planImage;
+
+  /// The plan file [_planImage] was built from, so a re-import or a switch to
+  /// a different plan is noticed.
+  String _planImagePath = '';
+
   @override
   void initState() {
     super.initState();
@@ -222,6 +242,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       if (provider.avNodes.isEmpty && provider.roomConfig.isNotEmpty) {
         _seedFromConfig(provider, silent: true);
       }
+      _syncFloorPlanImage(provider);
     });
   }
 
@@ -230,6 +251,23 @@ class _AvFlowViewState extends State<AvFlowView> {
     unregisterDiagramCanvas(AppTab.avFlow, _diagramKey);
     _transform.dispose();
     super.dispose();
+  }
+
+  /// Rebuilds [_planImage] when the room's plan changes. Cheap when nothing
+  /// moved, which is every build but the one after an import.
+  void _syncFloorPlanImage(AppStateProvider provider) {
+    final plan = provider.primaryFloorPlan;
+    final resolved = plan == null
+        ? ''
+        : provider.resolveFloorPlanImage(plan.imageFile);
+    if (resolved == _planImagePath) return;
+    setState(() {
+      _planImagePath = resolved;
+      _planImage = resolved.isEmpty || !File(resolved).existsSync()
+          ? null
+          : FileImage(File(resolved));
+      if (_planImage == null) _showFloorPlan = false;
+    });
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -653,6 +691,13 @@ class _AvFlowViewState extends State<AvFlowView> {
     final model = _withDragPreview(buildAvFlowModel(provider));
     final theme = Theme.of(context);
 
+    // A plan imported on the Floor Plan tab has to reach this canvas without
+    // the user knowing there are two pages involved. Deferred a frame because
+    // the sync calls setState and this is build().
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncFloorPlanImage(provider);
+    });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -746,6 +791,20 @@ class _AvFlowViewState extends State<AvFlowView> {
             label: const Text('Colors'),
             onPressed: () => _showPaletteDialog(provider),
           ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.place_outlined, size: 18),
+            label: Text('Locations (${provider.avLocations.length})'),
+            onPressed: () => showLocationManager(context, provider),
+          ),
+          // Only offered when there is a plan to show — a toggle that does
+          // nothing is worse than no toggle.
+          if (_planImage != null)
+            FilterChip(
+              avatar: const Icon(Icons.map_outlined, size: 18),
+              label: const Text('Floor plan'),
+              selected: _showFloorPlan,
+              onSelected: (v) => setState(() => _showFloorPlan = v),
+            ),
           // The racks, the flow and the estimate are one document, so this is
           // the same undo the Racks tab offers, over the same history.
           OutlinedButton.icon(
@@ -775,12 +834,17 @@ class _AvFlowViewState extends State<AvFlowView> {
             onSelected: (v) => switch (v) {
               'copy' => _copyReportText(provider),
               'workbook' => _exportWorkbook(provider),
+              'preset' => _saveAsRoomPreset(provider),
               _ => _exportReport(provider, v == 'xlsx'),
             },
             itemBuilder: (ctx) => const [
               PopupMenuItem(
                 value: 'workbook',
-                child: Text('Full room workbook (.xlsx, 4 sheets)'),
+                child: Text('Full room workbook (.xlsx, 5 sheets)'),
+              ),
+              PopupMenuItem(
+                value: 'preset',
+                child: Text('Save this room as a room type...'),
               ),
               PopupMenuDivider(),
               PopupMenuItem(value: 'xlsx', child: Text('AV report (.xlsx)')),
@@ -830,9 +894,13 @@ class _AvFlowViewState extends State<AvFlowView> {
       cables: model.cables,
       racks: model.racks,
       rackSlots: model.rackSlots,
+      rackItems: model.rackItems,
       canvasSize: Size(maxX, maxY),
       roomTitle: model.roomTitle,
       unplaced: model.unplaced,
+      locations: model.locations,
+      screenSwitches: model.screenSwitches,
+      floorPlans: model.floorPlans,
     );
   }
 
@@ -955,6 +1023,23 @@ class _AvFlowViewState extends State<AvFlowView> {
       color: surface,
       child: Stack(
         children: [
+          // The floor plan, behind everything. Faint by default so the
+          // diagram still reads over it — it is there to say WHERE the boxes
+          // are, not to be looked at.
+          if (_showFloorPlan && _planImage != null)
+            Positioned(
+              left: 0,
+              top: 0,
+              child: Opacity(
+                opacity: provider.primaryFloorPlan?.opacity ?? 0.35,
+                child: Image(
+                  image: _planImage!,
+                  width: model.canvasSize.width,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.topLeft,
+                ),
+              ),
+            ),
           // Tap-to-select-a-cable sits under the nodes but over the paint, so
           // a click on empty canvas clears the selection.
           Positioned.fill(
@@ -963,6 +1048,21 @@ class _AvFlowViewState extends State<AvFlowView> {
               onTapUp: (details) {
                 final hit = _cableAt(details.localPosition);
                 setState(() => _selectedCableId = hit);
+              },
+              // Double-clicking a run opens it. onDoubleTapDown carries the
+              // position; onDoubleTap does not, and without both the hit test
+              // would have to guess where the click was.
+              onDoubleTapDown: (details) =>
+                  _doubleTapAt = details.localPosition,
+              onDoubleTap: () {
+                final at = _doubleTapAt;
+                if (at == null) return;
+                final hit = _cableAt(at);
+                if (hit == null) return;
+                final matches = model.cables.where((c) => c.id == hit);
+                if (matches.isEmpty) return;
+                setState(() => _selectedCableId = hit);
+                _showCableDialog(provider, matches.first);
               },
               child: CustomPaint(
                 painter: _CablePainter(
@@ -1475,18 +1575,44 @@ class _AvFlowViewState extends State<AvFlowView> {
     final countController = TextEditingController(text: '6');
     // The site numbering scheme: the room number is the prefix and the jack
     // is a two-digit position under it, so jack 1 of room 1110 is "111001".
-    final prefixController = TextEditingController(text: '1110');
+    // Seeded from the room number when there is one, because typing the room
+    // number that is already on screen is the step everybody skips.
+    final prefixController = TextEditingController(
+      text: _defaultJackPrefix(provider),
+    );
     final startController = TextEditingController(text: '01');
     SignalType signal = SignalType.network;
     // A wall box and a patch panel are the same data and two different
     // shapes, and drawing them alike is what made the flow diagram and the
     // rack elevation disagree about what the same part was.
     AvNodeKind kind = AvNodeKind.jackField;
+    String locationId = kNoLocationId;
+
+    /// The numbers this box would be given as the fields currently stand.
+    List<String> candidates() {
+      final count = (int.tryParse(countController.text.trim()) ?? 0).clamp(
+        1,
+        96,
+      );
+      final startText = startController.text.trim();
+      final first = int.tryParse(startText) ?? 1;
+      final prefix = prefixController.text.trim();
+      final width = startText.length;
+      return [
+        for (int i = 0; i < count; i++)
+          '$prefix${'${first + i}'.padLeft(width, '0')}',
+      ];
+    }
 
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
+        builder: (ctx, setLocal) {
+          // Checked on every rebuild rather than only on Add: a number that is
+          // already taken is worth knowing while it is being typed, not after
+          // the box is on the canvas and has to be found and edited.
+          final clashes = duplicateJackLabels(candidates(), provider.avNodes);
+          return AlertDialog(
           title: const Text('Add wall box / patch panel'),
           content: SizedBox(
             width: 460,
@@ -1551,6 +1677,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
+                        onChanged: (_) => setLocal(() {}),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1559,6 +1686,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                       child: TextField(
                         controller: prefixController,
                         decoration: const InputDecoration(labelText: 'Prefix'),
+                        onChanged: (_) => setLocal(() {}),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1574,10 +1702,39 @@ class _AvFlowViewState extends State<AvFlowView> {
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
+                        onChanged: (_) => setLocal(() {}),
                       ),
                     ),
                   ],
                 ),
+                // A jack number is the room's addressing scheme: an installer
+                // at the plate finds it on the report and expects exactly one
+                // thing behind it. Two boxes numbered alike is a patch made to
+                // the wrong jack, found at commissioning — so it is refused
+                // here, with the next free block one click away rather than
+                // left to be worked out.
+                if (clashes.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _JackClashBanner(
+                    clashes: clashes,
+                    onUseNextFree: () {
+                      final startText = startController.text.trim();
+                      final next = nextFreeJackStart(
+                        prefix: prefixController.text.trim(),
+                        start: int.tryParse(startText) ?? 1,
+                        count: (int.tryParse(countController.text.trim()) ?? 1)
+                            .clamp(1, 96),
+                        width: startText.length,
+                        nodes: provider.avNodes,
+                      );
+                      if (next == null) return;
+                      setLocal(
+                        () => startController.text =
+                            '$next'.padLeft(startText.length, '0'),
+                      );
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<SignalType>(
                   initialValue: signal,
@@ -1594,6 +1751,13 @@ class _AvFlowViewState extends State<AvFlowView> {
                   ],
                   onChanged: (v) => setLocal(() => signal = v ?? signal),
                 ),
+                const SizedBox(height: 12),
+                _LocationField(
+                  provider: provider,
+                  value: locationId,
+                  label: 'Where in the room',
+                  onChanged: (v) => setLocal(() => locationId = v),
+                ),
                 const SizedBox(height: 8),
                 const Text(
                   'Jacks are bidirectional, so a run can be drawn to either '
@@ -1609,11 +1773,13 @@ class _AvFlowViewState extends State<AvFlowView> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
+              onPressed:
+                  clashes.isEmpty ? () => Navigator.of(ctx).pop(true) : null,
               child: const Text('Add'),
             ),
           ],
-        ),
+          );
+        },
       ),
     );
 
@@ -1640,6 +1806,7 @@ class _AvFlowViewState extends State<AvFlowView> {
             : '$count-jack ${kSignalLabels[signal] ?? signal.name} field',
         pos: _spawnPosition(provider),
         kind: kind,
+        locationId: locationId,
         powerSource: PowerSource.none,
         // A panel is usually 1U per 24 ports; anything smaller is still a
         // rail, so the height is never 0 and it can go straight in a rack.
@@ -1661,6 +1828,128 @@ class _AvFlowViewState extends State<AvFlowView> {
         ],
       ),
     );
+  }
+
+  /// Saves the room as a reusable room type in the project root.
+  ///
+  /// This is the other half of the preset picker on New Room: the four shipped
+  /// types are a starting point, and the ones a shop actually builds are the
+  /// ones it draws. Saving from a real room is the only way those get written
+  /// down without somebody hand-editing JSON.
+  Future<void> _saveAsRoomPreset(AppStateProvider provider) async {
+    if (provider.avNodes.isEmpty) {
+      _snack(
+        'There is nothing on the canvas to save as a room type.',
+        error: true,
+      );
+      return;
+    }
+
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final existing = provider.availableRoomPresets();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final name = nameController.text.trim();
+          final clash = existing.any(
+            (p) => p.name.trim().toLowerCase() == name.toLowerCase(),
+          );
+          return AlertDialog(
+            title: const Text('Save as a room type'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'The equipment, the cabling, the locations, the racks and '
+                    'the screen runs are saved. The cost estimate, the floor '
+                    'plan and this room\'s name and number are not — a price '
+                    'belongs to a job and a drawing belongs to a building.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      hintText: 'e.g. Standard lecture hall',
+                      // A name that already exists overwrites that file. Said
+                      // here rather than found out afterwards.
+                      errorText: clash
+                          ? 'A room type called "$name" already exists — '
+                                'saving replaces it'
+                          : null,
+                      errorStyle: TextStyle(
+                        color: Theme.of(ctx).colorScheme.tertiary,
+                      ),
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      hintText: 'What this room type is for',
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Saved to ${provider.roomPresetFolder}',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: name.isEmpty
+                    ? null
+                    : () => Navigator.of(ctx).pop(true),
+                child: Text(clash ? 'Replace' : 'Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (saved != true) return;
+
+    final written = saveRoomPreset(
+      provider.effectiveRootFolder,
+      provider.currentRoomAsPreset(
+        name: nameController.text.trim(),
+        description: descriptionController.text.trim(),
+      ),
+    );
+    if (written.isEmpty) {
+      _snack('Could not write the room type — see the log.', error: true);
+      return;
+    }
+    _snack(
+      'Room type saved. It is offered the next time a room is created.',
+    );
+  }
+
+  /// The jack prefix a new box starts with: this room's number, falling back
+  /// to the old built-in when the config has none.
+  static String _defaultJackPrefix(AppStateProvider provider) {
+    final setup = provider.roomConfig['SYSTEM_SETUP'];
+    final room = (setup is Map ? setup['gve_room']?.toString() : null) ?? '';
+    final digits = room.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.isEmpty ? '1110' : digits;
   }
 
   /// Recolors the signal palette for this room. Changing HDMI here moves
@@ -1783,6 +2072,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     final ports = List<AvPort>.from(node.ports);
     PowerSource powerSource = node.powerSource;
     bool excludeFromCost = node.excludeFromCost;
+    String locationId = node.locationId;
+    // Owned out here rather than built inside the dialog's builder: the
+    // scrollbar needs the same controller as the list it is describing, and
+    // one created per rebuild loses its position on every keystroke.
+    final portScroll = ScrollController();
 
     final result = await showDialog<String>(
       context: context,
@@ -1869,6 +2163,16 @@ class _AvFlowViewState extends State<AvFlowView> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                // Where in the room this box physically is. Every per-location
+                // jack count, cable count and floor plan marker is built from
+                // this one field, so it sits with the device's other facts
+                // rather than in a page of its own nobody visits.
+                _LocationField(
+                  provider: provider,
+                  value: locationId,
+                  onChanged: (v) => setLocal(() => locationId = v),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -2015,7 +2319,19 @@ class _AvFlowViewState extends State<AvFlowView> {
                             // text field and focus with it, rather than
                             // leaving the values behind at the old index.
                             final keys = avPortRowKeys(ports);
-                            return ReorderableListView.builder(
+                            // The scrollbar used to sit on top of the rows,
+                            // over the delete button and the right edge of the
+                            // label field — grabbing one meant hitting the
+                            // other. It gets a channel of its own now, and the
+                            // list is inset clear of it.
+                            return Scrollbar(
+                              controller: portScroll,
+                              thumbVisibility: true,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.only(right: kPortListScrollGutter),
+                                child: ReorderableListView.builder(
+                              scrollController: portScroll,
                               // The stock desktop handle is an icon floated
                               // over the bottom-right of the tile, which on a
                               // row this dense lands on top of the delete
@@ -2050,6 +2366,8 @@ class _AvFlowViewState extends State<AvFlowView> {
                                         final p = ports.removeAt(i);
                                         ports.insert(i + 1, p);
                                       }),
+                              ),
+                                ),
                               ),
                             );
                           },
@@ -2098,6 +2416,63 @@ class _AvFlowViewState extends State<AvFlowView> {
       return;
     }
 
+    // Jack numbers renamed by hand get the same duplicate check the add
+    // dialog does. This is the path that actually produces clashes in
+    // practice: the numbering is right when a box is created and drifts when
+    // somebody retypes a jack to match what got installed.
+    if (node.isJackField && result == 'save') {
+      final clashes = duplicateJackLabels(
+        ports.map((p) => p.label),
+        provider.avNodes,
+        exceptNodeId: node.id,
+      );
+      if (clashes.isNotEmpty && mounted) {
+        final keep = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(
+              '${clashes.length} jack number'
+              '${clashes.length == 1 ? '' : 's'} already in use',
+            ),
+            content: SizedBox(
+              width: 460,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'An installer finds a jack number on the report and '
+                    'expects one thing behind it. Two boxes numbered alike is '
+                    'a patch made to the wrong jack.',
+                  ),
+                  const SizedBox(height: 10),
+                  for (final clash in clashes.take(8))
+                    Text('${clash.label} — also on ${clash.usedBy}'),
+                  if (clashes.length > 8)
+                    Text('…and ${clashes.length - 8} more'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Go back and fix them'),
+              ),
+              // Not a refusal: a room really can have two plates numbered the
+              // same because that is what is on the wall, and the app is not
+              // in a position to say otherwise. It just must not happen by
+              // accident.
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Save anyway'),
+              ),
+            ],
+          ),
+        );
+        if (keep != true) return;
+      }
+    }
+
     final updated = node.copyWith(
       label: labelController.text.trim().isEmpty
           ? node.label
@@ -2109,6 +2484,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       btuPerHour: double.tryParse(btuController.text.trim()) ?? 0,
       powerSource: powerSource,
       excludeFromCost: excludeFromCost,
+      locationId: locationId,
       ports: ports,
     );
 
@@ -2455,6 +2831,160 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
+}
+
+/// How far the connector list is inset from the right so the scrollbar has a
+/// channel of its own. Wide enough that the thumb never lands on the delete
+/// button or the right edge of a text field, which is what made grabbing one
+/// hit the other.
+const double kPortListScrollGutter = 16;
+
+// ---------------------------------------------------------------------------
+//  LOCATION PICKER
+// ---------------------------------------------------------------------------
+
+/// Picks which of the room's locations something is in, with a way to add one
+/// without leaving the dialog.
+///
+/// Making the list reachable from every editor is the whole difference between
+/// locations that get filled in and a field that stays blank: nobody switches
+/// tabs to define "front floor box" in the middle of adding a wall plate, so
+/// the "+" defines it here and selects it.
+class _LocationField extends StatelessWidget {
+  final AppStateProvider provider;
+  final String value;
+  final String label;
+  final ValueChanged<String> onChanged;
+
+  const _LocationField({
+    required this.provider,
+    required this.value,
+    required this.onChanged,
+    this.label = 'Location in the room',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // A stale id — the location was deleted while this dialog was open —
+    // shows as unset rather than crashing the dropdown's value assertion.
+    final known = {for (final l in provider.avLocations) l.id};
+    final safe = known.contains(value) ? value : kNoLocationId;
+
+    return Row(
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            initialValue: safe,
+            isExpanded: true,
+            decoration: InputDecoration(labelText: label),
+            items: [
+              const DropdownMenuItem(
+                value: kNoLocationId,
+                child: Text('Not recorded'),
+              ),
+              for (final l in provider.avLocations)
+                DropdownMenuItem(
+                  value: l.id,
+                  child: Row(
+                    children: [
+                      Icon(kRoomZoneIcons[l.zone] ?? Icons.place, size: 15),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        kRoomZoneCodes[l.zone] ?? '',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            onChanged: (v) => onChanged(v ?? kNoLocationId),
+          ),
+        ),
+        const SizedBox(width: 6),
+        IconButton(
+          icon: const Icon(Icons.add_location_alt_outlined, size: 20),
+          tooltip: 'Add a location',
+          onPressed: () async {
+            final created = await showLocationEditor(context, provider, null);
+            if (created != null) onChanged(created.id);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// Says which jack numbers are already taken, and offers the next free block.
+class _JackClashBanner extends StatelessWidget {
+  final List<({String label, String usedBy})> clashes;
+  final VoidCallback onUseNextFree;
+
+  const _JackClashBanner({required this.clashes, required this.onUseNextFree});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Long clash lists are truncated: the first few make the point, and a
+    // dialog that grows past the window to list forty of them cannot be
+    // dismissed.
+    final shown = clashes.take(5).toList();
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 18,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${clashes.length} jack number'
+                  '${clashes.length == 1 ? ' is' : 's are'} already in use',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: onUseNextFree,
+                child: const Text('Use the next free block'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final clash in shown)
+            Text(
+              '${clash.label} — ${clash.usedBy}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          if (clashes.length > shown.length)
+            Text(
+              '…and ${clashes.length - shown.length} more',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

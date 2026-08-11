@@ -18,6 +18,9 @@ import 'xlsx_writer.dart';
 ///                    asks for in the same breath)
 ///    AV Flow       — cable schedule, pack list, jack schedule, connector use,
 ///                    with the signal-flow diagram underneath
+///    Locations     — where everything is, jacks and cable runs counted per
+///                    place and grouped by mounting surface, the screen and
+///                    shade runs, and the floor plan's callouts
 ///    Racks         — how full and how hot each frame is, and what sits on
 ///                    which U
 ///    Cost Estimate — equipment at catalog or quoted prices, other items,
@@ -39,6 +42,7 @@ import 'xlsx_writer.dart';
 const List<String> kRoomWorkbookSheets = [
   'Control',
   'AV Flow',
+  'Locations',
   'Racks',
   'Cost Estimate',
 ];
@@ -52,6 +56,7 @@ Uint8List buildRoomWorkbookBytes({
   Uint8List? controlPng,
   Uint8List? avFlowPng,
   Uint8List? rackPng,
+  Uint8List? floorPlanPng,
   /// Stamped on every sheet. One moment for the whole book — four tabs of the
   /// same export dated a minute apart would read as four documents.
   DateTime? generated,
@@ -93,8 +98,23 @@ Uint8List buildRoomWorkbookBytes({
       imageBuilder: image(avFlowPng),
       generated: stamp,
     ),
+    // Where things are, and the counts that get ordered against them. Its own
+    // sheet because it is read by different people at a different time —
+    // rough-in, before anything is racked or cabled — and because the floor
+    // plan's callouts point at a sheet by NAME, so it has to have one.
     buildStackedReportSheet(
       sheetName: kRoomWorkbookSheets[2],
+      title: title,
+      sections: _orPlaceholder(
+        locationSections(av),
+        'Locations',
+        'No locations have been recorded for this room.',
+      ),
+      imageBuilder: image(floorPlanPng),
+      generated: stamp,
+    ),
+    buildStackedReportSheet(
+      sheetName: kRoomWorkbookSheets[3],
       title: title,
       sections: _orPlaceholder(
         rackSections(av),
@@ -105,7 +125,7 @@ Uint8List buildRoomWorkbookBytes({
       generated: stamp,
     ),
     buildStackedReportSheet(
-      sheetName: kRoomWorkbookSheets[3],
+      sheetName: kRoomWorkbookSheets[4],
       title: title,
       sections: _orPlaceholder(
         costReportSections(estimate),

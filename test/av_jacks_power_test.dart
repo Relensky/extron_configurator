@@ -43,6 +43,13 @@ void main() {
   ReportSection sectionNamed(List<ReportSection> all, String title) =>
       all.firstWhere((s) => s.title == title);
 
+  /// Reads a cell by COLUMN NAME. The schedules gain columns as the sheets
+  /// grow — a location on every row, the far end's location — and a test
+  /// pinned to column 3 fails on the next one of those without anything
+  /// being wrong.
+  Object? cell(ReportSection s, List<dynamic> row, String column) =>
+      row[s.header.indexOf(column)];
+
   test('the jack schedule says which device is on which jack', () {
     final p = room();
     p.addAvNode(wallBox('WB1', 'Lectern wall plate', 4));
@@ -72,14 +79,21 @@ void main() {
     expect(jacks.header.first, 'Wall box / panel');
     expect(jacks.rows.length, 4); // one row per jack
 
-    final j2 = jacks.rows.firstWhere((r) => r[1] == 'J2');
-    expect(j2[0], 'Lectern wall plate');
-    expect(j2[3], 'Room PC');
-    expect(j2[4], 'LAN');
-    expect(j2[5], 'C1');
+    final j2 = jacks.rows.firstWhere(
+      (r) => cell(jacks, r, 'Jack') == 'J2',
+    );
+    expect(cell(jacks, j2, 'Wall box / panel'), 'Lectern wall plate');
+    expect(cell(jacks, j2, 'Connected device'), 'Room PC');
+    expect(cell(jacks, j2, 'Device port'), 'LAN');
+    expect(cell(jacks, j2, 'Cable'), 'C1');
 
     // Unused jacks are still listed — knowing what is spare is the point.
-    expect(jacks.rows.where((r) => r[3] == '(spare)').length, 3);
+    expect(
+      jacks.rows
+          .where((r) => cell(jacks, r, 'Connected device') == '(spare)')
+          .length,
+      3,
+    );
   });
 
   test('a jack still reports when the cable was drawn from the box end', () {
@@ -107,8 +121,8 @@ void main() {
 
     final model = buildAvFlowModel(p);
     final jacks = sectionNamed(avReportSections(p, model), 'Jack Schedule');
-    final j1 = jacks.rows.firstWhere((r) => r[1] == 'J1');
-    expect(j1[3], 'Camera');
+    final j1 = jacks.rows.firstWhere((r) => cell(jacks, r, 'Jack') == 'J1');
+    expect(cell(jacks, j1, 'Connected device'), 'Camera');
   });
 
   test('there is no jack schedule when the room has no jack fields', () {

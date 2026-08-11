@@ -424,3 +424,147 @@ not json at all
 ^
 
 --------------------------------------------------
+[2026-08-10T18:28:00.256726] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_8e9b2bde\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:28:25.514061] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_c6e40b67\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:28:51.971377] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_2617b3d7\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:29:16.643329] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_84b361e8\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:29:43.762411] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_c338aa1b\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:30:08.333440] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_5eb960a3\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:32:39.875683] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_bd8a9c14\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:32:59.993763] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_b02abf15\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:40:20.518981] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_a0044388\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:40:41.164807] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_373545e3\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:41:47.745168] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_5cd66e4\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:42:07.569108] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_37ad78c1\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:42:26.406846] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_b2ec0e2b\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:42:46.478530] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_f96a060e\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:43:04.821085] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_7992adfd\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:43:25.056607] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_86bd4e12\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:43:51.584091] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_4f7c10c6\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:44:11.705459] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_800be42e\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:49:33.829468] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_37531e19\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:49:53.940542] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_31e63c13\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:54:30.868806] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_e8a2fa68\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:54:51.716143] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_8f732974\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:58:55.054506] ERROR: Failed to load AV flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_439cf104\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-10T18:59:16.813793] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_7a8a2b2\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------

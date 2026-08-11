@@ -2,6 +2,74 @@
   "__readme": "AV device catalog for the Room Config Builder: connectors, rack height, estimated power draw and unit price per model. Edited on the Device Editor tab; entries here override the app's built-in models.",
   "devices": [
     {
+      "model": "Document Camera",
+      "rackUnits": 0,
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "HDMI Laptop",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        }
+      ]
+    },
+    {
+      "model": "PC",
+      "rackUnits": 0,
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "VGA Laptop",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "VGA OUT",
+          "signal": "vga",
+          "direction": "output",
+          "side": "right"
+        }
+      ]
+    },
+    {
       "model": "AP7900B",
       "manufacturer": "APC",
       "category": "Power controller",
@@ -467,20 +535,6 @@
           "id": "out_hdmi_1",
           "label": "HDMI OUT",
           "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_usb_1",
-          "label": "USB",
-          "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_sdi_1",
-          "label": "SDI OUT",
-          "signal": "sdi",
           "direction": "output",
           "side": "right"
         },
@@ -26699,7 +26753,7 @@
       "ports": [
         {
           "id": "hdmi",
-          "label": "HDMI",
+          "label": "HDMI OUT",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
@@ -26717,6 +26771,13 @@
           "signal": "power",
           "direction": "input",
           "side": "bottom"
+        },
+        {
+          "id": "port_1786393825139452",
+          "label": "DTP IN",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
         }
       ]
     },
@@ -26752,6 +26813,13 @@
           "signal": "power",
           "direction": "input",
           "side": "bottom"
+        },
+        {
+          "id": "port_1786393062452313",
+          "label": "DTP",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
         }
       ]
     },
@@ -48372,15 +48440,15 @@
       "ports": [
         {
           "id": "in_hdmi_1",
-          "label": "HDMI IN 1",
-          "signal": "hdmi",
+          "label": "VGA IN 1",
+          "signal": "vga",
           "direction": "input",
           "side": "left"
         },
         {
           "id": "in_hdmi_2",
-          "label": "HDMI IN 2",
-          "signal": "hdmi",
+          "label": "VGA IN 2",
+          "signal": "vga",
           "direction": "input",
           "side": "left"
         },
@@ -48399,15 +48467,50 @@
           "side": "left"
         },
         {
+          "id": "port_1786393528064191",
+          "label": "HDMI IN 5",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "port_1786393528864052",
+          "label": "HDMI IN 6",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "port_1786393608561286",
+          "label": "DTP IN 7",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "port_1786393609032402",
+          "label": "DTP IN 8",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
           "id": "out_hdmi_1",
-          "label": "HDMI OUT",
+          "label": "HDMI OUT A",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "port_1786393529864072",
+          "label": "HDMI OUT B",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "out_dtp_1",
-          "label": "DTP OUT",
+          "label": "DTP OUT C",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"

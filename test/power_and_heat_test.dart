@@ -202,8 +202,14 @@ void main() {
 
       final sections = avReportSections(p, buildAvFlowModel(p));
       final gap = sectionNamed(sections, 'Devices Without a Control Module');
-      expect(gap.rows.single[1], 'Wall display');
-      expect(gap.rows.single[3], contains('No Python module'));
+      // By header name, for the same reason the pack list check below is:
+      // this table gained a "From" column saying whether the device came from
+      // the room config or was added by hand.
+      expect(gap.rows.single[gap.header.indexOf('Model')], 'Wall display');
+      expect(
+        gap.rows.single[gap.header.indexOf('Note')],
+        contains('No Python module'),
+      );
 
       // By header name rather than position: the pack list gains columns as
       // the sheet grows, and this test is about the module, not the layout.

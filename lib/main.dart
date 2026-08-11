@@ -17,6 +17,7 @@ import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'device_editor_view.dart';
 import 'device_start_wizard.dart';
+import 'floor_plan_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
 import 'dynamic_devices_view.dart';
@@ -223,6 +224,32 @@ class _MainDashboardState extends State<MainDashboard> {
       // room mode lives in it.
       provider.setRoomMode(choice.mode);
 
+      // The room type goes in before the estimator wizard, so anything picked
+      // there lands on a canvas that already has the room's usual gear on it
+      // rather than colliding with it afterwards.
+      final preset = choice.preset;
+      if (preset != null) {
+        final summary = provider.applyRoomPreset(
+          preset,
+          // Renumbered into this room's own scheme when it has a number. A new
+          // room usually doesn't yet, and then the preset's numbering stands
+          // until somebody renumbers the boxes.
+          jackPrefix: _roomJackPrefix(provider),
+        );
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 6),
+            content: Text(
+              '${preset.name}: ${summary.devices} devices, ${summary.jacks} '
+              'jacks, ${summary.cables} runs and ${summary.racks} rack'
+              '${summary.racks == 1 ? '' : 's'} added. Set the room number on '
+              'the Wizard tab, then check the jack numbering.',
+            ),
+          ),
+        );
+      }
+
       if (choice.startFromEstimator) {
         final placed = await showDeviceStartWizard(context, provider);
         if (!context.mounted) return;
@@ -264,6 +291,15 @@ class _MainDashboardState extends State<MainDashboard> {
               "Place config.json there or set a Template file in App Config."),
           backgroundColor: Colors.red));
     }
+  }
+
+  /// This room's jack prefix — its number, digits only. '' when the room has
+  /// no number yet, which tells [AppStateProvider.applyRoomPreset] to leave a
+  /// preset's own numbering alone rather than renumbering it to nothing.
+  static String _roomJackPrefix(AppStateProvider provider) {
+    final setup = provider.roomConfig['SYSTEM_SETUP'];
+    final room = (setup is Map ? setup['gve_room']?.toString() : null) ?? '';
+    return room.replaceAll(RegExp(r'[^0-9]'), '');
   }
 
   /// Puts the working file back the way it was before the last save, after
@@ -677,6 +713,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
                       NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
                       NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
+                      NavigationRailDestination(icon: Icon(Icons.map), label: Text('Floor Plan')),
                       NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
                       NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
                       NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
@@ -792,6 +829,8 @@ class _MainDashboardState extends State<MainDashboard> {
         return SchematicView(key: key);
       case AppTab.avFlow:
         return AvFlowView(key: key);
+      case AppTab.floorPlan:
+        return FloorPlanView(key: key);
       case AppTab.racks:
         return RackTabView(key: key);
       case AppTab.cost:
@@ -843,6 +882,7 @@ Future<void> _saveAllProject(
       schematicPng: shots.schematic,
       avFlowPng: shots.avFlow,
       rackPng: shots.racks,
+      floorPlanPng: shots.floorPlan,
     );
   } catch (e) {
     messenger.showSnackBar(SnackBar(

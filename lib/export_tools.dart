@@ -98,6 +98,7 @@ Future<ProjectExport> saveProjectFolder({
   Uint8List? schematicPng,
   Uint8List? avFlowPng,
   Uint8List? rackPng,
+  Uint8List? floorPlanPng,
 }) async {
   final folder = Directory(path.join(parentFolder, roomFolderName(provider)));
   await folder.create(recursive: true);
@@ -143,6 +144,7 @@ Future<ProjectExport> saveProjectFolder({
         controlPng: schematicPng,
         avFlowPng: avFlowPng,
         rackPng: rackPng,
+        floorPlanPng: floorPlanPng,
         generated: generated,
       ),
     );
@@ -198,6 +200,22 @@ Future<ProjectExport> saveProjectFolder({
   await image('control_schematic', schematicPng, 'the control schematic');
   await image('av_flow', avFlowPng, 'the signal flow diagram');
   await image('racks', rackPng, 'the rack elevation');
+  await image('floor_plan', floorPlanPng, 'the floor plan');
+
+  // The plan image itself, so the marked-up drawing and the drawing it was
+  // marked up on both travel with the room. The sidecar names the file by
+  // its bare name, and a folder that carries the reference without the file
+  // is a room that opens with a broken plan on somebody else's machine.
+  final plan = provider.primaryFloorPlan;
+  if (plan != null && plan.hasImage) {
+    final source = File(provider.resolveFloorPlanImage(plan.imageFile));
+    final name = path.basename(source.path);
+    if (!source.existsSync()) {
+      skipped.add('$name — the floor plan image is not where the room says');
+    } else {
+      await write(name, (f) async => source.copy(f.path));
+    }
+  }
 
   // --- a backup of anything custom ----------------------------------------
   // The catalog entries and rate card the figures came from. Without them a
