@@ -441,7 +441,13 @@ ReportSection _locationSummary(AvFlowModel model) {
       here.where((n) => n.isJackField).length,
       jacks,
       runs,
-      location.isPlaced ? 'yes' : '',
+      // WHICH sheets, not just "yes". A set with a Level 1, a Level 2 and a
+      // reflected ceiling plan is read one sheet at a time, and "the projector
+      // box is on the RCP" is the answer somebody is actually looking for.
+      [
+        for (final p in model.floorPlans)
+          if (p.hasMarker(location.id)) p.name,
+      ].join(', '),
       location.note,
     ]);
   }
@@ -476,7 +482,7 @@ ReportSection _locationSummary(AvFlowModel model) {
       'Jack fields',
       'Jacks',
       'Cable ends',
-      'On plan',
+      'On sheets',
       'Notes',
     ],
     rows: rows,

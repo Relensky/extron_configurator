@@ -187,7 +187,10 @@ class _CablingViewState extends State<CablingView> {
               ),
               label: Text(kCablingBoxKindLabels[kind]!),
               onPressed: () {
-                final box = provider.addCablingBox(kind: kind);
+                final box = provider.addCablingBox(
+                  kind: kind,
+                  occupied: _occupied(provider, drawing),
+                );
                 setState(() => _selectedId = box.id);
               },
             ),
@@ -196,9 +199,22 @@ class _CablingViewState extends State<CablingView> {
           OutlinedButton.icon(
             icon: const Icon(Icons.developer_board, size: 18),
             label: const Text('Device'),
-            onPressed: () => _addDevice(provider),
+            onPressed: () => _addDevice(provider, drawing),
           ),
           const SizedBox(width: 8),
+          // The key is part of the drawing, not a view setting: it exports
+          // with the PNG and it is what makes the colours mean anything. The
+          // toggle is here for the rare sheet that carries its legend in the
+          // title block instead.
+          FilterChip(
+            key: const ValueKey('cabling_key_toggle'),
+            avatar: const Icon(Icons.legend_toggle, size: 18),
+            label: const Text('Key'),
+            selected: _keyShown(provider),
+            onSelected: (on) => on
+                ? provider.restoreCablingItem(kCablingKeyId)
+                : provider.removeCablingItem(kCablingKeyId),
+          ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
             label: const Text('Fit to view'),
@@ -462,13 +478,14 @@ class _CablingViewState extends State<CablingView> {
         icon: const Icon(Icons.playlist_add, size: 16),
         label: const Text('Add cable type'),
         onPressed: () {
+          // No colour is chosen here any more: the key hands one out per cable
+          // type, so the new line is a different colour from the one it was
+          // added beside for the only reason that should ever make two lines
+          // different colours — it is a different cable.
           final added = provider.addCablingBundle(
             fromBoxId: bundle.fromBoxId,
             toBoxId: bundle.toBoxId,
             cableType: '',
-            // Not the run it was added beside: two lines the same colour on
-            // one edge is the drawing saying they are the same cable.
-            color: _nextRunColor(drawing, bundle).toARGB32(),
           );
           if (added != null) setState(() => _selectedId = added.id);
         },
@@ -494,9 +511,13 @@ class _CablingViewState extends State<CablingView> {
     ];
   }
 
-  /// The colours a run can be drawn in. The signal palette first — so "make
-  /// this one look like the network runs" is one click — then the picker for
-  /// anything the drawing set uses that the app has never heard of.
+  /// The colours a run can be drawn in, for the sheet whose office has its own
+  /// convention. The palette first, then the picker for anything the app has
+  /// never heard of.
+  ///
+  /// Recolouring one run is an EXCEPTION now: the key gives every cable type
+  /// its own colour, so the ordinary way to make two runs read alike is to
+  /// give them the same cable type, not to paint them.
   List<Widget> _colorPicker(AppStateProvider provider, CablingBundle bundle) {
     final current = Color(bundle.color);
     return [
@@ -527,42 +548,39 @@ class _CablingViewState extends State<CablingView> {
           }
         },
       ),
-      // Only offered once there is something to go back to: a derived run
-      // takes the room's colour for its signal, and a recolour is the one
-      // thing that hides it.
+      // Only offered once there is something to go back to: a hand-picked
+      // colour is the one thing that hides what the key says this cable is.
       if (provider.avCabling.colors.containsKey(bundle.id))
         avRowIcon(
           Icons.format_color_reset,
-          'Back to the colour the room gives this signal',
+          'Back to the colour the key gives this cable',
           () => provider.setCablingBundleColor(bundle.id, null),
         ),
     ];
   }
 
-  /// A colour for a run being added beside [beside]: the first swatch nothing
-  /// on that edge is already using, so a new line is visibly a new line.
-  Color _nextRunColor(CablingSchematic drawing, CablingBundle beside) {
-    final taken = {
-      for (final b in drawing.bundlesBetween(beside.fromBoxId, beside.toBoxId))
-        b.color,
-    };
-    for (final c in kCableSwatches) {
-      if (!taken.contains(c.toARGB32())) return c;
-    }
-    return kCableSwatches.first;
-  }
-
   // --- devices --------------------------------------------------------------
 
-  Future<void> _addDevice(AppStateProvider provider) async {
+  Future<void> _addDevice(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+  ) async {
     final shape = await _pickDeviceShape('');
     if (shape == null) return;
     final box = provider.addCablingBox(
       kind: CablingBoxKind.device,
       shape: shape,
+      occupied: _occupied(provider, drawing),
     );
     setState(() => _selectedId = box.id);
   }
+
+  /// Everything already taking up room on the sheet: the boxes, and the key
+  /// panel when it is on. A new box has to miss all of it.
+  List<Rect> _occupied(AppStateProvider provider, CablingSchematic drawing) => [
+    for (final b in drawing.boxes) b.rect,
+    ?_keyRect(provider, drawing),
+  ];
 
   /// The gear picker: the same icons the schematic uses, named the way the
   /// room talks about them.
@@ -704,18 +722,171 @@ class _CablingViewState extends State<CablingView> {
 
   // --- the drawing ----------------------------------------------------------
 
-  Size _canvasSize(CablingSchematic drawing) {
+  Size _canvasSize(AppStateProvider provider, CablingSchematic drawing) {
     var w = 1200.0;
     var h = 700.0;
-    for (final b in drawing.boxes) {
-      w = w > b.rect.right + 80 ? w : b.rect.right + 80;
-      h = h > b.rect.bottom + 80 ? h : b.rect.bottom + 80;
+    for (final r in [
+      for (final b in drawing.boxes) b.rect,
+      ?_keyRect(provider, drawing),
+    ]) {
+      w = w > r.right + 80 ? w : r.right + 80;
+      h = h > r.bottom + 80 ? h : r.bottom + 80;
     }
     return Size(w, h);
   }
 
+  // --- the key --------------------------------------------------------------
+
+  /// Whether the key is on the sheet. On by default: a drawing whose lines are
+  /// colour-coded and whose key is opt-in is a drawing that gets issued
+  /// without one.
+  bool _keyShown(AppStateProvider provider) =>
+      !provider.avCabling.hidden.contains(kCablingKeyId);
+
+  /// Where the key is and how big it has to be, or null when it is off.
+  ///
+  /// The height is worked out from the number of lines rather than measured,
+  /// the same bargain [CablingBox.size] makes: the canvas sizing and the
+  /// overlap checks need it before anything has been laid out.
+  Rect? _keyRect(AppStateProvider provider, CablingSchematic drawing) {
+    if (!_keyShown(provider)) return null;
+    final entries = drawing.key;
+    if (entries.isEmpty) return null;
+    final at = provider.avCabling.positions[kCablingKeyId] ??
+        kDefaultCablingKeyPosition;
+    // padding + title + gap + one row each, running a little generous: this
+    // figure is what the canvas is sized against and what a new box is kept
+    // out of, and a panel that reserves a few pixels too many costs nothing
+    // while one that reserves too few gets landed on.
+    final height = 20 + 24 + 6 + entries.length * 30.0;
+    return Rect.fromLTWH(at.dx, at.dy, kCablingKeyWidth, height);
+  }
+
+  /// The key: one line per cable on the sheet, in its colour.
+  ///
+  /// This is the half of a colour-coded drawing that makes the colours mean
+  /// anything. It is derived from the same bundles the lines are drawn from —
+  /// see [CablingSchematic.key] — so it cannot fall out of step with them the
+  /// way a legend somebody maintains by hand always eventually does.
+  Widget _key(AppStateProvider provider, CablingSchematic drawing) {
+    final rect = _keyRect(provider, drawing)!;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+
+    return Positioned(
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      // No height: the panel sizes itself to its lines. [_keyRect]'s figure is
+      // an estimate for the layout maths, and pinning the widget to it would
+      // clip the last line whenever the estimate came in a pixel short.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanUpdate: (d) => provider.setCablingBoxPosition(
+          kCablingKeyId,
+          rect.topLeft + d.delta,
+          recordUndo: false,
+        ),
+        onPanEnd: (_) => provider.setCablingBoxPosition(
+          kCablingKeyId,
+          nonOverlappingPosition(
+            desired: rect.topLeft,
+            size: rect.size,
+            others: [for (final b in drawing.boxes) b.rect],
+          ),
+        ),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grab,
+          child: Container(
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xFF1B2026) : const Color(0xFFFAFAFA),
+              border: Border.all(
+                color: dark ? const Color(0xFF3A424C) : const Color(0xFF9E9E9E),
+                width: 1.2,
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CABLE KEY',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                    color: dark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (final e in drawing.key)
+                  SizedBox(
+                    height: 30,
+                    child: Row(
+                      children: [
+                        // The same dash the run captions carry, so a line in
+                        // the key and a line on the drawing read as the same
+                        // mark rather than two different notations.
+                        Container(
+                          width: 20,
+                          height: 3,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: Color(e.color),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                // The category only when it is doing work —
+                                // when two categories share a cable type and
+                                // the reader has to be told which Cat 6a this
+                                // colour means.
+                                e.categoryMatters
+                                    ? '${e.type}  (${e.category})'
+                                    : e.type,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: dark ? Colors.white : Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${_cableCount(e.count)} cable'
+                                '${e.count == 1 ? '' : 's'} · '
+                                '${e.runs} run${e.runs == 1 ? '' : 's'}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: dark ? Colors.white70 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _cableCount(double n) =>
+      n == n.roundToDouble() ? n.round().toString() : n.toStringAsFixed(1);
+
   Widget _canvas(AppStateProvider provider, CablingSchematic drawing) {
-    final size = _canvasSize(drawing);
+    final size = _canvasSize(provider, drawing);
     final theme = Theme.of(context);
     // Worked out once and handed to both the painter and the click targets, so
     // the line you see and the line you can hit are the same line.
@@ -748,6 +919,13 @@ class _CablingViewState extends State<CablingView> {
                   routes: routes,
                   selectedId: _selectedId,
                   overridden: drawing.overridden,
+                  // What a caption has to stay off: the boxes and the key.
+                  // A run's label parked on top of a box is the drawing losing
+                  // the count it exists to report.
+                  keepClear: [
+                    for (final b in drawing.boxes) b.rect,
+                    ?_keyRect(provider, drawing),
+                  ],
                   dark: theme.brightness == Brightness.dark,
                 ),
               ),
@@ -756,6 +934,9 @@ class _CablingViewState extends State<CablingView> {
           for (final bundle in drawing.bundles)
             _bundleHitTarget(drawing, bundle, routes[bundle.id]),
           for (final box in drawing.boxes) _box(provider, drawing, box),
+          // Last, so it is on top of anything it has been dragged over rather
+          // than half hidden behind it.
+          if (_keyRect(provider, drawing) != null) _key(provider, drawing),
         ],
       ),
     );
@@ -1014,6 +1195,10 @@ class _BundlePainter extends CustomPainter {
 
   final String selectedId;
   final Set<String> overridden;
+
+  /// The boxes and the key — everything a caption must not land on.
+  final List<Rect> keepClear;
+
   final bool dark;
 
   const _BundlePainter({
@@ -1022,6 +1207,7 @@ class _BundlePainter extends CustomPainter {
     required this.routes,
     required this.selectedId,
     required this.overridden,
+    required this.keepClear,
     required this.dark,
   });
 
@@ -1067,13 +1253,20 @@ class _BundlePainter extends CustomPainter {
       byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(bundle);
     }
 
+    // Grows as captions go down: each one dodges the boxes, the key and every
+    // caption already placed. Two edges whose middles land near each other —
+    // which is exactly what happens when several runs come off one location,
+    // the way runs created from the floor plan do — used to print one caption
+    // over another, and the drawing quietly stopped reporting half the pulls.
+    final taken = [...keepClear];
     for (final group in byEdge.values) {
       // Halfway ALONG the route rather than halfway between the boxes: on a
       // run that detours around a rack the straight-line midpoint can land
       // well off the line it is supposed to be labelling.
       final route = routes[group.first.id];
       if (route == null || route.isEmpty) continue;
-      _paintCaption(canvas, group, polylineMidpoint(route));
+      final placed = _paintCaption(canvas, group, polylineMidpoint(route), taken);
+      if (placed != null) taken.add(placed);
     }
   }
 
@@ -1089,10 +1282,12 @@ class _BundlePainter extends CustomPainter {
   }
 
   /// The stacked label block: one row per run, each with a colour dash.
-  void _paintCaption(
+  /// Returns the box it ended up in, so the next caption can dodge it.
+  Rect? _paintCaption(
     Canvas canvas,
     List<CablingBundle> group,
     Offset edgeMiddle,
+    List<Rect> taken,
   ) {
     const dash = 14.0;
     const gap = 5.0;
@@ -1141,6 +1336,8 @@ class _BundlePainter extends CustomPainter {
       ));
     }
 
+    if (rows.isEmpty) return null;
+
     double width = 0;
     double height = 0;
     for (final row in rows) {
@@ -1150,14 +1347,16 @@ class _BundlePainter extends CustomPainter {
     }
     height -= rowGap;
 
-    final left = edgeMiddle.dx - width / 2;
-    final top = edgeMiddle.dy - height - 6;
+    final box = _freeCaptionBox(
+      Size(width, height),
+      Offset(edgeMiddle.dx - width / 2, edgeMiddle.dy - height - 6),
+      taken,
+    );
+    final left = box.left;
+    final top = box.top;
 
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(left, top, width, height).inflate(3),
-        const Radius.circular(3),
-      ),
+      RRect.fromRectAndRadius(box.inflate(3), const Radius.circular(3)),
       Paint()..color = dark ? const Color(0xE614181C) : const Color(0xE6FFFFFF),
     );
 
@@ -1176,6 +1375,46 @@ class _BundlePainter extends CustomPainter {
       row.text.paint(canvas, Offset(left + dash + gap, y));
       y += row.text.height + rowGap;
     }
+    return box.inflate(3);
+  }
+
+  /// [wanted] if nothing is already there, else the nearest spot that is
+  /// clear.
+  ///
+  /// Straight up and down first, so a caption stays ON the run it names and
+  /// only slides sideways when there is nowhere above or below it. Gives up
+  /// after a few rings and uses the original spot rather than flinging a label
+  /// across the sheet to somewhere it explains nothing — a caption a little
+  /// crowded is readable; a caption pointing at the wrong line is not.
+  static Rect _freeCaptionBox(Size size, Offset wanted, List<Rect> taken) {
+    Rect at(Offset o) => Rect.fromLTWH(o.dx, o.dy, size.width, size.height);
+    bool free(Rect r) {
+      final padded = r.inflate(4);
+      for (final other in taken) {
+        if (padded.overlaps(other)) return false;
+      }
+      return true;
+    }
+
+    if (free(at(wanted))) return at(wanted);
+
+    const step = 16.0;
+    for (int ring = 1; ring <= 16; ring++) {
+      for (final d in const [
+        Offset(0, -1),
+        Offset(0, 1),
+        Offset(-1, 0),
+        Offset(1, 0),
+        Offset(-1, -1),
+        Offset(1, -1),
+        Offset(-1, 1),
+        Offset(1, 1),
+      ]) {
+        final candidate = at(wanted + d * (ring * step));
+        if (free(candidate)) return candidate;
+      }
+    }
+    return at(wanted);
   }
 
   @override
@@ -1184,5 +1423,6 @@ class _BundlePainter extends CustomPainter {
       old.lanes != lanes ||
       old.routes != routes ||
       old.selectedId != selectedId ||
+      old.keepClear != keepClear ||
       old.dark != dark;
 }

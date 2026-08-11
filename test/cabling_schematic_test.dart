@@ -298,19 +298,114 @@ void main() {
     });
   });
 
-  group('colour', () {
-    test('a derived run takes the room colour for its signal', () {
-      // The cabling sheet and the signal flow describe the same run, so they
-      // describe it in the same colour without anybody keeping two palettes
-      // in step.
-      final p = room(runs: 2);
-      final bundle = drawingOf(p).bundles.single;
-      expect(bundle.color, p.avSignalColor(SignalType.network).toARGB32());
+  group('colour: one per cable, not one per signal', () {
+    /// A room whose two places are joined by network runs AND by HDBaseT and
+    /// Dante runs — the two signals that both get filed as "AV cabling".
+    AppStateProvider mixedRoom() {
+      final p = room(runs: 1);
+      for (final (i, signal) in [
+        SignalType.hdbaset,
+        SignalType.dante,
+      ].indexed) {
+        p.addAvNode(
+          AvNode(
+            id: 'X$i',
+            label: 'X$i',
+            model: '',
+            pos: Offset.zero,
+            locationId: 'LOC_1',
+            ports: [
+              AvPort(
+                id: 'p1',
+                label: 'P1',
+                signal: signal,
+                direction: PortDirection.bidirectional,
+                side: PortSide.right,
+              ),
+            ],
+          ),
+        );
+        p.addAvNode(
+          AvNode(
+            id: 'Y$i',
+            label: 'Y$i',
+            model: '',
+            pos: Offset.zero,
+            locationId: 'LOC_2',
+            ports: [
+              AvPort(
+                id: 'p1',
+                label: 'P1',
+                signal: signal,
+                direction: PortDirection.bidirectional,
+                side: PortSide.left,
+              ),
+            ],
+          ),
+        );
+        p.addAvCable(
+          fromNodeId: 'X$i',
+          fromPortId: 'p1',
+          toNodeId: 'Y$i',
+          toPortId: 'p1',
+          signal: signal,
+        );
+      }
+      return p;
+    }
+
+    test('two signals filed as the same cable are drawn as one cable', () {
+      // HDBaseT and Dante are both "AV cabling" and both come off the same
+      // reel. Drawing them in two colours told whoever was pulling them they
+      // were two different things.
+      final drawing = drawingOf(mixedRoom());
+      final av = drawing.bundles.where((b) => b.cableType == 'AV cabling');
+      expect(av, hasLength(2));
+      expect(av.map((b) => b.color).toSet(), hasLength(1));
     });
 
-    test('a run can be recoloured, and put back', () {
+    test('a different category of the same cable is a different colour', () {
+      // The example the rule exists for: AV Cat 6a and network Cat 6a are two
+      // pulls, by two contractors, to two test standards.
+      final p = mixedRoom();
+      final drawing = drawingOf(p);
+      final av = drawing.bundles.firstWhere((b) => b.cableType == 'AV cabling');
+      final net = drawing.bundles.firstWhere((b) => b.cableType == 'Network');
+
+      p.setCablingBundleType(av.id, 'Cat 6a');
+      p.setCablingBundleType(net.id, 'Cat 6a');
+
+      final after = drawingOf(p);
+      final avAfter = after.bundles.firstWhere((b) => b.id == av.id);
+      final netAfter = after.bundles.firstWhere((b) => b.id == net.id);
+      expect(avAfter.cableType, 'Cat 6a');
+      expect(netAfter.cableType, 'Cat 6a');
+      expect(avAfter.color, isNot(netAfter.color));
+    });
+
+    test('the same cable typed two ways is still one colour', () {
+      // "Cat6a" and "CAT 6A" are one line on a purchase order and one line on
+      // the drawing.
+      final p = mixedRoom();
+      final drawing = drawingOf(p);
+      final av = drawing.bundles.where((b) => b.cableType == 'AV cabling')
+          .toList();
+      p.setCablingBundleType(av[0].id, 'Cat6a');
+      p.setCablingBundleType(av[1].id, 'CAT 6A');
+
+      final after = drawingOf(p);
+      expect(
+        after.bundles.where((b) => av.any((x) => x.id == b.id))
+            .map((b) => b.color)
+            .toSet(),
+        hasLength(1),
+      );
+    });
+
+    test('a run can be recoloured by hand, and put back', () {
       final p = room(runs: 2);
       final bundle = drawingOf(p).bundles.single;
+      final fromKey = bundle.color;
       p.setCablingBundleColor(bundle.id, 0xFF00FF00);
       expect(drawingOf(p).bundles.single.color, 0xFF00FF00);
 
@@ -319,10 +414,7 @@ void main() {
       expect(drawingOf(p).overridden, isEmpty);
 
       p.setCablingBundleColor(bundle.id, null);
-      expect(
-        drawingOf(p).bundles.single.color,
-        p.avSignalColor(SignalType.network).toARGB32(),
-      );
+      expect(drawingOf(p).bundles.single.color, fromKey);
     });
 
     test('the colour goes to disk with the other edits', () {
@@ -331,6 +423,30 @@ void main() {
 
       final back = CablingOverrides()..readJson(p.avCabling.toJson());
       expect(back.colors.values.single, 0xFF123456);
+    });
+  });
+
+  group('the key', () {
+    test('one line per cable, with what there is of it', () {
+      final p = room(runs: 3);
+      final key = drawingOf(p).key;
+      expect(key, hasLength(1));
+      expect(key.single.type, 'Network');
+      expect(key.single.count, 3);
+      expect(key.single.runs, 1);
+      // Nothing else claims "Network", so the category would only be noise.
+      expect(key.single.categoryMatters, isFalse);
+    });
+
+    test('the key line and the runs it names carry the same colour', () {
+      // Derived from the same bundles, which is the whole reason not to let
+      // anybody maintain a legend by hand.
+      final drawing = drawingOf(room(runs: 2));
+      expect(drawing.key.single.color, drawing.bundles.single.color);
+    });
+
+    test('an empty drawing has no key to print', () {
+      expect(drawingOf(room(runs: 0)).key, isEmpty);
     });
   });
 

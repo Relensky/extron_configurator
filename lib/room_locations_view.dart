@@ -277,7 +277,10 @@ class _LocationManagerDialogState extends State<_LocationManagerDialog> {
           kRoomZoneLabels[location.zone] ?? location.zone.name,
           '$devices device${devices == 1 ? '' : 's'}',
           '$jacks jack${jacks == 1 ? '' : 's'}',
-          if (location.isPlaced) 'on the plan',
+          // Named rather than counted: a marker belongs to a sheet, so "which
+          // one" is the only useful form of "yes".
+          if (provider.isLocationOnAnySheet(location.id))
+            'on ${provider.sheetsShowing(location.id).map((p) => p.name).join(', ')}',
           if (location.note.isNotEmpty) location.note,
         ].join(' · '),
         style: theme.textTheme.bodySmall,

@@ -31,29 +31,22 @@ void main() {
     ],
   );
 
-  /// Two placed locations with a network run and a DTP run between them, plus
-  /// a screen control run on the same pair.
+  /// Two locations placed ON THE SHEET with a network run and a DTP run
+  /// between them, plus a screen control run on the same pair.
   AppStateProvider room() {
     final p = AppStateProvider(autoLoadSettings: false)
       ..roomConfig = {
         'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
       };
     p.loadAvFlowForCurrentConfig();
-    p.addFloorPlanSheet(name: 'Level 1');
+    final sheet = p.addFloorPlanSheet(name: 'Level 1');
     p.addAvLocation(
-      const RoomLocation(
-        id: 'LOC_1',
-        name: 'Instructor station',
-        planPos: Offset(200, 200),
-      ),
+      const RoomLocation(id: 'LOC_1', name: 'Instructor station'),
     );
-    p.addAvLocation(
-      const RoomLocation(
-        id: 'LOC_2',
-        name: 'Equipment rack',
-        planPos: Offset(600, 400),
-      ),
-    );
+    p.addAvLocation(const RoomLocation(id: 'LOC_2', name: 'Equipment rack'));
+    // A marker belongs to the SHEET, not to the room's location list.
+    p.moveAvLocationMarker(sheet.id, 'LOC_1', const Offset(200, 200));
+    p.moveAvLocationMarker(sheet.id, 'LOC_2', const Offset(600, 400));
 
     for (final (i, signal) in [
       SignalType.network,
@@ -151,16 +144,85 @@ void main() {
     expect(find.text('Cable runs'), findsNothing);
   });
 
-  testWidgets('runs whose ends are not on the plan are counted, not hidden', (
+  testWidgets('runs whose ends are not on the sheet are counted, not hidden', (
     tester,
   ) async {
     // A plan that quietly leaves out half the pulls is worse than one that
     // says how many it left out.
     final p = room();
-    p.moveAvLocationMarker('LOC_2', Offset.zero);
+    p.removeAvLocationMarker(p.avFloorPlans.single.id, 'LOC_2');
     await pump(tester, p);
 
-    expect(find.textContaining('not on the plan'), findsOneWidget);
+    expect(find.textContaining('not on this sheet'), findsOneWidget);
+  });
+
+  testWidgets('a second sheet starts empty and is placed on its own', (
+    tester,
+  ) async {
+    // The whole point of a second sheet: its own image, its own callouts and
+    // its own markers. Before, every sheet redrew the first sheet's
+    // coordinates, so a Level 2 plan came up pre-scribbled with Level 1.
+    final p = room();
+    final level2 = p.addFloorPlanSheet(name: 'Level 2');
+    expect(level2.markers, isEmpty);
+
+    await pump(tester, p);
+    // Nothing lands on the new sheet, so every run is reported missing.
+    expect(find.textContaining('not on this sheet'), findsOneWidget);
+
+    p.moveAvLocationMarker(level2.id, 'LOC_1', const Offset(50, 60));
+    // Level 1 keeps its own coordinates for the same location.
+    expect(
+      p.avFloorPlans.first.markerFor('LOC_1'),
+      const Offset(200, 200),
+    );
+    expect(p.avFloorPlanById(level2.id)!.markerFor('LOC_1'),
+        const Offset(50, 60));
+  });
+
+  group('a run keeps off what is already printed', () {
+    test('a marker is its dot AND the name under it', () {
+      // The name is what makes the dot mean anything, so it is part of what a
+      // cable line has to go round. A box drawn round the dot alone let runs
+      // scribble straight through the labels.
+      final bare = locationMarkerBounds(const Offset(300, 200), '');
+      final named = locationMarkerBounds(
+        const Offset(300, 200),
+        'Instructor station floor box',
+      );
+
+      expect(named.height, greaterThan(bare.height));
+      expect(named.width, greaterThan(bare.width));
+      // The dot still sits on the coordinates it was given, whatever the name
+      // under it measures.
+      expect(named.center.dx, closeTo(300, 0.01));
+      expect(named.top, bare.top);
+    });
+
+    test('a run steps round a label instead of crossing it', () {
+      final label = locationMarkerBounds(const Offset(400, 300), 'Ceiling mic');
+      final route = latticeRoute(
+        const Offset(200, 300),
+        const Offset(600, 300),
+        [label],
+      );
+
+      expect(route, isNotNull);
+      // It turned rather than running straight through.
+      expect(route!.length, greaterThan(2));
+      expect(polylineHitsAny(route, [label]), isFalse);
+    });
+
+    test('nothing in the way leaves the run straight', () {
+      // A cabling sheet reads best when a run that CAN be a straight line is
+      // one. Dodging is for when there is something to dodge.
+      final route = latticeRoute(
+        const Offset(200, 300),
+        const Offset(600, 300),
+        const [],
+      );
+      expect(route, [const Offset(200, 300), const Offset(600, 300)]);
+    });
   });
 
   test('the plan draws the same runs the cabling drawing does', () {

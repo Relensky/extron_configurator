@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'av_flow_model.dart';
+import 'layout_tools.dart';
 import 'room_locations.dart';
 
 /// ============================================================================
@@ -536,6 +537,73 @@ class CablingSchematic {
     return lanes;
   }
 
+  /// The key: one line per cable on the sheet, in the order the colours were
+  /// handed out, with what it is and how much of it there is.
+  ///
+  /// Built off the same bundles the drawing paints, so a key line and the
+  /// lines it describes cannot come apart — which is the whole reason to
+  /// derive it rather than let somebody maintain a legend by hand.
+  List<CableKeyEntry> get key {
+    // Which cable types are claimed by more than one category. Only those need
+    // the category printed: "Cat 6a (Network)" earns its parenthesis when
+    // there is also an AV Cat 6a, and is noise when there isn't.
+    final categoriesPerType = <String, Set<String>>{};
+    for (final b in bundles) {
+      categoriesPerType
+          .putIfAbsent(cablingTypeKey(b.cableType), () => {})
+          .add(cablingCategoryOf(b));
+    }
+
+    final order = <String>[];
+    final rolled = <String, ({
+      String category,
+      String typeKey,
+      String type,
+      int color,
+      double count,
+      int runs,
+    })>{};
+    for (final b in bundles) {
+      final k = cablingColorKey(b);
+      final existing = rolled[k];
+      if (existing == null) {
+        order.add(k);
+        rolled[k] = (
+          category: cablingCategoryOf(b),
+          typeKey: cablingTypeKey(b.cableType),
+          type: b.cableType.trim().isEmpty
+              ? '(cable not specified)'
+              : b.cableType.trim(),
+          color: b.color,
+          count: b.count,
+          runs: 1,
+        );
+      } else {
+        rolled[k] = (
+          category: existing.category,
+          typeKey: existing.typeKey,
+          type: existing.type,
+          color: existing.color,
+          count: existing.count + b.count,
+          runs: existing.runs + 1,
+        );
+      }
+    }
+
+    return [
+      for (final k in order)
+        (
+          category: rolled[k]!.category,
+          type: rolled[k]!.type,
+          color: rolled[k]!.color,
+          count: rolled[k]!.count,
+          runs: rolled[k]!.runs,
+          categoryMatters:
+              (categoriesPerType[rolled[k]!.typeKey]?.length ?? 1) > 1,
+        ),
+    ];
+  }
+
   /// Where [bundle] is actually drawn: its two ends, already pushed onto its
   /// lane. Null when either box has gone off the drawing.
   ({Offset from, Offset to})? endsOf(CablingBundle bundle, double lane) {
@@ -601,6 +669,121 @@ const int kCablingControlRunColor = 0xFFFFA726;
 /// What a control run is called when nobody has said what cable it is.
 const String kCablingControlRunType = 'Control cable';
 
+// ---------------------------------------------------------------------------
+//  THE KEY: ONE COLOUR PER CABLE
+// ---------------------------------------------------------------------------
+
+/// What a run is FILED under, over and above what cable it is.
+///
+/// A drawing's colours have to answer one question — "which of these lines am
+/// I pulling?" — and the answer is the CABLE, not the signal riding it. Two
+/// HDBaseT runs and two Dante runs down the same four Cat 6a are four lines of
+/// one cable, and drawing them in four colours told the person pulling them
+/// they were four different things.
+///
+/// So colour keys off the cable type, with the category as the one permitted
+/// tiebreak: AV Cat 6a and network Cat 6a really are two different pulls, by
+/// two different contractors, to two different test standards, and the sheet
+/// has to be able to say so.
+const String kCablingControlCategory = 'Control';
+const String kCablingUnfiledCategory = 'Other cabling';
+
+/// The category a run is filed under.
+String cablingCategoryOf(CablingBundle bundle) {
+  if (bundle.isControlRun) return kCablingControlCategory;
+  final s = bundle.signal;
+  if (s == null) return kCablingUnfiledCategory;
+  return kCableFamilyLabels[cableFamilyFor(s)] ?? kCablingUnfiledCategory;
+}
+
+/// The cable type as the key groups it — case-folded with the spaces taken
+/// out, so "Cat6a", "Cat 6a" and "CAT  6A" are ONE line of the key and one
+/// colour on the drawing rather than three of each.
+///
+/// The same three spellings are already the reason [kCablingCableTypes] exists
+/// as a shortcut menu: a schedule carrying all three is three lines of a
+/// purchase order for one reel of cable. Folding them here means the DRAWING
+/// stops disagreeing with itself even when somebody types past the menu.
+String cablingTypeKey(String cableType) =>
+    cableType.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+
+/// The identity a colour is assigned against: category and cable type.
+String cablingColorKey(CablingBundle bundle) =>
+    '${cablingCategoryOf(bundle)}|${cablingTypeKey(bundle.cableType)}';
+
+/// The colours the key runs through, in order.
+///
+/// No orange in it: orange is spoken for by the control runs (see
+/// [kCablingControlRunColor]), and a network run the same colour as the screen
+/// switch run is the drawing telling somebody to land data on a motor.
+/// Picked to stay apart from each other at the weight a cable line is drawn
+/// and in both light and dark, which is a shorter list than it looks.
+const List<int> kCablingTypeColors = [
+  0xFF3949AB, // indigo
+  0xFF546E7A, // blue grey
+  0xFF2E7D32, // green
+  0xFF8E24AA, // purple
+  0xFF00838F, // teal
+  0xFFC2185B, // pink
+  0xFF5D4037, // brown
+  0xFF1976D2, // blue
+  0xFF689F38, // olive
+  0xFF00695C, // deep teal
+  0xFF7B1FA2, // deep purple
+  0xFF455A64, // slate
+];
+
+/// The shades the control runs get, amber first — the colour they have always
+/// been drawn in, and the one the rest of the palette keeps clear of.
+const List<int> kCablingControlColors = [
+  kCablingControlRunColor,
+  0xFFFB8C00,
+  0xFFFFCA28,
+  0xFFEF6C00,
+];
+
+/// A colour per [cablingColorKey], assigned in the order the runs are drawn.
+///
+/// First-appearance order rather than alphabetical so adding a cable type
+/// appends a colour instead of reshuffling every line already on the sheet.
+/// The bundles arrive sorted by id, which is derived from the two ends and the
+/// signal, so the same room gives the same key every time it is opened.
+Map<String, int> cablingKeyColors(List<CablingBundle> bundles) {
+  final out = <String, int>{};
+  var next = 0;
+  var nextControl = 0;
+  for (final bundle in bundles) {
+    final key = cablingColorKey(bundle);
+    if (out.containsKey(key)) continue;
+    out[key] = bundle.isControlRun
+        ? kCablingControlColors[nextControl++ % kCablingControlColors.length]
+        : kCablingTypeColors[next++ % kCablingTypeColors.length];
+  }
+  return out;
+}
+
+/// The id the key panel is filed under in [CablingOverrides] — so it can be
+/// dragged out of the way and taken off the sheet like anything else drawn,
+/// without being a box the runs could be wired to.
+const String kCablingKeyId = 'key:cables';
+
+/// One line of the key on the drawing.
+typedef CableKeyEntry = ({
+  String category,
+  String type,
+  int color,
+
+  /// How many cables the sheet has of it, summed across every run.
+  double count,
+
+  /// How many runs those cables are spread over.
+  int runs,
+
+  /// True when another category uses the same cable type, so the key has to
+  /// print the category to explain why one Cat 6a is blue and the other green.
+  bool categoryMatters,
+});
+
 /// The cable types offered on a run before anybody types their own.
 ///
 /// A list rather than a free field alone because "Cat5e" gets typed a hundred
@@ -633,6 +816,14 @@ const List<String> kCablingCableTypes = [
 /// pathway ends up sitting on top of the device added a moment earlier.
 Offset defaultCablingBoxPosition(int index, CablingBoxKind kind) =>
     _defaultPosition(index, kind);
+
+/// Where the key sits before anybody drags it: clear to the right of the notes
+/// column, which is the far edge of the derived layout.
+const Offset kDefaultCablingKeyPosition = Offset(1270, 60);
+
+/// How wide the key panel is drawn. Fixed, because a key whose width follows
+/// its longest cable name jumps around every time somebody retypes one.
+const double kCablingKeyWidth = 260;
 
 Offset _defaultPosition(int index, CablingBoxKind kind) => switch (kind) {
   // A room has one route out and usually one block of scope notes, so these
@@ -688,12 +879,24 @@ CablingSchematic buildCablingSchematic({
     final isPull = loc.zone == RoomZone.pullBox;
     if (!isPull && !used.contains(loc.id)) continue;
     final kind = isPull ? CablingBoxKind.pullBox : CablingBoxKind.location;
+    final box = CablingBox(
+      id: 'loc:${loc.id}',
+      label: loc.name,
+      kind: kind,
+      pos: _defaultPosition(isPull ? pullIndex++ : locationIndex++, kind),
+    );
     derivedBoxes.add(
-      CablingBox(
-        id: 'loc:${loc.id}',
-        label: loc.name,
-        kind: kind,
-        pos: _defaultPosition(isPull ? pullIndex++ : locationIndex++, kind),
+      // The column layout steps far enough apart for the boxes it was written
+      // for, but a room whose places came off the floor plan can produce more
+      // of a kind than the step allows for, and a note box sizes itself to its
+      // text. Checking beats trusting the arithmetic: a box that lands on
+      // another hides both, and the runs between them become unreadable.
+      box.copyWith(
+        pos: nonOverlappingPosition(
+          desired: box.pos,
+          size: box.size,
+          others: [for (final b in derivedBoxes) b.rect],
+        ),
       ),
     );
   }
@@ -788,10 +991,6 @@ CablingSchematic buildCablingSchematic({
       out = out.copyWith(cableType: type);
       if (bundle.isDerived) overridden.add(bundle.id);
     }
-    // Recolouring is NOT a disagreement with the room — the run still carries
-    // what the signal flow says it carries — so it does not badge the bundle.
-    final color = overrides.colors[bundle.id];
-    if (color != null) out = out.copyWith(color: color);
     return out;
   }
 
@@ -817,6 +1016,23 @@ CablingSchematic buildCablingSchematic({
           present.contains(b.toBoxId))
         applyBundle(b),
   ];
+
+  // --- the colours, last: one per cable, not one per signal ----------------
+  //
+  // After the type overrides, because retyping a run's cable is exactly how
+  // somebody says "this one is Cat 6a like those two" and the colour has to
+  // follow. A run recoloured BY HAND still wins — that is the drawing set's
+  // own convention overriding the app's, which is the one thing a colour rule
+  // must never take away.
+  final keyColors = cablingKeyColors(bundles);
+  for (int i = 0; i < bundles.length; i++) {
+    final explicit = overrides.colors[bundles[i].id];
+    final byType = keyColors[cablingColorKey(bundles[i])];
+    final color = explicit ?? byType;
+    if (color != null && color != bundles[i].color) {
+      bundles[i] = bundles[i].copyWith(color: color);
+    }
+  }
 
   return CablingSchematic(
     boxes: boxes,

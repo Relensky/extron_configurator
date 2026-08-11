@@ -3,9 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_flow_view.dart' show buildAvFlowModel;
 import 'package:extron_configurator/cabling_schematic.dart';
 import 'package:extron_configurator/cabling_view.dart';
+import 'package:extron_configurator/room_locations.dart';
 
 /// The Cabling tab is edited, not just looked at, so the controls that edit it
 /// have to be somewhere a person can find. Telling somebody to "set the count
@@ -19,6 +21,45 @@ void main() {
         'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
       };
     p.loadAvFlowForCurrentConfig();
+    return p;
+  }
+
+  /// A room the DRAWING derives boxes from: two places with network runs
+  /// between them, which is what a room that came off the floor plan looks
+  /// like by the time it reaches this tab.
+  AppStateProvider roomWithPlaces() {
+    final p = room();
+    p.addAvLocation(const RoomLocation(id: 'LOC_1', name: 'Lectern'));
+    p.addAvLocation(const RoomLocation(id: 'LOC_2', name: 'Rack'));
+    for (int i = 0; i < 2; i++) {
+      for (final (id, loc) in [('A$i', 'LOC_1'), ('B$i', 'LOC_2')]) {
+        p.addAvNode(
+          AvNode(
+            id: id,
+            label: id,
+            model: '',
+            pos: Offset.zero,
+            locationId: loc,
+            ports: const [
+              AvPort(
+                id: 'p1',
+                label: 'P1',
+                signal: SignalType.network,
+                direction: PortDirection.bidirectional,
+                side: PortSide.right,
+              ),
+            ],
+          ),
+        );
+      }
+      p.addAvCable(
+        fromNodeId: 'A$i',
+        fromPortId: 'p1',
+        toNodeId: 'B$i',
+        toPortId: 'p1',
+        signal: SignalType.network,
+      );
+    }
     return p;
   }
 
@@ -240,6 +281,75 @@ void main() {
 
       expect(find.text('Conduit to IDF-2B'), findsWidgets);
       expect(find.text('Network Pathway back to TR'), findsNothing);
+    });
+
+    testWidgets('a hand-added box misses the ones the room drew', (
+      tester,
+    ) async {
+      // Regression: a new box was slotted by counting only the boxes SOMEBODY
+      // ADDED, so the first hand-added location landed exactly on the first
+      // location the room derived — which is every room that has come off the
+      // floor plan, since that is where its locations come from.
+      final provider = roomWithPlaces();
+      await pumpTab(tester, provider);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Location'));
+      await tester.pumpAndSettle();
+
+      final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
+      final added = drawing.boxes.firstWhere((b) => !b.isDerived);
+      for (final other in drawing.boxes) {
+        if (other.id == added.id) continue;
+        expect(
+          added.rect.overlaps(other.rect),
+          isFalse,
+          reason: '${added.label} landed on ${other.label}',
+        );
+      }
+    });
+  });
+
+  group('the key', () {
+    testWidgets('it is on the drawing, with a line per cable', (tester) async {
+      final provider = roomWithPlaces();
+      await pumpTab(tester, provider);
+
+      expect(find.text('CABLE KEY'), findsOneWidget);
+      // One line, named for the cable rather than the signal riding it.
+      expect(find.text('Network'), findsWidgets);
+      expect(find.textContaining('2 cables'), findsOneWidget);
+    });
+
+    testWidgets('it can be taken off the sheet and put back', (tester) async {
+      final provider = roomWithPlaces();
+      await pumpTab(tester, provider);
+
+      await tester.tap(find.byKey(const ValueKey('cabling_key_toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('CABLE KEY'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('cabling_key_toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('CABLE KEY'), findsOneWidget);
+    });
+
+    testWidgets('a new box does not land on it', (tester) async {
+      final provider = roomWithPlaces();
+      await pumpTab(tester, provider);
+
+      // Parked where the derived note column would put a box.
+      provider.setCablingBoxPosition(kCablingKeyId, const Offset(980, 60));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Notes'));
+      await tester.pumpAndSettle();
+
+      final note = provider.avCabling.extraBoxes.last;
+      expect(note.kind, CablingBoxKind.note);
+      expect(
+        note.rect.overlaps(const Rect.fromLTWH(980, 60, kCablingKeyWidth, 80)),
+        isFalse,
+      );
     });
   });
 }

@@ -302,7 +302,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       children: [
         _toolbar(provider, plan),
         _sheetBar(provider, plan),
-        if (plan != null) _layerBar(provider, drawing),
+        if (plan != null) _layerBar(provider, plan, drawing),
         if (_tool == _PlanTool.notation && plan != null)
           _notationBar(provider, plan),
         const Divider(height: 1),
@@ -557,7 +557,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
             avRowIcon(
               Icons.copy_all_outlined,
-              'Duplicate this sheet with its callouts',
+              // The way a reflected ceiling plan gets started: from the
+              // furniture plan that already has every marker on it.
+              'Duplicate this sheet with its callouts and markers',
               () => provider.duplicateFloorPlanSheet(active.id),
             ),
             avRowIcon(
@@ -634,14 +636,21 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       builder: (ctx) => AlertDialog(
         title: Text('Remove ${sheet.name}?'),
         content: Text(
-          sheet.callouts.isEmpty
+          sheet.callouts.isEmpty && sheet.markers.isEmpty
               ? 'The sheet goes; the drawing file it points at stays where it '
                   'is.'
-              : 'The sheet and its ${sheet.callouts.length} callout'
-                  '${sheet.callouts.length == 1 ? '' : 's'} go. The drawing '
-                  'file it points at stays where it is, and the room\'s '
-                  'locations are not touched — they belong to the room, not '
-                  'to this sheet.',
+              : 'The sheet goes, and with it '
+                  '${[
+                    if (sheet.callouts.isNotEmpty)
+                      '${sheet.callouts.length} callout'
+                          '${sheet.callouts.length == 1 ? '' : 's'}',
+                    if (sheet.markers.isNotEmpty)
+                      '${sheet.markers.length} location marker'
+                          '${sheet.markers.length == 1 ? '' : 's'}',
+                  ].join(' and ')}. The drawing file it points at stays where '
+                  'it is, and the room\'s locations themselves are not touched '
+                  '— they belong to the room, and only where they are DRAWN '
+                  'belongs to this sheet.',
         ),
         actions: [
           TextButton(
@@ -725,7 +734,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ],
           OutlinedButton.icon(
             icon: const Icon(Icons.place_outlined, size: 18),
-            label: Text('Locations (${provider.avLocations.length})'),
+            // How many of the room's places are on THIS sheet, out of how many
+            // there are. A bare total said nothing about the drawing in front
+            // of you, which is the number that matters once a room has more
+            // than one sheet.
+            label: Text(
+              plan == null
+                  ? 'Locations (${provider.avLocations.length})'
+                  : 'Locations (${plan.markers.length}'
+                        '/${provider.avLocations.length} on this sheet)',
+            ),
             onPressed: () => showLocationManager(context, provider),
           ),
           OutlinedButton.icon(
@@ -820,6 +838,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   ) {
     final size = _imageSize;
     final theme = Theme.of(context);
+    // Worked out once and handed to both the router and the captions, so the
+    // line you see and the label beside it are dodging the same things.
+    final obstacles = _planObstacles(provider, plan);
 
     return SizedBox(
       width: size.width,
@@ -864,15 +885,30 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 child: IgnorePointer(
                   child: CustomPaint(
                     painter: _PlanCablePainter(
-                      runs: _runsOnPlan(provider, drawing),
+                      runs: _runsOnPlan(provider, plan, drawing, obstacles),
+                      // The captions dodge all of it — dots included, which
+                      // the routes cannot — so a run's label never lands on
+                      // the name of the place it runs to.
+                      keepClear: [
+                        ...obstacles.dots.values,
+                        ...obstacles.always,
+                      ],
                       dark: theme.brightness == Brightness.dark,
                     ),
                   ),
                 ),
               ),
+            // Only the locations dropped on THIS sheet. A room's locations
+            // belong to the room; where they are drawn belongs to the drawing.
             for (final location in provider.avLocations)
-              if (location.isPlaced)
-                _locationMarker(provider, model, location),
+              if (plan.markerFor(location.id) != null)
+                _locationMarker(
+                  provider,
+                  model,
+                  plan,
+                  location,
+                  plan.markerFor(location.id)!,
+                ),
             for (final callout in plan.callouts)
               _calloutMarker(provider, model, plan, callout),
             // Over the markers: notation is a mark-up ON the drawing, and an
@@ -899,21 +935,32 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   // --- cable runs over the plan ---------------------------------------------
 
-  /// The runs the cabling drawing knows about, resolved onto this sheet.
+  /// Where each location sits ON THIS SHEET, keyed the way the cabling drawing
+  /// names its boxes so a bundle can be looked up straight against it.
   ///
-  /// Only runs whose BOTH ends are locations somebody has placed can be drawn
-  /// — a line to a location that is not on the plan would have to point
-  /// somewhere arbitrary, and a plan that invents where cable goes is worse
-  /// than one that leaves it out. [_unplacedRunCount] says how many were left
-  /// out, so the omission is visible rather than silent.
+  /// A sheet only knows about the locations somebody dropped on IT — see
+  /// [FloorPlan.markers]. That is what makes a second sheet a second drawing
+  /// rather than a second copy of the first.
+  Map<String, Offset> _markersOn(FloorPlan? plan) => {
+    if (plan != null)
+      for (final e in plan.markers.entries) 'loc:${e.key}': e.value,
+  };
+
+  /// The runs the cabling drawing knows about, resolved onto this sheet and
+  /// routed clear of everything already printed on it.
+  ///
+  /// Only runs whose BOTH ends are on THIS sheet can be drawn — a line to a
+  /// location that is not on the plan would have to point somewhere arbitrary,
+  /// and a plan that invents where cable goes is worse than one that leaves it
+  /// out. [_unplacedRunCount] says how many were left out, so the omission is
+  /// visible rather than silent.
   List<_PlanRun> _runsOnPlan(
     AppStateProvider provider,
+    FloorPlan plan,
     CablingSchematic drawing,
+    ({Map<String, Rect> dots, List<Rect> always}) obstacles,
   ) {
-    final placed = {
-      for (final l in provider.avLocations)
-        if (l.isPlaced) 'loc:${l.id}': l.planPos,
-    };
+    final placed = _markersOn(plan);
 
     final drawable = [
       for (final b in drawing.bundles)
@@ -922,6 +969,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             _layerMatches(b.cableType))
           b,
     ];
+    if (drawable.isEmpty) return const [];
 
     // Runs sharing a pair of markers are fanned apart, the same way the
     // cabling drawing fans them, so six Cat 6a and five Cat 5e between the
@@ -932,22 +980,96 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(b);
     }
     final lanes = <String, double>{};
-    for (final group in byEdge.values) {
-      for (int i = 0; i < group.length; i++) {
-        lanes[group[i].id] = (i - (group.length - 1) / 2) * kCablingLaneStep;
+    final edgeOf = <String, String>{};
+    for (final e in byEdge.entries) {
+      for (int i = 0; i < e.value.length; i++) {
+        lanes[e.value[i].id] =
+            (i - (e.value.length - 1) / 2) * kCablingLaneStep;
+        edgeOf[e.value[i].id] = e.key;
       }
     }
 
     return [
       for (final b in drawable)
         (
-          from: placed[b.fromBoxId]!,
-          to: placed[b.toBoxId]!,
+          id: b.id,
+          edgeKey: edgeOf[b.id] ?? b.id,
+          route: _routeOnPlan(
+            from: placed[b.fromBoxId]!,
+            to: placed[b.toBoxId]!,
+            lane: lanes[b.id] ?? 0,
+            // The two dots this run LANDS on are not obstacles to it: it has
+            // to reach them. Everything else on the sheet still is — including
+            // the names under those two dots.
+            obstacles: [
+              for (final e in obstacles.dots.entries)
+                if (e.key != b.fromBoxId && e.key != b.toBoxId) e.value,
+              ...obstacles.always,
+            ],
+          ),
           color: Color(b.color),
           label: b.label,
-          lane: lanes[b.id] ?? 0,
         ),
     ];
+  }
+
+  /// One run's path: fanned onto its lane, then stepped around whatever is
+  /// printed between its two ends.
+  List<Offset> _routeOnPlan({
+    required Offset from,
+    required Offset to,
+    required double lane,
+    required List<Rect> obstacles,
+  }) {
+    var a = from;
+    var b = to;
+    final d = b - a;
+    final length = d.distance;
+    if (length > 0 && lane != 0) {
+      final normal = Offset(-d.dy / length, d.dx / length) * lane;
+      a += normal;
+      b += normal;
+    }
+    // A straight line when nothing is in the way, which is the common case and
+    // the one a cabling sheet reads best.
+    return latticeRoute(a, b, obstacles) ?? [a, b];
+  }
+
+  /// Everything already printed on the sheet that a cable run should go round,
+  /// split by whether a run may cross it to reach its own end.
+  ///
+  ///   * [dots] are the location markers, keyed the way the runs name their
+  ///     ends. A run has to REACH the two it joins, so those two come out of
+  ///     the list for that run — otherwise there is no way in.
+  ///
+  ///   * [always] is everything no run may cross whatever it is doing: the
+  ///     names under the dots and the callouts. The name is what makes the dot
+  ///     mean anything, and a run coming in sideways across the label of the
+  ///     very place it runs to is the drawing rubbing out its own caption on
+  ///     the last few pixels of the pull.
+  ({Map<String, Rect> dots, List<Rect> always}) _planObstacles(
+    AppStateProvider provider,
+    FloorPlan plan,
+  ) {
+    final dots = <String, Rect>{};
+    final always = <Rect>[];
+    for (final e in plan.markers.entries) {
+      final location = provider.avLocationById(e.key);
+      if (location == null) continue;
+      dots['loc:${e.key}'] = locationDotBounds(e.value);
+      final label = locationLabelBounds(e.value, location.name);
+      if (label != null) always.add(label);
+    }
+    for (final c in plan.callouts) {
+      always.add(
+        Rect.fromCenter(
+          center: c.pos,
+          width: kCalloutMarkerRadius * 2 + 6,
+          height: kCalloutMarkerRadius * 2 + 6,
+        ),
+      );
+    }
+    return (dots: dots, always: always);
   }
 
   bool _layerMatches(String cableType) =>
@@ -957,12 +1079,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// them, each with the colour it is drawn in.
   List<({String type, Color color})> _cableLayers(
     AppStateProvider provider,
+    FloorPlan? plan,
     CablingSchematic drawing,
   ) {
-    final placed = {
-      for (final l in provider.avLocations)
-        if (l.isPlaced) 'loc:${l.id}',
-    };
+    final placed = _markersOn(plan).keys.toSet();
     final seen = <String, Color>{};
     for (final b in drawing.bundles) {
       if (!placed.contains(b.fromBoxId) || !placed.contains(b.toBoxId)) {
@@ -975,12 +1095,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     return [for (final t in types) (type: t, color: seen[t]!)];
   }
 
-  /// How many runs cannot be drawn because an end has no marker on the plan.
-  int _unplacedRunCount(AppStateProvider provider, CablingSchematic drawing) {
-    final placed = {
-      for (final l in provider.avLocations)
-        if (l.isPlaced) 'loc:${l.id}',
-    };
+  /// How many runs cannot be drawn because an end is not on THIS sheet.
+  int _unplacedRunCount(
+    AppStateProvider provider,
+    FloorPlan? plan,
+    CablingSchematic drawing,
+  ) {
+    final placed = _markersOn(plan).keys.toSet();
     return drawing.bundles
         .where(
           (b) =>
@@ -990,10 +1111,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   }
 
   /// The layer picker: off, everything, or one cable type on its own.
-  Widget _layerBar(AppStateProvider provider, CablingSchematic drawing) {
+  Widget _layerBar(
+    AppStateProvider provider,
+    FloorPlan plan,
+    CablingSchematic drawing,
+  ) {
     final theme = Theme.of(context);
-    final layers = _cableLayers(provider, drawing);
-    final missing = _unplacedRunCount(provider, drawing);
+    final layers = _cableLayers(provider, plan, drawing);
+    final missing = _unplacedRunCount(provider, plan, drawing);
     // The bar has to survive having nothing to draw: a room whose markers are
     // not placed yet is exactly the room that needs telling how many runs are
     // missing, and hiding the bar would take the warning with it.
@@ -1032,10 +1157,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
           if (missing > 0)
             Tooltip(
-              message: 'Both ends of a run have to be placed on the plan '
-                  'before it can be drawn.',
+              message: 'Both ends of a run have to be on THIS sheet before it '
+                  'can be drawn. Turn on "Place locations" and click where '
+                  'the missing end goes.',
               child: Text(
-                '$missing run${missing == 1 ? '' : 's'} not on the plan',
+                '$missing run${missing == 1 ? '' : 's'} not on this sheet',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
                 ),
@@ -1053,9 +1179,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// and neither has to read around the other's runs.
   Future<void> _exportLayers(AppStateProvider provider) async {
     final model = buildAvFlowModel(provider);
-    final layers = _cableLayers(provider, provider.cablingSchematic(model));
+    final layers = _cableLayers(
+      provider,
+      provider.activeFloorPlan,
+      provider.cablingSchematic(model),
+    );
     if (layers.isEmpty) {
-      _snack('No cable runs land on this plan yet.');
+      _snack('No cable runs land on this sheet yet.');
       return;
     }
 
@@ -1227,7 +1357,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   Widget _locationMarker(
     AppStateProvider provider,
     AvFlowModel model,
+    FloorPlan plan,
     RoomLocation location,
+    Offset at,
   ) {
     final here = model.nodes.where((n) => n.locationId == location.id);
     final jacks = here
@@ -1235,25 +1367,45 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         .fold(0, (sum, n) => sum + n.ports.length);
     final devices = here.where((n) => !n.isJackField).length;
     const r = kLocationMarkerRadius;
+    // A fixed-width column centred on the marker's coordinates, so the DOT
+    // lands on them whatever the name under it measures. Sized to the column
+    // rather than the dot, a long name shunted the dot sideways and every
+    // cable run then ended somewhere the eye could see it did not.
+    const w = kLocationLabelWidth + 8;
 
     return Positioned(
-      left: location.planPos.dx - r,
-      top: location.planPos.dy - r,
+      left: at.dx - w / 2,
+      top: at.dy - r,
+      width: w,
       child: GestureDetector(
         onPanUpdate: (d) => provider.moveAvLocationMarker(
+          plan.id,
           location.id,
-          location.planPos + d.delta,
+          at + d.delta,
           // One drag is one undo, not one per pointer event.
           recordUndo: false,
         ),
         onDoubleTap: () => showLocationEditor(context, provider, location),
+        // Taking a marker off ONE sheet without deleting the location: the
+        // place is still where the gear is, it just does not belong on this
+        // drawing. There was no way to say that while a marker was a property
+        // of the room.
+        onSecondaryTap: () {
+          provider.removeAvLocationMarker(plan.id, location.id);
+          _snack(
+            '${location.name} taken off ${plan.name}. The location itself is '
+            'untouched — undo, or click the sheet again to put it back.',
+          );
+        },
         child: Tooltip(
           message:
               '${location.displayName}\n'
               '${kRoomZoneLabels[location.zone] ?? ''}\n'
               '$devices device${devices == 1 ? '' : 's'}, '
               '$jacks jack${jacks == 1 ? '' : 's'}\n'
-              'Drag to move · double-click to edit',
+              'On ${plan.name}\n'
+              'Drag to move · double-click to edit · '
+              'right-click to take it off this sheet',
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1282,10 +1434,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               Container(
                 margin: const EdgeInsets.only(top: 2),
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                constraints: const BoxConstraints(
+                  maxWidth: kLocationLabelWidth + 8,
+                ),
                 color: Colors.white.withValues(alpha: 0.85),
                 child: Text(
                   location.name,
-                  style: const TextStyle(fontSize: 10, color: Colors.black87),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: kLocationLabelFontSize,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
             ],
@@ -1378,26 +1539,35 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     }
   }
 
-  /// Drops the next location that isn't on the plan yet at [at]. Asks which
+  /// Drops the next location that isn't on THIS SHEET yet at [at]. Asks which
   /// one when several are waiting, because guessing puts the wrong marker
   /// somewhere plausible, which is worse than asking.
+  ///
+  /// "Not on this sheet" rather than "not on any plan": a location can
+  /// legitimately be on the furniture plan and the reflected ceiling plan
+  /// both, and a sheet that refused to show it because another sheet already
+  /// did would make the second drawing impossible to complete.
   Future<void> _placeLocationAt(AppStateProvider provider, Offset at) async {
-    final waiting = provider.avLocations.where((l) => !l.isPlaced).toList();
+    final plan = provider.activeFloorPlan;
+    if (plan == null) return;
+    final waiting = provider.avLocations
+        .where((l) => !plan.hasMarker(l.id))
+        .toList();
     if (waiting.isEmpty) {
       _snack(
-        'Every location is already on the plan. Drag them to move, or add '
+        'Every location is already on ${plan.name}. Drag them to move, or add '
         'another under "Locations".',
       );
       return;
     }
     if (waiting.length == 1) {
-      provider.moveAvLocationMarker(waiting.first.id, at);
+      provider.moveAvLocationMarker(plan.id, waiting.first.id, at);
       return;
     }
     final picked = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Which location goes here?'),
+        title: Text('Which location goes here on ${plan.name}?'),
         children: [
           for (final l in waiting)
             SimpleDialogOption(
@@ -1406,14 +1576,24 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 children: [
                   Icon(kRoomZoneIcons[l.zone] ?? Icons.place, size: 18),
                   const SizedBox(width: 10),
-                  Text(l.displayName),
+                  Expanded(child: Text(l.displayName)),
+                  // Where else it is already drawn, so a sheet does not get a
+                  // second copy of something by accident.
+                  if (provider.isLocationOnAnySheet(l.id))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Text(
+                        'on ${provider.sheetsShowing(l.id).map((p) => p.name).join(', ')}',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                    ),
                 ],
               ),
             ),
         ],
       ),
     );
-    if (picked != null) provider.moveAvLocationMarker(picked, at);
+    if (picked != null) provider.moveAvLocationMarker(plan.id, picked, at);
   }
 
   // --- the side panel -------------------------------------------------------
@@ -1880,75 +2060,197 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 }
 
 /// What clicking the plan does.
-/// One cable run as it lands on a plan sheet.
+/// One cable run as it lands on a plan sheet, already routed.
 typedef _PlanRun = ({
-  Offset from,
-  Offset to,
+  String id,
+
+  /// The pair of markers this run joins, so runs sharing an edge can be
+  /// captioned as one block instead of one caption on top of another.
+  String edgeKey,
+  List<Offset> route,
   Color color,
   String label,
-  double lane,
 });
 
 /// Draws the cable runs over the plan, each in the colour the cabling drawing
 /// gives it and labelled with what it carries.
+///
+/// Two things a cabling sheet has to get right, and neither is the line
+/// itself:
+///
+///   * THE ROUTE goes round the markers and callouts between its two ends —
+///     computed upstream, in [_FloorPlanViewState._runsOnPlan], because a
+///     lattice search is not something to repeat on every hover.
+///
+///   * THE CAPTION goes somewhere nothing else already is. Runs sharing a pair
+///     of markers get ONE stacked block, and a block that would land on a
+///     location's name, a callout or another caption is walked clear of it.
+///     A drawing whose labels cover each other is a drawing that under-reports
+///     the job, which is the one thing this sheet exists not to do.
 class _PlanCablePainter extends CustomPainter {
   final List<_PlanRun> runs;
+
+  /// The markers and callouts already printed on the sheet.
+  final List<Rect> keepClear;
+
   final bool dark;
 
-  const _PlanCablePainter({required this.runs, required this.dark});
+  const _PlanCablePainter({
+    required this.runs,
+    required this.keepClear,
+    required this.dark,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     for (final run in runs) {
-      var from = run.from;
-      var to = run.to;
-      final d = to - from;
-      final length = d.distance;
-      if (length > 0 && run.lane != 0) {
-        final normal = Offset(-d.dy / length, d.dx / length) * run.lane;
-        from += normal;
-        to += normal;
+      if (run.route.length < 2) continue;
+      final path = Path()..moveTo(run.route.first.dx, run.route.first.dy);
+      for (int i = 1; i < run.route.length; i++) {
+        path.lineTo(run.route[i].dx, run.route[i].dy);
       }
-
-      canvas.drawLine(
-        from,
-        to,
+      canvas.drawPath(
+        path,
         Paint()
+          ..style = PaintingStyle.stroke
           ..color = run.color
+          ..strokeWidth = 3
+          ..strokeJoin = StrokeJoin.round
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // One caption block per pair of markers, placed after every line is down
+    // so the block can be laid over its own run rather than under the next.
+    final byEdge = <String, List<_PlanRun>>{};
+    for (final run in runs) {
+      byEdge.putIfAbsent(run.edgeKey, () => []).add(run);
+    }
+
+    // Grows as captions are placed: each one dodges the markers, the callouts
+    // AND everything captioned before it.
+    final taken = [...keepClear];
+    for (final group in byEdge.values) {
+      final placed = _paintCaption(
+        canvas,
+        group,
+        polylineMidpoint(group.first.route),
+        taken,
+      );
+      if (placed != null) taken.add(placed);
+    }
+  }
+
+  /// Draws one edge's stacked caption and returns the box it ended up in, or
+  /// null when there was nothing to draw.
+  Rect? _paintCaption(
+    Canvas canvas,
+    List<_PlanRun> group,
+    Offset anchor,
+    List<Rect> taken,
+  ) {
+    const dash = 13.0;
+    const gap = 4.0;
+    const rowGap = 2.0;
+
+    final rows = <({TextPainter text, Color color})>[];
+    for (final run in group) {
+      rows.add((
+        color: run.color,
+        text: TextPainter(
+          text: TextSpan(
+            text: run.label,
+            style: TextStyle(
+              color: dark ? Colors.white : Colors.black87,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+      ));
+    }
+    if (rows.isEmpty) return null;
+
+    double width = 0;
+    double height = 0;
+    for (final row in rows) {
+      final w = dash + gap + row.text.width;
+      if (w > width) width = w;
+      height += row.text.height + rowGap;
+    }
+    height -= rowGap;
+
+    final box = _freeCaptionBox(
+      Size(width, height),
+      Offset(anchor.dx - width / 2, anchor.dy - height - 6),
+      taken,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(box.inflate(3), const Radius.circular(3)),
+      // The plan underneath is a drawing, not a background — the label needs
+      // something solid behind it or it lands on top of a wall line.
+      Paint()..color = dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
+    );
+
+    double y = box.top;
+    for (final row in rows) {
+      // The dash is the key: it is what ties "6x Cat 6a" to the line it names
+      // when three run side by side.
+      canvas.drawLine(
+        Offset(box.left, y + row.text.height / 2),
+        Offset(box.left + dash, y + row.text.height / 2),
+        Paint()
+          ..color = row.color
           ..strokeWidth = 3
           ..strokeCap = StrokeCap.round,
       );
-
-      final text = TextPainter(
-        text: TextSpan(
-          text: run.label,
-          style: TextStyle(
-            color: dark ? Colors.white : Colors.black87,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      final mid = (from + to) / 2;
-      final at = Offset(mid.dx - text.width / 2, mid.dy - text.height - 3);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(at.dx, at.dy, text.width, text.height).inflate(3),
-          const Radius.circular(3),
-        ),
-        // The plan underneath is a drawing, not a background — the label needs
-        // something solid behind it or it lands on top of a wall line.
-        Paint()..color = dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
-      );
-      text.paint(canvas, at);
+      row.text.paint(canvas, Offset(box.left + dash + gap, y));
+      y += row.text.height + rowGap;
     }
+    return box.inflate(3);
+  }
+
+  /// [wanted] if nothing is already there, else the nearest spot that is
+  /// clear.
+  ///
+  /// Steps straight up and down first — a caption belongs ON its own run, and
+  /// sliding it along the line keeps it pointing at the right cable — then out
+  /// to the sides. Gives up and uses the original spot rather than flinging a
+  /// label across the sheet to somewhere it explains nothing.
+  static Rect _freeCaptionBox(Size size, Offset wanted, List<Rect> taken) {
+    Rect at(Offset o) => Rect.fromLTWH(o.dx, o.dy, size.width, size.height);
+    bool free(Rect r) {
+      final padded = r.inflate(3);
+      for (final other in taken) {
+        if (padded.overlaps(other)) return false;
+      }
+      return true;
+    }
+
+    if (free(at(wanted))) return at(wanted);
+
+    const step = 15.0;
+    for (int ring = 1; ring <= 14; ring++) {
+      for (final d in const [
+        Offset(0, -1),
+        Offset(0, 1),
+        Offset(-1, 0),
+        Offset(1, 0),
+        Offset(-1, -1),
+        Offset(1, -1),
+      ]) {
+        final candidate = at(wanted + d * (ring * step));
+        if (free(candidate)) return candidate;
+      }
+    }
+    return at(wanted);
   }
 
   @override
   bool shouldRepaint(_PlanCablePainter old) =>
-      old.runs != runs || old.dark != dark;
+      old.runs != runs || old.keepClear != keepClear || old.dark != dark;
 }
 
 enum _PlanTool { none, location, callout, notation }

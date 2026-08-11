@@ -448,7 +448,7 @@ void main() {
           workbookRef: 'Rack Inventory',
         ),
       );
-      p.moveAvLocationMarker(r.floorBox, const Offset(340, 120));
+      p.moveAvLocationMarker(plan.id, r.floorBox, const Offset(340, 120));
 
       expect(await p.saveAvFlow(), isNotEmpty);
 
@@ -458,8 +458,9 @@ void main() {
       reopened.loadAvFlowForCurrentConfig();
 
       expect(reopened.avLocations.length, 2);
+      // The marker rides on the SHEET it was dropped on.
       expect(
-        reopened.avLocationById(r.floorBox)!.planPos,
+        reopened.avFloorPlans.single.markerFor(r.floorBox),
         const Offset(340, 120),
       );
       expect(reopened.avScreenSwitches.single.runFeet, 30);

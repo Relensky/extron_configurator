@@ -14,6 +14,7 @@ import 'config_key_mapper.dart';
 import 'cabling_schematic.dart';
 import 'cost_estimate.dart';
 import 'labor_rates.dart';
+import 'layout_tools.dart';
 import 'room_locations.dart';
 import 'room_presets.dart';
 import 'room_sidecar.dart';
@@ -1470,16 +1471,70 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Moves a location's marker on the floor plan without an undo entry per
-  /// pointer event — one drag should be one undo, the same bargain the cable
-  /// waypoint handles make.
-  void moveAvLocationMarker(String id, Offset planPos,
-      {bool recordUndo = true}) {
-    final index = avLocations.indexWhere((l) => l.id == id);
-    if (index < 0) return;
-    if (recordUndo) _pushAvUndo('Move ${avLocations[index].name}');
-    avLocations[index] = avLocations[index].copyWith(planPos: planPos);
+  /// Moves a location's marker ON ONE SHEET, without an undo entry per pointer
+  /// event — one drag should be one undo, the same bargain the cable waypoint
+  /// handles make.
+  ///
+  /// [planId] blank means the sheet currently open, which is what every gesture
+  /// on the Floor Plan tab wants.
+  void moveAvLocationMarker(
+    String planId,
+    String id,
+    Offset planPos, {
+    bool recordUndo = true,
+  }) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    if (sheet == null) return;
+    final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
+    if (index < 0 || avLocationById(id) == null) return;
+    if (recordUndo) _pushAvUndo('Move ${avLocationName(id)}');
+    avFloorPlans[index] = sheet.withMarker(id, planPos);
     notifyListeners();
+  }
+
+  /// Takes a location off ONE sheet. The location itself stays in the room —
+  /// it is still where the devices are, it is just not drawn on this drawing.
+  void removeAvLocationMarker(String planId, String id) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    if (sheet == null || !sheet.hasMarker(id)) return;
+    final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
+    if (index < 0) return;
+    _pushAvUndo('Take ${avLocationName(id)} off ${sheet.name}');
+    avFloorPlans[index] = sheet.withoutMarker(id);
+    notifyListeners();
+  }
+
+  /// Where [locationId] sits on [planId] (or on the open sheet), or null when
+  /// it is not on that sheet at all.
+  Offset? avLocationMarker(String planId, String locationId) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    return sheet?.markerFor(locationId);
+  }
+
+  /// True when [locationId] is drawn on ANY sheet. What the reports ask: "is
+  /// this place on a drawing somewhere", not "is it on the one you have open".
+  bool isLocationOnAnySheet(String locationId) =>
+      avFloorPlans.any((p) => p.hasMarker(locationId));
+
+  /// The sheets [locationId] appears on, in sheet order.
+  List<FloorPlan> sheetsShowing(String locationId) =>
+      avFloorPlans.where((p) => p.hasMarker(locationId)).toList();
+
+  /// Moves markers written by a version that kept ONE set of coordinates per
+  /// room onto the first sheet, which is the sheet they were drawn on.
+  ///
+  /// Only ever fires on a room whose sheets carry no markers of their own, so
+  /// re-saving a migrated room and opening it again is a no-op rather than a
+  /// second migration writing over what has since been moved.
+  void _migrateLegacyPlanMarkers() {
+    if (avFloorPlans.isEmpty) return;
+    if (avFloorPlans.any((p) => p.markers.isNotEmpty)) return;
+    final legacy = {
+      for (final l in avLocations)
+        if (l.isPlaced) l.id: l.planPos,
+    };
+    if (legacy.isEmpty) return;
+    avFloorPlans[0] = avFloorPlans[0].copyWith(markers: legacy);
   }
 
   /// Removes a location and unsets it everywhere it was named.
@@ -1506,7 +1561,8 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
     // A callout pointing at a location that no longer exists becomes a plain
-    // note rather than a dangling reference nobody can resolve on site.
+    // note rather than a dangling reference nobody can resolve on site, and
+    // the marker comes off every sheet that was drawing it.
     for (int p = 0; p < avFloorPlans.length; p++) {
       final plan = avFloorPlans[p];
       avFloorPlans[p] = plan.copyWith(
@@ -1517,6 +1573,7 @@ class AppStateProvider extends ChangeNotifier {
             else
               c,
         ],
+        markers: {...plan.markers}..remove(id),
       );
     }
     notifyListeners();
@@ -1852,30 +1909,49 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Drops a new box on the cabling drawing.
+  ///
+  /// [occupied] is what is already on the sheet — the caller has the drawing to
+  /// hand, and only the drawing knows, because the DERIVED boxes are rebuilt
+  /// from the room every time and are not in [CablingOverrides] to be counted.
+  /// Without it a hand-added location took the slot the first location off the
+  /// floor plan was already sitting in, and the two drew on top of each other.
   CablingBox addCablingBox({
     required CablingBoxKind kind,
     String label = '',
     Offset? pos,
     String body = '',
     String shape = '',
+    List<Rect> occupied = const [],
   }) {
     _pushAvUndo('Add ${kCablingBoxKindLabels[kind]?.toLowerCase() ?? 'box'}');
     _avCablingBoxCounter++;
+    // The slot the derived layout would have given it, stepped on by how many
+    // of the SAME kind are already drawn. Counting all boxes instead would put
+    // a pathway on top of the device added a moment earlier, since the two
+    // belong in completely different parts of the sheet.
+    final wanted = pos ??
+        defaultCablingBoxPosition(
+          avCabling.extraBoxes.where((b) => b.kind == kind).length,
+          kind,
+        );
+    final size = CablingBox(id: '', label: '', kind: kind, body: body).size;
     final box = CablingBox(
       id: 'box:$_avCablingBoxCounter',
       label: label.trim().isEmpty
           ? _defaultCablingBoxLabel(kind, shape)
           : label.trim(),
       kind: kind,
-      // The slot the derived layout would have given it, stepped on by how
-      // many of the SAME kind are already drawn. Counting all boxes instead
-      // would put a pathway on top of the device added a moment earlier, since
-      // the two belong in completely different parts of the sheet.
-      pos: pos ??
-          defaultCablingBoxPosition(
-            avCabling.extraBoxes.where((b) => b.kind == kind).length,
-            kind,
-          ),
+      // An explicit position is somebody saying where they want it and is left
+      // alone; a slot picked by the layout is only a guess and gets moved off
+      // whatever is already there.
+      pos: pos != null
+          ? wanted
+          : nonOverlappingPosition(
+              desired: wanted,
+              size: size,
+              others: occupied,
+            ),
       body: body,
       shape: shape,
     );
@@ -3377,6 +3453,8 @@ class AppStateProvider extends ChangeNotifier {
           }
         }
       }
+
+      _migrateLegacyPlanMarkers();
 
       final cabling = doc['cablingSchematic'];
       if (cabling is Map) {

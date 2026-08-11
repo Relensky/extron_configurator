@@ -147,9 +147,17 @@ class RoomLocation {
   /// Short tag printed on the plan and in the report ('A', 'FB1').
   final String callout;
 
-  /// Where the marker sits on the floor plan image, in the plan's own
-  /// coordinate space. [Offset.zero] means "not placed on the plan yet",
-  /// which is normal: locations are named long before a plan turns up.
+  /// LEGACY. Where the marker sat back when a room had ONE plan and every
+  /// sheet shared it.
+  ///
+  /// A marker now belongs to the SHEET it was dropped on — see
+  /// [FloorPlan.markers] — because a room with a Level 1 plan, a Level 2 plan
+  /// and a reflected ceiling plan does not have the instructor station in the
+  /// same spot on all three, and drawing it in all three at one set of
+  /// coordinates put two of them somewhere arbitrary.
+  ///
+  /// Still READ from an older room file so its markers survive the upgrade
+  /// (they are copied onto the first sheet on load); never written back out.
   final Offset planPos;
 
   final String note;
@@ -163,7 +171,8 @@ class RoomLocation {
     this.note = '',
   });
 
-  /// True when this location has been dropped on the floor plan.
+  /// True when the LEGACY room file had this location on its single plan.
+  /// Only the migration reads it; ask the sheet otherwise.
   bool get isPlaced => planPos != Offset.zero;
 
   /// What a report column shows: the callout tag in front of the name when
@@ -195,13 +204,14 @@ class RoomLocation {
     note: note,
   );
 
+  /// The marker coordinates are deliberately NOT written: they live on the
+  /// sheet now, and writing them here too would leave two answers to "where is
+  /// the instructor station" for the next reader to choose between.
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     if (zone != RoomZone.unspecified) 'zone': zone.name,
     if (callout.isNotEmpty) 'callout': callout,
-    if (isPlaced) 'planX': planPos.dx,
-    if (isPlaced) 'planY': planPos.dy,
     if (note.isNotEmpty) 'note': note,
   };
 
@@ -702,6 +712,27 @@ class FloorPlan {
   /// and would be nonsense on the reflected ceiling plan.
   final List<PlanAnnotation> annotations;
 
+  /// Where each of the ROOM'S locations sits ON THIS SHEET, keyed by location
+  /// id, in this sheet's own image coordinates.
+  ///
+  /// The locations themselves stay a property of the room — a floor box named
+  /// once is the same floor box on every drawing, and the devices, the jack
+  /// counts and the cable schedule all key off that one id. What is per sheet
+  /// is WHERE it is drawn, and whether it is drawn at all:
+  ///
+  ///   * a location with no entry here is simply not on this sheet, which is
+  ///     the normal case — the Level 2 plan has no business showing the Level 1
+  ///     floor boxes;
+  ///   * a location on two sheets has two sets of coordinates, because two
+  ///     drawings of the same room are almost never at the same scale, origin
+  ///     or crop.
+  ///
+  /// This is the third of the three things a sheet owns outright, beside its
+  /// [imageFile] and its [callouts]. Before it, every sheet redrew one shared
+  /// set of coordinates, so adding a second sheet scattered its markers
+  /// wherever the first sheet's geometry happened to put them.
+  final Map<String, Offset> markers;
+
   const FloorPlan({
     required this.id,
     required this.name,
@@ -711,9 +742,28 @@ class FloorPlan {
     this.pixelsPerFoot = 0,
     this.callouts = const [],
     this.annotations = const [],
+    this.markers = const {},
   });
 
   bool get hasImage => imageFile.trim().isNotEmpty;
+
+  /// True when [locationId] has been dropped on THIS sheet.
+  bool hasMarker(String locationId) => markers.containsKey(locationId);
+
+  /// Where [locationId] is on this sheet, or null when it is not on it. Null
+  /// rather than [Offset.zero] on purpose: the top-left corner is a legitimate
+  /// place to put a marker, and "not placed" has to be a different answer from
+  /// "placed at 0,0" or a marker dragged into the corner disappears.
+  Offset? markerFor(String locationId) => markers[locationId];
+
+  /// This sheet with [locationId] at [pos].
+  FloorPlan withMarker(String locationId, Offset pos) =>
+      copyWith(markers: {...markers, locationId: pos});
+
+  /// This sheet with [locationId] taken off it. The location itself is
+  /// untouched — it belongs to the room.
+  FloorPlan withoutMarker(String locationId) =>
+      copyWith(markers: {...markers}..remove(locationId));
 
   FloorPlan copyWith({
     String? name,
@@ -723,6 +773,7 @@ class FloorPlan {
     double? pixelsPerFoot,
     List<FloorPlanCallout>? callouts,
     List<PlanAnnotation>? annotations,
+    Map<String, Offset>? markers,
   }) => FloorPlan(
     id: id,
     name: name ?? this.name,
@@ -732,6 +783,7 @@ class FloorPlan {
     pixelsPerFoot: pixelsPerFoot ?? this.pixelsPerFoot,
     callouts: callouts ?? this.callouts,
     annotations: annotations ?? this.annotations,
+    markers: markers ?? this.markers,
   );
 
   FloorPlan withId(String newId) => FloorPlan(
@@ -743,6 +795,7 @@ class FloorPlan {
     pixelsPerFoot: pixelsPerFoot,
     callouts: callouts,
     annotations: annotations,
+    markers: markers,
   );
 
   Map<String, dynamic> toJson() => {
@@ -756,6 +809,11 @@ class FloorPlan {
     'callouts': [for (final c in callouts) c.toJson()],
     if (annotations.isNotEmpty)
       'annotations': [for (final a in annotations) a.toJson()],
+    if (markers.isNotEmpty)
+      'markers': {
+        for (final e in markers.entries)
+          e.key: {'x': e.value.dx, 'y': e.value.dy},
+      },
   };
 
   factory FloorPlan.fromJson(Map<String, dynamic> json) => FloorPlan(
@@ -776,6 +834,14 @@ class FloorPlan {
       for (final a in (json['annotations'] as List? ?? []))
         if (a is Map) PlanAnnotation.fromJson(Map<String, dynamic>.from(a)),
     ],
+    markers: {
+      for (final e in (json['markers'] as Map? ?? {}).entries)
+        if (e.value is Map)
+          e.key.toString(): Offset(
+            ((e.value as Map)['x'] as num?)?.toDouble() ?? 0,
+            ((e.value as Map)['y'] as num?)?.toDouble() ?? 0,
+          ),
+    },
   );
 }
 
@@ -783,3 +849,63 @@ class FloorPlan {
 /// location dot is the same size wherever it is drawn.
 const double kLocationMarkerRadius = 13;
 const double kCalloutMarkerRadius = 15;
+
+/// How wide the name printed under a location dot is allowed to get before it
+/// wraps. A cap rather than no limit: "Instructor station floor box (front)"
+/// on one line is a banner across the drawing.
+const double kLocationLabelWidth = 170;
+
+/// Font size of that name, and the padding the plate round it carries.
+const double kLocationLabelFontSize = 10;
+const double _kLocationLabelPadX = 4;
+const double _kLocationLabelPadY = 1;
+const double _kLocationLabelGap = 2;
+
+/// Just the dot, centred on [pos].
+Rect locationDotBounds(Offset pos) => Rect.fromCenter(
+  center: pos,
+  width: kLocationMarkerRadius * 2,
+  height: kLocationMarkerRadius * 2,
+);
+
+/// Just the plate the name is printed on, under the dot. Null when there is no
+/// name to print.
+///
+/// Separate from [locationDotBounds] because the two are obstacles to a cable
+/// run on DIFFERENT terms. A run landing at a location has to reach its dot, so
+/// the dot cannot block it — but the name plate must block it even then, or the
+/// last few pixels of a run come in sideways straight across the label of the
+/// very place it is running to. That is the one crossing a single combined box
+/// could not express, and it is the one that actually happened.
+Rect? locationLabelBounds(Offset pos, String name) {
+  if (name.trim().isEmpty) return null;
+  final label = TextPainter(
+    text: TextSpan(
+      text: name,
+      style: const TextStyle(fontSize: kLocationLabelFontSize),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 2,
+    ellipsis: '…',
+  )..layout(maxWidth: kLocationLabelWidth);
+
+  return Rect.fromLTWH(
+    pos.dx - (label.width + _kLocationLabelPadX * 2) / 2,
+    locationDotBounds(pos).bottom + _kLocationLabelGap,
+    label.width + _kLocationLabelPadX * 2,
+    label.height + _kLocationLabelPadY * 2,
+  );
+}
+
+/// The whole box a location marker occupies on a plan: the dot, centred on
+/// [pos], with [name] printed on a plate under it.
+///
+/// Shared with the code that ROUTES cable runs, which is the point of it being
+/// a function rather than a magic number in the painter. A run stepped round
+/// the 26-pixel dot and straight through the words under it was the drawing
+/// scribbling out its own labels.
+Rect locationMarkerBounds(Offset pos, String name) {
+  final dot = locationDotBounds(pos);
+  final plate = locationLabelBounds(pos, name);
+  return plate == null ? dot : dot.expandToInclude(plate);
+}
