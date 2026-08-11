@@ -60,7 +60,7 @@ List<ReportSection> avFlowSections(
   if (model.nodes.any((n) => n.isJackField)) _jackSchedule(model),
   ...locationSections(model),
   _portUtilization(model),
-  ..._driverGap(provider, model),
+  ...driverGapSections(provider, model),
 ];
 
 /// The where-is-it half: the room's places, what lands at each of them, and
@@ -100,7 +100,10 @@ List<ReportSection> cablingSections(AvFlowModel model) {
     locations: model.locations,
     overrides: model.cablingEdits,
   );
-  if (drawing.boxes.isEmpty) return const [];
+  // The counts come off the signal flow rather than the drawing, so a room
+  // that is cabled but not yet drawn still has a sheet somebody can order
+  // from. Nothing at all in either and the tables stay away entirely.
+  if (drawing.boxes.isEmpty && model.cables.isEmpty) return const [];
 
   String nameOf(String id) => drawing.boxById(id)?.label ?? id;
 
@@ -115,17 +118,34 @@ List<ReportSection> cablingSections(AvFlowModel model) {
           );
   });
 
-  // Per cable type, which is the line a purchase order is written against.
-  final byType = <String, double>{};
+  // Per cable type, which is the line a purchase order is written against —
+  // grouped under the family heading the drawing labels those runs with, so
+  // "AV cabling" totals once and then says what is in it.
+  final byType = <String, ({double runs, Set<String> signals})>{};
   for (final r in runs) {
     final type = r.cableType.trim().isEmpty ? '(unspecified)' : r.cableType;
-    byType[type] = (byType[type] ?? 0) + r.count;
+    final existing = byType[type];
+    byType[type] = (
+      runs: (existing?.runs ?? 0) + r.count,
+      signals: {
+        ...?existing?.signals,
+        if (r.signalSubLabel.isNotEmpty) r.signalSubLabel,
+      },
+    );
   }
 
   final sections = <ReportSection>[
+    cableCountSection(model),
     (
       title: 'Cabling Runs',
-      header: ['From', 'To', 'Cables', 'Type', 'Where the figure came from'],
+      header: [
+        'From',
+        'To',
+        'Cables',
+        'Cable type',
+        'Signal',
+        'Where the figure came from',
+      ],
       rows: [
         for (final r in runs)
           [
@@ -133,6 +153,7 @@ List<ReportSection> cablingSections(AvFlowModel model) {
             nameOf(r.toBoxId),
             r.count,
             r.cableType,
+            r.signalSubLabel,
             if (!r.isDerived)
               'Added on the drawing'
             else if (drawing.overridden.contains(r.id))
@@ -144,13 +165,17 @@ List<ReportSection> cablingSections(AvFlowModel model) {
     ),
     (
       title: 'Cable Totals by Type',
-      header: ['Cable type', 'Runs'],
+      header: ['Cable type', 'Signal', 'Runs'],
       rows: [
         for (final e in (byType.entries.toList()
               ..sort((a, b) => a.key.toLowerCase().compareTo(
                     b.key.toLowerCase(),
                   ))))
-          [e.key, e.value],
+          [
+            e.key,
+            (e.value.signals.toList()..sort()).join(', '),
+            e.value.runs,
+          ],
       ],
     ),
     (
@@ -260,7 +285,12 @@ ReportSection _cableSchedule(AvFlowModel model) {
     header: [
       'Cable',
       'Label',
+      // What it is FILED as, then what it carries: a DTP run and a Dante run
+      // are both AV cabling to whoever pulls them, and different things to
+      // whoever lands them.
+      'Cable type',
       'Signal',
+      'Length',
       'Source device',
       'Source port',
       'Source location',
@@ -273,7 +303,9 @@ ReportSection _cableSchedule(AvFlowModel model) {
         [
           c.id,
           c.label,
+          cableTypeLabel(c.signal),
           kSignalCodes[c.signal] ?? c.signal.name,
+          formatCableLength(c.lengthFt),
           deviceName(c.fromNodeId),
           portName(c.fromNodeId, c.fromPortId),
           model.locationNameOf(c.fromNodeId),
@@ -282,6 +314,91 @@ ReportSection _cableSchedule(AvFlowModel model) {
           model.locationNameOf(c.toNodeId),
         ],
     ],
+  );
+}
+
+/// How many runs of each kind there are, and in what lengths.
+///
+/// This is the sheet an order is written from, so it is arranged the way an
+/// order is: the AV cabling together, the network together, everything else
+/// after, each family totalled and then broken down by the signal it actually
+/// carries and the lead length it is being bought in. A run with no length set
+/// is counted in a column of its own rather than folded into the shortest
+/// lead, because "we haven't decided" and "one foot" are different answers.
+ReportSection cableCountSection(AvFlowModel model) {
+  final byId = model.nodesById;
+  final runs = model.cables
+      .where((c) => AvFlowModel.cableIsResolvable(c, byId))
+      .toList();
+
+  /// length -> count, for one bucket of runs.
+  Map<double, int> lengths(Iterable<AvCable> cables) {
+    final out = <double, int>{};
+    for (final c in cables) {
+      final ft = c.lengthFt <= 0 ? 0.0 : c.lengthFt;
+      out[ft] = (out[ft] ?? 0) + 1;
+    }
+    return out;
+  }
+
+  // Only the lengths in use get a column, plus every stock length that has
+  // anything in it — a table with seven empty columns is a table nobody reads.
+  final used = <double>{
+    for (final c in runs)
+      if (c.lengthFt > 0) c.lengthFt,
+  }.toList()..sort();
+  final anyUnset = runs.any((c) => c.lengthFt <= 0);
+
+  List<dynamic> lengthCells(Map<double, int> counts) => [
+    for (final ft in used) counts[ft] ?? '',
+    if (anyUnset) counts[0] ?? '',
+  ];
+
+  final rows = <List<dynamic>>[];
+  for (final family in CableFamily.values) {
+    final here = runs.where((c) => cableFamilyFor(c.signal) == family).toList();
+    if (here.isEmpty) continue;
+
+    rows.add([
+      '— ${kCableFamilyLabels[family]} —',
+      '',
+      here.length,
+      ...lengthCells(lengths(here)),
+    ]);
+
+    // One row per signal under the family heading. Ordered by the enum so the
+    // same room lists its types in the same order every time.
+    for (final signal in SignalType.values) {
+      final ofType = here.where((c) => c.signal == signal).toList();
+      if (ofType.isEmpty) continue;
+      rows.add([
+        cableTypeLabel(signal),
+        kSignalLabels[signal] ?? signal.name,
+        ofType.length,
+        ...lengthCells(lengths(ofType)),
+      ]);
+    }
+  }
+
+  if (rows.isNotEmpty) {
+    rows.add([
+      'All cabling',
+      '',
+      runs.length,
+      ...lengthCells(lengths(runs)),
+    ]);
+  }
+
+  return (
+    title: 'Cable Counts by Type and Length',
+    header: [
+      'Cable type',
+      'Signal',
+      'Runs',
+      for (final ft in used) formatCableLength(ft),
+      if (anyUnset) 'No length set',
+    ],
+    rows: rows,
   );
 }
 
@@ -741,7 +858,15 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
 /// but it IS the list somebody needs before commissioning, because every
 /// entry on it is a box the processor cannot touch. Empty sections drop out,
 /// so a fully driven room never grows this table.
-List<ReportSection> _driverGap(AppStateProvider provider, AvFlowModel model) {
+///
+/// Public because it belongs on more than the AV report: a COST-ONLY estimate
+/// is a document somebody signs off, and a room quoted without anybody noticing
+/// that three of its devices have no driver is a room that arrives on site and
+/// cannot be commissioned. Every cost export appends this for that reason.
+List<ReportSection> driverGapSections(
+  AppStateProvider provider,
+  AvFlowModel model,
+) {
   final rows = <List<dynamic>>[];
 
   // A config block whose `module` field is blank is the sharper version of the

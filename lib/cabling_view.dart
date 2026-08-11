@@ -11,6 +11,7 @@ import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
+import 'live_text_field.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
@@ -85,6 +86,12 @@ class _CablingViewState extends State<CablingView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _toolbar(provider, drawing),
+        // What is selected, and what can be done to it. Its own row under the
+        // toolbar rather than more chips on the end of it: the toolbar is
+        // already long enough to wrap, and "set the count in the toolbar" is
+        // useless advice when the controls have wrapped off the bottom of a
+        // row nobody was looking at.
+        ..._selectionBar(provider, drawing),
         const Divider(height: 1),
         Expanded(
           key: _viewportKey,
@@ -148,10 +155,6 @@ class _CablingViewState extends State<CablingView> {
 
   Widget _toolbar(AppStateProvider provider, CablingSchematic drawing) {
     final theme = Theme.of(context);
-    final selectedBox = drawing.boxById(_selectedId);
-    final selectedBundle = drawing.bundles
-        .where((b) => b.id == _selectedId)
-        .firstOrNull;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -175,6 +178,7 @@ class _CablingViewState extends State<CablingView> {
                   CablingBoxKind.location => Icons.crop_square,
                   CablingBoxKind.pathway => Icons.swap_vert,
                   CablingBoxKind.note => Icons.sticky_note_2_outlined,
+                  CablingBoxKind.device => Icons.developer_board,
                 },
                 size: 18,
               ),
@@ -184,6 +188,13 @@ class _CablingViewState extends State<CablingView> {
                 setState(() => _selectedId = box.id);
               },
             ),
+          // The gear itself, drawn the way the schematic draws it, so a run
+          // can be pulled to "the ceiling mic" rather than to a location code.
+          OutlinedButton.icon(
+            icon: const Icon(Icons.developer_board, size: 18),
+            label: const Text('Device'),
+            onPressed: () => _addDevice(provider),
+          ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
@@ -252,9 +263,6 @@ class _CablingViewState extends State<CablingView> {
               ),
               onDeleted: () => setState(() => _runFrom = ''),
             ),
-          if (selectedBox != null) ..._boxActions(provider, selectedBox),
-          if (selectedBundle != null)
-            ..._bundleActions(provider, drawing, selectedBundle),
           if (drawing.overridden.isNotEmpty)
             Tooltip(
               message: 'Typed over what the room worked out. The badge is on '
@@ -270,15 +278,85 @@ class _CablingViewState extends State<CablingView> {
     );
   }
 
+  // --- the selection bar ----------------------------------------------------
+
+  /// The row under the toolbar: what is selected and everything that can be
+  /// done to it. Nothing at all when nothing is selected, so the page stays
+  /// quiet for somebody who only came to look at the drawing.
+  List<Widget> _selectionBar(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+  ) {
+    final box = drawing.boxById(_selectedId);
+    final bundle = drawing.bundles.where((b) => b.id == _selectedId).firstOrNull;
+    if (box == null && bundle == null) return const [];
+
+    final theme = Theme.of(context);
+    return [
+      const Divider(height: 1),
+      Container(
+        width: double.infinity,
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: box != null
+              ? _boxActions(provider, box)
+              : _bundleActions(provider, drawing, bundle!),
+        ),
+      ),
+    ];
+  }
+
+  /// The small caption at the head of the selection bar, so it is obvious what
+  /// the controls beside it are about to change.
+  Widget _selectionTitle(String kind, String name) => Padding(
+    padding: const EdgeInsets.only(right: 4),
+    child: RichText(
+      text: TextSpan(
+        style: Theme.of(context).textTheme.bodySmall,
+        children: [
+          TextSpan(
+            text: '$kind  ',
+            style: TextStyle(color: Theme.of(context).hintColor),
+          ),
+          TextSpan(
+            text: name,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
   List<Widget> _boxActions(AppStateProvider provider, CablingBox box) => [
+    _selectionTitle(kCablingBoxKindLabels[box.kind] ?? 'Box', box.label),
     TextButton.icon(
       icon: const Icon(Icons.drive_file_rename_outline, size: 16),
       label: const Text('Rename'),
       onPressed: () async {
         final name = await _askFor('Box name', box.label);
-        if (name != null) provider.setCablingBoxLabel(box.id, name);
+        if (name != null && name.trim().isNotEmpty) {
+          provider.setCablingBoxLabel(box.id, name.trim());
+        }
       },
     ),
+    // Only a hand-added device box has a shape to swap; a place derived from
+    // the room is a place, not a piece of gear.
+    if (box.kind == CablingBoxKind.device && !box.isDerived)
+      TextButton.icon(
+        icon: Icon(cablingDeviceIcon(box.shape), size: 16),
+        label: const Text('Device type'),
+        onPressed: () async {
+          final shape = await _pickDeviceShape(box.shape);
+          if (shape != null) provider.setCablingBoxShape(box.id, shape);
+        },
+      ),
     TextButton.icon(
       icon: const Icon(Icons.notes, size: 16),
       label: Text(box.body.trim().isEmpty ? 'Add text' : 'Edit text'),
@@ -305,52 +383,147 @@ class _CablingViewState extends State<CablingView> {
     ),
   ];
 
+  /// The run's count and type, edited IN the bar rather than behind a button.
+  ///
+  /// The count is the number somebody came to this page to change, so it is a
+  /// box they can type in, not a dialog they have to find first.
   List<Widget> _bundleActions(
     AppStateProvider provider,
     CablingSchematic drawing,
     CablingBundle bundle,
-  ) => [
-    Text(
-      bundle.label,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-    ),
-    TextButton.icon(
-      icon: const Icon(Icons.tag, size: 16),
-      label: const Text('Count'),
-      onPressed: () async {
-        final v = await _askFor('How many cables', bundle.count
-            .toStringAsFixed(0));
-        if (v == null) return;
-        provider.setCablingBundleCount(bundle.id, double.tryParse(v.trim()));
-      },
-    ),
-    TextButton.icon(
-      icon: const Icon(Icons.cable, size: 16),
-      label: const Text('Type'),
-      onPressed: () async {
-        final v = await _askFor('Cable type', bundle.cableType);
-        if (v != null) provider.setCablingBundleType(bundle.id, v);
-      },
-    ),
-    if (drawing.overridden.contains(bundle.id))
-      TextButton.icon(
-        icon: const Icon(Icons.restart_alt, size: 16),
-        label: const Text('Back to the counted figure'),
-        onPressed: () {
-          provider.setCablingBundleCount(bundle.id, null);
-          provider.setCablingBundleType(bundle.id, null);
-        },
+  ) {
+    final from = drawing.boxById(bundle.fromBoxId)?.label ?? bundle.fromBoxId;
+    final to = drawing.boxById(bundle.toBoxId)?.label ?? bundle.toBoxId;
+    return [
+      _selectionTitle('Run', '$from  →  $to'),
+      // Committed on Enter or on clicking away rather than per keystroke: the
+      // count goes through the undo stack, and "13" typed a digit at a time
+      // would leave "1" behind as an entry of its own.
+      SizedBox(
+        width: 96,
+        child: LiveTextField(
+          key: ValueKey('cabling_count_${bundle.id}'),
+          fieldId: 'count:${bundle.id}',
+          initial: bundle.count == bundle.count.roundToDouble()
+              ? bundle.count.round().toString()
+              : bundle.count.toStringAsFixed(1),
+          label: 'Cables',
+          numeric: true,
+          onChanged: (_) {},
+          onSubmitted: (v) => provider.setCablingBundleCount(
+            bundle.id,
+            v.trim().isEmpty ? null : double.tryParse(v.trim()),
+          ),
+        ),
       ),
-    avRowIcon(
-      Icons.delete_outline,
-      'Take this run off the drawing',
-      () {
-        provider.removeCablingItem(bundle.id);
-        setState(() => _selectedId = '');
-      },
-      danger: true,
+      SizedBox(
+        width: 180,
+        child: LiveTextField(
+          key: ValueKey('cabling_type_${bundle.id}'),
+          fieldId: 'type:${bundle.id}',
+          initial: bundle.cableType,
+          label: 'Cable',
+          onChanged: (_) {},
+          onSubmitted: (v) => provider.setCablingBundleType(bundle.id, v),
+        ),
+      ),
+      // What the family name covers, when it covers more than one thing.
+      if (bundle.signalSubLabel.isNotEmpty)
+        Chip(
+          label: Text(bundle.signalSubLabel),
+          visualDensity: VisualDensity.compact,
+          labelStyle: const TextStyle(fontSize: 11),
+        ),
+      if (drawing.overridden.contains(bundle.id))
+        TextButton.icon(
+          icon: const Icon(Icons.restart_alt, size: 16),
+          label: const Text('Back to the counted figure'),
+          onPressed: () {
+            provider.setCablingBundleCount(bundle.id, null);
+            provider.setCablingBundleType(bundle.id, null);
+          },
+        ),
+      avRowIcon(
+        Icons.delete_outline,
+        'Take this run off the drawing',
+        () {
+          provider.removeCablingItem(bundle.id);
+          setState(() => _selectedId = '');
+        },
+        danger: true,
+      ),
+    ];
+  }
+
+  // --- devices --------------------------------------------------------------
+
+  Future<void> _addDevice(AppStateProvider provider) async {
+    final shape = await _pickDeviceShape('');
+    if (shape == null) return;
+    final box = provider.addCablingBox(
+      kind: CablingBoxKind.device,
+      shape: shape,
+    );
+    setState(() => _selectedId = box.id);
+  }
+
+  /// The gear picker: the same icons the schematic uses, named the way the
+  /// room talks about them.
+  Future<String?> _pickDeviceShape(String current) => showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Which device?'),
+      content: SizedBox(
+        width: 460,
+        height: 420,
+        child: GridView.count(
+          crossAxisCount: 3,
+          childAspectRatio: 1.25,
+          children: [
+            for (final e in kCablingDeviceShapes.entries)
+              InkWell(
+                key: ValueKey('cabling_device_${e.key}'),
+                onTap: () => Navigator.of(ctx).pop(e.key),
+                child: Container(
+                  margin: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: e.key == current
+                          ? Theme.of(ctx).colorScheme.primary
+                          : Theme.of(ctx).dividerColor,
+                      width: e.key == current ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(e.value.icon, size: 26),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          e.value.label,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 11),
+                          maxLines: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
     ),
-  ];
+  );
 
   Future<void> _exportPng(AppStateProvider provider) async {
     final bytes = await captureBoundary(_canvasKey, pixelRatio: 2.0);
@@ -481,22 +654,36 @@ class _CablingViewState extends State<CablingView> {
     );
   }
 
-  /// A small pad at the middle of a run, so a line can be clicked without
+  /// A pad at the middle of a run, so a line can be clicked without
   /// hit-testing the whole canvas.
+  ///
+  /// Sized to cover the LABEL as well as the line: the label is the part of a
+  /// run people aim at, and a target that only covered the wire itself was the
+  /// reason a run looked unselectable and its count unreachable.
   Widget _bundleHitTarget(CablingSchematic drawing, CablingBundle bundle) {
     final from = drawing.boxById(bundle.fromBoxId);
     final to = drawing.boxById(bundle.toBoxId);
     if (from == null || to == null) return const SizedBox.shrink();
     final mid = (from.rect.center + to.rect.center) / 2;
+    const w = 150.0;
+    const h = 48.0;
     return Positioned(
-      left: mid.dx - 26,
-      top: mid.dy - 14,
-      width: 52,
-      height: 28,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _selectedId = bundle.id),
-        child: const SizedBox.expand(),
+      left: mid.dx - w / 2,
+      top: mid.dy - h / 2 - 8,
+      width: w,
+      height: h,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _selectedId = bundle.id),
+          child: Tooltip(
+            message: '${bundle.label}'
+                '${bundle.signalSubLabel.isEmpty ? '' : ' · ${bundle.signalSubLabel}'}'
+                ' — click to set the count and cable type',
+            child: const SizedBox.expand(),
+          ),
+        ),
       ),
     );
   }
@@ -510,6 +697,7 @@ class _CablingViewState extends State<CablingView> {
     final selected = box.id == _selectedId;
     final isNote = box.kind == CablingBoxKind.note;
     final isPathway = box.kind == CablingBoxKind.pathway;
+    final isDevice = box.kind == CablingBoxKind.device;
 
     return Positioned(
       left: box.pos.dx,
@@ -530,7 +718,8 @@ class _CablingViewState extends State<CablingView> {
               _selectedId = added?.id ?? '';
             });
             if (added != null) {
-              _snack('Run added — set its count and type in the toolbar.');
+              _snack('Run added — its count and cable type are in the bar '
+                  'above the drawing.');
             }
             return;
           }
@@ -566,17 +755,24 @@ class _CablingViewState extends State<CablingView> {
             ),
             padding: const EdgeInsets.all(8),
             child: isPathway
-                ? const RotatedBox(
+                // The label the user typed, not a fixed caption: a room whose
+                // route out is "Conduit to IDF-2B" said so on the drawing and
+                // then had it painted over with somebody else's wording.
+                ? RotatedBox(
                     quarterTurns: 3,
                     child: Center(
                       child: Text(
-                        'Network Pathway back to TR',
+                        box.label,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           fontStyle: FontStyle.italic,
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black87,
                         ),
                         maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   )
@@ -588,6 +784,18 @@ class _CablingViewState extends State<CablingView> {
                         ? MainAxisAlignment.start
                         : MainAxisAlignment.center,
                     children: [
+                      // The same icon the schematic gives the same device, so
+                      // the projector is the same picture on every sheet.
+                      if (isDevice) ...[
+                        Icon(
+                          cablingDeviceIcon(box.shape),
+                          size: 26,
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.white70
+                              : Colors.black87,
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                       Text(
                         box.label,
                         textAlign: isNote ? TextAlign.left : TextAlign.center,
@@ -660,9 +868,12 @@ class _BundlePainter extends CustomPainter {
           ..strokeCap = StrokeCap.round,
       );
 
-      // "2x Cat 6a", set beside the middle of the run in the bold italic a
-      // cabling drawing labels its bundles in.
+      // "4x AV cabling", set beside the middle of the run in the bold italic a
+      // cabling drawing labels its bundles in — with the signal on a second,
+      // lighter line under it, because "AV cabling" is what gets pulled and
+      // "HDBaseT / DTP" is what gets landed.
       final edited = overridden.contains(bundle.id);
+      final sub = bundle.signalSubLabel;
       final painter = TextPainter(
         text: TextSpan(
           text: '${bundle.label}${edited ? '  ✎' : ''}',
@@ -672,7 +883,21 @@ class _BundlePainter extends CustomPainter {
             fontWeight: FontWeight.bold,
             fontStyle: FontStyle.italic,
           ),
+          children: sub.isEmpty
+              ? null
+              : [
+                  TextSpan(
+                    text: '\n$sub',
+                    style: TextStyle(
+                      color: dark ? Colors.white70 : Colors.black54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.normal,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
         ),
+        textAlign: TextAlign.center,
         textDirection: TextDirection.ltr,
       )..layout();
 

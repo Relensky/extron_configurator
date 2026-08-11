@@ -185,7 +185,14 @@ Future<ProjectExport> saveProjectFolder({
   } else {
     await write('${named('cost_estimate')}.txt', (f) async {
       await f.writeAsString(
-        renderTextReport(title, costSections, generated: generated),
+        renderTextReport(
+          title,
+          // The estimate, then the devices the control system cannot drive. A
+          // quote gets signed off on its own, so the warning has to travel
+          // with it rather than living only on an AV report nobody opened.
+          [...costSections, ...driverGapSections(provider, av)],
+          generated: generated,
+        ),
       );
     });
   }

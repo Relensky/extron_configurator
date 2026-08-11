@@ -147,11 +147,18 @@ Uint8List buildRoomWorkbookBytes({
     buildStackedReportSheet(
       sheetName: kRoomWorkbookSheets[5],
       title: title,
-      sections: _orPlaceholder(
-        costReportSections(estimate),
-        'Cost Estimate',
-        'No devices on the diagram to price.',
-      ),
+      sections: [
+        ..._orPlaceholder(
+          costReportSections(estimate),
+          'Cost Estimate',
+          'No devices on the diagram to price.',
+        ),
+        // The devices the control system cannot drive, under the money. The
+        // Cost sheet is the one that gets printed and signed on its own, and a
+        // room quoted without anybody noticing three undriven boxes is a room
+        // that cannot be commissioned when it arrives.
+        ...driverGapSections(provider, av),
+      ],
       generated: stamp,
     ),
   ]);

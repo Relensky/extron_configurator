@@ -901,13 +901,33 @@ CostEstimate computeRoomCost({
       }
       if (source == PriceSource.catalogOtherTier) otherTierLines++;
 
+      // The lead lengths this type is drawn in, so the line says what to order
+      // rather than just how many. Runs with no length set are left out of the
+      // note — they are counted in the quantity either way.
+      final byLength = <double, int>{};
+      for (final c in model.cables) {
+        if (c.signal != signal || c.lengthFt <= 0) continue;
+        byLength[c.lengthFt] = (byLength[c.lengthFt] ?? 0) + 1;
+      }
+      final lengths = (byLength.keys.toList()..sort())
+          .map((ft) => '${byLength[ft]}× ${formatCableLength(ft)}')
+          .join(', ');
+
       cabling.add(
         CostLine(
           key: key,
           description: [
             catalog?.model.trim().isNotEmpty == true
                 ? catalog!.model
-                : '${kSignalLabels[signal] ?? signal.name} cable',
+                // "AV cabling (HDBaseT / DTP)" — the family a cable schedule
+                // files it under, then what it actually carries.
+                : [
+                    cableTypeLabel(signal),
+                    if (cableSignalSubLabel(signal).isNotEmpty)
+                      '(${cableSignalSubLabel(signal)})',
+                    'cable',
+                  ].join(' '),
+            if (lengths.isNotEmpty) '[$lengths]',
             if (spares > 0)
               '(${trimNumber(drawn)} drawn + ${trimNumber(spares)} spare)',
           ].join(' '),

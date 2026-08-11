@@ -45,6 +45,15 @@ enum CablingBoxKind {
 
   /// A free block of text: the scope notes down the side of the sheet.
   note,
+
+  /// A piece of gear, drawn with the same icon the Schematic tab gives it.
+  ///
+  /// A cabling drawing is read at the wall, and "the ceiling mic" is what the
+  /// person holding it calls the thing they are pulling to — not "CEILING
+  /// LOCATION 2". Devices are drawn rather than derived because the drawing is
+  /// about where cable GOES, and a run can be pulled to a projector months
+  /// before anybody has decided which projector.
+  device,
 }
 
 const Map<CablingBoxKind, String> kCablingBoxKindLabels = {
@@ -52,7 +61,46 @@ const Map<CablingBoxKind, String> kCablingBoxKindLabels = {
   CablingBoxKind.pullBox: 'Pull box',
   CablingBoxKind.pathway: 'Pathway',
   CablingBoxKind.note: 'Notes',
+  CablingBoxKind.device: 'Device',
 };
+
+/// The gear a cabling drawing can carry, with the icon the rest of the app
+/// already draws it with.
+///
+/// The same names and the same icons as the Schematic and Signal Flow tabs, so
+/// a projector is the same picture on every sheet of the set. Keyed by a
+/// stable slug because the key is what gets written to the room file — the
+/// label can be reworded without orphaning every drawing that used it.
+const Map<String, ({String label, IconData icon})> kCablingDeviceShapes = {
+  'projector': (label: 'Projector', icon: Icons.connected_tv),
+  'display': (label: 'Display / TV', icon: Icons.tv),
+  'screen': (label: 'Projection screen', icon: Icons.aspect_ratio),
+  'camera': (label: 'Camera', icon: Icons.videocam),
+  'ceilingMic': (label: 'Ceiling mic', icon: Icons.mic),
+  'tableMic': (label: 'Table mic', icon: Icons.mic_none),
+  'speaker': (label: 'Speaker', icon: Icons.speaker),
+  'amplifier': (label: 'Amplifier', icon: Icons.volume_up),
+  'switcher': (label: 'Switcher', icon: Icons.swap_horiz),
+  'dsp': (label: 'DSP', icon: Icons.equalizer),
+  'transmitter': (label: 'Transmitter / wall plate', icon: Icons.input),
+  'receiver': (label: 'Receiver', icon: Icons.output),
+  'networkSwitch': (label: 'Network switch', icon: Icons.lan),
+  'patchPanel': (label: 'Patch panel', icon: Icons.dns),
+  'touchPanel': (label: 'Touch panel', icon: Icons.tablet_mac),
+  'floorBox': (label: 'Floor box', icon: Icons.crop_free),
+  'laptop': (label: 'Laptop / BYOD', icon: Icons.laptop),
+  'pc': (label: 'Room PC', icon: Icons.desktop_windows),
+  'rack': (label: 'Rack', icon: Icons.storage),
+  'power': (label: 'Power controller', icon: Icons.power),
+  'wireless': (label: 'Wireless / AP', icon: Icons.wifi),
+  'other': (label: 'Other device', icon: Icons.developer_board),
+};
+
+/// The icon for a device box, falling back to the generic chip so a drawing
+/// written by a newer version still draws.
+IconData cablingDeviceIcon(String shape) =>
+    kCablingDeviceShapes[shape]?.icon ??
+    kCablingDeviceShapes['other']!.icon;
 
 CablingBoxKind cablingBoxKindFromName(String? name) =>
     CablingBoxKind.values.firstWhere(
@@ -75,12 +123,17 @@ class CablingBox {
   /// pathway, the whole scope list on a note.
   final String body;
 
+  /// Which of [kCablingDeviceShapes] a [CablingBoxKind.device] box draws.
+  /// Empty on every other kind.
+  final String shape;
+
   const CablingBox({
     required this.id,
     required this.label,
     this.kind = CablingBoxKind.location,
     this.pos = Offset.zero,
     this.body = '',
+    this.shape = '',
   });
 
   /// True when this box is one the room produced rather than one somebody
@@ -91,6 +144,11 @@ class CablingBox {
   Size get size => switch (kind) {
     CablingBoxKind.pathway => const Size(46, 420),
     CablingBoxKind.note => const Size(250, 260),
+    // Narrower than a place: a device box is an icon with a name under it, the
+    // way it reads on the schematic. Tall enough for the icon plus TWO lines
+    // of label — "Transmitter / wall plate" is a real entry in
+    // [kCablingDeviceShapes], and a box sized to the one-line case clips it.
+    CablingBoxKind.device => const Size(140, 96),
     _ => const Size(180, 66),
   };
 
@@ -101,12 +159,14 @@ class CablingBox {
     CablingBoxKind? kind,
     Offset? pos,
     String? body,
+    String? shape,
   }) => CablingBox(
     id: id,
     label: label ?? this.label,
     kind: kind ?? this.kind,
     pos: pos ?? this.pos,
     body: body ?? this.body,
+    shape: shape ?? this.shape,
   );
 
   Map<String, dynamic> toJson() => {
@@ -116,6 +176,7 @@ class CablingBox {
     'x': pos.dx,
     'y': pos.dy,
     if (body.isNotEmpty) 'body': body,
+    if (shape.isNotEmpty) 'shape': shape,
   };
 
   factory CablingBox.fromJson(Map<String, dynamic> json) => CablingBox(
@@ -127,6 +188,7 @@ class CablingBox {
       (json['y'] as num?)?.toDouble() ?? 0,
     ),
     body: json['body']?.toString() ?? '',
+    shape: json['shape']?.toString() ?? '',
   );
 }
 
@@ -141,8 +203,18 @@ class CablingBundle {
   /// has been.
   final double count;
 
-  /// What they are — 'Cat 6a', 'Cat 5e', 'HDMI'.
+  /// What they are FILED as — 'AV cabling', 'Network', 'Cat 6a'. For a derived
+  /// bundle this is [cableTypeLabel] of [signal], which is why a DTP run and a
+  /// Dante run both read "AV cabling" on the drawing.
   final String cableType;
+
+  /// The signal the derived count was taken off, when there is one. It is what
+  /// the sub-heading under "AV cabling" names, so the drawing can say the
+  /// family and the specific signal without them ever drifting apart.
+  ///
+  /// Null on a run somebody drew by hand: nothing counted it, so nothing knows
+  /// what is in it beyond whatever they typed in [cableType].
+  final SignalType? signal;
 
   /// ARGB. The reference drawing reads by colour — the AV bundles in one, the
   /// network in another — so the colour is part of the drawing, not decoration.
@@ -154,12 +226,13 @@ class CablingBundle {
     required this.toBoxId,
     this.count = 1,
     this.cableType = '',
+    this.signal,
     this.color = 0xFFD32F2F,
   });
 
   bool get isDerived => id.startsWith('bundle:');
 
-  /// "2x Cat 6a" — what gets printed on the run.
+  /// "2x AV cabling" — what gets printed on the run.
   String get label {
     final n = count == count.roundToDouble()
         ? count.round().toString()
@@ -167,11 +240,26 @@ class CablingBundle {
     return cableType.trim().isEmpty ? '${n}x' : '${n}x ${cableType.trim()}';
   }
 
+  /// The line UNDER [label] — 'HDBaseT / DTP' beneath '4x AV cabling'.
+  ///
+  /// Empty when the heading already names the signal, so a network run is not
+  /// labelled "Network" twice, and empty on a hand-drawn run, which is a count
+  /// of something somebody named rather than a count of a signal.
+  String get signalSubLabel {
+    final s = signal;
+    if (s == null) return '';
+    final sub = cableSignalSubLabel(s);
+    // A typed-over cable type is what the site calls it; the signal underneath
+    // is still worth saying, so this only falls silent when the two agree.
+    return sub == cableType.trim() ? '' : sub;
+  }
+
   CablingBundle copyWith({
     String? fromBoxId,
     String? toBoxId,
     double? count,
     String? cableType,
+    SignalType? signal,
     int? color,
   }) => CablingBundle(
     id: id,
@@ -179,6 +267,7 @@ class CablingBundle {
     toBoxId: toBoxId ?? this.toBoxId,
     count: count ?? this.count,
     cableType: cableType ?? this.cableType,
+    signal: signal ?? this.signal,
     color: color ?? this.color,
   );
 
@@ -188,6 +277,7 @@ class CablingBundle {
     'to': toBoxId,
     'count': count,
     if (cableType.isNotEmpty) 'type': cableType,
+    if (signal != null) 'signal': signal!.name,
     'color': color,
   };
 
@@ -197,6 +287,9 @@ class CablingBundle {
     toBoxId: json['to']?.toString() ?? '',
     count: (json['count'] as num?)?.toDouble() ?? 1,
     cableType: json['type']?.toString() ?? '',
+    signal: json['signal'] == null
+        ? null
+        : signalFromName(json['signal']?.toString()),
     color: (json['color'] as num?)?.toInt() ?? 0xFFD32F2F,
   );
 }
@@ -357,10 +450,21 @@ class CablingSchematic {
 /// column, the pull boxes in the middle, the pathway on the right. Good enough
 /// to read immediately and be rearranged from, which is all an automatic
 /// layout has to be.
+/// Public because a box added BY HAND wants the same slot the derived layout
+/// would have given it. Dropping every new box at one fixed spot is how a
+/// pathway ends up sitting on top of the device added a moment earlier.
+Offset defaultCablingBoxPosition(int index, CablingBoxKind kind) =>
+    _defaultPosition(index, kind);
+
 Offset _defaultPosition(int index, CablingBoxKind kind) => switch (kind) {
-  CablingBoxKind.pathway => const Offset(880, 60),
-  CablingBoxKind.note => const Offset(980, 60),
+  // A room has one route out and usually one block of scope notes, so these
+  // step sideways rather than down when a second one is added.
+  CablingBoxKind.pathway => Offset(880.0 + index * 70, 60),
+  CablingBoxKind.note => Offset(980.0 + index * 40, 60.0 + index * 40),
   CablingBoxKind.pullBox => Offset(560, 80.0 + index * 150),
+  // Devices land in a row of their own above the places, so a handful dropped
+  // in one after another don't stack on each other.
+  CablingBoxKind.device => Offset(320, 60.0 + index * 104),
   CablingBoxKind.location => Offset(80, 60.0 + index * 96),
 };
 
@@ -429,7 +533,11 @@ CablingSchematic buildCablingSchematic({
         fromBoxId: e.value.from,
         toBoxId: e.value.to,
         count: e.value.n.toDouble(),
-        cableType: kSignalLabels[e.value.signal] ?? e.value.signal.name,
+        // The FAMILY, not the signal: a DTP run and a Dante run are both
+        // "AV cabling" to whoever is pulling them, and the signal goes on the
+        // sub-heading underneath.
+        cableType: cableTypeLabel(e.value.signal),
+        signal: e.value.signal,
         color: 0xFFD32F2F,
       ),
   ]..sort((a, b) => a.id.compareTo(b.id));

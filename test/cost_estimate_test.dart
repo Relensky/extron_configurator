@@ -580,6 +580,40 @@ void main() {
     });
   });
 
+  /// A cost-only document gets signed off without anybody opening the AV
+  /// report, so the devices the control system cannot drive have to be on it.
+  group('the warning that travels with a cost-only report', () {
+    test('an undriven device is named under the money', () {
+      final p = room();
+      // A model no Python module claims, added by hand.
+      p.addAvNode(device('P1', 'Projector', 'Some Projector 9000'));
+      final model = buildAvFlowModel(p);
+      final estimate = computeRoomCost(
+        model: model,
+        library: catalog(),
+        settings: p.avCost,
+      );
+
+      final gaps = driverGapSections(p, model);
+      final section = sectionNamed(gaps, 'Devices Without a Control Module');
+      expect(section.rows.single[1], 'Some Projector 9000');
+
+      // The estimate itself is unchanged; the warning rides after it, which is
+      // exactly how every cost export assembles the document.
+      final document = [...costReportSections(estimate), ...gaps];
+      expect(
+        document.map((s) => s.title),
+        containsAllInOrder(['Totals', 'Devices Without a Control Module']),
+      );
+    });
+
+    test('a fully driven room grows no warning at all', () {
+      final p = room();
+      final model = buildAvFlowModel(p);
+      expect(driverGapSections(p, model), isEmpty);
+    });
+  });
+
   test('the cost estimate round-trips through the AV flow sidecar', () {
     final p = room();
     p.setAvCostTax(percent: 8.25, label: 'State tax', currency: r'$');

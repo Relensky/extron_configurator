@@ -145,6 +145,87 @@ const Set<SignalType> kAudioSignals = {
   SignalType.speaker,
 };
 
+// ---------------------------------------------------------------------------
+//  CABLE FAMILIES
+// ---------------------------------------------------------------------------
+
+/// The AV signals that travel down STRUCTURED CABLE — the same Cat 5e/6 the
+/// network runs on.
+///
+/// These are the runs a cabling drawing has to be explicit about, because on
+/// the drawing they look exactly like the network runs beside them and get
+/// pulled, terminated and tested by the same people. Calling all of them "AV
+/// cabling" and naming the signal underneath is how a rough-in sheet stops a
+/// DTP run being landed on a data switch.
+const Set<SignalType> kAvCablingSignals = {
+  SignalType.hdbaset,
+  SignalType.dante,
+};
+
+/// What a run gets FILED under on a cabling sheet, as opposed to what signal
+/// it carries.
+enum CableFamily {
+  /// DTP / HDBaseT and Dante — see [kAvCablingSignals].
+  avCabling,
+
+  /// The data runs back to the telecom room.
+  network,
+
+  /// Everything that is its own thing: HDMI, speaker level, USB.
+  other,
+}
+
+const Map<CableFamily, String> kCableFamilyLabels = {
+  CableFamily.avCabling: 'AV cabling',
+  CableFamily.network: 'Network',
+  CableFamily.other: 'Other cabling',
+};
+
+CableFamily cableFamilyFor(SignalType s) => kAvCablingSignals.contains(s)
+    ? CableFamily.avCabling
+    : s == SignalType.network
+    ? CableFamily.network
+    : CableFamily.other;
+
+/// The heading a run of [s] is listed under: "AV cabling" for the structured
+/// AV signals, the signal's own name for everything else.
+///
+/// Nothing calls [kSignalLabels] directly when it is naming a CABLE, so the
+/// family name and the sub-heading below it can never drift apart.
+String cableTypeLabel(SignalType s) {
+  final family = cableFamilyFor(s);
+  if (family == CableFamily.other) return kSignalLabels[s] ?? s.name;
+  return kCableFamilyLabels[family]!;
+}
+
+/// The sub-heading under [cableTypeLabel] — which signal the family name
+/// covers. Empty when the heading already names the signal, so a table never
+/// prints "Network / Network".
+String cableSignalSubLabel(SignalType s) {
+  final label = kSignalLabels[s] ?? s.name;
+  return label == cableTypeLabel(s) ? '' : label;
+}
+
+// ---------------------------------------------------------------------------
+//  CABLE LENGTHS
+// ---------------------------------------------------------------------------
+
+/// The made-up lead lengths this shop stocks, in feet.
+///
+/// A closed list rather than a free number on purpose: a cable schedule is an
+/// ORDER, and "17 ft" is not a thing anybody can put on one. Runs pulled to
+/// length in conduit simply leave the length unset, which the counts report as
+/// its own column rather than quietly rounding into the shortest lead.
+const List<double> kCableLengthsFt = [1, 3, 6, 7, 15, 20, 25];
+
+/// "6ft", or '' when the length was never set.
+String formatCableLength(double feet) {
+  if (feet <= 0) return '';
+  return feet == feet.roundToDouble()
+      ? '${feet.round()}ft'
+      : '${feet.toStringAsFixed(1)}ft';
+}
+
 /// The color a signal type is drawn in, honouring the room's palette.
 ///
 /// [kSignalColors] is only the factory default. A room can recolor any type
@@ -789,6 +870,11 @@ class AvCable {
   /// Cable ID / note shown on the line and in the schedule.
   final String label;
 
+  /// How long the lead is, in feet — one of [kCableLengthsFt], or 0 when
+  /// nobody has said. Zero rather than null so a room saved before lengths
+  /// existed reads back as "not set" rather than as a one-foot patch lead.
+  final double lengthFt;
+
   /// Manual route overrides. Empty means "use the automatic route".
   final List<Offset> waypoints;
 
@@ -805,6 +891,7 @@ class AvCable {
     required this.toPortId,
     required this.signal,
     this.label = '',
+    this.lengthFt = 0,
     this.waypoints = const [],
     this.colorOverride,
   });
@@ -814,6 +901,7 @@ class AvCable {
   AvCable copyWith({
     SignalType? signal,
     String? label,
+    double? lengthFt,
     List<Offset>? waypoints,
     Color? colorOverride,
     bool clearColorOverride = false,
@@ -825,6 +913,7 @@ class AvCable {
     toPortId: toPortId,
     signal: signal ?? this.signal,
     label: label ?? this.label,
+    lengthFt: lengthFt ?? this.lengthFt,
     waypoints: waypoints ?? this.waypoints,
     colorOverride: clearColorOverride
         ? null
@@ -848,6 +937,7 @@ class AvCable {
     'toPort': toPortId,
     'signal': signal.name,
     if (label.isNotEmpty) 'label': label,
+    if (lengthFt > 0) 'lengthFt': lengthFt,
     if (colorOverride != null)
       'color': (colorOverride!.toARGB32() & 0xFFFFFF)
           .toRadixString(16)
@@ -869,6 +959,7 @@ class AvCable {
       toPortId: json['toPort']?.toString() ?? '',
       signal: signalFromName(json['signal']?.toString()),
       label: json['label']?.toString() ?? '',
+      lengthFt: (json['lengthFt'] as num?)?.toDouble() ?? 0,
       colorOverride: parsed == null ? null : Color(0xFF000000 | parsed),
       waypoints: [
         for (final w in (json['waypoints'] as List? ?? []))

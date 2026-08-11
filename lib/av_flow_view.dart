@@ -1008,6 +1008,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     final legendHeight = avLegendHeight(
       model.usedSignals.length,
       model.hasCustomCableColors,
+      groupHeaders: avLegendGroupCount(model.usedSignals),
     );
     final canvasHeight = math.max(
       model.canvasSize.height,
@@ -2605,19 +2606,35 @@ class _AvFlowViewState extends State<AvFlowView> {
       child: ListView(
         shrinkWrap: true, // one line of help shouldn't hold open 200px
         children: [
-          Text(
-            _pendingPort != null
-                ? 'Now click the connector at the other end of the cable '
-                      '(click the same one again to cancel).'
-                : _cableMode
-                ? 'Click a connector, then the connector at the other end, '
-                      'to draw a cable. Turn off "Draw Cable" to move '
-                      'devices again.'
-                : 'Drag a device to move it. Click its header pencil to '
-                      'rename it or edit its connectors. Turn on "Draw '
-                      'Cable" to wire connectors together. Click a cable to '
-                      'add bends.',
-            style: theme.textTheme.bodySmall,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _pendingPort != null
+                      ? 'Now click the connector at the other end of the cable '
+                            '(click the same one again to cancel).'
+                      : _cableMode
+                      ? 'Click a connector, then the connector at the other '
+                            'end, to draw a cable. Turn off "Draw Cable" to '
+                            'move devices again.'
+                      : 'Drag a device to move it. Click its header pencil to '
+                            'rename it or edit its connectors. Turn on "Draw '
+                            'Cable" to wire connectors together. Click a cable '
+                            'to add bends.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              // Lengths are set HERE rather than one cable dialog at a time:
+              // a room is usually cabled in one or two lead lengths, and
+              // twenty dialogs to say so is twenty chances to miss one.
+              if (model.cables.isNotEmpty)
+                TextButton.icon(
+                  key: const ValueKey('av_cable_lengths'),
+                  icon: const Icon(Icons.straighten, size: 16),
+                  label: const Text('Cable lengths'),
+                  onPressed: () => _showCableLengthsDialog(provider, model),
+                ),
+            ],
           ),
           const SizedBox(height: 4),
           for (final c in model.cables)
@@ -2644,6 +2661,14 @@ class _AvFlowViewState extends State<AvFlowView> {
                 Text(
                   kSignalLabels[c.signal] ?? c.signal.name,
                   style: theme.textTheme.bodySmall,
+                ),
+                SizedBox(
+                  width: 52,
+                  child: Text(
+                    formatCableLength(c.lengthFt),
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
                 IconButton(
                   key: ValueKey('av_cable_edit_${c.id}'),
@@ -2682,12 +2707,189 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
+  /// Sets the lead length on every run at once, on every run of one signal, or
+  /// one run at a time — all three in one place, because "the room is all 25ft
+  /// except the two in the rack" is what actually happens.
+  Future<void> _showCableLengthsDialog(
+    AppStateProvider provider,
+    AvFlowModel model,
+  ) async {
+    final byId = model.nodesById;
+    String endpoint(String nodeId, String portId) {
+      final node = byId[nodeId];
+      return '${node?.label ?? nodeId} · '
+          '${node?.portById(portId)?.label ?? portId}';
+    }
+
+    double bulk = kCableLengthsFt.first;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          // Read back off the provider each rebuild so the list shows what was
+          // just applied rather than the snapshot the dialog opened on.
+          final cables = provider.avCables
+              .where((c) => AvFlowModel.cableIsResolvable(c, byId))
+              .toList();
+          final signals = <SignalType>{for (final c in cables) c.signal}
+              .toList()
+            ..sort((a, b) => a.index.compareTo(b.index));
+
+          return AlertDialog(
+            title: const Text('Cable lengths'),
+            content: SizedBox(
+              width: 620,
+              height: 520,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Set every run to'),
+                      const SizedBox(width: 10),
+                      DropdownButton<double>(
+                        key: const ValueKey('av_lengths_bulk'),
+                        value: bulk,
+                        items: [
+                          const DropdownMenuItem(
+                            value: 0.0,
+                            child: Text('Not set'),
+                          ),
+                          for (final ft in kCableLengthsFt)
+                            DropdownMenuItem(
+                              value: ft,
+                              child: Text(formatCableLength(ft)),
+                            ),
+                        ],
+                        onChanged: (v) => setLocal(() => bulk = v ?? 0),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        key: const ValueKey('av_lengths_apply_all'),
+                        onPressed: () {
+                          final n = provider.setAllAvCableLengths(bulk);
+                          setLocal(() {});
+                          _snack(n == 0
+                              ? 'Every run was already '
+                                  '${bulk <= 0 ? 'unset' : formatCableLength(bulk)}.'
+                              : 'Set $n run${n == 1 ? '' : 's'} to '
+                                  '${bulk <= 0 ? 'not set' : formatCableLength(bulk)}.');
+                        },
+                        child: const Text('Apply to all'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Per signal type: the runs that share a length usually
+                  // share a signal — every Dante drop is the same lead.
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        'or just the',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                      for (final s in signals)
+                        OutlinedButton(
+                          onPressed: () {
+                            final n = provider.setAllAvCableLengths(
+                              bulk,
+                              only: s,
+                            );
+                            setLocal(() {});
+                            _snack('Set $n ${cableTypeLabel(s)} '
+                                'run${n == 1 ? '' : 's'}.');
+                          },
+                          child: Text(
+                            '${cableTypeLabel(s)}'
+                            '${cableSignalSubLabel(s).isEmpty ? '' : ' · ${cableSignalSubLabel(s)}'}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final c in cables)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 44,
+                                  child: Text(
+                                    c.id,
+                                    style: Theme.of(ctx).textTheme.bodySmall,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    '${endpoint(c.fromNodeId, c.fromPortId)}'
+                                    '  →  '
+                                    '${endpoint(c.toNodeId, c.toPortId)}',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 96,
+                                  child: DropdownButton<double>(
+                                    key: ValueKey('av_length_${c.id}'),
+                                    isExpanded: true,
+                                    value: kCableLengthsFt.contains(c.lengthFt)
+                                        ? c.lengthFt
+                                        : 0,
+                                    items: [
+                                      const DropdownMenuItem(
+                                        value: 0.0,
+                                        child: Text('—'),
+                                      ),
+                                      for (final ft in kCableLengthsFt)
+                                        DropdownMenuItem(
+                                          value: ft,
+                                          child: Text(formatCableLength(ft)),
+                                        ),
+                                    ],
+                                    onChanged: (v) {
+                                      provider.setAvCableLength(c.id, v ?? 0);
+                                      setLocal(() {});
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _showCableDialog(
     AppStateProvider provider,
     AvCable cable,
   ) async {
     final labelController = TextEditingController(text: cable.label);
     SignalType signal = cable.signal;
+    double lengthFt = cable.lengthFt;
     Color? colorOverride = cable.colorOverride;
 
     final result = await showDialog<String>(
@@ -2725,11 +2927,32 @@ class _AvFlowViewState extends State<AvFlowView> {
                   onChanged: (v) => setLocal(() => signal = v ?? signal),
                 ),
                 const SizedBox(height: 12),
+                // The lead length, off a fixed list: a cable schedule is an
+                // order, and a made-up lead comes in the lengths the shop
+                // stocks. A run pulled to length in conduit stays unset, which
+                // the counts report as its own column.
+                DropdownButtonFormField<double>(
+                  key: const ValueKey('cable_length'),
+                  initialValue:
+                      kCableLengthsFt.contains(lengthFt) ? lengthFt : 0,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Length'),
+                  items: [
+                    const DropdownMenuItem(value: 0.0, child: Text('Not set')),
+                    for (final ft in kCableLengthsFt)
+                      DropdownMenuItem(
+                        value: ft,
+                        child: Text(formatCableLength(ft)),
+                      ),
+                  ],
+                  onChanged: (v) => setLocal(() => lengthFt = v ?? 0),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: labelController,
                   decoration: const InputDecoration(
                     labelText: 'Label / cable ID',
-                    hintText: 'e.g. HDMI-04, 50ft',
+                    hintText: 'e.g. HDMI-04',
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -2825,6 +3048,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       cable.copyWith(
         signal: signal,
         label: labelController.text.trim(),
+        lengthFt: lengthFt,
         waypoints: result == 'straighten' ? const [] : cable.waypoints,
         colorOverride: colorOverride,
         clearColorOverride: colorOverride == null,
@@ -3556,7 +3780,12 @@ class _CablePainter extends CustomPainter {
 /// the diagram for it. An estimate rather than a measurement — over-shooting
 /// leaves a little blank canvas, which is harmless; the widget itself still
 /// lays out naturally.
-double avLegendHeight(int signalCount, bool hasCustomColors) {
+double avLegendHeight(
+  int signalCount,
+  bool hasCustomColors, {
+  /// The "AV cabling" style sub-headings the key groups its rows under.
+  int groupHeaders = 0,
+}) {
   const padding = 16.0; // 8 top + 8 bottom
   const title = 18.0;
   const rowHeight = 16.0;
@@ -3564,9 +3793,15 @@ double avLegendHeight(int signalCount, bool hasCustomColors) {
   return padding +
       title +
       4 +
-      signalCount * rowHeight +
+      (signalCount + groupHeaders) * rowHeight +
       (hasCustomColors ? customNote : 0);
 }
+
+/// How many family sub-headings [_AvLegend] will print for [signals].
+int avLegendGroupCount(List<SignalType> signals) => {
+  for (final s in signals)
+    if (cableFamilyFor(s) != CableFamily.other) cableFamilyFor(s),
+}.length;
 
 /// Lists only the signal types actually on the canvas, so it stays short.
 class _AvLegend extends StatelessWidget {
@@ -3587,6 +3822,25 @@ class _AvLegend extends StatelessWidget {
     required this.palette,
     required this.theme,
   });
+
+  /// [signals] in the order they are drawn, split so the ones that share a
+  /// cable family sit together under one heading. Everything else keeps its
+  /// enum order and gets no heading, because "HDMI" is already its own name.
+  List<({String header, List<SignalType> signals})> _grouped(
+    List<SignalType> signals,
+  ) {
+    final out = <({String header, List<SignalType> signals})>[];
+    for (final family in CableFamily.values) {
+      final here = signals.where((s) => cableFamilyFor(s) == family).toList();
+      if (here.isEmpty) continue;
+      if (family == CableFamily.other) {
+        out.add((header: '', signals: here));
+      } else {
+        out.add((header: kCableFamilyLabels[family]!, signals: here));
+      }
+    }
+    return out;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3609,25 +3863,46 @@ class _AvLegend extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          for (final s in signals)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1.5),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 22,
-                    height: 3.5,
-                    color: signalColor(s, palette),
+          // "AV cabling" as a sub-heading with the signals it covers indented
+          // under it, so the key reads the way the cable schedule and the
+          // cabling drawing name the same runs.
+          for (final group in _grouped(signals)) ...[
+            if (group.header.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 1),
+                child: Text(
+                  group.header,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: theme.hintColor,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    kSignalLabels[s] ?? s.name,
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                ],
+                ),
               ),
-            ),
+            for (final s in group.signals)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: 1.5,
+                  bottom: 1.5,
+                  left: group.header.isEmpty ? 0 : 10,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 3.5,
+                      color: signalColor(s, palette),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      kSignalLabels[s] ?? s.name,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+          ],
           if (hasCustomColors)
             Padding(
               padding: const EdgeInsets.only(top: 4),

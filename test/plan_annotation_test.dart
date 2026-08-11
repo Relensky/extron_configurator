@@ -1,10 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
+import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/floor_plan_view.dart';
 import 'package:extron_configurator/plan_annotations.dart';
 import 'package:extron_configurator/room_locations.dart';
 
@@ -216,6 +219,71 @@ void main() {
         note(id: ''),
       )!;
       expect(existing.contains(fresh.id), isFalse);
+    });
+
+    /// Picking a shape up and pressing Delete is how every drawing tool works,
+    /// and the button in the notation bar is the long way round.
+    testWidgets('Delete removes the shape that is picked up', (tester) async {
+      tester.view.physicalSize = const Size(1600, 1100);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final p = room()..loadAvFlowForCurrentConfig();
+      final sheet = p.addFloorPlanSheet(name: 'Level 1');
+      final drawn = p.addAvAnnotation(sheet.id, note(id: ''))!;
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: FloorPlanView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilterChip, 'Notation'));
+      await tester.pumpAndSettle();
+
+      // The arrow runs from (100,100) to (200,100) in the sheet's own
+      // coordinates, which is where the untransformed plan draws it.
+      final origin = tester.getTopLeft(find.byType(InteractiveViewer));
+      await tester.tapAt(origin + const Offset(150, 100));
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(TextButton, 'Delete'),
+        findsOneWidget,
+        reason: 'the shape has to be picked up before Delete means anything',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pumpAndSettle();
+
+      expect(p.avFloorPlanById(sheet.id)!.annotations, isEmpty);
+      expect(drawn.id, isNotEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Delete with nothing picked up does nothing', (tester) async {
+      tester.view.physicalSize = const Size(1600, 1100);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final p = room()..loadAvFlowForCurrentConfig();
+      final sheet = p.addFloorPlanSheet(name: 'Level 1');
+      p.addAvAnnotation(sheet.id, note(id: ''));
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: FloorPlanView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilterChip, 'Notation'));
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pumpAndSettle();
+      expect(p.avFloorPlanById(sheet.id)!.annotations, hasLength(1));
     });
 
     test('a sheet saved before notation existed still reads', () {

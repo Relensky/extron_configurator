@@ -316,4 +316,85 @@ void main() {
     expect(moved.dy, greaterThan(start.dy));
     expect(moved.dx - start.dx, greaterThan(moved.dy - start.dy));
   });
+
+  /// A cable schedule is an ORDER, so every run has to be able to say what
+  /// length of lead it is. Setting that one dialog at a time for a room with
+  /// twenty runs is twenty chances to miss one, so the bulk control is the
+  /// primary path and the per-cable dropdown is the exception.
+  group('cable lengths', () {
+    AppStateProvider cabled() {
+      final p = seeded();
+      p.addAvCable(
+        fromNodeId: 'SWITCHERDEVICE_1',
+        fromPortId: 'out_hdmi_1',
+        toNodeId: 'PROJECTORDEVICE_1',
+        toPortId: 'in_hdmi_1',
+        signal: SignalType.hdmi,
+      );
+      return p;
+    }
+
+    testWidgets('the cable dialog sets a length and keeps it', (tester) async {
+      final provider = cabled();
+      await pumpTab(tester, provider);
+
+      await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('av_cable_edit_C1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Not set'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('cable_length')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('15ft').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(provider.avCables.single.lengthFt, 15);
+    });
+
+    testWidgets('the bulk dialog sets every run at once', (tester) async {
+      final provider = cabled();
+      // A second run, so "apply to all" has something to be about.
+      provider.addAvCable(
+        fromNodeId: 'SWITCHERDEVICE_1',
+        fromPortId: 'in_hdmi_1',
+        toNodeId: 'PROJECTORDEVICE_1',
+        toPortId: 'in_hdmi_1',
+        signal: SignalType.hdmi,
+      );
+      await pumpTab(tester, provider);
+
+      await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('av_cable_lengths')));
+      await tester.pumpAndSettle();
+      expect(find.text('Cable lengths'), findsWidgets);
+
+      await tester.tap(find.byKey(const ValueKey('av_lengths_bulk')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('25ft').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('av_lengths_apply_all')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(provider.avCables, hasLength(2));
+      expect(provider.avCables.every((c) => c.lengthFt == 25), isTrue);
+      // One undo entry for the lot, not one per run.
+      expect(provider.avUndoLabel, 'Set cable lengths');
+    });
+
+    testWidgets('the button stays away until there is a run to measure', (
+      tester,
+    ) async {
+      final provider = seeded();
+      await pumpTab(tester, provider);
+      await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('av_cable_lengths')), findsNothing);
+    });
+  });
 }

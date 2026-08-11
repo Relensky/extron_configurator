@@ -1839,23 +1839,54 @@ class AppStateProvider extends ChangeNotifier {
   CablingBox addCablingBox({
     required CablingBoxKind kind,
     String label = '',
-    Offset pos = const Offset(360, 60),
+    Offset? pos,
     String body = '',
+    String shape = '',
   }) {
     _pushAvUndo('Add ${kCablingBoxKindLabels[kind]?.toLowerCase() ?? 'box'}');
     _avCablingBoxCounter++;
     final box = CablingBox(
       id: 'box:$_avCablingBoxCounter',
       label: label.trim().isEmpty
-          ? (kCablingBoxKindLabels[kind] ?? 'Box')
+          ? _defaultCablingBoxLabel(kind, shape)
           : label.trim(),
       kind: kind,
-      pos: pos,
+      // The slot the derived layout would have given it, stepped on by how
+      // many of the SAME kind are already drawn. Counting all boxes instead
+      // would put a pathway on top of the device added a moment earlier, since
+      // the two belong in completely different parts of the sheet.
+      pos: pos ??
+          defaultCablingBoxPosition(
+            avCabling.extraBoxes.where((b) => b.kind == kind).length,
+            kind,
+          ),
       body: body,
+      shape: shape,
     );
     avCabling.extraBoxes.add(box);
     notifyListeners();
     return box;
+  }
+
+  /// What a new box is called before anybody renames it. A device takes the
+  /// name of the shape it was picked from — "Ceiling mic", not "Device" — and
+  /// a pathway is named for what it actually is, since it is drawn once per
+  /// room and always means the same thing.
+  static String _defaultCablingBoxLabel(CablingBoxKind kind, String shape) {
+    if (kind == CablingBoxKind.device) {
+      return kCablingDeviceShapes[shape]?.label ?? 'Device';
+    }
+    if (kind == CablingBoxKind.pathway) return 'Network Pathway back to TR';
+    return kCablingBoxKindLabels[kind] ?? 'Box';
+  }
+
+  /// Swaps which icon a device box draws.
+  void setCablingBoxShape(String id, String shape) {
+    final at = avCabling.extraBoxes.indexWhere((b) => b.id == id);
+    if (at < 0) return;
+    _pushAvUndo('Change the device');
+    avCabling.extraBoxes[at] = avCabling.extraBoxes[at].copyWith(shape: shape);
+    notifyListeners();
   }
 
   /// A run the room cannot know about — a spare conduit, somebody else's
@@ -2743,6 +2774,39 @@ class AppStateProvider extends ChangeNotifier {
     _pushAvUndo('Remove cable $cableId');
     avCables.removeWhere((c) => c.id == cableId);
     notifyListeners();
+  }
+
+  /// How long one lead is, in feet. 0 puts it back to "not set", which the
+  /// counts report in a column of its own rather than guessing.
+  void setAvCableLength(String cableId, double feet) {
+    final index = avCables.indexWhere((c) => c.id == cableId);
+    if (index < 0) return;
+    _pushAvUndo('Set cable length');
+    avCables[index] = avCables[index].copyWith(lengthFt: feet < 0 ? 0 : feet);
+    notifyListeners();
+  }
+
+  /// Sets the length on every run at once, optionally only the runs carrying
+  /// [only].
+  ///
+  /// One undo entry for the lot: a room is cabled in one gauge of lead far
+  /// more often than run by run, and thirty separate entries would bury
+  /// whatever the user did before it. Returns how many runs changed.
+  int setAllAvCableLengths(double feet, {SignalType? only}) {
+    final length = feet < 0 ? 0.0 : feet;
+    final targets = [
+      for (int i = 0; i < avCables.length; i++)
+        if ((only == null || avCables[i].signal == only) &&
+            avCables[i].lengthFt != length)
+          i,
+    ];
+    if (targets.isEmpty) return 0;
+    _pushAvUndo('Set cable lengths');
+    for (final i in targets) {
+      avCables[i] = avCables[i].copyWith(lengthFt: length);
+    }
+    notifyListeners();
+    return targets.length;
   }
 
   // --- racks ---

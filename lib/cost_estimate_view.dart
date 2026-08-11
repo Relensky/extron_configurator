@@ -10,6 +10,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'av_flow_report.dart' show driverGapSections;
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'av_rack_view.dart' show iconForRackItem;
@@ -1571,9 +1572,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final title = model.roomTitle.isEmpty ? 'Cost estimate' : model.roomTitle;
-    final sections = costReportSections(estimate);
+    final priced = costReportSections(estimate);
 
-    if (sections.isEmpty) {
+    if (priced.isEmpty) {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Nothing priced yet — there is no estimate to export.'),
@@ -1581,6 +1582,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       );
       return;
     }
+
+    // The estimate, then the devices no control module claims. A cost-only
+    // document is one somebody signs off without opening the AV report, so the
+    // warning has to be on it — a room quoted with three undriven boxes in it
+    // is a room that cannot be commissioned when it arrives.
+    final sections = [
+      ...priced,
+      ...driverGapSections(provider, model),
+    ];
 
     if (what == 'copy') {
       await Clipboard.setData(

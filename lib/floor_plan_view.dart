@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
@@ -77,6 +78,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   String _selectedNoteId = '';
   AnnotationGrip _grip = AnnotationGrip.none;
 
+  /// Holds the keyboard for the drawing area, so Delete removes the selected
+  /// shape. Focus is taken when something is picked up rather than on build,
+  /// so a text field elsewhere on the page never loses the caret to it.
+  final FocusNode _planFocus = FocusNode(debugLabel: 'floor plan notation');
+
   /// The decoded plan image, and the file it came from.
   ImageProvider? _image;
   String _imagePath = '';
@@ -100,7 +106,33 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   void dispose() {
     unregisterDiagramCanvas(AppTab.floorPlan, _planKey);
     _transform.dispose();
+    _planFocus.dispose();
     super.dispose();
+  }
+
+  /// Selects a shape and takes the keyboard, so Delete lands on it.
+  void _selectNote(String id) {
+    setState(() => _selectedNoteId = id);
+    if (id.isNotEmpty) _planFocus.requestFocus();
+  }
+
+  /// Delete / Backspace removes whatever is selected on the drawing.
+  ///
+  /// Every other handled key is passed through, so typing into the label
+  /// dialog — or anywhere else on the page — is untouched.
+  KeyEventResult _onPlanKey(FloorPlan? plan, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final isDelete = event.logicalKey == LogicalKeyboardKey.delete ||
+        event.logicalKey == LogicalKeyboardKey.backspace;
+    if (!isDelete || plan == null || _selectedNoteId.isEmpty) {
+      return KeyEventResult.ignored;
+    }
+    context.read<AppStateProvider>().removeAvAnnotation(
+      plan.id,
+      _selectedNoteId,
+    );
+    setState(() => _selectedNoteId = '');
+    return KeyEventResult.handled;
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -269,19 +301,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 key: _viewportKey,
                 child: plan == null
                     ? _emptyState(provider)
-                    : InteractiveViewer(
-                        transformationController: _transform,
-                        constrained: false,
-                        // A drag has to draw rather than shove the sheet
-                        // sideways while the notation tool is on. Zoom still
-                        // works — that is the scroll wheel, not a drag.
-                        panEnabled: _tool != _PlanTool.notation,
-                        minScale: 0.08,
-                        maxScale: 4.0,
-                        boundaryMargin: const EdgeInsets.all(400),
-                        child: RepaintBoundary(
-                          key: _planKey,
-                          child: _plan(provider, model, plan),
+                    : Focus(
+                        focusNode: _planFocus,
+                        onKeyEvent: (_, event) => _onPlanKey(plan, event),
+                        child: InteractiveViewer(
+                          transformationController: _transform,
+                          constrained: false,
+                          // A drag has to draw rather than shove the sheet
+                          // sideways while the notation tool is on. Zoom still
+                          // works — that is the scroll wheel, not a drag.
+                          panEnabled: _tool != _PlanTool.notation,
+                          minScale: 0.08,
+                          maxScale: 4.0,
+                          boundaryMargin: const EdgeInsets.all(400),
+                          child: RepaintBoundary(
+                            key: _planKey,
+                            child: _plan(provider, model, plan),
+                          ),
                         ),
                       ),
               ),
@@ -406,14 +442,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 );
               },
             ),
-            TextButton.icon(
-              icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('Delete'),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              onPressed: () {
-                provider.removeAvAnnotation(plan.id, selected.id);
-                setState(() => _selectedNoteId = '');
-              },
+            Tooltip(
+              message: 'Or press Delete',
+              child: TextButton.icon(
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Delete'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                onPressed: () {
+                  provider.removeAvAnnotation(plan.id, selected.id);
+                  setState(() => _selectedNoteId = '');
+                },
+              ),
             ),
           ],
           const SizedBox(width: 4),
@@ -835,6 +874,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         _selectedNoteId = under.id;
         _grip = AnnotationGrip.body;
       });
+      _planFocus.requestFocus();
       return;
     }
     setState(() {
@@ -1065,10 +1105,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         final plan = provider.activeFloorPlan;
         if (plan == null) return;
         // Selecting, not drawing: a shape is dragged out, and a tap is how you
-        // pick one up to recolour, relabel or delete it.
-        setState(
-          () => _selectedNoteId = annotationAt(plan.annotations, at)?.id ?? '',
-        );
+        // pick one up to recolour, relabel or delete it. Picking one up takes
+        // the keyboard too, so Delete removes it.
+        _selectNote(annotationAt(plan.annotations, at)?.id ?? '');
       case _PlanTool.none:
         setState(() => _selectedCalloutId = null);
       case _PlanTool.location:
