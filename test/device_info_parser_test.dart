@@ -57,6 +57,9 @@ DEVICE_INFO = {
       final info = AppStateProvider.parseDeviceInfo('test.py', py);
       expect(info, isNotNull);
       expect(info!['models'], ['VPL-PHZ60']);
+      // The parser reports the file as written, None included. Deciding what
+      // a None MEANS is the registry's job, not the parser's — see the
+      // moduleDefaults expectation below, where it is dropped.
       expect(info['connection'], {
         'protocol': 'TCP',
         'net_port': 53595,
@@ -321,6 +324,9 @@ class DeviceClass:
       expect(entry.deviceTypes, ['dsp']);
       // "connection" and "defaults" arrive merged into one apply-map — now the
       // full field set (site-specific ip_address/serial_port/password blank).
+      // The driver's `None` entries — device_id, keep_alive_trigger — are NOT
+      // here: a None says the model does not use the key, and writing it as a
+      // null put an empty device_id on every device that picked a model.
       expect(provider.moduleDefaults['extr_dsp_DMP_64_Plus_Series'], {
         'com_type': 'Network',
         'protocol': 'TCP',
@@ -333,10 +339,8 @@ class DeviceClass:
         'lbl_name': 'Lbl_DSP_Name_Status',
         'gve_id': 'DSP1',
         'name': 'DSP - DMP 64 Plus C AT',
-        'device_id': null,
         'keep_alive_command': 'RefreshMatrix',
         'keep_alive_interval': 30,
-        'keep_alive_trigger': null,
         'manual_disconnect': false,
         'user': 'admin',
         'password': '',

@@ -176,9 +176,31 @@ void main() {
       });
       await pump(tester, p, 'SWITCHERDEVICE_1');
 
-      for (final key in ['device_id', 'service_port', 'use_device_mute']) {
+      // device_id and use_device_mute are no longer offered to a switcher at
+      // all — see schema_field_scope_test.dart — so what is left to check here
+      // is the placeholder that IS offered, and the keys the block carries.
+      for (final key in ['service_port', 'keep_alive_trigger', 'ip_address']) {
         await expectDeletable(tester, key);
       }
+    });
+
+    testWidgets('a screen keeps its trash button on use_device_mute', (
+      tester,
+    ) async {
+      // The one family it is offered to: a placeholder field is still a field,
+      // and the report this test came from was about fields with no way to
+      // decline them.
+      final p = room({
+        'PROJECTORDEVICE_1': {
+          'name': 'Projector 1',
+          'com_type': 'Network',
+          'module': '',
+          'ip_address': '10.0.0.5',
+        },
+      });
+      await pump(tester, p, 'PROJECTORDEVICE_1');
+
+      await expectDeletable(tester, 'use_device_mute');
     });
 
     testWidgets('deleting a placeholder key takes the field off the page', (

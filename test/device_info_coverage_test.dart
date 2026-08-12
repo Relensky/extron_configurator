@@ -81,13 +81,16 @@ void main() {
       expect(entry.explicit, isTrue);
     });
 
-    test('the audio group numbers and device_id survived', () {
+    test('the audio group numbers survived', () {
       final defaults = provider.moduleDefaults['extr_dsp_DMP_64_Plus_Series']!;
       expect(defaults['protocol'], 'TCP');
       expect(defaults['keep_alive_command'], 'RefreshMatrix');
-      expect(defaults.containsKey('device_id'), isTrue);
       expect(defaults['group_prog_gain'], '1');
       expect(defaults['group_pc_record_mute'], '11');
+      // The driver declares "device_id": None, which says the model does not
+      // use the key — not that a null is a value to apply. Taken literally it
+      // put a null device_id on every device anybody picked a model for.
+      expect(defaults.containsKey('device_id'), isFalse);
     });
   });
 

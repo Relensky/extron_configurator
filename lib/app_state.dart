@@ -6204,11 +6204,20 @@ class AppStateProvider extends ChangeNotifier {
         }
         // "connection" + "defaults" are both device properties to apply —
         // merged here; two keys in the file purely for readability.
+        //
+        // A None in a driver means "this model does not use the key", not
+        // "write a null into the config". Every driver in the library spells
+        // out `"device_id": None`, and taking that literally put a null
+        // device_id on every device anybody picked a model for. Dropped here,
+        // once, so the preview and the apply agree.
         final Map<String, dynamic> merged = {};
         for (final section in ['connection', 'defaults']) {
           final d = info[section];
           if (d is Map) {
-            merged.addAll(d.map((k, v) => MapEntry(k.toString(), v)));
+            d.forEach((k, v) {
+              if (v == null) return;
+              merged[k.toString()] = v;
+            });
           }
         }
         // Keyed by the stem so [moduleDefaultsFor] finds it from either the
@@ -6523,6 +6532,48 @@ class AppStateProvider extends ChangeNotifier {
     for (final key in _dropKeysHiddenByConnection(deviceKey)) {
       applied.add('$key removed');
     }
+    notifyListeners();
+    return applied;
+  }
+
+  /// Writes the driver's defaults for the keys the user ticked in the
+  /// post-conversion review — see [auditModelDefaults].
+  ///
+  /// A SUBSET rather than [applyModuleDefaults]'s all-or-nothing, because a
+  /// converted room is not a new device: its addresses, its names and whatever
+  /// the site did on purpose are already in the block, and the answer to "does
+  /// this VIA GO speak SSH or TCP" must not drag the room's naming with it.
+  ///
+  /// Returns the "key = value" strings written, for the log and the snackbar.
+  List<String> applyModelDefaultValues(
+    String deviceKey,
+    Map<String, dynamic> values,
+  ) {
+    final dev = roomConfig[deviceKey];
+    if (dev is! Map || values.isEmpty) return const [];
+    final applied = <String>[];
+    values.forEach((key, value) {
+      if (dev[key] == value) return;
+      dev[key] = value;
+      // Written by the user now, so it stops reading as a converted value.
+      _forgetConversionOrigin(deviceKey, key);
+      applied.add('$key = $value');
+    });
+    if (applied.isEmpty) return applied;
+    // A driver that moved the device onto another connection leaves the old
+    // one's properties behind — the same tidy-up picking a model does.
+    for (final key in _dropKeysHiddenByConnection(deviceKey)) {
+      applied.add('$key removed');
+    }
+    final module = dev['module']?.toString() ?? '';
+    if (module.isNotEmpty) {
+      getCommandsForModule(moduleStem(module));
+      getInputsForModule(moduleStem(module));
+    }
+    AppLogger.logInfo(
+        "Driver defaults applied to $deviceKey: ${applied.join(', ')}");
+    systemLogs.add(
+        "-> Applied driver defaults to '$deviceKey': ${applied.join(', ')}");
     notifyListeners();
     return applied;
   }

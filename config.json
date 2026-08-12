@@ -415,8 +415,6 @@
         "active_share_room": false,
         "share_room_default_mode": "combined",
         "disable_inactivity_timer": false,
-        "conf_display_1": "1",
-        "conf_display_2": "2",
         "default_cc_aud_cam": false,
         "dev_cameras": "2",
         "dev_dsps": "0",

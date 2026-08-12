@@ -11,7 +11,7 @@ class ConfigDictionary {
     "com_type": "Type of connection as a string. 'Serial' opens a COM port on the host processor/spdevice (the only one that reads serial_port and baud); 'SerialOverEthernet' and 'Network' both reach the device by ip_address + net_port; 'HTTP' posts to it over ip_address + net_port with the user/password credentials.",
     "host": "The processor or spdevice in use for serial connections.",
     "relay_host": "The processor in use for the relay power control.",
-    "device_id": "The ID to be sent to the device if it is required.",
+    "device_id": "The ID to be sent to the device if it is required. Shown where a block already carries one, or where the model's driver asks for one — not offered on every device, because almost none of them need it.",
     "gve_id": "String that identifies the device in GVE. Needs to be created when you add the room devices to GVE.",
     "input": "Input for the device. The subscribe status will change to this input. (Examples: HDBaseT, HDMI 1, Digital Link).",
     "ip_address": "IP address for the device as a string. Network, SerialOverEthernet and HTTP all reach the device through it; a Serial device is wired to a COM port on its host instead and does not carry the key.",

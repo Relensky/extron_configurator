@@ -34,10 +34,17 @@ void main() {
   /// Only a device on a COM port carries these.
   const serialKeys = ['serial_port', 'baud'];
 
-  /// Every device carries these, whatever it is plugged into.
+  /// Every device is OFFERED these, whatever it is plugged into.
+  ///
+  /// device_id and use_device_mute used to be on this list and are not any
+  /// more — not because a connection rules them out, but because almost no
+  /// device has either: every driver in the library declares device_id None,
+  /// and only a screen has a picture of its own to blank. They are offered
+  /// where they mean something (see schema_field_scope_test.dart) and render
+  /// wherever a block already carries one.
   const alwaysKeys = [
-    'device_id', 'keep_alive_qualifier', 'keep_alive_trigger', 'model',
-    'lbl_name', 'use_device_mute', 'manual_disconnect',
+    'keep_alive_qualifier', 'keep_alive_trigger', 'model',
+    'lbl_name', 'manual_disconnect',
   ];
 
   late Directory dir;

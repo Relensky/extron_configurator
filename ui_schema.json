@@ -178,7 +178,9 @@
       "SYSTEM_SETUP values injected on load when missing (shown in the",
       "acknowledgement dialog). Edit values here and press Reload Schema."
     ],
-    "gve_bldg": "UNKNOWN",
+    "active_debug_server": false,
+  "active_event_space": false,
+  "gve_bldg": "UNKNOWN",
     "gve_room": "000",
     "processor1": "MainProcessor",
     "gui_full_room_name": "Legacy Room Update",
@@ -335,9 +337,17 @@
     "__readme": [
       "Field definitions scoped to one device type. The outer key is a pattern",
       "matched against the config section name (e.g. PROJECTORDEVICE_1); the",
-      "inner entries use exactly the same properties as 'fields' above."
+      "inner entries use exactly the same properties as 'fields' above.",
+      "A key defined here as well as in 'fields' takes ITS addIfMissing from",
+      "here - which is how use_device_mute is offered on the screens and",
+      "nowhere else."
     ],
     "PROJECTORDEVICE_*": {
+      "use_device_mute": {
+        "type": "bool",
+        "addIfMissing": true,
+        "description": "Whether pressing Video Mute also mutes the PICTURE at this display itself. Only asked here: PROJECTORDEVICE_* is the family that covers both projectors and flat panels (see device_role), and nothing else in a room has a picture of its own to blank. Not to be confused with speaker_mute, which is the same idea for the display's SPEAKERS."
+      },
       "input": {
         "type": "module_states",
         "moduleCommand": "Input",
@@ -511,8 +521,7 @@
       ]
     },
     "device_id": {
-      "addIfMissing": true,
-      "description": "The ID to be sent to the device if it is required."
+      "description": "The ID to be sent to the device if it is required. Shown where a block already carries one, or where the model's driver asks for one — not offered on every device, because almost none of them need it."
     },
     "gve_id": {
       "description": "String that identifies the device in GVE. Needs to be created when you add the room devices to GVE."
@@ -639,7 +648,6 @@
     },
     "use_device_mute": {
       "type": "bool",
-      "addIfMissing": true,
       "description": "Whether pressing Video Mute also mutes the PICTURE at this display itself — the processor sends the module's AV mute / video mute / shutter command on top of muting the switcher output feeding it. Turn it on for a display that must black out even when it isn't fed from the switcher, or one whose own blanking is cleaner than dropping the signal. Not to be confused with speaker_mute, which is the same idea for the display's SPEAKERS."
     },
     "user": {
@@ -919,10 +927,12 @@
       "description": "Switcher output feeding projector/display 4 — see output_proj_1. Only read while dev_projectors is 4."
     },
     "conf_display_1": {
+      "hideWhen": ["gui_routing_mode!=Conference"],
       "helperText": "An INPUT on the conference switcher (Switcher 3), not an output",
       "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 1' is pressed on the Conference routing page — the codec's first display feed. Read only while gui_routing_mode is Conference."
     },
     "conf_display_2": {
+      "hideWhen": ["gui_routing_mode!=Conference"],
       "helperText": "An INPUT on the conference switcher (Switcher 3), not an output",
       "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 2' is pressed on the Conference routing page — the codec's second display feed. Read only while gui_routing_mode is Conference."
     },

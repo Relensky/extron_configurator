@@ -80,7 +80,10 @@ import 'config_dictionary.dart';
 ///  different label depending on OTHER values in the same config section —
 ///  { "gui_usb_or_vga=VGA": "VGA over USB" }. The first matching condition
 ///  wins; none matching falls back to the plain "label". Conditions are
-///  "key=value" (equals) or "key~text" (contains), both case-insensitive.
+///  "key=value" (equals), "key!=value" (differs) or "key~text" (contains),
+///  all case-insensitive. "key!=value" is what keeps a field out of a room it
+///  means nothing in: conf_display_1 is a Conference-mode setting, so it is
+///  hidden — and never added — while gui_routing_mode says anything else.
 ///
 ///  CONSISTENCY CHECKS: a top-level "consistency" list cross-checks keys that
 ///  must agree — when one condition holds, another must too. A violation
@@ -90,10 +93,20 @@ import 'config_dictionary.dart';
 ///  Defining any entries REPLACES the built-in list.
 /// ============================================================================
 
-/// Evaluates one condition string against [section]: "key=value" (equals) or
-/// "key~text" (contains), both case-insensitive. Shared by "labelWhen" and
-/// the "consistency" rules. Unparseable conditions are simply false.
+/// Evaluates one condition string against [section]: "key=value" (equals),
+/// "key!=value" (differs) or "key~text" (contains), all case-insensitive.
+/// Shared by "labelWhen", "hideWhen" and the "consistency" rules.
+/// Unparseable conditions are simply false.
 bool _conditionHolds(String condition, Map<String, dynamic> section) {
+  // '!=' is looked for first: '=' matches inside it, and finding that one
+  // would read "a!=b" as the key "a!" equalling "=b".
+  final not = condition.indexOf('!=');
+  if (not > 0) {
+    final key = condition.substring(0, not).trim();
+    final want = condition.substring(not + 2).trim().toLowerCase();
+    final have = (section[key] ?? '').toString().toLowerCase();
+    return have != want;
+  }
   for (final op in const ['=', '~']) {
     final i = condition.indexOf(op);
     if (i <= 0) continue;
