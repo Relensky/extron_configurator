@@ -18,6 +18,8 @@ import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
+import 'layout_tools.dart' show pushOutOfRects;
+import 'live_text_field.dart';
 import 'plan_annotations.dart';
 import 'report_tools.dart';
 import 'room_sidecar.dart' show AvUndoScope;
@@ -97,6 +99,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   Size _imageSize = const Size(1200, 900);
 
   String? _selectedCalloutId;
+
+  /// The run being worked on, by bundle id, or '' when none is.
+  ///
+  /// A run is picked up by clicking its line. While one is held the sheet
+  /// grows a bar for its cable count and shows the handles that steer it, and
+  /// nothing else on the drawing changes — a selection is a thing to edit, not
+  /// a mark on the paper, so it is cleared before the sheet is exported.
+  String _selectedRunId = '';
 
   /// Which cable runs are drawn over the plan: [_kLayerOff], [_kLayerAll], or
   /// one cable type on its own.
@@ -260,16 +270,31 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// the capture takes and then put back, so the tab the user is looking at
   /// does not change colour under them.
   Future<Uint8List?> _captureSheet({bool monochrome = false}) async {
-    if (!monochrome) return captureBoundary(_planKey, pixelRatio: 2.0);
-    setState(() => _printMode = true);
-    try {
-      // Let it actually paint: without this the capture is of whatever was on
-      // screen when the mode was flipped.
+    // A run held for editing carries drag handles, which belong to the person
+    // editing and not to the sheet. Put it down for the capture and pick it
+    // back up after.
+    final heldRun = _selectedRunId;
+    if (heldRun.isNotEmpty) {
+      setState(() => _selectedRunId = '');
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return null;
-      return await captureBoundary(_planKey, pixelRatio: 2.0);
+    }
+    try {
+      if (!monochrome) return await captureBoundary(_planKey, pixelRatio: 2.0);
+      setState(() => _printMode = true);
+      try {
+        // Let it actually paint: without this the capture is of whatever was
+        // on screen when the mode was flipped.
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return null;
+        return await captureBoundary(_planKey, pixelRatio: 2.0);
+      } finally {
+        if (mounted) setState(() => _printMode = false);
+      }
     } finally {
-      if (mounted) setState(() => _printMode = false);
+      if (mounted && heldRun.isNotEmpty) {
+        setState(() => _selectedRunId = heldRun);
+      }
     }
   }
 
@@ -415,6 +440,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         _toolbar(provider, plan),
         _sheetBar(provider, plan),
         if (plan != null) _layerBar(provider, plan, drawing),
+        if (plan != null && _selectedRunId.isNotEmpty)
+          _runBar(provider, plan, drawing),
         if (_tool == _PlanTool.notation && plan != null)
           _notationBar(provider, plan),
         const Divider(height: 1),
@@ -472,6 +499,94 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// What the notation tool is about to draw, and what to do with whatever is
   /// selected. Only on screen while the tool is, so the page stays as quiet as
   /// it was for somebody who only came to look at the plan.
+  /// The bar for the run being worked on: what it is, how many cables are in
+  /// it, and the way back from a route steered by hand.
+  ///
+  /// A bar rather than a dialog, and the same fields the Cabling tab puts in
+  /// its own selection bar. The count is the number somebody came to the
+  /// drawing to change — typing it should not mean answering a modal — and
+  /// while the bar is up the bends are on the line, so the two halves of
+  /// "this pull is bigger than we thought and it goes the other way round"
+  /// are one visit.
+  Widget _runBar(
+    AppStateProvider provider,
+    FloorPlan plan,
+    CablingSchematic drawing,
+  ) {
+    final theme = Theme.of(context);
+    final bundle = drawing.bundleById(_selectedRunId);
+    if (bundle == null) return const SizedBox.shrink();
+    final from = drawing.boxById(bundle.fromBoxId)?.label ?? bundle.fromBoxId;
+    final to = drawing.boxById(bundle.toBoxId)?.label ?? bundle.toBoxId;
+    final bends = plan.waypointsFor(bundle.id);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Container(
+            width: 22,
+            height: 4,
+            margin: const EdgeInsets.only(right: 2),
+            color: Color(bundle.color),
+          ),
+          Text('$from  →  $to', style: theme.textTheme.bodySmall),
+          // Committed on Enter or on clicking away rather than per keystroke,
+          // exactly as on the Cabling tab: the count goes through the undo
+          // stack, and "13" typed a digit at a time would leave "1" behind as
+          // an entry of its own.
+          SizedBox(
+            width: 96,
+            child: LiveTextField(
+              key: ValueKey('plan_run_count_${bundle.id}'),
+              fieldId: 'planCount:${bundle.id}',
+              initial: bundle.count == bundle.count.roundToDouble()
+                  ? bundle.count.round().toString()
+                  : bundle.count.toStringAsFixed(1),
+              label: 'Cables',
+              numeric: true,
+              onChanged: (_) {},
+              onSubmitted: (v) => provider.setCablingBundleCount(
+                bundle.id,
+                v.trim().isEmpty ? null : double.tryParse(v.trim()),
+              ),
+            ),
+          ),
+          Text(
+            bundle.cableType.trim().isEmpty ? 'Cable' : bundle.cableType,
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            bends.isEmpty
+                ? 'Drag a hollow dot onto the line to turn it'
+                : '${bends.length} bend${bends.length == 1 ? '' : 's'} on this '
+                      'sheet',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.disabledColor,
+            ),
+          ),
+          if (bends.isNotEmpty)
+            TextButton.icon(
+              key: const ValueKey('plan_straighten_run'),
+              icon: const Icon(Icons.timeline, size: 16),
+              label: const Text('Straighten'),
+              onPressed: () =>
+                  provider.setAvRunWaypoints(plan.id, bundle.id, const []),
+            ),
+          TextButton.icon(
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('Done'),
+            onPressed: () => setState(() => _selectedRunId = ''),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _notationBar(AppStateProvider provider, FloorPlan plan) {
     final theme = Theme.of(context);
     final selected =
@@ -1092,6 +1207,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
               ),
             ),
+            // The selected run's bends, over everything the run is drawn over.
+            // Not in the export: nothing is selected on a sheet being written
+            // to a file, because the tab clears the selection before it
+            // captures — see [_captureCableLayers].
+            ..._bendHandles(provider, plan, runs),
             // Last, so nothing is drawn over it. INSIDE the boundary that gets
             // captured, which is the whole point: the exported PNG and the
             // sheet in the workbook carry the key with them, instead of being
@@ -1453,6 +1573,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             from: placed[b.fromBoxId]!,
             to: placed[b.toBoxId]!,
             lane: lanes[b.id] ?? 0,
+            bends: plan.waypointsFor(b.id),
             // The two dots this run LANDS on are not obstacles to it: it has
             // to reach them. Everything else on the sheet still is — including
             // the names under those two dots.
@@ -1559,6 +1680,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     required Offset to,
     required double lane,
     required List<Rect> obstacles,
+    List<Offset> bends = const [],
   }) {
     var a = from;
     var b = to;
@@ -1569,6 +1691,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       a += normal;
       b += normal;
     }
+    // Bends dragged onto this sheet say which way the cable actually goes,
+    // which is a fact about the building rather than about the geometry. The
+    // router still keeps each leg off what is printed.
+    if (bends.isNotEmpty) return routeThrough([a, ...bends, b], obstacles);
     // A straight line when nothing is in the way, which is the common case and
     // the one a cabling sheet reads best.
     return latticeRoute(a, b, obstacles) ?? [a, b];
@@ -1765,7 +1891,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           // be discovered.
           if (layers.isNotEmpty && _cableLayer != _kLayerOff)
             Text(
-              '· click a run to set its cable count',
+              '· click a run to set its cable count or route it',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.disabledColor,
               ),
@@ -1809,6 +1935,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
     final out = <({String name, String caption, Uint8List bytes})>[];
     final was = _cableLayer;
+    // A selection is a thing being edited, not a mark on the paper: the bend
+    // handles must not turn up on a sheet somebody is issued.
+    final heldRun = _selectedRunId;
+    if (heldRun.isNotEmpty) setState(() => _selectedRunId = '');
     for (final layer in [_kLayerAll, ...layers.map((l) => l.type)]) {
       if (!mounted) break;
       setState(() => _cableLayer = layer);
@@ -1826,7 +1956,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         bytes: bytes,
       ));
     }
-    if (mounted) setState(() => _cableLayer = was);
+    if (mounted) {
+      setState(() {
+        _cableLayer = was;
+        _selectedRunId = heldRun;
+      });
+    }
     return out;
   }
 
@@ -2216,14 +2351,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         // the keyboard too, so Delete removes it.
         _selectNote(annotationAt(plan.annotations, at)?.id ?? '');
       case _PlanTool.none:
-        setState(() => _selectedCalloutId = null);
-        // How many cables are in a run is the number that changes most while
-        // somebody is reading the plan — the count comes off a jack schedule
-        // or a walk of the room, not off the signal flow. It was only editable
-        // on the Cabling tab, which meant leaving the drawing you were
-        // counting against.
+        // Clicking a run picks it up: its count and the way it is routed are
+        // both things that get worked out standing in front of the plan, and
+        // both used to mean leaving for the Cabling tab. A click on bare paper
+        // puts it down again.
         final bundle = _runAt(drawing, runs, at);
-        if (bundle != null) _showRunCountDialog(provider, drawing, bundle);
+        setState(() {
+          _selectedCalloutId = null;
+          _selectedRunId = bundle?.id ?? '';
+        });
       case _PlanTool.location:
         _placeLocationAt(provider, at);
       case _PlanTool.callout:
@@ -2262,106 +2398,115 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     return null;
   }
 
-  /// Sets how many cables are in a run, from the drawing itself.
+  /// Drag handles for the selected run: a filled dot on every bend it has
+  /// been given, and a hollow one at the middle of each leg that adds one.
   ///
-  /// The same number the Cabling tab edits in its selection bar — this writes
-  /// through the same override, so the two pages, the schedule and the cost
-  /// estimate cannot disagree about the size of a pull. Only the count: the
-  /// cable type, the end labels and the run's colour stay on the Cabling tab,
-  /// where there is room to lay them out.
-  Future<void> _showRunCountDialog(
+  /// The router decides how a run gets from one marker to the other, and it
+  /// decides well enough for a drawing to be issued — but which side of the
+  /// room the cable is actually pulled down is a fact about the building. A
+  /// bend is how that gets said, and it is held per sheet: the same pull is
+  /// drawn differently on a floor plan and a reflected ceiling plan.
+  List<Widget> _bendHandles(
     AppStateProvider provider,
-    CablingSchematic drawing,
-    CablingBundle bundle,
-  ) async {
-    final from = drawing.boxById(bundle.fromBoxId)?.label ?? bundle.fromBoxId;
-    final to = drawing.boxById(bundle.toBoxId)?.label ?? bundle.toBoxId;
-    String typed = bundle.count == bundle.count.roundToDouble()
-        ? bundle.count.round().toString()
-        : bundle.count.toStringAsFixed(1);
-    // A derived run counted itself off the signal flow; an override is a
-    // number somebody typed over that, and the way back has to be offered or
-    // it is a one-way door.
-    final bool overridden =
-        bundle.isDerived && provider.avCabling.counts.containsKey(bundle.id);
+    FloorPlan plan,
+    List<_PlanRun> runs,
+  ) {
+    if (_selectedRunId.isEmpty) return const [];
+    final drawn = <_PlanRun>[
+      for (final r in runs)
+        if (r.id == _selectedRunId) r,
+    ];
+    if (drawn.isEmpty) return const [];
+    final route = drawn.first.route;
+    if (route.length < 2) return const [];
 
-    final String? result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cables in this run'),
-        content: SizedBox(
-          width: 380,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$from  →  $to',
-                style: Theme.of(ctx).textTheme.bodyMedium,
+    final bends = plan.waypointsFor(_selectedRunId);
+    // A bend may not be dropped on top of a marker or a caption: the router
+    // cannot get out of one, so the line would have to cross what it is meant
+    // to keep off in order to reach it.
+    final obstacles = _planObstacles(provider, plan);
+    final keepOut = [...obstacles.dots.values, ...obstacles.always];
+    final color = drawn.first.color;
+    const r = 6.0;
+    final out = <Widget>[];
+
+    // The midpoints go down FIRST, so a bend placed on a straight leg
+    // — collinear, and therefore invisible in the drawn route — keeps
+    // its own handle on top of the one that would add another there.
+    for (int i = 0; i < route.length - 1; i++) {
+      final mid = (route[i] + route[i + 1]) / 2;
+      out.add(
+        Positioned(
+          left: mid.dx - r,
+          top: mid.dy - r,
+          child: GestureDetector(
+            key: ValueKey('plan_add_bend_${_selectedRunId}_$i'),
+            onTap: () => provider.setAvRunWaypoints(
+              plan.id,
+              _selectedRunId,
+              List<Offset>.from(bends)..insert(
+                bendInsertIndex(route.first, bends, route.last, mid),
+                pushOutOfRects(mid, keepOut),
               ),
-              if (bundle.cableType.trim().isNotEmpty)
-                Text(
-                  bundle.cableType,
-                  style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+            child: Tooltip(
+              message: 'Add a bend here',
+              child: Container(
+                width: r * 2,
+                height: r * 2,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.75),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 1.5),
                 ),
-              const SizedBox(height: 14),
-              TextFormField(
-                key: const ValueKey('plan_run_count'),
-                initialValue: typed,
-                autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Cables',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (v) => typed = v,
-                onFieldSubmitted: (v) => Navigator.of(ctx).pop(v),
               ),
-              if (bundle.isDerived) ...[
-                const SizedBox(height: 8),
-                Text(
-                  overridden
-                      ? 'Counted off the signal flow, and typed over. Clear it '
-                          'to go back to the counted number.'
-                      : 'Counted off the signal flow. A number typed here '
-                          'overrides that count until it is cleared.',
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-              ],
-            ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          if (overridden)
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(''),
-              child: const Text('Use the counted number'),
+      );
+    }
+    for (int i = 0; i < bends.length; i++) {
+      out.add(
+        Positioned(
+          left: bends[i].dx - r,
+          top: bends[i].dy - r,
+          child: GestureDetector(
+            key: ValueKey('plan_bend_${_selectedRunId}_$i'),
+            onPanStart: (_) => provider.pushFloorPlanUndo('Route a run'),
+            onPanUpdate: (d) {
+              final next = List<Offset>.from(bends);
+              next[i] = pushOutOfRects(next[i] + d.delta, keepOut);
+              provider.setAvRunWaypoints(
+                plan.id,
+                _selectedRunId,
+                next,
+                recordUndo: false,
+              );
+            },
+            onDoubleTap: () => provider.setAvRunWaypoints(
+              plan.id,
+              _selectedRunId,
+              List<Offset>.from(bends)..removeAt(i),
             ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(typed),
-            child: const Text('Save'),
+            child: Tooltip(
+              message: 'Drag to route this run · double-click to drop the '
+                  'bend',
+              child: Container(
+                width: r * 2,
+                height: r * 2,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+              ),
+            ),
           ),
-        ],
-      ),
-    );
-    if (result == null) return;
+        ),
+      );
+    }
 
-    final trimmed = result.trim();
-    if (trimmed.isEmpty) {
-      provider.setCablingBundleCount(bundle.id, null);
-      return;
-    }
-    final count = double.tryParse(trimmed);
-    if (count == null || count < 0) {
-      _snack('"$trimmed" is not a number of cables.', error: true);
-      return;
-    }
-    provider.setCablingBundleCount(bundle.id, count);
+    return out;
   }
 
   /// Drops the next location that isn't on THIS SHEET yet at [at]. Asks which

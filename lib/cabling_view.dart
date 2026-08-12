@@ -7,7 +7,8 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
-import 'av_flow_model.dart' show kCableSwatches, latticeRoute;
+import 'av_flow_model.dart'
+    show bendInsertIndex, kCableSwatches, latticeRoute, routeThrough;
 import 'av_flow_report.dart' show cablingSections;
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
@@ -720,6 +721,16 @@ class _CablingViewState extends State<CablingView> {
           label: Text(bundle.signalSubLabel),
           visualDensity: VisualDensity.compact,
           labelStyle: const TextStyle(fontSize: 11),
+        ),
+      // Which way the pull actually goes is a fact about the building, so the
+      // dots on the selected line are draggable. This is the way back.
+      if ((provider.avCabling.waypoints[bundle.id] ?? const []).isNotEmpty)
+        TextButton.icon(
+          key: ValueKey('cabling_straighten_${bundle.id}'),
+          icon: const Icon(Icons.timeline, size: 16),
+          label: const Text('Straighten'),
+          onPressed: () =>
+              provider.setCablingBundleWaypoints(bundle.id, const []),
         ),
       ..._colorPicker(provider, bundle),
       // The whole point of an edge holding more than one run: "six Cat 6a AND
@@ -1585,7 +1596,7 @@ class _CablingViewState extends State<CablingView> {
     // ends rather than straight through them, the same guarantee the signal
     // flow gives. Computed here rather than in paint() so a repaint — a
     // hover, a selection — is not an A* search.
-    final routes = _routes(drawing, lanes);
+    final routes = _routes(provider, drawing, lanes);
     return SizedBox(
       width: size.width,
       height: size.height,
@@ -1624,6 +1635,9 @@ class _CablingViewState extends State<CablingView> {
           for (final bundle in drawing.bundles)
             _bundleHitTarget(context, provider, drawing, bundle, routes[bundle.id]),
           for (final box in drawing.boxes) _box(context, provider, drawing, box),
+          // Over the boxes: a bend dragged near one has to stay grabbable, and
+          // it is only on screen while its run is selected.
+          ..._bendHandles(provider, drawing, lanes, routes),
           // Last, so it is on top of anything it has been dragged over rather
           // than half hidden behind it.
           if (_keyRect(provider, drawing) != null)
@@ -1646,6 +1660,7 @@ class _CablingViewState extends State<CablingView> {
   /// it is exactly the reason the signal flow grew a router of its own. The
   /// two boxes a run LANDS on are not obstacles to it — it has to reach them.
   Map<String, List<Offset>> _routes(
+    AppStateProvider provider,
     CablingSchematic drawing,
     Map<String, double> lanes,
   ) {
@@ -1658,6 +1673,14 @@ class _CablingViewState extends State<CablingView> {
         for (final e in rects.entries)
           if (e.key != bundle.fromBoxId && e.key != bundle.toBoxId) e.value,
       ];
+      // Bends placed by hand say which way the pull actually goes — down the
+      // tray, round the corridor — which is a fact about the building the
+      // router cannot know. It still keeps each leg off the boxes.
+      final bends = provider.avCabling.waypoints[bundle.id];
+      if (bends != null && bends.isNotEmpty) {
+        out[bundle.id] = routeThrough([ends.from, ...bends, ends.to], obstacles);
+        continue;
+      }
       out[bundle.id] =
           latticeRoute(ends.from, ends.to, obstacles) ??
           // No way through — a straight line at least says the two ends are
@@ -1717,6 +1740,109 @@ class _CablingViewState extends State<CablingView> {
         ),
       ),
     );
+  }
+
+  /// Drag handles for the selected run's route: a filled dot on every bend it
+  /// has been given, and a hollow one at the middle of each leg that adds one.
+  ///
+  /// Only on the selected run. A drawing with a dot on every corner of every
+  /// line is a drawing nobody can read, and the ones that matter are the ones
+  /// on the run being worked on.
+  List<Widget> _bendHandles(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    Map<String, double> lanes,
+    Map<String, List<Offset>> routes,
+  ) {
+    if (_selectedId.isEmpty) return const [];
+    final bundle = drawing.bundleById(_selectedId);
+    if (bundle == null) return const [];
+    final ends = drawing.endsOf(bundle, lanes[bundle.id] ?? 0);
+    final drawn = routes[bundle.id];
+    if (ends == null || drawn == null || drawn.length < 2) return const [];
+
+    final bends = provider.avCabling.waypoints[bundle.id] ?? const <Offset>[];
+    final boxes = [for (final b in drawing.boxes) b.rect];
+    final color = Color(bundle.color);
+    const r = 6.0;
+    final out = <Widget>[];
+
+    // The midpoints go down FIRST, so a bend placed on a straight leg
+    // — collinear, and therefore invisible in the drawn route — keeps
+    // its own handle on top of the one that would add another there.
+    for (int i = 0; i < drawn.length - 1; i++) {
+      final mid = (drawn[i] + drawn[i + 1]) / 2;
+      out.add(
+        Positioned(
+          left: mid.dx - r,
+          top: mid.dy - r,
+          child: GestureDetector(
+            key: ValueKey('cabling_add_bend_${bundle.id}_$i'),
+            onTap: () => provider.setCablingBundleWaypoints(
+              bundle.id,
+              List<Offset>.from(bends)..insert(
+                bendInsertIndex(ends.from, bends, ends.to, mid),
+                pushOutOfRects(mid, boxes),
+              ),
+            ),
+            child: Tooltip(
+              message: 'Add a bend here',
+              child: Container(
+                width: r * 2,
+                height: r * 2,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    for (int i = 0; i < bends.length; i++) {
+      out.add(
+        Positioned(
+          left: bends[i].dx - r,
+          top: bends[i].dy - r,
+          child: GestureDetector(
+            key: ValueKey('cabling_bend_${bundle.id}_$i'),
+            onPanStart: (_) => provider.pushCablingUndo('Route a run'),
+            onPanUpdate: (d) {
+              final next = List<Offset>.from(bends);
+              // A bend dropped inside a box is the one place the router cannot
+              // route out of, so the line would have to cross the box to reach
+              // it. Nudged clear instead.
+              next[i] = pushOutOfRects(next[i] + d.delta, boxes);
+              provider.setCablingBundleWaypoints(
+                bundle.id,
+                next,
+                recordUndo: false,
+              );
+            },
+            onDoubleTap: () => provider.setCablingBundleWaypoints(
+              bundle.id,
+              List<Offset>.from(bends)..removeAt(i),
+            ),
+            child: Tooltip(
+              message: 'Drag to route this run · double-click to drop the bend',
+              child: Container(
+                width: r * 2,
+                height: r * 2,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return out;
   }
 
   /// Commits a box drag: one undo entry, and a landing spot clear of the rest.

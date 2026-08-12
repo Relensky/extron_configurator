@@ -1767,6 +1767,35 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Takes an undo snapshot of the floor plans before a gesture that will
+  /// write through them over and over. Dragging a bend writes on every pointer
+  /// event, and one drag has to be one undo.
+  void pushFloorPlanUndo(String label) => _pushAvUndo(label, _plansScope);
+
+  /// Steers a cable run on ONE sheet: the bends it passes through, in order,
+  /// in that sheet's image coordinates. An empty list hands it back to the
+  /// router.
+  ///
+  /// Per sheet, like the markers — see [FloorPlan.runWaypoints]. The pull is
+  /// the room's; the shape of the line is this drawing's.
+  ///
+  /// [recordUndo] false is for the middle of a drag: one drag is one undo, not
+  /// one per pointer event.
+  void setAvRunWaypoints(
+    String planId,
+    String runId,
+    List<Offset> points, {
+    bool recordUndo = true,
+  }) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    if (sheet == null || runId.isEmpty) return;
+    final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
+    if (index < 0) return;
+    if (recordUndo) _pushAvUndo('Route a run', _plansScope);
+    avFloorPlans[index] = sheet.withRunWaypoints(runId, points);
+    notifyListeners();
+  }
+
   /// Takes a location off ONE sheet. The location itself stays in the room —
   /// it is still where the devices are, it is just not drawn on this drawing.
   void removeAvLocationMarker(String planId, String id) {
@@ -2234,6 +2263,31 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Takes an undo snapshot of the cabling drawing before a gesture that will
+  /// write through it over and over. Dragging a bend writes on every pointer
+  /// event, and one drag has to be one undo.
+  void pushCablingUndo(String label) => _pushAvUndo(label, _cablingScope);
+
+  /// Steers a run on the cabling drawing: the bends it passes through, in
+  /// order. An empty list hands it back to the router.
+  ///
+  /// [recordUndo] false is for the middle of a drag — one drag is one undo,
+  /// not one per pointer event. The caller takes the snapshot when the drag
+  /// starts, the same bargain the signal flow's bends make.
+  void setCablingBundleWaypoints(
+    String id,
+    List<Offset> points, {
+    bool recordUndo = true,
+  }) {
+    if (recordUndo) _pushAvUndo('Route a run', _cablingScope);
+    if (points.isEmpty) {
+      avCabling.waypoints.remove(id);
+    } else {
+      avCabling.waypoints[id] = List<Offset>.from(points);
+    }
+    notifyListeners();
+  }
+
   /// Takes something off the drawing. A derived box or run is HIDDEN rather
   /// than deleted, because deleting one would only bring it back next time the
   /// drawing was built.
@@ -2257,6 +2311,7 @@ class AppStateProvider extends ChangeNotifier {
     avCabling.colors.remove(id);
     avCabling.fromLabels.remove(id);
     avCabling.toLabels.remove(id);
+    avCabling.waypoints.remove(id);
     notifyListeners();
   }
 

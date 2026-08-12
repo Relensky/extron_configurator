@@ -1393,24 +1393,7 @@ List<Offset> routeCable({
   // kept exactly as drawn when it's clear, and routed around when it isn't,
   // so the shape the user asked for survives without the line crossing a box.
   if (cable.waypoints.isNotEmpty) {
-    final guide = [start, ...cable.waypoints, end];
-    if (obstacles.isEmpty) return guide;
-
-    final out = <Offset>[guide.first];
-    for (int i = 0; i < guide.length - 1; i++) {
-      final p = guide[i], q = guide[i + 1];
-      if (!_segmentBlocked(p, q, obstacles)) {
-        out.add(q);
-        continue;
-      }
-      final detour = latticeRoute(p, q, obstacles);
-      if (detour == null) {
-        out.add(q); // nowhere to go; the straight leg is the best on offer
-        continue;
-      }
-      out.addAll(detour.skip(1));
-    }
-    return _mergeCollinear(out);
+    return routeThrough([start, ...cable.waypoints, end], obstacles);
   }
 
   const stub = 18.0;
@@ -1650,6 +1633,72 @@ List<Offset>? latticeRoute(Offset a, Offset b, List<Rect> allObstacles) {
   route.first = a;
   route.last = b;
   return _mergeCollinear(route);
+}
+
+/// The line through [guide] — two ends with any hand-placed bends between
+/// them — kept exactly as drawn where it is clear, and routed around what is
+/// in the way where it is not.
+///
+/// Hand-placed bends say where the run should GO; they do not license it to
+/// cut through a device on the way. Each leg is checked on its own, so the
+/// shape somebody asked for survives without the line crossing a box.
+///
+/// Shared by the signal flow, the cabling drawing and the floor plan: all
+/// three let a run be steered by hand, and a bend that behaved differently
+/// depending on which sheet it was dragged on would be three features.
+List<Offset> routeThrough(List<Offset> guide, List<Rect> obstacles) {
+  if (guide.length < 2) return guide;
+  if (obstacles.isEmpty) return _mergeCollinear(guide);
+
+  final out = <Offset>[guide.first];
+  for (int i = 0; i < guide.length - 1; i++) {
+    final p = guide[i], q = guide[i + 1];
+    if (!_segmentBlocked(p, q, obstacles)) {
+      out.add(q);
+      continue;
+    }
+    final detour = latticeRoute(p, q, obstacles);
+    if (detour == null) {
+      out.add(q); // nowhere to go; the straight leg is the best on offer
+      continue;
+    }
+    out.addAll(detour.skip(1));
+  }
+  return _mergeCollinear(out);
+}
+
+/// Where a new bend belongs in [waypoints]: the leg of the guide line
+/// ([start], the bends, [end]) that [at] sits nearest to.
+///
+/// Worked out against the GUIDE rather than the drawn path, whose detours
+/// round obstacles carry points nobody placed — insert against those and the
+/// new bend lands in the wrong slot as soon as a leg has been re-routed.
+int bendInsertIndex(
+  Offset start,
+  List<Offset> waypoints,
+  Offset end,
+  Offset at,
+) {
+  final guide = [start, ...waypoints, end];
+  double best = double.infinity;
+  int index = waypoints.length;
+  for (int i = 0; i < guide.length - 1; i++) {
+    final d = distanceToSegmentPoint(at, guide[i], guide[i + 1]);
+    if (d < best) {
+      best = d;
+      index = i;
+    }
+  }
+  return index.clamp(0, waypoints.length);
+}
+
+/// Distance from [p] to the segment [a]-[b].
+double distanceToSegmentPoint(Offset p, Offset a, Offset b) {
+  final ab = b - a;
+  final len2 = ab.dx * ab.dx + ab.dy * ab.dy;
+  if (len2 == 0) return (p - a).distance;
+  final t = (((p - a).dx * ab.dx + (p - a).dy * ab.dy) / len2).clamp(0.0, 1.0);
+  return (p - (a + ab * t)).distance;
 }
 
 /// Drops points sitting in the middle of a straight run, so the painter

@@ -819,6 +819,19 @@ class FloorPlan {
   /// wherever the first sheet's geometry happened to put them.
   final Map<String, Offset> markers;
 
+  /// Bends a cable run has been given ON THIS SHEET, keyed by the run's id and
+  /// held in this sheet's own image coordinates.
+  ///
+  /// Per sheet for the same reason [markers] is: the run between the rack and
+  /// the lectern is one pull, but the way it is drawn round a Level 1 plan has
+  /// nothing to say about how it is drawn on the reflected ceiling plan. The
+  /// RUN belongs to the room; the shape of the line belongs to the drawing.
+  ///
+  /// The router picks a way through on its own. Which way the cable actually
+  /// goes — down the tray, along the corridor, round the wall nobody may core
+  /// — is a fact about the building, and this is where it gets said.
+  final Map<String, List<Offset>> runWaypoints;
+
   /// Where the key panel sits on this sheet, in the image's own coordinates.
   ///
   /// Per sheet like everything else drawn on one: a legend in the top-right
@@ -843,6 +856,7 @@ class FloorPlan {
     this.callouts = const [],
     this.annotations = const [],
     this.markers = const {},
+    this.runWaypoints = const {},
     this.keyPos = kDefaultPlanKeyPosition,
     this.keyHidden = false,
   });
@@ -867,6 +881,19 @@ class FloorPlan {
   FloorPlan withoutMarker(String locationId) =>
       copyWith(markers: {...markers}..remove(locationId));
 
+  /// This sheet with [runId] bent through [points]. An empty list hands the
+  /// run back to the router.
+  FloorPlan withRunWaypoints(String runId, List<Offset> points) => copyWith(
+    runWaypoints: {
+      ...runWaypoints,
+      if (points.isNotEmpty) runId: List<Offset>.from(points),
+    }..removeWhere((key, _) => key == runId && points.isEmpty),
+  );
+
+  /// The bends [runId] has been given on this sheet, or none.
+  List<Offset> waypointsFor(String runId) =>
+      runWaypoints[runId] ?? const <Offset>[];
+
   FloorPlan copyWith({
     String? name,
     String? imageFile,
@@ -876,6 +903,7 @@ class FloorPlan {
     List<FloorPlanCallout>? callouts,
     List<PlanAnnotation>? annotations,
     Map<String, Offset>? markers,
+    Map<String, List<Offset>>? runWaypoints,
     Offset? keyPos,
     bool? keyHidden,
   }) => FloorPlan(
@@ -888,6 +916,7 @@ class FloorPlan {
     callouts: callouts ?? this.callouts,
     annotations: annotations ?? this.annotations,
     markers: markers ?? this.markers,
+    runWaypoints: runWaypoints ?? this.runWaypoints,
     keyPos: keyPos ?? this.keyPos,
     keyHidden: keyHidden ?? this.keyHidden,
   );
@@ -902,6 +931,7 @@ class FloorPlan {
     callouts: callouts,
     annotations: annotations,
     markers: markers,
+    runWaypoints: runWaypoints,
     keyPos: keyPos,
     keyHidden: keyHidden,
   );
@@ -921,6 +951,14 @@ class FloorPlan {
       'markers': {
         for (final e in markers.entries)
           e.key: {'x': e.value.dx, 'y': e.value.dy},
+      },
+    if (runWaypoints.isNotEmpty)
+      'runWaypoints': {
+        for (final e in runWaypoints.entries)
+          if (e.value.isNotEmpty)
+            e.key: [
+              for (final w in e.value) {'x': w.dx, 'y': w.dy},
+            ],
       },
     if (keyPos != kDefaultPlanKeyPosition)
       'key': {'x': keyPos.dx, 'y': keyPos.dy},
@@ -952,6 +990,18 @@ class FloorPlan {
             ((e.value as Map)['x'] as num?)?.toDouble() ?? 0,
             ((e.value as Map)['y'] as num?)?.toDouble() ?? 0,
           ),
+    },
+    runWaypoints: {
+      for (final e in (json['runWaypoints'] as Map? ?? {}).entries)
+        if (e.value is List && (e.value as List).isNotEmpty)
+          e.key.toString(): [
+            for (final p in (e.value as List))
+              if (p is Map)
+                Offset(
+                  (p['x'] as num?)?.toDouble() ?? 0,
+                  (p['y'] as num?)?.toDouble() ?? 0,
+                ),
+          ],
     },
     keyPos: json['key'] is Map
         ? Offset(

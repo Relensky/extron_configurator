@@ -8,6 +8,7 @@ import 'package:extron_configurator/av_flow_view.dart' show buildAvFlowModel;
 import 'package:extron_configurator/cabling_schematic.dart';
 import 'package:extron_configurator/floor_plan_view.dart';
 import 'package:extron_configurator/room_locations.dart';
+import 'package:extron_configurator/room_sidecar.dart' show AvUndoScope;
 
 /// A cabling set is issued one trade at a time: the network contractor gets
 /// the network sheet, the AV contractor gets theirs, and neither has to read
@@ -71,6 +72,32 @@ void main() {
         endLocationId: 'LOC_2',
         cableType: 'Cat 5e',
       ),
+    );
+    return p;
+  }
+
+  /// One run, both ends placed and nothing in the way, so its route is the
+  /// straight line between the two markers and the middle of that line is on
+  /// it — which is what lets a test click the run the way a user does.
+  AppStateProvider oneRunRoom() {
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..roomConfig = {
+        'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
+      };
+    p.loadAvFlowForCurrentConfig();
+    final sheet = p.addFloorPlanSheet(name: 'Level 1');
+    p.addAvLocation(const RoomLocation(id: 'LOC_1', name: 'Lectern'));
+    p.addAvLocation(const RoomLocation(id: 'LOC_2', name: 'Rack'));
+    p.moveAvLocationMarker(sheet.id, 'LOC_1', const Offset(200, 200));
+    p.moveAvLocationMarker(sheet.id, 'LOC_2', const Offset(700, 200));
+    p.addAvNode(device('A', 'LOC_1', SignalType.network));
+    p.addAvNode(device('B', 'LOC_2', SignalType.network));
+    p.addAvCable(
+      fromNodeId: 'A',
+      fromPortId: 'p1',
+      toNodeId: 'B',
+      toPortId: 'p1',
+      signal: SignalType.network,
     );
     return p;
   }
@@ -406,32 +433,11 @@ void main() {
       );
     });
 
-    testWidgets('clicking one opens its count, and saving writes it through', (
+    testWidgets('clicking one picks it up, and its count writes through', (
       tester,
     ) async {
-      // One run, both ends placed and nothing in the way, so the route is the
-      // straight line between the two markers and its middle is on it.
-      final p = AppStateProvider(autoLoadSettings: false)
-        ..roomConfig = {
-          'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
-        };
-      p.loadAvFlowForCurrentConfig();
-      final sheet = p.addFloorPlanSheet(name: 'Level 1');
-      p.addAvLocation(const RoomLocation(id: 'LOC_1', name: 'Lectern'));
-      p.addAvLocation(const RoomLocation(id: 'LOC_2', name: 'Rack'));
-      p.moveAvLocationMarker(sheet.id, 'LOC_1', const Offset(200, 200));
-      p.moveAvLocationMarker(sheet.id, 'LOC_2', const Offset(700, 200));
-      p.addAvNode(device('A', 'LOC_1', SignalType.network));
-      p.addAvNode(device('B', 'LOC_2', SignalType.network));
-      p.addAvCable(
-        fromNodeId: 'A',
-        fromPortId: 'p1',
-        toNodeId: 'B',
-        toPortId: 'p1',
-        signal: SignalType.network,
-      );
+      final p = oneRunRoom();
       await pump(tester, p);
-
       final bundle = p.cablingSchematic(buildAvFlowModel(p)).bundles.single;
       expect(bundle.count, 1);
 
@@ -441,30 +447,195 @@ void main() {
       await tester.tapAt(origin + const Offset(450, 200));
       await tester.pumpAndSettle();
 
-      expect(find.text('Cables in this run'), findsOneWidget);
-      await tester.enterText(find.byKey(const ValueKey('plan_run_count')), '6');
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+      expect(find.text('Lectern  \u2192  Rack'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(ValueKey('plan_run_count_${bundle.id}')),
+        '6',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
       // Written through the same override the Cabling tab edits, so both pages
       // and the schedule report one number.
       expect(p.avCabling.counts[bundle.id], 6);
-      expect(
-        p.cablingSchematic(buildAvFlowModel(p)).bundles.single.count,
-        6,
-      );
+      expect(p.cablingSchematic(buildAvFlowModel(p)).bundles.single.count, 6);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('clicking bare paper opens nothing', (tester) async {
-      final p = room();
+    testWidgets('clicking bare paper puts it down again', (tester) async {
+      final p = oneRunRoom();
       await pump(tester, p);
-
       final origin = tester.getTopLeft(find.byType(InteractiveViewer));
+
+      await tester.tapAt(origin + const Offset(450, 200));
+      await tester.pumpAndSettle();
+      expect(find.text('Lectern  \u2192  Rack'), findsOneWidget);
+
       await tester.tapAt(origin + const Offset(60, 700));
       await tester.pumpAndSettle();
+      expect(find.text('Lectern  \u2192  Rack'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
 
-      expect(find.text('Cables in this run'), findsNothing);
+  /// The router picks a way through, and picks a defensible one. Which side of
+  /// the room the cable is actually pulled down is a fact about the building,
+  /// and the drawing has to be able to say it.
+  group('routing a run by hand', () {
+    test('a bend steers the line, and the legs still dodge', () {
+      // Nothing in the way: the guide IS the line.
+      expect(
+        routeThrough(
+          [const Offset(0, 0), const Offset(100, 200), const Offset(400, 0)],
+          const [],
+        ),
+        [const Offset(0, 0), const Offset(100, 200), const Offset(400, 0)],
+      );
+
+      // Something across one leg: that leg goes round it, and the bend the
+      // user placed is still on the path. A hand-placed bend says where the
+      // run should GO; it does not license it to cut through a box.
+      final blocked = [const Rect.fromLTWH(180, 120, 120, 120)];
+      final routed = routeThrough(
+        [const Offset(0, 200), const Offset(240, 300), const Offset(500, 60)],
+        blocked,
+      );
+      expect(routed.first, const Offset(0, 200));
+      expect(routed.last, const Offset(500, 60));
+      expect(routed, contains(const Offset(240, 300)));
+      expect(polylineHitsAny(routed, blocked), isFalse);
+    });
+
+    test('a new bend lands in the leg it was dropped on', () {
+      const start = Offset(0, 0);
+      const end = Offset(400, 0);
+      const bends = [Offset(100, 100), Offset(300, 100)];
+
+      // Before the first bend, between the two, and after the second.
+      expect(bendInsertIndex(start, bends, end, const Offset(40, 40)), 0);
+      expect(bendInsertIndex(start, bends, end, const Offset(200, 100)), 1);
+      expect(bendInsertIndex(start, bends, end, const Offset(360, 40)), 2);
+    });
+
+    test('a plan holds the bends per SHEET', () {
+      // The pull belongs to the room; the shape of the line belongs to the
+      // drawing. Two sheets of one room draw the same run their own way.
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
+        };
+      p.loadAvFlowForCurrentConfig();
+      final one = p.addFloorPlanSheet(name: 'Level 1');
+      final two = p.addFloorPlanSheet(name: 'Level 2');
+
+      p.setAvRunWaypoints(one.id, 'bundle:x', const [Offset(50, 60)]);
+      p.setAvRunWaypoints(two.id, 'bundle:x', const [Offset(400, 90)]);
+
+      expect(
+        p.avFloorPlanById(one.id)!.waypointsFor('bundle:x'),
+        const [Offset(50, 60)],
+      );
+      expect(
+        p.avFloorPlanById(two.id)!.waypointsFor('bundle:x'),
+        const [Offset(400, 90)],
+      );
+
+      // Straightening one leaves the other alone.
+      p.setAvRunWaypoints(one.id, 'bundle:x', const []);
+      expect(p.avFloorPlanById(one.id)!.waypointsFor('bundle:x'), isEmpty);
+      expect(p.avFloorPlanById(two.id)!.waypointsFor('bundle:x'), hasLength(1));
+    });
+
+    test('bends survive the sidecar round trip', () {
+      const bare = FloorPlan(id: 'PLAN_1', name: 'Level 1');
+      final bent = bare.withRunWaypoints(
+        'bundle:x',
+        const [Offset(120, 40), Offset(120, 500)],
+      );
+
+      expect(
+        FloorPlan.fromJson(bent.toJson()).waypointsFor('bundle:x'),
+        const [Offset(120, 40), Offset(120, 500)],
+      );
+      // A straightened run writes nothing rather than an empty list.
+      expect(
+        bent
+            .withRunWaypoints('bundle:x', const [])
+            .toJson()
+            .containsKey('runWaypoints'),
+        isFalse,
+      );
+    });
+
+    testWidgets('the sheet grows handles for the run being worked on', (
+      tester,
+    ) async {
+      final p = oneRunRoom();
+      await pump(tester, p);
+      final bundle = p.cablingSchematic(buildAvFlowModel(p)).bundles.single;
+      final origin = tester.getTopLeft(find.byType(InteractiveViewer));
+
+      // Nothing picked up: no handles anywhere on the drawing.
+      expect(find.byKey(ValueKey('plan_add_bend_${bundle.id}_0')), findsNothing);
+
+      await tester.tapAt(origin + const Offset(450, 200));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Drag a hollow dot onto the line to turn it'),
+        findsOneWidget,
+      );
+
+      // The hollow dot at the middle of the only leg adds a bend there.
+      await tester.tap(find.byKey(ValueKey('plan_add_bend_${bundle.id}_0')));
+      await tester.pumpAndSettle();
+
+      expect(p.avFloorPlans.single.waypointsFor(bundle.id), hasLength(1));
+      expect(find.text('1 bend on this sheet'), findsOneWidget);
+      expect(find.byKey(ValueKey('plan_bend_${bundle.id}_0')), findsOneWidget);
+
+      // And the way back out of a route steered by hand.
+      await tester.tap(find.byKey(const ValueKey('plan_straighten_run')));
+      await tester.pumpAndSettle();
+      expect(p.avFloorPlans.single.waypointsFor(bundle.id), isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a bend drags, and one drag is one undo', (tester) async {
+      final p = oneRunRoom();
+      await pump(tester, p);
+      final bundle = p.cablingSchematic(buildAvFlowModel(p)).bundles.single;
+      final origin = tester.getTopLeft(find.byType(InteractiveViewer));
+
+      await tester.tapAt(origin + const Offset(450, 200));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('plan_add_bend_${bundle.id}_0')));
+      await tester.pumpAndSettle();
+      final placed = p.avFloorPlans.single.waypointsFor(bundle.id).single;
+
+      // In steps, the way a pointer does it: the handle and the sheet's own
+      // pan are both watching, and one jump from end to end gives the arena
+      // nothing to decide on.
+      final from = tester.getCenter(
+        find.byKey(ValueKey('plan_bend_${bundle.id}_0')),
+      );
+      final gesture = await tester.startGesture(from);
+      await tester.pump(const Duration(milliseconds: 60));
+      for (var step = 1; step <= 4; step++) {
+        await gesture.moveTo(from + Offset(0, 30.0 * step));
+        await tester.pump(const Duration(milliseconds: 40));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      final moved = p.avFloorPlans.single.waypointsFor(bundle.id).single;
+      expect(moved.dy, greaterThan(placed.dy));
+      // One drag is one entry: undoing puts the bend back where it started
+      // rather than unwinding it a pointer event at a time.
+      p.undoAvFlow(AvUndoScope.floorPlans);
+      expect(
+        p.avFloorPlans.single.waypointsFor(bundle.id).single.dy,
+        closeTo(placed.dy, 0.01),
+      );
       expect(tester.takeException(), isNull);
     });
   });

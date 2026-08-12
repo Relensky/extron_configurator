@@ -439,6 +439,16 @@ class CablingOverrides {
   final Map<String, String> fromLabels;
   final Map<String, String> toLabels;
 
+  /// Bundle id -> bends placed by hand, in the order the run passes through
+  /// them.
+  ///
+  /// The router picks a way through on its own, and it picks a defensible one
+  /// — but which side of the room a pull actually runs down is a fact about
+  /// the building, not something geometry can work out. Cable follows the
+  /// cable tray, the corridor, the wall somebody is allowed to core. These are
+  /// how that gets said, and the router still keeps each leg off the boxes.
+  final Map<String, List<Offset>> waypoints;
+
   /// Derived boxes and bundles taken off the drawing. Hidden rather than
   /// deleted, because a rebuild would only bring a deleted one back.
   final Set<String> hidden;
@@ -457,6 +467,7 @@ class CablingOverrides {
     Map<String, int>? typeColors,
     Map<String, String>? fromLabels,
     Map<String, String>? toLabels,
+    Map<String, List<Offset>>? waypoints,
     Set<String>? hidden,
     List<CablingBox>? extraBoxes,
     List<CablingBundle>? extraBundles,
@@ -469,6 +480,7 @@ class CablingOverrides {
        typeColors = typeColors ?? {},
        fromLabels = fromLabels ?? {},
        toLabels = toLabels ?? {},
+       waypoints = waypoints ?? {},
        hidden = hidden ?? {},
        extraBoxes = extraBoxes ?? [],
        extraBundles = extraBundles ?? [];
@@ -483,6 +495,7 @@ class CablingOverrides {
       typeColors.isEmpty &&
       fromLabels.isEmpty &&
       toLabels.isEmpty &&
+      waypoints.isEmpty &&
       hidden.isEmpty &&
       extraBoxes.isEmpty &&
       extraBundles.isEmpty;
@@ -497,6 +510,7 @@ class CablingOverrides {
     typeColors.clear();
     fromLabels.clear();
     toLabels.clear();
+    waypoints.clear();
     hidden.clear();
     extraBoxes.clear();
     extraBundles.clear();
@@ -524,6 +538,13 @@ class CablingOverrides {
     if (typeColors.isNotEmpty) 'typeColors': Map<String, int>.of(typeColors),
     if (fromLabels.isNotEmpty) 'fromLabels': Map<String, String>.of(fromLabels),
     if (toLabels.isNotEmpty) 'toLabels': Map<String, String>.of(toLabels),
+    if (waypoints.isNotEmpty)
+      'waypoints': {
+        for (final e in waypoints.entries)
+          e.key: [
+            for (final w in e.value) {'x': w.dx, 'y': w.dy},
+          ],
+      },
     if (hidden.isNotEmpty) 'hidden': hidden.toList(),
     if (extraBoxes.isNotEmpty)
       'boxes': [for (final b in extraBoxes) b.toJson()],
@@ -575,6 +596,22 @@ class CablingOverrides {
 
     argb('colors', colors);
     argb('typeColors', typeColors);
+    final bends = json['waypoints'];
+    if (bends is Map) {
+      bends.forEach((key, value) {
+        if (value is! List) return;
+        final points = [
+          for (final p in value)
+            if (p is Map)
+              Offset(
+                (p['x'] as num?)?.toDouble() ?? 0,
+                (p['y'] as num?)?.toDouble() ?? 0,
+              ),
+        ];
+        // An empty list is the absence of bends, which is what no entry means.
+        if (points.isNotEmpty) waypoints[key.toString()] = points;
+      });
+    }
     for (final h in (json['hidden'] as List? ?? [])) {
       hidden.add(h.toString());
     }
@@ -607,6 +644,13 @@ class CablingSchematic {
 
   CablingBox? boxById(String id) {
     for (final b in boxes) {
+      if (b.id == id) return b;
+    }
+    return null;
+  }
+
+  CablingBundle? bundleById(String id) {
+    for (final b in bundles) {
       if (b.id == id) return b;
     }
     return null;
