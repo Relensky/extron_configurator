@@ -640,6 +640,105 @@ void main() {
     });
   });
 
+  /// The sheet places every caption itself, and places them well enough that
+  /// most are never touched. The ones that are touched are the ones it cannot
+  /// reason about — a label over the door swing, or over the very bit of the
+  /// plan the note beside it points at.
+  group('moving a cable label', () {
+    /// The caption block for the only run on the sheet, keyed the way the
+    /// drawing keys it: the pair of markers it joins.
+    const edgeKey = 'loc:LOC_1|loc:LOC_2';
+
+    testWidgets('drags, and stays where it was put', (tester) async {
+      final p = oneRunRoom();
+      await pump(tester, p);
+
+      final label = find.byKey(const ValueKey('plan_label_$edgeKey'));
+      expect(label, findsOneWidget);
+      expect(p.avFloorPlans.single.labelOffsetFor(edgeKey), Offset.zero);
+      final before = tester.getTopLeft(label);
+
+      // In steps, the way a pointer does it: the label and the sheet's own pan
+      // are both watching, and one jump gives the arena nothing to decide on.
+      final from = tester.getCenter(label);
+      final gesture = await tester.startGesture(from);
+      await tester.pump(const Duration(milliseconds: 60));
+      for (var step = 1; step <= 4; step++) {
+        await gesture.moveTo(from + Offset(0, 25.0 * step));
+        await tester.pump(const Duration(milliseconds: 40));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // Down the page and nowhere sideways. Not to the pixel: the pointer has
+      // to clear the drag threshold before the first delta is reported, so the
+      // label lands a little short of the travel — which is what every drag in
+      // the app does.
+      final moved = p.avFloorPlans.single.labelOffsetFor(edgeKey);
+      expect(moved.dy, greaterThan(40));
+      expect(moved.dx.abs(), lessThan(2));
+      // And the block on the page went with it.
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('plan_label_$edgeKey'))).dy,
+        greaterThan(before.dy),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('goes back where the sheet had it on a double-click', (
+      tester,
+    ) async {
+      final p = oneRunRoom();
+      p.setAvRunLabelOffset(p.avFloorPlans.single.id, edgeKey,
+          const Offset(0, 120));
+      await pump(tester, p);
+
+      final at = tester.getCenter(
+        find.byKey(const ValueKey('plan_label_$edgeKey')),
+      );
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.tapAt(at);
+      await tester.pumpAndSettle();
+
+      expect(p.avFloorPlans.single.labelOffsetFor(edgeKey), Offset.zero);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('the nudge is remembered per sheet, and round-trips', () {
+      const bare = FloorPlan(id: 'PLAN_1', name: 'Level 1');
+      final moved = bare.withRunLabelOffset(edgeKey, const Offset(30, -40));
+
+      expect(moved.labelOffsetFor(edgeKey), const Offset(30, -40));
+      expect(
+        FloorPlan.fromJson(moved.toJson()).labelOffsetFor(edgeKey),
+        const Offset(30, -40),
+      );
+      // Put back is stored as nothing at all, not as a zero.
+      expect(
+        moved
+            .withRunLabelOffset(edgeKey, Offset.zero)
+            .toJson()
+            .containsKey('runLabelOffsets'),
+        isFalse,
+      );
+    });
+
+    test('a moved label follows its run when the marker moves', () {
+      // The whole reason it is a nudge and not a position: a label moved clear
+      // of a door swing is still clear of it after the rack is dragged.
+      final p = oneRunRoom();
+      final sheet = p.avFloorPlans.single.id;
+      p.setAvRunLabelOffset(sheet, edgeKey, const Offset(0, 90));
+      p.moveAvLocationMarker(sheet, 'LOC_2', const Offset(700, 600));
+
+      expect(
+        p.avFloorPlanById(sheet)!.labelOffsetFor(edgeKey),
+        const Offset(0, 90),
+      );
+    });
+  });
+
   test('the plan draws the same runs the cabling drawing does', () {
     // Both read the same call, so the sheet a contractor is handed and the
     // one-line drawing beside it cannot disagree about what runs where.

@@ -832,6 +832,17 @@ class FloorPlan {
   /// — is a fact about the building, and this is where it gets said.
   final Map<String, List<Offset>> runWaypoints;
 
+  /// How far a run's caption has been nudged from where the sheet put it,
+  /// keyed by the pair of markers the caption names.
+  ///
+  /// A NUDGE rather than a position: the automatic spot follows the line, so a
+  /// label that was moved out of the way of a door swing stays out of the way
+  /// of it when the marker it belongs to is dragged half a metre. An absolute
+  /// coordinate would be left behind pointing at nothing.
+  ///
+  /// Per sheet, like everything else drawn on one.
+  final Map<String, Offset> runLabelOffsets;
+
   /// Where the key panel sits on this sheet, in the image's own coordinates.
   ///
   /// Per sheet like everything else drawn on one: a legend in the top-right
@@ -857,6 +868,7 @@ class FloorPlan {
     this.annotations = const [],
     this.markers = const {},
     this.runWaypoints = const {},
+    this.runLabelOffsets = const {},
     this.keyPos = kDefaultPlanKeyPosition,
     this.keyHidden = false,
   });
@@ -894,6 +906,20 @@ class FloorPlan {
   List<Offset> waypointsFor(String runId) =>
       runWaypoints[runId] ?? const <Offset>[];
 
+  /// This sheet with the caption for [edgeKey] nudged by [by].
+  /// [Offset.zero] puts it back where the sheet would have placed it.
+  FloorPlan withRunLabelOffset(String edgeKey, Offset by) => copyWith(
+    runLabelOffsets: {
+      ...runLabelOffsets,
+      if (by != Offset.zero) edgeKey: by,
+    }..removeWhere((key, _) => key == edgeKey && by == Offset.zero),
+  );
+
+  /// How far the caption for [edgeKey] has been moved, or [Offset.zero] when
+  /// it is still where the sheet put it.
+  Offset labelOffsetFor(String edgeKey) =>
+      runLabelOffsets[edgeKey] ?? Offset.zero;
+
   FloorPlan copyWith({
     String? name,
     String? imageFile,
@@ -904,6 +930,7 @@ class FloorPlan {
     List<PlanAnnotation>? annotations,
     Map<String, Offset>? markers,
     Map<String, List<Offset>>? runWaypoints,
+    Map<String, Offset>? runLabelOffsets,
     Offset? keyPos,
     bool? keyHidden,
   }) => FloorPlan(
@@ -917,6 +944,7 @@ class FloorPlan {
     annotations: annotations ?? this.annotations,
     markers: markers ?? this.markers,
     runWaypoints: runWaypoints ?? this.runWaypoints,
+    runLabelOffsets: runLabelOffsets ?? this.runLabelOffsets,
     keyPos: keyPos ?? this.keyPos,
     keyHidden: keyHidden ?? this.keyHidden,
   );
@@ -932,6 +960,7 @@ class FloorPlan {
     annotations: annotations,
     markers: markers,
     runWaypoints: runWaypoints,
+    runLabelOffsets: runLabelOffsets,
     keyPos: keyPos,
     keyHidden: keyHidden,
   );
@@ -959,6 +988,12 @@ class FloorPlan {
             e.key: [
               for (final w in e.value) {'x': w.dx, 'y': w.dy},
             ],
+      },
+    if (runLabelOffsets.isNotEmpty)
+      'runLabelOffsets': {
+        for (final e in runLabelOffsets.entries)
+          if (e.value != Offset.zero)
+            e.key: {'x': e.value.dx, 'y': e.value.dy},
       },
     if (keyPos != kDefaultPlanKeyPosition)
       'key': {'x': keyPos.dx, 'y': keyPos.dy},
@@ -1002,6 +1037,14 @@ class FloorPlan {
                   (p['y'] as num?)?.toDouble() ?? 0,
                 ),
           ],
+    },
+    runLabelOffsets: {
+      for (final e in (json['runLabelOffsets'] as Map? ?? {}).entries)
+        if (e.value is Map)
+          e.key.toString(): Offset(
+            ((e.value as Map)['x'] as num?)?.toDouble() ?? 0,
+            ((e.value as Map)['y'] as num?)?.toDouble() ?? 0,
+          ),
     },
     keyPos: json['key'] is Map
         ? Offset(

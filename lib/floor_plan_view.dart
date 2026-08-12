@@ -127,6 +127,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// without a provider write (and an undo entry) per frame.
   Offset? _keyDrag;
 
+  /// The caption being dragged, by [_PlanRun.edgeKey], and how far it has come
+  /// since the pointer went down. Held here for the same reason [_keyDrag] is:
+  /// the label follows the cursor without a write, and the write happens once
+  /// on release so one drag is one undo.
+  String _labelDragKey = '';
+  Offset _labelDrag = Offset.zero;
+
   @override
   void initState() {
     super.initState();
@@ -1116,6 +1123,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final runs = _cableLayer == _kLayerOff
         ? const <_PlanRun>[]
         : _runsOnPlan(provider, plan, drawing, obstacles);
+    // The captions dodge all of it — dots included, which the routes cannot —
+    // so a run's label never lands on the name of the place it runs to.
+    final keepClear = [...obstacles.dots.values, ...obstacles.always];
+    // Laid out here rather than in paint(): the boxes are what the drag
+    // targets below sit on, so the label somebody grabs is the one they can
+    // see. A label being dragged right now carries the live offset, so it
+    // follows the cursor without a provider write per pointer event.
+    final captions = _planCaptions(
+      runs: runs,
+      keepClear: keepClear,
+      nudges: {
+        for (final e in plan.runLabelOffsets.entries) e.key: e.value,
+        if (_labelDragKey.isNotEmpty)
+          _labelDragKey: plan.labelOffsetFor(_labelDragKey) + _labelDrag,
+      },
+      dark: theme.brightness == Brightness.dark,
+    );
 
     return SizedBox(
       width: size.width,
@@ -1165,13 +1189,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   child: CustomPaint(
                     painter: _PlanCablePainter(
                       runs: runs,
-                      // The captions dodge all of it — dots included, which
-                      // the routes cannot — so a run's label never lands on
-                      // the name of the place it runs to.
-                      keepClear: [
-                        ...obstacles.dots.values,
-                        ...obstacles.always,
-                      ],
+                      captions: captions,
+                      keepClear: keepClear,
                       dark: theme.brightness == Brightness.dark,
                     ),
                   ),
@@ -1207,6 +1226,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
               ),
             ),
+            // The captions are painted, so this is what makes them grabbable:
+            // an invisible pad over each block. Invisible on purpose — it must
+            // not turn up in the exported sheet, and the label under it is
+            // already the thing you can see.
+            for (final caption in captions)
+              _labelDragTarget(provider, plan, caption),
             // The selected run's bends, over everything the run is drawn over.
             // Not in the export: nothing is selected on a sheet being written
             // to a file, because the tab clears the selection before it
@@ -2398,6 +2423,74 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     return null;
   }
 
+  /// The pad that makes a painted caption draggable.
+  ///
+  /// The sheet places every label itself, and places them well enough that
+  /// most are never touched. The ones that are touched are the ones the
+  /// drawing cannot reason about: a label sitting over the door swing, or over
+  /// the bit of the plan the note beside it is pointing at. Dragging is stored
+  /// as a nudge from the automatic spot, so the label still follows its run
+  /// when a marker moves.
+  Widget _labelDragTarget(
+    AppStateProvider provider,
+    FloorPlan plan,
+    _PlanCaption caption,
+  ) {
+    final box = caption.box;
+    return Positioned(
+      left: box.left,
+      top: box.top,
+      width: box.width,
+      height: box.height,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        child: GestureDetector(
+          key: ValueKey('plan_label_${caption.edgeKey}'),
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (_) => setState(() {
+            _labelDragKey = caption.edgeKey;
+            _labelDrag = Offset.zero;
+          }),
+          onPanUpdate: (d) => setState(() => _labelDrag += d.delta),
+          onPanEnd: (_) {
+            final moved = _labelDrag;
+            final key = _labelDragKey;
+            setState(() {
+              _labelDragKey = '';
+              _labelDrag = Offset.zero;
+            });
+            if (key.isEmpty || moved == Offset.zero) return;
+            provider.setAvRunLabelOffset(
+              plan.id,
+              key,
+              plan.labelOffsetFor(key) + moved,
+            );
+          },
+          onPanCancel: () => setState(() {
+            _labelDragKey = '';
+            _labelDrag = Offset.zero;
+          }),
+          // The way back. A label put somewhere by hand is left exactly there
+          // even when something is drawn over it later, so there has to be one.
+          onDoubleTap: caption.moved
+              ? () => provider.setAvRunLabelOffset(
+                  plan.id,
+                  caption.edgeKey,
+                  Offset.zero,
+                )
+              : null,
+          child: Tooltip(
+            message: caption.moved
+                ? 'Drag to move this label · double-click to put it back where '
+                      'the sheet had it'
+                : 'Drag to move this label',
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Drag handles for the selected run: a filled dot on every bend it has
   /// been given, and a hollow one at the middle of each leg that adds one.
   ///
@@ -3075,6 +3168,11 @@ typedef _PlanRun = ({
 class _PlanCablePainter extends CustomPainter {
   final List<_PlanRun> runs;
 
+  /// The caption blocks, laid out by [_planCaptions] before the frame so the
+  /// drawing and the drag targets over it cannot disagree about where a label
+  /// is.
+  final List<_PlanCaption> captions;
+
   /// The markers and callouts already printed on the sheet.
   final List<Rect> keepClear;
 
@@ -3082,6 +3180,7 @@ class _PlanCablePainter extends CustomPainter {
 
   const _PlanCablePainter({
     required this.runs,
+    required this.captions,
     required this.keepClear,
     required this.dark,
   });
@@ -3107,24 +3206,14 @@ class _PlanCablePainter extends CustomPainter {
       drawn.add(run.route);
     }
 
-    // One caption block per pair of markers, placed after every line is down
-    // so the block can be laid over its own run rather than under the next.
-    final byEdge = <String, List<_PlanRun>>{};
-    for (final run in runs) {
-      byEdge.putIfAbsent(run.edgeKey, () => []).add(run);
-    }
-
-    // Grows as captions are placed: each one dodges the markers, the callouts
-    // AND everything captioned before it.
+    // The caption blocks were laid out before the frame — see [_planCaptions] —
+    // so the boxes drawn here are the same boxes the tab put drag targets on.
+    // Drawn after every line is down, so a block sits over its own run rather
+    // than under the next one.
     final taken = [...keepClear];
-    for (final group in byEdge.values) {
-      final placed = _paintCaption(
-        canvas,
-        group,
-        polylineMidpoint(group.first.route),
-        taken,
-      );
-      if (placed != null) taken.add(placed);
+    for (final caption in captions) {
+      _paintCaption(canvas, caption);
+      taken.add(caption.box);
     }
 
     // The end labels last, so what a run TERMINATES INTO is on top of the
@@ -3160,18 +3249,89 @@ class _PlanCablePainter extends CustomPainter {
     }
   }
 
-  /// Draws one edge's stacked caption and returns the box it ended up in, or
-  /// null when there was nothing to draw.
-  Rect? _paintCaption(
-    Canvas canvas,
-    List<_PlanRun> group,
-    Offset anchor,
-    List<Rect> taken,
-  ) {
-    const dash = 13.0;
-    const gap = 4.0;
-    const rowGap = 2.0;
+  /// Draws one caption block where [_planCaptions] put it.
+  void _paintCaption(Canvas canvas, _PlanCaption caption) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(caption.box, const Radius.circular(3)),
+      // The plan underneath is a drawing, not a background — the label needs
+      // something solid behind it or it lands on top of a wall line.
+      Paint()..color = dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
+    );
 
+    double y = caption.box.top + _kCaptionPad;
+    final left = caption.box.left + _kCaptionPad;
+    for (final row in caption.rows) {
+      // The dash is the key: it is what ties "6x Cat 6a" to the line it names
+      // when three run side by side — in that run's own pattern as well as its
+      // colour, so the tie survives a black-and-white print.
+      paintRunSpecimen(
+        canvas: canvas,
+        from: Offset(left, y + row.text.height / 2),
+        to: Offset(left + _kCaptionDash, y + row.text.height / 2),
+        color: row.color,
+        style: row.style,
+      );
+      row.text.paint(canvas, Offset(left + _kCaptionDash + _kCaptionGap, y));
+      y += row.text.height + _kCaptionRowGap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PlanCablePainter old) =>
+      old.runs != runs ||
+      old.captions != captions ||
+      old.keepClear != keepClear ||
+      old.dark != dark;
+}
+
+/// The padding, dash and gaps a caption block is laid out with. Shared by the
+/// layout below and the painter, which is the only way the box a label is
+/// dragged by can be the box it is drawn in.
+const double _kCaptionPad = 3;
+const double _kCaptionDash = 13;
+const double _kCaptionGap = 4;
+const double _kCaptionRowGap = 2;
+
+/// One caption block: the runs it names, and the box it occupies.
+typedef _PlanCaption = ({
+  /// The pair of markers this block belongs to — [_PlanRun.edgeKey] — which is
+  /// what a moved label is remembered under.
+  String edgeKey,
+  Rect box,
+
+  /// True when somebody put this one where it is. The sheet then leaves it
+  /// exactly there instead of walking it clear of what it overlaps: a label
+  /// moved by hand has been moved for a reason the drawing cannot see.
+  bool moved,
+  List<({TextPainter text, Color color, RunLineStyle style})> rows,
+});
+
+/// Where every run caption goes on the sheet.
+///
+/// One block per pair of markers: six Cat 6a and five Cat 5e between the same
+/// two places is one stack of two lines, not two labels on top of each other.
+/// Each block dodges the markers, the callouts and everything captioned before
+/// it — unless it carries a nudge in [nudges], in which case it goes exactly
+/// where it was put and the ones after it dodge IT.
+///
+/// Laid out here rather than inside paint() for the same reason the routes
+/// are: the tab needs the boxes to put drag targets over, and a label the user
+/// grabs has to be the label they can see.
+List<_PlanCaption> _planCaptions({
+  required List<_PlanRun> runs,
+  required List<Rect> keepClear,
+  required Map<String, Offset> nudges,
+  required bool dark,
+}) {
+  final byEdge = <String, List<_PlanRun>>{};
+  for (final run in runs) {
+    byEdge.putIfAbsent(run.edgeKey, () => []).add(run);
+  }
+
+  final out = <_PlanCaption>[];
+  final taken = [...keepClear];
+  for (final entry in byEdge.entries) {
+    final group = entry.value;
     final rows = <({TextPainter text, Color color, RunLineStyle style})>[];
     for (final run in group) {
       rows.add((
@@ -3190,87 +3350,73 @@ class _PlanCablePainter extends CustomPainter {
         )..layout(),
       ));
     }
-    if (rows.isEmpty) return null;
+    if (rows.isEmpty) continue;
 
     double width = 0;
     double height = 0;
     for (final row in rows) {
-      final w = dash + gap + row.text.width;
+      final w = _kCaptionDash + _kCaptionGap + row.text.width;
       if (w > width) width = w;
-      height += row.text.height + rowGap;
+      height += row.text.height + _kCaptionRowGap;
     }
-    height -= rowGap;
+    height -= _kCaptionRowGap;
 
-    final box = _freeCaptionBox(
-      Size(width, height),
-      Offset(anchor.dx - width / 2, anchor.dy - height - 6),
-      taken,
-    );
+    final anchor = polylineMidpoint(group.first.route);
+    final wanted = Offset(anchor.dx - width / 2, anchor.dy - height - 6);
+    final nudge = nudges[entry.key] ?? Offset.zero;
+    final inner = nudge == Offset.zero
+        ? _freeCaptionBox(Size(width, height), wanted, taken)
+        : Rect.fromLTWH(
+            wanted.dx + nudge.dx,
+            wanted.dy + nudge.dy,
+            width,
+            height,
+          );
+    final box = inner.inflate(_kCaptionPad);
+    taken.add(box);
+    out.add((
+      edgeKey: entry.key,
+      box: box,
+      moved: nudge != Offset.zero,
+      rows: rows,
+    ));
+  }
+  return out;
+}
 
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(box.inflate(3), const Radius.circular(3)),
-      // The plan underneath is a drawing, not a background — the label needs
-      // something solid behind it or it lands on top of a wall line.
-      Paint()..color = dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
-    );
-
-    double y = box.top;
-    for (final row in rows) {
-      // The dash is the key: it is what ties "6x Cat 6a" to the line it names
-      // when three run side by side — in that run's own pattern as well as its
-      // colour, so the tie survives a black-and-white print.
-      paintRunSpecimen(
-        canvas: canvas,
-        from: Offset(box.left, y + row.text.height / 2),
-        to: Offset(box.left + dash, y + row.text.height / 2),
-        color: row.color,
-        style: row.style,
-      );
-      row.text.paint(canvas, Offset(box.left + dash + gap, y));
-      y += row.text.height + rowGap;
+/// [wanted] if nothing is already there, else the nearest spot that is clear.
+///
+/// Steps straight up and down first — a caption belongs ON its own run, and
+/// sliding it along the line keeps it pointing at the right cable — then out
+/// to the sides. Gives up and uses the original spot rather than flinging a
+/// label across the sheet to somewhere it explains nothing.
+Rect _freeCaptionBox(Size size, Offset wanted, List<Rect> taken) {
+  Rect at(Offset o) => Rect.fromLTWH(o.dx, o.dy, size.width, size.height);
+  bool free(Rect r) {
+    final padded = r.inflate(_kCaptionPad);
+    for (final other in taken) {
+      if (padded.overlaps(other)) return false;
     }
-    return box.inflate(3);
+    return true;
   }
 
-  /// [wanted] if nothing is already there, else the nearest spot that is
-  /// clear.
-  ///
-  /// Steps straight up and down first — a caption belongs ON its own run, and
-  /// sliding it along the line keeps it pointing at the right cable — then out
-  /// to the sides. Gives up and uses the original spot rather than flinging a
-  /// label across the sheet to somewhere it explains nothing.
-  static Rect _freeCaptionBox(Size size, Offset wanted, List<Rect> taken) {
-    Rect at(Offset o) => Rect.fromLTWH(o.dx, o.dy, size.width, size.height);
-    bool free(Rect r) {
-      final padded = r.inflate(3);
-      for (final other in taken) {
-        if (padded.overlaps(other)) return false;
-      }
-      return true;
-    }
+  if (free(at(wanted))) return at(wanted);
 
-    if (free(at(wanted))) return at(wanted);
-
-    const step = 15.0;
-    for (int ring = 1; ring <= 14; ring++) {
-      for (final d in const [
-        Offset(0, -1),
-        Offset(0, 1),
-        Offset(-1, 0),
-        Offset(1, 0),
-        Offset(-1, -1),
-        Offset(1, -1),
-      ]) {
-        final candidate = at(wanted + d * (ring * step));
-        if (free(candidate)) return candidate;
-      }
+  const step = 15.0;
+  for (int ring = 1; ring <= 14; ring++) {
+    for (final d in const [
+      Offset(0, -1),
+      Offset(0, 1),
+      Offset(-1, 0),
+      Offset(1, 0),
+      Offset(-1, -1),
+      Offset(1, -1),
+    ]) {
+      final candidate = at(wanted + d * (ring * step));
+      if (free(candidate)) return candidate;
     }
-    return at(wanted);
   }
-
-  @override
-  bool shouldRepaint(_PlanCablePainter old) =>
-      old.runs != runs || old.keepClear != keepClear || old.dark != dark;
+  return at(wanted);
 }
 
 /// The short specimen of a run drawn beside its name in the key — the same

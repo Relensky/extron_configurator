@@ -1796,6 +1796,31 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Moves a run's caption on ONE sheet, as a nudge from where the drawing
+  /// put it — see [FloorPlan.runLabelOffsets]. [Offset.zero] hands it back to
+  /// the automatic placement.
+  ///
+  /// [recordUndo] false is for the middle of a drag.
+  void setAvRunLabelOffset(
+    String planId,
+    String edgeKey,
+    Offset by, {
+    bool recordUndo = true,
+  }) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    if (sheet == null || edgeKey.isEmpty) return;
+    final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
+    if (index < 0) return;
+    if (recordUndo) {
+      _pushAvUndo(
+        by == Offset.zero ? 'Put a label back' : 'Move a label',
+        _plansScope,
+      );
+    }
+    avFloorPlans[index] = sheet.withRunLabelOffset(edgeKey, by);
+    notifyListeners();
+  }
+
   /// Takes a location off ONE sheet. The location itself stays in the room —
   /// it is still where the devices are, it is just not drawn on this drawing.
   void removeAvLocationMarker(String planId, String id) {
