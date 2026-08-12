@@ -901,6 +901,29 @@ class AppStateProvider extends ChangeNotifier {
   /// panel. Persisted in the sidecar with the rest of the layout.
   final Set<String> schematicHiddenEdges = {};
 
+  /// Boxes the user added by hand: equipment that is part of the room but not
+  /// part of the control system — the building network switch the processor
+  /// lands on, a UPS, a room PC, a wall plate, somebody else's rack.
+  ///
+  /// The diagram is DERIVED from the config, so anything the config does not
+  /// know about could not be drawn at all: the reader was left to infer that
+  /// the network line disappears into a switch that exists. These are the
+  /// exception — the user's own boxes, drawn as related equipment rather than
+  /// as controlled devices, and linkable with the ordinary line tool.
+  ///
+  /// {'id': 'EXTRA_1', 'title': s, 'subtitle': s, 'icon': key}. Same shape as
+  /// [schematicLinks] (plain strings) so the sidecar stays a flat document.
+  final List<Map<String, String>> schematicExtraNodes = [];
+
+  /// Ids [SchematicModel] would generate itself, which a hand-added box must
+  /// never collide with — it would silently take a real device's place in the
+  /// links and the positions.
+  static const Set<String> _kSchematicReservedIds = {
+    'PROCESSOR',
+    'IDF',
+    'TOUCHPANEL',
+  };
+
   /// Per-room overrides of the control schematic's line colors, keyed by
   /// the connection category's index in ConnType. Stored by index because
   /// this layer must not depend on the view that defines the enum. Empty
@@ -936,7 +959,8 @@ class AppStateProvider extends ChangeNotifier {
 
   final List<({String label, Map<String, Offset> positions,
       List<Map<String, String>> links, Set<String> hidden,
-      Map<int, Color> colors})> _schematicUndoStack = [];
+      Map<int, Color> colors, List<Map<String, String>> extras})>
+      _schematicUndoStack = [];
 
   bool get canUndoSchematic => _schematicUndoStack.isNotEmpty;
 
@@ -951,6 +975,9 @@ class AppStateProvider extends ChangeNotifier {
       links: [for (final l in schematicLinks) Map<String, String>.from(l)],
       hidden: Set<String>.from(schematicHiddenEdges),
       colors: Map<int, Color>.from(schematicConnColors),
+      extras: [
+        for (final n in schematicExtraNodes) Map<String, String>.from(n),
+      ],
     ));
     if (_schematicUndoStack.length > _kMaxUndoDepth) {
       _schematicUndoStack.removeAt(0);
@@ -974,6 +1001,9 @@ class AppStateProvider extends ChangeNotifier {
     schematicConnColors
       ..clear()
       ..addAll(entry.colors);
+    schematicExtraNodes
+      ..clear()
+      ..addAll(entry.extras);
     AppLogger.logInfo('Undid: ${entry.label}');
     notifyListeners();
     return entry.label;
@@ -1007,6 +1037,74 @@ class AppStateProvider extends ChangeNotifier {
     _pushSchematicUndo('Edit line');
     schematicLinks[index] =
         {'from': from, 'to': to, 'color': colorHex, 'label': label};
+    notifyListeners();
+  }
+
+  // --- hand-added boxes ------------------------------------------------------
+
+  /// Adds a box for equipment the control system does not talk to. Returns the
+  /// id it was filed under, so the caller can select or position it.
+  ///
+  /// [title] is required in spirit — a nameless box on a drawing is noise — so
+  /// a blank one is refused rather than drawn.
+  String addSchematicExtraNode({
+    required String title,
+    String subtitle = '',
+    String icon = '',
+  }) {
+    if (title.trim().isEmpty) return '';
+    _pushSchematicUndo('Add related device');
+    final taken = {
+      ..._kSchematicReservedIds,
+      for (final n in schematicExtraNodes) n['id'] ?? '',
+    };
+    var n = schematicExtraNodes.length + 1;
+    while (taken.contains('EXTRA_$n')) {
+      n++;
+    }
+    final id = 'EXTRA_$n';
+    schematicExtraNodes.add({
+      'id': id,
+      'title': title.trim(),
+      'subtitle': subtitle.trim(),
+      'icon': icon.trim(),
+    });
+    notifyListeners();
+    return id;
+  }
+
+  void updateSchematicExtraNodeAt(
+    int index, {
+    required String title,
+    String subtitle = '',
+    String icon = '',
+  }) {
+    if (index < 0 || index >= schematicExtraNodes.length) return;
+    if (title.trim().isEmpty) return;
+    _pushSchematicUndo('Edit related device');
+    schematicExtraNodes[index] = {
+      // The id is the box's identity on every line drawn to it, so an edit
+      // keeps it. Renaming through a new id would orphan the lines.
+      'id': schematicExtraNodes[index]['id'] ?? '',
+      'title': title.trim(),
+      'subtitle': subtitle.trim(),
+      'icon': icon.trim(),
+    };
+    notifyListeners();
+  }
+
+  /// Removes a hand-added box, and with it the lines drawn to it and the spot
+  /// it was dragged to. [SchematicModel] already declines to draw a line whose
+  /// endpoint is gone, but leaving the entries behind means a later box that
+  /// reused the id would inherit somebody else's lines.
+  void removeSchematicExtraNodeAt(int index) {
+    if (index < 0 || index >= schematicExtraNodes.length) return;
+    _pushSchematicUndo('Remove related device');
+    final id = schematicExtraNodes.removeAt(index)['id'] ?? '';
+    if (id.isNotEmpty) {
+      schematicLinks.removeWhere((l) => l['from'] == id || l['to'] == id);
+      schematicPositions.remove(id);
+    }
     notifyListeners();
   }
 
@@ -1068,7 +1166,8 @@ class AppStateProvider extends ChangeNotifier {
       schematicPositions.isNotEmpty ||
       schematicLinks.isNotEmpty ||
       schematicHiddenEdges.isNotEmpty ||
-      schematicConnColors.isNotEmpty;
+      schematicConnColors.isNotEmpty ||
+      schematicExtraNodes.isNotEmpty;
 
   /// True when a saved control schematic sits next to the working config,
   /// under either the current name or the pre-rename one.
@@ -1093,6 +1192,7 @@ class AppStateProvider extends ChangeNotifier {
     schematicLinks.clear();
     schematicHiddenEdges.clear();
     schematicConnColors.clear();
+    schematicExtraNodes.clear();
   }
 
   /// Adopts the CURRENT in-memory diagram for the working config, ignoring any
@@ -1163,6 +1263,23 @@ class AppStateProvider extends ChangeNotifier {
       if (hidden is List) {
         schematicHiddenEdges.addAll(hidden.map((e) => e.toString()));
       }
+      final extras = doc['extraNodes'];
+      if (extras is List) {
+        for (final n in extras) {
+          // An entry with no id or no name could not be drawn or linked to,
+          // so it is dropped rather than becoming an unnameable empty box.
+          if (n is! Map) continue;
+          final id = n['id']?.toString() ?? '';
+          final title = n['title']?.toString() ?? '';
+          if (id.isEmpty || title.isEmpty) continue;
+          schematicExtraNodes.add({
+            'id': id,
+            'title': title,
+            'subtitle': (n['subtitle'] ?? '').toString(),
+            'icon': (n['icon'] ?? '').toString(),
+          });
+        }
+      }
       final lineColors = doc['connColors'];
       if (lineColors is Map) {
         lineColors.forEach((index, hex) {
@@ -1196,13 +1313,15 @@ class AppStateProvider extends ChangeNotifier {
       const encoder = JsonEncoder.withIndent('  ');
       await File(sidecar).writeAsString(encoder.convert({
         '__readme': 'Control Schematic tab layout for the Room Config '
-            'Builder: dragged node positions and user-drawn connection '
-            'lines. (Before the tab was renamed this file was called '
+            'Builder: dragged node positions, user-drawn connection lines, '
+            'and boxes added by hand for equipment the control system does '
+            'not talk to. (Before the tab was renamed this file was called '
             '<config>_schematic.json.)',
         'positions': schematicPositions
             .map((id, p) => MapEntry(id, [p.dx, p.dy])),
         'links': schematicLinks,
         'hiddenEdges': schematicHiddenEdges.toList(),
+        'extraNodes': schematicExtraNodes,
         'connColors': {
           for (final e in schematicConnColors.entries)
             e.key.toString(): (e.value.toARGB32() & 0xFFFFFF)

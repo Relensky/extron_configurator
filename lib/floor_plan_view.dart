@@ -1007,7 +1007,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       height: size.height,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapUp: (details) => _onPlanTap(provider, details.localPosition),
+        // The runs are handed over with the tap: they were just routed for
+        // this frame, and a lattice search is not something to repeat to find
+        // out what was clicked.
+        onTapUp: (details) =>
+            _onPlanTap(provider, details.localPosition, drawing, runs),
         // Drawing and dragging notation. Only wired up while the tool is on,
         // so an ordinary visit still pans the sheet with the same gesture.
         onPanStart: _tool == _PlanTool.notation
@@ -1756,6 +1760,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   ),
                 ),
             ],
+          // A run is a painted line, so nothing about it says it can be
+          // clicked. Said once, next to the layer chips, rather than left to
+          // be discovered.
+          if (layers.isNotEmpty && _cableLayer != _kLayerOff)
+            Text(
+              '· click a run to set its cable count',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.disabledColor,
+              ),
+            ),
           if (missing > 0)
             Tooltip(
               message: 'At least one end of a run has to be on THIS sheet '
@@ -2019,7 +2033,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     // lands on them whatever the name under it measures. Sized to the column
     // rather than the dot, a long name shunted the dot sideways and every
     // cable run then ended somewhere the eye could see it did not.
-    const w = kLocationLabelWidth + 8;
+    //
+    // Wide enough for the zone badge as well as the name, so the plate can
+    // reach the width [locationLabelBounds] tells the router to keep off.
+    const w = kLocationLabelWidth + 8 + kLocationZoneBadgeWidth;
 
     return Positioned(
       left: at.dx - w / 2,
@@ -2078,25 +2095,48 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
               ),
               // The name under the dot, because a plan of unlabeled circles
-              // is a plan somebody has to hover over to read.
-              Container(
-                margin: const EdgeInsets.only(top: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                constraints: const BoxConstraints(
-                  maxWidth: kLocationLabelWidth + 8,
-                ),
-                color: Colors.white.withValues(alpha: 0.85),
-                child: Text(
-                  location.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: kLocationLabelFontSize,
-                    color: Colors.black87,
+              // is a plan somebody has to hover over to read — with the zone
+              // glyph in front of it, which is what the key's "mounting
+              // surface" section is a legend FOR. Without it that section
+              // explained a convention the sheet never used.
+              //
+              // Only when there IS a name: [locationLabelBounds] returns no
+              // plate for a nameless location, and a plate drawn where the
+              // routing believes there is none is a plate runs cross.
+              if (location.name.trim().isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  constraints: const BoxConstraints(maxWidth: w),
+                  color: Colors.white.withValues(alpha: 0.85),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        kRoomZoneIcons[location.zone] ?? Icons.place,
+                        size: kLocationZoneIconSize,
+                        color: Colors.black87,
+                        semanticLabel: kRoomZoneLabels[location.zone],
+                      ),
+                      const SizedBox(width: kLocationZoneIconGap),
+                      Flexible(
+                        child: Text(
+                          location.name,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: kLocationLabelFontSize,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -2161,7 +2201,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
-  void _onPlanTap(AppStateProvider provider, Offset at) {
+  void _onPlanTap(
+    AppStateProvider provider,
+    Offset at,
+    CablingSchematic drawing,
+    List<_PlanRun> runs,
+  ) {
     switch (_tool) {
       case _PlanTool.notation:
         final plan = provider.activeFloorPlan;
@@ -2172,6 +2217,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         _selectNote(annotationAt(plan.annotations, at)?.id ?? '');
       case _PlanTool.none:
         setState(() => _selectedCalloutId = null);
+        // How many cables are in a run is the number that changes most while
+        // somebody is reading the plan — the count comes off a jack schedule
+        // or a walk of the room, not off the signal flow. It was only editable
+        // on the Cabling tab, which meant leaving the drawing you were
+        // counting against.
+        final bundle = _runAt(drawing, runs, at);
+        if (bundle != null) _showRunCountDialog(provider, drawing, bundle);
       case _PlanTool.location:
         _placeLocationAt(provider, at);
       case _PlanTool.callout:
@@ -2186,6 +2238,130 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ),
         );
     }
+  }
+
+  /// The bundle whose line was tapped, or null when the tap missed them all.
+  CablingBundle? _runAt(
+    CablingSchematic drawing,
+    List<_PlanRun> runs,
+    Offset at,
+  ) {
+    final hitId = runIdNearest(
+      {for (final run in runs) run.id: run.route},
+      at,
+    );
+    if (hitId.isEmpty) return null;
+    // A run leaving the page is drawn under a suffixed id so it can be fanned
+    // separately; the cable it belongs to is the one without it.
+    final id = hitId.endsWith(_kOffSheetSuffix)
+        ? hitId.substring(0, hitId.length - _kOffSheetSuffix.length)
+        : hitId;
+    for (final b in drawing.bundles) {
+      if (b.id == id) return b;
+    }
+    return null;
+  }
+
+  /// Sets how many cables are in a run, from the drawing itself.
+  ///
+  /// The same number the Cabling tab edits in its selection bar — this writes
+  /// through the same override, so the two pages, the schedule and the cost
+  /// estimate cannot disagree about the size of a pull. Only the count: the
+  /// cable type, the end labels and the run's colour stay on the Cabling tab,
+  /// where there is room to lay them out.
+  Future<void> _showRunCountDialog(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    CablingBundle bundle,
+  ) async {
+    final from = drawing.boxById(bundle.fromBoxId)?.label ?? bundle.fromBoxId;
+    final to = drawing.boxById(bundle.toBoxId)?.label ?? bundle.toBoxId;
+    String typed = bundle.count == bundle.count.roundToDouble()
+        ? bundle.count.round().toString()
+        : bundle.count.toStringAsFixed(1);
+    // A derived run counted itself off the signal flow; an override is a
+    // number somebody typed over that, and the way back has to be offered or
+    // it is a one-way door.
+    final bool overridden =
+        bundle.isDerived && provider.avCabling.counts.containsKey(bundle.id);
+
+    final String? result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cables in this run'),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$from  →  $to',
+                style: Theme.of(ctx).textTheme.bodyMedium,
+              ),
+              if (bundle.cableType.trim().isNotEmpty)
+                Text(
+                  bundle.cableType,
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              const SizedBox(height: 14),
+              TextFormField(
+                key: const ValueKey('plan_run_count'),
+                initialValue: typed,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Cables',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => typed = v,
+                onFieldSubmitted: (v) => Navigator.of(ctx).pop(v),
+              ),
+              if (bundle.isDerived) ...[
+                const SizedBox(height: 8),
+                Text(
+                  overridden
+                      ? 'Counted off the signal flow, and typed over. Clear it '
+                          'to go back to the counted number.'
+                      : 'Counted off the signal flow. A number typed here '
+                          'overrides that count until it is cleared.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          if (overridden)
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(''),
+              child: const Text('Use the counted number'),
+            ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(typed),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+
+    final trimmed = result.trim();
+    if (trimmed.isEmpty) {
+      provider.setCablingBundleCount(bundle.id, null);
+      return;
+    }
+    final count = double.tryParse(trimmed);
+    if (count == null || count < 0) {
+      _snack('"$trimmed" is not a number of cables.', error: true);
+      return;
+    }
+    provider.setCablingBundleCount(bundle.id, count);
   }
 
   /// Drops the next location that isn't on THIS SHEET yet at [at]. Asks which
@@ -3007,6 +3183,40 @@ const int _kPlanKeyMaxRows = 12;
 /// sheet — see [_FloorPlanViewState._offSheetRuns]. Keeps the stub from
 /// colliding with the real run's id if both ever appear at once.
 const String _kOffSheetSuffix = ' off-sheet';
+
+/// How near a tap has to land to count as hitting a run.
+///
+/// A 2px line is not something a mouse can be asked to hit. It stays under
+/// half [kCablingLaneStep] so the slack cannot reach the pull fanned out
+/// beside it: clicking between two runs picks the nearer, never the wrong one
+/// of a pair.
+const double kRunTapSlack = 7;
+
+/// Which drawn run a click at [at] landed on: the id whose route passes
+/// nearest, or '' when nothing is within [slack].
+///
+/// [routes] is id -> the polyline actually drawn for it, dodges and all, so
+/// this answers against the line on the page rather than the straight one
+/// between its two ends.
+String runIdNearest(
+  Map<String, List<Offset>> routes,
+  Offset at, {
+  double slack = kRunTapSlack,
+}) {
+  String hit = '';
+  double best = slack;
+  for (final entry in routes.entries) {
+    final route = entry.value;
+    for (int i = 0; i < route.length - 1; i++) {
+      final d = distanceToSegment(at, route[i], route[i + 1]);
+      if (d < best) {
+        best = d;
+        hit = entry.key;
+      }
+    }
+  }
+  return hit;
+}
 
 /// The sheets a callout can point into. The room workbook's four, plus the
 /// location sheet this tab adds — named rather than indexed so adding a tab

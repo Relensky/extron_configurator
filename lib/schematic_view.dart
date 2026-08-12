@@ -77,15 +77,60 @@ const List<Color> kLinkSwatches = [
 const double kNodeWidth = 190;
 const double kNodeHeight = 78;
 
+/// How a box added by hand is drawn: a dashed border in a neutral grey.
+///
+/// Deliberately NOT one of the [kConnColors]. On this drawing a colour means
+/// "this is how the processor talks to it", and the whole point of a related
+/// box is that the processor does not — colouring it network-blue because it
+/// happens to be a network switch would say the opposite of the truth. The
+/// dashes and the grey say "here, and real, but not driven from here"; the
+/// legend spells it out.
+const Color kRelatedNodeColor = Color(0xFF8D95A0);
+
+/// Icons offered for a hand-added box, keyed by a name the sidecar stores.
+///
+/// A stable string rather than the icon's code point: a font upgrade that
+/// renumbers a glyph must not turn last year's UPS into an arrow.
+const Map<String, ({String label, IconData icon})> kRelatedNodeIcons = {
+  'device': (label: 'Generic device', icon: Icons.developer_board),
+  'switch': (label: 'Network switch', icon: Icons.lan),
+  'pc': (label: 'PC / server', icon: Icons.computer),
+  'laptop': (label: 'Laptop / guest device', icon: Icons.laptop),
+  'display': (label: 'Display / TV', icon: Icons.tv),
+  'projector': (label: 'Projector', icon: Icons.connected_tv),
+  'camera': (label: 'Camera', icon: Icons.videocam),
+  'speaker': (label: 'Speaker / amp', icon: Icons.speaker),
+  'mic': (label: 'Microphone', icon: Icons.mic),
+  'plate': (label: 'Wall plate / floor box', icon: Icons.power_input),
+  'power': (label: 'Power / UPS', icon: Icons.power),
+  'rack': (label: 'Rack / cabinet', icon: Icons.dns),
+  'phone': (label: 'Phone / intercom', icon: Icons.phone),
+  'sensor': (label: 'Sensor', icon: Icons.sensors),
+};
+
+const String kDefaultRelatedNodeIcon = 'device';
+
+IconData relatedNodeIcon(String key) =>
+    (kRelatedNodeIcons[key] ?? kRelatedNodeIcons[kDefaultRelatedNodeIcon]!)
+        .icon;
+
 /// One box on the diagram.
 class SchematicNode {
-  final String id; // device key, 'PROCESSOR', 'IDF', 'TOUCHPANEL'
+  final String id; // device key, 'PROCESSOR', 'IDF', 'TOUCHPANEL', 'EXTRA_n'
   final String title;
   final String subtitle;
   final IconData icon;
   final ConnType conn; // colors the border/icon
   final int tabCount; // >0: draw the window-with-tabs touch panel icon
   final Offset pos; // top-left on the canvas
+
+  /// Added by hand rather than read off the config: equipment in the room that
+  /// the control system does not talk to. Drawn dashed, in [kRelatedNodeColor],
+  /// and reported separately from the devices the processor drives.
+  final bool related;
+
+  /// Index into [AppStateProvider.schematicExtraNodes] when [related].
+  final int relatedIndex;
 
   const SchematicNode({
     required this.id,
@@ -95,6 +140,8 @@ class SchematicNode {
     required this.conn,
     this.tabCount = 0,
     required this.pos,
+    this.related = false,
+    this.relatedIndex = -1,
   });
 
   Offset get center => pos + const Offset(kNodeWidth / 2, kNodeHeight / 2);
@@ -110,6 +157,8 @@ class SchematicNode {
         conn: conn,
         tabCount: tabCount,
         pos: newPos,
+        related: related,
+        relatedIndex: relatedIndex,
       );
 }
 
@@ -391,6 +440,33 @@ class SchematicModel {
         color: connColor(ConnType.touchpanel, provider),
         label: 'PoE',
         kind: ConnType.touchpanel,
+      ));
+    }
+
+    // Boxes the user added for equipment the control system does not talk to.
+    // They come after the derived nodes so a line may run to them, and they
+    // auto-lay-out in a row along the bottom — there is no column for them,
+    // because there is no connection to the processor that would put them in
+    // one. Dragging moves them like anything else.
+    final double relatedRowY = rowStart + rows * rowSpacing + 24;
+    for (int i = 0; i < provider.schematicExtraNodes.length; i++) {
+      final extra = provider.schematicExtraNodes[i];
+      final id = extra['id'] ?? '';
+      if (id.isEmpty) continue;
+      nodes.add(SchematicNode(
+        id: id,
+        title: extra['title'] ?? id,
+        subtitle: extra['subtitle'] ?? '',
+        icon: relatedNodeIcon(extra['icon'] ?? ''),
+        // Never drawn in a category colour — see [kRelatedNodeColor] — but the
+        // field is not nullable, so it carries the one the box is not.
+        conn: ConnType.network,
+        related: true,
+        relatedIndex: i,
+        pos: autoPos(
+          id,
+          Offset(colNetworkX + i * (kNodeWidth + 30), relatedRowY),
+        ),
       ));
     }
 
@@ -777,6 +853,140 @@ class _SchematicViewState extends State<SchematicView> {
     }
   }
 
+  /// Adds or edits a box for equipment that is in the room but not in the
+  /// control system. [index] >= 0 edits the entry at that spot in
+  /// [AppStateProvider.schematicExtraNodes].
+  ///
+  /// It asks for a name, a detail line and an icon, and nothing else. There is
+  /// deliberately no IP, port or protocol: those describe how the processor
+  /// talks to a device, and the whole point of this box is that it does not.
+  Future<void> _showRelatedDeviceDialog(
+    AppStateProvider provider, {
+    int index = -1,
+  }) async {
+    final existing =
+        (index >= 0 && index < provider.schematicExtraNodes.length)
+            ? provider.schematicExtraNodes[index]
+            : null;
+    String title = existing?['title'] ?? '';
+    String subtitle = existing?['subtitle'] ?? '';
+    String icon = existing?['icon']?.isNotEmpty == true
+        ? existing!['icon']!
+        : kDefaultRelatedNodeIcon;
+
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(existing == null ? 'Add Device' : 'Edit Device'),
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'A box for equipment the control system does not talk to '
+                    'but the room depends on — the building switch, a UPS, '
+                    'the room PC, a wall plate. It is drawn dashed, kept out '
+                    'of the device report, and can be joined to anything on '
+                    'the diagram with Draw Line.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    initialValue: title,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      hintText: 'e.g. Building network switch',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => setDialogState(() => title = v),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    initialValue: subtitle,
+                    decoration: const InputDecoration(
+                      labelText: 'Detail (optional)',
+                      hintText: 'e.g. Cisco 9200 • IDF 2B',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => subtitle = v,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Icon:'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final e in kRelatedNodeIcons.entries)
+                        Tooltip(
+                          message: e.value.label,
+                          child: InkWell(
+                            key: ValueKey('related_icon_${e.key}'),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () => setDialogState(() => icon = e.key),
+                            child: Container(
+                              width: 40,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: icon == e.key
+                                      ? Theme.of(ctx).colorScheme.primary
+                                      : Theme.of(ctx).dividerColor,
+                                  width: icon == e.key ? 2.4 : 1,
+                                ),
+                              ),
+                              child: Icon(e.value.icon,
+                                  size: 20, color: kRelatedNodeColor),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              // A nameless box is a box nobody can read or link to by name.
+              onPressed: title.trim().isEmpty
+                  ? null
+                  : () => Navigator.of(ctx).pop(true),
+              child: Text(existing == null ? 'Add Device' : 'Save Device'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (ok != true || title.trim().isEmpty) return;
+    if (existing == null) {
+      provider.addSchematicExtraNode(
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+      );
+      _snack('$title added. Use "Draw Line" to join it to the diagram.');
+    } else {
+      provider.updateSchematicExtraNodeAt(
+        index,
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+      );
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  BUILD
   // -------------------------------------------------------------------------
@@ -850,6 +1060,17 @@ class _SchematicViewState extends State<SchematicView> {
                 _linkMode = v;
                 _pendingLinkFrom = null;
               }),
+            ),
+          // Equipment the config knows nothing about, because the control
+          // system does not talk to it — the switch the processor lands on,
+          // the room PC, a UPS. Without this the drawing could only show what
+          // is driven, and the reader had to infer the rest.
+          if (_editMode)
+            OutlinedButton.icon(
+              key: const ValueKey('schematic_add_device'),
+              icon: const Icon(Icons.add_box_outlined, size: 18),
+              label: const Text('Add device'),
+              onPressed: () => _showRelatedDeviceDialog(provider),
             ),
           if (_editMode)
             OutlinedButton.icon(
@@ -1057,7 +1278,8 @@ class _SchematicViewState extends State<SchematicView> {
     final contentBottom = schematicContentBottom(model);
     final legendTop = contentBottom + 28;
     final canvasHeight = math.max(
-        model.canvasSize.height, legendTop + kLegendHeight + 20);
+        model.canvasSize.height,
+        legendTop + legendHeight(model.nodes.any((n) => n.related)) + 20);
 
     return Container(
       width: model.canvasSize.width,
@@ -1105,7 +1327,9 @@ class _SchematicViewState extends State<SchematicView> {
                         : MouseCursor.defer,
                     child: _NodeBox(
                       node: node,
-                      connColor: connColor(node.conn, provider),
+                      connColor: node.related
+                          ? kRelatedNodeColor
+                          : connColor(node.conn, provider),
                       highlighted: _pendingLinkFrom == node.id,
                       editMode: _editMode,
                       dragging: _dragNodeId == node.id,
@@ -1115,7 +1339,15 @@ class _SchematicViewState extends State<SchematicView> {
               ),
             ),
           // Legend under the diagram (also part of the PNG export).
-          Positioned(left: 16, top: legendTop, child: _Legend(theme: theme, provider: provider)),
+          Positioned(
+            left: 16,
+            top: legendTop,
+            child: _Legend(
+              theme: theme,
+              provider: provider,
+              hasRelated: model.nodes.any((n) => n.related),
+            ),
+          ),
         ],
       ),
     );
@@ -1228,10 +1460,46 @@ class _SchematicViewState extends State<SchematicView> {
           Text(
             'Drag boxes to rearrange. "Draw Line" + tap two boxes adds a '
             'line. Edit any line below to re-route or recolor it (editing an '
-            'auto line makes it yours); deleted auto lines can be restored.',
+            'auto line makes it yours); deleted auto lines can be restored. '
+            '"Add device" draws equipment the control system does not talk to.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 4),
+          // The hand-added boxes first: they are the only ones on the diagram
+          // that exist nowhere else, so this list is the only place they can
+          // be renamed or taken off again.
+          for (final node in model.nodes.where((n) => n.related))
+            Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Icon(node.icon, size: 18, color: kRelatedNodeColor),
+                ),
+                Expanded(
+                  child: Text(
+                    node.subtitle.isEmpty
+                        ? node.title
+                        : '${node.title}   (${node.subtitle})',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(kRelatedLegendLabel, style: theme.textTheme.bodySmall),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  tooltip: 'Rename this device or change its icon',
+                  onPressed: () => _showRelatedDeviceDialog(
+                    provider,
+                    index: node.relatedIndex,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  tooltip: 'Remove this device and the lines drawn to it',
+                  onPressed: () =>
+                      provider.removeSchematicExtraNodeAt(node.relatedIndex),
+                ),
+              ],
+            ),
           for (final e in model.edges)
             Row(
               children: [
@@ -1295,9 +1563,11 @@ class _SchematicViewState extends State<SchematicView> {
 }
 
 /// How tall [_Legend] is, so the canvas can reserve room for it beneath the
-/// diagram. An estimate: one row per connection type, plus the container's
-/// own padding. Over-shooting just leaves a little blank canvas.
-const double kLegendHeight = 16 + 5 * 18.0;
+/// diagram. An estimate: one row per connection type — plus the related-
+/// equipment row when the drawing has any — and the container's own padding.
+/// Over-shooting just leaves a little blank canvas.
+double legendHeight(bool hasRelated) =>
+    16 + (ConnType.values.length + (hasRelated ? 1 : 0)) * 18.0;
 
 /// One device/processor/IDF box.
 class _NodeBox extends StatelessWidget {
@@ -1324,6 +1594,10 @@ class _NodeBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final connColor = this.connColor;
+    final edgeColor = (highlighted || dragging)
+        ? theme.colorScheme.primary
+        : connColor;
+    final edgeWidth = highlighted ? 3.0 : (dragging ? 2.4 : 1.6);
     return Container(
       width: kNodeWidth,
       height: kNodeHeight,
@@ -1331,12 +1605,11 @@ class _NodeBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: (highlighted || dragging)
-              ? theme.colorScheme.primary
-              : connColor,
-          width: highlighted ? 3 : (dragging ? 2.4 : 1.6),
-        ),
+        // A related box is outlined in dashes by the painter below instead —
+        // a solid border here would draw underneath them.
+        border: node.related
+            ? null
+            : Border.all(color: edgeColor, width: edgeWidth),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: dragging ? 0.4 : 0.25),
@@ -1345,6 +1618,9 @@ class _NodeBox extends StatelessWidget {
           ),
         ],
       ),
+      foregroundDecoration: node.related
+          ? _DashedBorderDecoration(color: edgeColor, width: edgeWidth)
+          : null,
       child: Row(
         children: [
           node.tabCount > 0
@@ -1382,6 +1658,57 @@ class _NodeBox extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// The dashed outline round a hand-added box.
+///
+/// A [Decoration] rather than a wrapping CustomPaint so it lays over the box's
+/// own rounded rectangle exactly, at the same radius, whatever the box is
+/// doing (highlighted for a line, lifted while dragged).
+class _DashedBorderDecoration extends Decoration {
+  final Color color;
+  final double width;
+
+  const _DashedBorderDecoration({required this.color, required this.width});
+
+  @override
+  BoxPainter createBoxPainter([VoidCallback? onChanged]) =>
+      _DashedBorderPainter(color, width);
+}
+
+class _DashedBorderPainter extends BoxPainter {
+  final Color color;
+  final double width;
+
+  _DashedBorderPainter(this.color, this.width);
+
+  /// Dash and gap, in logical pixels. Long enough to read as deliberate at the
+  /// zoom a whole room is looked at, short enough to stay a rectangle.
+  static const double _dash = 6;
+  static const double _gap = 4;
+
+  @override
+  void paint(Canvas canvas, Offset offset, ImageConfiguration cfg) {
+    final size = cfg.size;
+    if (size == null) return;
+    final rect = RRect.fromRectAndRadius(
+      (offset & size).deflate(width / 2),
+      const Radius.circular(8),
+    );
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width;
+
+    for (final metric in (Path()..addRRect(rect)).computeMetrics()) {
+      double at = 0;
+      while (at < metric.length) {
+        final end = math.min(at + _dash, metric.length);
+        canvas.drawPath(metric.extractPath(at, end), paint);
+        at = end + _gap;
+      }
+    }
   }
 }
 
@@ -1650,7 +1977,15 @@ class _Legend extends StatelessWidget {
   /// The room's line colors, so the key matches what is drawn.
   final AppStateProvider provider;
 
-  const _Legend({required this.theme, required this.provider});
+  /// Whether the drawing carries any hand-added boxes. The row is only printed
+  /// when there is something on the page it explains.
+  final bool hasRelated;
+
+  const _Legend({
+    required this.theme,
+    required this.provider,
+    this.hasRelated = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1679,10 +2014,64 @@ class _Legend extends StatelessWidget {
                 ],
               ),
             ),
+          // The dashed box, explained in the same words the edit panel uses.
+          if (hasRelated)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 12,
+                    child: CustomPaint(
+                      painter: _DashedSpecimenPainter(kRelatedNodeColor),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(kRelatedLegendLabel,
+                      style: TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
+}
+
+/// What the dashed box means, in one line — used by the legend and by the
+/// report section, so the drawing and the paperwork say the same thing.
+const String kRelatedLegendLabel = 'Related equipment (not controlled)';
+
+/// A little dashed rectangle, so the legend row looks like what it explains.
+class _DashedSpecimenPainter extends CustomPainter {
+  final Color color;
+
+  _DashedSpecimenPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0.7, 1.7, size.width - 1.4, size.height - 3.4),
+      const Radius.circular(2),
+    );
+    for (final metric in (Path()..addRRect(rect)).computeMetrics()) {
+      double at = 0;
+      while (at < metric.length) {
+        final end = math.min(at + 3.0, metric.length);
+        canvas.drawPath(metric.extractPath(at, end), paint);
+        at = end + 2.0;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedSpecimenPainter old) => old.color != color;
 }
 
 // ============================================================================
@@ -1971,6 +2360,30 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
     }
   }
 
+  // --- Related equipment (the hand-added boxes) ---
+  // Its own section rather than extra rows on Devices: that table is what the
+  // control system drives, and every column on it — IP, protocol, port,
+  // module — is a question about a device the processor talks to. A switch
+  // the room depends on belongs on the paperwork, but not as a controlled
+  // device with eight blank columns.
+  final relatedRows = <List<dynamic>>[
+    for (final node in model.nodes)
+      if (node.related)
+        [
+          node.title,
+          node.subtitle,
+          // What it is joined to on the diagram, which is the reason it is
+          // drawn at all.
+          [
+            for (final e in model.edges)
+              if (e.fromId == node.id)
+                model.nodeById(e.toId)?.title ?? e.toId
+              else if (e.toId == node.id)
+                model.nodeById(e.fromId)?.title ?? e.fromId,
+          ].join(', '),
+        ]
+  ];
+
   // --- Connections (as drawn, including user re-routes) ---
   final connectionRows = <List<dynamic>>[
     for (final e in model.edges)
@@ -2020,6 +2433,11 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
       title: 'Audio Groups',
       header: ['Device', 'Group', 'Number'],
       rows: audioGroupRows
+    ),
+    (
+      title: 'Related Equipment',
+      header: ['Name', 'Detail', 'Connected To'],
+      rows: relatedRows
     ),
     (
       title: 'Connections',

@@ -411,6 +411,22 @@ List<AvDeviceTemplate> searchCatalog(
   return matched.length > limit ? matched.sublist(0, limit) : matched;
 }
 
+/// Whether two port lists say the same thing. [AvPort] has no value equality,
+/// and a rebuilt-but-identical inlet must not read as an edit.
+bool _samePorts(List<AvPort> a, List<AvPort> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].id != b[i].id ||
+        a[i].label != b[i].label ||
+        a[i].signal != b[i].signal ||
+        a[i].direction != b[i].direction ||
+        a[i].side != b[i].side) {
+      return false;
+    }
+  }
+  return true;
+}
+
 class AvDeviceLibrary {
   /// Model (normalized) -> template.
   final Map<String, AvDeviceTemplate> _byModel = {};
@@ -591,6 +607,10 @@ class AvDeviceLibrary {
   /// Adds or replaces an entry, marking it as the user's so it is saved.
   /// [previousModel] renames: the old key is dropped rather than left behind
   /// as a duplicate under its former name.
+  ///
+  /// Ports are stored exactly as handed over — reconciling them against
+  /// [AvDeviceTemplate.powerInput] happens on [save]. See
+  /// [normalizePowerInlets] for why it cannot happen here.
   void upsert(AvDeviceTemplate template, {String previousModel = ''}) {
     if (template.model.trim().isEmpty) return;
     if (previousModel.isNotEmpty &&
@@ -606,6 +626,35 @@ class AvDeviceLibrary {
   void remove(String model) {
     _byModel.remove(_norm(model));
     _invalidate();
+  }
+
+  /// Brings every user entry's connectors back in step with its power input:
+  /// one inlet on a powered model, labelled for mains or PoE, none at all on a
+  /// passive one. Returns how many entries had to change.
+  ///
+  /// This runs on [save] rather than on [upsert] because the Device Editor
+  /// upserts on every keystroke, and [withPowerInlet] puts the inlet at the
+  /// END of the list: normalizing per edit would yank the POWER row out from
+  /// under somebody dragging the connectors into panel order, and would undo
+  /// a deliberate placement of it as soon as the next character was typed. The
+  /// write is where it actually has to hold — an entry saved as mains with no
+  /// inlet is a box the drawing and the rack load both forget is plugged in,
+  /// which is how the AP7900B reached av_devices.json without one.
+  ///
+  /// Built-ins are left alone: they declare no inlet on purpose and are given
+  /// one when they are placed, and nothing writes them to the file anyway.
+  int normalizePowerInlets() {
+    var changed = 0;
+    for (final key in _byModel.keys.toList()) {
+      final entry = _byModel[key]!;
+      if (!entry.custom) continue;
+      final ports = withPowerInlet(entry.ports, entry.powerInput);
+      if (_samePorts(ports, entry.ports)) continue;
+      _byModel[key] = entry.copyWith(ports: ports);
+      changed++;
+    }
+    if (changed > 0) _invalidate();
+    return changed;
   }
 
   /// Replaces the family fallbacks (the Device Editor round-trips these).
@@ -627,6 +676,10 @@ class AvDeviceLibrary {
     final target = toPath.isNotEmpty ? toPath : filePath;
     if (target.isEmpty) return '';
     try {
+      // Nothing inconsistent reaches the file: the catalog in memory is
+      // brought into line first, so what is on disk and what the editor shows
+      // are the same entries.
+      final reconciled = normalizePowerInlets();
       final custom = all.where((t) => t.custom).toList();
       const encoder = JsonEncoder.withIndent('  ');
       await File(target).parent.create(recursive: true);
@@ -650,7 +703,8 @@ class AvDeviceLibrary {
         source = target;
       }
       AppLogger.logInfo(
-        'AV device catalog saved to $target (${custom.length} entries).',
+        'AV device catalog saved to $target (${custom.length} entries'
+        '${reconciled > 0 ? ', $reconciled power inlet(s) reconciled' : ''}).',
       );
       return target;
     } catch (e, stack) {

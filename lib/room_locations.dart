@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// ============================================================================
@@ -232,6 +234,16 @@ class RoomLocation {
 /// name. Every one of them is a place gear actually lands in a teaching space,
 /// and having them pre-named is the difference between a room where locations
 /// get used and one where the field stays blank.
+///
+/// The cameras are two entries rather than one because they point opposite ways
+/// and are mounted at opposite ends of the room, and the speakers are four
+/// because each one is its own ceiling drop with its own run — a single
+/// "Speakers" location would put four drops at one dot on the plan and one row
+/// in the schedule. The wall switch is where the screen switch's three-position
+/// plate lands, which is the end of a run the electrician has to box out for.
+///
+/// The callout letters run on from the ones above them and skip I, which reads
+/// as a 1 next to a numbered marker on a printed plan.
 const List<({String name, RoomZone zone, String callout})>
 kDefaultRoomLocations = [
   (name: 'Equipment rack', zone: RoomZone.rack, callout: 'A'),
@@ -239,6 +251,13 @@ kDefaultRoomLocations = [
   (name: 'Projector box', zone: RoomZone.ceiling, callout: 'C'),
   (name: 'Projector screen', zone: RoomZone.wall, callout: 'D'),
   (name: 'Ceiling mic', zone: RoomZone.ceiling, callout: 'E'),
+  (name: 'Instructor camera', zone: RoomZone.wall, callout: 'F'),
+  (name: 'Audience camera', zone: RoomZone.wall, callout: 'G'),
+  (name: 'Speaker 1', zone: RoomZone.ceiling, callout: 'H'),
+  (name: 'Speaker 2', zone: RoomZone.ceiling, callout: 'J'),
+  (name: 'Speaker 3', zone: RoomZone.ceiling, callout: 'K'),
+  (name: 'Speaker 4', zone: RoomZone.ceiling, callout: 'L'),
+  (name: 'Wall switch', zone: RoomZone.wall, callout: 'M'),
 ];
 
 // ---------------------------------------------------------------------------
@@ -967,6 +986,23 @@ const double _kLocationLabelPadX = 4;
 const double _kLocationLabelPadY = 1;
 const double _kLocationLabelGap = 2;
 
+/// The zone badge printed on the name plate, in front of the name: the same
+/// [kRoomZoneIcons] glyph the key's "mounting surface" section lists.
+///
+/// The key was explaining a convention the drawing did not use. It said a
+/// ceiling glyph means ceiling, and then every marker on the sheet was the same
+/// blue dot, so the only way to tell a ceiling speaker from a wall plate was to
+/// read the names and know the room. Printing the glyph on the marker is what
+/// makes that section of the key worth having — and it is the fact the trades
+/// care about, since a ceiling drop and a wall box are different work.
+const double kLocationZoneIconSize = 11;
+const double kLocationZoneIconGap = 3;
+
+/// What the badge adds to the width of the plate. Part of the geometry rather
+/// than a detail of the painter, because a run routes round the plate.
+const double kLocationZoneBadgeWidth =
+    kLocationZoneIconSize + kLocationZoneIconGap;
+
 /// Just the dot, centred on [pos].
 Rect locationDotBounds(Offset pos) => Rect.fromCenter(
   center: pos,
@@ -995,11 +1031,17 @@ Rect? locationLabelBounds(Offset pos, String name) {
     ellipsis: '…',
   )..layout(maxWidth: kLocationLabelWidth);
 
+  // The zone badge is drawn inside the plate, so it is part of the box a run
+  // has to keep off — a plate measured on the words alone left the glyph
+  // sticking out into the routing.
+  final width =
+      label.width + _kLocationLabelPadX * 2 + kLocationZoneBadgeWidth;
+
   return Rect.fromLTWH(
-    pos.dx - (label.width + _kLocationLabelPadX * 2) / 2,
+    pos.dx - width / 2,
     locationDotBounds(pos).bottom + _kLocationLabelGap,
-    label.width + _kLocationLabelPadX * 2,
-    label.height + _kLocationLabelPadY * 2,
+    width,
+    math.max(label.height, kLocationZoneIconSize) + _kLocationLabelPadY * 2,
   );
 }
 

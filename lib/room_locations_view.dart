@@ -222,7 +222,12 @@ class _LocationManagerDialogState extends State<_LocationManagerDialog> {
                           const SizedBox(height: 12),
                           OutlinedButton.icon(
                             icon: const Icon(Icons.playlist_add, size: 18),
-                            label: const Text('Start with the usual five'),
+                            // Named by count so the button does not have to be
+                            // re-worded every time the starter list grows.
+                            label: Text(
+                              'Start with the usual '
+                              '${kDefaultRoomLocations.length}',
+                            ),
                             onPressed: () => setState(
                               provider.seedDefaultAvLocations,
                             ),

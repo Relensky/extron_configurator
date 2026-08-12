@@ -484,19 +484,42 @@ void main() {
   /// the location field gets used; one that starts with a blank list is a room
   /// where it stays blank.
   group('the locations a new room starts with', () {
-    test('are the five a teaching space always has', () {
+    test('are the places a teaching space always has', () {
       expect(kDefaultRoomLocations.map((d) => d.name), [
         'Equipment rack',
         'Instructor station',
         'Projector box',
         'Projector screen',
         'Ceiling mic',
+        'Instructor camera',
+        'Audience camera',
+        'Speaker 1',
+        'Speaker 2',
+        'Speaker 3',
+        'Speaker 4',
+        'Wall switch',
       ]);
       // Distinct callouts, because the plan points at them by letter.
       expect(
         kDefaultRoomLocations.map((d) => d.callout).toSet(),
         hasLength(kDefaultRoomLocations.length),
       );
+      // I reads as a 1 beside a numbered marker, so the letters skip it.
+      expect(kDefaultRoomLocations.map((d) => d.callout), isNot(contains('I')));
+    });
+
+    test('mount the new ones where the work actually happens', () {
+      RoomZone zoneOf(String name) =>
+          kDefaultRoomLocations.firstWhere((d) => d.name == name).zone;
+
+      // The zone is what changes the work — a wall bracket and a back box for
+      // the cameras and the switch plate, a ceiling drop for each speaker.
+      expect(zoneOf('Instructor camera'), RoomZone.wall);
+      expect(zoneOf('Audience camera'), RoomZone.wall);
+      expect(zoneOf('Wall switch'), RoomZone.wall);
+      for (var i = 1; i <= 4; i++) {
+        expect(zoneOf('Speaker $i'), RoomZone.ceiling);
+      }
     });
 
     test('are seeded once and never on top of a room that has some', () {

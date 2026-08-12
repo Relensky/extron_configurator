@@ -219,6 +219,26 @@ void main() {
       expect(named.top, bare.top);
     });
 
+    test('the plate makes room for the zone badge printed on it', () {
+      // The glyph is drawn INSIDE the plate, so the box a run keeps off has to
+      // include it. Measured on the words alone, a run could come in over the
+      // icon that says whether this is a ceiling drop or a wall box.
+      final words = TextPainter(
+        text: const TextSpan(
+          text: 'Ceiling mic',
+          style: TextStyle(fontSize: kLocationLabelFontSize),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 2,
+      )..layout(maxWidth: kLocationLabelWidth);
+      final plate = locationLabelBounds(const Offset(300, 200), 'Ceiling mic')!;
+
+      expect(plate.width - words.width, greaterThan(kLocationZoneBadgeWidth));
+      expect(plate.height, greaterThanOrEqualTo(kLocationZoneIconSize));
+      // And it is still centred on the dot, badge and all.
+      expect(plate.center.dx, closeTo(300, 0.01));
+    });
+
     test('a run steps round a label instead of crossing it', () {
       final label = locationMarkerBounds(const Offset(400, 300), 'Ceiling mic');
       final route = latticeRoute(
@@ -242,6 +262,210 @@ void main() {
         const [],
       );
       expect(route, [const Offset(200, 300), const Offset(600, 300)]);
+    });
+  });
+
+  /// The key's "mounting surface" section is a legend for a glyph that has to
+  /// actually be on the drawing. It listed a ceiling icon and a wall icon while
+  /// every marker on the sheet was the same blue dot, which left the reader no
+  /// way to tell a ceiling drop from a wall box without knowing the room.
+  group('the zone glyph on a marker', () {
+    AppStateProvider placed() {
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
+        };
+      p.loadAvFlowForCurrentConfig();
+      final sheet = p.addFloorPlanSheet(name: 'Level 1');
+      p.addAvLocation(
+        const RoomLocation(
+          id: 'LOC_1',
+          name: 'Speaker 1',
+          zone: RoomZone.ceiling,
+          callout: 'H',
+        ),
+      );
+      p.addAvLocation(
+        const RoomLocation(
+          id: 'LOC_2',
+          name: 'Wall switch',
+          zone: RoomZone.wall,
+          callout: 'M',
+        ),
+      );
+      p.moveAvLocationMarker(sheet.id, 'LOC_1', const Offset(200, 200));
+      p.moveAvLocationMarker(sheet.id, 'LOC_2', const Offset(600, 400));
+      return p;
+    }
+
+    /// The icon drawn inside a marker, found through the tooltip that names it
+    /// so the key's own copy of the same glyph is not what gets counted.
+    Finder onMarker(String name, IconData icon) => find.descendant(
+      of: find.ancestor(
+        of: find.text(name),
+        matching: find.byType(Tooltip),
+      ),
+      matching: find.byIcon(icon),
+    );
+
+    testWidgets('is the one its row in the key explains', (tester) async {
+      final p = placed();
+      await pump(tester, p);
+
+      // The key says what the surfaces on this sheet are...
+      expect(find.text('Mounting surface'.toUpperCase()), findsOneWidget);
+      expect(find.text('Ceiling'), findsOneWidget);
+      expect(find.text('Wall'), findsOneWidget);
+
+      // ...and each marker carries the glyph its row is about.
+      expect(onMarker('Speaker 1', kRoomZoneIcons[RoomZone.ceiling]!),
+          findsOneWidget);
+      expect(onMarker('Wall switch', kRoomZoneIcons[RoomZone.wall]!),
+          findsOneWidget);
+      // Not each other's.
+      expect(onMarker('Speaker 1', kRoomZoneIcons[RoomZone.wall]!), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('goes with the plate, which a nameless marker has none of', (
+      tester,
+    ) async {
+      // [locationLabelBounds] reports no plate for a location with no name, so
+      // the marker must not draw one either — a plate the routing does not
+      // know about is a plate runs are drawn straight across.
+      final p = placed();
+      await pump(tester, p);
+      final ceiling = find.byIcon(kRoomZoneIcons[RoomZone.ceiling]!);
+      final withPlate = tester.widgetList(ceiling).length;
+
+      p.updateAvLocation(p.avLocationById('LOC_1')!.copyWith(name: ''));
+      await tester.pumpAndSettle();
+
+      // One fewer: the key still explains the surface, the marker no longer
+      // carries the glyph.
+      expect(ceiling, findsNWidgets(withPlate - 1));
+      expect(withPlate - 1, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  /// How many cables are in a run is the number that changes while somebody is
+  /// standing in front of the plan counting them, and it was only editable on
+  /// the Cabling tab.
+  group('setting a run\'s cable count from the plan', () {
+    test('a click picks the run whose line it landed on', () {
+      // Two pulls fanned apart the way the sheet fans them.
+      final routes = {
+        'a': [const Offset(0, 100), const Offset(400, 100)],
+        'b': [const Offset(0, 112), const Offset(400, 112)],
+      };
+
+      expect(runIdNearest(routes, const Offset(200, 101)), 'a');
+      expect(runIdNearest(routes, const Offset(200, 111)), 'b');
+      // In the gap, where both are within reach, the nearer one wins — the
+      // slack must never hand back the wrong one of a pair.
+      expect(runIdNearest(routes, const Offset(200, 104)), 'a');
+      expect(runIdNearest(routes, const Offset(200, 108)), 'b');
+      // And a click on empty paper is not a click on a run.
+      expect(runIdNearest(routes, const Offset(200, 300)), isEmpty);
+      expect(
+        runIdNearest(routes, const Offset(200, 100 - kRunTapSlack - 1)),
+        isEmpty,
+      );
+    });
+
+    test('it answers against the drawn route, dodges and all', () {
+      // The line steps round a marker, so the straight line between its ends
+      // is exactly where it is NOT.
+      final routes = {
+        'a': [
+          const Offset(0, 100),
+          const Offset(200, 100),
+          const Offset(200, 300),
+          const Offset(400, 300),
+        ],
+      };
+      expect(runIdNearest(routes, const Offset(200, 200)), 'a');
+      expect(runIdNearest(routes, const Offset(300, 150)), isEmpty);
+    });
+
+    testWidgets('the sheet says the runs can be clicked', (tester) async {
+      final p = room();
+      await pump(tester, p);
+      expect(
+        find.textContaining('click a run to set its cable count'),
+        findsOneWidget,
+      );
+
+      // Nothing to click when the runs are turned off.
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Off'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('click a run to set its cable count'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('clicking one opens its count, and saving writes it through', (
+      tester,
+    ) async {
+      // One run, both ends placed and nothing in the way, so the route is the
+      // straight line between the two markers and its middle is on it.
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gui_full_room_name': 'Test Room'},
+        };
+      p.loadAvFlowForCurrentConfig();
+      final sheet = p.addFloorPlanSheet(name: 'Level 1');
+      p.addAvLocation(const RoomLocation(id: 'LOC_1', name: 'Lectern'));
+      p.addAvLocation(const RoomLocation(id: 'LOC_2', name: 'Rack'));
+      p.moveAvLocationMarker(sheet.id, 'LOC_1', const Offset(200, 200));
+      p.moveAvLocationMarker(sheet.id, 'LOC_2', const Offset(700, 200));
+      p.addAvNode(device('A', 'LOC_1', SignalType.network));
+      p.addAvNode(device('B', 'LOC_2', SignalType.network));
+      p.addAvCable(
+        fromNodeId: 'A',
+        fromPortId: 'p1',
+        toNodeId: 'B',
+        toPortId: 'p1',
+        signal: SignalType.network,
+      );
+      await pump(tester, p);
+
+      final bundle = p.cablingSchematic(buildAvFlowModel(p)).bundles.single;
+      expect(bundle.count, 1);
+
+      // The plan draws at 1:1 from the top-left of its viewport, so the
+      // midpoint of the two markers is where the line is.
+      final origin = tester.getTopLeft(find.byType(InteractiveViewer));
+      await tester.tapAt(origin + const Offset(450, 200));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cables in this run'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('plan_run_count')), '6');
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      // Written through the same override the Cabling tab edits, so both pages
+      // and the schedule report one number.
+      expect(p.avCabling.counts[bundle.id], 6);
+      expect(
+        p.cablingSchematic(buildAvFlowModel(p)).bundles.single.count,
+        6,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('clicking bare paper opens nothing', (tester) async {
+      final p = room();
+      await pump(tester, p);
+
+      final origin = tester.getTopLeft(find.byType(InteractiveViewer));
+      await tester.tapAt(origin + const Offset(60, 700));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cables in this run'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
   });
 

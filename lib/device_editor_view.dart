@@ -1206,6 +1206,9 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       _snack('Could not write the copy.', error: true);
       return;
     }
+    // A write reconciles the power inlets, so the entry on screen may have
+    // just gained or lost one even though this was "only" an export.
+    provider.avDeviceLibraryChanged();
     showSavedFileSnack(context, provider, 'Catalog copy', saved);
   }
 

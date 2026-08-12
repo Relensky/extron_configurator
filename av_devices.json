@@ -26773,18 +26773,18 @@
           "side": "right"
         },
         {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        },
-        {
           "id": "port_1786393825139452",
           "label": "DTP IN",
           "signal": "hdbaset",
           "direction": "input",
           "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
         }
       ]
     },
@@ -26815,18 +26815,18 @@
           "side": "left"
         },
         {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        },
-        {
           "id": "port_1786393062452313",
           "label": "DTP",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
         }
       ]
     },

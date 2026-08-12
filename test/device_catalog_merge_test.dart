@@ -80,7 +80,14 @@ void main() {
       expect(restored.rackUnits, 2);
       expect(restored.powerWatts, 90);
       expect(restored.price, 2500.5);
-      expect(restored.ports.single.id, 'in_1');
+      // The mains inlet is reconciled onto the entry as it is written — see
+      // test/catalog_power_inlet_test.dart — so the signal connectors are the
+      // ones to compare.
+      expect(
+        [for (final p in restored.ports.where((p) => !p.isPowerInlet)) p.id],
+        ['in_1'],
+      );
+      expect(restored.ports.where((p) => p.isPowerInlet).length, 1);
     });
 
     test('writes only the entries that are yours', () async {
