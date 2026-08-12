@@ -344,6 +344,10 @@ class DeviceGroup {
 
   /// One name, or every name when several devices share the model — the
   /// pack list is read to find the boxes, so the names have to be there.
+  ///
+  /// Comma-joined because this is also a line on the estimate PAGE, where a
+  /// four-line cell would push the row apart. The pack list wants one name
+  /// per line and builds that itself from [nodes].
   String get label =>
       nodes.length == 1 ? first.label : nodes.map((n) => n.label).join(', ');
 

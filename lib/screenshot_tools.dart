@@ -41,6 +41,40 @@ Future<Uint8List?> captureBoundary(GlobalKey boundaryKey,
   }
 }
 
+/// Wraps a drawing so it renders the way it should PRINT: light theme,
+/// no colour.
+///
+/// A cabling sheet is a working document. It gets printed, photocopied, marked
+/// up on a clipboard and faxed back, and none of that survives a drawing whose
+/// only distinction between six Cat 6a and five Cat 5e is that one line is
+/// blue. Forcing the light theme as well as dropping the colour matters
+/// separately: a dark-mode capture converted to grey is a black page with pale
+/// lines on it, which a printer renders as a black page.
+///
+/// This is why the runs carry a dash pattern as well as a colour — see
+/// `run_painting.dart`. Take the colour away and the pattern is what is left.
+///
+/// [enabled] false returns [child] untouched, so the normal on-screen path
+/// costs nothing.
+Widget printSkin({required bool enabled, required Widget child}) {
+  if (!enabled) return child;
+  return Theme(
+    // The drawings ask the theme whether they are in dark mode and pick their
+    // label and backing-plate colours off the answer.
+    data: ThemeData(brightness: Brightness.light, useMaterial3: true),
+    child: ColorFiltered(colorFilter: kGreyscaleFilter, child: child),
+  );
+}
+
+/// Rec. 709 luminance — the same weighting a printer's own colour conversion
+/// uses, so what comes out of the app matches what comes out of the printer.
+const ColorFilter kGreyscaleFilter = ColorFilter.matrix(<double>[
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0, 0, 0, 1, 0, //
+]);
+
 /// Captures [boundaryKey] and opens the annotation editor over the result.
 /// Shows a snackbar when the capture fails.
 Future<void> captureAndAnnotate(BuildContext context, GlobalKey boundaryKey,

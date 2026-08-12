@@ -52,11 +52,18 @@ String renderTextReport(
   for (final s in sections) {
     buffer.writeln(s.title);
     buffer.writeln('=' * s.title.length);
-    final all = [s.header, ...s.rows];
+    // A cell listing several things carries them one per LINE — the same cell
+    // the .xlsx writes wrapped. Here that means one row can occupy several
+    // physical lines, with the other columns blank underneath, so the columns
+    // still line up instead of a newline blowing the whole table apart.
+    final all = [
+      for (final row in [s.header, ...s.rows])
+        [for (final cell in row) cell.toString().split('\n')],
+    ];
     final widths = <int>[];
     for (final row in all) {
       for (int c = 0; c < row.length; c++) {
-        final len = row[c].toString().length;
+        final len = row[c].fold<int>(0, (m, line) => math.max(m, line.length));
         if (c >= widths.length) {
           widths.add(len);
         } else if (len > widths[c]) {
@@ -65,10 +72,14 @@ String renderTextReport(
       }
     }
     for (int r = 0; r < all.length; r++) {
-      buffer.writeln([
-        for (int c = 0; c < all[r].length; c++)
-          all[r][c].toString().padRight(widths[c]),
-      ].join('  '));
+      final row = all[r];
+      final height = row.fold<int>(1, (m, lines) => math.max(m, lines.length));
+      for (int line = 0; line < height; line++) {
+        buffer.writeln([
+          for (int c = 0; c < row.length; c++)
+            (line < row[c].length ? row[c][line] : '').padRight(widths[c]),
+        ].join('  ').trimRight());
+      }
       if (r == 0) buffer.writeln(widths.map((w) => '-' * w).join('  '));
     }
     buffer.writeln();

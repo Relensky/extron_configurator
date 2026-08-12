@@ -289,7 +289,9 @@ void main() {
 
       final net = counts.rows.firstWhere((row) => row.first == 'NET-');
       expect(cell(counts, net, 'Runs'), 2);
-      expect(cell(counts, net, 'Labels'), 'NET-01, NET-02');
+      // One label per line — the cell is a list somebody reads down, and the
+      // .xlsx writes it wrapped rather than running them together.
+      expect(cell(counts, net, 'Labels'), 'NET-01\nNET-02');
 
       final av = counts.rows.firstWhere((row) => row.first == 'AV-');
       expect(cell(counts, av, 'Runs'), 1);

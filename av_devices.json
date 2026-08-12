@@ -138,6 +138,13 @@
           "label": "LAN",
           "signal": "network",
           "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
           "side": "bottom"
         }
       ]

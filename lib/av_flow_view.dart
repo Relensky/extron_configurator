@@ -1502,6 +1502,10 @@ class _AvFlowViewState extends State<AvFlowView> {
   Future<void> _showAddCustomDeviceDialog(AppStateProvider provider) async {
     final labelController = TextEditingController();
     final searchController = TextEditingController();
+    // How many of the picked model to drop on the canvas. A room with three
+    // DTP HDMI 4K 233s is an ordinary room, and adding it one box at a time —
+    // search, pick, name, Add, repeat — is the same six clicks three times.
+    final countController = TextEditingController(text: '1');
     String? selectedModel;
     // Retired models are left out: adding a device is specifying new work.
     // The Catalog tab is where a discontinued part is still visible.
@@ -1521,12 +1525,33 @@ class _AvFlowViewState extends State<AvFlowView> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: labelController,
-                    decoration: const InputDecoration(
-                      labelText: 'Name on the diagram',
-                      hintText: 'e.g. Lectern wall plate',
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: labelController,
+                          decoration: const InputDecoration(
+                            labelText: 'Name on the diagram',
+                            hintText: 'e.g. Lectern wall plate',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 110,
+                        child: TextField(
+                          controller: countController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'How many',
+                            helperText: 'Numbered 1, 2, 3…',
+                            helperMaxLines: 2,
+                          ),
+                          onChanged: (_) => setLocal(() {}),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -1611,7 +1636,11 @@ class _AvFlowViewState extends State<AvFlowView> {
               ),
               ElevatedButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Add'),
+                child: Text(
+                  _addCount(countController.text) == 1
+                      ? 'Add'
+                      : 'Add ${_addCount(countController.text)}',
+                ),
               ),
             ],
           );
@@ -1623,41 +1652,58 @@ class _AvFlowViewState extends State<AvFlowView> {
     final model = selectedModel ?? '';
     final template = provider.avDeviceLibrary.templateForModel(model);
     final label = labelController.text.trim();
-    provider.addAvNode(
-      AvNode(
-        id: '', // provider assigns AVNODE_<n>
-        label: label.isEmpty ? (model.isEmpty ? 'Device' : model) : label,
-        model: model,
-        pos: _spawnPosition(provider),
-        ports: withPowerInlet(
-          template?.ports ??
-              const [
-                AvPort(
-                  id: 'in_1',
-                  label: 'IN 1',
-                  signal: SignalType.hdmi,
-                  direction: PortDirection.input,
-                  side: PortSide.left,
-                ),
-                AvPort(
-                  id: 'out_1',
-                  label: 'OUT 1',
-                  signal: SignalType.hdmi,
-                  direction: PortDirection.output,
-                  side: PortSide.right,
-                ),
-              ],
-          template?.powerInput ?? PowerInput.mains,
+    final base = label.isEmpty ? (model.isEmpty ? 'Device' : model) : label;
+    final int count = _addCount(countController.text);
+
+    for (int i = 1; i <= count; i++) {
+      provider.addAvNode(
+        AvNode(
+          id: '', // provider assigns AVNODE_<n>
+          // Numbered only when there is more than one: "DTP HDMI 4K 233 1" on
+          // a room with a single transmitter is a number that means nothing.
+          label: count == 1 ? base : '$base $i',
+          model: model,
+          // Recomputed each time round, so the second box lands under the
+          // first rather than on top of it.
+          pos: _spawnPosition(provider),
+          ports: withPowerInlet(
+            template?.ports ??
+                const [
+                  AvPort(
+                    id: 'in_1',
+                    label: 'IN 1',
+                    signal: SignalType.hdmi,
+                    direction: PortDirection.input,
+                    side: PortSide.left,
+                  ),
+                  AvPort(
+                    id: 'out_1',
+                    label: 'OUT 1',
+                    signal: SignalType.hdmi,
+                    direction: PortDirection.output,
+                    side: PortSide.right,
+                  ),
+                ],
+            template?.powerInput ?? PowerInput.mains,
+          ),
+          rackUnits: template?.rackUnits ?? 0,
+          powerWatts: template?.powerWatts ?? 0,
+          btuPerHour: template?.btuPerHour ?? 0,
+          powerSource: powerSourceForInput(
+            template?.powerInput ?? PowerInput.mains,
+          ),
         ),
-        rackUnits: template?.rackUnits ?? 0,
-        powerWatts: template?.powerWatts ?? 0,
-        btuPerHour: template?.btuPerHour ?? 0,
-        powerSource: powerSourceForInput(
-          template?.powerInput ?? PowerInput.mains,
-        ),
-      ),
-    );
+      );
+    }
   }
+
+  /// How many devices the "How many" field is asking for.
+  ///
+  /// Clamped rather than validated: a blank or nonsense entry means one, and
+  /// the cap is there because a mistyped quantity should not drop two hundred
+  /// boxes on a diagram somebody then has to delete one at a time.
+  static int _addCount(String text) =>
+      (int.tryParse(text.trim()) ?? 1).clamp(1, 40);
 
   /// Adds a wall box, floor box or patch panel: a box whose "ports" are
   /// numbered jacks. Cabling a device to a jack is what lets the Jack

@@ -389,6 +389,116 @@ class ConsistencyRule {
   }
 }
 
+/// Which `input_*` keys a room is entitled to, given the sources it has.
+///
+/// A room's source list is spelled twice: `gui_inputs` counts them and
+/// `gui_tab_type` names them ("DOC_USB_WL"). The switcher input each source
+/// is wired to then lives in its own SYSTEM_SETUP key. Nothing kept the two
+/// in step, so a room whose sources were retyped from six down to four still
+/// shipped `input_blu_ray` and `input_dvd` — inputs the panel has no button
+/// for, on a switcher that has something else plugged into those numbers.
+/// That is not merely untidy: the next person to read the file believes it.
+///
+/// [tokens] maps one piece of a tab type to the key it entitles the room to;
+/// [always] are the keys every layout has regardless (the PC and the room's
+/// HDMI plate) plus the ones some OTHER setting governs (the sub switcher's
+/// input, the extended-desktop input); [cameras] are the ones that exist only
+/// while the room has cameras, so `dev_cameras` 0 takes them with it.
+///
+/// Only keys named here are ever removed — an `input_` key the schema does
+/// not know about is left exactly where it is.
+class SourceInputRules {
+  /// Source token (a piece of gui_tab_type) -> the input key it entitles.
+  final Map<String, String> tokens;
+
+  /// Keys every sources layout carries, or that another setting governs.
+  final List<String> always;
+
+  /// Keys that only mean anything while the room has at least one camera.
+  final List<String> cameras;
+
+  const SourceInputRules({
+    this.tokens = const {},
+    this.always = const [],
+    this.cameras = const [],
+  });
+
+  static const SourceInputRules builtIn = SourceInputRules(
+    tokens: {
+      'DOC': 'input_doc_cam',
+      'DVD': 'input_dvd',
+      'BR': 'input_blu_ray',
+      'WL': 'input_wireless',
+      // One physical input, labelled USB or VGA by gui_usb_or_vga — the key
+      // name stays input_usb either way, so both tokens claim it.
+      'USB': 'input_usb',
+      'VGA': 'input_usb',
+    },
+    always: [
+      'input_pc',
+      'input_hdmi',
+      // Governed by gui_routing_mode "Extended", not by the sources list.
+      'input_pc_extended',
+      // Governed by sub_switch_sources.
+      'input_sub_switcher',
+    ],
+    cameras: ['input_inst_cam', 'input_aud_cam'],
+  );
+
+  /// True when this ruleset says nothing at all, so the caller leaves the
+  /// config alone rather than stripping every input key in it.
+  bool get isEmpty => tokens.isEmpty && always.isEmpty && cameras.isEmpty;
+
+  /// Every key these rules are willing to take responsibility for.
+  Set<String> get managedKeys => {...always, ...tokens.values, ...cameras};
+
+  /// The keys a room with this [tabType] and [cameraCount] should carry.
+  Set<String> expectedKeys({required String tabType, required int cameraCount}) {
+    final out = <String>{...always};
+    for (final piece in tabType.split('_')) {
+      final key = tokens[piece.trim().toUpperCase()];
+      if (key != null) out.add(key);
+    }
+    if (cameraCount > 0) out.addAll(cameras);
+    return out;
+  }
+
+  /// The keys [setup] holds that this room is not entitled to: managed by
+  /// these rules, present in the block, and not expected. Sorted so the log
+  /// line reads the same way twice.
+  ///
+  /// A setting the room does not state is a question, not a No. A legacy file
+  /// with no `gui_tab_type` at all has not told us it has no doc cam — it has
+  /// told us nothing — so the token-driven keys are left exactly where they
+  /// are, and the same goes for the camera inputs when `dev_cameras` is
+  /// missing. Removing them on a silence would delete real site data on the
+  /// first load of exactly the oldest, least reproducible configs.
+  List<String> staleKeysIn(Map<String, dynamic> setup) {
+    if (isEmpty) return const [];
+
+    final String tabType = setup['gui_tab_type']?.toString().trim() ?? '';
+    final bool knowsSources = tabType.isNotEmpty;
+    final bool knowsCameras = setup.containsKey('dev_cameras');
+
+    final expected = expectedKeys(
+      tabType: tabType,
+      cameraCount: int.tryParse(setup['dev_cameras']?.toString() ?? '') ?? 0,
+    );
+
+    // What this room has actually answered for.
+    final managed = <String>{
+      ...always,
+      if (knowsSources) ...tokens.values,
+      if (knowsCameras) ...cameras,
+    };
+
+    return [
+      for (final key in setup.keys)
+        if (managed.contains(key) && !expected.contains(key)) key,
+    ]..sort();
+  }
+}
+
 /// One "device_defaults" entry: property values merged into newly created
 /// device blocks whose section name matches [sectionPattern].
 class DeviceDefaults {
@@ -428,6 +538,13 @@ class UiSchema {
   final List<ConsistencyRule> _consistency = [];
 
   List<ConsistencyRule> get consistencyRules => List.unmodifiable(_consistency);
+
+  /// Which `input_*` keys the room's sources entitle it to — see
+  /// [SourceInputRules]. A "source_inputs" section in ui_schema.json replaces
+  /// the built-in ruleset entirely.
+  SourceInputRules _sourceInputs = SourceInputRules.builtIn;
+
+  SourceInputRules get sourceInputs => _sourceInputs;
 
   /// The device families the Setup Wizard manages, in display order. Starts
   /// as the built-in list (the previously hardcoded ten); a "device_types"
@@ -838,6 +955,39 @@ class UiSchema {
         final text = entry.toString().trim();
         if (text.isEmpty || text.startsWith('__')) continue;
         _runtimeWritten.add(text);
+      }
+    }
+
+    // Optional "source_inputs": which input_* keys each source token entitles
+    // the room to. Defining ANY of the three lists replaces the built-in
+    // ruleset entirely, so the file owns the whole vocabulary rather than
+    // half of it merged with a stale built-in half.
+    final sourceInputs = doc['source_inputs'];
+    if (sourceInputs is Map) {
+      List<String> stringList(String key) => (sourceInputs[key] is List)
+          ? [
+              for (final e in sourceInputs[key] as List)
+                if (e.toString().trim().isNotEmpty) e.toString().trim(),
+            ]
+          : const [];
+      final Map<String, String> tokens = {};
+      final rawTokens = sourceInputs['tokens'];
+      if (rawTokens is Map) {
+        rawTokens.forEach((token, key) {
+          if (token.toString().startsWith('__')) return;
+          final name = key?.toString().trim() ?? '';
+          if (name.isEmpty) return;
+          tokens[token.toString().trim().toUpperCase()] = name;
+        });
+      }
+      final always = stringList('always');
+      final cameras = stringList('cameras');
+      if (tokens.isNotEmpty || always.isNotEmpty || cameras.isNotEmpty) {
+        _sourceInputs = SourceInputRules(
+          tokens: tokens,
+          always: always,
+          cameras: cameras,
+        );
       }
     }
 

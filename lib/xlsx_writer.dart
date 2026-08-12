@@ -19,7 +19,12 @@ import 'package:archive/archive.dart';
 ///  Row styles (see [XlsxRowStyle]): normal, bold, section title (white on
 ///  dark blue fill), and column header (bold on light blue fill).
 ///
-///  Column widths are computed automatically from the longest value in each
+///  A string cell containing newlines is written WRAPPED, and its row is given
+///  a height that fits the lines — so a cell listing four pull boxes shows
+///  four lines rather than one long line clipped at the column edge. Callers
+///  produce those cells simply by joining a list with '\n'.
+///
+///  Column widths are computed automatically from the longest LINE in each
 ///  column unless an explicit width is given.
 ///
 ///  One PNG image per sheet can be anchored to a cell ([XlsxImage]) — used to
@@ -245,12 +250,43 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     }
     numFmts.write('</numFmts>');
   }
-  final int cellXfCount = firstMoneyStyle + currencies.length * 3;
+  final int firstWrapStyle = firstMoneyStyle + currencies.length * 3;
+
+  /// The cellXfs index for a WRAPPED cell sitting in a [rowStyle] row.
+  ///
+  /// A string with newlines in it needs wrapText or Excel shows the first line
+  /// and hides the rest behind the next column — which is the whole point of
+  /// putting each item on its own line in the first place. One variant per row
+  /// style, appended after the money formats so the plain ids (which are also
+  /// the row style ids) keep their meaning.
+  int wrapStyle(int rowStyle) => firstWrapStyle + rowStyle;
+
+  /// True when [value] is text that should be written wrapped.
+  bool wraps(dynamic value) =>
+      value != null &&
+      value is! num &&
+      value is! XlsxMoney &&
+      value.toString().contains('\n');
+
+  /// The five wrapped variants: the same fonts and fills as [XlsxRowStyle],
+  /// plus top-aligned wrapText so a two-line cell sits against the top of its
+  /// row rather than floating in the middle of it.
+  const String wrapAlign =
+      '<alignment wrapText="1" vertical="top"/>';
+  final String wrapXfs =
+      '<xf applyAlignment="1" xfId="0">$wrapAlign</xf>'
+      '<xf fontId="1" applyFont="1" applyAlignment="1" xfId="0">$wrapAlign</xf>'
+      '<xf fontId="2" fillId="2" applyFont="1" applyFill="1" applyAlignment="1" xfId="0">$wrapAlign</xf>'
+      '<xf fontId="1" fillId="3" applyFont="1" applyFill="1" applyAlignment="1" xfId="0">$wrapAlign</xf>'
+      '<xf fillId="4" applyFill="1" applyAlignment="1" xfId="0">$wrapAlign</xf>';
+
+  final int cellXfCount = firstWrapStyle + 5;
 
   // --- xl/styles.xml ---
   // fonts:  0 normal, 1 bold, 2 bold white
   // fills:  0 none, 1 gray125 (Excel convention), 2 dark blue, 3 light blue
-  // cellXfs: see XlsxRowStyle, then three per currency (see moneyStyle)
+  // cellXfs: see XlsxRowStyle, three per currency (see moneyStyle), then one
+  //          wrapped variant per row style (see wrapStyle)
   archive.add(ArchiveFile.string('xl/styles.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -276,6 +312,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '<xf fontId="1" fillId="3" applyFont="1" applyFill="1" xfId="0"/>'
       '<xf fillId="4" applyFill="1" xfId="0"/>'
       '$moneyXfs'
+      '$wrapXfs'
       '</cellXfs>'
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
       '</styleSheet>'));
@@ -337,14 +374,22 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     // Column widths: explicit overrides win; otherwise size to the longest
     // value in the column (with padding), clamped to a sane range. Section
     // title rows (style 2) span conceptually and are ignored for sizing.
+    //
+    // The longest LINE, not the longest value: a wrapped cell listing four
+    // pull boxes is as wide as its widest one, and sizing it to the whole
+    // string would make the column four times wider than anything in it.
     final Map<int, double> widths = Map.of(sheet.columnWidths);
     final Map<int, int> maxLen = {};
+    // Row index -> how many lines its tallest wrapped cell needs.
+    final Map<int, int> rowLines = {};
     for (int r = 0; r < sheet.rows.length; r++) {
-      if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
       final cells = sheet.rows[r];
       final bool overflow = sheet.overflowRows.contains(r);
       for (int c = 0; c < cells.length; c++) {
         final cell = cells[c];
+        final lines = cell?.toString().split('\n') ?? const <String>[];
+        if (lines.length > (rowLines[r] ?? 1)) rowLines[r] = lines.length;
+        if (sheet.rowStyles[r] == XlsxRowStyle.title) continue;
         // The excluded cell of an overflow row is only excused when it is
         // TEXT: text spills into the empty cells to its right, but a number
         // too wide for its column comes out as ###, so figures always size.
@@ -354,8 +399,9 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
             cell is! XlsxMoney) {
           continue;
         }
-        final len = cell?.toString().length ?? 0;
-        if (len > (maxLen[c] ?? 0)) maxLen[c] = len;
+        for (final line in lines) {
+          if (line.length > (maxLen[c] ?? 0)) maxLen[c] = line.length;
+        }
       }
     }
     maxLen.forEach((c, len) {
@@ -376,7 +422,15 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     for (int r = 0; r < sheet.rows.length; r++) {
       final int style = sheet.rowStyles[r] ?? XlsxRowStyle.normal;
       final styleAttr = style == XlsxRowStyle.normal ? '' : ' s="$style"';
-      body.write('<row r="${r + 1}">');
+      // A row carrying a wrapped cell is given the height its lines need.
+      // Excel's own auto-fit does not run on a file it did not write, so
+      // without this the extra lines are simply hidden — which is the same
+      // thing as not having put them on their own lines at all.
+      final int lines = rowLines[r] ?? 1;
+      final String heightAttr = lines > 1
+          ? ' ht="${(lines * 14).clamp(15, 409)}" customHeight="1"'
+          : '';
+      body.write('<row r="${r + 1}"$heightAttr>');
       final cells = sheet.rows[r];
       for (int c = 0; c < cells.length; c++) {
         final value = cells[c];
@@ -393,8 +447,10 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
         } else if (value is num) {
           body.write('<c r="$ref"$styleAttr><v>$value</v></c>');
         } else {
+          final String cellStyle =
+              wraps(value) ? ' s="${wrapStyle(style)}"' : styleAttr;
           body.write(
-              '<c r="$ref"$styleAttr t="inlineStr"><is><t xml:space="preserve">${esc(value.toString())}</t></is></c>');
+              '<c r="$ref"$cellStyle t="inlineStr"><is><t xml:space="preserve">${esc(value.toString())}</t></is></c>');
         }
       }
       body.write('</row>');

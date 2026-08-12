@@ -275,8 +275,30 @@ class ScreenSwitch {
   final String endLocationId;
   final String endNote;
 
+  /// Places the cable is routed THROUGH on its way, in order, as location ids.
+  ///
+  /// The run that actually gets pulled is rarely a straight line between two
+  /// rooms' worth of gear: it leaves the projector box, lands in an AV pull box
+  /// above the ceiling, and carries on to the equipment rack. Recording only
+  /// the two ends made the drawing show a line through the middle of the room
+  /// and the schedule quote a length nobody could pull, and the pull box — the
+  /// thing the electrician has to install — appeared nowhere at all.
+  ///
+  /// Empty is the normal case and behaves exactly as before: one leg, end to
+  /// end. Anything named here becomes a leg boundary, so a run through two
+  /// pull boxes is three legs on the cabling sheet.
+  final List<String> viaLocationIds;
+
   /// What runs between them — '18/2 plenum', 'Cat6', 'line voltage'.
   final String cableType;
+
+  /// The number this cable carries on the drawing set and on its own label —
+  /// 'C-101', '14'. Printed on the run and in the schedule.
+  ///
+  /// Free text because a cable number is whatever the office's convention says
+  /// it is, and a scheme that renumbers somebody's drawing set for them is a
+  /// scheme that gets turned off.
+  final String cableNumber;
 
   /// Estimated run length in feet; 0 means nobody has measured it.
   final double runFeet;
@@ -290,10 +312,33 @@ class ScreenSwitch {
     this.startNote = '',
     this.endLocationId = kNoLocationId,
     this.endNote = '',
+    this.viaLocationIds = const [],
     this.cableType = '',
+    this.cableNumber = '',
     this.runFeet = 0,
     this.note = '',
   });
+
+  /// Every place this run touches, in pull order: the start, whatever it is
+  /// routed through, then the end. Blank ids are dropped, and a via that
+  /// repeats the leg before it is collapsed — a zero-length leg is a line the
+  /// drawing cannot draw and a row the schedule should not print.
+  List<String> get pathLocationIds {
+    final out = <String>[];
+    for (final id in [startLocationId, ...viaLocationIds, endLocationId]) {
+      if (id.isEmpty || id == kNoLocationId) continue;
+      if (out.isNotEmpty && out.last == id) continue;
+      out.add(id);
+    }
+    return out;
+  }
+
+  /// The pairs of places cable is actually pulled between: one for a plain
+  /// run, one per hop for a run routed through pull boxes.
+  List<({String from, String to})> get legs => [
+    for (int i = 0; i < pathLocationIds.length - 1; i++)
+      (from: pathLocationIds[i], to: pathLocationIds[i + 1]),
+  ];
 
   ScreenSwitch copyWith({
     String? label,
@@ -301,7 +346,9 @@ class ScreenSwitch {
     String? startNote,
     String? endLocationId,
     String? endNote,
+    List<String>? viaLocationIds,
     String? cableType,
+    String? cableNumber,
     double? runFeet,
     String? note,
   }) => ScreenSwitch(
@@ -311,7 +358,9 @@ class ScreenSwitch {
     startNote: startNote ?? this.startNote,
     endLocationId: endLocationId ?? this.endLocationId,
     endNote: endNote ?? this.endNote,
+    viaLocationIds: viaLocationIds ?? this.viaLocationIds,
     cableType: cableType ?? this.cableType,
+    cableNumber: cableNumber ?? this.cableNumber,
     runFeet: runFeet ?? this.runFeet,
     note: note ?? this.note,
   );
@@ -323,7 +372,9 @@ class ScreenSwitch {
     startNote: startNote,
     endLocationId: endLocationId,
     endNote: endNote,
+    viaLocationIds: viaLocationIds,
     cableType: cableType,
+    cableNumber: cableNumber,
     runFeet: runFeet,
     note: note,
   );
@@ -335,7 +386,9 @@ class ScreenSwitch {
     if (startNote.isNotEmpty) 'startNote': startNote,
     if (endLocationId.isNotEmpty) 'endLocation': endLocationId,
     if (endNote.isNotEmpty) 'endNote': endNote,
+    if (viaLocationIds.isNotEmpty) 'via': viaLocationIds,
     if (cableType.isNotEmpty) 'cableType': cableType,
+    if (cableNumber.isNotEmpty) 'cableNumber': cableNumber,
     if (runFeet > 0) 'runFeet': runFeet,
     if (note.isNotEmpty) 'note': note,
   };
@@ -347,14 +400,28 @@ class ScreenSwitch {
     startNote: json['startNote']?.toString() ?? '',
     endLocationId: json['endLocation']?.toString() ?? kNoLocationId,
     endNote: json['endNote']?.toString() ?? '',
+    viaLocationIds: [
+      for (final v in (json['via'] as List? ?? []))
+        if (v.toString().trim().isNotEmpty) v.toString(),
+    ],
     cableType: json['cableType']?.toString() ?? '',
+    cableNumber: json['cableNumber']?.toString() ?? '',
     runFeet: (json['runFeet'] as num?)?.toDouble() ?? 0,
     note: json['note']?.toString() ?? '',
   );
 }
 
 /// Cable types offered in the screen switch editor; free text underneath.
+///
+/// The three "what it is for, then what it is made of" entries are the office's
+/// own names for the pulls it specifies most, and they are here rather than
+/// being typed each time for the same reason kCablingCableTypes exists: a
+/// schedule
+/// carrying "Cat6a", "cat 6a" and "CAT6A" is three lines on a purchase order.
 const List<String> kScreenSwitchCableTypes = [
+  'AV Point to Point Cat6a',
+  'Control Cable Cat5e',
+  'Network to IDF Cat6a',
   '18/2 plenum',
   '18/3 plenum',
   '16/2 plenum',
@@ -733,6 +800,20 @@ class FloorPlan {
   /// wherever the first sheet's geometry happened to put them.
   final Map<String, Offset> markers;
 
+  /// Where the key panel sits on this sheet, in the image's own coordinates.
+  ///
+  /// Per sheet like everything else drawn on one: a legend in the top-right
+  /// corner of the furniture plan can be sitting on the title block of the
+  /// reflected ceiling plan, and one shared position would put it there.
+  final Offset keyPos;
+
+  /// True when somebody has taken the key OFF this sheet.
+  ///
+  /// Stored the way round that makes the default "shown": a drawing whose
+  /// lines are coded by colour, dash pattern and marker shape, and whose key is
+  /// opt-in, is a drawing that gets issued without one.
+  final bool keyHidden;
+
   const FloorPlan({
     required this.id,
     required this.name,
@@ -743,6 +824,8 @@ class FloorPlan {
     this.callouts = const [],
     this.annotations = const [],
     this.markers = const {},
+    this.keyPos = kDefaultPlanKeyPosition,
+    this.keyHidden = false,
   });
 
   bool get hasImage => imageFile.trim().isNotEmpty;
@@ -774,6 +857,8 @@ class FloorPlan {
     List<FloorPlanCallout>? callouts,
     List<PlanAnnotation>? annotations,
     Map<String, Offset>? markers,
+    Offset? keyPos,
+    bool? keyHidden,
   }) => FloorPlan(
     id: id,
     name: name ?? this.name,
@@ -784,6 +869,8 @@ class FloorPlan {
     callouts: callouts ?? this.callouts,
     annotations: annotations ?? this.annotations,
     markers: markers ?? this.markers,
+    keyPos: keyPos ?? this.keyPos,
+    keyHidden: keyHidden ?? this.keyHidden,
   );
 
   FloorPlan withId(String newId) => FloorPlan(
@@ -796,6 +883,8 @@ class FloorPlan {
     callouts: callouts,
     annotations: annotations,
     markers: markers,
+    keyPos: keyPos,
+    keyHidden: keyHidden,
   );
 
   Map<String, dynamic> toJson() => {
@@ -814,6 +903,9 @@ class FloorPlan {
         for (final e in markers.entries)
           e.key: {'x': e.value.dx, 'y': e.value.dy},
       },
+    if (keyPos != kDefaultPlanKeyPosition)
+      'key': {'x': keyPos.dx, 'y': keyPos.dy},
+    if (keyHidden) 'keyHidden': true,
   };
 
   factory FloorPlan.fromJson(Map<String, dynamic> json) => FloorPlan(
@@ -842,8 +934,22 @@ class FloorPlan {
             ((e.value as Map)['y'] as num?)?.toDouble() ?? 0,
           ),
     },
+    keyPos: json['key'] is Map
+        ? Offset(
+            ((json['key'] as Map)['x'] as num?)?.toDouble() ??
+                kDefaultPlanKeyPosition.dx,
+            ((json['key'] as Map)['y'] as num?)?.toDouble() ??
+                kDefaultPlanKeyPosition.dy,
+          )
+        : kDefaultPlanKeyPosition,
+    keyHidden: json['keyHidden'] == true,
   );
 }
+
+/// Where a sheet's key sits before anybody drags it: in from the top-left,
+/// which is the one corner of an architectural export that is reliably empty —
+/// the title block is bottom-right and the north arrow is usually top-right.
+const Offset kDefaultPlanKeyPosition = Offset(24, 24);
 
 /// Marker geometry, shared by the Floor Plan page and the AV canvas so a
 /// location dot is the same size wherever it is drawn.

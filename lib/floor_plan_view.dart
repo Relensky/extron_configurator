@@ -21,6 +21,7 @@ import 'export_tools.dart';
 import 'plan_annotations.dart';
 import 'report_tools.dart';
 import 'room_sidecar.dart' show AvUndoScope;
+import 'run_painting.dart';
 import 'undo_bar.dart';
 import 'room_locations.dart';
 import 'room_locations_view.dart';
@@ -105,6 +106,16 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// a plan with every run on it at once is a plan nobody can trace a single
   /// pull from.
   String _cableLayer = _kLayerAll;
+
+  /// True while the sheet is being drawn the way it should PRINT — light
+  /// theme, no colour. Held for the one frame a black-and-white export
+  /// captures, then put back; see [printSkin] and [_exportPng].
+  bool _printMode = false;
+
+  /// How far the key has been dragged since the pointer went down, or null
+  /// while nobody is dragging it. Live, so the panel follows the cursor
+  /// without a provider write (and an undo entry) per frame.
+  Offset? _keyDrag;
 
   @override
   void initState() {
@@ -240,15 +251,43 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   // --- exporting ------------------------------------------------------------
 
-  Future<void> _exportPng(AppStateProvider provider) async {
-    final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
+  /// The sheet as PNG bytes, optionally rendered the way it should print.
+  ///
+  /// The print skin is a WIDGET, not a filter over the bytes, so the drawing
+  /// is re-laid-out in the light theme before it is captured — a dark-mode
+  /// capture converted to grey is a black page with pale lines on it, which a
+  /// printer renders as a black page. The mode is held for exactly as long as
+  /// the capture takes and then put back, so the tab the user is looking at
+  /// does not change colour under them.
+  Future<Uint8List?> _captureSheet({bool monochrome = false}) async {
+    if (!monochrome) return captureBoundary(_planKey, pixelRatio: 2.0);
+    setState(() => _printMode = true);
+    try {
+      // Let it actually paint: without this the capture is of whatever was on
+      // screen when the mode was flipped.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return null;
+      return await captureBoundary(_planKey, pixelRatio: 2.0);
+    } finally {
+      if (mounted) setState(() => _printMode = false);
+    }
+  }
+
+  Future<void> _exportPng(
+    AppStateProvider provider, {
+    bool monochrome = false,
+  }) async {
+    final bytes = await _captureSheet(monochrome: monochrome);
     if (bytes == null) {
       _snack('Could not render the plan to an image.', error: true);
       return;
     }
     String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save the floor plan image',
-      fileName: '${roomFileStem(provider, 'floor_plan')}.png',
+      dialogTitle: monochrome
+          ? 'Save the floor plan for printing'
+          : 'Save the floor plan image',
+      fileName:
+          '${roomFileStem(provider, monochrome ? 'floor_plan_bw' : 'floor_plan')}.png',
       type: FileType.custom,
       allowedExtensions: const ['png'],
     );
@@ -256,7 +295,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
     try {
       await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(provider, 'Floor plan', outputFile);
+      _savedSnack(
+        provider,
+        monochrome ? 'Floor plan (black & white)' : 'Floor plan',
+        outputFile,
+      );
     } catch (e) {
       _snack('Failed to save the image: $e', error: true);
     }
@@ -399,7 +442,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           boundaryMargin: const EdgeInsets.all(400),
                           child: RepaintBoundary(
                             key: _planKey,
-                            child: _plan(provider, model, plan, drawing),
+                            // Inside the boundary, so the black-and-white
+                            // export captures exactly what it draws — see
+                            // [printSkin]. A Builder because the drawing reads
+                            // the theme this substitutes.
+                            child: printSkin(
+                              enabled: _printMode,
+                              child: Builder(
+                                builder: (ctx) =>
+                                    _plan(ctx, provider, model, plan, drawing),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -795,6 +848,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 if (!fitted) _snack('The plan is still drawing — try again.');
               },
             ),
+            // The legend that travels with the exported image. On by default:
+            // a sheet coded by icon, colour and dash pattern whose key is
+            // opt-in is a sheet that gets mailed out without one.
+            FilterChip(
+              avatar: const Icon(Icons.legend_toggle, size: 18),
+              label: const Text('Key'),
+              tooltip: 'Draw the key on the sheet — it is part of the '
+                  'exported image',
+              selected: !plan.keyHidden,
+              onSelected: (v) => provider.updateAvFloorPlan(
+                plan.copyWith(keyHidden: !v),
+              ),
+            ),
             OutlinedButton.icon(
               icon: const Icon(Icons.tune, size: 18),
               label: const Text('Plan settings'),
@@ -824,10 +890,20 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           if (plan != null)
             PopupMenuButton<String>(
               tooltip: 'Export the plan',
-              onSelected: (v) =>
-                  v == 'layers' ? _exportLayers(provider) : _exportPng(provider),
+              onSelected: (v) => switch (v) {
+                'layers' => _exportLayers(provider),
+                'bw' => _exportPng(provider, monochrome: true),
+                _ => _exportPng(provider),
+              },
               itemBuilder: (ctx) => const [
                 PopupMenuItem(value: 'one', child: Text('This view (.png)')),
+                // The one that gets printed and marked up on a clipboard. The
+                // runs carry a dash pattern as well as a colour precisely so
+                // this stays readable.
+                PopupMenuItem(
+                  value: 'bw',
+                  child: Text('This view, black & white for print (.png)'),
+                ),
                 // A sheet per trade: the network contractor gets the network
                 // drawing, the AV contractor gets theirs.
                 PopupMenuItem(
@@ -908,6 +984,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   /// The plan itself: image, cable runs, location markers, callouts.
   Widget _plan(
+    BuildContext context,
     AppStateProvider provider,
     AvFlowModel model,
     FloorPlan plan,
@@ -918,6 +995,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     // Worked out once and handed to both the router and the captions, so the
     // line you see and the label beside it are dodging the same things.
     final obstacles = _planObstacles(provider, plan);
+    // And once more for the key: the legend has to list the runs that are
+    // actually drawn, in the colour and dash pattern they are actually drawn
+    // in, or it is a legend to a different sheet.
+    final runs = _cableLayer == _kLayerOff
+        ? const <_PlanRun>[]
+        : _runsOnPlan(provider, plan, drawing, obstacles);
 
     return SizedBox(
       width: size.width,
@@ -962,7 +1045,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 child: IgnorePointer(
                   child: CustomPaint(
                     painter: _PlanCablePainter(
-                      runs: _runsOnPlan(provider, plan, drawing, obstacles),
+                      runs: runs,
                       // The captions dodge all of it — dots included, which
                       // the routes cannot — so a run's label never lands on
                       // the name of the place it runs to.
@@ -980,6 +1063,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             for (final location in provider.avLocations)
               if (plan.markerFor(location.id) != null)
                 _locationMarker(
+                  context,
                   provider,
                   model,
                   plan,
@@ -987,7 +1071,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   plan.markerFor(location.id)!,
                 ),
             for (final callout in plan.callouts)
-              _calloutMarker(provider, model, plan, callout),
+              _calloutMarker(context, provider, model, plan, callout),
             // Over the markers: notation is a mark-up ON the drawing, and an
             // arrow that disappeared behind a location dot would be pointing
             // at nothing anybody can see.
@@ -1004,11 +1088,298 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
               ),
             ),
+            // Last, so nothing is drawn over it. INSIDE the boundary that gets
+            // captured, which is the whole point: the exported PNG and the
+            // sheet in the workbook carry the key with them, instead of being
+            // a marked-up drawing whose marks nobody can read.
+            if (!plan.keyHidden)
+              _keyPanel(context, provider, model, plan, runs),
           ],
         ),
       ),
     );
   }
+
+  // --- the key --------------------------------------------------------------
+
+  /// The legend, drawn ON the sheet: what the marker icons mean, which cable
+  /// each line is, what the callouts point at, and what the mark-up colours
+  /// were used for.
+  ///
+  /// It lives inside the captured [RepaintBoundary] deliberately. A plan
+  /// exported as a PNG and mailed to a contractor is read away from this app,
+  /// and every convention on it — a ceiling icon, a dashed line, a squiggle
+  /// leaving the page, a red arrow — means nothing on its own. A key that is
+  /// only on screen is a key nobody who needs it ever sees.
+  Widget _keyPanel(
+    BuildContext context,
+    AppStateProvider provider,
+    AvFlowModel model,
+    FloorPlan plan,
+    List<_PlanRun> runs,
+  ) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+
+    // Only the surfaces actually on this sheet: a legend listing all ten zones
+    // when the drawing shows three is a legend people stop reading.
+    final zones = <RoomZone>[];
+    for (final location in provider.avLocations) {
+      if (plan.markerFor(location.id) == null) continue;
+      if (zones.contains(location.zone)) continue;
+      zones.add(location.zone);
+    }
+    zones.sort(
+      (a, b) => RoomZone.values.indexOf(a).compareTo(RoomZone.values.indexOf(b)),
+    );
+
+    // One line per run, deduplicated: the same cable drawn on three legs is
+    // one entry, not three.
+    final cables = <String, _PlanRun>{};
+    for (final run in runs) {
+      cables.putIfAbsent(run.label, () => run);
+    }
+
+    // The mark-up colours in use, with what was written in them.
+    final notes = <int, List<String>>{};
+    for (final a in plan.annotations) {
+      notes.putIfAbsent(a.color, () => []);
+      if (a.text.trim().isNotEmpty) notes[a.color]!.add(a.text.trim());
+    }
+
+    final bool empty =
+        zones.isEmpty && cables.isEmpty && plan.callouts.isEmpty && notes.isEmpty;
+    if (empty) return const SizedBox.shrink();
+
+    final at = plan.keyPos + (_keyDrag ?? Offset.zero);
+
+    return Positioned(
+      left: at.dx,
+      top: at.dy,
+      width: _kPlanKeyWidth,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (_) => setState(() => _keyDrag = Offset.zero),
+        onPanUpdate: (d) =>
+            setState(() => _keyDrag = (_keyDrag ?? Offset.zero) + d.delta),
+        onPanEnd: (_) {
+          final moved = _keyDrag ?? Offset.zero;
+          setState(() => _keyDrag = null);
+          if (moved == Offset.zero) return;
+          // Kept on the sheet: a key dragged off the top-left corner is a key
+          // that is not in the exported image either.
+          provider.updateAvFloorPlan(
+            plan.copyWith(
+              keyPos: Offset(
+                (plan.keyPos.dx + moved.dx)
+                    .clamp(0.0, math.max(0.0, _imageSize.width - _kPlanKeyWidth)),
+                (plan.keyPos.dy + moved.dy)
+                    .clamp(0.0, math.max(0.0, _imageSize.height - 60)),
+              ),
+            ),
+          );
+        },
+        onPanCancel: () => setState(() => _keyDrag = null),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grab,
+          child: Container(
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xF21B2026) : const Color(0xF2FAFAFA),
+              border: Border.all(
+                color: dark ? const Color(0xFF3A424C) : const Color(0xFF9E9E9E),
+                width: 1.2,
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            padding: const EdgeInsets.all(9),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'KEY — ${plan.name}'.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                          color: dark ? Colors.white : Colors.black87,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // Not in the captured image is the point of hiding it, so
+                    // the control is on the toolbar rather than here — see
+                    // [_toolbar]. This is only the drag handle hint.
+                    Icon(
+                      Icons.drag_indicator,
+                      size: 13,
+                      color: dark ? Colors.white38 : Colors.black26,
+                    ),
+                  ],
+                ),
+                if (zones.isNotEmpty) ...[
+                  _keyHeading('Mounting surface', dark),
+                  for (final zone in zones)
+                    _keyRow(
+                      dark,
+                      leading: Icon(
+                        kRoomZoneIcons[zone] ?? Icons.place,
+                        size: 13,
+                        color: dark ? Colors.white70 : Colors.black87,
+                      ),
+                      text: kRoomZoneLabels[zone] ?? zone.name,
+                    ),
+                ],
+                if (cables.isNotEmpty) ...[
+                  _keyHeading('Cable runs', dark),
+                  for (final run in cables.values.take(_kPlanKeyMaxRows))
+                    _keyRow(
+                      dark,
+                      leading: SizedBox(
+                        width: _kPlanKeySwatch,
+                        height: 12,
+                        child: CustomPaint(
+                          painter: _RunSpecimenPainter(
+                            color: run.color,
+                            style: run.style,
+                            offSheet: run.offSheet,
+                          ),
+                        ),
+                      ),
+                      text: run.label,
+                    ),
+                  _keyRow(
+                    dark,
+                    leading: SizedBox(
+                      width: _kPlanKeySwatch,
+                      height: 12,
+                      child: CustomPaint(
+                        painter: _RunSpecimenPainter(
+                          color: dark ? Colors.white70 : Colors.black54,
+                          style: RunLineStyle.solid,
+                          offSheet: true,
+                        ),
+                      ),
+                    ),
+                    text: 'Continues off this sheet',
+                  ),
+                  if (cables.length > _kPlanKeyMaxRows)
+                    _keyMore(dark, cables.length - _kPlanKeyMaxRows),
+                ],
+                if (plan.callouts.isNotEmpty) ...[
+                  _keyHeading('Callouts', dark),
+                  for (final c in plan.callouts.take(_kPlanKeyMaxRows))
+                    _keyRow(
+                      dark,
+                      leading: CircleAvatar(
+                        radius: 7,
+                        backgroundColor: const Color(0xFFD84315),
+                        child: Text(
+                          c.tag,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                          ),
+                        ),
+                      ),
+                      text: [
+                        if (_calloutSubtitle(model, c).isNotEmpty)
+                          _calloutSubtitle(model, c),
+                        if (c.workbookSheet.isNotEmpty)
+                          'see ${c.workbookSheet}'
+                              '${c.workbookRef.isEmpty ? '' : ' · ${c.workbookRef}'}',
+                        if (c.note.isNotEmpty) c.note,
+                      ].join(' — '),
+                    ),
+                  if (plan.callouts.length > _kPlanKeyMaxRows)
+                    _keyMore(dark, plan.callouts.length - _kPlanKeyMaxRows),
+                ],
+                if (notes.isNotEmpty) ...[
+                  _keyHeading('Notation', dark),
+                  for (final e in notes.entries.take(_kPlanKeyMaxRows))
+                    _keyRow(
+                      dark,
+                      leading: Container(
+                        width: _kPlanKeySwatch,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: Color(e.value.isEmpty ? e.key : e.key),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      text: e.value.isEmpty
+                          ? 'Mark-up'
+                          : e.value.toSet().join(' · '),
+                    ),
+                  if (notes.length > _kPlanKeyMaxRows)
+                    _keyMore(dark, notes.length - _kPlanKeyMaxRows),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _keyHeading(String text, bool dark) => Padding(
+    padding: const EdgeInsets.only(top: 7, bottom: 2),
+    child: Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        fontSize: 8.5,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.6,
+        color: dark ? Colors.white54 : Colors.black45,
+      ),
+    ),
+  );
+
+  /// The line that owns up to a section being longer than the panel.
+  ///
+  /// A key clipped at the bottom of the sheet is worse than a short one: it
+  /// looks complete and is not. The full list is in the location report, which
+  /// is where a sheet with forty runs on it has to be read from anyway.
+  Widget _keyMore(bool dark, int hidden) => Padding(
+    padding: const EdgeInsets.only(top: 1),
+    child: Text(
+      '+$hidden more — see the location report',
+      style: TextStyle(
+        fontSize: 8.5,
+        fontStyle: FontStyle.italic,
+        color: dark ? Colors.white54 : Colors.black45,
+      ),
+    ),
+  );
+
+  Widget _keyRow(bool dark, {required Widget leading, required String text}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: _kPlanKeySwatch,
+              child: Center(child: leading),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  color: dark ? Colors.white : Colors.black87,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
 
   // --- cable runs over the plan ---------------------------------------------
 
@@ -1046,7 +1417,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             _layerMatches(b.cableType))
           b,
     ];
-    if (drawable.isEmpty) return const [];
 
     // Runs sharing a pair of markers are fanned apart, the same way the
     // cabling drawing fans them, so six Cat 6a and five Cat 5e between the
@@ -1065,6 +1435,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         edgeOf[e.value[i].id] = e.key;
       }
     }
+    // The dash pattern comes off the CABLE, not the lane, so this sheet, the
+    // cabling drawing and both keys strike a Cat 6a the same way — and so the
+    // black-and-white print still tells the pulls apart.
+    final styles = drawing.bundleLineStyles;
 
     return [
       for (final b in drawable)
@@ -1086,12 +1460,92 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ),
           color: Color(b.color),
           label: b.label,
+          style: styles[b.id] ?? RunLineStyle.solid,
+          offSheet: drawing.isOffSheet(b),
           fromLabel: b.fromLabel,
           toLabel: b.toLabel,
           fromDot: obstacles.dots[b.fromBoxId],
           toDot: obstacles.dots[b.toBoxId],
         ),
+      ..._offSheetRuns(provider, plan, drawing, placed),
     ];
+  }
+
+  /// The runs with ONE end on this sheet, drawn as a squiggle leaving the page.
+  ///
+  /// A pull to the IDF is the ordinary case of this and the reason it exists:
+  /// the telecom room is not somewhere that can be marked on a plan of one
+  /// teaching space, so the run used to be counted in the "not on this sheet"
+  /// warning and drawn nowhere. A line that stops at the border reads as a
+  /// cable that stops at the border, so it leaves as a break symbol, labelled
+  /// with where it is going.
+  List<_PlanRun> _offSheetRuns(
+    AppStateProvider provider,
+    FloorPlan plan,
+    CablingSchematic drawing,
+    Map<String, Offset> placed,
+  ) {
+    final out = <_PlanRun>[];
+    // Fanned by how many have already left the same marker, so three runs out
+    // of one rack do not become one thick squiggle.
+    final leaving = <String, int>{};
+
+    for (final b in drawing.bundles) {
+      if (!_layerMatches(b.cableType)) continue;
+      final bool fromHere = placed.containsKey(b.fromBoxId);
+      final bool toHere = placed.containsKey(b.toBoxId);
+      if (fromHere == toHere) continue; // both on the sheet, or neither
+
+      final String hereId = fromHere ? b.fromBoxId : b.toBoxId;
+      final String awayId = fromHere ? b.toBoxId : b.fromBoxId;
+      final Offset at = placed[hereId]!;
+      final int index = leaving.update(hereId, (n) => n + 1, ifAbsent: () => 0);
+
+      out.add((
+        id: '${b.id}$_kOffSheetSuffix',
+        // Its own caption block, keyed on the marker it leaves and where it is
+        // going, so every run out of the rack to the IDF is captioned once.
+        edgeKey: 'off|$hereId|$awayId',
+        route: _offSheetStub(at, plan, index),
+        color: Color(b.color),
+        label: '${b.label} → ${drawing.boxById(awayId)?.label ?? 'off sheet'}',
+        style: drawing.bundleLineStyles[b.id] ?? RunLineStyle.solid,
+        offSheet: true,
+        fromLabel: '',
+        toLabel: '',
+        fromDot: locationDotBounds(at),
+        toDot: null,
+      ));
+    }
+    return out;
+  }
+
+  /// A short stub from [at] towards the nearest edge of the sheet, stepped
+  /// sideways by [index] so several leaving the same place stay apart.
+  List<Offset> _offSheetStub(Offset at, FloorPlan plan, int index) {
+    final size = _imageSize;
+    // Whichever border is closest — a run leaving the room should head for the
+    // way out, not across the drawing to the far side of it.
+    final distances = <Offset, double>{
+      const Offset(-1, 0): at.dx,
+      const Offset(1, 0): size.width - at.dx,
+      const Offset(0, -1): at.dy,
+      const Offset(0, 1): size.height - at.dy,
+    };
+    var direction = const Offset(1, 0);
+    var best = double.infinity;
+    distances.forEach((d, distance) {
+      if (distance < best) {
+        best = distance;
+        direction = d;
+      }
+    });
+
+    const length = 64.0;
+    final normal = Offset(-direction.dy, direction.dx) * (index * 14.0);
+    final start = at + normal;
+    final reach = math.min(length, math.max(28.0, best - 6));
+    return [start, start + direction * reach];
   }
 
   /// One run's path: fanned onto its lane, then stepped around whatever is
@@ -1194,7 +1648,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final placed = _markersOn(plan).keys.toSet();
     final seen = <String, Color>{};
     for (final b in drawing.bundles) {
-      if (!placed.contains(b.fromBoxId) || !placed.contains(b.toBoxId)) {
+      // ONE end is enough: a run with the other end off the sheet is drawn as
+      // a squiggle leaving the page, so its cable belongs on the layer bar.
+      if (!placed.contains(b.fromBoxId) && !placed.contains(b.toBoxId)) {
         continue;
       }
       seen.putIfAbsent(b.cableType, () => Color(b.color));
@@ -1204,7 +1660,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     return [for (final t in types) (type: t, color: seen[t]!)];
   }
 
-  /// How many runs cannot be drawn because an end is not on THIS sheet.
+  /// How many runs cannot be drawn at all because NEITHER end is on this
+  /// sheet.
+  ///
+  /// One end is enough to draw something honest — the run leaves the page as a
+  /// squiggle labelled with where it is going — so those are no longer counted
+  /// here. With neither end placed there is nowhere to start the line from,
+  /// and a plan that invents where cable goes is worse than one that says how
+  /// much it is leaving out.
   int _unplacedRunCount(
     AppStateProvider provider,
     FloorPlan? plan,
@@ -1214,7 +1677,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     return drawing.bundles
         .where(
           (b) =>
-              !placed.contains(b.fromBoxId) || !placed.contains(b.toBoxId),
+              !placed.contains(b.fromBoxId) && !placed.contains(b.toBoxId),
         )
         .length;
   }
@@ -1295,9 +1758,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ],
           if (missing > 0)
             Tooltip(
-              message: 'Both ends of a run have to be on THIS sheet before it '
-                  'can be drawn. Turn on "Place locations" and click where '
-                  'the missing end goes.',
+              message: 'At least one end of a run has to be on THIS sheet '
+                  'before it can be drawn — with one end placed it leaves the '
+                  'page as a squiggle. Turn on "Place locations" and click '
+                  'where the missing end goes.',
               child: Text(
                 '$missing run${missing == 1 ? '' : 's'} not on this sheet',
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -1538,6 +2002,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   }
 
   Widget _locationMarker(
+    BuildContext context,
     AppStateProvider provider,
     AvFlowModel model,
     FloorPlan plan,
@@ -1640,6 +2105,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   }
 
   Widget _calloutMarker(
+    BuildContext context,
     AppStateProvider provider,
     AvFlowModel model,
     FloorPlan plan,
@@ -1892,12 +2358,25 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               child: ListTile(
                 dense: true,
                 leading: const Icon(Icons.toggle_on_outlined),
-                title: Text(s.label, style: const TextStyle(fontSize: 13)),
+                title: Text(
+                  s.cableNumber.trim().isEmpty
+                      ? s.label
+                      : '${s.cableNumber.trim()} · ${s.label}',
+                  style: const TextStyle(fontSize: 13),
+                ),
                 subtitle: Text(
-                  '${_end(provider, s.startLocationId, s.startNote)} '
-                  '→ ${_end(provider, s.endLocationId, s.endNote)}'
-                  '${s.cableType.isEmpty ? '' : '\n${s.cableType}'}'
-                  '${s.runFeet <= 0 ? '' : ' · ${s.runFeet.toStringAsFixed(0)} ft'}',
+                  // The whole pull, pull boxes and all — the line on the plan
+                  // is the path, so the list beside it has to be too.
+                  [
+                    _end(provider, s.startLocationId, s.startNote),
+                    for (final id in s.viaLocationIds)
+                      _end(provider, id, '(location removed)'),
+                    _end(provider, s.endLocationId, s.endNote),
+                  ].join(' → ') +
+                      (s.cableType.isEmpty ? '' : '\n${s.cableType}') +
+                      (s.runFeet <= 0
+                          ? ''
+                          : ' · ${s.runFeet.toStringAsFixed(0)} ft'),
                   style: theme.textTheme.bodySmall,
                 ),
                 isThreeLine: s.cableType.isNotEmpty,
@@ -2236,6 +2715,16 @@ typedef _PlanRun = ({
   Color color,
   String label,
 
+  /// How the line is stroked, over and above its colour: runs sharing a pair
+  /// of markers each get their own dash pattern, because a fan of three
+  /// parallel lines is only readable while the colours can be told apart.
+  RunLineStyle style,
+
+  /// True when the run carries on past this sheet — to the IDF, or simply to
+  /// a location nobody has placed on this drawing. Drawn as a squiggle
+  /// heading off the page rather than a line that stops for no reason.
+  bool offSheet,
+
   /// What the run lands on at each end, printed beside that end of the line.
   /// Empty prints nothing — see [CablingBundle.fromLabel].
   String fromLabel,
@@ -2278,21 +2767,23 @@ class _PlanCablePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Each run hops over the ones already down. On a plan the lines cross
+    // constantly — that is what a room looks like from above — and two lines
+    // meeting at a point is indistinguishable from two lines joining at one
+    // unless the drawing says which is on top.
+    final drawn = <List<Offset>>[];
     for (final run in runs) {
       if (run.route.length < 2) continue;
-      final path = Path()..moveTo(run.route.first.dx, run.route.first.dy);
-      for (int i = 1; i < run.route.length; i++) {
-        path.lineTo(run.route[i].dx, run.route[i].dy);
-      }
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..color = run.color
-          ..strokeWidth = 3
-          ..strokeJoin = StrokeJoin.round
-          ..strokeCap = StrokeCap.round,
+      paintRun(
+        canvas: canvas,
+        route: run.route,
+        color: run.color,
+        strokeWidth: 3,
+        style: run.style,
+        hops: run.offSheet ? const [] : routeCrossings(run.route, drawn),
+        offSheet: run.offSheet,
       );
+      drawn.add(run.route);
     }
 
     // One caption block per pair of markers, placed after every line is down
@@ -2360,10 +2851,11 @@ class _PlanCablePainter extends CustomPainter {
     const gap = 4.0;
     const rowGap = 2.0;
 
-    final rows = <({TextPainter text, Color color})>[];
+    final rows = <({TextPainter text, Color color, RunLineStyle style})>[];
     for (final run in group) {
       rows.add((
         color: run.color,
+        style: run.style,
         text: TextPainter(
           text: TextSpan(
             text: run.label,
@@ -2404,14 +2896,14 @@ class _PlanCablePainter extends CustomPainter {
     double y = box.top;
     for (final row in rows) {
       // The dash is the key: it is what ties "6x Cat 6a" to the line it names
-      // when three run side by side.
-      canvas.drawLine(
-        Offset(box.left, y + row.text.height / 2),
-        Offset(box.left + dash, y + row.text.height / 2),
-        Paint()
-          ..color = row.color
-          ..strokeWidth = 3
-          ..strokeCap = StrokeCap.round,
+      // when three run side by side — in that run's own pattern as well as its
+      // colour, so the tie survives a black-and-white print.
+      paintRunSpecimen(
+        canvas: canvas,
+        from: Offset(box.left, y + row.text.height / 2),
+        to: Offset(box.left + dash, y + row.text.height / 2),
+        color: row.color,
+        style: row.style,
       );
       row.text.paint(canvas, Offset(box.left + dash + gap, y));
       y += row.text.height + rowGap;
@@ -2460,12 +2952,61 @@ class _PlanCablePainter extends CustomPainter {
       old.runs != runs || old.keepClear != keepClear || old.dark != dark;
 }
 
+/// The short specimen of a run drawn beside its name in the key — the same
+/// colour, the same dash pattern, the same squiggle. Painted rather than built
+/// out of widgets so it goes through exactly the code the drawing does: a
+/// legend drawn a second way is a legend that eventually disagrees.
+class _RunSpecimenPainter extends CustomPainter {
+  final Color color;
+  final RunLineStyle style;
+  final bool offSheet;
+
+  const _RunSpecimenPainter({
+    required this.color,
+    required this.style,
+    required this.offSheet,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    paintRunSpecimen(
+      canvas: canvas,
+      from: Offset(0, size.height / 2),
+      to: Offset(size.width, size.height / 2),
+      color: color,
+      style: style,
+      strokeWidth: 2.4,
+      offSheet: offSheet,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RunSpecimenPainter old) =>
+      old.color != color || old.style != style || old.offSheet != offSheet;
+}
+
 enum _PlanTool { none, location, callout, notation }
 
 /// Sentinels for [_FloorPlanViewState._cableLayer]. Not cable types, so they
 /// are spelled in a way no cable ever will be.
 const String _kLayerOff = ' off';
 const String _kLayerAll = ' all';
+
+/// How wide the key panel is drawn, and how much of that the swatch column
+/// takes. Fixed, because a legend whose width follows its longest cable name
+/// jumps around the drawing every time somebody retypes one.
+const double _kPlanKeyWidth = 226;
+const double _kPlanKeySwatch = 22;
+
+/// How many lines a section of the key prints before it says how many it left
+/// out. A panel taller than the drawing is clipped by the sheet, and a key
+/// clipped at the bottom looks complete when it is not.
+const int _kPlanKeyMaxRows = 12;
+
+/// Added to a bundle id for the stub drawn when only ONE of its ends is on the
+/// sheet — see [_FloorPlanViewState._offSheetRuns]. Keeps the stub from
+/// colliding with the real run's id if both ever appear at once.
+const String _kOffSheetSuffix = ' off-sheet';
 
 /// The sheets a callout can point into. The room workbook's four, plus the
 /// location sheet this tab adds — named rather than indexed so adding a tab

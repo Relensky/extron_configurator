@@ -365,9 +365,15 @@ Future<bool> showScreenSwitchEditor(
         ? ''
         : existing!.runFeet.toStringAsFixed(0),
   );
+  final numberController = TextEditingController(
+    text: existing?.cableNumber ?? '',
+  );
   final noteController = TextEditingController(text: existing?.note ?? '');
   String startLocation = existing?.startLocationId ?? kNoLocationId;
   String endLocation = existing?.endLocationId ?? kNoLocationId;
+  // Working copy: the dialog reorders and removes freely and only the Save
+  // button hands it back.
+  final List<String> via = [...?existing?.viaLocationIds];
 
   final saved = await showDialog<bool>(
     context: context,
@@ -391,13 +397,34 @@ Future<bool> showScreenSwitchEditor(
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: labelController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'What it controls',
-                    hintText: 'e.g. Front screen, Rear shades',
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        controller: labelController,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'What it controls',
+                          hintText: 'e.g. Front screen, Rear shades',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 150,
+                      child: TextField(
+                        controller: numberController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cable number',
+                          hintText: 'e.g. C-101',
+                          helperText: 'Printed on the run',
+                          helperMaxLines: 2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 Text('Start — the switch', style: Theme.of(ctx).textTheme.titleSmall),
@@ -408,6 +435,12 @@ Future<bool> showScreenSwitchEditor(
                   noteController: startNoteController,
                   hint: 'e.g. by the corridor door',
                   onChanged: (v) => setLocal(() => startLocation = v),
+                ),
+                const SizedBox(height: 14),
+                _RunVia(
+                  provider: provider,
+                  via: via,
+                  onChanged: () => setLocal(() {}),
                 ),
                 const SizedBox(height: 14),
                 Text(
@@ -502,7 +535,12 @@ Future<bool> showScreenSwitchEditor(
     startNote: startNoteController.text.trim(),
     endLocationId: endLocation,
     endNote: endNoteController.text.trim(),
+    viaLocationIds: [
+      for (final id in via)
+        if (id.isNotEmpty && id != kNoLocationId) id,
+    ],
     cableType: cableController.text.trim(),
+    cableNumber: numberController.text.trim(),
     runFeet: double.tryParse(feetController.text.trim()) ?? 0,
     note: noteController.text.trim(),
   );
@@ -513,6 +551,171 @@ Future<bool> showScreenSwitchEditor(
     provider.updateAvScreenSwitch(built);
   }
   return true;
+}
+
+/// The places a run is pulled THROUGH, in order.
+///
+/// The run that actually gets installed is rarely a straight line: it leaves
+/// the projector box, lands in an AV pull box above the ceiling and carries on
+/// to the equipment rack. Recording only the two ends drew a line through the
+/// middle of the room, quoted a length nobody could pull, and left the pull box
+/// — the thing the electrician has to install — off the drawing entirely.
+///
+/// A plain two-end run leaves this empty and behaves exactly as it always did.
+class _RunVia extends StatelessWidget {
+  final AppStateProvider provider;
+
+  /// Mutated in place; [onChanged] is the caller's cue to rebuild.
+  final List<String> via;
+  final VoidCallback onChanged;
+
+  const _RunVia({
+    required this.provider,
+    required this.via,
+    required this.onChanged,
+  });
+
+  /// The pull boxes first: they are what this field is nearly always for, and
+  /// a list that opens on the room's twelve locations with the pull box at the
+  /// bottom is a list nobody uses twice.
+  List<RoomLocation> get _choices {
+    final all = provider.avLocations;
+    return [
+      ...all.where((l) => l.zone == RoomZone.pullBox),
+      ...all.where((l) => l.zone != RoomZone.pullBox),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final choices = _choices;
+    final known = {for (final l in choices) l.id};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Route through${via.isEmpty ? '' : ' (${via.length})'}',
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.alt_route, size: 18),
+              label: const Text('Add a pull box'),
+              onPressed: choices.isEmpty
+                  ? null
+                  : () async {
+                      // Straight to the location editor when the room has no
+                      // pull box yet: being sent to another tab to define one
+                      // is how this field stays empty forever.
+                      final picked = await _pick(context, choices);
+                      if (picked == null) return;
+                      via.add(picked);
+                      onChanged();
+                    },
+            ),
+          ],
+        ),
+        Text(
+          via.isEmpty
+              ? 'Straight from the start to the end. Add a pull box or another '
+                    'place and the run is drawn — and scheduled — as the legs '
+                    'it is actually pulled in.'
+              : 'One leg per hop on the cabling sheet, in this order.',
+          style: theme.textTheme.bodySmall,
+        ),
+        for (int i = 0; i < via.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                Text('${i + 1}.', style: theme.textTheme.bodySmall),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: known.contains(via[i]) ? via[i] : null,
+                    isExpanded: true,
+                    isDense: true,
+                    decoration: const InputDecoration(labelText: 'Via'),
+                    items: [
+                      for (final l in choices)
+                        DropdownMenuItem(
+                          value: l.id,
+                          child: Row(
+                            children: [
+                              Icon(
+                                kRoomZoneIcons[l.zone] ?? Icons.place,
+                                size: 15,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(l.displayName)),
+                            ],
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      via[i] = v;
+                      onChanged();
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_upward, size: 18),
+                  tooltip: 'Earlier in the run',
+                  onPressed: i == 0
+                      ? null
+                      : () {
+                          final moved = via.removeAt(i);
+                          via.insert(i - 1, moved);
+                          onChanged();
+                        },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Not routed through here',
+                  onPressed: () {
+                    via.removeAt(i);
+                    onChanged();
+                  },
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<String?> _pick(
+    BuildContext context,
+    List<RoomLocation> choices,
+  ) => showDialog<String>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      title: const Text('Route the cable through…'),
+      children: [
+        for (final l in choices)
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(ctx).pop(l.id),
+            child: Row(
+              children: [
+                Icon(kRoomZoneIcons[l.zone] ?? Icons.place, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text(l.displayName)),
+                Text(
+                  kRoomZoneLabels[l.zone] ?? '',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// One end of a control run: a location if the room has one for it, and free

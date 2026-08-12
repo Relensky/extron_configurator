@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'av_flow_model.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
+import 'run_painting.dart';
+
+export 'run_painting.dart' show RunLineStyle, kRunLineStyleLabels;
 
 /// ============================================================================
 ///  THE CABLING SCHEMATIC
@@ -128,6 +131,14 @@ class CablingBox {
   /// Empty on every other kind.
   final String shape;
 
+  /// The mounting surface of the location this box came from.
+  ///
+  /// Carried through from the room rather than looked up again, so the key can
+  /// say which surface each box is on and — the reason it was added — so a run
+  /// to the IDF can be drawn as a run that LEAVES: an equipment room is not a
+  /// place on this drawing, it is the edge of it.
+  final RoomZone zone;
+
   const CablingBox({
     required this.id,
     required this.label,
@@ -135,7 +146,14 @@ class CablingBox {
     this.pos = Offset.zero,
     this.body = '',
     this.shape = '',
+    this.zone = RoomZone.unspecified,
   });
+
+  /// True when cable reaching this box carries on out of the room — the
+  /// telecom room, the IDF, the next floor. Drawn with a break symbol rather
+  /// than a line that simply stops.
+  bool get isOffSheet =>
+      zone == RoomZone.equipmentRoom || kind == CablingBoxKind.pathway;
 
   /// True when this box is one the room produced rather than one somebody
   /// drew. Hand-added boxes can be deleted outright; a derived one can only be
@@ -187,6 +205,7 @@ class CablingBox {
     Offset? pos,
     String? body,
     String? shape,
+    RoomZone? zone,
   }) => CablingBox(
     id: id,
     label: label ?? this.label,
@@ -194,6 +213,7 @@ class CablingBox {
     pos: pos ?? this.pos,
     body: body ?? this.body,
     shape: shape ?? this.shape,
+    zone: zone ?? this.zone,
   );
 
   Map<String, dynamic> toJson() => {
@@ -204,6 +224,7 @@ class CablingBox {
     'y': pos.dy,
     if (body.isNotEmpty) 'body': body,
     if (shape.isNotEmpty) 'shape': shape,
+    if (zone != RoomZone.unspecified) 'zone': zone.name,
   };
 
   factory CablingBox.fromJson(Map<String, dynamic> json) => CablingBox(
@@ -216,6 +237,7 @@ class CablingBox {
     ),
     body: json['body']?.toString() ?? '',
     shape: json['shape']?.toString() ?? '',
+    zone: roomZoneFromName(json['zone']?.toString()),
   );
 }
 
@@ -265,6 +287,17 @@ class CablingBundle {
   final String fromLabel;
   final String toLabel;
 
+  /// The number this cable carries on the drawing set — 'C-101', '14'.
+  ///
+  /// Printed in front of the count, because that is how a run is referred to
+  /// in every other document: the schedule says C-101, the label on the cable
+  /// says C-101, and a drawing that only says "1x Cat 6a" leaves the person
+  /// holding the end of it with nothing to match against.
+  ///
+  /// Empty on a derived signal bundle, which is a COUNT of cables rather than
+  /// one cable, and so has no single number to carry.
+  final String tag;
+
   const CablingBundle({
     required this.id,
     required this.fromBoxId,
@@ -275,6 +308,7 @@ class CablingBundle {
     this.color = 0xFFD32F2F,
     this.fromLabel = '',
     this.toLabel = '',
+    this.tag = '',
   });
 
   /// True when the ROOM produced this run rather than somebody drawing it —
@@ -289,12 +323,15 @@ class CablingBundle {
   /// can say what it is without implying the signal flow knows about it.
   bool get isControlRun => id.startsWith(kCablingScreenRunPrefix);
 
-  /// "2x AV cabling" — what gets printed on the run.
+  /// "2x AV cabling" — what gets printed on the run, with the cable number in
+  /// front of it when the run has one ("C-101 · 1x Control Cable Cat5e").
   String get label {
     final n = count == count.roundToDouble()
         ? count.round().toString()
         : count.toStringAsFixed(1);
-    return cableType.trim().isEmpty ? '${n}x' : '${n}x ${cableType.trim()}';
+    final body =
+        cableType.trim().isEmpty ? '${n}x' : '${n}x ${cableType.trim()}';
+    return tag.trim().isEmpty ? body : '${tag.trim()} · $body';
   }
 
   /// The line UNDER [label] — 'HDBaseT / DTP' beneath '4x AV cabling'.
@@ -320,6 +357,7 @@ class CablingBundle {
     int? color,
     String? fromLabel,
     String? toLabel,
+    String? tag,
   }) => CablingBundle(
     id: id,
     fromBoxId: fromBoxId ?? this.fromBoxId,
@@ -330,6 +368,7 @@ class CablingBundle {
     color: color ?? this.color,
     fromLabel: fromLabel ?? this.fromLabel,
     toLabel: toLabel ?? this.toLabel,
+    tag: tag ?? this.tag,
   );
 
   Map<String, dynamic> toJson() => {
@@ -342,6 +381,7 @@ class CablingBundle {
     'color': color,
     if (fromLabel.isNotEmpty) 'fromLabel': fromLabel,
     if (toLabel.isNotEmpty) 'toLabel': toLabel,
+    if (tag.isNotEmpty) 'tag': tag,
   };
 
   factory CablingBundle.fromJson(Map<String, dynamic> json) => CablingBundle(
@@ -356,6 +396,7 @@ class CablingBundle {
     color: (json['color'] as num?)?.toInt() ?? 0xFFD32F2F,
     fromLabel: json['fromLabel']?.toString() ?? '',
     toLabel: json['toLabel']?.toString() ?? '',
+    tag: json['tag']?.toString() ?? '',
   );
 }
 
@@ -590,19 +631,56 @@ class CablingSchematic {
   /// same map feeds the painter and the click targets, so what you see and
   /// what you can hit can never come apart.
   Map<String, double> get bundleLanes {
-    final byEdge = <String, List<CablingBundle>>{};
-    for (final b in bundles) {
-      final ends = [b.fromBoxId, b.toBoxId]..sort();
-      byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(b);
-    }
     final lanes = <String, double>{};
-    for (final group in byEdge.values) {
+    for (final group in bundlesByEdge.values) {
       for (int i = 0; i < group.length; i++) {
         lanes[group[i].id] = (i - (group.length - 1) / 2) * kCablingLaneStep;
       }
     }
     return lanes;
   }
+
+  /// The runs on each edge, keyed by the pair of boxes they join. The one
+  /// grouping [bundleLanes], [bundleLineStyles] and the captions all read, so
+  /// a run's lane, its dash pattern and the row it gets in the caption block
+  /// are the same ordering by construction.
+  Map<String, List<CablingBundle>> get bundlesByEdge {
+    final byEdge = <String, List<CablingBundle>>{};
+    for (final b in bundles) {
+      final ends = [b.fromBoxId, b.toBoxId]..sort();
+      byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(b);
+    }
+    return byEdge;
+  }
+
+  /// How each run is stroked, by bundle id.
+  ///
+  /// Keyed off the CABLE — the same identity the colour and the key line are
+  /// keyed off ([cablingColorKey]) — not off the run's position in a fan. That
+  /// is what lets the key say "Cat 6a is the dashed one" and be right about
+  /// every Cat 6a on the sheet, which is the whole job of a legend. Two runs of
+  /// the same cable between the same two boxes look alike because they ARE
+  /// alike; they are told apart by being fanned onto their own lanes.
+  ///
+  /// The pattern exists because colour alone fails the moment the sheet is
+  /// printed in black and white, photocopied, or read by somebody who cannot
+  /// distinguish red from green — which is most of the ways a cabling drawing
+  /// is actually read.
+  Map<String, RunLineStyle> get bundleLineStyles {
+    final byKey = cablingKeyLineStyles(bundles);
+    return {
+      for (final b in bundles)
+        b.id: byKey[cablingColorKey(b)] ?? RunLineStyle.solid,
+    };
+  }
+
+  /// True when [bundle] carries on out of the room rather than ending on this
+  /// drawing — a pull to the IDF or out through the pathway. Drawn as a break
+  /// symbol, so a run to the telecom room does not read as a run that stops at
+  /// the edge of the page.
+  bool isOffSheet(CablingBundle bundle) =>
+      (boxById(bundle.fromBoxId)?.isOffSheet ?? false) ||
+      (boxById(bundle.toBoxId)?.isOffSheet ?? false);
 
   /// The key: one line per cable on the sheet, in the order the colours were
   /// handed out, with what it is and how much of it there is.
@@ -657,12 +735,17 @@ class CablingSchematic {
       }
     }
 
+    // The dash pattern each cable is struck with, handed out beside the
+    // colours and read from the same map the drawing reads.
+    final styles = cablingKeyLineStyles(bundles);
+
     return [
       for (final k in order)
         (
           category: rolled[k]!.category,
           type: rolled[k]!.type,
           color: rolled[k]!.color,
+          style: styles[k] ?? RunLineStyle.solid,
           count: rolled[k]!.count,
           runs: rolled[k]!.runs,
           categoryMatters:
@@ -872,6 +955,11 @@ Rect? paintRunEndLabel({
 /// Bundle ids for the runs read off the room's screen and shade control runs.
 const String kCablingScreenRunPrefix = 'screen:';
 
+/// What separates a control run's id from the index of the leg it is, on a run
+/// routed through pull boxes: `screen:SCRSW_1#2`. Something no location id can
+/// contain, so splitting an id back apart is unambiguous.
+const String kCablingLegSeparator = '#';
+
 /// What a screen / shade control run is drawn in before anybody recolours it.
 ///
 /// Deliberately nothing like the signal palette: a control run is not program
@@ -976,6 +1064,28 @@ Map<String, int> cablingKeyColors(List<CablingBundle> bundles) {
   return out;
 }
 
+/// A dash pattern per [cablingColorKey], handed out beside the colours.
+///
+/// The same identity the colour is assigned against, and for the same reason:
+/// what a reader needs to tell apart is which CABLE a line is, and the pattern
+/// is the half of that answer which survives a black-and-white print, a
+/// photocopy, or a reader who cannot distinguish red from green. Two runs of
+/// the same cable look alike because they ARE alike — they are fanned onto
+/// their own lanes instead.
+///
+/// First-appearance order, exactly like [cablingKeyColors], so a line on the
+/// drawing and its line in the key are struck the same way by construction.
+Map<String, RunLineStyle> cablingKeyLineStyles(List<CablingBundle> bundles) {
+  final out = <String, RunLineStyle>{};
+  var next = 0;
+  for (final bundle in bundles) {
+    final key = cablingColorKey(bundle);
+    if (out.containsKey(key)) continue;
+    out[key] = runLineStyleForIndex(next++);
+  }
+  return out;
+}
+
 /// The id the key panel is filed under in [CablingOverrides] — so it can be
 /// dragged out of the way and taken off the sheet like anything else drawn,
 /// without being a box the runs could be wired to.
@@ -986,6 +1096,9 @@ typedef CableKeyEntry = ({
   String category,
   String type,
   int color,
+
+  /// How the lines of this cable are stroked — see [cablingKeyLineStyles].
+  RunLineStyle style,
 
   /// How many cables the sheet has of it, summed across every run.
   double count,
@@ -1005,6 +1118,11 @@ typedef CableKeyEntry = ({
 /// "Cat5e", "cat 5e" and "CAT5E" on it is three lines on a purchase order. The
 /// field still takes anything — the presets are a shortcut, not a whitelist.
 const List<String> kCablingCableTypes = [
+  // The office's own names for the three pulls it specifies most, first
+  // because they are what a run usually is.
+  'AV Point to Point Cat6a',
+  'Control Cable Cat5e',
+  'Network to IDF Cat6a',
   'Cat 5e',
   'Cat 6',
   'Cat 6a',
@@ -1078,11 +1196,10 @@ CablingSchematic buildCablingSchematic({
       if (n.locationId.isNotEmpty) n.locationId,
     // A screen switch and the motor it drives are both places cable lands,
     // and neither is a device on the signal flow. Without this the control
-    // run would be a line between two boxes that were never drawn.
-    for (final s in model.screenSwitches) ...[
-      if (s.startLocationId.isNotEmpty) s.startLocationId,
-      if (s.endLocationId.isNotEmpty) s.endLocationId,
-    ],
+    // run would be a line between two boxes that were never drawn. The places
+    // it is routed THROUGH count for the same reason: a pull box with nothing
+    // terminating in it is still a box somebody has to install.
+    for (final s in model.screenSwitches) ...s.pathLocationIds,
   }..remove(kNoLocationId);
   final derivedBoxes = <CablingBox>[];
   var locationIndex = 0;
@@ -1098,6 +1215,7 @@ CablingSchematic buildCablingSchematic({
       label: loc.name,
       kind: kind,
       pos: _defaultPosition(isPull ? pullIndex++ : locationIndex++, kind),
+      zone: loc.zone,
     );
     derivedBoxes.add(
       // The column layout steps far enough apart for the boxes it was written
@@ -1156,16 +1274,21 @@ CablingSchematic buildCablingSchematic({
     // places in this room, which is exactly what this sheet is for — and they
     // used to turn up as a surprise at rough-in precisely because no drawing
     // showed them.
+    // One bundle per LEG, so a run routed projector box -> AV pull box ->
+    // rack is drawn as the three-box path it is pulled along rather than a
+    // line straight through the middle of the room. A plain two-end run has
+    // exactly one leg and comes out as it always did.
     for (final s in model.screenSwitches)
-      if (s.startLocationId.isNotEmpty &&
-          s.endLocationId.isNotEmpty &&
-          s.startLocationId != kNoLocationId &&
-          s.endLocationId != kNoLocationId &&
-          s.startLocationId != s.endLocationId)
+      for (int i = 0; i < s.legs.length; i++)
         CablingBundle(
-          id: '$kCablingScreenRunPrefix${s.id}',
-          fromBoxId: 'loc:${s.startLocationId}',
-          toBoxId: 'loc:${s.endLocationId}',
+          // The first leg keeps the id a two-end run has always had, so an
+          // override typed against it — a recolour, a retyped count — is not
+          // orphaned by somebody adding a pull box to the middle of the run.
+          id: i == 0
+              ? '$kCablingScreenRunPrefix${s.id}'
+              : '$kCablingScreenRunPrefix${s.id}$kCablingLegSeparator$i',
+          fromBoxId: 'loc:${s.legs[i].from}',
+          toBoxId: 'loc:${s.legs[i].to}',
           count: 1,
           // Whatever the run was specified as — "Cat 5e", "18/2 plenum" — and
           // a name that says what it is when nobody has specified it yet.
@@ -1173,6 +1296,8 @@ CablingSchematic buildCablingSchematic({
               ? kCablingControlRunType
               : s.cableType.trim(),
           color: kCablingControlRunColor,
+          // Every leg is the SAME cable, so every leg carries its number.
+          tag: s.cableNumber.trim(),
         ),
   ]..sort((a, b) => a.id.compareTo(b.id));
 

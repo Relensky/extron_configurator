@@ -19,6 +19,7 @@ import 'layout_tools.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
 import 'room_sidecar.dart' show AvUndoScope;
+import 'run_painting.dart';
 import 'undo_bar.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
@@ -78,6 +79,11 @@ class _CablingViewState extends State<CablingView> {
   /// a widget that is on screen can be rendered, so the way to get a picture
   /// of one layer is to make the canvas draw it and capture a frame.
   String _exportLayer = '';
+
+  /// True while the drawing is being rendered the way it should PRINT — light
+  /// theme, no colour. Held for the one frame a black-and-white export
+  /// captures, then put back; see [printSkin].
+  bool _printMode = false;
 
   /// Holds the keyboard for the drawing, so Delete removes what is selected
   /// and the arrows step between the runs on one edge. Taken when something is
@@ -152,7 +158,14 @@ class _CablingViewState extends State<CablingView> {
                     boundaryMargin: const EdgeInsets.all(300),
                     child: RepaintBoundary(
                       key: _canvasKey,
-                      child: _canvas(provider, drawing),
+                      // Inside the boundary, so the black-and-white export
+                      // captures exactly what it draws — see [printSkin].
+                      child: printSkin(
+                        enabled: _printMode,
+                        child: Builder(
+                          builder: (ctx) => _canvas(ctx, provider, drawing),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -391,10 +404,27 @@ class _CablingViewState extends State<CablingView> {
           // This drawing's own history — and the way back out of a Delete
           // pressed by mistake.
           ...avUndoRedoButtons(provider, AvUndoScope.cabling, onDone: _snack),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.image_outlined, size: 18),
-            label: const Text('Export PNG'),
-            onPressed: () => _exportPng(provider),
+          PopupMenuButton<String>(
+            key: const ValueKey('cabling_png_menu'),
+            tooltip: 'Export the drawing',
+            onSelected: (v) => _exportPng(provider, monochrome: v == 'bw'),
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(value: 'one', child: Text('As drawn (.png)')),
+              // The one that gets printed and marked up on a clipboard. The
+              // runs carry a dash pattern as well as a colour precisely so
+              // this stays readable.
+              PopupMenuItem(
+                value: 'bw',
+                child: Text('Black & white for print (.png)'),
+              ),
+            ],
+            child: IgnorePointer(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.image_outlined, size: 18),
+                label: const Text('Export PNG'),
+                onPressed: () {},
+              ),
+            ),
           ),
           PopupMenuButton<String>(
             key: const ValueKey('cabling_schedule_menu'),
@@ -1137,15 +1167,39 @@ class _CablingViewState extends State<CablingView> {
     ),
   );
 
-  Future<void> _exportPng(AppStateProvider provider) async {
-    final bytes = await captureBoundary(_canvasKey, pixelRatio: 2.0);
+  /// The drawing as PNG bytes, optionally rendered the way it should print.
+  ///
+  /// The print skin is a WIDGET, not a filter over the bytes, so the drawing is
+  /// re-laid-out in the light theme before it is captured — a dark-mode capture
+  /// converted to grey is a black page with pale lines on it, which a printer
+  /// renders as a black page.
+  Future<Uint8List?> _captureDrawing({bool monochrome = false}) async {
+    if (!monochrome) return captureBoundary(_canvasKey, pixelRatio: 2.0);
+    setState(() => _printMode = true);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return null;
+      return await captureBoundary(_canvasKey, pixelRatio: 2.0);
+    } finally {
+      if (mounted) setState(() => _printMode = false);
+    }
+  }
+
+  Future<void> _exportPng(
+    AppStateProvider provider, {
+    bool monochrome = false,
+  }) async {
+    final bytes = await _captureDrawing(monochrome: monochrome);
     if (bytes == null) {
       _snack('Could not render the cabling drawing to an image.');
       return;
     }
     String? out = await FilePicker.saveFile(
-      dialogTitle: 'Save the cabling drawing',
-      fileName: '${roomFileStem(provider, 'cabling')}.png',
+      dialogTitle: monochrome
+          ? 'Save the cabling drawing for printing'
+          : 'Save the cabling drawing',
+      fileName:
+          '${roomFileStem(provider, monochrome ? 'cabling_bw' : 'cabling')}.png',
       type: FileType.custom,
       allowedExtensions: const ['png'],
     );
@@ -1153,7 +1207,14 @@ class _CablingViewState extends State<CablingView> {
     if (!out.toLowerCase().endsWith('.png')) out += '.png';
     try {
       await File(out).writeAsBytes(bytes);
-      if (mounted) showSavedFileSnack(context, provider, 'Cabling drawing', out);
+      if (mounted) {
+        showSavedFileSnack(
+          context,
+          provider,
+          monochrome ? 'Cabling drawing (black & white)' : 'Cabling drawing',
+          out,
+        );
+      }
     } catch (e) {
       _snack('Failed to save the image: $e');
     }
@@ -1372,7 +1433,11 @@ class _CablingViewState extends State<CablingView> {
   /// anything. It is derived from the same bundles the lines are drawn from —
   /// see [CablingSchematic.key] — so it cannot fall out of step with them the
   /// way a legend somebody maintains by hand always eventually does.
-  Widget _key(AppStateProvider provider, CablingSchematic drawing) {
+  Widget _key(
+    BuildContext context,
+    AppStateProvider provider,
+    CablingSchematic drawing,
+  ) {
     final rect = _keyRect(provider, drawing)!;
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
@@ -1443,16 +1508,20 @@ class _CablingViewState extends State<CablingView> {
                     height: 30,
                     child: Row(
                       children: [
-                        // The same dash the run captions carry, so a line in
-                        // the key and a line on the drawing read as the same
-                        // mark rather than two different notations.
+                        // The same dash the run captions carry — colour AND
+                        // pattern — so a line in the key and a line on the
+                        // drawing read as the same mark rather than two
+                        // different notations. The pattern is the half that
+                        // still works on a black-and-white print.
                         Container(
                           width: 20,
-                          height: 3,
+                          height: 10,
                           margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: Color(e.color),
-                            borderRadius: BorderRadius.circular(2),
+                          child: CustomPaint(
+                            painter: _KeySpecimenPainter(
+                              color: Color(e.color),
+                              style: e.style,
+                            ),
                           ),
                         ),
                         Expanded(
@@ -1502,7 +1571,11 @@ class _CablingViewState extends State<CablingView> {
   static String _cableCount(double n) =>
       n == n.roundToDouble() ? n.round().toString() : n.toStringAsFixed(1);
 
-  Widget _canvas(AppStateProvider provider, CablingSchematic drawing) {
+  Widget _canvas(
+    BuildContext context,
+    AppStateProvider provider,
+    CablingSchematic drawing,
+  ) {
     final size = _canvasSize(provider, drawing);
     final theme = Theme.of(context);
     // Worked out once and handed to both the painter and the click targets, so
@@ -1549,11 +1622,12 @@ class _CablingViewState extends State<CablingView> {
             ),
           ),
           for (final bundle in drawing.bundles)
-            _bundleHitTarget(provider, drawing, bundle, routes[bundle.id]),
-          for (final box in drawing.boxes) _box(provider, drawing, box),
+            _bundleHitTarget(context, provider, drawing, bundle, routes[bundle.id]),
+          for (final box in drawing.boxes) _box(context, provider, drawing, box),
           // Last, so it is on top of anything it has been dragged over rather
           // than half hidden behind it.
-          if (_keyRect(provider, drawing) != null) _key(provider, drawing),
+          if (_keyRect(provider, drawing) != null)
+            _key(context, provider, drawing),
         ],
       ),
     );
@@ -1598,6 +1672,7 @@ class _CablingViewState extends State<CablingView> {
   /// pad of its own: on a location feeding the pathway with six Cat 6a and
   /// five Cat 5e, both lines are selectable rather than only the top one.
   Widget _bundleHitTarget(
+    BuildContext context,
     AppStateProvider provider,
     CablingSchematic drawing,
     CablingBundle bundle,
@@ -1674,6 +1749,7 @@ class _CablingViewState extends State<CablingView> {
   }
 
   Widget _box(
+    BuildContext context,
     AppStateProvider provider,
     CablingSchematic drawing,
     CablingBox box,
@@ -1845,6 +1921,31 @@ class _CablingViewState extends State<CablingView> {
 /// "6x Cat 6a" over "5x Cat 5e", each with a dash of its own colour. Two
 /// captions at the same midpoint would sit on top of each other, which is how
 /// a drawing quietly loses half of what it is supposed to be ordering.
+/// The short line drawn beside a cable's name in the key. Painted rather than
+/// built out of widgets so it goes through exactly the code the drawing does:
+/// a legend drawn a second way is a legend that eventually disagrees.
+class _KeySpecimenPainter extends CustomPainter {
+  final Color color;
+  final RunLineStyle style;
+
+  const _KeySpecimenPainter({required this.color, required this.style});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    paintRunSpecimen(
+      canvas: canvas,
+      from: Offset(0, size.height / 2),
+      to: Offset(size.width, size.height / 2),
+      color: color,
+      style: style,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_KeySpecimenPainter old) =>
+      old.color != color || old.style != style;
+}
+
 class _BundlePainter extends CustomPainter {
   final CablingSchematic drawing;
   final Map<String, double> lanes;
@@ -1873,44 +1974,33 @@ class _BundlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // --- the lines ---------------------------------------------------------
+    // Drawn in order, each hopping over the ones already down. Two lines
+    // meeting at a point is, on a cabling drawing, indistinguishable from two
+    // lines JOINING at a point, and a sheet that cannot say which is which is
+    // a sheet somebody lands the wrong cable off.
+    final styles = drawing.bundleLineStyles;
+    final drawn = <List<Offset>>[];
     for (final bundle in drawing.bundles) {
       final route = routes[bundle.id];
       if (route == null || route.length < 2) continue;
-
-      final path = Path()..moveTo(route.first.dx, route.first.dy);
-      for (int i = 1; i < route.length; i++) {
+      final offSheet = drawing.isOffSheet(bundle);
+      paintRun(
+        canvas: canvas,
+        route: route,
+        color: Color(bundle.color),
+        strokeWidth: bundle.id == selectedId ? 4 : 2.4,
+        style: styles[bundle.id] ?? RunLineStyle.solid,
         // Rounded corners rather than square ones: a cabling drawing shows
         // cable, and cable does not turn a right angle in a ceiling.
-        final corner = route[i];
-        if (i == route.length - 1) {
-          path.lineTo(corner.dx, corner.dy);
-          break;
-        }
-        final next = route[i + 1];
-        final into = _stepBack(corner, route[i - 1]);
-        final outOf = _stepBack(corner, next);
-        path
-          ..lineTo(into.dx, into.dy)
-          ..quadraticBezierTo(corner.dx, corner.dy, outOf.dx, outOf.dy);
-      }
-
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..color = Color(bundle.color)
-          ..strokeWidth = bundle.id == selectedId ? 4 : 2.4
-          ..strokeJoin = StrokeJoin.round
-          ..strokeCap = StrokeCap.round,
+        cornerRadius: 9,
+        hops: offSheet ? const [] : routeCrossings(route, drawn),
+        offSheet: offSheet,
       );
+      drawn.add(route);
     }
 
     // --- one caption block per edge ----------------------------------------
-    final byEdge = <String, List<CablingBundle>>{};
-    for (final bundle in drawing.bundles) {
-      final ends = [bundle.fromBoxId, bundle.toBoxId]..sort();
-      byEdge.putIfAbsent('${ends[0]}|${ends[1]}', () => []).add(bundle);
-    }
+    final byEdge = drawing.bundlesByEdge;
 
     // Grows as captions go down: each one dodges the boxes, the key and every
     // caption already placed. Two edges whose middles land near each other —
@@ -1963,17 +2053,6 @@ class _BundlePainter extends CustomPainter {
     }
   }
 
-  /// A point [radius] back from [corner] towards [towards], for the bend
-  /// curve. Never more than half the leg, so a short one cannot overshoot into
-  /// the corner beyond it.
-  static Offset _stepBack(Offset corner, Offset towards, {double radius = 9}) {
-    final d = towards - corner;
-    final length = d.distance;
-    if (length == 0) return corner;
-    final r = radius > length / 2 ? length / 2 : radius;
-    return corner + d / length * r;
-  }
-
   /// The stacked label block: one row per run, each with a colour dash.
   /// Returns the box it ended up in, so the next caption can dodge it.
   Rect? _paintCaption(
@@ -1986,7 +2065,8 @@ class _BundlePainter extends CustomPainter {
     const gap = 5.0;
     const rowGap = 2.0;
 
-    final rows = <({TextPainter text, Color color})>[];
+    final styles = drawing.bundleLineStyles;
+    final rows = <({TextPainter text, Color color, RunLineStyle style})>[];
     for (final bundle in group) {
       // "4x AV cabling" in the bold italic a cabling drawing labels its
       // bundles in, with the signal on a second, lighter line under it:
@@ -1996,6 +2076,7 @@ class _BundlePainter extends CustomPainter {
       final selected = bundle.id == selectedId;
       rows.add((
         color: Color(bundle.color),
+        style: styles[bundle.id] ?? RunLineStyle.solid,
         text: TextPainter(
           text: TextSpan(
             text: '${bundle.label}${edited ? '  ✎' : ''}',
@@ -2056,14 +2137,15 @@ class _BundlePainter extends CustomPainter {
     double y = top;
     for (final row in rows) {
       // The dash is the key: it is what ties "6x Cat 6a" to the line it names
-      // when three run side by side.
-      canvas.drawLine(
-        Offset(left, y + row.text.height / 2),
-        Offset(left + dash, y + row.text.height / 2),
-        Paint()
-          ..color = row.color
-          ..strokeWidth = 3
-          ..strokeCap = StrokeCap.round,
+      // when three run side by side — so it is stroked in that run's own
+      // pattern, not just its colour, or the tie breaks the moment the sheet
+      // is printed in black and white.
+      paintRunSpecimen(
+        canvas: canvas,
+        from: Offset(left, y + row.text.height / 2),
+        to: Offset(left + dash, y + row.text.height / 2),
+        color: row.color,
+        style: row.style,
       );
       row.text.paint(canvas, Offset(left + dash + gap, y));
       y += row.text.height + rowGap;

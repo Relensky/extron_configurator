@@ -236,6 +236,37 @@
     "SYSTEM_SETUP.morning_power_on_time",
     "SYSTEM_SETUP.nightly_shutdown_time"
   ],
+  "source_inputs": {
+    "__readme": [
+      "Which input_* keys a room is entitled to, given the sources it has.",
+      "'tokens' maps one piece of gui_tab_type (DOC_USB_WL -> DOC, USB, WL) to",
+      "the switcher-input key that source needs. 'always' are the keys every",
+      "layout carries, plus the ones some OTHER setting governs (the extended",
+      "desktop input, the sub switcher's input). 'cameras' only exist while",
+      "dev_cameras is above zero.",
+      "Anything present but not entitled is removed, and put back if the tab",
+      "type or the camera count brings it back. Only keys named here are ever",
+      "touched, so an input_ key the schema does not know about is left alone."
+    ],
+    "tokens": {
+      "DOC": "input_doc_cam",
+      "DVD": "input_dvd",
+      "BR": "input_blu_ray",
+      "WL": "input_wireless",
+      "USB": "input_usb",
+      "VGA": "input_usb"
+    },
+    "always": [
+      "input_pc",
+      "input_hdmi",
+      "input_pc_extended",
+      "input_sub_switcher"
+    ],
+    "cameras": [
+      "input_inst_cam",
+      "input_aud_cam"
+    ]
+  },
   "consistency": [
     {
       "__readme": [

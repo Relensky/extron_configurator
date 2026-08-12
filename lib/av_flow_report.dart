@@ -173,7 +173,7 @@ List<ReportSection> cablingSections(AvFlowModel model) {
                   ))))
           [
             e.key,
-            (e.value.signals.toList()..sort()).join(', '),
+            (e.value.signals.toList()..sort()).join('\n'),
             e.value.runs,
           ],
       ],
@@ -226,7 +226,7 @@ ReportSection _roomSummary(AppStateProvider provider, AvFlowModel model) {
   }
   final byType = signalTotals.entries
       .map((e) => '${kSignalCodes[e.key] ?? e.key.name} ×${e.value}')
-      .join(', ');
+      .join('\n');
 
   return (
     title: 'Room',
@@ -447,7 +447,7 @@ ReportSection _locationSummary(AvFlowModel model) {
       [
         for (final p in model.floorPlans)
           if (p.hasMarker(location.id)) p.name,
-      ].join(', '),
+      ].join('\n'),
       location.note,
     ]);
   }
@@ -531,7 +531,7 @@ ReportSection _jackCountsByLocation(AvFlowModel model) {
         location.displayName,
         byType.entries
             .map((e) => '${kSignalCodes[e.key] ?? e.key.name} ×${e.value}')
-            .join(', '),
+            .join('\n'),
         total,
         used,
         total - used,
@@ -655,8 +655,8 @@ List<ReportSection> _lineCountsByLabel(AvFlowModel model) {
         // usually a labeling slip worth seeing.
         {
           for (final c in byStem[stem]!) kSignalCodes[c.signal] ?? c.signal.name,
-        }.join(', '),
-        (byStem[stem]!.map((c) => c.label).toList()..sort()).join(', '),
+        }.join('\n'),
+        (byStem[stem]!.map((c) => c.label).toList()..sort()).join('\n'),
       ],
     if (unlabeled > 0)
       [
@@ -705,8 +705,10 @@ ReportSection _screenSwitchSchedule(AvFlowModel model) {
     title: 'Screen / Shade Control Runs',
     header: [
       'Run',
+      'Cable #',
       'Controls',
       'Start (switch)',
+      'Routed through',
       'End (motor / screen)',
       'Cable',
       'Run (ft)',
@@ -716,8 +718,16 @@ ReportSection _screenSwitchSchedule(AvFlowModel model) {
       for (final s in model.screenSwitches)
         [
           s.id,
+          s.cableNumber,
           s.label,
           place(s.startLocationId, s.startNote),
+          // One pull box per line: this is the list somebody counts back boxes
+          // off, and a comma-separated string in one cell is a list nobody
+          // counts twice the same way.
+          [
+            for (final id in s.viaLocationIds)
+              model.locationById(id)?.displayName ?? '(location removed)',
+          ].join('\n'),
           place(s.endLocationId, s.endNote),
           s.cableType,
           s.runFeet <= 0 ? '' : s.runFeet,
@@ -805,7 +815,11 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
         .length;
     final module = provider.moduleForModel(first.model);
     rows.add([
-      group.label,
+      // One name per line: this is a list somebody ticks off against what
+      // is in the crate, and four names run together in one cell is a list
+      // nobody can tick. (The estimate PAGE keeps them comma-joined, where a
+      // four-line cell would push the row apart.)
+      group.nodes.map((n) => n.label).join('\n'),
       first.model,
       // The ordering code off the catalog entry, next to the model it belongs
       // to: the pack list is what a purchase order gets typed from.
@@ -823,7 +837,7 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
       {
         for (final n in group.nodes)
           if (n.locationId.isNotEmpty) model.locationNameOf(n.id),
-      }.where((s) => s.isNotEmpty).join(', '),
+      }.where((s) => s.isNotEmpty).join('\n'),
       // The pack list keeps a device the estimate leaves out: it is in the
       // room and it has to be found, wired and racked whoever paid for it.
       // Saying so here is what stops the two sheets looking like they
@@ -832,7 +846,11 @@ ReportSection _packList(AppStateProvider provider, AvFlowModel model) {
         first.fromConfig ? 'Room config' : 'Added manually',
         if (first.excludeFromCost) 'not quoted',
       ].join(' · '),
-      group.notes,
+      group.nodes
+          .map((n) => n.note)
+          .where((n) => n.trim().isNotEmpty)
+          .toSet()
+          .join('\n'),
     ]);
   }
 

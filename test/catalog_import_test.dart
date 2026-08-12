@@ -127,24 +127,42 @@ void main() {
   });
 
   test('prices came from a price list, and only where one matched', () {
-    // MSRP is imported from a published price list by part number
-    // (tools/import_price_list.py), not read off the drawings and not
-    // guessed. Two things must stay true:
+    // MSRP is imported from a published EXTRON price list, matched on Extron
+    // part number (tools/import_price_list.py — its PART_RE only recognises
+    // the 60-1234-01 form). It is not read off the drawings and not guessed.
     //
-    //   1. a priced entry has a part number — that is what it was matched on,
-    //      so a price with nothing behind it means the import went wrong;
+    // So the rule is about the entries that importer could have touched:
+    //
+    //   1. an Extron entry with a price has the part number it was matched on
+    //      — a price with nothing behind it means the import went wrong;
     //   2. plenty of entries are still unpriced, because no price list covers
-    //      the whole catalog and the importer leaves non-matches alone.
+    //      the whole catalog and the importer leaves non-matches alone;
+    //   3. and however a price arrived, it has to be a plausible figure.
+    //
+    // Third-party gear is deliberately outside rule 1. An Extron price list
+    // will never carry an APC PDU or a Panasonic projector, so those entries
+    // have no Extron part number and never will; a price on one is somebody's
+    // own figure, and demanding a part number there would only be satisfied by
+    // inventing one.
     final priced = catalog.all.where((e) => e.price > 0).toList();
     expect(priced, isNotEmpty, reason: 'the shipped catalog carries MSRPs');
 
     for (final entry in priced) {
-      expect(entry.partNumber.trim(), isNotEmpty,
-          reason: '${entry.model} is priced but has no part number');
-      expect(entry.price, greaterThan(0));
+      if (entry.manufacturer.trim().toLowerCase() == 'extron') {
+        expect(entry.partNumber.trim(), isNotEmpty,
+            reason: '${entry.model} is priced but has no part number');
+      }
       expect(entry.price, lessThan(1000000),
           reason: '${entry.model}: a six-figure list price is a parse error');
     }
+
+    // And the catalog is still overwhelmingly priced BY the importer rather
+    // than by hand — the check that would notice if a few hand-typed figures
+    // quietly became a few hundred.
+    final imported =
+        priced.where((e) => e.partNumber.trim().isNotEmpty).length;
+    expect(imported, greaterThan(priced.length - 20),
+        reason: 'nearly every price should have come off the price list');
 
     final unpriced = catalog.all.where((e) => e.price == 0).length;
     expect(unpriced, greaterThan(0),

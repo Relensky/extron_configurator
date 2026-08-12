@@ -144,13 +144,33 @@ void main() {
     expect(find.text('Cable runs'), findsNothing);
   });
 
-  testWidgets('runs whose ends are not on the sheet are counted, not hidden', (
+  testWidgets('a run with one end off the sheet still leaves the page', (
     tester,
   ) async {
-    // A plan that quietly leaves out half the pulls is worse than one that
-    // says how many it left out.
+    // One end placed is enough to draw something honest: the run heads off the
+    // edge as a squiggle labelled with where it is going, which is what a pull
+    // to the IDF actually does. It is therefore NOT one of the runs the bar
+    // reports as missing — a plan that quietly leaves out half the pulls is
+    // worse than one that says how many it left out, but a plan that says it
+    // left out runs it has drawn is worse still.
     final p = room();
     p.removeAvLocationMarker(p.avFloorPlans.single.id, 'LOC_2');
+    await pump(tester, p);
+
+    expect(find.textContaining('not on this sheet'), findsNothing);
+    // The cables are still on the layer bar, because they are still drawn.
+    expect(find.text('Cable runs'), findsOneWidget);
+  });
+
+  testWidgets('runs with NEITHER end on the sheet are counted, not hidden', (
+    tester,
+  ) async {
+    // Nowhere to start the line from, so the honest thing is to say how many
+    // were left out rather than invent where the cable goes.
+    final p = room();
+    final sheet = p.avFloorPlans.single.id;
+    p.removeAvLocationMarker(sheet, 'LOC_1');
+    p.removeAvLocationMarker(sheet, 'LOC_2');
     await pump(tester, p);
 
     expect(find.textContaining('not on this sheet'), findsOneWidget);

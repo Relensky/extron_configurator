@@ -140,6 +140,21 @@ that is where the migration log, the change-by-change review and "Use
 Original" live. A room with nothing to migrate leaves the button grayed out,
 so its state is also the answer to "does this file need converting?".
 
+### Inputs the room has no source for
+
+A room's source list is spelled twice — `gui_inputs` counts them, `gui_tab_type`
+names them ("DOC_USB_WL") — and the switcher input each source lands on is a key
+of its own. Nothing tied the two together, so a room retyped from six sources
+down to four kept shipping `input_dvd` and `input_blu_ray`: input numbers for
+buttons the panel does not draw, pointing at switcher inputs something else is
+now plugged into. Loading a room now **removes the `input_*` keys its sources do
+not entitle it to**, and the camera inputs go with `dev_cameras` when it is 0.
+Retyping the sources puts the numbers straight back, so it stays a reversible
+choice. Which token entitles which key is schema-driven — `source_inputs` in
+`ui_schema.json` — and a key the schema does not name is never touched. A room
+that has not *stated* its sources at all is left alone: a silence is a question,
+not a No.
+
 ## Cost estimate (the `Cost` tab)
 
 Prices the room that is drawn on the AV canvas. Quantities are the devices on
@@ -214,13 +229,53 @@ The plan image is copied in beside the config and travels in the room folder;
 it is not embedded, so the sidecar stays hand-readable and a 4 MB architectural
 export stays out of it.
 
-### Screen and shade control runs
+### The key
+
+A plan exported as a PNG and mailed to a contractor is read away from this app,
+and every convention on it means nothing on its own. So each sheet carries a
+**key**, drawn on the sheet itself and inside the boundary that gets captured —
+it is part of the exported image and of the sheet in the workbook, not a panel
+that only exists on screen. It lists the **mounting-surface icons** actually
+used on that sheet, the **cable runs** with their colour, dash pattern and
+number, the **callouts** and what each points at, and the **notation** colours.
+Drag it where it reads best (per sheet — a legend clear of the title block on
+one drawing can be on top of it on another) or turn it off from the toolbar.
+
+### Reading a drawing that is not in colour
+
+Colour alone fails the moment a sheet is printed, photocopied, or read by
+somebody who cannot distinguish red from green — and it fails hardest on the
+three parallel lines between the same two boxes, which is exactly where it
+matters. So a run carries a **dash pattern** as well as a colour, keyed off the
+cable rather than the run, so "Cat 6a is the dashed one" is true of every Cat 6a
+on the sheet. Crossings are drawn as a **hop**, because two lines meeting at a
+point is otherwise indistinguishable from two lines joining at one. A run that
+carries on past the sheet — to the IDF, or simply to a location nobody has
+placed on this drawing — leaves the page as a **squiggle** labelled with where
+it is going, rather than a line that stops at the border for no reason.
+
+Both drawings export a **black-and-white version for print**, rendered in the
+light theme before the colour is dropped: a dark-mode capture converted to grey
+is a black page with pale lines on it, which a printer renders as a black page.
+
+### Cable runs between places
 
 A three-position screen switch by the door and a motor above the board is a run
 with two ends and no signal — neither end is a box on the signal flow, so there
 was nowhere to record it and it turned up as a surprise at rough-in. Each run
 names where it **starts** and where it **ends**, what cable it is and how long,
 and comes out on its own sheet.
+
+Two things beyond that, because the run that actually gets installed is rarely
+a straight line between two pieces of gear:
+
+- a **cable number** (`C-101`), printed on the run and in the schedule, so the
+  drawing, the schedule and the label on the cable all say the same thing;
+- the places it is **routed through** — projector box, AV pull box, equipment
+  rack — in order. Each hop is a leg on the cabling sheet, so the drawing shows
+  the path the cable is pulled along and the pull box appears as the box
+  somebody has to install, instead of both being implied by a line straight
+  through the middle of the room.
 
 ### Jack numbering
 

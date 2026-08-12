@@ -340,28 +340,41 @@ class DeviceConfigurationForm extends StatelessWidget {
   // Helper method to wrap fields with Info buttons.
   // Descriptions come from the loaded ui_schema.json first, then fall back to
   // the legacy built-in ConfigDictionary.
-  Widget _wrapWithInfo(BuildContext context, String key, Widget field) {
+  //
+  // [onDelete] adds the same trash button the auto-generated fields carry.
+  // The fields with a slot of their own — model, module, keep alive, input —
+  // were the ones it was missing from, which made a handful of perfectly
+  // ordinary keys look permanent.
+  Widget _wrapWithInfo(BuildContext context, String key, Widget field,
+      {VoidCallback? onDelete}) {
     final desc = context.read<AppStateProvider>().uiSchema.descriptionFor(key)
         ?? ConfigDictionary.descriptions[key];
-    if (desc == null) return field;
+    if (desc == null && onDelete == null) return field;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(child: field),
-        IconButton(
-          icon: const Icon(Icons.info_outline, color: Colors.blueAccent),
-          tooltip: desc,
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: Text(key),
-                content: Text(desc),
-                actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
-              )
-            );
-          },
-        )
+        if (desc != null)
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.blueAccent),
+            tooltip: desc,
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text(key),
+                  content: Text(desc),
+                  actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+                )
+              );
+            },
+          ),
+        if (onDelete != null)
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Remove "$key" from the config',
+            onPressed: onDelete,
+          ),
       ],
     );
   }
@@ -385,7 +398,14 @@ class DeviceConfigurationForm extends StatelessWidget {
     // it for this device type (e.g. projector input -> module_states),
     // otherwise the legacy autocomplete block. Never in the list below —
     // that kept it visible only after a save re-sorted the keys.
+    // Deleted in this session and not since typed back in — the same rule the
+    // placeholder pass below follows, applied to the one field that has a slot
+    // of its own.
+    final bool inputOmitted =
+        !deviceData.containsKey('input') &&
+        provider.isConfigKeyOmitted(deviceKey, 'input');
     final bool inputHasSchemaOverride =
+        !inputOmitted &&
         provider.uiSchema.deviceSpecFor(deviceKey, 'input') != null;
     // 'model' renders in its own dedicated slot at the top (Model dropdown),
     // like 'module' — never in the auto-generated list below.
@@ -429,12 +449,21 @@ class DeviceConfigurationForm extends StatelessWidget {
         deviceKey, sortedKeys,
         section: deviceData.map((k, v) => MapEntry(k.toString(), v)))) {
       if (skipKeys.contains(spec.key)) continue;
+      // Deleted in this session: the schema is offering the key back, and the
+      // user has already said no. Putting the placeholder up again is what
+      // made these look undeletable — the trash button worked and the field
+      // reappeared, so nothing seemed to happen.
+      if (provider.isConfigKeyOmitted(deviceKey, spec.key)) continue;
       final Widget? field = SchemaFieldBuilder.buildField(
         context: context,
         provider: provider,
         sectionKey: deviceKey,
         fieldKey: spec.key,
         value: null,
+        // A placeholder is deletable too — declining the offer is the whole
+        // point of the button on a device whose connection has no use for it.
+        onDelete: () =>
+            confirmRemoveConfigKey(context, provider, deviceKey, spec.key),
       );
       if (field == null) continue;
       dynamicFormFields.add(field);
@@ -466,7 +495,11 @@ class DeviceConfigurationForm extends StatelessWidget {
         // --- MODEL SELECTOR (aggregated from every module's model dict) ---
         // Picking a model switches 'module' to that model's default .py and
         // applies the module's DEVICE_INFO connection defaults.
-        _wrapWithInfo(context, 'model', Row(
+        _wrapWithInfo(context, 'model',
+          onDelete: deviceData.containsKey('model')
+              ? () => confirmRemoveConfigKey(context, provider, deviceKey, 'model')
+              : null,
+          Row(
           children: [
             Expanded(
               child: Autocomplete<String>(
@@ -534,7 +567,11 @@ class DeviceConfigurationForm extends StatelessWidget {
         const SizedBox(height: 20),
 
         // --- PYTHON MODULE SELECTOR (fill-in or pick from modules path) ---
-        _wrapWithInfo(context, 'module', Row(
+        _wrapWithInfo(context, 'module',
+          onDelete: deviceData.containsKey('module')
+              ? () => confirmRemoveConfigKey(context, provider, deviceKey, 'module')
+              : null,
+          Row(
           children: [
             Expanded(
               child: Autocomplete<String>(
@@ -627,7 +664,12 @@ class DeviceConfigurationForm extends StatelessWidget {
 
         // --- DYNAMIC KEEP ALIVE DROPDOWN ---
         if (moduleName.isNotEmpty)
-          _wrapWithInfo(context, 'keep_alive_command', FutureBuilder<List<String>>(
+          _wrapWithInfo(context, 'keep_alive_command',
+            onDelete: deviceData.containsKey('keep_alive_command')
+                ? () => confirmRemoveConfigKey(
+                    context, provider, deviceKey, 'keep_alive_command')
+                : null,
+            FutureBuilder<List<String>>(
             future: provider.getCommandsForModule(moduleName),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const CircularProgressIndicator();
@@ -667,10 +709,15 @@ class DeviceConfigurationForm extends StatelessWidget {
                 sectionKey: deviceKey,
                 fieldKey: 'input',
                 value: deviceData['input'], // may be null before first edit
+                onDelete: () =>
+                    confirmRemoveConfigKey(context, provider, deviceKey, 'input'),
               ) ??
               const SizedBox.shrink()
         else if (deviceData.containsKey('input'))
-          _wrapWithInfo(context, 'input', FutureBuilder<List<String>>(
+          _wrapWithInfo(context, 'input',
+            onDelete: () =>
+                confirmRemoveConfigKey(context, provider, deviceKey, 'input'),
+            FutureBuilder<List<String>>(
             future: provider.getInputsForModule(moduleName),
             builder: (context, snapshot) {
               List<String> inputs = snapshot.data ?? [];

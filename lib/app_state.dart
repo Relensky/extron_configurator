@@ -4715,6 +4715,8 @@ class AppStateProvider extends ChangeNotifier {
   }) async {
     systemLogs.clear(); // Clear old logs on new load
     _prunedSystemKeys.clear(); // Belongs to the room being replaced
+    _prunedSourceInputs.clear();
+    _omittedConfigKeys.clear();
 
     roomConfig = parsedConfig;
 
@@ -4853,6 +4855,18 @@ class AppStateProvider extends ChangeNotifier {
     // the companion keys that create '_reboot_only', and reads the loaded file
     // rather than the working config to tell a real setting from that default.
     foldOutletActionIntoRebootOnly(_originalLoadedConfig);
+
+    // Drop the input_* keys this room's sources do not entitle it to — a
+    // legacy file retyped down to four sources still carries the DVD and
+    // Blu-ray input numbers, and a room with no cameras still carries theirs.
+    // Before the provenance diff, so the removals are part of the conversion
+    // the preview reports rather than a change nobody was told about.
+    final int strippedInputs = pruneUnusedSourceInputs();
+    if (strippedInputs > 0) {
+      systemLogs.add(
+          "DEFAULTS: Removed $strippedInputs input key(s) this room has no "
+          "source for (gui_tab_type / dev_cameras).");
+    }
 
     // Auto-generate the Title Case full room name when gve_bldg (code like
     // 'BSS' OR a legacy full name) resolves against buildings.json — so a
@@ -5153,6 +5167,8 @@ class AppStateProvider extends ChangeNotifier {
       // Nothing carried over from the previous room can be restored into this
       // one — the stash is per-config.
       _prunedSystemKeys.clear();
+      _prunedSourceInputs.clear();
+      _omittedConfigKeys.clear();
 
       // Default all hardware counts to 0 (families from the UI schema's
       // device_types, so new dev_ keys added there are covered too)
@@ -5175,6 +5191,11 @@ class AppStateProvider extends ChangeNotifier {
         for (final key in deviceKeys) {
           _pruneSystemKeysForCount(key, 0);
         }
+
+        // Same for the source inputs: a template's five-source room starts
+        // with no cameras, so the camera input numbers go with them and come
+        // back the moment the wizard puts a camera in the room.
+        pruneUnusedSourceInputs();
       }
 
       // Prune existing devices based on the new 0 counts
@@ -5688,6 +5709,9 @@ class AppStateProvider extends ChangeNotifier {
         value = normalizeModuleName(value);
       }
       roomConfig[deviceKey][property] = value;
+      // Typing into a placeholder field is asking for the key back, whatever
+      // was said about it earlier in the session.
+      _omittedConfigKeys.remove('$deviceKey.$property');
       _forgetConversionOrigin(deviceKey, property);
       // A new python module was just selected: parse it right away (if it isn't
       // already cached) so its command/input dictionaries are ready instantly.
@@ -5700,6 +5724,14 @@ class AppStateProvider extends ChangeNotifier {
       // it now rather than leaving dead data in the file the editor no longer
       // shows. Only ever removes keys the schema's "hideWhen" rules out.
       _dropKeysHiddenByConnection(deviceKey);
+      // Retyping the room's sources is the moment the input numbers behind
+      // the ones it just lost stop meaning anything — see
+      // [pruneUnusedSourceInputs]. Camera count is handled here too, for the
+      // paths that write dev_cameras directly rather than through the wizard.
+      if (deviceKey == 'SYSTEM_SETUP' &&
+          (property == 'gui_tab_type' || property == 'dev_cameras')) {
+        pruneUnusedSourceInputs();
+      }
       notifyListeners();
     }
   }
@@ -5724,18 +5756,45 @@ class AppStateProvider extends ChangeNotifier {
     return stale;
   }
 
+  /// `SECTION.key` for every property the user has deleted on a tab.
+  ///
+  /// The schema offers some keys BEFORE they exist in a block — "addIfMissing"
+  /// on device_id, service_port, use_device_mute, the keep-alive fields, baud
+  /// — so a device converted to something that doesn't use them still has
+  /// somewhere to type one in. That placeholder is also what made those keys
+  /// look undeletable: the trash button took the key out of the config and the
+  /// missing-field pass put the field straight back, so the delete appeared to
+  /// do nothing. Recording the deletion is what makes it stick.
+  ///
+  /// Session-only, like [_prunedSystemKeys]: it is a note about what the user
+  /// has said no to in this sitting, not a property of the room. Typing a
+  /// value in, or adding the key back through Check Defaults, clears it.
+  final Set<String> _omittedConfigKeys = {};
+
+  /// True when the user deleted [property] from [sectionKey] and the schema
+  /// should stop offering it back as a placeholder field.
+  bool isConfigKeyOmitted(String sectionKey, String property) =>
+      _omittedConfigKeys.contains('$sectionKey.$property');
+
   /// Removes one property from a section (device block or SYSTEM_SETUP).
   /// The delete buttons on the Devices/System tabs land here; the key can be
   /// re-added later via the Check Defaults dialog.
+  ///
+  /// Also records the deletion so a schema placeholder does not put the field
+  /// straight back — see [_omittedConfigKeys]. That is why this notifies even
+  /// when the key was not in the config: the field on screen was an offer, and
+  /// declining it has to change what is drawn.
   void removeConfigKey(String sectionKey, String property) {
     final section = roomConfig[sectionKey];
-    if (section is Map && section.containsKey(property)) {
+    if (section is! Map) return;
+    _omittedConfigKeys.add('$sectionKey.$property');
+    if (section.containsKey(property)) {
       section.remove(property);
       // Otherwise the entry outlives the key and Check Defaults re-adding it
       // later would bring the old conversion color back with it.
       _forgetConversionOrigin(sectionKey, property);
-      notifyListeners();
     }
+    notifyListeners();
   }
 
   /// Adds one property to a section (the Check Defaults dialog's "+ Add").
@@ -5743,6 +5802,8 @@ class AppStateProvider extends ChangeNotifier {
   void addConfigKey(String sectionKey, String property, dynamic value) {
     final section = roomConfig[sectionKey];
     if (section is Map && !section.containsKey(property)) {
+      // Asking for it back is the opposite of having deleted it.
+      _omittedConfigKeys.remove('$sectionKey.$property');
       section[property] = value;
       notifyListeners();
     }
@@ -6870,6 +6931,65 @@ class AppStateProvider extends ChangeNotifier {
     return doomed.length;
   }
 
+  /// `input_*` keys taken out by [pruneUnusedSourceInputs], with the values
+  /// they held, so retyping the sources back puts the switcher input numbers
+  /// back with them. Session-only and cleared with the room, exactly like
+  /// [_prunedSystemKeys].
+  final Map<String, dynamic> _prunedSourceInputs = {};
+
+  /// Removes the `input_*` keys this room's sources do not entitle it to, and
+  /// restores any the sources have brought back.
+  ///
+  /// A room's source list is spelled in `gui_tab_type` ("DOC_USB_WL") and its
+  /// camera count in `dev_cameras`; the switcher input each source lands on is
+  /// a key of its own. Nothing tied the two together, so a room retyped from
+  /// six sources down to four kept shipping `input_dvd` and `input_blu_ray` —
+  /// input numbers for buttons the panel does not draw, pointing at switcher
+  /// inputs something else is now plugged into. The rules live in
+  /// ui_schema.json "source_inputs"; see [SourceInputRules].
+  ///
+  /// Returns how many keys went, and logs them, so the removal is never
+  /// silent. Never notifies — every caller either notifies or is mid-load.
+  int pruneUnusedSourceInputs() {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return 0;
+    final block = setup.map((k, v) => MapEntry(k.toString(), v));
+    final rules = uiSchema.sourceInputs;
+
+    // Put back first: a tab type that has just regained Wireless should get
+    // its old input_wireless number back rather than a blank one, and doing
+    // it before the removal keeps a single pass from fighting itself.
+    final expected = rules.expectedKeys(
+      tabType: block['gui_tab_type']?.toString() ?? '',
+      cameraCount: int.tryParse(block['dev_cameras']?.toString() ?? '') ?? 0,
+    );
+    final restored = <String>[];
+    for (final key in expected) {
+      if (setup.containsKey(key)) continue;
+      if (!_prunedSourceInputs.containsKey(key)) continue;
+      setup[key] = _prunedSourceInputs.remove(key);
+      restored.add(key);
+    }
+    if (restored.isNotEmpty) {
+      AppLogger.logInfo(
+          "Sources changed: restored ${restored.length} input key(s) this room "
+          "has again — ${restored.join(', ')}");
+    }
+
+    final doomed = rules.staleKeysIn(block);
+    if (doomed.isEmpty) return 0;
+    for (final key in doomed) {
+      _prunedSourceInputs[key] = setup[key]; // recoverable if the source returns
+      setup.remove(key);
+      _forgetConversionOrigin('SYSTEM_SETUP', key);
+    }
+    AppLogger.logInfo(
+        "Sources are '${block['gui_tab_type'] ?? ''}' with "
+        "${block['dev_cameras'] ?? '0'} camera(s): removed ${doomed.length} "
+        "input key(s) the room has no source for — ${doomed.join(', ')}");
+    return doomed.length;
+  }
+
   /// The other half of [_pruneSystemKeysForCount]: giving a family hardware
   /// again restores the keys its own removal took, with their previous values.
   /// A key the config has since gained back on its own is never overwritten.
@@ -7009,6 +7129,11 @@ class AppStateProvider extends ChangeNotifier {
     // them back, so the wizard's dropdown stays a reversible choice.
     _pruneSystemKeysForCount(devKey, count);
     _restoreSystemKeysForCount(devKey, count);
+
+    // A room with no cameras has no camera inputs either, and a room that has
+    // just gained one gets its old input numbers back — the same bargain, on
+    // the keys the sources own rather than the ones a family owns.
+    pruneUnusedSourceInputs();
 
     // 1. Remove existing devices of this type to ensure a clean slate
     roomConfig.removeWhere((key, value) => key.startsWith(devicePrefix));
