@@ -5,6 +5,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:provider/provider.dart';
+
+import 'app_snack.dart';
+import 'app_state.dart';
 
 // ============================================================================
 // [FEATURE - SCREENSHOTS + ANNOTATION]
@@ -226,6 +231,11 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   Future<void> _save() async {
     final image = _image;
     if (image == null || _saving) return;
+    // Taken before anything is popped: the "saved" bar outlives this dialog,
+    // so it cannot be built from a BuildContext that has gone with it.
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
     setState(() => _saving = true);
 
     try {
@@ -251,16 +261,20 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
       if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
       await File(outputFile).writeAsBytes(byteData.buffer.asUint8List());
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Screenshot saved to $outputFile')));
-      }
+      final saved = outputFile;
+      if (mounted) Navigator.of(context).pop();
+      showSavedSnackBar(
+        messenger: messenger,
+        theme: theme,
+        provider: provider,
+        message: 'Screenshot saved as ${p.basename(saved)}',
+        savedPath: saved,
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to save screenshot: $e')));
-      }
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('Failed to save screenshot: $e')),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:path/path.dart' as path;
 
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -117,6 +117,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     required Brightness brightness,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
     setState(() {
       _captureBrightness = brightness;
       _capturing = true;
@@ -157,8 +158,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
     try {
       await File(outputFile).writeAsBytes(bytes);
-      messenger.showSnackBar(
-        SnackBar(content: Text('Cost estimate image saved as $outputFile')),
+      showSavedSnackBar(
+        messenger: messenger,
+        theme: theme,
+        provider: provider,
+        message: 'Cost estimate image saved as ${path.basename(outputFile)}',
+        savedPath: outputFile,
       );
     } catch (e) {
       messenger.showSnackBar(
@@ -1571,6 +1576,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     String what,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
     final title = model.roomTitle.isEmpty ? 'Cost estimate' : model.roomTitle;
     final priced = costReportSections(estimate);
 
@@ -1630,26 +1636,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       // OPEN rather than just a path: the point of writing a workbook is to
       // look at it, and hunting the folder down afterwards is the one step
       // between saving an estimate and reading it.
-      final saved = outputFile;
-      showTimedSnackBar(
-        messenger,
-        SnackBar(
-          duration: const Duration(seconds: 8),
-          content: Text('Cost estimate saved to $saved'),
-          action: SnackBarAction(
-            label: 'OPEN',
-            onPressed: () async {
-              if (!await launchUrl(
-                Uri.file(saved),
-                mode: LaunchMode.externalApplication,
-              )) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Could not open $saved')),
-                );
-              }
-            },
-          ),
-        ),
+      showSavedSnackBar(
+        messenger: messenger,
+        theme: theme,
+        provider: provider,
+        message: 'Cost estimate saved as ${path.basename(outputFile)}',
+        savedPath: outputFile,
       );
     } catch (e) {
       messenger.showSnackBar(

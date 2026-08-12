@@ -5,22 +5,28 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
+import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'plan_annotations.dart';
 import 'report_tools.dart';
+import 'room_sidecar.dart' show AvUndoScope;
+import 'undo_bar.dart';
 import 'room_locations.dart';
 import 'room_locations_view.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
+import 'xlsx_writer.dart';
 
 /// ============================================================================
 ///  FLOOR PLAN TAB
@@ -152,6 +158,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
+  void _savedSnack(AppStateProvider provider, String what, String file) {
+    if (!mounted) return;
+    showSavedFileSnack(context, provider, what, file);
+  }
+
   void _syncImage(AppStateProvider provider) {
     final plan = provider.activeFloorPlan;
     final resolved = plan == null
@@ -245,38 +256,96 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
     try {
       await File(outputFile).writeAsBytes(bytes);
-      _snack('Floor plan saved as $outputFile');
+      _savedSnack(provider, 'Floor plan', outputFile);
     } catch (e) {
       _snack('Failed to save the image: $e', error: true);
     }
   }
 
-  Future<void> _exportReport(AppStateProvider provider) async {
+  /// The location report, as a workbook or as plain text.
+  ///
+  /// The workbook is the one that gets sent: it carries the tables AND the
+  /// drawing they describe — every layer of it, a sheet each — so the person
+  /// reading "6 runs to the front floor box" can see which six and where they
+  /// go without a second attachment. The text file stays for a quick look and
+  /// for pasting into an email.
+  Future<void> _exportReport(
+    AppStateProvider provider, {
+    required bool asXlsx,
+  }) async {
     final model = buildAvFlowModel(provider);
     final sections = locationSections(model);
     if (sections.isEmpty) {
       _snack('Nothing to report yet — no locations, runs or callouts.');
       return;
     }
+    final title = model.roomTitle.isEmpty ? 'Floor plan' : model.roomTitle;
+    final ext = asXlsx ? 'xlsx' : 'txt';
     String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Save the location report',
-      fileName: '${roomFileStem(provider, 'locations')}.txt',
+      fileName: '${roomFileStem(provider, 'locations')}.$ext',
       type: FileType.custom,
-      allowedExtensions: const ['txt'],
+      allowedExtensions: [ext],
     );
     if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.txt')) outputFile += '.txt';
+    if (!outputFile.toLowerCase().endsWith('.$ext')) outputFile += '.$ext';
+
     try {
-      await File(outputFile).writeAsString(
-        renderTextReport(
-          model.roomTitle.isEmpty ? 'Floor plan' : model.roomTitle,
-          sections,
-        ),
-      );
-      _snack('Location report saved as $outputFile');
+      if (asXlsx) {
+        // One moment for the whole book: sheets stamped seconds apart read as
+        // documents from two different exports.
+        final generated = DateTime.now();
+        final layers = await _captureCableLayers(provider);
+        final first = layers.isEmpty ? null : layers.first;
+        await File(outputFile).writeAsBytes(
+          buildXlsx([
+            buildStackedReportSheet(
+              sheetName: 'Locations',
+              title: title,
+              sections: sections,
+              generated: generated,
+              imageBuilder: first == null
+                  ? null
+                  : (anchorRow) => scaledSheetImage(first.bytes, anchorRow),
+            ),
+            // One sheet per cable type, which is how a cabling set is issued:
+            // the network contractor gets the network drawing and nobody has
+            // to read around somebody else's runs.
+            for (final layer in layers.skip(1))
+              _layerSheet(title, layer, generated),
+          ]),
+        );
+      } else {
+        await File(outputFile).writeAsString(
+          renderTextReport(title, sections),
+        );
+      }
+      _savedSnack(provider, 'Location report', outputFile);
     } catch (e) {
       _snack('Failed to save the report: $e', error: true);
     }
+  }
+
+  /// One workbook sheet holding one layer's drawing and nothing else. The
+  /// tables are on the Locations sheet; repeating them per layer would be five
+  /// copies of one schedule with a different picture over each.
+  XlsxSheet _layerSheet(
+    String title,
+    ({String name, String caption, Uint8List bytes}) layer,
+    DateTime generated,
+  ) {
+    final rows = <List<dynamic>>[
+      ['$title — ${layer.caption}', '', '', '', ''],
+      ['Generated ${reportTimestamp(generated)}'],
+      [],
+    ];
+    return XlsxSheet(
+      name: layer.name,
+      rows: rows,
+      rowStyles: const {0: XlsxRowStyle.title},
+      merges: const ['A1:E1'],
+      image: scaledSheetImage(layer.bytes, rows.length + 1),
+    );
   }
 
   // --- build ----------------------------------------------------------------
@@ -746,17 +815,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
             onPressed: () => showLocationManager(context, provider),
           ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.undo, size: 18),
-            label: Text(
-              provider.canUndoAvFlow ? 'Undo: ${provider.avUndoLabel}' : 'Undo',
-            ),
-            onPressed: provider.canUndoAvFlow
-                ? () {
-                    final undone = provider.undoAvFlow();
-                    if (undone.isNotEmpty) _snack('Undid: $undone');
-                  }
-                : null,
+          // The sheets, the places on them and the notation drawn on them.
+          ...avUndoRedoButtons(
+            provider,
+            AvUndoScope.floorPlans,
+            onDone: (m) => _snack(m),
           ),
           if (plan != null)
             PopupMenuButton<String>(
@@ -780,10 +843,24 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 ),
               ),
             ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.summarize, size: 18),
-            label: const Text('Location report'),
-            onPressed: () => _exportReport(provider),
+          PopupMenuButton<String>(
+            key: const ValueKey('plan_report_menu'),
+            tooltip: 'Export the location report',
+            onSelected: (v) => _exportReport(provider, asXlsx: v == 'xlsx'),
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                value: 'xlsx',
+                child: Text('Workbook with the drawings (.xlsx)'),
+              ),
+              PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
+            ],
+            child: IgnorePointer(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.summarize, size: 18),
+                label: const Text('Location report'),
+                onPressed: () {},
+              ),
+            ),
           ),
         ],
       ),
@@ -1009,6 +1086,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ),
           color: Color(b.color),
           label: b.label,
+          fromLabel: b.fromLabel,
+          toLabel: b.toLabel,
+          fromDot: obstacles.dots[b.fromBoxId],
+          toDot: obstacles.dots[b.toBoxId],
         ),
     ];
   }
@@ -1074,6 +1155,34 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   bool _layerMatches(String cableType) =>
       _cableLayer == _kLayerAll || _cableLayer == cableType;
+
+  /// The colour keys every run of [cableType] is filed under.
+  ///
+  /// Plural because a cable type can be pulled under more than one category —
+  /// AV Cat 6a and network Cat 6a are two different pulls the key colours
+  /// apart — while this bar has ONE chip for "Cat 6a". Recolouring the chip
+  /// means the layer being looked at, so it takes both.
+  Set<String> _colorKeysFor(CablingSchematic drawing, String cableType) => {
+    for (final b in drawing.bundles)
+      if (b.cableType == cableType) cablingColorKey(b),
+  };
+
+  Future<void> _pickCableTypeColor(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    ({String type, Color color}) layer,
+  ) async {
+    final picked = await showColorWheelDialog(
+      context,
+      initial: layer.color,
+      title: 'Colour for ${layer.type}',
+    );
+    if (picked == null) return;
+    provider.setCablingTypeColor(
+      _colorKeysFor(drawing, layer.type),
+      picked.toARGB32(),
+    );
+  }
 
   /// The cable types this sheet could show, in the order the drawing lists
   /// them, each with the colour it is drawn in.
@@ -1147,14 +1256,43 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
           ],
           for (final layer in layers)
-            ChoiceChip(
-              key: ValueKey('plan_layer_${layer.type}'),
-              avatar: CircleAvatar(backgroundColor: layer.color, radius: 7),
-              label: Text(layer.type),
-              visualDensity: VisualDensity.compact,
-              selected: _cableLayer == layer.type,
-              onSelected: (_) => setState(() => _cableLayer = layer.type),
+            // Right-click recolours the cable rather than the line: a drawing
+            // set says "network is green", and saying it here beats clicking
+            // every network run on the sheet and hoping none was missed.
+            GestureDetector(
+              onSecondaryTap: () =>
+                  _pickCableTypeColor(provider, drawing, layer),
+              child: ChoiceChip(
+                key: ValueKey('plan_layer_${layer.type}'),
+                avatar: CircleAvatar(backgroundColor: layer.color, radius: 7),
+                label: Text(layer.type),
+                tooltip: 'Show only this cable · right-click to recolour it',
+                visualDensity: VisualDensity.compact,
+                selected: _cableLayer == layer.type,
+                onSelected: (_) => setState(() => _cableLayer = layer.type),
+              ),
             ),
+          // The same thing on a button, for the layer being looked at: a
+          // feature only reachable by right-clicking is a feature nobody finds.
+          for (final layer in layers)
+            if (_cableLayer == layer.type) ...[
+              avRowIcon(
+                Icons.colorize,
+                'Colour for ${layer.type}',
+                () => _pickCableTypeColor(provider, drawing, layer),
+              ),
+              if (provider.hasCablingTypeColor(
+                _colorKeysFor(drawing, layer.type),
+              ))
+                avRowIcon(
+                  Icons.format_color_reset,
+                  'Back to the colour the key gives this cable',
+                  () => provider.setCablingTypeColor(
+                    _colorKeysFor(drawing, layer.type),
+                    null,
+                  ),
+                ),
+            ],
           if (missing > 0)
             Tooltip(
               message: 'Both ends of a run have to be on THIS sheet before it '
@@ -1172,6 +1310,55 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
+  /// Renders the sheet once per cable layer: everything first, then one
+  /// drawing per cable type.
+  ///
+  /// The layer picker is flipped and the canvas re-captured each time, which
+  /// is the only way to get these — only a widget on screen can be rendered —
+  /// and the picker is put back where it was afterwards. Shared by the PNG
+  /// export and the workbook so the two cannot come out of a different set of
+  /// drawings.
+  ///
+  /// [name] is the sheet name the workbook uses (Excel: 31 chars, no
+  /// `: \ / ? * [ ]`); [caption] is what it is called in prose.
+  Future<List<({String name, String caption, Uint8List bytes})>>
+  _captureCableLayers(AppStateProvider provider) async {
+    final model = buildAvFlowModel(provider);
+    final layers = _cableLayers(
+      provider,
+      provider.activeFloorPlan,
+      provider.cablingSchematic(model),
+    );
+    final out = <({String name, String caption, Uint8List bytes})>[];
+    final was = _cableLayer;
+    for (final layer in [_kLayerAll, ...layers.map((l) => l.type)]) {
+      if (!mounted) break;
+      setState(() => _cableLayer = layer);
+      // Let the change actually paint before the boundary is captured;
+      // without this every image would be of whatever was on screen when the
+      // loop started.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) break;
+      final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
+      if (bytes == null) continue;
+      final caption = layer == _kLayerAll ? 'All runs' : layer;
+      out.add((
+        name: layer == _kLayerAll ? 'All runs' : _sheetSafe(layer),
+        caption: caption,
+        bytes: bytes,
+      ));
+    }
+    if (mounted) setState(() => _cableLayer = was);
+    return out;
+  }
+
+  /// A cable type as a workbook sheet name: Excel refuses the punctuation and
+  /// stops at 31 characters, and "Fiber (OS2)" is a real cable type.
+  static String _sheetSafe(String name) {
+    final cleaned = name.replaceAll(RegExp(r'[:\\/?*\[\]]'), ' ').trim();
+    return cleaned.length > 31 ? cleaned.substring(0, 31) : cleaned;
+  }
+
   /// Writes one PNG per cable type into a folder the user picks.
   ///
   /// A sheet per trade is the whole point of the layers: the network
@@ -1179,12 +1366,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// and neither has to read around the other's runs.
   Future<void> _exportLayers(AppStateProvider provider) async {
     final model = buildAvFlowModel(provider);
-    final layers = _cableLayers(
+    if (_cableLayers(
       provider,
       provider.activeFloorPlan,
       provider.cablingSchematic(model),
-    );
-    if (layers.isEmpty) {
+    ).isEmpty) {
       _snack('No cable runs land on this sheet yet.');
       return;
     }
@@ -1194,45 +1380,42 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
     if (folder == null) return;
 
-    final was = _cableLayer;
+    final captured = await _captureCableLayers(provider);
     final written = <String>[];
     final failed = <String>[];
-    // "All" first, then one per type, so the folder reads as a set.
-    for (final layer in [_kLayerAll, ...layers.map((l) => l.type)]) {
-      setState(() => _cableLayer = layer);
-      // Let the change actually paint before the boundary is captured;
-      // without this every image would be of whatever was on screen when the
-      // loop started.
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
-
-      final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
-      final name = layer == _kLayerAll ? 'all_runs' : layer;
-      final safe = name.replaceAll(RegExp(r'[^\w\-]+'), '_');
-      if (bytes == null) {
-        failed.add(name);
-        continue;
-      }
+    for (final layer in captured) {
+      final safe = layer.caption
+          .replaceAll(RegExp(r'[^\w\-]+'), '_')
+          .toLowerCase();
       try {
         final file = File(
-          '$folder${Platform.pathSeparator}'
-          '${roomFileStem(provider, 'floor_plan')}_$safe.png',
+          p.join(
+            folder,
+            '${roomFileStem(provider, 'floor_plan')}_$safe.png',
+          ),
         );
-        await file.writeAsBytes(bytes);
-        written.add(file.uri.pathSegments.last);
+        await file.writeAsBytes(layer.bytes);
+        written.add(p.basename(file.path));
       } catch (e) {
-        failed.add('$name — $e');
+        failed.add('${layer.caption} — $e');
       }
     }
 
-    if (mounted) setState(() => _cableLayer = was);
-    _snack(
-      failed.isEmpty
-          ? 'Wrote ${written.length} layer image'
-            '${written.length == 1 ? '' : 's'} to $folder'
-          : 'Wrote ${written.length}; could not write ${failed.join(', ')}',
-      error: failed.isNotEmpty,
-    );
+    if (!mounted) return;
+    if (failed.isEmpty && written.isNotEmpty) {
+      showSavedFolderSnack(
+        context,
+        provider,
+        'Wrote ${written.length} layer image'
+        '${written.length == 1 ? '' : 's'} to ${p.basename(folder)}',
+        folder,
+      );
+    } else {
+      _snack(
+        'Wrote ${written.length}; could not write ${failed.join(', ')}',
+        error: true,
+      );
+    }
   }
 
   // --- drawing notation -----------------------------------------------------
@@ -1678,13 +1861,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           children: [
             Expanded(
               child: Text(
-                'Screen / shade runs',
+                'Cabling Runs',
                 style: theme.textTheme.titleSmall,
               ),
             ),
             IconButton(
               icon: const Icon(Icons.add, size: 20),
-              tooltip: 'Add a control run',
+              tooltip: 'Add a cable run',
               onPressed: () async {
                 await showScreenSwitchEditor(context, provider, null);
                 if (mounted) setState(() {});
@@ -1693,8 +1876,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ],
         ),
         Text(
-          'A switch at one place and a motor at another, with a run between '
-          'them. Neither end is a box on the signal flow.',
+          'Cable between two places in this room that no device on the signal '
+          'flow accounts for — a screen switch and the motor it drives, a '
+          'spare conduit, somebody else\'s contract. Recorded here, they get '
+          'costed, scheduled and drawn on the cabling sheet with the rest.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 6),
@@ -1721,7 +1906,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 18),
-                      tooltip: 'Edit',
+                      tooltip: 'Edit Cable Run',
                       onPressed: () async {
                         await showScreenSwitchEditor(context, provider, s);
                         if (mounted) setState(() {});
@@ -1788,7 +1973,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ? ''
           : plan.pixelsPerFoot.toStringAsFixed(2),
     );
-    double opacity = plan.opacity;
 
     final result = await showDialog<String>(
       context: context,
@@ -1817,24 +2001,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Opacity behind the signal flow',
-                  style: Theme.of(ctx).textTheme.titleSmall,
-                ),
-                Text(
-                  'How strongly the plan shows through on the AV Flow tab. '
-                  'This page always draws it fully.',
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-                Slider(
-                  value: opacity,
-                  min: 0.05,
-                  max: 1.0,
-                  divisions: 19,
-                  label: '${(opacity * 100).round()}%',
-                  onChanged: (v) => setLocal(() => opacity = v),
-                ),
-                const SizedBox(height: 8),
                 Text(
                   'Image: ${plan.imageFile.isEmpty ? '(none)' : plan.imageFile}'
                   '\n${plan.imageSize.width.round()} × '
@@ -1876,7 +2042,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         name: nameController.text.trim().isEmpty
             ? plan.name
             : nameController.text.trim(),
-        opacity: opacity,
         pixelsPerFoot: double.tryParse(scaleController.text.trim()) ?? 0,
       ),
     );
@@ -2070,6 +2235,16 @@ typedef _PlanRun = ({
   List<Offset> route,
   Color color,
   String label,
+
+  /// What the run lands on at each end, printed beside that end of the line.
+  /// Empty prints nothing — see [CablingBundle.fromLabel].
+  String fromLabel,
+  String toLabel,
+
+  /// The marker at each end, so an end label can be anchored just clear of the
+  /// dot the run lands on rather than on top of it.
+  Rect? fromDot,
+  Rect? toDot,
 });
 
 /// Draws the cable runs over the plan, each in the colour the cabling drawing
@@ -2138,6 +2313,38 @@ class _PlanCablePainter extends CustomPainter {
         taken,
       );
       if (placed != null) taken.add(placed);
+    }
+
+    // The end labels last, so what a run TERMINATES INTO is on top of the
+    // lines rather than under the next one drawn. Each dodges everything
+    // already down, the run captions included.
+    //
+    // Anchored clear of the marker the run lands on — a dot here rather than
+    // the wide box the cabling sheet has, so the walk stops almost at once and
+    // the label sits right at the end, which is where it belongs on a plan.
+    for (final run in runs) {
+      for (final end in [
+        (text: run.fromLabel, atStart: true, dot: run.fromDot),
+        (text: run.toLabel, atStart: false, dot: run.toDot),
+      ]) {
+        if (end.text.trim().isEmpty) continue;
+        final anchor = runEndAnchor(
+          run.route,
+          atStart: end.atStart,
+          clearOf: end.dot,
+        );
+        if (anchor == null) continue;
+        final placed = paintRunEndLabel(
+          canvas: canvas,
+          text: end.text,
+          at: anchor.at,
+          towards: anchor.towards,
+          color: run.color,
+          dark: dark,
+          taken: taken,
+        );
+        if (placed != null) taken.add(placed);
+      }
     }
   }
 

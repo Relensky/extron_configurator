@@ -33,8 +33,6 @@ Future<void> exportRoomWorkbook(
 ) async {
   final messenger = ScaffoldMessenger.of(context);
   final theme = Theme.of(context);
-  final Color actionColor =
-      theme.snackBarTheme.actionTextColor ?? theme.colorScheme.onInverseSurface;
 
   // The AV data lives in the provider whether or not that tab has been opened
   // this session, but the sidecar is only read on the tab's first visit — so
@@ -74,44 +72,12 @@ Future<void> exportRoomWorkbook(
     );
     await File(saved).writeAsBytes(bytes);
 
-    Future<void> run(Future<String?> Function() action) async {
-      final error = await action();
-      if (error == null) return;
-      showTimedSnackBar(
-        messenger,
-        SnackBar(content: Text(error), backgroundColor: Colors.red),
-      );
-    }
-
-    final ButtonStyle actionStyle = TextButton.styleFrom(
-      foregroundColor: actionColor,
-      textStyle: const TextStyle(fontWeight: FontWeight.bold),
-    );
-    showTimedSnackBar(
-      messenger,
-      SnackBar(
-        duration: const Duration(seconds: 10),
-        content: Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Room workbook saved as ${path.basename(saved)}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            TextButton(
-              style: actionStyle,
-              onPressed: () => run(() => provider.openInDesktop(saved)),
-              child: const Text('OPEN FILE'),
-            ),
-            TextButton(
-              style: actionStyle,
-              onPressed: () => run(() => provider.revealInFileManager(saved)),
-              child: const Text('OPEN FOLDER'),
-            ),
-          ],
-        ),
-      ),
+    showSavedSnackBar(
+      messenger: messenger,
+      theme: theme,
+      provider: provider,
+      message: 'Room workbook saved as ${path.basename(saved)}',
+      savedPath: saved,
     );
   } catch (e) {
     showTimedSnackBar(

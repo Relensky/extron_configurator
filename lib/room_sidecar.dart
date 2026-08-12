@@ -69,6 +69,9 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
     'dismissedDevices',
     'signalColors',
     'roomMode',
+    // The backdrop belongs to the signal flow canvas, not to the floor plans:
+    // it is whatever picture somebody wanted behind THIS drawing.
+    'flowBackground',
   ],
   RoomSidecarPart.racks: ['racks', 'rackItems', 'rackSlots'],
   // The locations travel with the plans: a callout is a marker on a sheet
@@ -83,6 +86,43 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
 Set<String> get kRoomSidecarOwnedKeys => {
   for (final keys in kRoomSidecarKeys.values) ...keys,
 };
+
+// ---------------------------------------------------------------------------
+//  THE SAME PARTITION, USED FOR UNDO
+// ---------------------------------------------------------------------------
+
+/// Which tab's history an edit belongs to.
+///
+/// One per page that offers an Undo button. The estimate is absent on purpose:
+/// nothing on the Cost tab records an undo entry, and a scope no edit is ever
+/// filed under is a button that is always grey.
+enum AvUndoScope { flow, racks, floorPlans, cabling }
+
+const Map<AvUndoScope, String> kAvUndoScopeLabels = {
+  AvUndoScope.flow: 'AV Flow',
+  AvUndoScope.racks: 'Racks',
+  AvUndoScope.floorPlans: 'Floor Plan',
+  AvUndoScope.cabling: 'Cabling',
+};
+
+/// The part of the document each scope owns.
+///
+/// Deliberately the SAME division the room is written to disk with, rather
+/// than a second opinion about what belongs with what. Two consequences worth
+/// stating: a scope's keys are disjoint from every other scope's, so undoing
+/// on one tab cannot disturb another; and the test that every written key
+/// belongs to exactly one part keeps this honest too, so a field added later
+/// cannot quietly fall outside every history.
+const Map<AvUndoScope, RoomSidecarPart> kAvUndoScopePart = {
+  AvUndoScope.flow: RoomSidecarPart.flow,
+  AvUndoScope.racks: RoomSidecarPart.racks,
+  AvUndoScope.floorPlans: RoomSidecarPart.floorPlans,
+  AvUndoScope.cabling: RoomSidecarPart.cabling,
+};
+
+/// The top-level document keys [scope]'s history covers.
+List<String> avUndoScopeKeys(AvUndoScope scope) =>
+    kRoomSidecarKeys[kAvUndoScopePart[scope]!]!;
 
 const Map<RoomSidecarPart, String> _kReadme = {
   RoomSidecarPart.flow:

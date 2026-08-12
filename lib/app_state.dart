@@ -1256,46 +1256,202 @@ class AppStateProvider extends ChangeNotifier {
   //  both a session diagram and a saved file exist (avFlowNeedsChoice).
   // ---------------------------------------------------------------------
 
-  // --- undo (AV flow, racks and the estimate share one document) -----------
-  //  The AV sidecar IS the document — devices, cables, racks, rack hardware
-  //  and the estimate — so one stack of snapshots covers all three tabs that
-  //  edit it. Snapshots rather than inverse operations: an inverse for every
+  // --- undo, one history per tab -------------------------------------------
+  //  The AV sidecar is ONE document — devices, cables, racks, plans, the
+  //  cabling drawing, the estimate — but it is edited on four separate pages,
+  //  and a single shared history made those pages interfere: press Undo on the
+  //  Cabling tab and you could roll back a device you had just moved on the
+  //  AV Flow tab. So the history is split by SCOPE, one per tab.
+  //
+  //  What makes that safe is that the document already partitions cleanly.
+  //  [kRoomSidecarKeys] divides every top-level key between the files the room
+  //  is written to, exactly once each, and a test enforces it. Reusing that
+  //  partition means a scope's keys are disjoint from every other scope's, so
+  //  restoring one scope can never disturb another — and the split does not
+  //  become a second, drifting opinion about what belongs with what.
+  //
+  //  Snapshots rather than inverse operations, still: an inverse for every
   //  mutator is a second implementation of the model that only gets exercised
-  //  when something has already gone wrong, and re-splitting a shared rail is
-  //  exactly the kind of thing that would be got subtly wrong.
+  //  when something has already gone wrong. What changed is that a snapshot is
+  //  now a SLICE — only the keys the edit's scopes own — so restoring it
+  //  leaves the rest of the document exactly as it is.
+  //
+  //  A few edits genuinely span scopes: removing a location clears it off the
+  //  devices that named it and off the control runs, and removing a device
+  //  vacates its rack rail. Those are recorded as ONE entry covering every
+  //  scope they touched, so undoing puts all of it back together. The price is
+  //  [avUndoBlockedBy]: such an entry can only be undone while it is still the
+  //  newest in each of its scopes, because rolling one of them back over a
+  //  later edit would destroy work the user never asked to lose.
 
-  /// Past states, oldest first. Each entry is a whole [avFlowAsJson] document
-  /// plus the name of the action that was about to happen.
-  final List<({String label, Map<String, dynamic> doc})> _avUndoStack = [];
+  /// One recorded edit: what it was called, and the state of each scope it
+  /// touched BEFORE it happened.
+  ///
+  /// A key the document did not carry then is simply absent from the slice,
+  /// which is how "there was no background image" survives the round trip —
+  /// see [_restoreAvFlowSlices], which clears a scope's keys before laying its
+  /// slice back down.
+  final List<({String label, Map<AvUndoScope, Map<String, dynamic>> slices})>
+  _avUndoStack = [];
 
-  /// Deep enough to cover a run of edits, shallow enough that a big diagram
-  /// isn't held in memory thirty times over.
-  static const int _kMaxUndoDepth = 25;
+  /// Edits undone but not yet superseded, so Redo can put them back.
+  ///
+  /// Cleared PER SCOPE by the next real edit rather than wholesale: once a
+  /// scope has moved a different way its stored forward state is a branch
+  /// nobody asked for, but a forward state for the Racks tab is still perfectly
+  /// good after somebody retypes a cable count.
+  final List<({String label, Map<AvUndoScope, Map<String, dynamic>> slices})>
+  _avRedoStack = [];
 
-  bool get canUndoAvFlow => _avUndoStack.isNotEmpty;
+  /// Deep enough to cover a run of edits across four tabs at once. Higher than
+  /// it was because an entry is now a slice of the document rather than all of
+  /// it, and because one list feeds four histories.
+  static const int _kMaxUndoDepth = 60;
 
-  /// What pressing Undo would put back — shown on the button so it is never a
-  /// guess ("Undo: Rack DMP 64").
-  String get avUndoLabel => _avUndoStack.isEmpty ? '' : _avUndoStack.last.label;
+  /// Shorthands for the common case, which is an edit inside one tab.
+  static const Set<AvUndoScope> _flowScope = {AvUndoScope.flow};
+  static const Set<AvUndoScope> _racksScope = {AvUndoScope.racks};
+  static const Set<AvUndoScope> _plansScope = {AvUndoScope.floorPlans};
+  static const Set<AvUndoScope> _cablingScope = {AvUndoScope.cabling};
 
-  /// Records the state BEFORE [label] happens. Called at the top of every AV
-  /// mutator; cheap enough to do unconditionally because the document is small
-  /// next to the widget tree that is about to rebuild anyway.
-  void _pushAvUndo(String label) {
-    _avUndoStack.add((label: label, doc: avFlowAsJson()));
-    if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
+  /// The current value of every key [scopes] own.
+  Map<AvUndoScope, Map<String, dynamic>> _sliceAvFlow(
+    Iterable<AvUndoScope> scopes,
+  ) {
+    final doc = avFlowAsJson();
+    return {
+      for (final scope in scopes)
+        scope: {
+          for (final key in avUndoScopeKeys(scope))
+            if (doc.containsKey(key)) key: doc[key],
+        },
+    };
   }
 
-  /// Puts the AV document back the way it was before the last edit. Returns
-  /// what was undone, or '' when there was nothing on the stack.
-  String undoAvFlow() {
-    if (_avUndoStack.isEmpty) return '';
-    final entry = _avUndoStack.removeLast();
+  /// Lays [slices] back over the live document, leaving every scope they do
+  /// not cover exactly as it is.
+  void _restoreAvFlowSlices(
+    Map<AvUndoScope, Map<String, dynamic>> slices,
+  ) {
+    final doc = avFlowAsJson();
+    for (final entry in slices.entries) {
+      // Cleared first, so a key the slice does not carry goes back to being
+      // absent instead of keeping whatever the current document has.
+      for (final key in avUndoScopeKeys(entry.key)) {
+        doc.remove(key);
+      }
+      doc.addAll(entry.value);
+    }
     _clearAvFlowState();
-    _readAvFlowJson(entry.doc);
-    AppLogger.logInfo('Undid: ${entry.label}');
+    _readAvFlowJson(doc);
+  }
+
+  /// The entry [scope]'s Undo (or Redo) would act on, and — when there is one
+  /// it cannot act on — the tab standing in the way.
+  ///
+  /// An entry covering several scopes is only actionable while it is the
+  /// newest in ALL of them. Otherwise restoring it would roll one of those
+  /// scopes back over an edit made since, which is work nobody asked to lose;
+  /// undoing the later edit on its own tab clears the block.
+  ({
+    ({String label, Map<AvUndoScope, Map<String, dynamic>> slices})? edit,
+    int at,
+    String blockedBy,
+  })
+  _topAvEdit(
+    List<({String label, Map<AvUndoScope, Map<String, dynamic>> slices})> stack,
+    AvUndoScope scope,
+  ) {
+    final at = stack.lastIndexWhere((e) => e.slices.containsKey(scope));
+    if (at < 0) return (edit: null, at: -1, blockedBy: '');
+    final edit = stack[at];
+    for (final other in edit.slices.keys) {
+      if (other == scope) continue;
+      if (stack.lastIndexWhere((e) => e.slices.containsKey(other)) != at) {
+        return (
+          edit: null,
+          at: -1,
+          blockedBy: kAvUndoScopeLabels[other] ?? other.name,
+        );
+      }
+    }
+    return (edit: edit, at: at, blockedBy: '');
+  }
+
+  bool canUndoAvFlow(AvUndoScope scope) =>
+      _topAvEdit(_avUndoStack, scope).edit != null;
+
+  bool canRedoAvFlow(AvUndoScope scope) =>
+      _topAvEdit(_avRedoStack, scope).edit != null;
+
+  /// What pressing Undo on [scope]'s tab would put back — shown on the button
+  /// so it is never a guess ("Undo: Rack DMP 64").
+  String avUndoLabel(AvUndoScope scope) =>
+      _topAvEdit(_avUndoStack, scope).edit?.label ?? '';
+
+  /// What pressing Redo would put back, named the same way.
+  String avRedoLabel(AvUndoScope scope) =>
+      _topAvEdit(_avRedoStack, scope).edit?.label ?? '';
+
+  /// The tab whose later edit is holding [scope]'s Undo, or '' when nothing
+  /// is. For the tooltip on a disabled button — see [_topAvEdit].
+  String avUndoBlockedBy(AvUndoScope scope) =>
+      _topAvEdit(_avUndoStack, scope).blockedBy;
+
+  String avRedoBlockedBy(AvUndoScope scope) =>
+      _topAvEdit(_avRedoStack, scope).blockedBy;
+
+  /// Records the state BEFORE [label] happens, filed under the [scopes] it is
+  /// about to change. Called at the top of every AV mutator; cheap enough to
+  /// do unconditionally because a slice is small next to the widget tree that
+  /// is about to rebuild anyway.
+  void _pushAvUndo(String label, Set<AvUndoScope> scopes) {
+    _avUndoStack.add((label: label, slices: _sliceAvFlow(scopes)));
+    if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
+    // Only the branches this edit actually invalidates.
+    _avRedoStack.removeWhere((e) => e.slices.keys.any(scopes.contains));
+  }
+
+  /// Puts [scope]'s tab back the way it was before its last edit. Returns what
+  /// was undone, or '' when there was nothing it could act on.
+  String undoAvFlow(AvUndoScope scope) {
+    final found = _topAvEdit(_avUndoStack, scope);
+    final edit = found.edit;
+    if (edit == null) return '';
+    _avUndoStack.removeAt(found.at);
+    // The state being left, filed under the same name and the same scopes:
+    // "Undo: Move box" and "Redo: Move box" have to describe the same edit
+    // from the two sides, or the pair of buttons reads as two histories.
+    _avRedoStack.add((
+      label: edit.label,
+      slices: _sliceAvFlow(edit.slices.keys),
+    ));
+    if (_avRedoStack.length > _kMaxUndoDepth) _avRedoStack.removeAt(0);
+    _restoreAvFlowSlices(edit.slices);
+    AppLogger.logInfo('Undid: ${edit.label}');
     notifyListeners();
-    return entry.label;
+    return edit.label;
+  }
+
+  /// Puts back what the last Undo on [scope]'s tab took away.
+  ///
+  /// The undo stack is pushed DIRECTLY rather than through [_pushAvUndo],
+  /// which would drop this scope's forward history and make the second press
+  /// of Redo impossible.
+  String redoAvFlow(AvUndoScope scope) {
+    final found = _topAvEdit(_avRedoStack, scope);
+    final edit = found.edit;
+    if (edit == null) return '';
+    _avRedoStack.removeAt(found.at);
+    _avUndoStack.add((
+      label: edit.label,
+      slices: _sliceAvFlow(edit.slices.keys),
+    ));
+    if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
+    _restoreAvFlowSlices(edit.slices);
+    AppLogger.logInfo('Redid: ${edit.label}');
+    notifyListeners();
+    return edit.label;
   }
 
   /// Every box on the AV canvas, in creation order.
@@ -1363,7 +1519,7 @@ class AppStateProvider extends ChangeNotifier {
     RackFace face = RackFace.front,
     int? startU,
   }) {
-    _pushAvUndo('Add ${item.label}');
+    _pushAvUndo('Add ${item.label}', _racksScope);
     String id = item.id;
     if (id.isEmpty || avRackItemById(id) != null) {
       do {
@@ -1399,7 +1555,7 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvRackItem(RackItem item) {
     final index = avRackItems.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${item.label}');
+    _pushAvUndo('Edit ${item.label}', _racksScope);
     avRackItems[index] = item;
     notifyListeners();
   }
@@ -1407,7 +1563,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvRackItem(String itemId) {
     final item = avRackItemById(itemId);
     if (item == null) return;
-    _pushAvUndo('Remove ${item.label}');
+    _pushAvUndo('Remove ${item.label}', _racksScope);
     avRackItems.removeWhere((i) => i.id == itemId);
     final vacated = avRackSlots.remove(itemId);
     if (vacated != null) {
@@ -1449,7 +1605,7 @@ class AppStateProvider extends ChangeNotifier {
       id.isEmpty ? '' : (avLocationById(id)?.displayName ?? '');
 
   RoomLocation addAvLocation(RoomLocation location) {
-    _pushAvUndo('Add ${location.name}');
+    _pushAvUndo('Add ${location.name}', _plansScope);
     String id = location.id;
     if (id.isEmpty || avLocationById(id) != null) {
       do {
@@ -1466,7 +1622,7 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvLocation(RoomLocation location) {
     final index = avLocations.indexWhere((l) => l.id == location.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${location.name}');
+    _pushAvUndo('Edit ${location.name}', _plansScope);
     avLocations[index] = location;
     notifyListeners();
   }
@@ -1487,7 +1643,7 @@ class AppStateProvider extends ChangeNotifier {
     if (sheet == null) return;
     final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
     if (index < 0 || avLocationById(id) == null) return;
-    if (recordUndo) _pushAvUndo('Move ${avLocationName(id)}');
+    if (recordUndo) _pushAvUndo('Move ${avLocationName(id)}', _plansScope);
     avFloorPlans[index] = sheet.withMarker(id, planPos);
     notifyListeners();
   }
@@ -1499,7 +1655,7 @@ class AppStateProvider extends ChangeNotifier {
     if (sheet == null || !sheet.hasMarker(id)) return;
     final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
     if (index < 0) return;
-    _pushAvUndo('Take ${avLocationName(id)} off ${sheet.name}');
+    _pushAvUndo('Take ${avLocationName(id)} off ${sheet.name}', _plansScope);
     avFloorPlans[index] = sheet.withoutMarker(id);
     notifyListeners();
   }
@@ -1546,7 +1702,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvLocation(String id) {
     final location = avLocationById(id);
     if (location == null) return;
-    _pushAvUndo('Remove ${location.name}');
+    _pushAvUndo('Remove ${location.name}', const {AvUndoScope.floorPlans, AvUndoScope.flow, AvUndoScope.cabling});
     avLocations.removeWhere((l) => l.id == id);
     for (int i = 0; i < avNodes.length; i++) {
       if (avNodes[i].locationId == id) {
@@ -1585,7 +1741,7 @@ class AppStateProvider extends ChangeNotifier {
     final index = avNodes.indexWhere((n) => n.id == nodeId);
     if (index < 0) return;
     if (avNodes[index].locationId == locationId) return;
-    _pushAvUndo('Locate ${avNodes[index].label}');
+    _pushAvUndo('Locate ${avNodes[index].label}', _flowScope);
     avNodes[index] = avNodes[index].copyWith(locationId: locationId);
     notifyListeners();
   }
@@ -1610,7 +1766,7 @@ class AppStateProvider extends ChangeNotifier {
   // --- screen / shade control runs -----------------------------------------
 
   ScreenSwitch addAvScreenSwitch(ScreenSwitch item) {
-    _pushAvUndo('Add ${item.label}');
+    _pushAvUndo('Add ${item.label}', _cablingScope);
     String id = item.id;
     if (id.isEmpty || avScreenSwitches.any((s) => s.id == id)) {
       do {
@@ -1627,7 +1783,7 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvScreenSwitch(ScreenSwitch item) {
     final index = avScreenSwitches.indexWhere((s) => s.id == item.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${item.label}');
+    _pushAvUndo('Edit ${item.label}', _cablingScope);
     avScreenSwitches[index] = item;
     notifyListeners();
   }
@@ -1635,7 +1791,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvScreenSwitch(String id) {
     final index = avScreenSwitches.indexWhere((s) => s.id == id);
     if (index < 0) return;
-    _pushAvUndo('Remove ${avScreenSwitches[index].label}');
+    _pushAvUndo('Remove ${avScreenSwitches[index].label}', _cablingScope);
     avScreenSwitches.removeAt(index);
     notifyListeners();
   }
@@ -1713,13 +1869,13 @@ class AppStateProvider extends ChangeNotifier {
     if (from < 0) return;
     final to = toIndex.clamp(0, avFloorPlans.length - 1);
     if (from == to) return;
-    _pushAvUndo('Reorder floor plans');
+    _pushAvUndo('Reorder floor plans', _plansScope);
     avFloorPlans.insert(to, avFloorPlans.removeAt(from));
     notifyListeners();
   }
 
   FloorPlan addAvFloorPlan(FloorPlan plan) {
-    _pushAvUndo('Add ${plan.name}');
+    _pushAvUndo('Add ${plan.name}', _plansScope);
     String id = plan.id;
     if (id.isEmpty || avFloorPlanById(id) != null) {
       do {
@@ -1736,7 +1892,7 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvFloorPlan(FloorPlan plan) {
     final index = avFloorPlans.indexWhere((p) => p.id == plan.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${plan.name}');
+    _pushAvUndo('Edit ${plan.name}', _plansScope);
     avFloorPlans[index] = plan;
     notifyListeners();
   }
@@ -1744,7 +1900,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvFloorPlan(String id) {
     final plan = avFloorPlanById(id);
     if (plan == null) return;
-    _pushAvUndo('Remove ${plan.name}');
+    _pushAvUndo('Remove ${plan.name}', _plansScope);
     avFloorPlans.removeWhere((p) => p.id == id);
     // Land on a sheet that still exists rather than on nothing.
     if (_activeFloorPlanId == id) {
@@ -1760,7 +1916,7 @@ class AppStateProvider extends ChangeNotifier {
   FloorPlanCallout? addAvCallout(String planId, FloorPlanCallout callout) {
     final index = avFloorPlans.indexWhere((p) => p.id == planId);
     if (index < 0) return null;
-    _pushAvUndo('Add callout');
+    _pushAvUndo('Add callout', _plansScope);
     final plan = avFloorPlans[index];
     final taken = {for (final c in plan.callouts) c.id};
     String id = callout.id;
@@ -1785,7 +1941,7 @@ class AppStateProvider extends ChangeNotifier {
     final plan = avFloorPlans[index];
     final at = plan.callouts.indexWhere((c) => c.id == callout.id);
     if (at < 0) return;
-    if (recordUndo) _pushAvUndo('Edit callout ${callout.tag}');
+    if (recordUndo) _pushAvUndo('Edit callout ${callout.tag}', _plansScope);
     final next = List<FloorPlanCallout>.from(plan.callouts);
     next[at] = callout;
     avFloorPlans[index] = plan.copyWith(callouts: next);
@@ -1795,7 +1951,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvCallout(String planId, String calloutId) {
     final index = avFloorPlans.indexWhere((p) => p.id == planId);
     if (index < 0) return;
-    _pushAvUndo('Remove callout');
+    _pushAvUndo('Remove callout', _plansScope);
     final plan = avFloorPlans[index];
     avFloorPlans[index] = plan.copyWith(
       callouts: [
@@ -1803,6 +1959,39 @@ class AppStateProvider extends ChangeNotifier {
           if (c.id != calloutId) c,
       ],
     );
+    notifyListeners();
+  }
+
+  // --- the signal flow's backdrop -------------------------------------------
+
+  /// The picture behind the AV Flow canvas, if any. See [DiagramBackground].
+  DiagramBackground avFlowBackground = const DiagramBackground();
+
+  /// Puts [imageFile] (already copied in by [importRoomImage]) behind the
+  /// canvas at its natural [size], keeping whatever opacity and scale were set.
+  void setAvFlowBackgroundImage(String imageFile, Size size) {
+    _pushAvUndo(imageFile.isEmpty ? 'Remove the background' : 'Set a background', _flowScope);
+    avFlowBackground = avFlowBackground.copyWith(
+      imageFile: imageFile,
+      imageSize: size,
+    );
+    notifyListeners();
+  }
+
+  /// How strongly the backdrop shows, and how much of the canvas it covers.
+  void setAvFlowBackgroundView({double? opacity, double? scale}) {
+    _pushAvUndo('Adjust the background', _flowScope);
+    avFlowBackground = avFlowBackground.copyWith(
+      opacity: opacity,
+      scale: scale,
+    );
+    notifyListeners();
+  }
+
+  void clearAvFlowBackground() {
+    if (!avFlowBackground.hasImage) return;
+    _pushAvUndo('Remove the background', _flowScope);
+    avFlowBackground = const DiagramBackground();
     notifyListeners();
   }
 
@@ -1827,19 +2016,19 @@ class AppStateProvider extends ChangeNotifier {
 
   /// [recordUndo] false while a drag is in flight — one entry for the move.
   void setCablingBoxPosition(String id, Offset pos, {bool recordUndo = true}) {
-    if (recordUndo) _pushAvUndo('Move box');
+    if (recordUndo) _pushAvUndo('Move box', _cablingScope);
     avCabling.positions[id] = pos;
     notifyListeners();
   }
 
   void setCablingBoxLabel(String id, String label) {
-    _pushAvUndo('Rename box');
+    _pushAvUndo('Rename box', _cablingScope);
     avCabling.labels[id] = label;
     notifyListeners();
   }
 
   void setCablingBoxBody(String id, String body) {
-    _pushAvUndo('Edit notes');
+    _pushAvUndo('Edit notes', _cablingScope);
     avCabling.bodies[id] = body;
     notifyListeners();
   }
@@ -1847,7 +2036,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Types a count over the one the room worked out. Passing null puts the
   /// derived figure back, which is the only way out of an override.
   void setCablingBundleCount(String id, double? count) {
-    _pushAvUndo('Set cable count');
+    _pushAvUndo('Set cable count', _cablingScope);
     if (count == null) {
       avCabling.counts.remove(id);
     } else {
@@ -1857,7 +2046,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void setCablingBundleType(String id, String? type) {
-    _pushAvUndo('Set cable type');
+    _pushAvUndo('Set cable type', _cablingScope);
     if (type == null || type.trim().isEmpty) {
       avCabling.cableTypes.remove(id);
     } else {
@@ -1869,7 +2058,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Colours one run on the drawing. Null puts it back to the colour the room
   /// gives that signal, which is the only way out of a recolour.
   void setCablingBundleColor(String id, int? argb) {
-    _pushAvUndo('Set cable colour');
+    _pushAvUndo('Set cable colour', _cablingScope);
     if (argb == null) {
       avCabling.colors.remove(id);
     } else {
@@ -1878,11 +2067,59 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Colours every run of one CABLE, on the drawing and on the floor plan
+  /// alike. Null puts the key's own colour back.
+  ///
+  /// [colorKeys] is what [cablingColorKey] returns for the runs concerned —
+  /// plural because a cable type can be pulled under more than one category
+  /// ("Cat 6a" as AV and as network), and somebody recolouring the Cat 6a layer
+  /// means the layer they are looking at, not one half of it.
+  void setCablingTypeColor(Iterable<String> colorKeys, int? argb) {
+    final keys = colorKeys.where((k) => k.isNotEmpty).toSet();
+    if (keys.isEmpty) return;
+    _pushAvUndo('Set the colour for this cable', _cablingScope);
+    for (final key in keys) {
+      if (argb == null) {
+        avCabling.typeColors.remove(key);
+      } else {
+        avCabling.typeColors[key] = argb;
+      }
+    }
+    notifyListeners();
+  }
+
+  /// True when some run of [colorKeys] carries a hand-picked colour, so the
+  /// view can offer the way back out of one.
+  bool hasCablingTypeColor(Iterable<String> colorKeys) =>
+      colorKeys.any(avCabling.typeColors.containsKey);
+
+  /// What a run lands on at one end — the jack, the plate, the patch panel.
+  /// An empty string clears it, and prints nothing.
+  void setCablingBundleEndLabel(
+    String id, {
+    String? fromLabel,
+    String? toLabel,
+  }) {
+    _pushAvUndo('Label the end of a run', _cablingScope);
+    void set(Map<String, String> into, String? value) {
+      if (value == null) return;
+      if (value.trim().isEmpty) {
+        into.remove(id);
+      } else {
+        into[id] = value.trim();
+      }
+    }
+
+    set(avCabling.fromLabels, fromLabel);
+    set(avCabling.toLabels, toLabel);
+    notifyListeners();
+  }
+
   /// Takes something off the drawing. A derived box or run is HIDDEN rather
   /// than deleted, because deleting one would only bring it back next time the
   /// drawing was built.
   void removeCablingItem(String id) {
-    _pushAvUndo('Remove from the cabling drawing');
+    _pushAvUndo('Remove from the cabling drawing', _cablingScope);
     if (id.startsWith('box:')) {
       avCabling.extraBoxes.removeWhere((b) => b.id == id);
       avCabling.extraBundles.removeWhere(
@@ -1899,13 +2136,15 @@ class AppStateProvider extends ChangeNotifier {
     avCabling.counts.remove(id);
     avCabling.cableTypes.remove(id);
     avCabling.colors.remove(id);
+    avCabling.fromLabels.remove(id);
+    avCabling.toLabels.remove(id);
     notifyListeners();
   }
 
   /// Puts a hidden derived item back.
   void restoreCablingItem(String id) {
     if (!avCabling.hidden.remove(id)) return;
-    _pushAvUndo('Restore to the cabling drawing');
+    _pushAvUndo('Restore to the cabling drawing', _cablingScope);
     notifyListeners();
   }
 
@@ -1924,7 +2163,7 @@ class AppStateProvider extends ChangeNotifier {
     String shape = '',
     List<Rect> occupied = const [],
   }) {
-    _pushAvUndo('Add ${kCablingBoxKindLabels[kind]?.toLowerCase() ?? 'box'}');
+    _pushAvUndo('Add ${kCablingBoxKindLabels[kind]?.toLowerCase() ?? 'box'}', _cablingScope);
     _avCablingBoxCounter++;
     // The slot the derived layout would have given it, stepped on by how many
     // of the SAME kind are already drawn. Counting all boxes instead would put
@@ -1976,7 +2215,7 @@ class AppStateProvider extends ChangeNotifier {
   void setCablingBoxShape(String id, String shape) {
     final at = avCabling.extraBoxes.indexWhere((b) => b.id == id);
     if (at < 0) return;
-    _pushAvUndo('Change the device');
+    _pushAvUndo('Change the device', _cablingScope);
     avCabling.extraBoxes[at] = avCabling.extraBoxes[at].copyWith(shape: shape);
     notifyListeners();
   }
@@ -1993,7 +2232,7 @@ class AppStateProvider extends ChangeNotifier {
     if (fromBoxId.isEmpty || toBoxId.isEmpty || fromBoxId == toBoxId) {
       return null;
     }
-    _pushAvUndo('Add cable run');
+    _pushAvUndo('Add cable run', _cablingScope);
     _avCablingRunCounter++;
     final bundle = CablingBundle(
       id: 'run:$_avCablingRunCounter',
@@ -2011,14 +2250,14 @@ class AppStateProvider extends ChangeNotifier {
   void updateCablingBundle(CablingBundle bundle) {
     final at = avCabling.extraBundles.indexWhere((b) => b.id == bundle.id);
     if (at < 0) return;
-    _pushAvUndo('Edit cable run');
+    _pushAvUndo('Edit cable run', _cablingScope);
     avCabling.extraBundles[at] = bundle;
     notifyListeners();
   }
 
   /// Throws away every edit and goes back to what the room says.
   void resetCablingSchematic() {
-    _pushAvUndo('Reset the cabling drawing');
+    _pushAvUndo('Reset the cabling drawing', _cablingScope);
     avCabling.clear();
     notifyListeners();
   }
@@ -2033,7 +2272,7 @@ class AppStateProvider extends ChangeNotifier {
   PlanAnnotation? addAvAnnotation(String planId, PlanAnnotation note) {
     final index = avFloorPlans.indexWhere((p) => p.id == planId);
     if (index < 0) return null;
-    _pushAvUndo('Add ${kPlanShapeLabels[note.shape]?.toLowerCase() ?? 'note'}');
+    _pushAvUndo('Add ${kPlanShapeLabels[note.shape]?.toLowerCase() ?? 'note'}', _plansScope);
     final plan = avFloorPlans[index];
     final taken = {for (final a in plan.annotations) a.id};
     String id = note.id;
@@ -2063,7 +2302,7 @@ class AppStateProvider extends ChangeNotifier {
     final plan = avFloorPlans[index];
     final at = plan.annotations.indexWhere((a) => a.id == note.id);
     if (at < 0) return;
-    if (recordUndo) _pushAvUndo('Edit notation');
+    if (recordUndo) _pushAvUndo('Edit notation', _plansScope);
     final next = List<PlanAnnotation>.from(plan.annotations);
     next[at] = note;
     avFloorPlans[index] = plan.copyWith(annotations: next);
@@ -2073,7 +2312,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvAnnotation(String planId, String noteId) {
     final index = avFloorPlans.indexWhere((p) => p.id == planId);
     if (index < 0) return;
-    _pushAvUndo('Remove notation');
+    _pushAvUndo('Remove notation', _plansScope);
     final plan = avFloorPlans[index];
     avFloorPlans[index] = plan.copyWith(
       annotations: [
@@ -2107,24 +2346,30 @@ class AppStateProvider extends ChangeNotifier {
   /// broken image the moment it leaves this machine. Falling back to the
   /// original path rather than failing keeps an unsaved room usable — the plan
   /// is imported on the next save, when there is a folder to put it in.
-  Future<String> importFloorPlanImage(String sourcePath) async {
+  Future<String> importFloorPlanImage(String sourcePath) =>
+      importRoomImage(sourcePath, 'floorplan');
+
+  /// The same copy-in for any picture the room refers to by name — the plan
+  /// sheets, and the signal flow's backdrop. [kind] is the middle of the file
+  /// name, so a folder full of them still says what each one is.
+  Future<String> importRoomImage(String sourcePath, String kind) async {
     if (currentConfigPath.isEmpty) return sourcePath;
     try {
       final dir = path.dirname(currentConfigPath);
       final stem = path.basenameWithoutExtension(currentConfigPath);
       final ext = path.extension(sourcePath);
-      // Numbered so importing a second plan doesn't overwrite the first.
-      String name = '${stem}_floorplan$ext';
+      // Numbered so importing a second one doesn't overwrite the first.
+      String name = '${stem}_$kind$ext';
       int n = 1;
       while (File(path.join(dir, name)).existsSync()) {
         n++;
-        name = '${stem}_floorplan$n$ext';
+        name = '${stem}_$kind$n$ext';
       }
       await File(sourcePath).copy(path.join(dir, name));
-      AppLogger.logInfo('Floor plan image copied in as $name.');
+      AppLogger.logInfo('Image copied in as $name.');
       return name;
     } catch (e, stack) {
-      AppLogger.logError('Could not copy the floor plan image in', e, stack);
+      AppLogger.logError('Could not copy the image in', e, stack);
       return sourcePath;
     }
   }
@@ -2168,7 +2413,12 @@ class AppStateProvider extends ChangeNotifier {
   /// Returns a short summary of what landed, for the message afterwards.
   ({int devices, int jacks, int cables, int racks, int locations})
   applyRoomPreset(RoomPreset preset, {String jackPrefix = ''}) {
-    _pushAvUndo('Apply ${preset.name}');
+    _pushAvUndo('Apply ${preset.name}', const {
+      AvUndoScope.flow,
+      AvUndoScope.racks,
+      AvUndoScope.floorPlans,
+      AvUndoScope.cabling,
+    });
 
     // --- locations first: the nodes reference them ---------------------------
     final locationMap = <String, String>{};
@@ -2609,7 +2859,7 @@ class AppStateProvider extends ChangeNotifier {
   /// "to place" list instead of being invisible in both places at once.
   void clearAvRackPlacement(String occupantId) {
     if (!avRackSlots.containsKey(occupantId)) return;
-    _pushAvUndo('Un-rack ${rackOccupantLabel(occupantId)}');
+    _pushAvUndo('Un-rack ${rackOccupantLabel(occupantId)}', _racksScope);
     avRackSlots.remove(occupantId);
     notifyListeners();
   }
@@ -2746,7 +2996,7 @@ class AppStateProvider extends ChangeNotifier {
   /// — applying a room type adds twenty boxes, and twenty presses of Undo to
   /// get back to before it is not an undo anybody uses.
   AvNode addAvNode(AvNode node, {bool recordUndo = true}) {
-    if (recordUndo) _pushAvUndo('Add ${node.label}');
+    if (recordUndo) _pushAvUndo('Add ${node.label}', _flowScope);
     String id = node.id;
     if (id.isEmpty || avNodeById(id) != null) {
       do {
@@ -2767,7 +3017,7 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvNode(AvNode node) {
     final index = avNodes.indexWhere((n) => n.id == node.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${node.label}');
+    _pushAvUndo('Edit ${node.label}', _flowScope);
     avNodes[index] = node;
     notifyListeners();
   }
@@ -2778,7 +3028,7 @@ class AppStateProvider extends ChangeNotifier {
     if (index < 0) return;
     // Called once, on release — the drag itself is previewed in the view, so
     // one undo entry per move rather than one per pointer event.
-    _pushAvUndo('Move ${avNodes[index].label}');
+    _pushAvUndo('Move ${avNodes[index].label}', _flowScope);
     avNodes[index] = avNodes[index].copyWith(pos: pos);
     notifyListeners();
   }
@@ -2789,7 +3039,7 @@ class AppStateProvider extends ChangeNotifier {
   void removeAvNode(String nodeId) {
     final node = avNodeById(nodeId);
     if (node == null) return;
-    _pushAvUndo('Remove ${node.label}');
+    _pushAvUndo('Remove ${node.label}', const {AvUndoScope.flow, AvUndoScope.racks});
     avNodes.removeWhere((n) => n.id == nodeId);
     avCables.removeWhere((c) => c.fromNodeId == nodeId || c.toNodeId == nodeId);
     final vacated = avRackSlots.remove(nodeId);
@@ -2806,7 +3056,7 @@ class AppStateProvider extends ChangeNotifier {
   /// removals.
   void clearAvDismissedDevices() {
     if (avDismissedDevices.isEmpty) return;
-    _pushAvUndo('Place all from config');
+    _pushAvUndo('Place all from config', _flowScope);
     avDismissedDevices.clear();
     notifyListeners();
   }
@@ -2833,7 +3083,7 @@ class AppStateProvider extends ChangeNotifier {
             c.toPortId == fromPortId));
     if (duplicate) return null;
 
-    if (recordUndo) _pushAvUndo('Draw cable');
+    if (recordUndo) _pushAvUndo('Draw cable', _flowScope);
     _avCableCounter++;
     final cable = AvCable(
       id: 'C$_avCableCounter',
@@ -2856,14 +3106,14 @@ class AppStateProvider extends ChangeNotifier {
     final index = avCables.indexWhere((c) => c.id == cable.id);
     if (index < 0) return;
     if (recordUndo) {
-      _pushAvUndo('Edit cable ${cable.label.isEmpty ? cable.id : cable.label}');
+      _pushAvUndo('Edit cable ${cable.label.isEmpty ? cable.id : cable.label}', _flowScope);
     }
     avCables[index] = cable;
     notifyListeners();
   }
 
   void removeAvCable(String cableId) {
-    _pushAvUndo('Remove cable $cableId');
+    _pushAvUndo('Remove cable $cableId', _flowScope);
     avCables.removeWhere((c) => c.id == cableId);
     notifyListeners();
   }
@@ -2873,7 +3123,7 @@ class AppStateProvider extends ChangeNotifier {
   void setAvCableLength(String cableId, double feet) {
     final index = avCables.indexWhere((c) => c.id == cableId);
     if (index < 0) return;
-    _pushAvUndo('Set cable length');
+    _pushAvUndo('Set cable length', _flowScope);
     avCables[index] = avCables[index].copyWith(lengthFt: feet < 0 ? 0 : feet);
     notifyListeners();
   }
@@ -2893,7 +3143,7 @@ class AppStateProvider extends ChangeNotifier {
           i,
     ];
     if (targets.isEmpty) return 0;
-    _pushAvUndo('Set cable lengths');
+    _pushAvUndo('Set cable lengths', _flowScope);
     for (final i in targets) {
       avCables[i] = avCables[i].copyWith(lengthFt: length);
     }
@@ -2904,7 +3154,7 @@ class AppStateProvider extends ChangeNotifier {
   // --- racks ---
 
   RackFrame addAvRack(String name, int heightU, {String kind = ''}) {
-    _pushAvUndo('Add rack $name');
+    _pushAvUndo('Add rack $name', _racksScope);
     // Frames sit side by side; the new one goes to the right of the last.
     final rack = RackFrame(
       id: 'RACK_${avRacks.length + 1}_${DateTime.now().millisecondsSinceEpoch}',
@@ -2921,14 +3171,14 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvRack(RackFrame rack) {
     final index = avRacks.indexWhere((r) => r.id == rack.id);
     if (index < 0) return;
-    _pushAvUndo('Edit rack ${rack.name}');
+    _pushAvUndo('Edit rack ${rack.name}', _racksScope);
     avRacks[index] = rack;
     notifyListeners();
   }
 
   /// Removes a frame and un-racks everything that was in it.
   void removeAvRack(String rackId) {
-    _pushAvUndo('Remove rack');
+    _pushAvUndo('Remove rack', _racksScope);
     avRacks.removeWhere((r) => r.id == rackId);
     avRackSlots.removeWhere((_, slot) => slot.rackId == rackId);
     notifyListeners();
@@ -2938,7 +3188,7 @@ class AppStateProvider extends ChangeNotifier {
   void setAvRackSlot(String nodeId, RackSlot? slot) {
     _pushAvUndo(slot == null
         ? 'Un-rack ${rackOccupantLabel(nodeId)}'
-        : 'Move ${rackOccupantLabel(nodeId)}');
+        : 'Move ${rackOccupantLabel(nodeId)}', _racksScope);
     final previous = avRackSlots[nodeId];
     if (slot == null) {
       avRackSlots.remove(nodeId);
@@ -3041,7 +3291,7 @@ class AppStateProvider extends ChangeNotifier {
       )) {
         return false;
       }
-      if (recordUndo) _pushAvUndo('Rack ${rackOccupantLabel(nodeId)}');
+      if (recordUndo) _pushAvUndo('Rack ${rackOccupantLabel(nodeId)}', _racksScope);
       avRackSlots[nodeId] =
           RackSlot(rackId: rackId, startU: startU, face: face);
       notifyListeners();
@@ -3065,7 +3315,7 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
 
-    if (recordUndo) _pushAvUndo('Rack ${rackOccupantLabel(nodeId)}');
+    if (recordUndo) _pushAvUndo('Rack ${rackOccupantLabel(nodeId)}', _racksScope);
     for (int i = 0; i < occupants.length; i++) {
       final existing = avRackSlots[occupants[i]]!;
       avRackSlots[occupants[i]] =
@@ -3086,7 +3336,7 @@ class AppStateProvider extends ChangeNotifier {
   void avRackReorderRow(String nodeId, int target) {
     final slot = avRackSlots[nodeId];
     if (slot == null) return;
-    _pushAvUndo('Reorder ${rackOccupantLabel(nodeId)}');
+    _pushAvUndo('Reorder ${rackOccupantLabel(nodeId)}', _racksScope);
     final order = avRackOccupantsAt(
         rackId: slot.rackId, face: slot.face, startU: slot.startU);
     order.remove(nodeId);
@@ -3192,6 +3442,7 @@ class AppStateProvider extends ChangeNotifier {
     avLocations.clear();
     avScreenSwitches.clear();
     avFloorPlans.clear();
+    avFlowBackground = const DiagramBackground();
     avDismissedDevices.clear();
     avSignalColors.clear();
     avCost.clear();
@@ -3217,8 +3468,9 @@ class AppStateProvider extends ChangeNotifier {
   void _resetAvFlow() {
     _avFlowSyncedPath = currentConfigPath;
     _clearAvFlowState();
-    // A different room's edits are not this room's to undo.
+    // A different room's edits are not this room's to undo — or redo.
     _avUndoStack.clear();
+    _avRedoStack.clear();
   }
 
   /// Keeps the in-memory AV diagram for the working config, ignoring the
@@ -3368,6 +3620,12 @@ class AppStateProvider extends ChangeNotifier {
             }
           }
         });
+      }
+
+      final background = doc['flowBackground'];
+      if (background is Map) {
+        avFlowBackground =
+            DiagramBackground.fromJson(Map<String, dynamic>.from(background));
       }
 
       final cost = doc['cost'];
@@ -3521,6 +3779,8 @@ class AppStateProvider extends ChangeNotifier {
         'locations': avLocations.map((l) => l.toJson()).toList(),
         'screenSwitches': avScreenSwitches.map((s) => s.toJson()).toList(),
         if (!avCabling.isEmpty) 'cablingSchematic': avCabling.toJson(),
+        if (avFlowBackground.hasImage)
+          'flowBackground': avFlowBackground.toJson(),
         'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
         'dismissedDevices': avDismissedDevices.toList(),
         'roomMode': roomMode.name,

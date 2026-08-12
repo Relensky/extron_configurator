@@ -248,10 +248,15 @@ class RoomCostSettings {
     'taxPercent': taxPercent,
     'includeCabling': includeCabling,
     'fees': [for (final f in fees) f.toJson()],
-    'priceOverrides': priceOverrides,
+    // Copied, not handed out live: the undo history snapshots the room by
+    // calling this and empties the estimate before reading a snapshot back,
+    // so a live map would be cleared a moment before it was read. See
+    // CablingOverrides.toJson, which is the same requirement.
+    'priceOverrides': Map<String, double>.of(priceOverrides),
     'items': [for (final i in items) i.toJson()],
     'labor': [for (final l in labor) l.toJson()],
-    if (cableSpares.isNotEmpty) 'cableSpares': cableSpares,
+    if (cableSpares.isNotEmpty)
+      'cableSpares': Map<String, double>.of(cableSpares),
     if (extraEquipment.isNotEmpty)
       'extraEquipment': [for (final i in extraEquipment) i.toJson()],
     if (extraHardware.isNotEmpty)

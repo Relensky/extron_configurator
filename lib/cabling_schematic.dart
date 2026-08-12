@@ -252,6 +252,19 @@ class CablingBundle {
   /// was given, and either can be recoloured on the drawing.
   final int color;
 
+  /// What the run lands ON at each end, printed beside that end of the line.
+  ///
+  /// The box says WHERE the cable goes; these say what it terminates into once
+  /// it gets there — "Wall plate 2", "Patch panel A, ports 13-18". A cabling
+  /// sheet is read at the wall by somebody holding one end of a pull, and the
+  /// question they have is which jack this one lands on, which the name of the
+  /// room's lectern cannot answer.
+  ///
+  /// Empty is the normal case and prints nothing: a run whose ends are obvious
+  /// should not carry two labels saying so.
+  final String fromLabel;
+  final String toLabel;
+
   const CablingBundle({
     required this.id,
     required this.fromBoxId,
@@ -260,6 +273,8 @@ class CablingBundle {
     this.cableType = '',
     this.signal,
     this.color = 0xFFD32F2F,
+    this.fromLabel = '',
+    this.toLabel = '',
   });
 
   /// True when the ROOM produced this run rather than somebody drawing it —
@@ -303,6 +318,8 @@ class CablingBundle {
     String? cableType,
     SignalType? signal,
     int? color,
+    String? fromLabel,
+    String? toLabel,
   }) => CablingBundle(
     id: id,
     fromBoxId: fromBoxId ?? this.fromBoxId,
@@ -311,6 +328,8 @@ class CablingBundle {
     cableType: cableType ?? this.cableType,
     signal: signal ?? this.signal,
     color: color ?? this.color,
+    fromLabel: fromLabel ?? this.fromLabel,
+    toLabel: toLabel ?? this.toLabel,
   );
 
   Map<String, dynamic> toJson() => {
@@ -321,6 +340,8 @@ class CablingBundle {
     if (cableType.isNotEmpty) 'type': cableType,
     if (signal != null) 'signal': signal!.name,
     'color': color,
+    if (fromLabel.isNotEmpty) 'fromLabel': fromLabel,
+    if (toLabel.isNotEmpty) 'toLabel': toLabel,
   };
 
   factory CablingBundle.fromJson(Map<String, dynamic> json) => CablingBundle(
@@ -333,6 +354,8 @@ class CablingBundle {
         ? null
         : signalFromName(json['signal']?.toString()),
     color: (json['color'] as num?)?.toInt() ?? 0xFFD32F2F,
+    fromLabel: json['fromLabel']?.toString() ?? '',
+    toLabel: json['toLabel']?.toString() ?? '',
   );
 }
 
@@ -360,6 +383,21 @@ class CablingOverrides {
   /// run is still whatever the signal flow says it is.
   final Map<String, int> colors;
 
+  /// [cablingColorKey] -> ARGB picked for every run of that cable.
+  ///
+  /// The colour a drawing set actually specifies is "network is blue", not
+  /// "this one line is blue": the key hands a colour to a CABLE, and the office
+  /// convention that overrides it is about the same thing. Recolouring per run
+  /// ([colors]) is still there for the exception, and still wins — but it is
+  /// the wrong tool for "our network runs are green", which used to mean
+  /// clicking every network line on the sheet and hoping none was missed.
+  final Map<String, int> typeColors;
+
+  /// Bundle id -> what the run lands on at that end. See
+  /// [CablingBundle.fromLabel].
+  final Map<String, String> fromLabels;
+  final Map<String, String> toLabels;
+
   /// Derived boxes and bundles taken off the drawing. Hidden rather than
   /// deleted, because a rebuild would only bring a deleted one back.
   final Set<String> hidden;
@@ -375,6 +413,9 @@ class CablingOverrides {
     Map<String, double>? counts,
     Map<String, String>? cableTypes,
     Map<String, int>? colors,
+    Map<String, int>? typeColors,
+    Map<String, String>? fromLabels,
+    Map<String, String>? toLabels,
     Set<String>? hidden,
     List<CablingBox>? extraBoxes,
     List<CablingBundle>? extraBundles,
@@ -384,6 +425,9 @@ class CablingOverrides {
        counts = counts ?? {},
        cableTypes = cableTypes ?? {},
        colors = colors ?? {},
+       typeColors = typeColors ?? {},
+       fromLabels = fromLabels ?? {},
+       toLabels = toLabels ?? {},
        hidden = hidden ?? {},
        extraBoxes = extraBoxes ?? [],
        extraBundles = extraBundles ?? [];
@@ -395,6 +439,9 @@ class CablingOverrides {
       counts.isEmpty &&
       cableTypes.isEmpty &&
       colors.isEmpty &&
+      typeColors.isEmpty &&
+      fromLabels.isEmpty &&
+      toLabels.isEmpty &&
       hidden.isEmpty &&
       extraBoxes.isEmpty &&
       extraBundles.isEmpty;
@@ -406,22 +453,36 @@ class CablingOverrides {
     counts.clear();
     cableTypes.clear();
     colors.clear();
+    typeColors.clear();
+    fromLabels.clear();
+    toLabels.clear();
     hidden.clear();
     extraBoxes.clear();
     extraBundles.clear();
   }
 
+  /// A DETACHED copy of the overrides.
+  ///
+  /// Every map here is copied rather than handed out live, and that is not
+  /// tidiness — it is a correctness requirement. The undo history snapshots
+  /// the room by calling this, and restoring a snapshot empties the live
+  /// overrides before reading it back. A snapshot holding the live maps would
+  /// be emptied along with them a moment before it was read, so undoing a
+  /// typed count, a renamed box or a recoloured run silently restored nothing.
   Map<String, dynamic> toJson() => {
     if (positions.isNotEmpty)
       'positions': {
         for (final e in positions.entries)
           e.key: {'x': e.value.dx, 'y': e.value.dy},
       },
-    if (labels.isNotEmpty) 'labels': labels,
-    if (bodies.isNotEmpty) 'bodies': bodies,
-    if (counts.isNotEmpty) 'counts': counts,
-    if (cableTypes.isNotEmpty) 'cableTypes': cableTypes,
-    if (colors.isNotEmpty) 'colors': colors,
+    if (labels.isNotEmpty) 'labels': Map<String, String>.of(labels),
+    if (bodies.isNotEmpty) 'bodies': Map<String, String>.of(bodies),
+    if (counts.isNotEmpty) 'counts': Map<String, double>.of(counts),
+    if (cableTypes.isNotEmpty) 'cableTypes': Map<String, String>.of(cableTypes),
+    if (colors.isNotEmpty) 'colors': Map<String, int>.of(colors),
+    if (typeColors.isNotEmpty) 'typeColors': Map<String, int>.of(typeColors),
+    if (fromLabels.isNotEmpty) 'fromLabels': Map<String, String>.of(fromLabels),
+    if (toLabels.isNotEmpty) 'toLabels': Map<String, String>.of(toLabels),
     if (hidden.isNotEmpty) 'hidden': hidden.toList(),
     if (extraBoxes.isNotEmpty)
       'boxes': [for (final b in extraBoxes) b.toJson()],
@@ -452,6 +513,8 @@ class CablingOverrides {
     strings('labels', labels);
     strings('bodies', bodies);
     strings('cableTypes', cableTypes);
+    strings('fromLabels', fromLabels);
+    strings('toLabels', toLabels);
 
     final c = json['counts'];
     if (c is Map) {
@@ -460,13 +523,17 @@ class CablingOverrides {
         if (n != null) counts[key.toString()] = n;
       });
     }
-    final rgb = json['colors'];
-    if (rgb is Map) {
-      rgb.forEach((key, value) {
+    void argb(String key, Map<String, int> into) {
+      final raw = json[key];
+      if (raw is! Map) return;
+      raw.forEach((k, value) {
         final n = (value as num?)?.toInt();
-        if (n != null) colors[key.toString()] = n;
+        if (n != null) into[k.toString()] = n;
       });
     }
+
+    argb('colors', colors);
+    argb('typeColors', typeColors);
     for (final h in (json['hidden'] as List? ?? [])) {
       hidden.add(h.toString());
     }
@@ -653,6 +720,153 @@ Offset polylineMidpoint(List<Offset> route) {
     travelled += leg;
   }
   return route.last;
+}
+
+/// The point [distance] along [route], and [Offset.zero]-safe at both ends.
+Offset pointAlongRoute(List<Offset> route, double distance) {
+  if (route.isEmpty) return Offset.zero;
+  if (route.length == 1 || distance <= 0) return route.first;
+  var left = distance;
+  for (int i = 0; i < route.length - 1; i++) {
+    final leg = (route[i + 1] - route[i]).distance;
+    if (leg >= left) {
+      return leg == 0 ? route[i] : route[i] + (route[i + 1] - route[i]) * (left / leg);
+    }
+    left -= leg;
+  }
+  return route.last;
+}
+
+/// Where a run's end label belongs: the first point along the run that is
+/// clear of the box it starts in, with a second point further along to say
+/// which way the line is going.
+///
+/// Walking the route rather than stepping a fixed distance from the end is the
+/// whole point. A run starts at the CENTRE of its box, and the boxes are drawn
+/// over the lines — so a label a fixed forty pixels in from the end of a run
+/// leaving a 180-pixel-wide location box is a label printed underneath that
+/// box, which is to say invisible. On the floor plan, where the marker is a
+/// 26-pixel dot, the same walk stops almost immediately and the label sits
+/// right at the end, which is where it belongs there.
+({Offset at, Offset towards})? runEndAnchor(
+  List<Offset> route, {
+  required bool atStart,
+  Rect? clearOf,
+}) {
+  if (route.length < 2) return null;
+  final pts = atStart ? route : route.reversed.toList();
+
+  var total = 0.0;
+  for (int i = 0; i < pts.length - 1; i++) {
+    total += (pts[i + 1] - pts[i]).distance;
+  }
+  if (total == 0) return null;
+
+  // Never past the middle: beyond that the label stops reading as "this end"
+  // and starts competing with the run's own caption.
+  final limit = total / 2;
+  final box = clearOf?.inflate(6);
+  var out = 0.0;
+  if (box != null) {
+    while (out < limit && box.contains(pointAlongRoute(pts, out))) {
+      out += 4;
+    }
+  }
+  final at = pointAlongRoute(pts, (out + 8).clamp(0, limit));
+  return (at: at, towards: pointAlongRoute(pts, (out + 30).clamp(0, total)));
+}
+
+/// Prints what a run lands on at one end, just clear of the box at that end.
+///
+/// Returns the box it occupies so the caller can keep the next label off it,
+/// or null when there was nothing to print — which is the normal case, since
+/// an end label is an addition somebody makes to the runs that need one.
+///
+/// Shared by the cabling drawing and the floor plan so a run labelled "Patch
+/// panel A" is labelled the same way on both sheets. See [runEndAnchor] for
+/// where the two anchor points come from.
+Rect? paintRunEndLabel({
+  required Canvas canvas,
+  required String text,
+  required Offset at,
+  required Offset towards,
+  required Color color,
+  required bool dark,
+  required List<Rect> taken,
+}) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return null;
+
+  final painter = TextPainter(
+    text: TextSpan(
+      text: trimmed,
+      style: TextStyle(
+        color: dark ? Colors.white : Colors.black87,
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 2,
+    ellipsis: '…',
+  )..layout(maxWidth: 150);
+
+  final d = towards - at;
+  final length = d.distance;
+  // A zero-length leg has no direction to step along; the anchor point itself
+  // is still better than not drawing the label at all.
+  final along = length == 0 ? Offset.zero : d / length * 34;
+  final across = length == 0
+      ? const Offset(0, -12)
+      : Offset(-d.dy / length, d.dx / length) * 12;
+  final wanted = at + along + across;
+
+  Rect boxAt(Offset centre) => Rect.fromCenter(
+    center: centre,
+    width: painter.width + 8,
+    height: painter.height + 4,
+  );
+  bool free(Rect r) {
+    for (final other in taken) {
+      if (r.overlaps(other)) return false;
+    }
+    return true;
+  }
+
+  // Straight across the line first — the two sides of a cable are the two
+  // places a label for it belongs — then a little further along it.
+  var box = boxAt(wanted);
+  if (!free(box)) {
+    for (final candidate in [
+      at + along - across,
+      at + along * 1.8 + across,
+      at + along * 1.8 - across,
+      at + along * 0.5 + across * 2,
+    ]) {
+      box = boxAt(candidate);
+      if (free(box)) break;
+    }
+  }
+
+  canvas.drawRRect(
+    RRect.fromRectAndRadius(box, const Radius.circular(3)),
+    Paint()..color = dark ? const Color(0xF014181C) : const Color(0xF0FFFFFF),
+  );
+  canvas.drawRRect(
+    RRect.fromRectAndRadius(box, const Radius.circular(3)),
+    Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      // Outlined in the run's own colour: three labels round one box are
+      // otherwise three identical plates with no way to tell which cable each
+      // belongs to.
+      ..color = color,
+  );
+  painter.paint(
+    canvas,
+    Offset(box.center.dx - painter.width / 2, box.center.dy - painter.height / 2),
+  );
+  return box;
 }
 
 /// Bundle ids for the runs read off the room's screen and shade control runs.
@@ -991,6 +1205,13 @@ CablingSchematic buildCablingSchematic({
       out = out.copyWith(cableType: type);
       if (bundle.isDerived) overridden.add(bundle.id);
     }
+    // The end labels are additions to the drawing rather than disagreements
+    // with the room — nothing derives them, so there is nothing to badge.
+    final from = overrides.fromLabels[bundle.id];
+    final to = overrides.toLabels[bundle.id];
+    if (from != null || to != null) {
+      out = out.copyWith(fromLabel: from, toLabel: to);
+    }
     return out;
   }
 
@@ -1023,12 +1244,15 @@ CablingSchematic buildCablingSchematic({
   // somebody says "this one is Cat 6a like those two" and the colour has to
   // follow. A run recoloured BY HAND still wins — that is the drawing set's
   // own convention overriding the app's, which is the one thing a colour rule
-  // must never take away.
+  // must never take away. A colour chosen for the CABLE sits between the two:
+  // it is the office convention for every run of that type, and the one line
+  // somebody painted by hand is still the exception to it.
   final keyColors = cablingKeyColors(bundles);
   for (int i = 0; i < bundles.length; i++) {
     final explicit = overrides.colors[bundles[i].id];
+    final chosen = overrides.typeColors[cablingColorKey(bundles[i])];
     final byType = keyColors[cablingColorKey(bundles[i])];
-    final color = explicit ?? byType;
+    final color = explicit ?? chosen ?? byType;
     if (color != null && color != bundles[i].color) {
       bundles[i] = bundles[i].copyWith(color: color);
     }

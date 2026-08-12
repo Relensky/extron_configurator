@@ -679,8 +679,13 @@ class _MainDashboardState extends State<MainDashboard> {
             onPressed: () async {
               bool saved = await provider.exportRoomConfig();
               if (saved && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Config saved successfully!'))
+                // Exporting adopts the file as the working config, so the
+                // path to offer is the one the session is now tied to.
+                showSavedFileSnack(
+                  context,
+                  provider,
+                  'Config',
+                  provider.currentConfigPath,
                 );
               }
             },

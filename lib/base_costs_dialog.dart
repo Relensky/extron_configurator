@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_port_editor.dart' show avRowIcon;
 import 'base_costs.dart';
@@ -339,6 +340,6 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
     }
     setState(() => _dirty = false);
     provider.baseCostsChanged();
-    _snack('Base costs saved to $saved');
+    showSavedFileSnack(context, provider, 'Base costs', saved);
   }
 }

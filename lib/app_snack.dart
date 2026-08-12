@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+
+import 'app_state.dart';
 
 /// ============================================================================
 ///  SNACK BARS THAT ACTUALLY GO AWAY
@@ -48,3 +51,111 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showTimedSnackBar(
   });
   return controller;
 }
+
+/// ============================================================================
+///  "SAVED" — AND WHERE IT WENT
+/// ============================================================================
+///  Every export ends the same way: a file dialog closes, the bytes go down,
+///  and a bar says so. On its own that message is close to useless — the user
+///  has just picked a folder and is now being told a name, with no way back to
+///  either. So the bar carries the two buttons that answer the question it
+///  raises: open the thing, or open the folder it landed in.
+///
+///  One helper rather than a copy per tab, because the copies drifted: two
+///  pages offered the buttons, half a dozen offered a bare sentence, and which
+///  you got depended on which tab you happened to press Export on.
+/// ============================================================================
+
+/// Says [what] was saved to [savedPath], with OPEN FILE and OPEN FOLDER on it.
+///
+/// [savedPath] may be a FOLDER — a layer export writes several files into one
+/// — in which case pass [isFolder] and the single button opens it.
+///
+/// Held for ten seconds rather than the usual four: a file dialog has just
+/// closed over the top of everything, and the buttons are no use to somebody
+/// who is still looking at where the dialog was.
+ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSavedSnackBar({
+  required ScaffoldMessengerState messenger,
+  required ThemeData theme,
+  required AppStateProvider provider,
+  required String message,
+  required String savedPath,
+  bool isFolder = false,
+}) {
+  Future<void> run(Future<String?> Function() action) async {
+    final error = await action();
+    if (error == null) return;
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(error),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  final ButtonStyle actionStyle = TextButton.styleFrom(
+    foregroundColor: theme.snackBarTheme.actionTextColor ??
+        theme.colorScheme.onInverseSurface,
+    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+  );
+
+  return showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 10),
+      content: Row(
+        children: [
+          Expanded(child: Text(message, overflow: TextOverflow.ellipsis)),
+          if (!isFolder)
+            TextButton(
+              key: const ValueKey('saved_open_file'),
+              style: actionStyle,
+              onPressed: () => run(() => provider.openInDesktop(savedPath)),
+              child: const Text('OPEN FILE'),
+            ),
+          TextButton(
+            key: const ValueKey('saved_open_folder'),
+            style: actionStyle,
+            onPressed: () => run(
+              () => isFolder
+                  ? provider.openInDesktop(savedPath)
+                  : provider.revealInFileManager(savedPath),
+            ),
+            child: const Text('OPEN FOLDER'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// The same bar, phrased for the common case: `<what> saved as <file name>`.
+ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSavedFileSnack(
+  BuildContext context,
+  AppStateProvider provider,
+  String what,
+  String savedPath,
+) => showSavedSnackBar(
+  messenger: ScaffoldMessenger.of(context),
+  theme: Theme.of(context),
+  provider: provider,
+  message: '$what saved as ${p.basename(savedPath)}',
+  savedPath: savedPath,
+);
+
+/// And for an export that wrote several files into one folder.
+ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showSavedFolderSnack(
+  BuildContext context,
+  AppStateProvider provider,
+  String message,
+  String folder,
+) => showSavedSnackBar(
+  messenger: ScaffoldMessenger.of(context),
+  theme: Theme.of(context),
+  provider: provider,
+  message: message,
+  savedPath: folder,
+  isFolder: true,
+);

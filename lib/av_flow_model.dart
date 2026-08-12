@@ -996,6 +996,82 @@ const List<Color> kCableSwatches = [
 ];
 
 // ---------------------------------------------------------------------------
+//  THE CANVAS BACKDROP
+// ---------------------------------------------------------------------------
+
+/// A picture laid behind the signal flow.
+///
+/// This used to be the room's floor plan, and only ever the floor plan. That
+/// was the wrong picture in almost every case: a signal flow is laid out by
+/// signal, not by geometry, so a plan behind it lines up with nothing, and the
+/// drawings people actually wanted behind it — a title block, a riser sketch,
+/// a marked-up screenshot of the last revision — were unreachable. So the
+/// backdrop is now any image, chosen here and belonging to this canvas.
+///
+/// The file is referenced by NAME and copied in beside the config, on exactly
+/// the same terms as a floor plan sheet: a room folder is the unit that gets
+/// zipped and mailed, and an image referenced off somebody's desktop is a
+/// broken picture the moment it leaves this machine.
+class DiagramBackground {
+  /// File name relative to the config's folder, or an absolute path. Empty
+  /// means there is no backdrop, which is the default.
+  final String imageFile;
+
+  /// Natural pixel size, recorded on import so the canvas can lay out before
+  /// the bytes have been decoded.
+  final Size imageSize;
+
+  /// 1 is opaque. The default is faint enough that the diagram still reads
+  /// over it — a backdrop is there to be referred to, not looked at.
+  final double opacity;
+
+  /// How much of the canvas width the picture is drawn across, as a fraction.
+  /// 1 fills it; less leaves it at the top-left as a reference panel.
+  final double scale;
+
+  const DiagramBackground({
+    this.imageFile = '',
+    this.imageSize = const Size(1200, 900),
+    this.opacity = 0.35,
+    this.scale = 1.0,
+  });
+
+  bool get hasImage => imageFile.trim().isNotEmpty;
+
+  DiagramBackground copyWith({
+    String? imageFile,
+    Size? imageSize,
+    double? opacity,
+    double? scale,
+  }) => DiagramBackground(
+    imageFile: imageFile ?? this.imageFile,
+    imageSize: imageSize ?? this.imageSize,
+    opacity: opacity ?? this.opacity,
+    scale: scale ?? this.scale,
+  );
+
+  Map<String, dynamic> toJson() => {
+    if (imageFile.isNotEmpty) 'image': imageFile,
+    'width': imageSize.width,
+    'height': imageSize.height,
+    'opacity': opacity,
+    'scale': scale,
+  };
+
+  factory DiagramBackground.fromJson(Map<String, dynamic> json) =>
+      DiagramBackground(
+        imageFile: json['image']?.toString() ?? '',
+        imageSize: Size(
+          (json['width'] as num?)?.toDouble() ?? 1200,
+          (json['height'] as num?)?.toDouble() ?? 900,
+        ),
+        opacity: ((json['opacity'] as num?)?.toDouble() ?? 0.35)
+            .clamp(0.05, 1.0),
+        scale: ((json['scale'] as num?)?.toDouble() ?? 1.0).clamp(0.1, 3.0),
+      );
+}
+
+// ---------------------------------------------------------------------------
 //  RACKS
 // ---------------------------------------------------------------------------
 

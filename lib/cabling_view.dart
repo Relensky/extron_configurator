@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart' show kCableSwatches, latticeRoute;
 import 'av_flow_report.dart' show cablingSections;
@@ -16,8 +18,11 @@ import 'export_tools.dart';
 import 'layout_tools.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
+import 'room_sidecar.dart' show AvUndoScope;
+import 'undo_bar.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
+import 'xlsx_writer.dart';
 
 /// ============================================================================
 ///  CABLING TAB
@@ -52,6 +57,34 @@ class _CablingViewState extends State<CablingView> {
   /// The box a new run is being drawn from, or '' when not drawing one.
   String _runFrom = '';
 
+  /// Live drag, held HERE rather than written to the provider per pointer
+  /// event — the same bargain the AV Flow canvas makes, and the reason this
+  /// page's boxes used to stutter while that page's did not. A provider write
+  /// per frame rebuilds every listener in the app, re-derives the whole
+  /// drawing from the room and re-runs the lattice router for every run on the
+  /// sheet, sixty times a second, for a gesture whose only real outcome is one
+  /// position at the end of it.
+  ///
+  /// So the box is drawn under the cursor and the position is committed once,
+  /// on release. [kCablingKeyId] is a legitimate value: the key panel is
+  /// dragged on exactly the same terms.
+  String _dragId = '';
+  Offset _dragOffset = Offset.zero;
+
+  /// Which cable type the drawing is showing, or '' for all of them.
+  ///
+  /// Only ever set while an export is walking the layers — the sheet on screen
+  /// shows everything. It is here rather than local to the export because only
+  /// a widget that is on screen can be rendered, so the way to get a picture
+  /// of one layer is to make the canvas draw it and capture a frame.
+  String _exportLayer = '';
+
+  /// Holds the keyboard for the drawing, so Delete removes what is selected
+  /// and the arrows step between the runs on one edge. Taken when something is
+  /// selected rather than on build, so the count and cable-type fields in the
+  /// selection bar keep the caret.
+  final FocusNode _canvasFocus = FocusNode(debugLabel: 'cabling drawing');
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +99,7 @@ class _CablingViewState extends State<CablingView> {
   void dispose() {
     unregisterDiagramCanvas(AppTab.cabling, _canvasKey);
     _transform.dispose();
+    _canvasFocus.dispose();
     super.dispose();
   }
 
@@ -76,6 +110,12 @@ class _CablingViewState extends State<CablingView> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Selects [id] and takes the keyboard, so Delete and the arrows land on it.
+  void _select(String id) {
+    setState(() => _selectedId = id);
+    if (id.isNotEmpty) _canvasFocus.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
@@ -83,7 +123,7 @@ class _CablingViewState extends State<CablingView> {
       return const Center(child: Text('No configuration loaded.'));
     }
     final model = buildAvFlowModel(provider);
-    final drawing = provider.cablingSchematic(model);
+    final drawing = _asDrawn(provider.cablingSchematic(model));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,20 +140,140 @@ class _CablingViewState extends State<CablingView> {
           key: _viewportKey,
           child: drawing.boxes.isEmpty
               ? _emptyState(provider)
-              : InteractiveViewer(
-                  transformationController: _transform,
-                  constrained: false,
-                  minScale: 0.15,
-                  maxScale: 3.0,
-                  boundaryMargin: const EdgeInsets.all(300),
-                  child: RepaintBoundary(
-                    key: _canvasKey,
-                    child: _canvas(provider, drawing),
+              : Focus(
+                  focusNode: _canvasFocus,
+                  onKeyEvent: (_, event) =>
+                      _onCanvasKey(provider, drawing, event),
+                  child: InteractiveViewer(
+                    transformationController: _transform,
+                    constrained: false,
+                    minScale: 0.15,
+                    maxScale: 3.0,
+                    boundaryMargin: const EdgeInsets.all(300),
+                    child: RepaintBoundary(
+                      key: _canvasKey,
+                      child: _canvas(provider, drawing),
+                    ),
                   ),
                 ),
         ),
       ],
     );
+  }
+
+  /// The drawing as it should be shown RIGHT NOW: what the room says, with a
+  /// box being dragged shown under the cursor and — while an export is walking
+  /// the layers — only the cable being exported on it.
+  ///
+  /// Its real position is written back on release, so the runs follow the box
+  /// live without a provider write per pointer event.
+  CablingSchematic _asDrawn(CablingSchematic drawing) {
+    final dragging = _dragId.isNotEmpty &&
+        _dragOffset != Offset.zero &&
+        _dragId != kCablingKeyId;
+    if (!dragging && _exportLayer.isEmpty) return drawing;
+
+    return CablingSchematic(
+      boxes: [
+        for (final b in drawing.boxes)
+          if (dragging && b.id == _dragId)
+            b.copyWith(pos: _clamped(b.pos + _dragOffset))
+          else
+            b,
+      ],
+      bundles: _exportLayer.isEmpty
+          ? drawing.bundles
+          : [
+              for (final b in drawing.bundles)
+                if (b.cableType == _exportLayer) b,
+            ],
+      overridden: drawing.overridden,
+    );
+  }
+
+  /// The sheet only grows right and down, so a box cannot be dragged past the
+  /// origin where it would be clipped out of the export.
+  static Offset _clamped(Offset p) =>
+      Offset(p.dx < 0 ? 0 : p.dx, p.dy < 0 ? 0 : p.dy);
+
+  // --- the keyboard ---------------------------------------------------------
+
+  /// Delete removes what is selected; the arrows step between the runs sharing
+  /// an edge.
+  ///
+  /// The arrows are here because a bundle of six runs between two places is
+  /// six lines thirteen pixels apart, and picking the fourth one with a mouse
+  /// is a game. Selecting any of them and pressing Down walks the stack in
+  /// drawing order, which is the order the captions are printed in, so what is
+  /// selected can be followed in the label block rather than on the wire.
+  KeyEventResult _onCanvasKey(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    KeyEvent event,
+  ) {
+    if (event is! KeyDownEvent || _selectedId.isEmpty) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.backspace) {
+      _deleteSelection(provider, drawing);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.escape) {
+      setState(() {
+        _selectedId = '';
+        _runFrom = '';
+      });
+      return KeyEventResult.handled;
+    }
+
+    final forward = key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowRight;
+    final back = key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowLeft;
+    if (!forward && !back) return KeyEventResult.ignored;
+
+    final bundle = drawing.bundles
+        .where((b) => b.id == _selectedId)
+        .firstOrNull;
+    if (bundle == null) return KeyEventResult.ignored;
+
+    final siblings = drawing.bundlesBetween(bundle.fromBoxId, bundle.toBoxId);
+    if (siblings.length < 2) return KeyEventResult.ignored;
+    final at = siblings.indexWhere((b) => b.id == bundle.id);
+    // Wraps, so a stack of runs can be walked round without having to know
+    // which end of it you are at.
+    final next =
+        (at + (forward ? 1 : -1) + siblings.length) % siblings.length;
+    setState(() => _selectedId = siblings[next].id);
+    _snack(
+      '${siblings[next].label} — run ${next + 1} of ${siblings.length} '
+      'between these two',
+    );
+    return KeyEventResult.handled;
+  }
+
+  /// Takes the selected box or run off the drawing.
+  ///
+  /// A DERIVED item is hidden rather than deleted; see
+  /// [AppStateProvider.removeCablingItem] for why deleting one would only
+  /// bring it back on the next rebuild.
+  void _deleteSelection(AppStateProvider provider, CablingSchematic drawing) {
+    final id = _selectedId;
+    if (id.isEmpty) return;
+    final box = drawing.boxById(id);
+    final what = box?.label ??
+        drawing.bundles.where((b) => b.id == id).firstOrNull?.label ??
+        'it';
+    provider.removeCablingItem(id);
+    setState(() {
+      _selectedId = '';
+      if (_runFrom == id) _runFrom = '';
+    });
+    _snack('$what taken off the drawing — Undo puts it back.');
   }
 
   Widget _emptyState(AppStateProvider provider) => Center(
@@ -186,13 +346,14 @@ class _CablingViewState extends State<CablingView> {
                 size: 18,
               ),
               label: Text(kCablingBoxKindLabels[kind]!),
-              onPressed: () {
-                final box = provider.addCablingBox(
-                  kind: kind,
-                  occupied: _occupied(provider, drawing),
-                );
-                setState(() => _selectedId = box.id);
-              },
+              onPressed: () => _select(
+                provider
+                    .addCablingBox(
+                      kind: kind,
+                      occupied: _occupied(provider, drawing),
+                    )
+                    .id,
+              ),
             ),
           // The gear itself, drawn the way the schematic draws it, so a run
           // can be pulled to "the ceiling mic" rather than to a location code.
@@ -227,15 +388,32 @@ class _CablingViewState extends State<CablingView> {
           // The drawing is what the trades are handed; the schedule under it
           // is the same thing in a form somebody can price and order against.
           // Both come off this page rather than only out of Save All.
+          // This drawing's own history — and the way back out of a Delete
+          // pressed by mistake.
+          ...avUndoRedoButtons(provider, AvUndoScope.cabling, onDone: _snack),
           OutlinedButton.icon(
             icon: const Icon(Icons.image_outlined, size: 18),
             label: const Text('Export PNG'),
             onPressed: () => _exportPng(provider),
           ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.description_outlined, size: 18),
-            label: const Text('Run schedule'),
-            onPressed: () => _exportReport(provider),
+          PopupMenuButton<String>(
+            key: const ValueKey('cabling_schedule_menu'),
+            tooltip: 'Export the run schedule',
+            onSelected: (v) => _exportReport(provider, asXlsx: v == 'xlsx'),
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                value: 'xlsx',
+                child: Text('Workbook with the drawings (.xlsx)'),
+              ),
+              PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
+            ],
+            child: IgnorePointer(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.description_outlined, size: 18),
+                label: const Text('Run schedule'),
+                onPressed: () {},
+              ),
+            ),
           ),
           if (!provider.avCabling.isEmpty)
             TextButton.icon(
@@ -322,7 +500,7 @@ class _CablingViewState extends State<CablingView> {
           runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: box != null
-              ? _boxActions(provider, box)
+              ? _boxActions(provider, drawing, box)
               : _bundleActions(provider, drawing, bundle!),
         ),
       ),
@@ -353,17 +531,16 @@ class _CablingViewState extends State<CablingView> {
     ),
   );
 
-  List<Widget> _boxActions(AppStateProvider provider, CablingBox box) => [
+  List<Widget> _boxActions(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    CablingBox box,
+  ) => [
     _selectionTitle(kCablingBoxKindLabels[box.kind] ?? 'Box', box.label),
     TextButton.icon(
       icon: const Icon(Icons.drive_file_rename_outline, size: 16),
       label: const Text('Rename'),
-      onPressed: () async {
-        final name = await _askFor('Box name', box.label);
-        if (name != null && name.trim().isNotEmpty) {
-          provider.setCablingBoxLabel(box.id, name.trim());
-        }
-      },
+      onPressed: () => _renameBox(provider, box),
     ),
     // Only a hand-added device box has a shape to swap; a place derived from
     // the room is a place, not a piece of gear.
@@ -392,12 +569,10 @@ class _CablingViewState extends State<CablingView> {
     avRowIcon(
       Icons.delete_outline,
       box.isDerived
-          ? 'Take it off the drawing (the room keeps the location)'
-          : 'Delete this box',
-      () {
-        provider.removeCablingItem(box.id);
-        setState(() => _selectedId = '');
-      },
+          ? 'Take it off the drawing (the room keeps the location) — or press '
+                'Delete'
+          : 'Delete this box — or press Delete',
+      () => _deleteSelection(provider, drawing),
       danger: true,
     ),
   ];
@@ -413,8 +588,25 @@ class _CablingViewState extends State<CablingView> {
   ) {
     final from = drawing.boxById(bundle.fromBoxId)?.label ?? bundle.fromBoxId;
     final to = drawing.boxById(bundle.toBoxId)?.label ?? bundle.toBoxId;
+    final siblings = drawing.bundlesBetween(bundle.fromBoxId, bundle.toBoxId);
     return [
       _selectionTitle('Run', '$from  →  $to'),
+      // Which of the stack this is, and how to reach the others. Six runs
+      // thirteen pixels apart are not pickable with a mouse, and until this
+      // said so the ones in the middle read as unselectable.
+      if (siblings.length > 1)
+        Tooltip(
+          message: 'The arrow keys step through the runs between these two',
+          child: Chip(
+            avatar: const Icon(Icons.swap_vert, size: 16),
+            label: Text(
+              '${siblings.indexWhere((b) => b.id == bundle.id) + 1}'
+              ' of ${siblings.length}  ↑↓',
+            ),
+            visualDensity: VisualDensity.compact,
+            labelStyle: const TextStyle(fontSize: 11),
+          ),
+        ),
       // Committed on Enter or on clicking away rather than per keystroke: the
       // count goes through the undo stack, and "13" typed a digit at a time
       // would leave "1" behind as an entry of its own.
@@ -462,6 +654,36 @@ class _CablingViewState extends State<CablingView> {
             PopupMenuItem(value: type, child: Text(type)),
         ],
       ),
+      // What the run lands on at each end. Typed here rather than only in the
+      // dialog because these are the fields somebody fills in for run after
+      // run while reading a jack schedule, and a dialog per run is a dialog
+      // per run.
+      SizedBox(
+        width: 190,
+        child: LiveTextField(
+          key: ValueKey('cabling_from_label_${bundle.id}'),
+          fieldId: 'fromLabel:${bundle.id}',
+          initial: bundle.fromLabel,
+          label: 'Lands on at $from',
+          hint: 'e.g. Wall plate 2',
+          onChanged: (_) {},
+          onSubmitted: (v) =>
+              provider.setCablingBundleEndLabel(bundle.id, fromLabel: v),
+        ),
+      ),
+      SizedBox(
+        width: 190,
+        child: LiveTextField(
+          key: ValueKey('cabling_to_label_${bundle.id}'),
+          fieldId: 'toLabel:${bundle.id}',
+          initial: bundle.toLabel,
+          label: 'Lands on at $to',
+          hint: 'e.g. Patch panel A',
+          onChanged: (_) {},
+          onSubmitted: (v) =>
+              provider.setCablingBundleEndLabel(bundle.id, toLabel: v),
+        ),
+      ),
       // What the family name covers, when it covers more than one thing.
       if (bundle.signalSubLabel.isNotEmpty)
         Chip(
@@ -487,7 +709,7 @@ class _CablingViewState extends State<CablingView> {
             toBoxId: bundle.toBoxId,
             cableType: '',
           );
-          if (added != null) setState(() => _selectedId = added.id);
+          if (added != null) _select(added.id);
         },
       ),
       if (drawing.overridden.contains(bundle.id))
@@ -501,11 +723,8 @@ class _CablingViewState extends State<CablingView> {
         ),
       avRowIcon(
         Icons.delete_outline,
-        'Take this run off the drawing',
-        () {
-          provider.removeCablingItem(bundle.id);
-          setState(() => _selectedId = '');
-        },
+        'Take this run off the drawing — or press Delete',
+        () => _deleteSelection(provider, drawing),
         danger: true,
       ),
     ];
@@ -557,6 +776,284 @@ class _CablingViewState extends State<CablingView> {
           () => provider.setCablingBundleColor(bundle.id, null),
         ),
     ];
+  }
+
+  // --- right-click ----------------------------------------------------------
+  //  A drawing is edited by pointing at the thing being edited. Everything
+  //  here is also in the selection bar, and none of it should need a trip to
+  //  the top of the page.
+
+  /// Puts a menu where the pointer is.
+  Future<T?> _menuAt<T>(Offset at, List<PopupMenuEntry<T>> items) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final size = overlay?.size ?? MediaQuery.of(context).size;
+    return showMenu<T>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        at.dx,
+        at.dy,
+        size.width - at.dx,
+        size.height - at.dy,
+      ),
+      items: items,
+    );
+  }
+
+  /// The context menu for a box — a location, a pull box, a pathway, a note or
+  /// a device. What is offered depends on which: only a hand-added device has
+  /// an icon to swap, and a derived box is taken OFF the drawing rather than
+  /// deleted (the room keeps the location).
+  Future<void> _showBoxMenu(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    CablingBox box,
+    Offset at,
+  ) async {
+    final kind = kCablingBoxKindLabels[box.kind] ?? 'Box';
+    final choice = await _menuAt<String>(at, [
+      PopupMenuItem(
+        enabled: false,
+        height: 34,
+        child: Text(
+          '$kind · ${box.label}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+      const PopupMenuDivider(),
+      const PopupMenuItem(value: 'rename', child: Text('Rename...')),
+      PopupMenuItem(
+        value: 'body',
+        child: Text(box.body.trim().isEmpty ? 'Add text...' : 'Edit text...'),
+      ),
+      if (box.kind == CablingBoxKind.device && !box.isDerived)
+        const PopupMenuItem(value: 'shape', child: Text('Device type...')),
+      const PopupMenuItem(value: 'run', child: Text('Draw a run from here')),
+      const PopupMenuDivider(),
+      PopupMenuItem(
+        value: 'delete',
+        child: Text(
+          box.isDerived ? 'Take it off the drawing' : 'Delete this box',
+          style: const TextStyle(color: Colors.red),
+        ),
+      ),
+    ]);
+    if (choice == null || !mounted) return;
+
+    switch (choice) {
+      case 'rename':
+        await _renameBox(provider, box);
+      case 'body':
+        final body = await _askFor('Text', box.body, lines: 8);
+        if (body != null) provider.setCablingBoxBody(box.id, body);
+      case 'shape':
+        final shape = await _pickDeviceShape(box.shape);
+        if (shape != null) provider.setCablingBoxShape(box.id, shape);
+      case 'run':
+        setState(() => _runFrom = box.id);
+      case 'delete':
+        _deleteSelection(provider, drawing);
+    }
+  }
+
+  Future<void> _renameBox(AppStateProvider provider, CablingBox box) async {
+    final name = await _askFor('Box name', box.label);
+    if (name != null && name.trim().isNotEmpty) {
+      provider.setCablingBoxLabel(box.id, name.trim());
+    }
+  }
+
+  /// The context menu for a run.
+  Future<void> _showBundleMenu(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    CablingBundle bundle,
+    Offset at,
+  ) async {
+    final siblings = drawing.bundlesBetween(bundle.fromBoxId, bundle.toBoxId);
+    final choice = await _menuAt<String>(at, [
+      PopupMenuItem(
+        enabled: false,
+        height: 34,
+        child: Text(
+          'Run · ${bundle.label}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+      const PopupMenuDivider(),
+      const PopupMenuItem(
+        value: 'edit',
+        child: Text('Edit this run...'),
+      ),
+      const PopupMenuItem(value: 'color', child: Text('Colour...')),
+      if (siblings.length > 1)
+        PopupMenuItem(
+          value: 'next',
+          child: Text('Next of the ${siblings.length} runs here  (↓)'),
+        ),
+      const PopupMenuDivider(),
+      const PopupMenuItem(
+        value: 'delete',
+        child: Text(
+          'Take this run off the drawing',
+          style: TextStyle(color: Colors.red),
+        ),
+      ),
+    ]);
+    if (choice == null || !mounted) return;
+
+    switch (choice) {
+      case 'edit':
+        await _showBundleEditor(provider, drawing, bundle);
+      case 'color':
+        final picked = await showColorWheelDialog(
+          context,
+          initial: Color(bundle.color),
+          title: 'Colour for ${bundle.label}',
+        );
+        if (picked != null) {
+          provider.setCablingBundleColor(bundle.id, picked.toARGB32());
+        }
+      case 'next':
+        final at = siblings.indexWhere((b) => b.id == bundle.id);
+        setState(
+          () => _selectedId = siblings[(at + 1) % siblings.length].id,
+        );
+      case 'delete':
+        _deleteSelection(provider, drawing);
+    }
+  }
+
+  /// Everything about one run in one place — including what it LANDS ON at
+  /// each end.
+  ///
+  /// The two end labels are the reason this dialog exists rather than more
+  /// fields in the selection bar: a bar that already wraps on a laptop cannot
+  /// take two more text boxes, and "which jack does this one land on" is the
+  /// question a cabling sheet is read at the wall to answer.
+  Future<void> _showBundleEditor(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    CablingBundle bundle,
+  ) async {
+    final from = drawing.boxById(bundle.fromBoxId)?.label ?? bundle.fromBoxId;
+    final to = drawing.boxById(bundle.toBoxId)?.label ?? bundle.toBoxId;
+    final countController = TextEditingController(
+      text: bundle.count == bundle.count.roundToDouble()
+          ? bundle.count.round().toString()
+          : bundle.count.toStringAsFixed(1),
+    );
+    final typeController = TextEditingController(text: bundle.cableType);
+    final fromController = TextEditingController(text: bundle.fromLabel);
+    final toController = TextEditingController(text: bundle.toLabel);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$from  →  $to'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How much cable, what it is, and what it lands on at each '
+                  'end. The end labels print beside their own end of the line '
+                  'on this drawing and on the floor plan — leave them blank on '
+                  'a run whose ends speak for themselves.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 110,
+                      child: TextField(
+                        key: const ValueKey('run_editor_count'),
+                        controller: countController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cables',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('run_editor_type'),
+                        controller: typeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cable',
+                          hintText: 'e.g. Cat 6a',
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Common cable types',
+                      icon: const Icon(Icons.arrow_drop_down),
+                      onSelected: (v) => typeController.text = v,
+                      itemBuilder: (ctx) => [
+                        for (final type in kCablingCableTypes)
+                          PopupMenuItem(value: type, child: Text(type)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  key: const ValueKey('run_editor_from_label'),
+                  controller: fromController,
+                  decoration: InputDecoration(
+                    labelText: 'Lands on at $from',
+                    hintText: 'e.g. Wall plate 2, ports 1-4',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('run_editor_to_label'),
+                  controller: toController,
+                  decoration: InputDecoration(
+                    labelText: 'Lands on at $to',
+                    hintText: 'e.g. Patch panel A, ports 13-18',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true) return;
+
+    final count = countController.text.trim();
+    provider.setCablingBundleCount(
+      bundle.id,
+      count.isEmpty ? null : double.tryParse(count),
+    );
+    provider.setCablingBundleType(
+      bundle.id,
+      typeController.text.trim().isEmpty ? null : typeController.text,
+    );
+    provider.setCablingBundleEndLabel(
+      bundle.id,
+      fromLabel: fromController.text,
+      toLabel: toController.text,
+    );
   }
 
   // --- devices --------------------------------------------------------------
@@ -656,38 +1153,139 @@ class _CablingViewState extends State<CablingView> {
     if (!out.toLowerCase().endsWith('.png')) out += '.png';
     try {
       await File(out).writeAsBytes(bytes);
-      _snack('Cabling drawing saved as $out');
+      if (mounted) showSavedFileSnack(context, provider, 'Cabling drawing', out);
     } catch (e) {
       _snack('Failed to save the image: $e');
     }
   }
 
-  Future<void> _exportReport(AppStateProvider provider) async {
+  /// The run schedule, as a workbook or as plain text.
+  ///
+  /// The workbook is the one that gets sent to a contractor: the schedule they
+  /// price against AND the drawing they pull from, with a sheet per cable so
+  /// the network contractor's copy has the network runs on it and nothing
+  /// else. A schedule with no drawing is a list of pairs of place names, and a
+  /// drawing with no schedule is not something anybody can order against.
+  Future<void> _exportReport(
+    AppStateProvider provider, {
+    required bool asXlsx,
+  }) async {
     final model = buildAvFlowModel(provider);
     final sections = cablingSections(model);
     if (sections.isEmpty) {
       _snack('Nothing to report yet — the drawing is empty.');
       return;
     }
+    final title = model.roomTitle.isEmpty ? 'Cabling' : model.roomTitle;
+    final ext = asXlsx ? 'xlsx' : 'txt';
     String? out = await FilePicker.saveFile(
       dialogTitle: 'Save the cable run schedule',
-      fileName: '${roomFileStem(provider, 'cabling')}.txt',
+      fileName: '${roomFileStem(provider, 'cabling')}.$ext',
       type: FileType.custom,
-      allowedExtensions: const ['txt'],
+      allowedExtensions: [ext],
     );
     if (out == null) return;
-    if (!out.toLowerCase().endsWith('.txt')) out += '.txt';
+    if (!out.toLowerCase().endsWith('.$ext')) out += '.$ext';
+    final saved = out;
+
     try {
-      await File(out).writeAsString(
-        renderTextReport(
-          model.roomTitle.isEmpty ? 'Cabling' : model.roomTitle,
-          sections,
-        ),
-      );
-      _snack('Cable run schedule saved as $out');
+      if (asXlsx) {
+        // One moment for the whole book: sheets stamped seconds apart read as
+        // documents from two different exports.
+        final generated = DateTime.now();
+        final layers = await _captureCableLayers(provider);
+        final first = layers.isEmpty ? null : layers.first;
+        await File(saved).writeAsBytes(
+          buildXlsx([
+            buildStackedReportSheet(
+              sheetName: 'Run Schedule',
+              title: title,
+              sections: sections,
+              generated: generated,
+              imageBuilder: first == null
+                  ? null
+                  : (anchorRow) => scaledSheetImage(first.bytes, anchorRow),
+            ),
+            for (final layer in layers.skip(1))
+              _layerSheet(title, layer, generated),
+          ]),
+        );
+      } else {
+        await File(saved).writeAsString(renderTextReport(title, sections));
+      }
+      if (mounted) {
+        showSavedFileSnack(context, provider, 'Cable run schedule', saved);
+      }
     } catch (e) {
       _snack('Failed to save the schedule: $e');
     }
+  }
+
+  /// Renders the sheet once per cable: everything first, then one drawing per
+  /// cable type.
+  ///
+  /// Only a widget on screen can be rendered, so the way to get a picture of
+  /// one layer is to make the canvas draw that layer and capture a frame. The
+  /// filter is put back afterwards — the sheet on screen shows everything.
+  Future<List<({String name, String caption, Uint8List bytes})>>
+  _captureCableLayers(AppStateProvider provider) async {
+    final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
+    final types = <String>{for (final b in drawing.bundles) b.cableType}
+        .where((t) => t.trim().isNotEmpty)
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final out = <({String name, String caption, Uint8List bytes})>[];
+    // "All" first, then one per cable, so the book reads as a set. A sheet
+    // with one cable type on it gets no per-layer copy — it would be the same
+    // picture twice.
+    for (final layer in ['', if (types.length > 1) ...types]) {
+      if (!mounted) break;
+      setState(() => _exportLayer = layer);
+      // Let the change actually paint before the boundary is captured;
+      // without this every image would be of whatever was on screen when the
+      // loop started.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) break;
+      final bytes = await captureBoundary(_canvasKey, pixelRatio: 2.0);
+      if (bytes == null) continue;
+      out.add((
+        name: layer.isEmpty ? 'All runs' : _sheetSafe(layer),
+        caption: layer.isEmpty ? 'All runs' : layer,
+        bytes: bytes,
+      ));
+    }
+    if (mounted) setState(() => _exportLayer = '');
+    return out;
+  }
+
+  /// A cable type as a workbook sheet name: Excel refuses the punctuation and
+  /// stops at 31 characters, and "Fiber (OS2)" is a real cable type.
+  static String _sheetSafe(String name) {
+    final cleaned = name.replaceAll(RegExp(r'[:\\/?*\[\]]'), ' ').trim();
+    return cleaned.length > 31 ? cleaned.substring(0, 31) : cleaned;
+  }
+
+  /// One workbook sheet holding one layer's drawing and nothing else. The
+  /// schedule is on the first sheet; repeating it per layer would be five
+  /// copies of one table with a different picture over each.
+  XlsxSheet _layerSheet(
+    String title,
+    ({String name, String caption, Uint8List bytes}) layer,
+    DateTime generated,
+  ) {
+    final rows = <List<dynamic>>[
+      ['$title — ${layer.caption}', '', '', '', ''],
+      ['Generated ${reportTimestamp(generated)}'],
+      [],
+    ];
+    return XlsxSheet(
+      name: layer.name,
+      rows: rows,
+      rowStyles: const {0: XlsxRowStyle.title},
+      merges: const ['A1:E1'],
+      image: scaledSheetImage(layer.bytes, rows.length + 1),
+    );
   }
 
   Future<String?> _askFor(String label, String initial, {int lines = 1}) {
@@ -752,8 +1350,14 @@ class _CablingViewState extends State<CablingView> {
     if (!_keyShown(provider)) return null;
     final entries = drawing.key;
     if (entries.isEmpty) return null;
-    final at = provider.avCabling.positions[kCablingKeyId] ??
-        kDefaultCablingKeyPosition;
+    final at = _clamped(
+      (provider.avCabling.positions[kCablingKeyId] ??
+              kDefaultCablingKeyPosition) +
+          // Dragged live, like the boxes: the key is a panel somebody shoves
+          // out of the way, and a shove that rebuilds the whole app per frame
+          // is the one that feels like it is sticking.
+          (_dragId == kCablingKeyId ? _dragOffset : Offset.zero),
+    );
     // padding + title + gap + one row each, running a little generous: this
     // figure is what the canvas is sized against and what a new box is kept
     // out of, and a panel that reserves a few pixels too many costs nothing
@@ -782,19 +1386,32 @@ class _CablingViewState extends State<CablingView> {
       // clip the last line whenever the estimate came in a pixel short.
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onPanUpdate: (d) => provider.setCablingBoxPosition(
-          kCablingKeyId,
-          rect.topLeft + d.delta,
-          recordUndo: false,
-        ),
-        onPanEnd: (_) => provider.setCablingBoxPosition(
-          kCablingKeyId,
-          nonOverlappingPosition(
-            desired: rect.topLeft,
-            size: rect.size,
-            others: [for (final b in drawing.boxes) b.rect],
-          ),
-        ),
+        onPanStart: (_) => setState(() {
+          _dragId = kCablingKeyId;
+          _dragOffset = Offset.zero;
+        }),
+        onPanUpdate: (d) => setState(() => _dragOffset += d.delta),
+        onPanEnd: (_) {
+          final moved = _dragOffset;
+          setState(() {
+            _dragId = '';
+            _dragOffset = Offset.zero;
+          });
+          if (moved == Offset.zero) return;
+          provider.setCablingBoxPosition(
+            kCablingKeyId,
+            nonOverlappingPosition(
+              // rect already carries the drag — see [_keyRect].
+              desired: rect.topLeft,
+              size: rect.size,
+              others: [for (final b in drawing.boxes) b.rect],
+            ),
+          );
+        },
+        onPanCancel: () => setState(() {
+          _dragId = '';
+          _dragOffset = Offset.zero;
+        }),
         child: MouseRegion(
           cursor: SystemMouseCursors.grab,
           child: Container(
@@ -932,7 +1549,7 @@ class _CablingViewState extends State<CablingView> {
             ),
           ),
           for (final bundle in drawing.bundles)
-            _bundleHitTarget(drawing, bundle, routes[bundle.id]),
+            _bundleHitTarget(provider, drawing, bundle, routes[bundle.id]),
           for (final box in drawing.boxes) _box(provider, drawing, box),
           // Last, so it is on top of anything it has been dragged over rather
           // than half hidden behind it.
@@ -981,6 +1598,7 @@ class _CablingViewState extends State<CablingView> {
   /// pad of its own: on a location feeding the pathway with six Cat 6a and
   /// five Cat 5e, both lines are selectable rather than only the top one.
   Widget _bundleHitTarget(
+    AppStateProvider provider,
     CablingSchematic drawing,
     CablingBundle bundle,
     List<Offset>? route,
@@ -988,11 +1606,10 @@ class _CablingViewState extends State<CablingView> {
     if (route == null || route.isEmpty) return const SizedBox.shrink();
     final mid = polylineMidpoint(route);
     const w = 150.0;
+    final siblings = drawing.bundlesBetween(bundle.fromBoxId, bundle.toBoxId);
     // Kept to a lane's width when there are runs either side, so two pads on
     // one edge cannot cover each other and steal the click.
-    final h = drawing.bundlesBetween(bundle.fromBoxId, bundle.toBoxId).length > 1
-        ? kCablingLaneStep
-        : 48.0;
+    final h = siblings.length > 1 ? kCablingLaneStep : 48.0;
     return Positioned(
       left: mid.dx - w / 2,
       top: mid.dy - h / 2 - (h > kCablingLaneStep ? 8 : 0),
@@ -1002,14 +1619,56 @@ class _CablingViewState extends State<CablingView> {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _selectedId = bundle.id),
+          onTap: () => _select(bundle.id),
+          onSecondaryTapDown: (d) {
+            _select(bundle.id);
+            _showBundleMenu(provider, drawing, bundle, d.globalPosition);
+          },
           child: Tooltip(
-            message: '${bundle.label}'
-                '${bundle.signalSubLabel.isEmpty ? '' : ' · ${bundle.signalSubLabel}'}'
-                ' — click to set the count and cable type',
+            message: [
+              '${bundle.label}'
+                  '${bundle.signalSubLabel.isEmpty ? '' : ' · ${bundle.signalSubLabel}'}',
+              'Click to set the count and cable type · right-click for '
+                  'everything else',
+              // The way out of the one thing this drawing is genuinely awkward
+              // at: six lanes thirteen pixels apart, and the one you want in
+              // the middle.
+              if (siblings.length > 1)
+                '${siblings.length} runs between these two — arrow keys step '
+                    'through them',
+            ].join('\n'),
             child: const SizedBox.expand(),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Commits a box drag: one undo entry, and a landing spot clear of the rest.
+  ///
+  /// [box] is the PREVIEWED box, so its position already carries the drag —
+  /// which is what makes this one write rather than one per pointer event.
+  void _endBoxDrag(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    CablingBox box,
+  ) {
+    final id = _dragId;
+    final moved = _dragOffset;
+    setState(() {
+      _dragId = '';
+      _dragOffset = Offset.zero;
+    });
+    if (id.isEmpty || moved == Offset.zero) return;
+    provider.setCablingBoxPosition(
+      id,
+      nonOverlappingPosition(
+        desired: _clamped(box.pos),
+        size: box.size,
+        others: [
+          for (final other in drawing.boxes)
+            if (other.id != id) other.rect,
+        ],
       ),
     );
   }
@@ -1039,39 +1698,39 @@ class _CablingViewState extends State<CablingView> {
               toBoxId: box.id,
               cableType: 'Cat 6a',
             );
-            setState(() {
-              _runFrom = '';
-              _selectedId = added?.id ?? '';
-            });
+            setState(() => _runFrom = '');
+            _select(added?.id ?? '');
             if (added != null) {
               _snack('Run added — its count and cable type are in the bar '
                   'above the drawing.');
             }
             return;
           }
-          setState(() => _selectedId = box.id);
+          _select(box.id);
         },
-        onPanUpdate: (d) => provider.setCablingBoxPosition(
-          box.id,
-          box.pos + d.delta,
-          recordUndo: false,
-        ),
+        // Everything that can be done to this box, where the pointer already
+        // is. The selection bar has the same actions; a drawing is edited by
+        // pointing at the thing, and making somebody travel to a bar at the
+        // top of the page for every rename is the reason that bar was missed.
+        onSecondaryTapDown: (d) =>
+            _showBoxMenu(provider, drawing, box, d.globalPosition),
+        onPanStart: (_) {
+          _select(box.id);
+          setState(() {
+            _dragId = box.id;
+            _dragOffset = Offset.zero;
+          });
+        },
+        onPanUpdate: (d) => setState(() => _dragOffset += d.delta),
         // Land clear of the other boxes, the way the signal flow does. A box
         // dropped on top of another hides both and makes the runs between
         // them unreadable, so a drop that would overlap slides to the nearest
         // free spot instead.
-        onPanEnd: (_) => provider.setCablingBoxPosition(
-          box.id,
-          nonOverlappingPosition(
-            desired: box.pos,
-            size: box.size,
-            others: [
-              for (final other in drawing.boxes)
-                if (other.id != box.id) other.rect,
-            ],
-          ),
-          recordUndo: true,
-        ),
+        onPanEnd: (_) => _endBoxDrag(provider, drawing, box),
+        onPanCancel: () => setState(() {
+          _dragId = '';
+          _dragOffset = Offset.zero;
+        }),
         child: MouseRegion(
           cursor: SystemMouseCursors.grab,
           child: Container(
@@ -1267,6 +1926,40 @@ class _BundlePainter extends CustomPainter {
       if (route == null || route.isEmpty) continue;
       final placed = _paintCaption(canvas, group, polylineMidpoint(route), taken);
       if (placed != null) taken.add(placed);
+    }
+
+    // What each run TERMINATES INTO, beside its own end of the line, last so
+    // it sits over the runs rather than under the next one drawn. Each dodges
+    // everything already down, the captions included.
+    //
+    // Anchored clear of the box it leaves: a run starts at the CENTRE of its
+    // box and the boxes are drawn over the lines, so a label a fixed distance
+    // in from the end of the route would be printed underneath the box.
+    for (final bundle in drawing.bundles) {
+      final route = routes[bundle.id];
+      if (route == null || route.length < 2) continue;
+      for (final end in [
+        (text: bundle.fromLabel, atStart: true, boxId: bundle.fromBoxId),
+        (text: bundle.toLabel, atStart: false, boxId: bundle.toBoxId),
+      ]) {
+        if (end.text.trim().isEmpty) continue;
+        final anchor = runEndAnchor(
+          route,
+          atStart: end.atStart,
+          clearOf: drawing.boxById(end.boxId)?.rect,
+        );
+        if (anchor == null) continue;
+        final placed = paintRunEndLabel(
+          canvas: canvas,
+          text: end.text,
+          at: anchor.at,
+          towards: anchor.towards,
+          color: Color(bundle.color),
+          dark: dark,
+          taken: taken,
+        );
+        if (placed != null) taken.add(placed);
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_flow_view.dart';
+import 'package:extron_configurator/room_sidecar.dart';
 
 /// The AV tab's dialogs are built inside the tab, so anything that throws
 /// while they lay out takes the whole tab down to a gray screen rather than
@@ -384,7 +385,7 @@ void main() {
       expect(provider.avCables, hasLength(2));
       expect(provider.avCables.every((c) => c.lengthFt == 25), isTrue);
       // One undo entry for the lot, not one per run.
-      expect(provider.avUndoLabel, 'Set cable lengths');
+      expect(provider.avUndoLabel(AvUndoScope.flow), 'Set cable lengths');
     });
 
     testWidgets('the button stays away until there is a run to measure', (

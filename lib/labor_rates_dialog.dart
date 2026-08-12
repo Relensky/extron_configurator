@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_port_editor.dart' show avRowIcon;
 import 'cost_estimate.dart' show trimNumber;
@@ -330,6 +331,6 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
     }
     setState(() => _dirty = false);
     provider.laborRatesChanged();
-    _snack('Rate card saved to $saved');
+    showSavedFileSnack(context, provider, 'Rate card', saved);
   }
 }

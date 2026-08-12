@@ -374,7 +374,7 @@ Future<bool> showScreenSwitchEditor(
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) => AlertDialog(
         title: Text(
-          existing == null ? 'Add a control run' : 'Edit control run',
+          existing == null ? 'Add a Cable Run' : 'Edit Cable Run',
         ),
         content: SizedBox(
           width: 520,

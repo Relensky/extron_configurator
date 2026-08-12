@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -22,6 +24,8 @@ import 'view_zoom.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
+import 'room_sidecar.dart' show AvUndoScope;
+import 'undo_bar.dart';
 import 'room_locations_view.dart';
 import 'room_presets.dart';
 import 'screenshot_tools.dart';
@@ -218,15 +222,17 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// onDoubleTapDown carries no "it was a double" — so the two are paired.
   Offset? _doubleTapAt;
 
-  /// Whether the floor plan is drawn behind the diagram.
-  bool _showFloorPlan = false;
-
-  /// The decoded plan, held so it isn't re-read from disk on every repaint.
-  ImageProvider? _planImage;
-
-  /// The plan file [_planImage] was built from, so a re-import or a switch to
-  /// a different plan is noticed.
-  String _planImagePath = '';
+  /// The decoded backdrop, held so it isn't re-read from disk on every
+  /// repaint, and the file it was built from so a re-import is noticed.
+  ///
+  /// This used to be the room's FLOOR PLAN and only ever the floor plan, on a
+  /// toggle. That was the wrong picture nearly every time: a signal flow is
+  /// laid out by signal, not by geometry, so a plan behind it lined up with
+  /// nothing — and the drawings people did want behind it, a title block or a
+  /// marked-up revision, were unreachable. Now it is whatever image the user
+  /// picks; see [DiagramBackground].
+  ImageProvider? _backgroundImage;
+  String _backgroundPath = '';
 
   @override
   void initState() {
@@ -243,7 +249,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       if (provider.avNodes.isEmpty && provider.roomConfig.isNotEmpty) {
         _seedFromConfig(provider, silent: true);
       }
-      _syncFloorPlanImage(provider);
+      _syncBackgroundImage(provider);
     });
   }
 
@@ -254,21 +260,149 @@ class _AvFlowViewState extends State<AvFlowView> {
     super.dispose();
   }
 
-  /// Rebuilds [_planImage] when the room's plan changes. Cheap when nothing
-  /// moved, which is every build but the one after an import.
-  void _syncFloorPlanImage(AppStateProvider provider) {
-    final plan = provider.primaryFloorPlan;
-    final resolved = plan == null
-        ? ''
-        : provider.resolveFloorPlanImage(plan.imageFile);
-    if (resolved == _planImagePath) return;
+  /// Rebuilds [_backgroundImage] when the room's backdrop changes. Cheap when
+  /// nothing moved, which is every build but the one after an import.
+  void _syncBackgroundImage(AppStateProvider provider) {
+    final resolved = provider.resolveFloorPlanImage(
+      provider.avFlowBackground.imageFile,
+    );
+    if (resolved == _backgroundPath) return;
     setState(() {
-      _planImagePath = resolved;
-      _planImage = resolved.isEmpty || !File(resolved).existsSync()
+      _backgroundPath = resolved;
+      _backgroundImage = resolved.isEmpty || !File(resolved).existsSync()
           ? null
           : FileImage(File(resolved));
-      if (_planImage == null) _showFloorPlan = false;
     });
+  }
+
+  /// Picks a picture, copies it in beside the config and puts it behind the
+  /// canvas.
+  ///
+  /// The natural size is read here rather than assumed: it is what the canvas
+  /// lays the image out against before the bytes have been decoded, and a
+  /// guess would jump the backdrop the first time it painted.
+  Future<void> _importBackground(AppStateProvider provider) async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Choose a background image',
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'],
+    );
+    final picked = result?.files.single.path;
+    if (picked == null) return;
+
+    Size size;
+    try {
+      final bytes = await File(picked).readAsBytes();
+      final decoded = await ui.instantiateImageCodec(bytes);
+      final frame = await decoded.getNextFrame();
+      size = Size(
+        frame.image.width.toDouble(),
+        frame.image.height.toDouble(),
+      );
+      frame.image.dispose();
+    } catch (e) {
+      _snack('That file could not be read as an image: $e', error: true);
+      return;
+    }
+
+    final stored = await provider.importRoomImage(picked, 'flow_background');
+    if (!mounted) return;
+    provider.setAvFlowBackgroundImage(stored, size);
+    _syncBackgroundImage(provider);
+  }
+
+  /// How strongly the backdrop shows and how wide it is drawn, plus the way to
+  /// take it off again.
+  Future<void> _showBackgroundSettings(AppStateProvider provider) async {
+    var opacity = provider.avFlowBackground.opacity;
+    var scale = provider.avFlowBackground.scale;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Background image'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'A picture behind the diagram — a title block, a riser '
+                  'sketch, the last revision to draw over. It is there to be '
+                  'referred to, so the diagram has to stay readable on top of '
+                  'it.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 14),
+                Text('Opacity', style: Theme.of(ctx).textTheme.titleSmall),
+                Slider(
+                  value: opacity,
+                  min: 0.05,
+                  max: 1.0,
+                  divisions: 19,
+                  label: '${(opacity * 100).round()}%',
+                  onChanged: (v) => setLocal(() => opacity = v),
+                ),
+                Text('Size', style: Theme.of(ctx).textTheme.titleSmall),
+                Text(
+                  'How much of the canvas width it is drawn across.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                Slider(
+                  value: scale,
+                  min: 0.1,
+                  max: 2.0,
+                  divisions: 19,
+                  label: '${(scale * 100).round()}%',
+                  onChanged: (v) => setLocal(() => scale = v),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Image: ${provider.avFlowBackground.imageFile}'
+                  '\n${provider.avFlowBackground.imageSize.width.round()} × '
+                  '${provider.avFlowBackground.imageSize.height.round()} px',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('remove'),
+              child: const Text(
+                'Remove it',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('replace'),
+              child: const Text('Replace...'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('cancel'),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop('save'),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null || result == 'cancel' || !mounted) return;
+    switch (result) {
+      case 'remove':
+        provider.clearAvFlowBackground();
+        _syncBackgroundImage(provider);
+      case 'replace':
+        await _importBackground(provider);
+      case 'save':
+        provider.setAvFlowBackgroundView(opacity: opacity, scale: scale);
+    }
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -278,50 +412,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
   }
 
-  /// "Saved" snackbar offering to open the file or its folder. Mirrors the
-  /// Schematic tab's, including the 10s hold — a file dialog has just closed.
+  /// "Saved" snackbar offering to open the file or its folder — see
+  /// [showSavedFileSnack], which every export in the app now ends with.
   void _savedSnack(AppStateProvider provider, String label, String filePath) {
     if (!mounted) return;
-
-    Future<void> run(Future<String?> Function() action) async {
-      final error = await action();
-      if (error != null) _snack(error, error: true);
-    }
-
-    final Color actionColor =
-        Theme.of(context).snackBarTheme.actionTextColor ??
-        Theme.of(context).colorScheme.onInverseSurface;
-    final ButtonStyle actionStyle = TextButton.styleFrom(
-      foregroundColor: actionColor,
-      textStyle: const TextStyle(fontWeight: FontWeight.bold),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 10),
-        content: Row(
-          children: [
-            Expanded(
-              child: Text(
-                '$label saved as ${path.basename(filePath)}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            TextButton(
-              style: actionStyle,
-              onPressed: () => run(() => provider.openInDesktop(filePath)),
-              child: const Text('OPEN FILE'),
-            ),
-            TextButton(
-              style: actionStyle,
-              onPressed: () =>
-                  run(() => provider.revealInFileManager(filePath)),
-              child: const Text('OPEN FOLDER'),
-            ),
-          ],
-        ),
-      ),
-    );
+    showSavedFileSnack(context, provider, label, filePath);
   }
 
   /// Default export file name stem: `<BLDG>_<room>_<suffix>`.
@@ -692,11 +787,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     final model = _withDragPreview(buildAvFlowModel(provider));
     final theme = Theme.of(context);
 
-    // A plan imported on the Floor Plan tab has to reach this canvas without
-    // the user knowing there are two pages involved. Deferred a frame because
-    // the sync calls setState and this is build().
+    // A backdrop imported (or removed) elsewhere in the session has to reach
+    // this canvas. Deferred a frame because the sync calls setState and this
+    // is build().
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _syncFloorPlanImage(provider);
+      if (mounted) _syncBackgroundImage(provider);
     });
 
     return Column(
@@ -797,29 +892,24 @@ class _AvFlowViewState extends State<AvFlowView> {
             label: Text('Locations (${provider.avLocations.length})'),
             onPressed: () => showLocationManager(context, provider),
           ),
-          // Only offered when there is a plan to show — a toggle that does
-          // nothing is worse than no toggle.
-          if (_planImage != null)
-            FilterChip(
-              avatar: const Icon(Icons.map_outlined, size: 18),
-              label: const Text('Floor plan'),
-              selected: _showFloorPlan,
-              onSelected: (v) => setState(() => _showFloorPlan = v),
-            ),
-          // The racks, the flow and the estimate are one document, so this is
-          // the same undo the Racks tab offers, over the same history.
+          // Any picture, behind the diagram. Not the floor plan on a toggle:
+          // a signal flow is laid out by signal, so a plan behind it lines up
+          // with nothing, while the drawings people actually want back there
+          // — a title block, a riser sketch, the revision being drawn over —
+          // had no way in at all.
           OutlinedButton.icon(
-            icon: const Icon(Icons.undo, size: 18),
+            key: const ValueKey('av_background_button'),
+            icon: const Icon(Icons.wallpaper_outlined, size: 18),
             label: Text(
-              provider.canUndoAvFlow ? 'Undo: ${provider.avUndoLabel}' : 'Undo',
+              provider.avFlowBackground.hasImage ? 'Background' : 'Add a background',
             ),
-            onPressed: provider.canUndoAvFlow
-                ? () {
-                    final undone = provider.undoAvFlow();
-                    if (undone.isNotEmpty) _snack('Undid: $undone');
-                  }
-                : null,
+            onPressed: () => provider.avFlowBackground.hasImage
+                ? _showBackgroundSettings(provider)
+                : _importBackground(provider),
           ),
+          // This page's own history: the devices, the cables and the backdrop.
+          // What happens on the Racks or Cabling tabs is undone there.
+          ...avUndoRedoButtons(provider, AvUndoScope.flow, onDone: _snack),
           OutlinedButton.icon(
             icon: const Icon(Icons.save, size: 18),
             label: const Text('Save AV Setup'),
@@ -1025,18 +1115,19 @@ class _AvFlowViewState extends State<AvFlowView> {
       color: surface,
       child: Stack(
         children: [
-          // The floor plan, behind everything. Faint by default so the
-          // diagram still reads over it — it is there to say WHERE the boxes
-          // are, not to be looked at.
-          if (_showFloorPlan && _planImage != null)
+          // The backdrop, behind everything. Faint by default so the diagram
+          // still reads over it — it is there to be referred to, not looked
+          // at.
+          if (_backgroundImage != null)
             Positioned(
               left: 0,
               top: 0,
               child: Opacity(
-                opacity: provider.primaryFloorPlan?.opacity ?? 0.35,
+                opacity: provider.avFlowBackground.opacity,
                 child: Image(
-                  image: _planImage!,
-                  width: model.canvasSize.width,
+                  image: _backgroundImage!,
+                  width:
+                      model.canvasSize.width * provider.avFlowBackground.scale,
                   fit: BoxFit.contain,
                   alignment: Alignment.topLeft,
                 ),

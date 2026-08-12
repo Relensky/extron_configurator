@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
@@ -1200,10 +1201,12 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
       toPath: outputFile,
       rebind: false,
     );
-    _snack(
-      saved.isEmpty ? 'Could not write the copy.' : 'Catalog copy saved to $saved',
-      error: saved.isEmpty,
-    );
+    if (!mounted) return;
+    if (saved.isEmpty) {
+      _snack('Could not write the copy.', error: true);
+      return;
+    }
+    showSavedFileSnack(context, provider, 'Catalog copy', saved);
   }
 
   Future<void> _reload(AppStateProvider provider) async {

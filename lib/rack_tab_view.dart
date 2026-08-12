@@ -4,11 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'package:path/path.dart' as path;
+
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_rack_view.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'screenshot_tools.dart';
+import 'room_sidecar.dart' show AvUndoScope;
+import 'undo_bar.dart';
 
 /// ============================================================================
 ///  RACKS TAB
@@ -87,25 +92,17 @@ class _RackTabViewState extends State<RackTabView> {
                 selected: _editMode,
                 onSelected: (v) => setState(() => _editMode = v),
               ),
-              // One undo per tab, over the same document: the racks, the
-              // signal flow and the estimate all live in the AV sidecar, so
-              // an edit made here is undoable from here.
-              OutlinedButton.icon(
-                icon: const Icon(Icons.undo, size: 18),
-                label: Text(
-                  provider.canUndoAvFlow
-                      ? 'Undo: ${provider.avUndoLabel}'
-                      : 'Undo',
-                ),
-                onPressed: provider.canUndoAvFlow
-                    ? () {
-                        final undone = provider.undoAvFlow();
-                        if (!context.mounted || undone.isEmpty) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Undid: $undone')),
-                        );
-                      }
-                    : null,
+              // The frames and what is racked in them. An edit made on the
+              // signal flow is undone there, not here.
+              ...avUndoRedoButtons(
+                provider,
+                AvUndoScope.racks,
+                onDone: (message) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(message)));
+                },
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.save, size: 18),
@@ -144,6 +141,7 @@ class _RackTabViewState extends State<RackTabView> {
     // Taken before the first await: a messenger captured after one is a
     // BuildContext used across an async gap.
     final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
     final bytes = await captureBoundary(_captureKey, pixelRatio: 2.0);
     if (bytes == null) {
       messenger.showSnackBar(
@@ -165,8 +163,12 @@ class _RackTabViewState extends State<RackTabView> {
     final saved = outputFile;
     try {
       await File(saved).writeAsBytes(bytes);
-      messenger.showSnackBar(
-        SnackBar(content: Text('Rack elevation saved to $saved')),
+      showSavedSnackBar(
+        messenger: messenger,
+        theme: theme,
+        provider: provider,
+        message: 'Rack elevation saved as ${path.basename(saved)}',
+        savedPath: saved,
       );
     } catch (e) {
       messenger.showSnackBar(
