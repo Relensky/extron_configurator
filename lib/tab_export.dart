@@ -163,6 +163,7 @@ List<ReportSection> _catalogSections(AppStateProvider provider) {
         'Category',
         'Rack U',
         'Clear above/below',
+        'Cable length (ft)',
         'Power (W)',
         'MSRP',
         'Education',
@@ -179,6 +180,7 @@ List<ReportSection> _catalogSections(AppStateProvider provider) {
             e.clearanceAboveU == 0 && e.clearanceBelowU == 0
                 ? ''
                 : '${e.clearanceAboveU} / ${e.clearanceBelowU}',
+            e.cableLengthFt == 0 ? '' : trimNumber(e.cableLengthFt),
             e.powerWatts == 0 ? '' : trimNumber(e.powerWatts),
             e.price == 0 ? '' : trimNumber(e.price),
             e.educationPrice == 0 ? '' : trimNumber(e.educationPrice),

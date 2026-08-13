@@ -595,13 +595,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
             const SizedBox(height: 8),
             _headerRow(theme, const [
-              (width: 0.0, flex: 3, text: 'Device'),
-              (width: 0.0, flex: 2, text: 'Model'),
-              (width: 60.0, flex: 0, text: 'Qty'),
-              (width: 142.0, flex: 0, text: 'Unit price'),
-              (width: 122.0, flex: 0, text: 'Extended'),
-              (width: 104.0, flex: 0, text: 'Price from'),
-              (width: 68.0, flex: 0, text: ''),
+              (gap: 0.0, width: 0.0, flex: 3, text: 'Device',
+                  align: TextAlign.left),
+              (gap: 0.0, width: 0.0, flex: 2, text: 'Model',
+                  align: TextAlign.left),
+              (gap: 0.0, width: 60.0, flex: 0, text: 'Qty',
+                  align: TextAlign.right),
+              (gap: 12.0, width: 130.0, flex: 0, text: 'Unit price',
+                  align: TextAlign.left),
+              (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
+                  align: TextAlign.right),
+              (gap: 12.0, width: 92.0, flex: 0, text: 'Price from',
+                  align: TextAlign.left),
+              (gap: 0.0, width: 80.0, flex: 0, text: '',
+                  align: TextAlign.left),
             ]),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
@@ -854,13 +861,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             else ...[
               const SizedBox(height: 8),
               _headerRow(theme, const [
-                (width: 0.0, flex: 3, text: 'Item'),
-                (width: 0.0, flex: 2, text: 'Kind'),
-                (width: 60.0, flex: 0, text: 'Qty'),
-                (width: 142.0, flex: 0, text: 'Unit price'),
-                (width: 122.0, flex: 0, text: 'Extended'),
-                (width: 104.0, flex: 0, text: 'Price from'),
-                (width: 68.0, flex: 0, text: ''),
+                (gap: 0.0, width: 0.0, flex: 3, text: 'Item',
+                    align: TextAlign.left),
+                (gap: 0.0, width: 0.0, flex: 2, text: 'Kind',
+                    align: TextAlign.left),
+                (gap: 0.0, width: 60.0, flex: 0, text: 'Qty',
+                    align: TextAlign.right),
+                (gap: 12.0, width: 130.0, flex: 0, text: 'Unit price',
+                    align: TextAlign.left),
+                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
+                    align: TextAlign.right),
+                (gap: 12.0, width: 92.0, flex: 0, text: 'Price from',
+                    align: TextAlign.left),
+                // Two row buttons. They are constrained to 34 and render at 40, which
+                // is what the column actually takes — and the 12 pixels of
+                // difference is what put every caption on this row a column
+                // out.
+                (gap: 0.0, width: 80.0, flex: 0, text: '',
+                    align: TextAlign.left),
               ]),
               const Divider(height: 12),
               for (final line in estimate.hardware)
@@ -1130,164 +1148,187 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             else ...[
               const SizedBox(height: 8),
               _headerRow(theme, const [
-                (width: 0.0, flex: 3, text: 'Cable type'),
-                (width: 66.0, flex: 0, text: 'Drawn'),
-                (width: 92.0, flex: 0, text: 'Spares'),
-                (width: 66.0, flex: 0, text: 'Total'),
-                (width: 142.0, flex: 0, text: 'Unit price'),
-                (width: 122.0, flex: 0, text: 'Extended'),
-                (width: 68.0, flex: 0, text: ''),
+                (gap: 0.0, width: 0.0, flex: 3, text: 'Cable type',
+                    align: TextAlign.left),
+                (gap: 0.0, width: 66.0, flex: 0, text: 'Drawn',
+                    align: TextAlign.right),
+                (gap: 12.0, width: 80.0, flex: 0, text: 'Spares',
+                    align: TextAlign.left),
+                (gap: 12.0, width: 54.0, flex: 0, text: 'Total',
+                    align: TextAlign.right),
+                (gap: 12.0, width: 130.0, flex: 0, text: 'Unit price',
+                    align: TextAlign.left),
+                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
+                    align: TextAlign.right),
+                // Two row buttons. They are constrained to 34 and render at 40, which
+                // is what the column actually takes — and the 12 pixels of
+                // difference is what put every caption on this row a column
+                // out.
+                (gap: 0.0, width: 80.0, flex: 0, text: '',
+                    align: TextAlign.left),
               ]),
               const Divider(height: 12),
-              for (final signal in types)
-                Builder(
-                  builder: (context) {
-                    final key = 'cable:${signal.name}';
-                    final line = estimate.cabling
-                        .where((l) => l.key == key)
-                        .firstOrNull;
-                    final catalog = library.cableForSignal(signal);
-                    final runs = (drawn[signal] ?? 0).toDouble();
-                    final spares = provider.avCableSpares(signal);
-                    final unit = line?.unitPrice ?? catalog?.price ?? 0;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: provider.avSignalColor(signal),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    catalog?.model.trim().isNotEmpty == true
-                                        ? catalog!.model
-                                        : '${kSignalLabels[signal] ??
-                                              signal.name} cable',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            width: 66,
-                            child: Text(
-                              trimNumber(runs),
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 80,
-                            child: LiveTextField(
-                              fieldId: 'spare_${signal.name}',
-                              initial: spares == 0 ? '' : trimNumber(spares),
-                              numeric: true,
-                              hint: '0',
-                              onChanged: (v) => provider.setAvCableSpares(
-                                signal,
-                                double.tryParse(v) ?? 0,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 54,
-                            child: Text(
-                              trimNumber(runs + spares),
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 130,
-                            child: LiveTextField(
-                              fieldId: 'cableprice_${signal.name}',
-                              initial: line == null
-                                  ? ''
-                                  : _roomPriceText(provider, line),
-                              prefix: currency,
-                              numeric: true,
-                              hint: unit > 0
-                                  ? trimNumber(unit)
-                                  : 'unpriced',
-                              onChanged: (v) {
-                                final parsed = double.tryParse(v);
-                                provider.setAvCostPrice(
-                                  key,
-                                  v.trim().isEmpty ? null : (parsed ?? 0),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 110,
-                            child: Text(
-                              formatMoney(line?.total ?? 0, currency),
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          // A counted run is priced off the cable TYPE. When
-                          // that type has an entry there is nothing to
-                          // promote; when it has none, this is where the
-                          // room's cable finally gets one, tagged with the
-                          // signal so every future room's runs price
-                          // themselves off it.
-                          avRowIcon(
-                            Icons.library_add_outlined,
-                            catalog != null
-                                ? 'Cable types are edited on the Catalog tab'
-                                : 'Add this cable type to the catalog',
-                            catalog != null
-                                ? null
-                                : () => _addToCatalog(
-                                      context,
-                                      provider,
-                                      suggestedModel:
-                                          '${kSignalLabels[signal] ?? signal.name} cable',
-                                      category: kCategoryCable,
-                                      cableSignal: signal,
-                                      price: line == null
-                                          ? unit
-                                          : provider.avCost
-                                                  .priceOverrides[key] ??
-                                              line.unitPrice,
-                                      priceKey: key,
+              // ONE ROW PER LINE THE ESTIMATE MADE, not one per signal type.
+              // A room whose HDMI is stocked at 3 ft, 6 ft and 25 ft buys
+              // three different things at three different prices, and a single
+              // row for "HDMI" is a row that is wrong in both directions at
+              // once. A type with one entry (or none) still comes out as the
+              // one row it always did.
+              for (final line in estimate.cabling)
+                if (cableSignalOfKey(line.key) != null)
+                  Builder(
+                    builder: (context) {
+                      final signal = cableSignalOfKey(line.key)!;
+                      // The spares belong to the TYPE, so they sit on the
+                      // type's main line — the one keyed without a lead.
+                      final carriesSpares = line.key == 'cable:${signal.name}';
+                      final spares = provider.avCableSpares(signal);
+                      final runs = line.qty - (carriesSpares ? spares : 0);
+                      final catalog =
+                          library.templateForModel(line.model) ??
+                              library.cableForSignal(signal);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: provider.avSignalColor(signal),
+                                      shape: BoxShape.circle,
                                     ),
-                          ),
-                          avRowIcon(
-                            Icons.restart_alt,
-                            'Back to the catalog price',
-                            line?.source == PriceSource.override
-                                ? () => provider.setAvCostPrice(key, null)
-                                : null,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      line.description,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              width: 66,
+                              child: Text(
+                                trimNumber(runs),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 80,
+                              child: carriesSpares
+                                  ? LiveTextField(
+                                      fieldId: 'spare_${signal.name}',
+                                      initial:
+                                          spares == 0 ? '' : trimNumber(spares),
+                                      numeric: true,
+                                      hint: '0',
+                                      onChanged: (v) =>
+                                          provider.setAvCableSpares(
+                                        signal,
+                                        double.tryParse(v) ?? 0,
+                                      ),
+                                    )
+                                  // Spares are ordered against the type, not
+                                  // against one of its lengths.
+                                  : Text(
+                                      '—',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: theme.disabledColor,
+                                      ),
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 54,
+                              child: Text(
+                                trimNumber(line.qty),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 130,
+                              child: LiveTextField(
+                                fieldId: 'cableprice_${line.key}',
+                                initial: _roomPriceText(provider, line),
+                                prefix: currency,
+                                numeric: true,
+                                hint: _resolvedPriceHint(line),
+                                onChanged: (v) {
+                                  final parsed = double.tryParse(v);
+                                  provider.setAvCostPrice(
+                                    line.key,
+                                    v.trim().isEmpty ? null : (parsed ?? 0),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 110,
+                              child: Text(
+                                formatMoney(line.total, currency),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            // A counted run is priced off the cable TYPE. When
+                            // that type has an entry there is nothing to
+                            // promote; when it has none, this is where the
+                            // room's cable finally gets one, tagged with the
+                            // signal so every future room's runs price
+                            // themselves off it.
+                            avRowIcon(
+                              Icons.library_add_outlined,
+                              catalog != null
+                                  ? 'Cable types are edited on the Catalog tab'
+                                  : 'Add this cable type to the catalog',
+                              catalog != null
+                                  ? null
+                                  : () => _addToCatalog(
+                                        context,
+                                        provider,
+                                        suggestedModel:
+                                            '${kSignalLabels[signal] ?? signal.name} cable',
+                                        category: kCategoryCable,
+                                        cableSignal: signal,
+                                        price: provider.avCost
+                                                .priceOverrides[line.key] ??
+                                            line.unitPrice,
+                                        priceKey: line.key,
+                                      ),
+                            ),
+                            avRowIcon(
+                              Icons.restart_alt,
+                              'Back to the catalog price',
+                              line.source == PriceSource.override
+                                  ? () =>
+                                      provider.setAvCostPrice(line.key, null)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
               // Cable bought for the job that no run on the diagram accounts
               // for. Listed under the counted runs so the two are read
               // together, and labeled so nobody looks for it on the drawing.
@@ -1756,6 +1797,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final makerController = TextEditingController();
     final partController = TextEditingController(text: partNumber.trim());
     final uController = TextEditingController(text: rackUnits.toString());
+    // Only asked about for a cable: the length it is bought in, which is what
+    // makes "HDMI 6 ft" a different line on a quote from "HDMI 25 ft".
+    final lengthController = TextEditingController();
     final priceController =
         TextEditingController(text: price > 0 ? trimNumber(price) : '');
     final eduController = TextEditingController();
@@ -1898,6 +1942,34 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         ),
                       ],
                     ),
+                    if (cableSignal != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 150,
+                            child: TextField(
+                              controller: lengthController,
+                              decoration: const InputDecoration(
+                                labelText: 'Length (ft)',
+                                helperText: 'blank = bulk',
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'One entry per length — 3 ft, 6 ft, 25 ft — each '
+                              'with its own price. The estimate buys every '
+                              'drawn run the shortest one that reaches it.',
+                              style: Theme.of(ctx).textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -1996,6 +2068,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         // What signal a CABLE entry carries, so the counted runs of that type
         // find it. Kept from the old entry when one is being replaced.
         cableSignal: cableSignal ?? existing?.cableSignal,
+        cableLengthFt: double.tryParse(lengthController.text.trim()) ??
+            existing?.cableLengthFt ??
+            0,
         // Replacing keeps whatever connectors the old entry had: this dialog
         // knows about money, not about ports, and dropping a port list it
         // never showed would be a silent edit.
@@ -2213,14 +2288,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             if (lines.isNotEmpty) ...[
               const SizedBox(height: 4),
               _headerRow(theme, const [
-                (width: 190.0, flex: 0, text: 'Job type'),
-                (width: 0.0, flex: 3, text: 'Scope'),
-                (width: 86.0, flex: 0, text: 'Techs'),
-                (width: 94.0, flex: 0, text: 'Hours ea.'),
-                (width: 84.0, flex: 0, text: 'Rate/hr'),
-                (width: 122.0, flex: 0, text: 'Extended'),
-                (width: 92.0, flex: 0, text: 'Taxable'),
-                (width: 34.0, flex: 0, text: ''),
+                (gap: 0.0, width: 182.0, flex: 0, text: 'Job type',
+                    align: TextAlign.left),
+                (gap: 8.0, width: 0.0, flex: 3, text: 'Scope',
+                    align: TextAlign.left),
+                (gap: 8.0, width: 78.0, flex: 0, text: 'Techs',
+                    align: TextAlign.left),
+                (gap: 8.0, width: 86.0, flex: 0, text: 'Hours ea.',
+                    align: TextAlign.left),
+                (gap: 8.0, width: 76.0, flex: 0, text: 'Rate/hr',
+                    align: TextAlign.left),
+                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
+                    align: TextAlign.right),
+                (gap: 0.0, width: 92.0, flex: 0, text: 'Taxable',
+                    align: TextAlign.center),
+                // One row button, 40 wide as it renders.
+                (gap: 0.0, width: 40.0, flex: 0, text: '',
+                    align: TextAlign.left),
               ]),
               const Divider(height: 12),
             ],
@@ -2390,13 +2474,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             if (items.isNotEmpty) ...[
               const SizedBox(height: 4),
               _headerRow(theme, const [
-                (width: 0.0, flex: 3, text: 'Description'),
-                (width: 0.0, flex: 2, text: 'Category'),
-                (width: 78.0, flex: 0, text: 'Qty'),
-                (width: 138.0, flex: 0, text: 'Unit price'),
-                (width: 122.0, flex: 0, text: 'Extended'),
-                (width: 92.0, flex: 0, text: 'Taxable'),
-                (width: 68.0, flex: 0, text: ''),
+                (gap: 0.0, width: 0.0, flex: 3, text: 'Description',
+                    align: TextAlign.left),
+                (gap: 8.0, width: 0.0, flex: 2, text: 'Category',
+                    align: TextAlign.left),
+                (gap: 8.0, width: 70.0, flex: 0, text: 'Qty',
+                    align: TextAlign.left),
+                (gap: 8.0, width: 130.0, flex: 0, text: 'Unit price',
+                    align: TextAlign.left),
+                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
+                    align: TextAlign.right),
+                (gap: 0.0, width: 92.0, flex: 0, text: 'Taxable',
+                    align: TextAlign.center),
+                // Two row buttons. They are constrained to 34 and render at 40, which
+                // is what the column actually takes — and the 12 pixels of
+                // difference is what put every caption on this row a column
+                // out.
+                (gap: 0.0, width: 80.0, flex: 0, text: '',
+                    align: TextAlign.left),
               ]),
               const Divider(height: 12),
             ],
@@ -2749,28 +2844,46 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
   }
 
-  /// Column captions over a table. [width] is the data row's cell width plus
-  /// the gap in front of it, so a caption stays over its column — the rows
-  /// below are Rows of SizedBoxes, not a Table, and nothing else lines them
-  /// up.
+  /// Column captions over a table.
+  ///
+  /// The rows below are Rows of SizedBoxes, not a Table, so nothing lines a
+  /// caption up with its column except this — which means it has to mirror the
+  /// row it captions EXACTLY: the same [gap] in front of each cell, the same
+  /// [width] or [flex] for the cell itself, and the same [align] the value in
+  /// it uses.
+  ///
+  /// It used to fold the gap into the width and left-align every caption,
+  /// which put "Drawn", "Total" and "Extended" a gap-and-a-bit to the left of
+  /// the right-aligned figures they name. On the cabling table, where the
+  /// cells are narrow and the gaps many, they read as belonging to the column
+  /// before.
   Widget _headerRow(
     ThemeData theme,
-    List<({double width, int flex, String text})> columns,
+    List<
+        ({
+          double gap,
+          double width,
+          int flex,
+          String text,
+          TextAlign align,
+        })> columns,
   ) {
     final style = theme.textTheme.labelSmall;
     return Row(
       children: [
-        for (final c in columns)
+        for (final c in columns) ...[
+          if (c.gap > 0) SizedBox(width: c.gap),
           if (c.flex > 0)
             Expanded(
               flex: c.flex,
-              child: Text(c.text, style: style),
+              child: Text(c.text, style: style, textAlign: c.align),
             )
           else
             SizedBox(
               width: c.width,
-              child: Text(c.text, style: style),
+              child: Text(c.text, style: style, textAlign: c.align),
             ),
+        ],
       ],
     );
   }

@@ -103,6 +103,56 @@ void main() {
     });
   }
 
+  testWidgets('the equipment captions sit over their own columns',
+      (tester) async {
+    tester.view.physicalSize = const Size(1900, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: fullEstimate(),
+        child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The captions and the cells are laid out from the same gaps and widths,
+    // so a column's caption ends where the column does. It did not: the
+    // trailing button column was declared 12 pixels narrower than the buttons
+    // render, which walked every caption on the row out of place.
+    final headerRow = find
+        .ancestor(of: find.text('Device'), matching: find.byType(Row))
+        .first;
+    final extended = find.descendant(
+      of: headerRow,
+      matching: find.text('Extended'),
+    );
+    expect(extended, findsOneWidget);
+    expect(
+      tester.widget<Text>(extended).textAlign,
+      TextAlign.right,
+      reason: 'the money under it is right-aligned',
+    );
+
+    final row = find
+        .ancestor(of: find.text('Display'), matching: find.byType(Row))
+        .last;
+    final money = find.descendant(
+      of: row,
+      matching: find.byWidgetPredicate(
+        (w) => w is Text && (w.data ?? '').startsWith(r'$'),
+      ),
+    );
+    expect(money, findsWidgets);
+    expect(
+      (tester.getBottomRight(extended).dx -
+              tester.getBottomRight(money.last).dx)
+          .abs(),
+      lessThan(1),
+    );
+  });
+
   testWidgets('the heading buttons are still all there when it wraps',
       (tester) async {
     tester.view.physicalSize = const Size(1000, 1400);

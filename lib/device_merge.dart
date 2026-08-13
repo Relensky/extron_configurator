@@ -25,6 +25,7 @@ enum DeviceField {
   category,
   rackUnits,
   clearance,
+  cableLength,
   powerWatts,
   price,
   notes,
@@ -37,6 +38,7 @@ const Map<DeviceField, String> kDeviceFieldLabels = {
   DeviceField.category: 'Category',
   DeviceField.rackUnits: 'Rack units',
   DeviceField.clearance: 'Rack clearance (U above / below)',
+  DeviceField.cableLength: 'Cable length (ft)',
   DeviceField.powerWatts: 'Power (W)',
   DeviceField.price: 'Unit price',
   DeviceField.notes: 'Notes',
@@ -81,6 +83,8 @@ class DeviceFieldDiff {
           clearanceAboveU: theirs.clearanceAboveU,
           clearanceBelowU: theirs.clearanceBelowU,
         );
+      case DeviceField.cableLength:
+        return base.copyWith(cableLengthFt: theirs.cableLengthFt);
       case DeviceField.powerWatts:
         return base.copyWith(powerWatts: theirs.powerWatts);
       case DeviceField.price:
@@ -238,6 +242,7 @@ List<DeviceFieldDiff> _fieldDiffs(
       theirs: clearance(theirs),
     ));
   }
+  number(DeviceField.cableLength, mine.cableLengthFt, theirs.cableLengthFt);
   number(DeviceField.powerWatts, mine.powerWatts, theirs.powerWatts);
   number(DeviceField.price, mine.price, theirs.price, decimals: 2);
   text(DeviceField.notes, mine.notes, theirs.notes);

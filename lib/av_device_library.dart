@@ -41,6 +41,11 @@ import 'av_flow_model.dart';
 ///    }
 ///  }
 ///
+///  `cableSignal` + `cableLengthFt` are how a cable type is broken down: one
+///  entry per made-up length (3 ft, 6 ft, 25 ft), each with its own model and
+///  price, and the estimate buys every drawn run the shortest one that reaches
+///  it. A cable entry with no length is bulk off a spool.
+///
 ///  `clearanceAboveU` / `clearanceBelowU` are the rails this model wants left
 ///  EMPTY around it in a frame — the amplifier that vents upwards, the drawer
 ///  whose lid opens. The rack elevation shades them light red as a warning and
@@ -225,6 +230,17 @@ class AvDeviceTemplate {
   /// them. Null on everything else.
   final SignalType? cableSignal;
 
+  /// For a cable entry: the length it is BOUGHT in, in feet. 0 means the entry
+  /// is not a made-up lead — bulk cable off a spool, or a type nobody has
+  /// broken down yet.
+  ///
+  /// A room does not buy "HDMI cable", it buys a 3 ft one and a 25 ft one at
+  /// different prices, and quoting every run at one figure is wrong in both
+  /// directions at once. Several entries can share a [cableSignal] and differ
+  /// only in this: the estimate then puts each drawn run on the shortest stock
+  /// length that reaches, and prices it at that entry.
+  final double cableLengthFt;
+
   /// The page this entry's figures were read off — the manufacturer's product
   /// page for the Extron gear, projectorcentral.com for the projectors. A
   /// price, a wattage and a heat figure all came from somewhere, and next year
@@ -257,6 +273,7 @@ class AvDeviceTemplate {
     this.educationPrice = 0,
     this.retired = false,
     this.cableSignal,
+    this.cableLengthFt = 0,
     this.url = '',
     this.notes = '',
     required this.ports,
@@ -323,6 +340,7 @@ class AvDeviceTemplate {
     double? educationPrice,
     bool? retired,
     SignalType? cableSignal,
+    double? cableLengthFt,
     bool clearCableSignal = false,
     String? url,
     String? notes,
@@ -343,6 +361,7 @@ class AvDeviceTemplate {
     educationPrice: educationPrice ?? this.educationPrice,
     retired: retired ?? this.retired,
     cableSignal: clearCableSignal ? null : (cableSignal ?? this.cableSignal),
+    cableLengthFt: cableLengthFt ?? this.cableLengthFt,
     url: url ?? this.url,
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
@@ -364,6 +383,7 @@ class AvDeviceTemplate {
     if (educationPrice > 0) 'educationPrice': educationPrice,
     if (retired) 'retired': true,
     if (cableSignal != null) 'cableSignal': cableSignal!.name,
+    if (cableLengthFt > 0) 'cableLengthFt': cableLengthFt,
     if (url.isNotEmpty) 'url': url,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
@@ -403,6 +423,11 @@ class AvDeviceTemplate {
     cableSignal: json['cableSignal'] == null
         ? null
         : signalFromName(json['cableSignal'].toString()),
+    // 'lengthFt' is read as an alias for the same reason 'watts' and 'cost'
+    // are: it is what a hand-written entry tends to say.
+    cableLengthFt: (json['cableLengthFt'] as num?)?.toDouble() ??
+        (json['lengthFt'] as num?)?.toDouble() ??
+        0,
     // 'link' is read as an alias for the same reason 'watts' and 'cost' are:
     // it is what a hand-written entry tends to say.
     url: (json['url'] ?? json['link'])?.toString() ?? '',
@@ -596,6 +621,59 @@ class AvDeviceLibrary {
       retiredMatch ??= t;
     }
     return retiredMatch;
+  }
+
+  /// Every cable entry for [signal], shortest first, with the ones that carry
+  /// no length last.
+  ///
+  /// This is how a cable type is broken down: HDMI at 3 ft, 6 ft and 25 ft are
+  /// three entries with three prices, and the estimate puts each drawn run on
+  /// the shortest one that reaches it. An entry with no length is the fallback
+  /// — bulk cable, or a type nobody has priced by the foot yet — so it sorts
+  /// to the end where it is only reached when nothing else fits.
+  ///
+  /// Retired entries are left out unless they are all there is, for the same
+  /// reason [cableForSignal] falls back to one: a run priced at nothing is
+  /// worse than a run priced at a discontinued lead.
+  List<AvDeviceTemplate> cablesForSignal(SignalType signal) {
+    final live = <AvDeviceTemplate>[];
+    final retired = <AvDeviceTemplate>[];
+    for (final t in all) {
+      if (!t.isCable || t.cableSignal != signal) continue;
+      (t.retired ? retired : live).add(t);
+    }
+    final out = live.isEmpty ? retired : live;
+    out.sort((a, b) {
+      // No length sorts last, whatever it costs.
+      if ((a.cableLengthFt <= 0) != (b.cableLengthFt <= 0)) {
+        return a.cableLengthFt <= 0 ? 1 : -1;
+      }
+      final byLength = a.cableLengthFt.compareTo(b.cableLengthFt);
+      return byLength != 0
+          ? byLength
+          : a.model.toLowerCase().compareTo(b.model.toLowerCase());
+    });
+    return out;
+  }
+
+  /// The cable entry a run of [signal] and [lengthFt] should be bought as: the
+  /// shortest stock length that reaches.
+  ///
+  /// Falls back to the LONGEST when nothing reaches — a 40 ft run in a room
+  /// whose longest stock HDMI is 25 ft is quoted at the 25, and the estimate
+  /// says so rather than dropping the run — and to whatever the type has when
+  /// no lengths are recorded at all, which is exactly what happened before any
+  /// of this existed.
+  AvDeviceTemplate? cableForRun(SignalType signal, double lengthFt) {
+    final options = cablesForSignal(signal);
+    if (options.isEmpty) return null;
+    if (lengthFt <= 0) return options.first;
+    for (final t in options) {
+      if (t.cableLengthFt > 0 && t.cableLengthFt >= lengthFt) return t;
+    }
+    // Nothing long enough: the longest made-up length, else the bulk entry.
+    final withLength = options.where((t) => t.cableLengthFt > 0).toList();
+    return withLength.isEmpty ? options.first : withLength.last;
   }
 
   static String _norm(String model) =>

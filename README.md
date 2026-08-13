@@ -123,6 +123,22 @@ manufacturer, part number, category and notes. Entries here override the app's b
 touch stays built-in, so a later app build can still improve it, and **Save
 catalog** only writes the entries that are yours.
 
+### Cable by the length
+
+A room does not buy "HDMI cable" — it buys a 3 ft one and a 25 ft one at
+different prices, and quoting every run at one figure is wrong in both
+directions at once. A cable entry therefore carries a **length** as well as a
+signal (`cableLengthFt` in `av_devices.json`), and a type is broken down by
+adding one entry per length, each with its own model and price. Leave the
+length blank for bulk cable off a spool.
+
+The estimate then puts every drawn run on the **shortest stock length that
+reaches it** and gives each of those a line of its own: `HDMI 6 ft ×4` at one
+price, `HDMI 25 ft ×2` at another. A run longer than anything stocked is quoted
+at the longest. Spares stay on the type rather than on one of its lengths, and
+a type with a single entry comes out as the one line it always did — including
+any price typed on it by hand.
+
 ### Minimum space in a rack
 
 A rack elevation says what fits and nothing about what should not be touching.

@@ -483,6 +483,23 @@ const Map<PriceSource, String> kPriceSourceLabels = {
   PriceSource.none: 'Not priced',
 };
 
+/// The signal a counted-cable line belongs to, or null when [key] is not one.
+///
+/// Cabling lines are keyed `cable:<signal>` for the type's main line and
+/// `cable:<signal>@<model>` for each stock length it is broken down into. The
+/// estimate page reads the signal back out to put the type's spares box and
+/// its colour dot on the row.
+SignalType? cableSignalOfKey(String key) {
+  if (!key.startsWith('cable:')) return null;
+  final rest = key.substring('cable:'.length);
+  final at = rest.indexOf('@');
+  final name = at < 0 ? rest : rest.substring(0, at);
+  for (final s in SignalType.values) {
+    if (s.name == name) return s;
+  }
+  return null;
+}
+
 /// True when the line is costed at a category average rather than a real
 /// price. The estimate counts these separately: a budget built on base costs is
 /// a budget, and should not be read as a quote.
@@ -888,73 +905,129 @@ CostEstimate computeRoomCost({
     for (final signal in types) {
       final drawn = (counts[signal] ?? 0).toDouble();
       final spares = settings.cableSpares[signal.name] ?? 0;
-      final qty = drawn + spares;
-      if (qty <= 0) continue;
+      if (drawn + spares <= 0) continue;
 
-      final key = 'cable:${signal.name}';
-      final catalog = library.cableForSignal(signal);
-      final override = settings.priceOverrides[key];
+      // WHICH LEAD EACH RUN IS BOUGHT AS. A room does not buy "HDMI cable", it
+      // buys a 3 ft one and a 25 ft one at different prices — so every drawn
+      // run goes on the shortest stock length that reaches it, and each of
+      // those becomes a line of its own. A catalog with one entry for the type
+      // (or none) produces exactly the one line it always did.
+      final byEntry = <String, ({AvDeviceTemplate? entry, double qty})>{};
+      void add(AvDeviceTemplate? entry, double qty) {
+        final id = entry?.model ?? '';
+        final at = byEntry[id];
+        byEntry[id] = (entry: entry ?? at?.entry, qty: (at?.qty ?? 0) + qty);
+      }
 
-      final catalogPrice = catalog?.priceForTier(tier);
-
-      final double price;
-      final PriceSource source;
-      if (override != null) {
-        price = override;
-        source = PriceSource.override;
-      } else if (catalogPrice != null && catalogPrice.price > 0) {
-        price = catalogPrice.price;
-        source = catalogPrice.fallback
-            ? PriceSource.catalogOtherTier
-            : PriceSource.catalog;
+      final options = library.cablesForSignal(signal);
+      final splitByLength = options.where((t) => t.cableLengthFt > 0).length > 1;
+      // The type's MAIN lead: the shortest stock length (bulk cable last).
+      // Deterministic on purpose — it decides which line keeps the key
+      // `cable:<signal>`, and therefore which line a price typed before
+      // anybody broke the type down still applies to.
+      final mainEntry = options.isEmpty ? null : options.first;
+      if (splitByLength) {
+        for (final c in model.cables) {
+          if (c.signal != signal) continue;
+          add(library.cableForRun(signal, c.lengthFt), 1);
+        }
+        // Runs the diagram counts that are not cables on it (a screen switch
+        // run, a count typed over the drawing) and the spares both go on the
+        // type's default lead.
+        final loose = drawn -
+            model.cables.where((c) => c.signal == signal).length.toDouble();
+        if (loose > 0) add(mainEntry, loose);
+        if (spares > 0) add(mainEntry, spares);
       } else {
-        price = 0;
-        source = PriceSource.none;
+        add(library.cableForSignal(signal), drawn + spares);
       }
-      if (source == PriceSource.none) {
-        unpricedLines++;
-        unpricedDevices += qty.round();
-      }
-      if (source == PriceSource.catalogOtherTier) otherTierLines++;
 
-      // The lead lengths this type is drawn in, so the line says what to order
-      // rather than just how many. Runs with no length set are left out of the
-      // note — they are counted in the quantity either way.
-      final byLength = <double, int>{};
-      for (final c in model.cables) {
-        if (c.signal != signal || c.lengthFt <= 0) continue;
-        byLength[c.lengthFt] = (byLength[c.lengthFt] ?? 0) + 1;
-      }
-      final lengths = (byLength.keys.toList()..sort())
-          .map((ft) => '${byLength[ft]}× ${formatCableLength(ft)}')
-          .join(', ');
+      for (final grouped in byEntry.entries) {
+        final catalog = grouped.value.entry;
+        final qty = grouped.value.qty;
+        if (qty <= 0) continue;
 
-      cabling.add(
-        CostLine(
-          key: key,
-          description: [
-            catalog?.model.trim().isNotEmpty == true
-                ? catalog!.model
-                // "AV cabling (HDBaseT / DTP)" — the family a cable schedule
-                // files it under, then what it actually carries.
-                : [
-                    cableTypeLabel(signal),
-                    if (cableSignalSubLabel(signal).isNotEmpty)
-                      '(${cableSignalSubLabel(signal)})',
-                    'cable',
-                  ].join(' '),
-            if (lengths.isNotEmpty) '[$lengths]',
-            if (spares > 0)
-              '(${trimNumber(drawn)} drawn + ${trimNumber(spares)} spare)',
-          ].join(' '),
-          model: catalog?.model ?? '',
-          partNumber: catalog?.partNumber ?? '',
-          category: kCategoryCable,
-          qty: qty,
-          unitPrice: price,
-          source: source,
-        ),
-      );
+        // The line key is what a typed price is filed under, so the type's
+        // MAIN line keeps the key it has always had — a room that priced its
+        // HDMI by hand keeps that price when somebody later breaks the type
+        // down by length.
+        final key = catalog == null ||
+                !splitByLength ||
+                catalog.model == mainEntry?.model
+            ? 'cable:${signal.name}'
+            : 'cable:${signal.name}@${catalog.model}';
+        final override = settings.priceOverrides[key];
+        final catalogPrice = catalog?.priceForTier(tier);
+
+        final double price;
+        final PriceSource source;
+        if (override != null) {
+          price = override;
+          source = PriceSource.override;
+        } else if (catalogPrice != null && catalogPrice.price > 0) {
+          price = catalogPrice.price;
+          source = catalogPrice.fallback
+              ? PriceSource.catalogOtherTier
+              : PriceSource.catalog;
+        } else {
+          price = 0;
+          source = PriceSource.none;
+        }
+        if (source == PriceSource.none) {
+          unpricedLines++;
+          unpricedDevices += qty.round();
+        }
+        if (source == PriceSource.catalogOtherTier) otherTierLines++;
+
+        // The lead lengths behind this line, so it says what to order rather
+        // than just how many. Runs with no length set are left out of the note
+        // — they are counted in the quantity either way.
+        final byLength = <double, int>{};
+        for (final c in model.cables) {
+          if (c.signal != signal || c.lengthFt <= 0) continue;
+          if (splitByLength &&
+              library.cableForRun(signal, c.lengthFt)?.model !=
+                  catalog?.model) {
+            continue;
+          }
+          byLength[c.lengthFt] = (byLength[c.lengthFt] ?? 0) + 1;
+        }
+        final lengths = (byLength.keys.toList()..sort())
+            .map((ft) => '${byLength[ft]}× ${formatCableLength(ft)}')
+            .join(', ');
+        final carriesSpares = spares > 0 && key == 'cable:${signal.name}';
+
+        cabling.add(
+          CostLine(
+            key: key,
+            description: [
+              catalog?.model.trim().isNotEmpty == true
+                  ? catalog!.model
+                  // "AV cabling (HDBaseT / DTP)" — the family a cable schedule
+                  // files it under, then what it actually carries.
+                  : [
+                      cableTypeLabel(signal),
+                      if (cableSignalSubLabel(signal).isNotEmpty)
+                        '(${cableSignalSubLabel(signal)})',
+                      'cable',
+                    ].join(' '),
+              // What the entry itself is bought in, when it is a made-up lead.
+              if ((catalog?.cableLengthFt ?? 0) > 0)
+                '— ${formatCableLength(catalog!.cableLengthFt)}',
+              if (lengths.isNotEmpty) '[$lengths]',
+              if (carriesSpares)
+                '(${trimNumber(qty - spares)} drawn + '
+                    '${trimNumber(spares)} spare)',
+            ].join(' '),
+            model: catalog?.model ?? '',
+            partNumber: catalog?.partNumber ?? '',
+            category: kCategoryCable,
+            qty: qty,
+            unitPrice: price,
+            source: source,
+          ),
+        );
+      }
     }
   }
 

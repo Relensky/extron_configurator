@@ -154,6 +154,27 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     );
   }
 
+  /// What the rest of the catalog already stocks this cable in, so the entry
+  /// being edited is filled in against the list rather than against memory.
+  String _cableLengthNote(AvDeviceLibrary library, AvDeviceTemplate entry) {
+    final signal = entry.cableSignal;
+    if (signal == null) return '';
+    final family = library
+        .cablesForSignal(signal)
+        .where((t) => t.cableLengthFt > 0)
+        .toList();
+    if (family.isEmpty) {
+      return 'Nothing else is stocked for this signal yet. Add one entry per '
+          'length — 3 ft, 6 ft, 25 ft — each with its own price, and the '
+          'estimate buys every run the shortest one that reaches it.';
+    }
+    final lengths = family
+        .map((t) => '${trimNumber(t.cableLengthFt)} ft')
+        .join(', ');
+    return 'Stocked for this signal: $lengths. A run longer than the longest '
+        'is quoted at the longest.';
+  }
+
   List<AvDeviceTemplate> _filtered(AvDeviceLibrary library) {
     final narrowed = library.all.where((t) {
       if (!_showRetired && t.retired) return false;
@@ -688,6 +709,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         if (entry.isCable) ...[
           const SizedBox(height: 12),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
                 width: 300,
@@ -709,6 +731,41 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   ],
                   onChanged: (v) => setState(
                     () => _apply(entry.copyWith(cableSignal: v)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // THE LENGTH IT IS BOUGHT IN. A room does not buy "HDMI cable",
+              // it buys a 3 ft one and a 25 ft one at different prices — so a
+              // type is broken down into an entry per length, and the estimate
+              // puts every drawn run on the shortest one that reaches it.
+              SizedBox(
+                width: 130,
+                child: LiveTextField(
+                  fieldId: 'cablelen_$key',
+                  initial: entry.cableLengthFt == 0
+                      ? ''
+                      : trimNumber(entry.cableLengthFt),
+                  label: 'Length',
+                  suffix: 'ft',
+                  helper: 'blank = bulk',
+                  numeric: true,
+                  onChanged: (v) => setState(
+                    () => _apply(
+                      entry.copyWith(
+                        cableLengthFt: double.tryParse(v.trim()) ?? 0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    _cableLengthNote(library, entry),
+                    style: theme.textTheme.bodySmall,
                   ),
                 ),
               ),
