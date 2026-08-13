@@ -343,7 +343,7 @@ void main() {
     });
   });
 
-  group('screen and shade control runs', () {
+  group('cable runs', () {
     test('the report carries the start and the end of each run', () {
       final r = wiredRoom();
       final p = r.provider;
@@ -363,10 +363,11 @@ void main() {
 
       final runs = sectionNamed(
         avReportSections(p, buildAvFlowModel(p)),
-        'Screen / Shade Control Runs',
+        'Cable Runs',
       );
       final row = runs.rows.single;
-      expect(cell(runs, row, 'Controls'), 'Front screen');
+      // The run is named by what it controls, not by the internal SCRSW id.
+      expect(cell(runs, row, 'Run'), 'Front screen');
       expect(cell(runs, row, 'Start (switch)'), '[B] Front floor box');
       expect(cell(runs, row, 'End (motor / screen)'), 'Front wall');
       expect(cell(runs, row, 'Cable'), '18/2 plenum');
@@ -385,7 +386,7 @@ void main() {
       );
       final runs = sectionNamed(
         avReportSections(p, buildAvFlowModel(p)),
-        'Screen / Shade Control Runs',
+        'Cable Runs',
       );
       expect(
         cell(runs, runs.rows.single, 'Start (switch)'),

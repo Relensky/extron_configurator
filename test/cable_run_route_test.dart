@@ -320,7 +320,7 @@ void main() {
       );
 
       final section = locationSections(buildAvFlowModel(p)).firstWhere(
-        (s) => s.title == 'Screen / Shade Control Runs',
+        (s) => s.title == 'Cable Runs',
       );
       expect(section.header, contains('Cable #'));
       expect(section.header, contains('Routed through'));
@@ -341,7 +341,7 @@ void main() {
         ),
       );
       final section = locationSections(buildAvFlowModel(p)).firstWhere(
-        (s) => s.title == 'Screen / Shade Control Runs',
+        (s) => s.title == 'Cable Runs',
       );
       expect(
         section.rows.single[section.header.indexOf('Routed through')],

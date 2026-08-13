@@ -152,6 +152,37 @@ XlsxSheet buildStackedReportSheet({
   );
 }
 
+/// A name Excel will take for a worksheet: it refuses `: \ / ? * [ ]` and
+/// stops at 31 characters, and "Fiber (OS2)" is a real cable type.
+String xlsxSheetName(String name) {
+  final cleaned = name.replaceAll(RegExp(r'[:\\/?*\[\]]'), ' ').trim();
+  return cleaned.length > 31 ? cleaned.substring(0, 31) : cleaned;
+}
+
+/// [xlsxSheetName], plus a number when the book already holds that name.
+///
+/// Excel refuses to open a workbook with two sheets called the same thing, so
+/// a book built a sheet per drawing has to settle collisions before it is
+/// written: two plans named alike, or two names that only differ past the 31st
+/// character, is a real room rather than a hypothetical one. The name settled
+/// on is added to [taken], folded to lower case — Excel treats "Level 1" and
+/// "level 1" as the same sheet.
+String uniqueXlsxSheetName(String proposed, Set<String> taken) {
+  var base = xlsxSheetName(proposed);
+  if (base.isEmpty) base = 'Sheet';
+  var name = base;
+  var n = 2;
+  while (!taken.add(name.toLowerCase())) {
+    final suffix = ' ($n)';
+    final head = base.length + suffix.length > 31
+        ? base.substring(0, 31 - suffix.length)
+        : base;
+    name = '$head$suffix';
+    n++;
+  }
+  return name;
+}
+
 /// Scales a captured PNG to [targetWidth] px and anchors it at [anchorRow],
 /// preserving its aspect ratio. Returns null when the bytes aren't a readable
 /// PNG, which is the caller's cue to write the sheet without a diagram.

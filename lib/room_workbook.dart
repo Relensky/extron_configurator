@@ -19,8 +19,8 @@ import 'xlsx_writer.dart';
 ///    AV Flow       — cable schedule, pack list, jack schedule, connector use,
 ///                    with the signal-flow diagram underneath
 ///    Locations     — where everything is, jacks and cable runs counted per
-///                    place and grouped by mounting surface, the screen and
-///                    shade runs, and the floor plan's callouts
+///                    place and grouped by mounting surface, the cable runs
+///                    between places, and the floor plan's callouts
 ///    Racks         — how full and how hot each frame is, and what sits on
 ///                    which U
 ///    Cost Estimate — equipment at catalog or quoted prices, other items,

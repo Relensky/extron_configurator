@@ -1384,20 +1384,13 @@ class _CablingViewState extends State<CablingView> {
       final bytes = await captureBoundary(_canvasKey, pixelRatio: 2.0);
       if (bytes == null) continue;
       out.add((
-        name: layer.isEmpty ? 'All runs' : _sheetSafe(layer),
+        name: layer.isEmpty ? 'All runs' : xlsxSheetName(layer),
         caption: layer.isEmpty ? 'All runs' : layer,
         bytes: bytes,
       ));
     }
     if (mounted) setState(() => _exportLayer = '');
     return out;
-  }
-
-  /// A cable type as a workbook sheet name: Excel refuses the punctuation and
-  /// stops at 31 characters, and "Fiber (OS2)" is a real cable type.
-  static String _sheetSafe(String name) {
-    final cleaned = name.replaceAll(RegExp(r'[:\\/?*\[\]]'), ' ').trim();
-    return cleaned.length > 31 ? cleaned.substring(0, 31) : cleaned;
   }
 
   /// One workbook sheet holding one layer's drawing and nothing else. The

@@ -355,10 +355,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// The location report, as a workbook or as plain text.
   ///
   /// The workbook is the one that gets sent: it carries the tables AND the
-  /// drawing they describe — every layer of it, a sheet each — so the person
-  /// reading "6 runs to the front floor box" can see which six and where they
-  /// go without a second attachment. The text file stays for a quick look and
-  /// for pasting into an email.
+  /// drawings they describe — every sheet in the room, every layer of each, a
+  /// tab apiece — so the person reading "6 runs to the front floor box" can
+  /// see which six and where they go without a second attachment. The text
+  /// file stays for a quick look and for pasting into an email.
   Future<void> _exportReport(
     AppStateProvider provider, {
     required bool asXlsx,
@@ -385,7 +385,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         // One moment for the whole book: sheets stamped seconds apart read as
         // documents from two different exports.
         final generated = DateTime.now();
-        final layers = await _captureCableLayers(provider);
+        // Every plan in the room, not just the one that happened to be open:
+        // a set issued with the ceiling plan missing is a set somebody has to
+        // ask for again.
+        final layers = await _captureCableLayers(provider, allSheets: true);
         final first = layers.isEmpty ? null : layers.first;
         await File(outputFile).writeAsBytes(
           buildXlsx([
@@ -398,9 +401,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   ? null
                   : (anchorRow) => scaledSheetImage(first.bytes, anchorRow),
             ),
-            // One sheet per cable type, which is how a cabling set is issued:
-            // the network contractor gets the network drawing and nobody has
-            // to read around somebody else's runs.
+            // One sheet per plan per cable type, which is how a cabling set is
+            // issued: the network contractor gets the network drawing of each
+            // storey and nobody has to read around somebody else's runs. The
+            // first one is already printed above, under the tables.
             for (final layer in layers.skip(1))
               _layerSheet(title, layer, generated),
           ]),
@@ -2293,54 +2297,109 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// export and the workbook so the two cannot come out of a different set of
   /// drawings.
   ///
+  /// [allSheets] walks EVERY plan in the room rather than the one on screen,
+  /// which is what the report wants: a room with a furniture plan and a
+  /// reflected ceiling plan is a room whose report needs both drawings in it,
+  /// and issuing whichever sheet happened to be open is how the other one goes
+  /// missing. The sheet picker is put back where it was afterwards, same as
+  /// the layer picker. The per-layer PNG export is about the sheet in front of
+  /// you, so it leaves this off.
+  ///
   /// [name] is the sheet name the workbook uses (Excel: 31 chars, no
   /// `: \ / ? * [ ]`); [caption] is what it is called in prose.
   Future<List<({String name, String caption, Uint8List bytes})>>
-  _captureCableLayers(AppStateProvider provider) async {
+  _captureCableLayers(
+    AppStateProvider provider, {
+    bool allSheets = false,
+  }) async {
     final model = buildAvFlowModel(provider);
-    final layers = _cableLayers(
-      provider,
-      provider.activeFloorPlan,
-      provider.cablingSchematic(model),
-    );
+    final drawing = provider.cablingSchematic(model);
+    final startingSheet = provider.activeFloorPlan?.id ?? '';
+    // A room with no plan at all still comes through here: the capture simply
+    // finds no canvas and yields nothing, which is the same answer it gave
+    // before.
+    final sheets = <FloorPlan?>[
+      if (!allSheets || provider.avFloorPlans.isEmpty)
+        provider.activeFloorPlan
+      else
+        ...provider.avFloorPlans,
+    ];
+    final many = sheets.length > 1;
+
     final out = <({String name, String caption, Uint8List bytes})>[];
+    // The report's own tables are already on a sheet called Locations, so no
+    // drawing may claim that name.
+    final taken = <String>{'locations'};
     final was = _cableLayer;
     // A selection is a thing being edited, not a mark on the paper: the bend
     // handles must not turn up on a sheet somebody is issued.
     final heldRun = _selectedRunId;
     if (heldRun.isNotEmpty) setState(() => _selectedRunId = '');
-    for (final layer in [_kLayerAll, ...layers.map((l) => l.type)]) {
+
+    for (final sheet in sheets) {
       if (!mounted) break;
-      setState(() => _cableLayer = layer);
-      // Let the change actually paint before the boundary is captured;
-      // without this every image would be of whatever was on screen when the
-      // loop started.
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) break;
-      final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
-      if (bytes == null) continue;
-      final caption = layer == _kLayerAll ? 'All runs' : layer;
-      out.add((
-        name: layer == _kLayerAll ? 'All runs' : _sheetSafe(layer),
-        caption: caption,
-        bytes: bytes,
-      ));
+      if (sheet != null && sheet.id != (provider.activeFloorPlan?.id ?? '')) {
+        provider.selectFloorPlan(sheet.id);
+        // The drawing behind this sheet is a file that has to be read and
+        // decoded, and a capture taken before it is ready is a picture of the
+        // PREVIOUS sheet — which is how two plans come out of an export with
+        // the same image on them. Point the page at the new file, then wait
+        // for it to be decoded before anything is rendered.
+        _syncImage(provider);
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) break;
+        final image = _image;
+        if (image != null) {
+          try {
+            await precacheImage(image, context);
+          } catch (_) {
+            // A missing or unreadable drawing is not worth failing the whole
+            // export over: the sheet comes out with its markers on blank
+            // paper, which is what the page shows.
+          }
+        }
+        if (!mounted) break;
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) break;
+      }
+
+      // Per sheet: a cable type only earns a layer on the plan it actually
+      // lands on.
+      final layers = _cableLayers(provider, sheet, drawing);
+      for (final layer in [_kLayerAll, ...layers.map((l) => l.type)]) {
+        if (!mounted) break;
+        setState(() => _cableLayer = layer);
+        // Let the change actually paint before the boundary is captured;
+        // without this every image would be of whatever was on screen when the
+        // loop started.
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) break;
+        final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
+        if (bytes == null) continue;
+        final what = layer == _kLayerAll ? 'All runs' : layer;
+        // The sheet's name only goes in front of it once there is more than
+        // one sheet — a room with a single plan reads exactly as it always
+        // has.
+        final planName = sheet?.name.trim() ?? '';
+        final caption = many && planName.isNotEmpty ? '$planName — $what' : what;
+        out.add((
+          name: uniqueXlsxSheetName(caption, taken),
+          caption: caption,
+          bytes: bytes,
+        ));
+      }
     }
+
     if (mounted) {
       setState(() {
         _cableLayer = was;
         _selectedRunId = heldRun;
       });
+      if (startingSheet.isNotEmpty) provider.selectFloorPlan(startingSheet);
     }
     return out;
   }
 
-  /// A cable type as a workbook sheet name: Excel refuses the punctuation and
-  /// stops at 31 characters, and "Fiber (OS2)" is a real cable type.
-  static String _sheetSafe(String name) {
-    final cleaned = name.replaceAll(RegExp(r'[:\\/?*\[\]]'), ' ').trim();
-    return cleaned.length > 31 ? cleaned.substring(0, 31) : cleaned;
-  }
 
   /// Writes one PNG per cable type into a folder the user picks.
   ///

@@ -24,7 +24,9 @@ import 'room_locations.dart';
 ///                          floor / rack
 ///    * Line counts       — runs per location per signal type, and per cable
 ///                          label, which is the number that gets ordered
-///    * Screen switches   — the low-voltage control runs, start and end
+///    * Cable runs        — the runs pulled between two places in the room
+///                          (screen and shade control among them), start,
+///                          route and end
 ///    * Floor plan        — the callouts and what each one points at
 ///    * Power             — where each device's mains comes from, what the
 ///                          room draws, and what that is in amps and BTU/hr
@@ -253,7 +255,7 @@ ReportSection _roomSummary(AppStateProvider provider, AvFlowModel model) {
               'per-location counts below leave these out',
         ],
       if (model.screenSwitches.isNotEmpty)
-        ['Screen / shade control runs', model.screenSwitches.length],
+        ['Cable runs', model.screenSwitches.length],
       if (model.floorPlans.isNotEmpty)
         [
           'Floor plans',
@@ -687,11 +689,15 @@ String cableLabelStem(String label) {
   return stem.isEmpty ? trimmed : stem;
 }
 
-/// The low-voltage control runs: what each one drives, where the switch is and
-/// where the thing it drives is.
+/// The cable runs drawn between the places in the room: what each one is for,
+/// where it starts and where it ends.
 ///
-/// Neither end is a device on the signal flow, so without this sheet a screen
-/// switch is a run nobody drew, nobody costed and nobody pulled.
+/// These began as the low-voltage control runs — a screen switch on the wall
+/// and the motor above the whiteboard — and neither end is a device on the
+/// signal flow, so without this sheet such a run is one nobody drew, nobody
+/// costed and nobody pulled. The sheet is called Cable Runs because that is
+/// what it is used for: any run somebody has to pull between two places,
+/// whatever it drives.
 ReportSection _screenSwitchSchedule(AvFlowModel model) {
   String place(String locationId, String note) {
     final name = locationId.isEmpty
@@ -702,11 +708,10 @@ ReportSection _screenSwitchSchedule(AvFlowModel model) {
   }
 
   return (
-    title: 'Screen / Shade Control Runs',
+    title: 'Cable Runs',
     header: [
       'Run',
       'Cable #',
-      'Controls',
       'Cables',
       'Start (switch)',
       'Routed through',
@@ -718,9 +723,12 @@ ReportSection _screenSwitchSchedule(AvFlowModel model) {
     rows: [
       for (final s in model.screenSwitches)
         [
-          s.id,
+          // What it controls IS the name of the run — 'Front screen' is what
+          // it is called on the drawing and what somebody asks about. The
+          // internal id (SCRSW_1) named nothing anybody could look up, and
+          // printing both put the same run in two columns.
+          s.label.trim().isEmpty ? s.id : s.label,
           s.cableNumber,
-          s.label,
           // How many this run is. Six Cat 6 to a floor box is one run of six,
           // and a schedule that prints it as one is a schedule somebody
           // orders one cable against.
