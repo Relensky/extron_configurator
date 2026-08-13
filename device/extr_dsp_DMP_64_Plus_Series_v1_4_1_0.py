@@ -30,6 +30,19 @@ DEVICE_INFO = {
         "manual_disconnect": False,
         "user": "admin",
         "password": "ATEC2007",
+        # The audio group numbers this DSP is wired to: which group carries
+        # program gain, which mic mutes, which the record feed is on.
+        "group_prog_gain": "1",
+        "group_mic_in_room_mute": "2",
+        "group_voice_lift_mute": "3",
+        "group_mic_ceiling_mute": "4",
+        "group_prog_mute": "5",
+        "group_mic_master_mute": "6",
+        "group_pc_mic_input_gain": "7",
+        "group_pc_output_gain": "8",
+        "group_pc_output_mute": "9",
+        "group_mic_master_gain": "10",
+        "group_pc_record_mute": "11",
     },
     # How this driver is reached on each connection style, read by the app:
     # changing com_type loads the matching block, and picking a model merges it

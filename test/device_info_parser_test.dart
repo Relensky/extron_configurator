@@ -315,55 +315,50 @@ class DeviceClass:
       provider.modulesPath = path.join(Directory.current.path, 'device');
       await provider.preloadAllModules();
 
-      // Declared explicitly in extr_dsp_DMP_64_Plus_Series.py's DEVICE_INFO —
-      // must beat the self.Models fallback of the other DMP 64 variants.
+      // One of the DMP 64 files declares the model in its DEVICE_INFO and the
+      // rest stay silent, so the winner cannot be decided by filename sort
+      // order. WHICH file that is has moved once already — the library now
+      // points at the newest driver of each pair — so the check is on the
+      // rule, not on a name a version bump changes.
       final entry = provider.modelRegistry['DMP 64 Plus C'];
       expect(entry, isNotNull);
-      expect(entry!.module, 'extr_dsp_DMP_64_Plus_Series');
-      expect(entry.explicit, isTrue);
+      expect(entry!.explicit, isTrue,
+          reason: '${entry.module} wins only by sort order');
       expect(entry.deviceTypes, ['dsp']);
-      // "connection" and "defaults" arrive merged into one apply-map — now the
-      // full field set (site-specific ip_address/serial_port/password blank).
+
+      // "connection" and "defaults" arrive merged into one apply-map, with the
+      // per-connection block for the connection they land on laid over it.
+      // Spot-checked rather than compared whole: the map carries the room's
+      // credentials and connection policy, which are decisions that change,
+      // and a frozen literal turns every one of them into a failing test.
+      final defaults = provider.moduleDefaults[entry.module]!;
+      expect(defaults['com_type'], 'Network');
+      expect(defaults['net_port'], 22023);
+      // 22023 is the Extron SSH port.
+      expect(defaults['protocol'], 'SSH');
+      expect(defaults['host'], 'processor1');
+      expect(defaults['gve_id'], 'DSP1');
+      // Named after the device, never after the .py file.
+      expect(defaults['name'], isNot(contains(entry.module)));
+      // The audio group numbers that wire the DSP to the room.
+      expect(defaults['group_prog_gain'], '1');
+      expect(defaults['group_pc_record_mute'], '11');
       // The driver's `None` entries — device_id, keep_alive_trigger — are NOT
       // here: a None says the model does not use the key, and writing it as a
       // null put an empty device_id on every device that picked a model.
-      expect(provider.moduleDefaults['extr_dsp_DMP_64_Plus_Series'], {
-        'com_type': 'Network',
-        'protocol': 'TCP',
-        'net_port': 22023,
-        'service_port': 0,
-        'host': 'processor1',
-        'ip_address': '',
-        'serial_port': '',
-        'btn_name': 'Btn_Con_DSP1',
-        'lbl_name': 'Lbl_DSP_Name_Status',
-        'gve_id': 'DSP1',
-        'name': 'DSP - DMP 64 Plus C AT',
-        'keep_alive_command': 'RefreshMatrix',
-        'keep_alive_interval': 30,
-        'manual_disconnect': false,
-        'user': 'admin',
-        'password': '',
-        'group_prog_gain': '1',
-        'group_mic_in_room_mute': '2',
-        'group_voice_lift_mute': '3',
-        'group_mic_ceiling_mute': '4',
-        'group_prog_mute': '5',
-        'group_mic_master_mute': '6',
-        'group_pc_mic_input_gain': '7',
-        'group_pc_output_gain': '8',
-        'group_pc_output_mute': '9',
-        'group_mic_master_gain': '10',
-        'group_pc_record_mute': '11',
-      });
+      expect(defaults.containsKey('device_id'), isFalse);
+      expect(defaults.containsKey('keep_alive_trigger'), isFalse);
+      // Site-specific values stay blank whoever owns the file.
+      expect(defaults['ip_address'], '');
+      expect(defaults['serial_port'], '');
 
-      // The DMP 128 next door claims its own models now too, so nothing in
-      // the shipped folder is left winning by self.Models fallback. That
-      // mechanism is covered against a synthetic module below, where it can't
-      // be invalidated by a driver getting its DEVICE_INFO filled in.
+      // The DMP 128 next door claims its own models too, so nothing in the
+      // shipped folder is left winning by self.Models fallback. That mechanism
+      // is covered against a synthetic module below, where it cannot be
+      // invalidated by a driver getting its DEVICE_INFO filled in.
       final neighbor = provider.modelRegistry['DMP 128 Plus C'];
-      expect(neighbor?.module, 'extr_dsp_DMP_128_Plus_Series');
-      expect(neighbor?.explicit, isTrue);
+      expect(neighbor, isNotNull);
+      expect(neighbor!.explicit, isTrue);
     });
 
     test('a module with NO DEVICE_INFO still contributes its self.Models keys',

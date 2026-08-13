@@ -27,7 +27,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Switcher1",
         "lbl_name": "Lbl_Switcher_Model",
         "gve_id": "Switch1",
-        "name": "Switcher - extr_switcher_SW_HD_4K_Plus_Series_v1_1_5_0",
+        "name": "Switcher - SW2 HD 4K PLUS",
         "keep_alive_command": "VideoMute",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,

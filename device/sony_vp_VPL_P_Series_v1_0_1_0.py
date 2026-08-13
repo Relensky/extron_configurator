@@ -26,7 +26,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Projector1",
         "lbl_name": "Lbl_Proj_Model_Proj1",
         "gve_id": "Proj1",
-        "name": "Projector - sony_vp_VPL_P_Series_v1_0_1_0",
+        "name": "Projector - VPL-PHZ60",
         "device_id": None,
         "keep_alive_command": "Power",
         "keep_alive_interval": 10,

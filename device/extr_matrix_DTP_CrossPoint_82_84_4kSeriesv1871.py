@@ -23,7 +23,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Switcher1",
         "lbl_name": "Lbl_Switcher_Model",
         "gve_id": "Switch1",
-        "name": "Switcher - extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1871",
+        "name": "Switcher - DTP CrossPoint 82 4K",
         "keep_alive_command": "RefreshMatrix",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
