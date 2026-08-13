@@ -215,26 +215,12 @@ void main() {
   });
 
   test('the rack elevation is embedded on the Racks sheet', () {
-    // Only the IHDR is read (for the aspect ratio), so a header is enough to
-    // stand in for a captured elevation here.
-    Uint8List headerOnlyPng(int w, int h) {
-      final bytes = BytesBuilder()
-        ..add(const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
-        ..add(const [0, 0, 0, 13])
-        ..add(utf8.encode('IHDR'))
-        ..add((ByteData(8)..setUint32(0, w)..setUint32(4, h))
-            .buffer
-            .asUint8List())
-        ..add(const [8, 6, 0, 0, 0]);
-      return bytes.toBytes();
-    }
-
     final p = room();
     final archive = ZipDecoder().decodeBytes(
       buildRoomWorkbookBytes(
         provider: p,
         av: buildAvFlowModel(p),
-        rackPng: headerOnlyPng(1200, 800),
+        rackPng: _headerOnlyPng(1200, 800),
       ),
     );
 
@@ -248,6 +234,49 @@ void main() {
       contains('<drawing'),
       reason: 'and hangs off the Racks sheet, under its tables',
     );
+  });
+
+  test('every plan sheet gets a tab, straight after Locations', () {
+    // A room with a furniture plan and a reflected ceiling plan is a room
+    // whose workbook needs both drawings: the first illustrates the tables and
+    // the rest follow it. Before this the book carried whichever sheet
+    // happened to be open when the export was pressed.
+    final p = room();
+    final archive = ZipDecoder().decodeBytes(
+      buildRoomWorkbookBytes(
+        provider: p,
+        av: buildAvFlowModel(p),
+        floorPlanSheets: [
+          (name: 'Level 1', caption: 'Level 1', bytes: _headerOnlyPng(1200, 800)),
+          (name: 'Ceiling', caption: 'Ceiling', bytes: _headerOnlyPng(1200, 800)),
+          (name: 'Level 2', caption: 'Level 2', bytes: _headerOnlyPng(1200, 800)),
+        ],
+      ),
+    );
+
+    expect(tabNames(archive), [
+      'Control',
+      'AV Flow',
+      'Locations',
+      // The first one is already printed under the tables above.
+      'Ceiling',
+      'Level 2',
+      'Cabling',
+      'Racks',
+      'Cost Estimate',
+    ]);
+    // Each drawing tab says which drawing it is and carries the picture.
+    expect(sheetText(archive, 4), contains('Ceiling'));
+    expect(sheetText(archive, 4), contains('<drawing'));
+    expect(sheetText(archive, 3), contains('<drawing'));
+  });
+
+  test('a room with no plan sheets writes the book it always did', () {
+    final p = room();
+    final archive = ZipDecoder().decodeBytes(
+      buildRoomWorkbookBytes(provider: p, av: buildAvFlowModel(p)),
+    );
+    expect(tabNames(archive), kRoomWorkbookSheets);
   });
 
   test('a room with no racks still gets a readable Racks tab', () {
@@ -267,4 +296,22 @@ void main() {
       contains('No devices on the diagram'),
     );
   });
+}
+
+/// A PNG that is nothing but its header. Only the IHDR is read (for the aspect
+/// ratio), so this is enough to stand in for a captured drawing.
+Uint8List _headerOnlyPng(int w, int h) {
+  final bytes = BytesBuilder()
+    ..add(const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+    ..add(const [0, 0, 0, 13])
+    ..add(utf8.encode('IHDR'))
+    ..add(
+      (ByteData(8)
+            ..setUint32(0, w)
+            ..setUint32(4, h))
+          .buffer
+          .asUint8List(),
+    )
+    ..add(const [8, 6, 0, 0, 0]);
+  return bytes.toBytes();
 }

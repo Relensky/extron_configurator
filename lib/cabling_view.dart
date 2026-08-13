@@ -1341,7 +1341,7 @@ class _CablingViewState extends State<CablingView> {
                   : (anchorRow) => scaledSheetImage(first.bytes, anchorRow),
             ),
             for (final layer in layers.skip(1))
-              _layerSheet(title, layer, generated),
+              drawingSheet(title, layer, generated),
           ]),
         );
       } else {
@@ -1391,28 +1391,6 @@ class _CablingViewState extends State<CablingView> {
     }
     if (mounted) setState(() => _exportLayer = '');
     return out;
-  }
-
-  /// One workbook sheet holding one layer's drawing and nothing else. The
-  /// schedule is on the first sheet; repeating it per layer would be five
-  /// copies of one table with a different picture over each.
-  XlsxSheet _layerSheet(
-    String title,
-    ({String name, String caption, Uint8List bytes}) layer,
-    DateTime generated,
-  ) {
-    final rows = <List<dynamic>>[
-      ['$title — ${layer.caption}', '', '', '', ''],
-      ['Generated ${reportTimestamp(generated)}'],
-      [],
-    ];
-    return XlsxSheet(
-      name: layer.name,
-      rows: rows,
-      rowStyles: const {0: XlsxRowStyle.title},
-      merges: const ['A1:E1'],
-      image: scaledSheetImage(layer.bytes, rows.length + 1),
-    );
   }
 
   Future<String?> _askFor(String label, String initial, {int lines = 1}) {

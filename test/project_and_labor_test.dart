@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -391,6 +392,49 @@ void main() {
         File(p.join(result.folder, 'av_devices.json')).readAsStringSync(),
       );
       expect((doc['devices'] as List).length, 2);
+    });
+
+    test('writes one image per plan sheet, named for the sheet', () async {
+      // A room with a furniture plan and a reflected ceiling plan is a room
+      // whose folder needs both drawings. One sheet keeps the plain name it
+      // always had.
+      final provider = room();
+      final result = await saveProjectFolder(
+        provider: provider,
+        parentFolder: dir.path,
+        floorPlanSheets: [
+          (name: 'Level 1', caption: 'Level 1', bytes: Uint8List(4)),
+          (
+            name: 'Ceiling plan',
+            caption: 'Ceiling plan',
+            bytes: Uint8List(4),
+          ),
+        ],
+      );
+
+      final names = Directory(result.folder)
+          .listSync()
+          .map((e) => p.basename(e.path))
+          .toList();
+      expect(names, contains('BSS_103_floor_plan_level_1.png'));
+      expect(names, contains('BSS_103_floor_plan_ceiling_plan.png'));
+      expect(names, isNot(contains('BSS_103_floor_plan.png')));
+    });
+
+    test('one plan sheet is still just the floor plan', () async {
+      final provider = room();
+      final result = await saveProjectFolder(
+        provider: provider,
+        parentFolder: dir.path,
+        floorPlanSheets: [
+          (name: 'All runs', caption: 'All runs', bytes: Uint8List(4)),
+        ],
+      );
+      final names = Directory(result.folder)
+          .listSync()
+          .map((e) => p.basename(e.path))
+          .toList();
+      expect(names, contains('BSS_103_floor_plan.png'));
     });
 
     test('a room with no name still gets a sensible folder', () async {

@@ -98,7 +98,11 @@ Future<ProjectExport> saveProjectFolder({
   Uint8List? schematicPng,
   Uint8List? avFlowPng,
   Uint8List? rackPng,
-  Uint8List? floorPlanPng,
+  /// Every plan sheet in the room, one PNG each. A folder that carries the
+  /// storey that happened to be open is a folder somebody has to come back
+  /// for.
+  List<({String name, String caption, Uint8List bytes})> floorPlanSheets =
+      const [],
   Uint8List? cablingPng,
 }) async {
   final folder = Directory(path.join(parentFolder, roomFolderName(provider)));
@@ -145,7 +149,7 @@ Future<ProjectExport> saveProjectFolder({
         controlPng: schematicPng,
         avFlowPng: avFlowPng,
         rackPng: rackPng,
-        floorPlanPng: floorPlanPng,
+        floorPlanSheets: floorPlanSheets,
         cablingPng: cablingPng,
         generated: generated,
       ),
@@ -209,7 +213,21 @@ Future<ProjectExport> saveProjectFolder({
   await image('control_schematic', schematicPng, 'the control schematic');
   await image('av_flow', avFlowPng, 'the signal flow diagram');
   await image('racks', rackPng, 'the rack elevation');
-  await image('floor_plan', floorPlanPng, 'the floor plan');
+  // One marked-up drawing per plan sheet. A room with one sheet writes
+  // `<room>_floor_plan.png` exactly as it always did; a room with several
+  // names each after the sheet it is, so the folder can be read without
+  // opening all of them.
+  if (floorPlanSheets.isEmpty) {
+    skipped.add('${named('floor_plan')}.png — the floor plan '
+        'could not be captured');
+  }
+  for (final sheet in floorPlanSheets) {
+    final suffix = floorPlanSheets.length == 1
+        ? 'floor_plan'
+        : 'floor_plan_'
+              '${sheet.caption.replaceAll(_unsafe, '_').toLowerCase()}';
+    await image(suffix, sheet.bytes, 'the ${sheet.caption} drawing');
+  }
   await image('cabling', cablingPng, 'the cabling drawing');
 
   // The plan image itself, so the marked-up drawing and the drawing it was

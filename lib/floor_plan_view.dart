@@ -153,6 +153,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   void initState() {
     super.initState();
     registerDiagramCanvas(AppTab.floorPlan, _planKey);
+    // How the rest of the app gets at the OTHER sheets. One canvas key only
+    // ever yields the sheet on screen, and every export in the app wants the
+    // whole set — see [capturePlanSheets].
+    registerPlanSheetCapture(_captureSheets);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AppStateProvider>();
@@ -164,6 +168,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   @override
   void dispose() {
     unregisterDiagramCanvas(AppTab.floorPlan, _planKey);
+    unregisterPlanSheetCapture(_captureSheets);
     _transform.dispose();
     _planFocus.dispose();
     super.dispose();
@@ -283,49 +288,185 @@ class _FloorPlanViewState extends State<FloorPlanView> {
 
   // --- exporting ------------------------------------------------------------
 
-  /// The sheet as PNG bytes, optionally rendered the way it should print.
+  /// EVERY sheet in the room as PNG bytes — the one drawing-capture the whole
+  /// app goes through, registered with [registerPlanSheetCapture] so the
+  /// exports that live elsewhere can ask for the set without knowing how this
+  /// page works.
   ///
-  /// The print skin is a WIDGET, not a filter over the bytes, so the drawing
-  /// is re-laid-out in the light theme before it is captured — a dark-mode
-  /// capture converted to grey is a black page with pale lines on it, which a
-  /// printer renders as a black page. The mode is held for exactly as long as
-  /// the capture takes and then put back, so the tab the user is looking at
-  /// does not change colour under them.
-  Future<Uint8List?> _captureSheet({bool monochrome = false}) async {
-    // A run held for editing carries drag handles, which belong to the person
-    // editing and not to the sheet. Put it down for the capture and pick it
+  /// Only a widget on screen can be rendered, so the sheets are fetched the
+  /// only way there is: point the page at each one, let it paint, capture it,
+  /// and put the sheet picker back where it was. Before this every exporter
+  /// captured whichever sheet happened to be open, which is how a set gets
+  /// issued with the ceiling plan missing.
+  ///
+  /// [perLayer] adds one drawing per cable type after each sheet's own, which
+  /// is how a cabling set is issued: the network contractor gets the network
+  /// drawing of each storey and nobody has to read around somebody else's
+  /// runs. Without it each sheet is captured once, showing whatever the layer
+  /// picker is set to.
+  ///
+  /// [monochrome] renders them the way they should print. The print skin is a
+  /// WIDGET, not a filter over the bytes, so the drawing is re-laid-out in the
+  /// light theme before it is captured — a dark-mode capture converted to grey
+  /// is a black page with pale lines on it, which a printer renders as a black
+  /// page. It is held for exactly as long as the walk takes and then put back,
+  /// so the tab the user is looking at does not change colour under them.
+  Future<List<PlanDrawing>> _captureSheets({
+    bool perLayer = false,
+    bool monochrome = false,
+  }) async {
+    final provider = context.read<AppStateProvider>();
+    final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
+    final startingSheet = provider.activeFloorPlan?.id ?? '';
+    // Sheets with nothing behind them are skipped: a sheet somebody named but
+    // has not imported a drawing for renders as the message saying so, which
+    // is not an illustration of anything. With none of them drawn on, the one
+    // on screen is still captured — that is what "export this view" means.
+    final drawn = provider.avFloorPlans.where((s) => s.hasImage).toList();
+    final sheets = <FloorPlan?>[
+      if (drawn.isEmpty) provider.activeFloorPlan else ...drawn,
+    ];
+    final many = sheets.length > 1;
+
+    final out = <PlanDrawing>[];
+    // The report's own tables are already on a sheet called Locations, so no
+    // drawing may claim that name.
+    final taken = <String>{'locations'};
+    final wasLayer = _cableLayer;
+    // A run held for editing carries drag handles, and a selection is a thing
+    // being edited rather than a mark on the paper: the handles must not turn
+    // up on a sheet somebody is issued. Put it down for the walk and pick it
     // back up after.
     final heldRun = _selectedRunId;
-    if (heldRun.isNotEmpty) {
-      setState(() => _selectedRunId = '');
+    if (heldRun.isNotEmpty || monochrome) {
+      setState(() {
+        _selectedRunId = '';
+        if (monochrome) _printMode = true;
+      });
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return null;
     }
+
     try {
-      if (!monochrome) return await captureBoundary(_planKey, pixelRatio: 2.0);
-      setState(() => _printMode = true);
-      try {
-        // Let it actually paint: without this the capture is of whatever was
-        // on screen when the mode was flipped.
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return null;
-        return await captureBoundary(_planKey, pixelRatio: 2.0);
-      } finally {
-        if (mounted) setState(() => _printMode = false);
+      for (final sheet in sheets) {
+        if (!mounted) break;
+        if (sheet != null && sheet.id != (provider.activeFloorPlan?.id ?? '')) {
+          if (!await _showSheet(provider, sheet)) break;
+        }
+
+        // Per sheet: a cable type only earns a layer on the plan it actually
+        // lands on.
+        final layers = perLayer
+            ? _cableLayers(provider, sheet, drawing).map((l) => l.type)
+            : const <String>[];
+        final wanted = [
+          if (perLayer) _kLayerAll else _cableLayer,
+          ...layers,
+        ];
+        for (final layer in wanted) {
+          if (!mounted) break;
+          if (layer != _cableLayer) {
+            setState(() => _cableLayer = layer);
+            // Let the change actually paint before the boundary is captured;
+            // without this every image would be of whatever was on screen when
+            // the loop started.
+            await WidgetsBinding.instance.endOfFrame;
+            if (!mounted) break;
+          }
+          final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
+          if (bytes == null) continue;
+          // What this drawing is called. One-per-sheet is named for the sheet;
+          // per-layer is named for the layer, with the sheet in front of it
+          // only once there is more than one — a room with a single plan reads
+          // exactly as it always has.
+          final planName = sheet?.name.trim() ?? '';
+          final String caption;
+          if (!perLayer) {
+            caption = planName.isEmpty ? 'Floor plan' : planName;
+          } else {
+            final what = layer == _kLayerAll ? 'All runs' : layer;
+            caption = many && planName.isNotEmpty ? '$planName — $what' : what;
+          }
+          out.add((
+            name: uniqueXlsxSheetName(caption, taken),
+            caption: caption,
+            bytes: bytes,
+          ));
+        }
       }
     } finally {
-      if (mounted && heldRun.isNotEmpty) {
-        setState(() => _selectedRunId = heldRun);
+      if (mounted) {
+        setState(() {
+          _cableLayer = wasLayer;
+          _selectedRunId = heldRun;
+          _printMode = false;
+        });
+        if (startingSheet.isNotEmpty) provider.selectFloorPlan(startingSheet);
       }
     }
+    return out;
   }
 
+  /// Puts [sheet] on screen and waits until its drawing is actually there.
+  ///
+  /// The drawing behind a sheet is a file that has to be read and decoded, and
+  /// a capture taken before it is ready is a picture of the PREVIOUS sheet —
+  /// which is how two plans come out of an export with the same image on them.
+  /// False when the page went away mid-walk.
+  Future<bool> _showSheet(AppStateProvider provider, FloorPlan sheet) async {
+    provider.selectFloorPlan(sheet.id);
+    _syncImage(provider);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return false;
+    final image = _image;
+    if (image != null) {
+      try {
+        await precacheImage(image, context);
+      } catch (_) {
+        // A missing or unreadable drawing is not worth failing the whole
+        // export over: the sheet comes out the way the page shows it.
+      }
+    }
+    if (!mounted) return false;
+    await WidgetsBinding.instance.endOfFrame;
+    return mounted;
+  }
+
+  /// The plan as an image — every sheet in the room, as the page is showing
+  /// them.
+  ///
+  /// A room with one sheet writes one file, picked and named the way it always
+  /// was. A room with several writes one per sheet into a folder, because a
+  /// drawing set is the set: handing over the storey that happened to be open
+  /// is how the other one goes missing.
   Future<void> _exportPng(
     AppStateProvider provider, {
     bool monochrome = false,
   }) async {
-    final bytes = await _captureSheet(monochrome: monochrome);
-    if (bytes == null) {
+    final stem = roomFileStem(
+      provider,
+      monochrome ? 'floor_plan_bw' : 'floor_plan',
+    );
+    final what = monochrome ? 'Floor plan (black & white)' : 'Floor plan';
+
+    if (provider.avFloorPlans.where((s) => s.hasImage).length > 1) {
+      final folder = await FilePicker.getDirectoryPath(
+        dialogTitle: monochrome
+            ? 'Where should the sheets for printing go?'
+            : 'Where should the sheet images go?',
+      );
+      if (folder == null) return;
+      await _writePngFolder(
+        provider,
+        folder,
+        await _captureSheets(monochrome: monochrome),
+        monochrome ? 'sheet for printing' : 'sheet image',
+        suffix: monochrome ? 'floor_plan_bw' : 'floor_plan',
+      );
+      return;
+    }
+
+    final drawings = await _captureSheets(monochrome: monochrome);
+    if (drawings.isEmpty) {
       _snack('Could not render the plan to an image.', error: true);
       return;
     }
@@ -333,20 +474,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       dialogTitle: monochrome
           ? 'Save the floor plan for printing'
           : 'Save the floor plan image',
-      fileName:
-          '${roomFileStem(provider, monochrome ? 'floor_plan_bw' : 'floor_plan')}.png',
+      fileName: '$stem.png',
       type: FileType.custom,
       allowedExtensions: const ['png'],
     );
     if (outputFile == null) return;
     if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
     try {
-      await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(
-        provider,
-        monochrome ? 'Floor plan (black & white)' : 'Floor plan',
-        outputFile,
-      );
+      await File(outputFile).writeAsBytes(drawings.first.bytes);
+      _savedSnack(provider, what, outputFile);
     } catch (e) {
       _snack('Failed to save the image: $e', error: true);
     }
@@ -388,7 +524,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         // Every plan in the room, not just the one that happened to be open:
         // a set issued with the ceiling plan missing is a set somebody has to
         // ask for again.
-        final layers = await _captureCableLayers(provider, allSheets: true);
+        final layers = await _captureSheets(perLayer: true);
         final first = layers.isEmpty ? null : layers.first;
         await File(outputFile).writeAsBytes(
           buildXlsx([
@@ -406,7 +542,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             // storey and nobody has to read around somebody else's runs. The
             // first one is already printed above, under the tables.
             for (final layer in layers.skip(1))
-              _layerSheet(title, layer, generated),
+              drawingSheet(title, layer, generated),
           ]),
         );
       } else {
@@ -418,28 +554,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     } catch (e) {
       _snack('Failed to save the report: $e', error: true);
     }
-  }
-
-  /// One workbook sheet holding one layer's drawing and nothing else. The
-  /// tables are on the Locations sheet; repeating them per layer would be five
-  /// copies of one schedule with a different picture over each.
-  XlsxSheet _layerSheet(
-    String title,
-    ({String name, String caption, Uint8List bytes}) layer,
-    DateTime generated,
-  ) {
-    final rows = <List<dynamic>>[
-      ['$title — ${layer.caption}', '', '', '', ''],
-      ['Generated ${reportTimestamp(generated)}'],
-      [],
-    ];
-    return XlsxSheet(
-      name: layer.name,
-      rows: rows,
-      rowStyles: const {0: XlsxRowStyle.title},
-      merges: const ['A1:E1'],
-      image: scaledSheetImage(layer.bytes, rows.length + 1),
-    );
   }
 
   // --- build ----------------------------------------------------------------
@@ -1085,22 +1199,37 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 'bw' => _exportPng(provider, monochrome: true),
                 _ => _exportPng(provider),
               },
-              itemBuilder: (ctx) => const [
-                PopupMenuItem(value: 'one', child: Text('This view (.png)')),
-                // The one that gets printed and marked up on a clipboard. The
-                // runs carry a dash pattern as well as a colour precisely so
-                // this stays readable.
-                PopupMenuItem(
-                  value: 'bw',
-                  child: Text('This view, black & white for print (.png)'),
-                ),
-                // A sheet per trade: the network contractor gets the network
-                // drawing, the AV contractor gets theirs.
-                PopupMenuItem(
-                  value: 'layers',
-                  child: Text('One image per cable type...'),
-                ),
-              ],
+              // The menu says how many files each of these writes, because
+              // that decides whether it asks for a file or a folder: a room
+              // with one sheet still writes one image, exactly as before.
+              itemBuilder: (ctx) {
+                final drawn = provider.avFloorPlans
+                    .where((s) => s.hasImage)
+                    .length;
+                final each = drawn > 1
+                    ? 'Every sheet ($drawn .png files)'
+                    : 'This view (.png)';
+                return [
+                  PopupMenuItem(value: 'one', child: Text(each)),
+                  // The one that gets printed and marked up on a clipboard.
+                  // The runs carry a dash pattern as well as a colour
+                  // precisely so this stays readable.
+                  PopupMenuItem(
+                    value: 'bw',
+                    child: Text(
+                      drawn > 1
+                          ? 'Every sheet, black & white for print (.png)'
+                          : 'This view, black & white for print (.png)',
+                    ),
+                  ),
+                  // A drawing per trade: the network contractor gets the
+                  // network drawing, the AV contractor gets theirs.
+                  const PopupMenuItem(
+                    value: 'layers',
+                    child: Text('One image per sheet and cable type...'),
+                  ),
+                ];
+              },
               child: IgnorePointer(
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.image, size: 18),
@@ -2288,132 +2417,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
-  /// Renders the sheet once per cable layer: everything first, then one
-  /// drawing per cable type.
+  /// Writes one PNG per sheet per cable type into a folder the user picks.
   ///
-  /// The layer picker is flipped and the canvas re-captured each time, which
-  /// is the only way to get these — only a widget on screen can be rendered —
-  /// and the picker is put back where it was afterwards. Shared by the PNG
-  /// export and the workbook so the two cannot come out of a different set of
-  /// drawings.
-  ///
-  /// [allSheets] walks EVERY plan in the room rather than the one on screen,
-  /// which is what the report wants: a room with a furniture plan and a
-  /// reflected ceiling plan is a room whose report needs both drawings in it,
-  /// and issuing whichever sheet happened to be open is how the other one goes
-  /// missing. The sheet picker is put back where it was afterwards, same as
-  /// the layer picker. The per-layer PNG export is about the sheet in front of
-  /// you, so it leaves this off.
-  ///
-  /// [name] is the sheet name the workbook uses (Excel: 31 chars, no
-  /// `: \ / ? * [ ]`); [caption] is what it is called in prose.
-  Future<List<({String name, String caption, Uint8List bytes})>>
-  _captureCableLayers(
-    AppStateProvider provider, {
-    bool allSheets = false,
-  }) async {
-    final model = buildAvFlowModel(provider);
-    final drawing = provider.cablingSchematic(model);
-    final startingSheet = provider.activeFloorPlan?.id ?? '';
-    // A room with no plan at all still comes through here: the capture simply
-    // finds no canvas and yields nothing, which is the same answer it gave
-    // before.
-    final sheets = <FloorPlan?>[
-      if (!allSheets || provider.avFloorPlans.isEmpty)
-        provider.activeFloorPlan
-      else
-        ...provider.avFloorPlans,
-    ];
-    final many = sheets.length > 1;
-
-    final out = <({String name, String caption, Uint8List bytes})>[];
-    // The report's own tables are already on a sheet called Locations, so no
-    // drawing may claim that name.
-    final taken = <String>{'locations'};
-    final was = _cableLayer;
-    // A selection is a thing being edited, not a mark on the paper: the bend
-    // handles must not turn up on a sheet somebody is issued.
-    final heldRun = _selectedRunId;
-    if (heldRun.isNotEmpty) setState(() => _selectedRunId = '');
-
-    for (final sheet in sheets) {
-      if (!mounted) break;
-      if (sheet != null && sheet.id != (provider.activeFloorPlan?.id ?? '')) {
-        provider.selectFloorPlan(sheet.id);
-        // The drawing behind this sheet is a file that has to be read and
-        // decoded, and a capture taken before it is ready is a picture of the
-        // PREVIOUS sheet — which is how two plans come out of an export with
-        // the same image on them. Point the page at the new file, then wait
-        // for it to be decoded before anything is rendered.
-        _syncImage(provider);
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) break;
-        final image = _image;
-        if (image != null) {
-          try {
-            await precacheImage(image, context);
-          } catch (_) {
-            // A missing or unreadable drawing is not worth failing the whole
-            // export over: the sheet comes out with its markers on blank
-            // paper, which is what the page shows.
-          }
-        }
-        if (!mounted) break;
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) break;
-      }
-
-      // Per sheet: a cable type only earns a layer on the plan it actually
-      // lands on.
-      final layers = _cableLayers(provider, sheet, drawing);
-      for (final layer in [_kLayerAll, ...layers.map((l) => l.type)]) {
-        if (!mounted) break;
-        setState(() => _cableLayer = layer);
-        // Let the change actually paint before the boundary is captured;
-        // without this every image would be of whatever was on screen when the
-        // loop started.
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) break;
-        final bytes = await captureBoundary(_planKey, pixelRatio: 2.0);
-        if (bytes == null) continue;
-        final what = layer == _kLayerAll ? 'All runs' : layer;
-        // The sheet's name only goes in front of it once there is more than
-        // one sheet — a room with a single plan reads exactly as it always
-        // has.
-        final planName = sheet?.name.trim() ?? '';
-        final caption = many && planName.isNotEmpty ? '$planName — $what' : what;
-        out.add((
-          name: uniqueXlsxSheetName(caption, taken),
-          caption: caption,
-          bytes: bytes,
-        ));
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _cableLayer = was;
-        _selectedRunId = heldRun;
-      });
-      if (startingSheet.isNotEmpty) provider.selectFloorPlan(startingSheet);
-    }
-    return out;
-  }
-
-
-  /// Writes one PNG per cable type into a folder the user picks.
-  ///
-  /// A sheet per trade is the whole point of the layers: the network
+  /// A drawing per trade is the whole point of the layers: the network
   /// contractor gets the network drawing and the AV contractor gets theirs,
-  /// and neither has to read around the other's runs.
+  /// and neither has to read around the other's runs. Every sheet in the room,
+  /// because a set issued for one storey is not the set.
   Future<void> _exportLayers(AppStateProvider provider) async {
     final model = buildAvFlowModel(provider);
-    if (_cableLayers(
-      provider,
-      provider.activeFloorPlan,
-      provider.cablingSchematic(model),
-    ).isEmpty) {
-      _snack('No cable runs land on this sheet yet.');
+    final drawing = provider.cablingSchematic(model);
+    if (provider.avFloorPlans.every(
+      (sheet) => _cableLayers(provider, sheet, drawing).isEmpty,
+    )) {
+      _snack('No cable runs land on any of the sheets yet.');
       return;
     }
 
@@ -2422,24 +2438,38 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
     if (folder == null) return;
 
-    final captured = await _captureCableLayers(provider);
+    await _writePngFolder(
+      provider,
+      folder,
+      await _captureSheets(perLayer: true),
+      'layer image',
+    );
+  }
+
+  /// Writes captured drawings into [folder], one PNG each, named for the room
+  /// and then for the drawing. Shared by the two exports that produce a set of
+  /// images rather than a single file.
+  Future<void> _writePngFolder(
+    AppStateProvider provider,
+    String folder,
+    List<PlanDrawing> drawings,
+    String what, {
+    String suffix = 'floor_plan',
+  }) async {
     final written = <String>[];
     final failed = <String>[];
-    for (final layer in captured) {
-      final safe = layer.caption
+    for (final drawing in drawings) {
+      final safe = drawing.caption
           .replaceAll(RegExp(r'[^\w\-]+'), '_')
           .toLowerCase();
       try {
         final file = File(
-          p.join(
-            folder,
-            '${roomFileStem(provider, 'floor_plan')}_$safe.png',
-          ),
+          p.join(folder, '${roomFileStem(provider, suffix)}_$safe.png'),
         );
-        await file.writeAsBytes(layer.bytes);
+        await file.writeAsBytes(drawing.bytes);
         written.add(p.basename(file.path));
       } catch (e) {
-        failed.add('${layer.caption} — $e');
+        failed.add('${drawing.caption} — $e');
       }
     }
 
@@ -2448,8 +2478,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       showSavedFolderSnack(
         context,
         provider,
-        'Wrote ${written.length} layer image'
-        '${written.length == 1 ? '' : 's'} to ${p.basename(folder)}',
+        'Wrote ${written.length} $what${written.length == 1 ? '' : 's'} '
+        'to ${p.basename(folder)}',
         folder,
       );
     } else {

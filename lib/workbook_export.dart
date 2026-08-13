@@ -67,7 +67,7 @@ Future<void> exportRoomWorkbook(
       controlPng: shots.schematic,
       avFlowPng: shots.avFlow,
       rackPng: shots.racks,
-      floorPlanPng: shots.floorPlan,
+      floorPlanSheets: shots.floorPlanSheets,
       cablingPng: shots.cabling,
     );
     await File(saved).writeAsBytes(bytes);

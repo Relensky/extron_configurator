@@ -982,7 +982,7 @@ Future<void> _saveAllProject(
       schematicPng: shots.schematic,
       avFlowPng: shots.avFlow,
       rackPng: shots.racks,
-      floorPlanPng: shots.floorPlan,
+      floorPlanSheets: shots.floorPlanSheets,
       cablingPng: shots.cabling,
     );
   } catch (e) {

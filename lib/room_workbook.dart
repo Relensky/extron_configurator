@@ -61,7 +61,15 @@ Uint8List buildRoomWorkbookBytes({
   Uint8List? controlPng,
   Uint8List? avFlowPng,
   Uint8List? rackPng,
-  Uint8List? floorPlanPng,
+  /// Every plan sheet in the room.
+  ///
+  /// The Locations sheet can only carry one picture, and a room with a
+  /// furniture plan and a reflected ceiling plan needs both in the book — so
+  /// the first illustrates the tables and the rest get a tab each after it.
+  /// Their names are settled by the capture, which knows what else is in the
+  /// book.
+  List<({String name, String caption, Uint8List bytes})> floorPlanSheets =
+      const [],
   Uint8List? cablingPng,
   /// Stamped on every sheet. One moment for the whole book — four tabs of the
   /// same export dated a minute apart would read as four documents.
@@ -85,6 +93,10 @@ Uint8List buildRoomWorkbookBytes({
 
   XlsxImage? Function(int)? image(Uint8List? png) =>
       png == null ? null : (anchorRow) => scaledSheetImage(png, anchorRow);
+
+  // The first plan sheet illustrates the Locations tables; the rest follow it
+  // as tabs of their own.
+  final firstPlan = floorPlanSheets.isEmpty ? null : floorPlanSheets.first;
 
   return buildXlsx([
     buildStackedReportSheet(
@@ -116,9 +128,13 @@ Uint8List buildRoomWorkbookBytes({
         'Locations',
         'No locations have been recorded for this room.',
       ),
-      imageBuilder: image(floorPlanPng),
+      imageBuilder: image(firstPlan?.bytes),
       generated: stamp,
     ),
+    // The room's other plan sheets, a tab each, straight after the tables they
+    // belong to.
+    for (final sheet in floorPlanSheets.skip(1))
+      drawingSheet(title, sheet, stamp),
     buildStackedReportSheet(
       sheetName: kRoomWorkbookSheets[3],
       title: title,

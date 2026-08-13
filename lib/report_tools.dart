@@ -152,6 +152,31 @@ XlsxSheet buildStackedReportSheet({
   );
 }
 
+/// One workbook sheet holding one captured drawing and nothing else.
+///
+/// The tables are on the report's own sheet; repeating them under every
+/// drawing would be five copies of one schedule with a different picture over
+/// each. [drawing] is a [PlanDrawing] — taken structurally so this stays below
+/// the capture code rather than depending on it.
+XlsxSheet drawingSheet(
+  String title,
+  ({String name, String caption, Uint8List bytes}) drawing,
+  DateTime generated,
+) {
+  final rows = <List<dynamic>>[
+    ['$title — ${drawing.caption}', '', '', '', ''],
+    ['Generated ${reportTimestamp(generated)}'],
+    [],
+  ];
+  return XlsxSheet(
+    name: drawing.name,
+    rows: rows,
+    rowStyles: const {0: XlsxRowStyle.title},
+    merges: const ['A1:E1'],
+    image: scaledSheetImage(drawing.bytes, rows.length + 1),
+  );
+}
+
 /// A name Excel will take for a worksheet: it refuses `: \ / ? * [ ]` and
 /// stops at 31 characters, and "Fiber (OS2)" is a real cable type.
 String xlsxSheetName(String name) {

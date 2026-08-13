@@ -55,13 +55,78 @@ Future<Uint8List?> captureCurrentDiagram(
   return captureBoundary(key, pixelRatio: pixelRatio);
 }
 
+/// ---------------------------------------------------------------------------
+///  THE PLAN TAB'S SHEETS
+/// ---------------------------------------------------------------------------
+///  Every other drawing tab holds exactly one drawing, so one canvas key is
+///  enough to fetch it. The plan tab does not: a room has a sheet per storey,
+///  a reflected ceiling plan beside the furniture plan, a demolition sheet
+///  beside the new work, and only the one being looked at is mounted.
+///
+///  So the page registers HOW TO WALK THEM rather than just where its canvas
+///  is, and every export asks for the set. Before this each exporter captured
+///  whichever sheet happened to be open, which is how a set gets issued with
+///  the ceiling plan missing.
+
+/// One drawing captured off the plan tab.
+///
+/// [name] is short enough and clean enough for an Excel tab; [caption] is what
+/// it is called in prose and what a file is named after; [bytes] is the PNG.
+typedef PlanDrawing = ({String name, String caption, Uint8List bytes});
+
+/// How the plan page renders every sheet in the room.
+///
+/// [perLayer] adds one drawing per cable type on each sheet, after that
+/// sheet's "all runs" drawing — a set issued a trade at a time. [monochrome]
+/// renders them the way they should print.
+typedef PlanSheetCapture =
+    Future<List<PlanDrawing>> Function({bool perLayer, bool monochrome});
+
+PlanSheetCapture? _planSheets;
+
+/// Called by the plan page as it mounts.
+void registerPlanSheetCapture(PlanSheetCapture capture) {
+  _planSheets = capture;
+}
+
+/// Called as the plan page is disposed. Checked for the same reason
+/// [unregisterDiagramCanvas] is: a page going away AFTER its replacement
+/// registered must not unregister the live one.
+///
+/// `==` rather than `identical`, because two tear-offs of the same method on
+/// the same object are equal but need not be the same object — while two
+/// pages' tear-offs are never equal, which is the distinction being made here.
+void unregisterPlanSheetCapture(PlanSheetCapture capture) {
+  if (_planSheets == capture) _planSheets = null;
+}
+
+/// Every plan sheet in the room, drawn and captured one at a time.
+///
+/// Empty when the plan page is not on screen — the caller must be standing on
+/// it, or must have visited it first ([captureDiagramTabs] does). An empty
+/// list is the same answer a room with no plan gives, and every caller already
+/// has to survive that.
+Future<List<PlanDrawing>> capturePlanSheets({
+  bool perLayer = false,
+  bool monochrome = false,
+}) async {
+  final capture = _planSheets;
+  if (capture == null) return const [];
+  return capture(perLayer: perLayer, monochrome: monochrome);
+}
+
 /// What a capture run produced. Null means that drawing could not be had —
 /// the tab does not exist in this room, or it had nothing on it.
+///
+/// The plan is a LIST because the tab holds a sheet per storey. A single
+/// `floorPlan` field is how documents ended up carrying whichever sheet
+/// happened to be open, so there is no longer one to reach for: a caller with
+/// room for only one picture takes the first and says so.
 typedef DiagramImages = ({
   Uint8List? schematic,
   Uint8List? avFlow,
   Uint8List? racks,
-  Uint8List? floorPlan,
+  List<PlanDrawing> floorPlanSheets,
   Uint8List? cabling,
 });
 
@@ -70,7 +135,7 @@ const DiagramImages kNoDiagramImages = (
   schematic: null,
   avFlow: null,
   racks: null,
-  floorPlan: null,
+  floorPlanSheets: <PlanDrawing>[],
   cabling: null,
 );
 
@@ -108,9 +173,19 @@ Future<DiagramImages> captureDiagramTabs(
   final racks = provider.avRacks.isEmpty ? null : await capture(AppTab.racks);
   // Same rule for the plan: with no image imported the page is an invitation
   // to import one, which is not an illustration of this room.
-  final floorPlan = provider.primaryFloorPlan?.hasImage == true
-      ? await capture(AppTab.floorPlan)
-      : null;
+  //
+  // EVERY sheet, not just the one that was open. A room with a furniture plan
+  // and a reflected ceiling plan is a room whose documents need both, and the
+  // page has to be visited for any of them — so it is walked here, once, and
+  // every document downstream is dealt from the same set.
+  final planSheets = <PlanDrawing>[];
+  if (provider.floorPlanSheetsWithImages.isNotEmpty) {
+    provider.selectTab(AppTab.floorPlan.index);
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    await WidgetsBinding.instance.endOfFrame;
+    planSheets.addAll(await capturePlanSheets());
+  }
   // Same rule again: with nowhere for the drawing to come from, the Cabling
   // page is an invitation to name some locations, and a picture of an
   // invitation illustrates nothing.
@@ -128,7 +203,7 @@ Future<DiagramImages> captureDiagramTabs(
     schematic: schematic,
     avFlow: avFlow,
     racks: racks,
-    floorPlan: floorPlan,
+    floorPlanSheets: planSheets,
     cabling: cabling,
   );
 }

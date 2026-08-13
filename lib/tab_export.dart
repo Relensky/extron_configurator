@@ -251,19 +251,35 @@ Future<void> exportTabReport(
 
   try {
     if (ext == 'xlsx') {
-      // The drawing on THIS tab, if it is a drawing tab: it is on screen by
-      // definition, so there is nothing to visit and nothing to put back.
-      final png = await captureCurrentDiagram(tab);
+      // One moment for the whole book: sheets stamped seconds apart read as
+      // documents from two different exports.
+      final generated = DateTime.now();
+      // The Locations tab holds a drawing per sheet in the room rather than
+      // one drawing, and a set issued with the ceiling plan missing is a set
+      // somebody has to ask for again — so that tab hands over all of them,
+      // the first under the tables and the rest a tab apiece.
+      final drawings = tab == AppTab.floorPlan
+          ? await capturePlanSheets(perLayer: true)
+          // Every other drawing tab has exactly one, on screen by definition,
+          // so there is nothing to visit and nothing to put back.
+          : [
+              if (await captureCurrentDiagram(tab) case final png?)
+                (name: label, caption: label, bytes: png),
+            ];
+      final first = drawings.isEmpty ? null : drawings.first;
       await File(saved).writeAsBytes(
         buildXlsx([
           buildStackedReportSheet(
             sheetName: label,
             title: title,
             sections: sections,
-            imageBuilder: png == null
+            generated: generated,
+            imageBuilder: first == null
                 ? null
-                : (anchorRow) => scaledSheetImage(png, anchorRow),
+                : (anchorRow) => scaledSheetImage(first.bytes, anchorRow),
           ),
+          for (final drawing in drawings.skip(1))
+            drawingSheet(title, drawing, generated),
         ]),
       );
     } else {
