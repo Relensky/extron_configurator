@@ -22,6 +22,359 @@
       ]
     },
     {
+      "model": "DTP CrossPoint 84 4K IPCP MA 70",
+      "partNumber": "60-1515-23",
+      "category": "Matrix",
+      "rackUnits": 2,
+      "price": 13890.0,
+      "educationPrice": 8056.2,
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_1",
+          "label": "AUDIO 1",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_2",
+          "label": "AUDIO 2",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_3",
+          "label": "AUDIO 3",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_4",
+          "label": "AUDIO 4",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_5",
+          "label": "HDMI 5",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_5",
+          "label": "AUDIO 5",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_6",
+          "label": "HDMI 6",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_6",
+          "label": "AUDIO 6",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_1",
+          "label": "DTP IN 1",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_1",
+          "label": "RS-232/IR 1",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_2",
+          "label": "DTP IN 2",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_2",
+          "label": "RS-232/IR 2",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_1",
+          "label": "MIC/LINE 1",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_2",
+          "label": "MIC/LINE 2",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_3",
+          "label": "MIC/LINE 3",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_4",
+          "label": "MIC/LINE 4",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "ebus",
+          "label": "eBUS",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_001",
+          "label": "HDMI 001",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_002",
+          "label": "HDMI 002",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_003a",
+          "label": "HDMI 003A",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_004a",
+          "label": "HDMI 004A",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dtp_out_003b",
+          "label": "DTP OUT 003B",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_3",
+          "label": "RS-232/IR 3",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out_004b",
+          "label": "DTP OUT 004B",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_4",
+          "label": "RS-232/IR 4",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "s_pdif_004",
+          "label": "S/PDIF 004",
+          "signal": "digitalAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ma_out_70v",
+          "label": "MA OUT 70V",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_001",
+          "label": "AUDIO 001",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_002",
+          "label": "AUDIO 002",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_003",
+          "label": "AUDIO 003",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_004",
+          "label": "AUDIO 004",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dmp_exp",
+          "label": "DMP EXP",
+          "signal": "network",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com1",
+          "label": "COM1",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com2",
+          "label": "COM2",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com3",
+          "label": "COM3",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "relay_1",
+          "label": "RELAY 1",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "relay_3",
+          "label": "RELAY 3",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_1",
+          "label": "IR/SERIAL 1",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_2",
+          "label": "IR/SERIAL 2",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_1",
+          "label": "AV LAN 1",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_2",
+          "label": "AV LAN 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_3",
+          "label": "AV LAN 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "HDMI Laptop",
       "rackUnits": 0,
       "powerInput": "none",
@@ -66,6 +419,54 @@
           "signal": "vga",
           "direction": "output",
           "side": "right"
+        }
+      ]
+    },
+    {
+      "model": "Fan panel Intake 2U",
+      "manufacturer": "AC Infinitry",
+      "partNumber": "T7-N",
+      "category": "Vent plate",
+      "rackUnits": 2,
+      "price": 139.0,
+      "educationPrice": 100.0,
+      "ports": [
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Fan panel 1U",
+      "manufacturer": "AC Infinity",
+      "partNumber": "T1",
+      "category": "Vent plate",
+      "rackUnits": 1,
+      "powerInput": "none",
+      "price": 139.0,
+      "educationPrice": 100.0,
+      "notes": "Powered — set its watts on the catalog entry",
+      "ports": []
+    },
+    {
+      "model": "Fan panel Exhaust 2U",
+      "manufacturer": "AC Infinity",
+      "partNumber": "T7",
+      "category": "Vent plate",
+      "rackUnits": 2,
+      "price": 139.0,
+      "educationPrice": 100.0,
+      "ports": [
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
         }
       ]
     },
@@ -18286,360 +18687,6 @@
           "id": "rs_232",
           "label": "RS-232",
           "signal": "serial",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "lan",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "DTP CrossPoint 84 4K IPCP MA 70",
-      "manufacturer": "Extron",
-      "partNumber": "60-1515-23",
-      "category": "Matrix",
-      "rackUnits": 2,
-      "url": "https://www.extron.com/product/dtpcp4k84",
-      "notes": "8x4 Seamless 4K Scaling Presentation Matrix Switcher — 100 Watt 70 V Mono Amp, AV LAN — Retired product",
-      "ports": [
-        {
-          "id": "hdmi_1",
-          "label": "HDMI 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio_1",
-          "label": "AUDIO 1",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_2",
-          "label": "HDMI 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio_2",
-          "label": "AUDIO 2",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_3",
-          "label": "HDMI 3",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio_3",
-          "label": "AUDIO 3",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_4",
-          "label": "HDMI 4",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio_4",
-          "label": "AUDIO 4",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_5",
-          "label": "HDMI 5",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio_5",
-          "label": "AUDIO 5",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_6",
-          "label": "HDMI 6",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio_6",
-          "label": "AUDIO 6",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "dtp_in_1",
-          "label": "DTP IN 1",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "rs_232_ir_1",
-          "label": "RS-232/IR 1",
-          "signal": "ir",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "dtp_in_2",
-          "label": "DTP IN 2",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "rs_232_ir_2",
-          "label": "RS-232/IR 2",
-          "signal": "ir",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_1",
-          "label": "MIC/LINE 1",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_2",
-          "label": "MIC/LINE 2",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_3",
-          "label": "MIC/LINE 3",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_4",
-          "label": "MIC/LINE 4",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "ebus",
-          "label": "eBUS",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_001",
-          "label": "HDMI 001",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "hdmi_002",
-          "label": "HDMI 002",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "hdmi_003a",
-          "label": "HDMI 003A",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "hdmi_004a",
-          "label": "HDMI 004A",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "dtp_out_003b",
-          "label": "DTP OUT 003B",
-          "signal": "hdbaset",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "rs_232_ir_3",
-          "label": "RS-232/IR 3",
-          "signal": "ir",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "dtp_out_004b",
-          "label": "DTP OUT 004B",
-          "signal": "hdbaset",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "rs_232_ir_4",
-          "label": "RS-232/IR 4",
-          "signal": "ir",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "s_pdif_004",
-          "label": "S/PDIF 004",
-          "signal": "digitalAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ma_out_70v",
-          "label": "MA OUT 70V",
-          "signal": "speaker",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_001",
-          "label": "AUDIO 001",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_002",
-          "label": "AUDIO 002",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_003",
-          "label": "AUDIO 003",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_004",
-          "label": "AUDIO 004",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "dmp_exp",
-          "label": "DMP EXP",
-          "signal": "network",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com1",
-          "label": "COM1",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com2",
-          "label": "COM2",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com3",
-          "label": "COM3",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "relay_1",
-          "label": "RELAY 1",
-          "signal": "other",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "relay_3",
-          "label": "RELAY 3",
-          "signal": "other",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_serial_1",
-          "label": "IR/SERIAL 1",
-          "signal": "ir",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_serial_2",
-          "label": "IR/SERIAL 2",
-          "signal": "ir",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "rs_232",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "av_lan_1",
-          "label": "AV LAN 1",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "av_lan_2",
-          "label": "AV LAN 2",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "av_lan_3",
-          "label": "AV LAN 3",
-          "signal": "network",
           "direction": "bidirectional",
           "side": "left"
         },
