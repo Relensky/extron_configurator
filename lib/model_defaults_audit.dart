@@ -133,7 +133,7 @@ List<String> comparableComTypes(
     if (block is! Map) return;
     if (provider.uiSchema.deviceTypeForSection(sectionKey) == null) return;
     final model = block['model']?.toString().trim() ?? '';
-    final module = provider.modelRegistry[model]?.module ??
+    final module = provider.modelEntryFor(model)?.module ??
         block['module']?.toString().trim() ??
         '';
     if (module.isEmpty) return;
@@ -273,7 +273,11 @@ List<ModelDefaultMismatch> auditModelDefaults(
     if (provider.uiSchema.deviceTypeForSection(sectionKey) == null) return;
     final model = block['model']?.toString().trim() ?? '';
     if (model.isEmpty) return;
-    final entry = provider.modelRegistry[model];
+    // Case-forgivingly: a legacy file says 'Via Go' where the driver says
+    // 'VIA GO', and an exact lookup here skipped the device entirely — so the
+    // one box whose driver disagrees with its family default was the one box
+    // never reviewed. See [AppStateProvider.modelEntryFor].
+    final entry = provider.modelEntryFor(model);
     if (entry == null) return;
 
     // The connection this device is ON, unless the reader asked about another

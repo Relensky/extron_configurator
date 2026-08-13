@@ -4525,6 +4525,38 @@ class AppStateProvider extends ChangeNotifier {
   /// Sorted model names for the device-tab Model dropdown (every model).
   List<String> get availableModels => modelRegistry.keys.toList()..sort();
 
+  /// The registry entry for [model], matched the way a converted room needs.
+  ///
+  /// [modelRegistry] is keyed by the string the DRIVER spells — 'VIA GO',
+  /// 'TR311HW' — and a legacy file spells the same box however whoever typed
+  /// it felt at the time: 'Via Go', 'tr311hw'. An exact lookup therefore says
+  /// "no driver claims this model" about a device whose driver is sitting
+  /// right there, and everything downstream of the lookup then has nothing to
+  /// say: no module, no connection defaults, no review.
+  ///
+  /// That is what kept the VIA GO on the wireless family's SSH when its own
+  /// driver says TCP on 9982 — the module resolution matched 'Via Go'
+  /// case-insensitively and filled the module in, and the defaults review
+  /// looked the same string up exactly, missed, and skipped the device. One
+  /// lookup for both, so the two can never disagree about what a model is
+  /// again.
+  ///
+  /// Case and surrounding space only. Spelling the spaces differently
+  /// ('DMP128 Plus' for 'DMP 128 Plus') is still a miss: that is a different
+  /// string rather than the same one shouted, and guessing across it is how
+  /// the wrong driver gets picked.
+  ModelEntry? modelEntryFor(String model) {
+    final name = model.trim();
+    if (name.isEmpty) return null;
+    final exact = modelRegistry[name];
+    if (exact != null) return exact;
+    final wanted = name.toLowerCase();
+    for (final entry in modelRegistry.values) {
+      if (entry.model.toLowerCase().trim() == wanted) return entry;
+    }
+    return null;
+  }
+
   /// The modules-folder-relative stem of a config `module` value — the inverse
   /// of [normalizeModuleName]. The config stores the import path the processor
   /// needs ('modules.device.avr_TR311'), but the file sits at
@@ -4982,12 +5014,6 @@ class AppStateProvider extends ChangeNotifier {
     // actually landed before concluding that a model is unknown.
     if (modelRegistry.isEmpty) await preloadAllModules();
 
-    // Model names in the wild differ in case/spacing from the DEVICE_INFO
-    // spelling ("TR311hw" vs "TR311HW"), so match forgivingly.
-    final Map<String, ModelEntry> byLowerModel = {
-      for (final e in modelRegistry.values) e.model.toLowerCase().trim(): e,
-    };
-
     roomConfig.forEach((sectionKey, block) {
       if (block is! Map) return;
       if (uiSchema.deviceTypeForSection(sectionKey) == null) return;
@@ -4998,8 +5024,7 @@ class AppStateProvider extends ChangeNotifier {
       if (module.isEmpty) {
         final String model = section['model']?.toString().trim() ?? '';
         if (model.isEmpty) return; // nothing to look the module up by
-        final ModelEntry? match =
-            modelRegistry[model] ?? byLowerModel[model.toLowerCase()];
+        final ModelEntry? match = modelEntryFor(model);
         if (match == null) {
           systemLogs.add(
               "FLAGGED: '$sectionKey.module' is empty and no python module "
@@ -6226,13 +6251,7 @@ class AppStateProvider extends ChangeNotifier {
   /// be discovered on site. Matching is case-forgiving for the same reason
   /// module resolution is: people type 'TR311hw' for 'TR311HW'.
   String moduleForModel(String model) {
-    final name = model.trim();
-    if (name.isEmpty) return '';
-    final entry = modelRegistry[name] ??
-        modelRegistry.values.cast<ModelEntry?>().firstWhere(
-              (e) => e!.model.toLowerCase().trim() == name.toLowerCase(),
-              orElse: () => null,
-            );
+    final entry = modelEntryFor(model);
     return entry == null ? '' : normalizeModuleName(entry.module);
   }
 
@@ -7007,7 +7026,7 @@ class AppStateProvider extends ChangeNotifier {
   ModelChangePreview previewModelSelection(String deviceKey, String model,
       {String? comType}) {
     final dev = roomConfig[deviceKey];
-    final entry = modelRegistry[model];
+    final entry = modelEntryFor(model);
     if (dev is! Map || entry == null) {
       return ModelChangePreview(
         known: entry != null,
@@ -7060,7 +7079,7 @@ class AppStateProvider extends ChangeNotifier {
     // conversion coloring the same way a typed value does.
     _forgetConversionOrigin(deviceKey, 'model');
 
-    final entry = modelRegistry[model];
+    final entry = modelEntryFor(model);
     if (entry != null) {
       // The registry is keyed by the bare file stem; the config stores the
       // dotted import path.
@@ -7212,7 +7231,7 @@ class AppStateProvider extends ChangeNotifier {
     dev['model'] = model;
     _forgetConversionOrigin(deviceKey, 'model');
 
-    final entry = modelRegistry[model];
+    final entry = modelEntryFor(model);
     if (entry != null) {
       final String moduleImport = normalizeModuleName(entry.module);
       dev['module'] = moduleImport;

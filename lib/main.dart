@@ -1184,6 +1184,14 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
                 if (applied == true) {
                   provider.acknowledgeConversion();
                   if (ctx.mounted) Navigator.of(ctx).pop();
+                  // The same question Acknowledge asks. Reading the conversion
+                  // in detail must not be the path that skips it: the preview
+                  // says what the CONVERSION did, and this says where what it
+                  // did disagrees with the driver — which is exactly the
+                  // question somebody who opened the preview is asking.
+                  if (context.mounted) {
+                    await offerModelDefaults(context, provider);
+                  }
                 }
               },
             ),

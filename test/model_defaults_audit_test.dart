@@ -50,6 +50,14 @@ void main() {
       'model': 'VIA GO',
       'ip_address': '10.0.0.9',
     },
+    // The other way round: Extron's own driver says SSH on 22023, and the
+    // file arrives on TCP.
+    'DSPDEVICE_1': {
+      'com_type': 'Network',
+      'model': 'DMP 64 Plus C AT',
+      'ip_address': '10.0.0.5',
+      'protocol': 'TCP',
+    },
     // One of the three models apc_other_AP79xxB_Series.py serves. The key map
     // carries a template block for the AP7900B only, so this one converts
     // with no module and no keep-alive trigger.
@@ -103,6 +111,70 @@ void main() {
       expect(via.defaultSelection, contains('net_port'));
       expect(via.defaultSelection, isNot(contains('name')));
       expect(via.defaultSelection, isNot(contains('btn_name')));
+    });
+
+    test('a model spelled the way the file spells it is still found', () async {
+      // The registry is keyed by the string the DRIVER spells — 'VIA GO' —
+      // and a legacy file spells the same box however whoever typed it felt
+      // at the time. 'Via Go' is what they are actually full of.
+      //
+      // The module resolution has always matched case-insensitively, so the
+      // block came out of a conversion carrying krmr_VIA_GO; the review looked
+      // the same string up EXACTLY, missed, and skipped the device. The one
+      // box whose driver disagrees with its family default was the one box
+      // never reviewed, and the VIA GO stayed on the ShareLink's SSH.
+      final room = legacyRoom();
+      (room['WIRELESSDEVICE_1'] as Map)['model'] = 'Via Go';
+      await convert(room);
+
+      final via = forSection(auditModelDefaults(provider), 'WIRELESSDEVICE_1');
+      expect(
+        via,
+        isNotNull,
+        reason: 'a VIA GO spelled "Via Go" must still be reviewed',
+      );
+      final byKey = {for (final d in via!.diffs) d.key: d};
+      expect(byKey['protocol']?.fromModule, 'TCP');
+      expect(byKey['net_port']?.fromModule, 9982);
+      expect(via.defaultSelection, contains('protocol'));
+    });
+
+    test('the module resolution and the review agree on a model', () async {
+      // The two used to match differently, which is the whole bug: whatever
+      // fills in the module has to be what the review looks up, or a device
+      // gets a driver and no defaults from it.
+      for (final spelling in const ['VIA GO', 'Via Go', 'via go', ' Via Go ']) {
+        expect(
+          provider.modelEntryFor(spelling)?.module,
+          'krmr_VIA_GO',
+          reason: 'model "$spelling"',
+        );
+      }
+      // Spacing is a different string rather than the same one shouted, and
+      // guessing across it is how the wrong driver gets picked.
+      expect(provider.modelEntryFor('VIAGO'), isNull);
+    });
+
+    test('the DMP is offered the SSH its driver states', () async {
+      await convert(legacyRoom());
+      // What the conversion left behind, and the reason this exists.
+      expect((provider.roomConfig['DSPDEVICE_1'] as Map)['protocol'], 'TCP');
+
+      final dsp = forSection(auditModelDefaults(provider), 'DSPDEVICE_1')!;
+      final byKey = {for (final d in dsp.diffs) d.key: d};
+      expect(byKey['protocol']?.fromModule, 'SSH');
+      expect(byKey['net_port']?.fromModule, 22023);
+      expect(dsp.defaultSelection, contains('protocol'));
+
+      provider.applyModelDefaultValues(dsp.sectionKey, {
+        for (final d in dsp.diffs)
+          if (dsp.defaultSelection.contains(d.key)) d.key: d.fromModule,
+      });
+      final dev = provider.roomConfig['DSPDEVICE_1'] as Map;
+      expect(dev['protocol'], 'SSH');
+      expect(dev['net_port'], 22023);
+      // The site's own address survives it.
+      expect(dev['ip_address'], '10.0.0.5');
     });
 
     test('the APC gets its Schneider keep-alive trigger offered', () async {

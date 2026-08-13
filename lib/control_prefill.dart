@@ -257,7 +257,7 @@ DeviceTypeSpec? familyForNode(AppStateProvider provider, AvNode node) {
   // module library what something is, and the library only knows about models
   // some driver already claims — which is exactly the set this is trying to
   // find the gaps in.
-  final entry = provider.modelRegistry[node.model.trim()];
+  final entry = provider.modelEntryFor(node.model);
   if (entry != null) {
     for (final spec in provider.uiSchema.deviceTypes) {
       if (provider.modelMatchesDevice(entry, spec.prefix)) return spec;
