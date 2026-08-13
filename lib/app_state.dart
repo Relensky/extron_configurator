@@ -645,7 +645,40 @@ class AppStateProvider extends ChangeNotifier {
   List<dynamic> processors = [];
   Map<String, dynamic> buildings = {}; // NEW: Store building abbreviations
   Map<String, dynamic>? selectedProcessor;
-  Map<String, dynamic> roomConfig = {};
+
+  Map<String, dynamic> _roomConfig = {};
+
+  /// The loaded room, as blocks of properties.
+  ///
+  /// Every block is stored as a `Map<String, dynamic>` whatever the caller
+  /// hands over — see [_openConfigMaps]. That is not tidiness: a block that
+  /// arrives as a `Map<String, String>` (a converted device whose values all
+  /// happened to be strings, a block built by a `{for ...}` literal) throws
+  /// `type 'int' is not a subtype of type 'String'` the moment somebody types
+  /// a baud rate into it, from inside a text field's onChanged where nothing
+  /// reports it: the digit simply never lands, and the field looks broken.
+  Map<String, dynamic> get roomConfig => _roomConfig;
+
+  set roomConfig(Map<String, dynamic> value) {
+    _roomConfig = _openConfigMaps(value) as Map<String, dynamic>;
+  }
+
+  /// [value] with every nested map re-typed as `Map<String, dynamic>` and
+  /// every list as `List<dynamic>`, so any value can later be written into it.
+  ///
+  /// Applied on the way IN rather than defended against at each of the write
+  /// sites, because there are half a dozen of those and one of them will
+  /// always be the one somebody forgets.
+  static dynamic _openConfigMaps(dynamic value) {
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final e in value.entries)
+          e.key.toString(): _openConfigMaps(e.value),
+      };
+    }
+    if (value is List) return [for (final v in value) _openConfigMaps(v)];
+    return value;
+  }
 
   /// Bumped every time [roomConfig] is REPLACED wholesale — New from template,
   /// opening a file, an SFTP download, Apply Changes in the raw editor, Use
@@ -2028,6 +2061,54 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets the blank space around the plan image on [planId].
+  ///
+  /// Growing the LEFT or TOP margin moves the image away from the sheet's
+  /// origin, so everything already drawn is shifted by the same amount: a
+  /// marker placed on a wall stays on that wall, a run keeps its bends, and
+  /// the key keeps its corner. Without that, adding a margin would quietly
+  /// slide every mark on the drawing off the thing it was marking.
+  void setAvPlanMargins(String planId, EdgeInsets margins) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    if (sheet == null) return;
+    final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
+    if (index < 0) return;
+    final clean = EdgeInsets.fromLTRB(
+      math.max(0, margins.left),
+      math.max(0, margins.top),
+      math.max(0, margins.right),
+      math.max(0, margins.bottom),
+    );
+    if (clean == sheet.margins) return;
+    _pushAvUndo('Space around the plan', _plansScope);
+
+    final shift = Offset(
+      clean.left - sheet.margins.left,
+      clean.top - sheet.margins.top,
+    );
+    var next = sheet.copyWith(margins: clean);
+    if (shift != Offset.zero) {
+      next = next.copyWith(
+        markers: {
+          for (final e in sheet.markers.entries) e.key: e.value + shift,
+        },
+        callouts: [
+          for (final c in sheet.callouts) c.copyWith(pos: c.pos + shift),
+        ],
+        annotations: [
+          for (final a in sheet.annotations) a.shifted(shift),
+        ],
+        runWaypoints: {
+          for (final e in sheet.runWaypoints.entries)
+            e.key: [for (final w in e.value) w + shift],
+        },
+        keyPos: sheet.keyPos + shift,
+      );
+    }
+    avFloorPlans[index] = next;
+    notifyListeners();
+  }
+
   /// Sets the plate and ink one kind of text is printed in on [planId].
   ///
   /// A drawing decision like the key's position or a bend in a run, so it goes
@@ -2491,6 +2572,79 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// Moves a run's caption on the cabling drawing, as a nudge from where the
+  /// sheet put it. [Offset.zero] hands it back to the automatic placement.
+  ///
+  /// A nudge rather than a position, for the reason the floor plan stores one:
+  /// the automatic spot follows the line, so a label moved out of the way of a
+  /// box stays out of the way of it when that box is dragged half a metre.
+  void setCablingLabelOffset(String edgeKey, Offset by) {
+    if (edgeKey.isEmpty) return;
+    _pushAvUndo(
+      by == Offset.zero ? 'Put a label back' : 'Move a label',
+      _cablingScope,
+    );
+    if (by == Offset.zero) {
+      avCabling.labelOffsets.remove(edgeKey);
+    } else {
+      avCabling.labelOffsets[edgeKey] = by;
+    }
+    notifyListeners();
+  }
+
+  /// Moves where one end of a run lands on its box, as a fraction of the box.
+  /// Null puts it back in the middle.
+  ///
+  /// Cable comes into a floor box from one side, and four runs all pointing at
+  /// the centre of the same box say nothing about which knockout each of them
+  /// uses. See [CablingOverrides.endAnchors].
+  void setCablingEndAnchor(String bundleId, bool atStart, Offset? fraction) {
+    if (bundleId.isEmpty) return;
+    final key = cablingEndKey(bundleId, atStart);
+    _pushAvUndo(
+      fraction == null ? 'Centre a run on its box' : 'Move where a run lands',
+      _cablingScope,
+    );
+    if (fraction == null) {
+      avCabling.endAnchors.remove(key);
+    } else {
+      avCabling.endAnchors[key] = Offset(
+        fraction.dx.clamp(0.0, 1.0),
+        fraction.dy.clamp(0.0, 1.0),
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Takes ONE run's caption off the drawings, or puts it back.
+  ///
+  /// A sheet regularly carries a run that needs no label — the obvious one, the
+  /// one named in the title block, the one whose caption sits over the detail
+  /// the sheet is being issued for. Turning every caption off is a different
+  /// decision and a much worse one.
+  void setCablingLabelHidden(String edgeKey, bool hidden) {
+    if (edgeKey.isEmpty) return;
+    if (avCabling.hiddenLabels.contains(edgeKey) == hidden) return;
+    _pushAvUndo(hidden ? 'Hide a label' : 'Show a label', _cablingScope);
+    if (hidden) {
+      avCabling.hiddenLabels.add(edgeKey);
+    } else {
+      avCabling.hiddenLabels.remove(edgeKey);
+    }
+    notifyListeners();
+  }
+
+  /// Puts every hidden caption back. Returns how many came back, so the page
+  /// can say so rather than appearing to do nothing.
+  int showAllCablingLabels() {
+    final count = avCabling.hiddenLabels.length;
+    if (count == 0) return 0;
+    _pushAvUndo('Show every label', _cablingScope);
+    avCabling.hiddenLabels.clear();
+    notifyListeners();
+    return count;
   }
 
   /// True when some run of [colorKeys] carries a hand-picked colour, so the

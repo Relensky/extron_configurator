@@ -352,6 +352,25 @@ class _LocationManagerDialogState extends State<_LocationManagerDialog> {
 //  SCREEN / SHADE CONTROL RUNS
 // ---------------------------------------------------------------------------
 
+/// One place a run is pulled THROUGH, and how many cables carry on from it.
+///
+/// A record rather than two parallel lists, because the dialog reorders these
+/// and a pair of lists reordered separately is a bug waiting for its first
+/// drag.
+class _RoutePoint {
+  String locationId;
+
+  /// 0 means "however many the run itself carries".
+  double count;
+
+  _RoutePoint({required this.locationId, this.count = 0});
+}
+
+/// A cable count with no trailing '.0' on it — counts are whole cables far
+/// more often than not.
+String trimCount(double v) =>
+    v == v.roundToDouble() ? v.round().toString() : v.toString();
+
 /// Adds or edits one control run. Returns true when something was saved.
 Future<bool> showScreenSwitchEditor(
   BuildContext context,
@@ -380,8 +399,21 @@ Future<bool> showScreenSwitchEditor(
   String startLocation = existing?.startLocationId ?? kNoLocationId;
   String endLocation = existing?.endLocationId ?? kNoLocationId;
   // Working copy: the dialog reorders and removes freely and only the Save
-  // button hands it back.
-  final List<String> via = [...?existing?.viaLocationIds];
+  // button hands it back. Each route point carries its own cable count, so
+  // moving one moves its count with it — two parallel lists would eventually
+  // be reordered apart.
+  final List<_RoutePoint> via = [
+    for (int i = 0; i < (existing?.viaLocationIds.length ?? 0); i++)
+      _RoutePoint(
+        locationId: existing!.viaLocationIds[i],
+        count: i < existing.viaCounts.length ? existing.viaCounts[i] : 0,
+      ),
+  ];
+  final countController = TextEditingController(
+    text: existing == null || existing.cableCount <= 1
+        ? ''
+        : trimCount(existing.cableCount),
+  );
 
   final saved = await showDialog<bool>(
     context: context,
@@ -430,6 +462,24 @@ Future<bool> showScreenSwitchEditor(
                         ),
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    // Six Cat 6 to a floor box is ONE run of six, not six
+                    // runs. Every one of these was drawn and scheduled as a
+                    // single lead until this box existed.
+                    SizedBox(
+                      width: 110,
+                      child: TextField(
+                        key: const ValueKey('run_cable_count'),
+                        controller: countController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cables',
+                          hintText: '1',
+                          helperText: 'in this run',
+                          helperMaxLines: 2,
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -446,6 +496,11 @@ Future<bool> showScreenSwitchEditor(
                 _RunVia(
                   provider: provider,
                   via: via,
+                  // So a route point with no count of its own shows what it
+                  // inherits, rather than an empty box.
+                  runCountText: countController.text.trim().isEmpty
+                      ? '1'
+                      : countController.text.trim(),
                   onChanged: () => setLocal(() {}),
                 ),
                 const SizedBox(height: 14),
@@ -542,8 +597,17 @@ Future<bool> showScreenSwitchEditor(
     endLocationId: endLocation,
     endNote: endNoteController.text.trim(),
     viaLocationIds: [
-      for (final id in via)
-        if (id.isNotEmpty && id != kNoLocationId) id,
+      for (final point in via)
+        if (point.locationId.isNotEmpty && point.locationId != kNoLocationId)
+          point.locationId,
+    ],
+    cableCount: double.tryParse(countController.text.trim()) ?? 1,
+    // In the same order as the ids above, so a point and its count cannot
+    // come apart.
+    viaCounts: [
+      for (final point in via)
+        if (point.locationId.isNotEmpty && point.locationId != kNoLocationId)
+          point.count,
     ],
     cableType: cableController.text.trim(),
     cableNumber: numberController.text.trim(),
@@ -572,13 +636,18 @@ class _RunVia extends StatelessWidget {
   final AppStateProvider provider;
 
   /// Mutated in place; [onChanged] is the caller's cue to rebuild.
-  final List<String> via;
+  final List<_RoutePoint> via;
   final VoidCallback onChanged;
+
+  /// What the run itself carries, so a point with no count of its own can
+  /// show what it inherits instead of a blank.
+  final String runCountText;
 
   const _RunVia({
     required this.provider,
     required this.via,
     required this.onChanged,
+    this.runCountText = '1',
   });
 
   /// The pull boxes first: they are what this field is nearly always for, and
@@ -605,13 +674,14 @@ class _RunVia extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Route through${via.isEmpty ? '' : ' (${via.length})'}',
+                'Route points${via.isEmpty ? '' : ' (${via.length})'}',
                 style: theme.textTheme.titleSmall,
               ),
             ),
             TextButton.icon(
+              key: const ValueKey('add_route_point'),
               icon: const Icon(Icons.alt_route, size: 18),
-              label: const Text('Add a pull box'),
+              label: const Text('Add a route point'),
               onPressed: choices.isEmpty
                   ? null
                   : () async {
@@ -620,18 +690,16 @@ class _RunVia extends StatelessWidget {
                       // is how this field stays empty forever.
                       final picked = await _pick(context, choices);
                       if (picked == null) return;
-                      via.add(picked);
+                      via.add(_RoutePoint(locationId: picked));
                       onChanged();
                     },
             ),
           ],
         ),
         Text(
-          via.isEmpty
-              ? 'Straight from the start to the end. Add a pull box or another '
-                    'place and the run is drawn — and scheduled — as the legs '
-                    'it is actually pulled in.'
-              : 'One leg per hop on the cabling sheet, in this order.',
+          'Add a route point such as a pull box or secondary location that '
+          'the cables will pull through.'
+          '${via.isEmpty ? '' : ' One leg per point on the cabling sheet, in this order.'}',
           style: theme.textTheme.bodySmall,
         ),
         for (int i = 0; i < via.length; i++)
@@ -643,10 +711,12 @@ class _RunVia extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: known.contains(via[i]) ? via[i] : null,
+                    initialValue: known.contains(via[i].locationId)
+                        ? via[i].locationId
+                        : null,
                     isExpanded: true,
                     isDense: true,
-                    decoration: const InputDecoration(labelText: 'Via'),
+                    decoration: const InputDecoration(labelText: 'Route point'),
                     items: [
                       for (final l in choices)
                         DropdownMenuItem(
@@ -665,9 +735,35 @@ class _RunVia extends StatelessWidget {
                     ],
                     onChanged: (v) {
                       if (v == null) return;
-                      via[i] = v;
+                      via[i].locationId = v;
                       onChanged();
                     },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // A route point is where a run can change size: eight cables
+                // reach the pull box and six carry on, because two of them
+                // terminate there. Blank means "the same as the run", which is
+                // what a point nobody has touched carries.
+                SizedBox(
+                  width: 104,
+                  child: TextFormField(
+                    key: ValueKey('route_point_count_$i'),
+                    initialValue:
+                        via[i].count <= 0 ? '' : trimCount(via[i].count),
+                    decoration: InputDecoration(
+                      labelText: 'Cables on',
+                      hintText: runCountText,
+                      helperText: 'from here',
+                      helperMaxLines: 2,
+                      isDense: true,
+                    ),
+                    keyboardType: TextInputType.number,
+                    // Read straight into the working copy without a rebuild:
+                    // re-running the row on every digit would take the caret
+                    // out of the box being typed in.
+                    onChanged: (v) =>
+                        via[i].count = double.tryParse(v.trim()) ?? 0,
                   ),
                 ),
                 IconButton(
@@ -702,7 +798,7 @@ class _RunVia extends StatelessWidget {
   ) => showDialog<String>(
     context: context,
     builder: (ctx) => SimpleDialog(
-      title: const Text('Route the cable through…'),
+      title: const Text('Add a route point…'),
       children: [
         for (final l in choices)
           SimpleDialogOption(

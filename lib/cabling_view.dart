@@ -15,6 +15,7 @@ import 'av_port_editor.dart' show avRowIcon;
 import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
+import 'cable_colors_dialog.dart';
 import 'export_tools.dart';
 import 'layout_tools.dart';
 import 'live_text_field.dart';
@@ -91,6 +92,34 @@ class _CablingViewState extends State<CablingView> {
   /// selected rather than on build, so the count and cable-type fields in the
   /// selection bar keep the caret.
   final FocusNode _canvasFocus = FocusNode(debugLabel: 'cabling drawing');
+
+  /// The END being dragged: which run, which end of it, and where the pointer
+  /// has it — in the same fractional coordinates the anchor is stored in.
+  ///
+  /// Local while the pointer is down for the reason the bend drag is: a write
+  /// per pointer event re-routes every run on the sheet.
+  String _endRunId = '';
+  bool _endAtStart = true;
+  Offset? _endFraction;
+
+  /// The bend being dragged: which run, which of its bends, and how far it has
+  /// come since the pointer went down.
+  ///
+  /// Held here rather than written to the provider per pointer event, which is
+  /// what made routing a run feel like dragging through treacle: every move
+  /// notified every listener, re-ran the router for every run on the sheet and
+  /// re-laid out every caption. Now the drag is local and cheap, and the write
+  /// — with its undo entry — happens once, on release.
+  String _bendRunId = '';
+  int _bendIndex = -1;
+  Offset _bendDelta = Offset.zero;
+
+  /// The caption being dragged, by edge key, and how far it has come since the
+  /// pointer went down. Held here rather than written per frame: the label
+  /// follows the cursor without a provider write, and the write happens once
+  /// on release so one drag is one undo.
+  String _labelDragKey = '';
+  Offset _labelDrag = Offset.zero;
 
   @override
   void initState() {
@@ -389,6 +418,39 @@ class _CablingViewState extends State<CablingView> {
             onSelected: (on) => on
                 ? provider.restoreCablingItem(kCablingKeyId)
                 : provider.removeCablingItem(kCablingKeyId),
+          ),
+          // The labels themselves: how many are off the sheet, and the one
+          // way back. A hidden caption cannot be right-clicked to un-hide
+          // itself, so the way back cannot live on the drawing.
+          Builder(
+            builder: (ctx) {
+              final hidden = provider.avCabling.hiddenLabels.length;
+              return OutlinedButton.icon(
+                key: const ValueKey('cabling_labels'),
+                icon: const Icon(Icons.label_outline, size: 18),
+                label: Text(
+                  hidden == 0 ? 'Labels' : 'Labels ($hidden hidden)',
+                ),
+                onPressed: hidden == 0
+                    ? null
+                    : () {
+                        final back = provider.showAllCablingLabels();
+                        _snack(
+                          'Showing $back label${back == 1 ? '' : 's'} again.',
+                        );
+                      },
+              );
+            },
+          ),
+          // Every cable type's colour in one place, the way the Schematic
+          // tab's "Colors" button has always worked. Setting them one
+          // selected run at a time is how a sheet ends up with three shades
+          // of network on it.
+          OutlinedButton.icon(
+            key: const ValueKey('cabling_colors'),
+            icon: const Icon(Icons.palette_outlined, size: 18),
+            label: const Text('Cable colours'),
+            onPressed: () => showCableColorsDialog(context, provider, drawing),
           ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
@@ -1597,6 +1659,35 @@ class _CablingViewState extends State<CablingView> {
     // flow gives. Computed here rather than in paint() so a repaint — a
     // hover, a selection — is not an A* search.
     final routes = _routes(provider, drawing, lanes);
+    // What a caption has to stay off: the boxes and the key. A run's label
+    // parked on top of a box is the drawing losing the count it exists to
+    // report.
+    final keepClear = <Rect>[
+      for (final b in drawing.boxes) b.rect,
+      ?_keyRect(provider, drawing),
+    ];
+    // Laid out here rather than in paint(): the boxes are what the drag pads
+    // below sit on, so the label somebody grabs is the one they can see. A
+    // label being dragged right now carries the live offset, so it follows the
+    // cursor without a provider write per pointer event.
+    final captions = _cablingCaptions(
+      drawing: drawing,
+      routes: routes,
+      keepClear: keepClear,
+      nudges: {
+        for (final e in provider.avCabling.labelOffsets.entries)
+          e.key: e.value,
+        if (_labelDragKey.isNotEmpty)
+          _labelDragKey:
+              (provider.avCabling.labelOffsets[_labelDragKey] ?? Offset.zero) +
+                  _labelDrag,
+      },
+      selectedId: _selectedId,
+      overridden: drawing.overridden,
+      dark: theme.brightness == Brightness.dark,
+      hiddenLabels: provider.avCabling.hiddenLabels,
+      canvasSize: size,
+    );
     return SizedBox(
       width: size.width,
       height: size.height,
@@ -1618,15 +1709,10 @@ class _CablingViewState extends State<CablingView> {
                   drawing: drawing,
                   lanes: lanes,
                   routes: routes,
+                  captions: captions,
                   selectedId: _selectedId,
                   overridden: drawing.overridden,
-                  // What a caption has to stay off: the boxes and the key.
-                  // A run's label parked on top of a box is the drawing losing
-                  // the count it exists to report.
-                  keepClear: [
-                    for (final b in drawing.boxes) b.rect,
-                    ?_keyRect(provider, drawing),
-                  ],
+                  keepClear: keepClear,
                   dark: theme.brightness == Brightness.dark,
                 ),
               ),
@@ -1634,6 +1720,13 @@ class _CablingViewState extends State<CablingView> {
           ),
           for (final bundle in drawing.bundles)
             _bundleHitTarget(context, provider, drawing, bundle, routes[bundle.id]),
+          // The pads that make a caption draggable. OVER the run targets,
+          // which are deliberately wide enough to cover the label — otherwise
+          // the run swallows the drag and the label cannot be picked up — and
+          // under the boxes, so a label dragged across one does not steal the
+          // box's clicks.
+          for (final caption in captions)
+            _labelDragTarget(provider, drawing, caption),
           for (final box in drawing.boxes) _box(context, provider, drawing, box),
           // Over the boxes: a bend dragged near one has to stay grabbable, and
           // it is only on screen while its run is selected.
@@ -1643,6 +1736,86 @@ class _CablingViewState extends State<CablingView> {
           if (_keyRect(provider, drawing) != null)
             _key(context, provider, drawing),
         ],
+      ),
+    );
+  }
+
+  /// The pad that makes a painted caption draggable.
+  ///
+  /// The sheet places every label itself, and places them well enough that most
+  /// are never touched. The ones that are touched are the ones the drawing
+  /// cannot reason about: a label sitting where the next revision needs a note,
+  /// or over the bit of the sheet somebody is pointing at. Dragging is stored
+  /// as a nudge from the automatic spot, so the label still follows its run
+  /// when a box moves.
+  Widget _labelDragTarget(
+    AppStateProvider provider,
+    CablingSchematic drawing,
+    _CablingCaption caption,
+  ) {
+    final box = caption.box;
+    // The run this caption names, so clicking the label still picks the run —
+    // which is how most people select one: the label is the part of a run big
+    // enough to aim at.
+    final runId = drawing.bundlesByEdge[caption.edgeKey]?.first.id ?? '';
+    return Positioned(
+      left: box.left,
+      top: box.top,
+      width: box.width,
+      height: box.height,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        child: GestureDetector(
+          key: ValueKey('cabling_label_${caption.edgeKey}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: runId.isEmpty ? null : () => _select(runId),
+          onPanStart: (_) => setState(() {
+            _labelDragKey = caption.edgeKey;
+            _labelDrag = Offset.zero;
+          }),
+          onPanUpdate: (d) => setState(() => _labelDrag += d.delta),
+          onPanEnd: (_) {
+            final moved = _labelDrag;
+            final key = _labelDragKey;
+            setState(() {
+              _labelDragKey = '';
+              _labelDrag = Offset.zero;
+            });
+            if (key.isEmpty || moved == Offset.zero) return;
+            provider.setCablingLabelOffset(
+              key,
+              (provider.avCabling.labelOffsets[key] ?? Offset.zero) + moved,
+            );
+          },
+          onPanCancel: () => setState(() {
+            _labelDragKey = '';
+            _labelDrag = Offset.zero;
+          }),
+          // Right-click takes THIS caption off the sheet. The way back is on
+          // the toolbar rather than here, because a label that is not drawn
+          // cannot be right-clicked to bring itself back.
+          onSecondaryTap: () {
+            provider.setCablingLabelHidden(caption.edgeKey, true);
+            _snack('Label hidden. "Labels" on the toolbar shows them again.');
+          },
+          // The way back. A label put somewhere by hand is left exactly there
+          // even when something is drawn over it later, so there has to be one.
+          onDoubleTap: caption.moved
+              ? () => provider.setCablingLabelOffset(
+                    caption.edgeKey,
+                    Offset.zero,
+                  )
+              : null,
+          child: Tooltip(
+            message: caption.moved
+                ? 'Click to select the run · drag to move · double-click to '
+                    'put it back · right-click to hide it'
+                : 'Click to select the run · drag to move · right-click to '
+                    'hide it',
+            waitDuration: const Duration(milliseconds: 700),
+            child: const SizedBox.expand(),
+          ),
+        ),
       ),
     );
   }
@@ -1659,6 +1832,47 @@ class _CablingViewState extends State<CablingView> {
   /// through the middle of the equipment rack is a line nobody can follow, and
   /// it is exactly the reason the signal flow grew a router of its own. The
   /// two boxes a run LANDS on are not obstacles to it — it has to reach them.
+  /// Where each run lands on its boxes right now: what is stored, with the end
+  /// under the pointer moved to where the pointer has it.
+  Map<String, Offset> _anchorsWithDrag(AppStateProvider provider) {
+    final stored = provider.avCabling.endAnchors;
+    if (_endRunId.isEmpty || _endFraction == null) return stored;
+    return {
+      ...stored,
+      cablingEndKey(_endRunId, _endAtStart): _endFraction!,
+    };
+  }
+
+  /// The bends [bundleId] is drawn with right now: what is stored, with the
+  /// bend under the pointer moved to where the pointer has it.
+  ///
+  /// A dragged bend is snapped square with its neighbours as it comes close to
+  /// them, because cable in a building runs along walls and trays and hitting
+  /// an exact right angle by dragging a dot is a thing nobody can do.
+  List<Offset> _bendsOf(
+    AppStateProvider provider,
+    String bundleId,
+    Offset from,
+    Offset to,
+    Map<String, Rect> rects,
+  ) {
+    final stored = provider.avCabling.waypoints[bundleId];
+    if (bundleId != _bendRunId || _bendIndex < 0) return stored ?? const [];
+    final next = List<Offset>.from(stored ?? const <Offset>[]);
+    if (_bendIndex >= next.length) return next;
+    final neighbours = <Offset>[
+      if (_bendIndex == 0) from else next[_bendIndex - 1],
+      if (_bendIndex == next.length - 1) to else next[_bendIndex + 1],
+    ];
+    // A bend dropped inside a box is the one place the router cannot route out
+    // of, so the line would have to cross the box to reach it. Nudged clear.
+    next[_bendIndex] = pushOutOfRects(
+      snapToRightAngle(next[_bendIndex] + _bendDelta, neighbours),
+      rects.values.toList(),
+    );
+    return next;
+  }
+
   Map<String, List<Offset>> _routes(
     AppStateProvider provider,
     CablingSchematic drawing,
@@ -1667,7 +1881,8 @@ class _CablingViewState extends State<CablingView> {
     final rects = {for (final b in drawing.boxes) b.id: b.rect};
     final out = <String, List<Offset>>{};
     for (final bundle in drawing.bundles) {
-      final ends = drawing.endsOf(bundle, lanes[bundle.id] ?? 0);
+      final ends = drawing.endsOf(bundle, lanes[bundle.id] ?? 0,
+        endAnchors: _anchorsWithDrag(provider));
       if (ends == null) continue;
       final obstacles = [
         for (final e in rects.entries)
@@ -1676,8 +1891,8 @@ class _CablingViewState extends State<CablingView> {
       // Bends placed by hand say which way the pull actually goes — down the
       // tray, round the corridor — which is a fact about the building the
       // router cannot know. It still keeps each leg off the boxes.
-      final bends = provider.avCabling.waypoints[bundle.id];
-      if (bends != null && bends.isNotEmpty) {
+      final bends = _bendsOf(provider, bundle.id, ends.from, ends.to, rects);
+      if (bends.isNotEmpty) {
         out[bundle.id] = routeThrough([ends.from, ...bends, ends.to], obstacles);
         continue;
       }
@@ -1757,12 +1972,16 @@ class _CablingViewState extends State<CablingView> {
     if (_selectedId.isEmpty) return const [];
     final bundle = drawing.bundleById(_selectedId);
     if (bundle == null) return const [];
-    final ends = drawing.endsOf(bundle, lanes[bundle.id] ?? 0);
+    final ends = drawing.endsOf(bundle, lanes[bundle.id] ?? 0,
+        endAnchors: _anchorsWithDrag(provider));
     final drawn = routes[bundle.id];
     if (ends == null || drawn == null || drawn.length < 2) return const [];
 
-    final bends = provider.avCabling.waypoints[bundle.id] ?? const <Offset>[];
-    final boxes = [for (final b in drawing.boxes) b.rect];
+    final rects = {for (final b in drawing.boxes) b.id: b.rect};
+    // What is on SCREEN, drag included, so a handle sits under the pointer
+    // that is dragging it.
+    final bends = _bendsOf(provider, bundle.id, ends.from, ends.to, rects);
+    final boxes = rects.values.toList();
     final color = Color(bundle.color);
     const r = 6.0;
     final out = <Widget>[];
@@ -1774,10 +1993,10 @@ class _CablingViewState extends State<CablingView> {
       final mid = (drawn[i] + drawn[i + 1]) / 2;
       out.add(
         Positioned(
+          key: ValueKey('cabling_add_bend_${bundle.id}_$i'),
           left: mid.dx - r,
           top: mid.dy - r,
           child: GestureDetector(
-            key: ValueKey('cabling_add_bend_${bundle.id}_$i'),
             onTap: () => provider.setCablingBundleWaypoints(
               bundle.id,
               List<Offset>.from(bends)..insert(
@@ -1785,8 +2004,21 @@ class _CablingViewState extends State<CablingView> {
                 pushOutOfRects(mid, boxes),
               ),
             ),
+            // A square corner in one click, which is what a cable pulled
+            // along a wall and then across actually does. Dragging a bend
+            // until it happens to line up is the same thing done by eye.
+            onSecondaryTap: () => provider.setCablingBundleWaypoints(
+              bundle.id,
+              List<Offset>.from(bends)..insertAll(
+                bendInsertIndex(ends.from, bends, ends.to, mid),
+                [
+                  for (final corner in rightAngleTurn(drawn[i], drawn[i + 1]))
+                    pushOutOfRects(corner, boxes),
+                ],
+              ),
+            ),
             child: Tooltip(
-              message: 'Add a bend here',
+              message: 'Add a bend here · right-click for a 90° turn',
               child: Container(
                 width: r * 2,
                 height: r * 2,
@@ -1801,32 +2033,125 @@ class _CablingViewState extends State<CablingView> {
         ),
       );
     }
+    // WHERE THE RUN LANDS on each of its two boxes. A run arrives at the
+    // middle of a box by default, which is right for a one-line drawing and
+    // wrong the moment somebody is describing real work: cable comes into a
+    // floor box from one side, and four runs pointing at the centre of the
+    // same box say nothing about which knockout each of them uses.
+    for (final end in [
+      (atStart: true, boxId: bundle.fromBoxId, at: ends.from),
+      (atStart: false, boxId: bundle.toBoxId, at: ends.to),
+    ]) {
+      final box = drawing.boxById(end.boxId);
+      if (box == null) continue;
+      final rect = box.rect;
+      out.add(
+        Positioned(
+          key: ValueKey(
+            'cabling_end_${bundle.id}_${end.atStart ? 'from' : 'to'}',
+          ),
+          left: end.at.dx - r,
+          top: end.at.dy - r,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.move,
+            child: GestureDetector(
+              onPanStart: (_) => setState(() {
+                _endRunId = bundle.id;
+                _endAtStart = end.atStart;
+                _endFraction = Offset(
+                  rect.width == 0 ? 0.5 : (end.at.dx - rect.left) / rect.width,
+                  rect.height == 0
+                      ? 0.5
+                      : (end.at.dy - rect.top) / rect.height,
+                );
+              }),
+              onPanUpdate: (d) => setState(() {
+                final f = _endFraction ?? const Offset(0.5, 0.5);
+                _endFraction = Offset(
+                  (f.dx + (rect.width == 0 ? 0 : d.delta.dx / rect.width))
+                      .clamp(0.0, 1.0),
+                  (f.dy + (rect.height == 0 ? 0 : d.delta.dy / rect.height))
+                      .clamp(0.0, 1.0),
+                );
+              }),
+              onPanEnd: (_) {
+                final f = _endFraction;
+                final id = _endRunId;
+                final atStart = _endAtStart;
+                setState(() {
+                  _endRunId = '';
+                  _endFraction = null;
+                });
+                if (f == null || id.isEmpty) return;
+                provider.setCablingEndAnchor(id, atStart, f);
+              },
+              onPanCancel: () => setState(() {
+                _endRunId = '';
+                _endFraction = null;
+              }),
+              // Back to the middle of the box, which is where every run
+              // starts out.
+              onDoubleTap: () => provider.setCablingEndAnchor(
+                bundle.id,
+                end.atStart,
+                null,
+              ),
+              child: Tooltip(
+                message: 'Drag to move where this run lands on the box · '
+                    'double-click to centre it',
+                child: Container(
+                  width: r * 2,
+                  height: r * 2,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.rectangle,
+                    borderRadius: BorderRadius.circular(2),
+                    border: Border.all(color: color, width: 2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     for (int i = 0; i < bends.length; i++) {
       out.add(
         Positioned(
+          key: ValueKey('cabling_bend_${bundle.id}_$i'),
           left: bends[i].dx - r,
           top: bends[i].dy - r,
           child: GestureDetector(
-            key: ValueKey('cabling_bend_${bundle.id}_$i'),
-            onPanStart: (_) => provider.pushCablingUndo('Route a run'),
-            onPanUpdate: (d) {
-              final next = List<Offset>.from(bends);
-              // A bend dropped inside a box is the one place the router cannot
-              // route out of, so the line would have to cross the box to reach
-              // it. Nudged clear instead.
-              next[i] = pushOutOfRects(next[i] + d.delta, boxes);
-              provider.setCablingBundleWaypoints(
-                bundle.id,
-                next,
-                recordUndo: false,
-              );
+            // Local while the pointer is down, one write on release: see
+            // [_bendRunId].
+            onPanStart: (_) => setState(() {
+              _bendRunId = bundle.id;
+              _bendIndex = i;
+              _bendDelta = Offset.zero;
+            }),
+            onPanUpdate: (d) => setState(() => _bendDelta += d.delta),
+            onPanEnd: (_) {
+              final moved = _bendDelta;
+              setState(() {
+                _bendRunId = '';
+                _bendIndex = -1;
+                _bendDelta = Offset.zero;
+              });
+              if (moved == Offset.zero) return;
+              provider.setCablingBundleWaypoints(bundle.id, bends);
             },
+            onPanCancel: () => setState(() {
+              _bendRunId = '';
+              _bendIndex = -1;
+              _bendDelta = Offset.zero;
+            }),
             onDoubleTap: () => provider.setCablingBundleWaypoints(
               bundle.id,
               List<Offset>.from(bends)..removeAt(i),
             ),
             child: Tooltip(
-              message: 'Drag to route this run · double-click to drop the bend',
+              message: 'Drag to route this run — it snaps square with the '
+                  'bends either side · double-click to drop it',
               child: Container(
                 width: r * 2,
                 height: r * 2,
@@ -2085,12 +2410,17 @@ class _BundlePainter extends CustomPainter {
   /// The boxes and the key — everything a caption must not land on.
   final List<Rect> keepClear;
 
+  /// The caption blocks, laid out by [cablingCaptions] before the frame so the
+  /// drawing and the drag pads over it cannot disagree about where a label is.
+  final List<_CablingCaption> captions;
+
   final bool dark;
 
   const _BundlePainter({
     required this.drawing,
     required this.lanes,
     required this.routes,
+    required this.captions,
     required this.selectedId,
     required this.overridden,
     required this.keepClear,
@@ -2126,22 +2456,13 @@ class _BundlePainter extends CustomPainter {
     }
 
     // --- one caption block per edge ----------------------------------------
-    final byEdge = drawing.bundlesByEdge;
-
-    // Grows as captions go down: each one dodges the boxes, the key and every
-    // caption already placed. Two edges whose middles land near each other —
-    // which is exactly what happens when several runs come off one location,
-    // the way runs created from the floor plan do — used to print one caption
-    // over another, and the drawing quietly stopped reporting half the pulls.
+    // Laid out BEFORE the frame — see [cablingCaptions] — so the boxes drawn
+    // here are the same boxes the page puts drag targets over. A label
+    // somebody grabs has to be the label they can see.
     final taken = [...keepClear];
-    for (final group in byEdge.values) {
-      // Halfway ALONG the route rather than halfway between the boxes: on a
-      // run that detours around a rack the straight-line midpoint can land
-      // well off the line it is supposed to be labelling.
-      final route = routes[group.first.id];
-      if (route == null || route.isEmpty) continue;
-      final placed = _paintCaption(canvas, group, polylineMidpoint(route), taken);
-      if (placed != null) taken.add(placed);
+    for (final caption in captions) {
+      _paintCaption(canvas, caption);
+      taken.add(caption.box);
     }
 
     // What each run TERMINATES INTO, beside its own end of the line, last so
@@ -2179,89 +2500,16 @@ class _BundlePainter extends CustomPainter {
     }
   }
 
-  /// The stacked label block: one row per run, each with a colour dash.
-  /// Returns the box it ended up in, so the next caption can dodge it.
-  Rect? _paintCaption(
-    Canvas canvas,
-    List<CablingBundle> group,
-    Offset edgeMiddle,
-    List<Rect> taken,
-  ) {
-    const dash = 14.0;
-    const gap = 5.0;
-    const rowGap = 2.0;
-
-    final styles = drawing.bundleLineStyles;
-    final rows = <({TextPainter text, Color color, RunLineStyle style})>[];
-    for (final bundle in group) {
-      // "4x AV cabling" in the bold italic a cabling drawing labels its
-      // bundles in, with the signal on a second, lighter line under it:
-      // "AV cabling" is what gets pulled, "HDBaseT / DTP" is what gets landed.
-      final sub = bundle.signalSubLabel;
-      final edited = overridden.contains(bundle.id);
-      final selected = bundle.id == selectedId;
-      rows.add((
-        color: Color(bundle.color),
-        style: styles[bundle.id] ?? RunLineStyle.solid,
-        text: TextPainter(
-          text: TextSpan(
-            text: '${bundle.label}${edited ? '  ✎' : ''}',
-            style: TextStyle(
-              color: dark ? Colors.white : Colors.black87,
-              fontSize: selected ? 12.5 : 11.5,
-              fontWeight: FontWeight.bold,
-              fontStyle: FontStyle.italic,
-              // The selected run is underlined rather than recoloured: its
-              // colour is data on this drawing and must not move to say
-              // "picked".
-              decoration: selected ? TextDecoration.underline : null,
-            ),
-            children: sub.isEmpty
-                ? null
-                : [
-                    TextSpan(
-                      text: '\n$sub',
-                      style: TextStyle(
-                        color: dark ? Colors.white70 : Colors.black54,
-                        fontSize: 10,
-                        fontWeight: FontWeight.normal,
-                        fontStyle: FontStyle.italic,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                  ],
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout(),
-      ));
-    }
-
-    if (rows.isEmpty) return null;
-
-    double width = 0;
-    double height = 0;
-    for (final row in rows) {
-      final w = dash + gap + row.text.width;
-      if (w > width) width = w;
-      height += row.text.height + rowGap;
-    }
-    height -= rowGap;
-
-    final box = _freeCaptionBox(
-      Size(width, height),
-      Offset(edgeMiddle.dx - width / 2, edgeMiddle.dy - height - 6),
-      taken,
-    );
-    final left = box.left;
-    final top = box.top;
-
+  /// Draws one caption block where [cablingCaptions] put it.
+  void _paintCaption(Canvas canvas, _CablingCaption caption) {
     canvas.drawRRect(
-      RRect.fromRectAndRadius(box.inflate(3), const Radius.circular(3)),
+      RRect.fromRectAndRadius(caption.box, const Radius.circular(3)),
       Paint()..color = dark ? const Color(0xE614181C) : const Color(0xE6FFFFFF),
     );
 
-    double y = top;
-    for (final row in rows) {
+    double y = caption.box.top + _kCaptionPad;
+    final left = caption.box.left + _kCaptionPad;
+    for (final row in caption.rows) {
       // The dash is the key: it is what ties "6x Cat 6a" to the line it names
       // when three run side by side — so it is stroked in that run's own
       // pattern, not just its colour, or the tie breaks the moment the sheet
@@ -2269,14 +2517,13 @@ class _BundlePainter extends CustomPainter {
       paintRunSpecimen(
         canvas: canvas,
         from: Offset(left, y + row.text.height / 2),
-        to: Offset(left + dash, y + row.text.height / 2),
+        to: Offset(left + _kCaptionDash, y + row.text.height / 2),
         color: row.color,
         style: row.style,
       );
-      row.text.paint(canvas, Offset(left + dash + gap, y));
-      y += row.text.height + rowGap;
+      row.text.paint(canvas, Offset(left + _kCaptionDash + _kCaptionGap, y));
+      y += row.text.height + _kCaptionRowGap;
     }
-    return box.inflate(3);
   }
 
   /// [wanted] if nothing is already there, else the nearest spot that is
@@ -2323,7 +2570,158 @@ class _BundlePainter extends CustomPainter {
       old.drawing != drawing ||
       old.lanes != lanes ||
       old.routes != routes ||
+      old.captions != captions ||
       old.selectedId != selectedId ||
       old.keepClear != keepClear ||
       old.dark != dark;
+}
+
+/// The padding, dash and gaps a caption block is laid out with. Shared by the
+/// layout below and the painter, which is the only way the box a label is
+/// dragged by can be the box it is drawn in.
+const double _kCaptionPad = 3;
+const double _kCaptionDash = 14;
+const double _kCaptionGap = 5;
+const double _kCaptionRowGap = 2;
+
+/// One caption block: the runs it names, the box it occupies, and whether it
+/// was put there by hand.
+typedef _CablingCaption = ({
+  /// The pair of boxes this block belongs to — [CablingSchematic.bundlesByEdge]
+  /// — which is what a moved label is remembered under.
+  String edgeKey,
+  Rect box,
+
+  /// True when somebody dragged this one. The sheet then leaves it exactly
+  /// there instead of walking it clear of what it overlaps: a label moved by
+  /// hand has been moved for a reason the drawing cannot see.
+  bool moved,
+  List<({TextPainter text, Color color, RunLineStyle style})> rows,
+});
+
+/// Where every run caption goes on the drawing.
+///
+/// One block per pair of boxes: six Cat 6a and five Cat 5e between the same
+/// two places is one stack of two lines, not two labels on top of each other.
+/// Each block dodges the boxes, the key and everything captioned before it —
+/// unless it carries a nudge in [nudges], in which case it goes exactly where
+/// it was put and the ones after it dodge IT.
+///
+/// Laid out here rather than inside paint() for the same reason the routes
+/// are: the page needs the boxes to put drag pads over, and a label somebody
+/// grabs has to be the label they can see.
+List<_CablingCaption> _cablingCaptions({
+  required CablingSchematic drawing,
+  required Map<String, List<Offset>> routes,
+  required List<Rect> keepClear,
+  required Map<String, Offset> nudges,
+  required String selectedId,
+  required Set<String> overridden,
+  required bool dark,
+  /// Edge keys whose caption this sheet does not print. See
+  /// [CablingOverrides.hiddenLabels].
+  Set<String> hiddenLabels = const {},
+  /// The sheet itself, so a label cannot be dragged off the edge of it — off
+  /// the drawing is off the exported PNG, and a label the pointer has carried
+  /// past the border is one the drag is cancelled on halfway.
+  Size canvasSize = Size.zero,
+}) {
+  final styles = drawing.bundleLineStyles;
+  final out = <_CablingCaption>[];
+  final taken = [...keepClear];
+
+  for (final entry in drawing.bundlesByEdge.entries) {
+    if (hiddenLabels.contains(entry.key)) continue;
+    final group = entry.value;
+    // Halfway ALONG the route rather than halfway between the boxes: on a run
+    // that detours around a rack the straight-line midpoint can land well off
+    // the line it is supposed to be labelling.
+    final route = routes[group.first.id];
+    if (route == null || route.isEmpty) continue;
+
+    final rows = <({TextPainter text, Color color, RunLineStyle style})>[];
+    for (final bundle in group) {
+      // "4x AV cabling" in the bold italic a cabling drawing labels its
+      // bundles in, with the signal on a second, lighter line under it:
+      // "AV cabling" is what gets pulled, "HDBaseT / DTP" is what gets landed.
+      final sub = bundle.signalSubLabel;
+      final edited = overridden.contains(bundle.id);
+      final selected = bundle.id == selectedId;
+      rows.add((
+        color: Color(bundle.color),
+        style: styles[bundle.id] ?? RunLineStyle.solid,
+        text: TextPainter(
+          text: TextSpan(
+            text: '${bundle.label}${edited ? '  ✎' : ''}',
+            style: TextStyle(
+              color: dark ? Colors.white : Colors.black87,
+              fontSize: selected ? 12.5 : 11.5,
+              fontWeight: FontWeight.bold,
+              fontStyle: FontStyle.italic,
+              // The selected run is underlined rather than recoloured: its
+              // colour is data on this drawing and must not move to say
+              // "picked".
+              decoration: selected ? TextDecoration.underline : null,
+            ),
+            children: sub.isEmpty
+                ? null
+                : [
+                    TextSpan(
+                      text: '\n$sub',
+                      style: TextStyle(
+                        color: dark ? Colors.white70 : Colors.black54,
+                        fontSize: 10,
+                        fontWeight: FontWeight.normal,
+                        fontStyle: FontStyle.italic,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ],
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+      ));
+    }
+    if (rows.isEmpty) continue;
+
+    double width = 0;
+    double height = 0;
+    for (final row in rows) {
+      final w = _kCaptionDash + _kCaptionGap + row.text.width;
+      if (w > width) width = w;
+      height += row.text.height + _kCaptionRowGap;
+    }
+    height -= _kCaptionRowGap;
+
+    final anchor = polylineMidpoint(route);
+    final wanted = Offset(anchor.dx - width / 2, anchor.dy - height - 6);
+    final nudge = nudges[entry.key] ?? Offset.zero;
+    final inner = nudge == Offset.zero
+        ? _BundlePainter._freeCaptionBox(Size(width, height), wanted, taken)
+        : Rect.fromLTWH(
+            wanted.dx + nudge.dx,
+            wanted.dy + nudge.dy,
+            width,
+            height,
+          );
+    var box = inner.inflate(_kCaptionPad);
+    if (canvasSize != Size.zero) {
+      box = Rect.fromLTWH(
+        box.left.clamp(0.0, (canvasSize.width - box.width).clamp(0.0,
+            double.infinity)),
+        box.top.clamp(0.0, (canvasSize.height - box.height).clamp(0.0,
+            double.infinity)),
+        box.width,
+        box.height,
+      );
+    }
+    taken.add(box);
+    out.add((
+      edgeKey: entry.key,
+      box: box,
+      moved: nudge != Offset.zero,
+      rows: rows,
+    ));
+  }
+  return out;
 }

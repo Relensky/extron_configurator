@@ -328,6 +328,15 @@ number, the **callouts** and what each points at, and the **notation** colours.
 Drag it where it reads best (per sheet — a legend clear of the title block on
 one drawing can be on top of it on another) or turn it off from the toolbar.
 
+### Blank space round the drawing
+
+An architectural export draws all the way to its own border, so the key, the
+callout list and the notes end up on top of the walls. **Blank space round the
+drawing** in the sheet's settings adds paper on any of the four sides, in plan
+pixels. It is part of the sheet, so it is in the exported PNG and in the
+workbook image — and adding space on the left or top moves everything already
+drawn with the plan, so a marker stays on the wall it was placed on.
+
 ### Label colours
 
 An architectural plan is a line drawing, and text dropped straight onto one
@@ -358,6 +367,27 @@ it is going, rather than a line that stops at the border for no reason.
 Both drawings export a **black-and-white version for print**, rendered in the
 light theme before the colour is dropped: a dark-mode capture converted to grey
 is a black page with pale lines on it, which a printer renders as a black page.
+
+### Editing a run by hand
+
+Select a run and it grows handles: a hollow dot at the middle of each leg adds
+a bend, a filled dot is a bend you can drag, and a double-click drops one
+again. A dragged bend **snaps square** with the bends either side of it as it
+comes close, because cable runs along walls and trays and hitting an exact
+right angle by dragging a dot is a thing nobody can do. **Right-click a hollow
+dot** to put a 90° turn in outright — an L on a diagonal leg, and a jog out and
+back on a leg that is already straight.
+
+The drag is held locally and written once on release, so steering a run no
+longer re-routes every other run on the sheet between pointer events.
+
+Run labels can be **dragged** where they read best (double-click puts one back)
+and **right-clicked to hide** just that one; **Labels** on the toolbar says how
+many are hidden and brings them all back. Hidden labels and moved labels are
+kept in the room's sidecar. On the Cabling sheet, each run also has a square
+handle at each end that moves **where it lands on its box** — cable comes into
+a floor box from one side, and four runs pointing at the middle of the same box
+say nothing about which knockout each of them uses.
 
 ### Cable runs between places
 

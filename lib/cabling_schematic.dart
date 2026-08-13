@@ -449,6 +449,43 @@ class CablingOverrides {
   /// how that gets said, and the router still keeps each leg off the boxes.
   final Map<String, List<Offset>> waypoints;
 
+  /// Edge key ([cablingEdgeKey]) -> how far its caption has been nudged from
+  /// where the sheet put it.
+  ///
+  /// A NUDGE rather than a position, for the reason the floor plan stores one:
+  /// the automatic spot follows the line, so a label moved out of the way of a
+  /// box stays out of the way of it when that box is dragged half a metre. An
+  /// absolute coordinate would be left behind pointing at nothing.
+  final Map<String, Offset> labelOffsets;
+
+  /// `<bundle id>:from` / `<bundle id>:to` -> where on its box that end of the
+  /// run lands, as a FRACTION of the box (0,0 is its top-left corner, 0.5,0.5
+  /// the middle).
+  ///
+  /// A run lands in the middle of its box by default, which is right for a
+  /// one-line drawing and wrong the moment somebody is describing real work:
+  /// cable comes into a floor box from one side, and four runs that all point
+  /// at the centre of the same box say nothing about which knockout each of
+  /// them uses.
+  ///
+  /// A fraction rather than a point so it survives the box being dragged
+  /// across the sheet or resized by a longer name.
+  final Map<String, Offset> endAnchors;
+
+  /// Edge keys whose caption is not printed.
+  ///
+  /// A drawing can carry a run that needs no label: the obvious one, the one
+  /// named in the title block, the one whose caption sits over the very detail
+  /// the sheet is being issued for. Taking that ONE label off is a normal
+  /// drafting decision, and the alternative — turning every caption off — is
+  /// not the same thing at all.
+  ///
+  /// Held against the run rather than the sheet, so a label taken off the
+  /// cabling drawing is off the floor plan too: it is the same cable, and a
+  /// label that reappears on the other sheet is a label somebody has to hide
+  /// twice.
+  final Set<String> hiddenLabels;
+
   /// Derived boxes and bundles taken off the drawing. Hidden rather than
   /// deleted, because a rebuild would only bring a deleted one back.
   final Set<String> hidden;
@@ -468,6 +505,9 @@ class CablingOverrides {
     Map<String, String>? fromLabels,
     Map<String, String>? toLabels,
     Map<String, List<Offset>>? waypoints,
+    Map<String, Offset>? labelOffsets,
+    Map<String, Offset>? endAnchors,
+    Set<String>? hiddenLabels,
     Set<String>? hidden,
     List<CablingBox>? extraBoxes,
     List<CablingBundle>? extraBundles,
@@ -481,6 +521,9 @@ class CablingOverrides {
        fromLabels = fromLabels ?? {},
        toLabels = toLabels ?? {},
        waypoints = waypoints ?? {},
+       labelOffsets = labelOffsets ?? {},
+       endAnchors = endAnchors ?? {},
+       hiddenLabels = hiddenLabels ?? {},
        hidden = hidden ?? {},
        extraBoxes = extraBoxes ?? [],
        extraBundles = extraBundles ?? [];
@@ -496,6 +539,9 @@ class CablingOverrides {
       fromLabels.isEmpty &&
       toLabels.isEmpty &&
       waypoints.isEmpty &&
+      labelOffsets.isEmpty &&
+      endAnchors.isEmpty &&
+      hiddenLabels.isEmpty &&
       hidden.isEmpty &&
       extraBoxes.isEmpty &&
       extraBundles.isEmpty;
@@ -511,6 +557,9 @@ class CablingOverrides {
     fromLabels.clear();
     toLabels.clear();
     waypoints.clear();
+    labelOffsets.clear();
+    endAnchors.clear();
+    hiddenLabels.clear();
     hidden.clear();
     extraBoxes.clear();
     extraBundles.clear();
@@ -545,6 +594,17 @@ class CablingOverrides {
             for (final w in e.value) {'x': w.dx, 'y': w.dy},
           ],
       },
+    if (labelOffsets.isNotEmpty)
+      'labelOffsets': {
+        for (final e in labelOffsets.entries)
+          e.key: {'x': e.value.dx, 'y': e.value.dy},
+      },
+    if (endAnchors.isNotEmpty)
+      'endAnchors': {
+        for (final e in endAnchors.entries)
+          e.key: {'x': e.value.dx, 'y': e.value.dy},
+      },
+    if (hiddenLabels.isNotEmpty) 'hiddenLabels': hiddenLabels.toList(),
     if (hidden.isNotEmpty) 'hidden': hidden.toList(),
     if (extraBoxes.isNotEmpty)
       'boxes': [for (final b in extraBoxes) b.toJson()],
@@ -611,6 +671,29 @@ class CablingOverrides {
         // An empty list is the absence of bends, which is what no entry means.
         if (points.isNotEmpty) waypoints[key.toString()] = points;
       });
+    }
+    final nudges = json['labelOffsets'];
+    if (nudges is Map) {
+      nudges.forEach((key, value) {
+        if (value is! Map) return;
+        labelOffsets[key.toString()] = Offset(
+          (value['x'] as num?)?.toDouble() ?? 0,
+          (value['y'] as num?)?.toDouble() ?? 0,
+        );
+      });
+    }
+    final anchors = json['endAnchors'];
+    if (anchors is Map) {
+      anchors.forEach((key, value) {
+        if (value is! Map) return;
+        endAnchors[key.toString()] = Offset(
+          ((value['x'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
+          ((value['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
+        );
+      });
+    }
+    for (final h in (json['hiddenLabels'] as List? ?? [])) {
+      hiddenLabels.add(h.toString());
     }
     for (final h in (json['hidden'] as List? ?? [])) {
       hidden.add(h.toString());
@@ -800,12 +883,28 @@ class CablingSchematic {
 
   /// Where [bundle] is actually drawn: its two ends, already pushed onto its
   /// lane. Null when either box has gone off the drawing.
-  ({Offset from, Offset to})? endsOf(CablingBundle bundle, double lane) {
+  ({Offset from, Offset to})? endsOf(
+    CablingBundle bundle,
+    double lane, {
+    /// Where each end lands on its box, as a fraction of the box. See
+    /// [CablingOverrides.endAnchors]; the middle of the box when there is no
+    /// entry, which is how every run was drawn before they existed.
+    Map<String, Offset> endAnchors = const {},
+  }) {
     final a = boxById(bundle.fromBoxId);
     final b = boxById(bundle.toBoxId);
     if (a == null || b == null) return null;
-    final from = a.rect.center;
-    final to = b.rect.center;
+    Offset anchor(Rect rect, String key) {
+      final f = endAnchors[key];
+      if (f == null) return rect.center;
+      return Offset(
+        rect.left + rect.width * f.dx.clamp(0.0, 1.0),
+        rect.top + rect.height * f.dy.clamp(0.0, 1.0),
+      );
+    }
+
+    final from = anchor(a.rect, cablingEndKey(bundle.id, true));
+    final to = anchor(b.rect, cablingEndKey(bundle.id, false));
     if (lane == 0) return (from: from, to: to);
     // Perpendicular to the run, so the fan opens across the line rather than
     // along it however the two boxes happen to be arranged.
@@ -816,6 +915,10 @@ class CablingSchematic {
     return (from: from + normal, to: to + normal);
   }
 }
+
+/// The key one end of [bundleId] stores its anchor under.
+String cablingEndKey(String bundleId, bool atStart) =>
+    '$bundleId:${atStart ? 'from' : 'to'}';
 
 /// How far apart runs sharing an edge are fanned. Wide enough to read as
 /// separate cables at the zoom a cabling sheet is looked at, tight enough that
@@ -1379,7 +1482,9 @@ CablingSchematic buildCablingSchematic({
               : '$kCablingScreenRunPrefix${s.id}$kCablingLegSeparator$i',
           fromBoxId: 'loc:${s.legs[i].from}',
           toBoxId: 'loc:${s.legs[i].to}',
-          count: 1,
+          // How many cables THIS leg carries: the run's own count, or
+          // whatever was said to carry on from the route point it leaves.
+          count: s.countForLeg(i),
           // Whatever the run was specified as — "Cat 5e", "18/2 plenum" — and
           // a name that says what it is when nobody has specified it yet.
           cableType: s.cableType.trim().isEmpty

@@ -72,6 +72,81 @@ Offset nonOverlappingPosition({
   return desired;
 }
 
+/// How close a dragged bend has to come to lining up with its neighbour
+/// before it is pulled square with it.
+///
+/// Cable in a building runs along walls, trays and corridors, so the bends
+/// somebody puts in a run are nearly always meant to be square — and hitting
+/// an exact right angle by dragging a dot with a mouse is a thing nobody can
+/// do. Small enough that a deliberately diagonal leg is left alone.
+const double kRightAngleSnap = 9;
+
+/// [point] pulled square with whichever of [neighbours] it has come close to.
+///
+/// Each axis is considered separately, so a bend can end up square with the
+/// point before it horizontally and the one after it vertically — which is
+/// exactly the corner an L-shaped route is made of.
+Offset snapToRightAngle(
+  Offset point,
+  Iterable<Offset> neighbours, {
+  double tolerance = kRightAngleSnap,
+}) {
+  var x = point.dx;
+  var y = point.dy;
+  var bestX = tolerance;
+  var bestY = tolerance;
+  for (final n in neighbours) {
+    final dx = (point.dx - n.dx).abs();
+    if (dx <= bestX) {
+      bestX = dx;
+      x = n.dx;
+    }
+    final dy = (point.dy - n.dy).abs();
+    if (dy <= bestY) {
+      bestY = dy;
+      y = n.dy;
+    }
+  }
+  return Offset(x, y);
+}
+
+/// The corner that turns the straight leg [a] -> [b] into two square legs.
+///
+/// Goes the LONG way first — horizontally when the leg is wider than it is
+/// tall — because that is the way cable actually runs: along the wall, then
+/// across. The other corner is a right angle too, and it is the one that
+/// reads as a detour.
+Offset rightAngleCorner(Offset a, Offset b) =>
+    (b.dx - a.dx).abs() >= (b.dy - a.dy).abs()
+        ? Offset(b.dx, a.dy)
+        : Offset(a.dx, b.dy);
+
+/// The bends that put a right-angle turn into the leg [a] -> [b].
+///
+/// TWO answers, because a leg has two shapes:
+///
+///   * a DIAGONAL leg becomes an L with one corner — along, then across, which
+///     is how cable is actually pulled;
+///   * a leg that is ALREADY square has nothing to straighten, so a single
+///     corner would land on top of one of its ends. What that leg wants is a
+///     JOG: out to one side by [jog], along, and back — the shape a run takes
+///     to get round a beam or into a different tray, and four right angles
+///     rather than none.
+List<Offset> rightAngleTurn(Offset a, Offset b, {double jog = 44}) {
+  final dx = (b.dx - a.dx).abs();
+  final dy = (b.dy - a.dy).abs();
+  const flat = 1.0; // a leg within a pixel of square IS square
+  if (dx > flat && dy > flat) return [rightAngleCorner(a, b)];
+
+  final mid = (a + b) / 2;
+  // Out to the side the leg is not already running along.
+  final out = dx <= flat ? Offset(jog, 0) : Offset(0, jog);
+  // A quarter of the way along and three quarters, so the jog is a jog rather
+  // than a single kink at the middle.
+  final quarter = (b - a) / 4;
+  return [mid - quarter + out, mid + quarter + out];
+}
+
 /// Moves [p] just outside any of [rects] it has landed inside, leaving
 /// [margin] clearance and taking the shortest way out.
 ///

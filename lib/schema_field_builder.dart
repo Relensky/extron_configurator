@@ -257,11 +257,35 @@ class SchemaFieldBuilder {
     final section = provider.roomConfig[sectionKey];
     final String moduleName =
         (section is Map ? section['module'] : null)?.toString() ?? '';
+    return _ModuleStatesField(
+      key: ValueKey('$sectionKey.$fieldKey.states'),
+      provider: provider,
+      sectionKey: sectionKey,
+      fieldKey: fieldKey,
+      spec: spec,
+      label: label,
+      value: value,
+      moduleName: moduleName,
+    );
+  }
+
+  /// The body of the module-states field, once the future it reads has been
+  /// parked somewhere that survives a rebuild. See [_ModuleStatesField].
+  static Widget _moduleStatesBody(
+      BuildContext context,
+      AppStateProvider provider,
+      String sectionKey,
+      String fieldKey,
+      FieldSpec spec,
+      String label,
+      dynamic value,
+      String moduleName,
+      Future<List<String>> states0) {
     final String command = spec.moduleCommand ?? fieldKey;
     final String current = value?.toString() ?? '';
 
     return FutureBuilder<List<String>>(
-      future: provider.getStatesForModuleCommand(moduleName, command),
+      future: states0,
       builder: (context, snapshot) {
         final List<String> states = snapshot.data ?? [];
         final String helper;
@@ -469,6 +493,81 @@ class SchemaFieldBuilder {
       children: [Expanded(child: field), ...trailing],
     );
   }
+}
+
+/// The module-states field, with the parse it reads held in State.
+///
+/// A [FutureBuilder] whose `future:` is CREATED IN BUILD rebuilds forever: the
+/// future completes, the builder calls setState, the rebuild makes another
+/// future, and round it goes. An `async` method returns a new Future every
+/// call even when it answers out of a cache, so the states parse — which is
+/// cached, and looks cheap — was spinning a frame per frame for as long as a
+/// device with a module_states field (a projector's input) was on screen.
+///
+/// Nothing looked broken; it just meant the whole device form was rebuilding
+/// continuously behind whatever was being typed into it. The future is made
+/// once here, and again only when the module or the command it is parsed from
+/// actually changes.
+class _ModuleStatesField extends StatefulWidget {
+  final AppStateProvider provider;
+  final String sectionKey;
+  final String fieldKey;
+  final FieldSpec spec;
+  final String label;
+  final dynamic value;
+  final String moduleName;
+
+  const _ModuleStatesField({
+    super.key,
+    required this.provider,
+    required this.sectionKey,
+    required this.fieldKey,
+    required this.spec,
+    required this.label,
+    required this.value,
+    required this.moduleName,
+  });
+
+  @override
+  State<_ModuleStatesField> createState() => _ModuleStatesFieldState();
+}
+
+class _ModuleStatesFieldState extends State<_ModuleStatesField> {
+  late Future<List<String>> _states;
+
+  String get _command => widget.spec.moduleCommand ?? widget.fieldKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _states = widget.provider
+        .getStatesForModuleCommand(widget.moduleName, _command);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ModuleStatesField old) {
+    super.didUpdateWidget(old);
+    // Only when there is something new to parse. Re-reading the same module on
+    // every rebuild is the loop this class exists to stop.
+    if (old.moduleName != widget.moduleName ||
+        (old.spec.moduleCommand ?? old.fieldKey) != _command) {
+      _states = widget.provider
+          .getStatesForModuleCommand(widget.moduleName, _command);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SchemaFieldBuilder._moduleStatesBody(
+        context,
+        widget.provider,
+        widget.sectionKey,
+        widget.fieldKey,
+        widget.spec,
+        widget.label,
+        widget.value,
+        widget.moduleName,
+        _states,
+      );
 }
 
 /// The text/int/double editor. Holds its own TextEditingController and keeps

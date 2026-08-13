@@ -707,6 +707,7 @@ ReportSection _screenSwitchSchedule(AvFlowModel model) {
       'Run',
       'Cable #',
       'Controls',
+      'Cables',
       'Start (switch)',
       'Routed through',
       'End (motor / screen)',
@@ -720,13 +721,19 @@ ReportSection _screenSwitchSchedule(AvFlowModel model) {
           s.id,
           s.cableNumber,
           s.label,
+          // How many this run is. Six Cat 6 to a floor box is one run of six,
+          // and a schedule that prints it as one is a schedule somebody
+          // orders one cable against.
+          s.cableCount <= 1 ? 1 : s.cableCount,
           place(s.startLocationId, s.startNote),
-          // One pull box per line: this is the list somebody counts back boxes
-          // off, and a comma-separated string in one cell is a list nobody
-          // counts twice the same way.
+          // One route point per line: this is the list somebody counts back
+          // boxes off, and a comma-separated string in one cell is a list
+          // nobody counts twice the same way. Each says how many carry on
+          // from it when that differs from the run.
           [
-            for (final id in s.viaLocationIds)
-              model.locationById(id)?.displayName ?? '(location removed)',
+            for (int i = 0; i < s.viaLocationIds.length; i++)
+              '${model.locationById(s.viaLocationIds[i])?.displayName ?? '(location removed)'}'
+                  '${s.countForLeg(i + 1) == s.countForLeg(0) ? '' : ' — ${s.countForLeg(i + 1)} on'}',
           ].join('\n'),
           place(s.endLocationId, s.endNote),
           s.cableType,

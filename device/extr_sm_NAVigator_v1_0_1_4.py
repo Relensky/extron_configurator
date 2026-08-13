@@ -28,7 +28,7 @@ DEVICE_INFO = {
         "lbl_name": "Lbl_Switcher_Model",
         "gve_id": "Switch1",
         "name": "Switcher - NAVigator",
-        "keep_alive_command": "RefreshMatrix",
+        "keep_alive_command": "PartNumber",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,

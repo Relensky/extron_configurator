@@ -17,7 +17,6 @@ DEVICE_INFO = {
         "service_port": 0,
         "host": "processor1",
         "ip_address": "",  # site-specific — blank
-        "serial_port": "",  # site-specific — blank
     },
     "defaults": {
         "btn_name": "Btn_Con_Cam2",
@@ -30,7 +29,7 @@ DEVICE_INFO = {
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "averadmin",
-        "password": "ATEC2008",
+        "password": "Atec!2008",
     },
     # How this driver is reached on each connection style, read by the app:
     # changing com_type loads the matching block, and picking a model merges it
@@ -38,7 +37,7 @@ DEVICE_INFO = {
     # communication sheet documents; protocol, baud and service port are the
     # defaults declared by the wrapper classes at the bottom of this file.
     "network": {
-        "protocol": "TCP",
+        "protocol": "UDP",
         "net_port": 52381,
         "service_port": 0,
     },
@@ -47,11 +46,13 @@ DEVICE_INFO = {
         "net_port": 2001,
         "service_port": 0,
         "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "password": "ATEC2007",  # the gateway, like the address above
         "host": "processor1",
     },
     "serial": {
         "baud": 38400,
         "host": "processor1",  # the processor the COM port is on
+        "serial_port": "",  # site-specific — blank
     },
 }
 

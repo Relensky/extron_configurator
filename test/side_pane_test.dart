@@ -103,6 +103,69 @@ void main() {
     expect(paneWidth(tester), greaterThan(195));
   });
 
+  group('the pane across the bottom', () {
+    Future<void> pumpBottom(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const Expanded(child: ColoredBox(color: Colors.black12)),
+                BottomPane(
+                  storageKey: 'test_bottom',
+                  initialHeight: 190,
+                  minHeight: 90,
+                  maxHeight: 500,
+                  child: ListView(
+                    children: const [Text('a line in the list')],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    final bottomGrip = find.byKey(const ValueKey('pane_grip_test_bottom'));
+    double paneHeight(WidgetTester tester) =>
+        tester.getSize(find.byType(BottomPane)).height;
+
+    testWidgets('dragging its top edge up makes it taller', (tester) async {
+      await pumpBottom(tester);
+      final before = paneHeight(tester);
+      expect(find.text('a line in the list'), findsOneWidget);
+
+      await tester.drag(bottomGrip, const Offset(0, -200));
+      await tester.pumpAndSettle();
+      expect(paneHeight(tester), greaterThan(before + 150));
+    });
+
+    testWidgets('it stops at its limits and comes back on a double-click',
+        (tester) async {
+      await pumpBottom(tester);
+      final before = paneHeight(tester);
+
+      await tester.drag(bottomGrip, const Offset(0, -4000));
+      await tester.pumpAndSettle();
+      expect(paneHeight(tester), lessThan(520));
+
+      await tester.drag(bottomGrip, const Offset(0, 4000));
+      await tester.pumpAndSettle();
+      expect(paneHeight(tester), greaterThan(95));
+
+      await tester.tap(bottomGrip);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(bottomGrip);
+      await tester.pumpAndSettle();
+      expect(paneHeight(tester), before);
+    });
+  });
+
   testWidgets('double-clicking the grip puts the width back', (tester) async {
     await pump(tester);
     final before = paneWidth(tester);

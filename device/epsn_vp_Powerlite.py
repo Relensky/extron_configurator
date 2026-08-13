@@ -64,6 +64,7 @@ DEVICE_INFO = {
         "net_port": 2001,
         "service_port": 0,
         "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "password": "ATEC2007",  # the gateway, like the address above
         "host": "processor1",
     },
     "serial": {

@@ -13,6 +13,7 @@ import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
+import 'side_pane.dart';
 import 'workbook_export.dart';
 import 'xlsx_writer.dart';
 
@@ -1020,7 +1021,14 @@ class _SchematicViewState extends State<SchematicView> {
             ),
           ),
         ),
-        if (_editMode) _buildEditPanel(provider, model),
+        // Dragged taller by its top edge: the list of lines in it is as long
+        // as the room is, and 190 pixels of it was a scroll bar with three
+        // rows behind it.
+        if (_editMode)
+          BottomPane(
+            storageKey: 'schematic_edit',
+            child: _buildEditPanel(provider, model),
+          ),
       ],
     );
   }
@@ -1450,7 +1458,8 @@ class _SchematicViewState extends State<SchematicView> {
 
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 190),
+      // The height belongs to the [BottomPane] this sits in, so it can be
+      // dragged; the panel itself fills whatever it is given.
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: theme.dividerColor)),

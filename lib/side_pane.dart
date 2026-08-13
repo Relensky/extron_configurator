@@ -29,6 +29,111 @@ import 'package:flutter/material.dart';
 
 enum PaneSide { left, right }
 
+/// The same idea across the bottom of a page: a panel whose TOP edge is the
+/// handle.
+///
+/// Its own class rather than a fourth [PaneSide], because a bottom pane is a
+/// Column where a side pane is a Row and sharing that through a flag makes
+/// both harder to read than either is apart.
+///
+/// No fold button here: the pages that use one already show it only while
+/// something is being edited, so "hide it" is the switch that put it there.
+class BottomPane extends StatefulWidget {
+  final Widget child;
+
+  /// Remembers the height across rebuilds of the page.
+  final String storageKey;
+
+  final double initialHeight;
+  final double minHeight;
+  final double maxHeight;
+
+  const BottomPane({
+    super.key,
+    required this.child,
+    required this.storageKey,
+    this.initialHeight = 190,
+    this.minHeight = 90,
+    this.maxHeight = 620,
+  });
+
+  @override
+  State<BottomPane> createState() => _BottomPaneState();
+}
+
+class _BottomPaneState extends State<BottomPane> {
+  late double _height = widget.initialHeight;
+  bool _restored = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_restored) return;
+    _restored = true;
+    final stored = PageStorage.maybeOf(context)?.readState(
+      context,
+      identifier: 'bottom_pane_${widget.storageKey}',
+    );
+    if (stored is num) {
+      _height = stored.toDouble().clamp(widget.minHeight, widget.maxHeight);
+    }
+  }
+
+  void _remember() => PageStorage.maybeOf(context)?.writeState(
+        context,
+        _height,
+        identifier: 'bottom_pane_${widget.storageKey}',
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeUpDown,
+          child: GestureDetector(
+            key: ValueKey('pane_grip_${widget.storageKey}'),
+            behavior: HitTestBehavior.opaque,
+            // Dragging the top edge UP makes the panel taller, which is the
+            // direction the edge itself moves.
+            onVerticalDragUpdate: (d) {
+              setState(() {
+                _height = (_height - d.delta.dy)
+                    .clamp(widget.minHeight, widget.maxHeight);
+              });
+              _remember();
+            },
+            onDoubleTap: () {
+              setState(() => _height = widget.initialHeight);
+              _remember();
+            },
+            child: Tooltip(
+              message: 'Drag to resize · double-click for the default height',
+              child: SizedBox(
+                height: 9,
+                width: double.infinity,
+                child: Center(
+                  child: Container(
+                    height: 3,
+                    width: 44,
+                    decoration: BoxDecoration(
+                      color: theme.dividerColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: _height, child: widget.child),
+      ],
+    );
+  }
+}
+
 /// How wide the strip left behind when a pane is folded away.
 const double kFoldedPaneWidth = 26;
 

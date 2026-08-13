@@ -417,8 +417,42 @@ class DeviceConfigurationForm extends StatelessWidget {
     final List<String> sortedKeys =
         (deviceData as Map).keys.map((k) => k.toString()).toList()..sort();
 
+    // DEVICE-TYPE-ONLY FIELDS: "device_fields" entries flagged addIfMissing
+    // render even before the key exists in this device block — the first
+    // edit writes the key into config.json. Lets a new device-type setting
+    // (e.g. a projector-only option) ship via ui_schema.json alone. ('input'
+    // is handled by its own dedicated slot above and is skipped here.)
+    final List<String> placeholderKeys = [
+      for (final spec in provider.uiSchema.missingFieldsFor(
+        deviceKey,
+        sortedKeys,
+        section: deviceData.map((k, v) => MapEntry(k.toString(), v)),
+      ))
+        // Deleted in this session: the schema is offering the key back, and
+        // the user has already said no. Putting the placeholder up again is
+        // what made these look undeletable — the trash button worked and the
+        // field reappeared, so nothing seemed to happen.
+        if (!provider.isConfigKeyOmitted(deviceKey, spec.key)) spec.key,
+    ];
+
+    // ONE LIST, ONE ORDER. A placeholder sits exactly where the key will sit
+    // once it has a value, rather than in a group of its own after the real
+    // fields.
+    //
+    // That is not a tidiness question. The first keystroke in a placeholder
+    // WRITES the key, so a converted device typing a baud rate into a field
+    // parked at the bottom had that field jump to its alphabetical position
+    // near the top on the very next frame — off the visible part of a lazy
+    // ListView, which threw its state away and took the caret with it. One
+    // sorted list means nothing moves, so the field keeps the focus and the
+    // rest of the number can be typed.
+    final List<String> formKeys = [
+      ...sortedKeys,
+      ...placeholderKeys,
+    ]..sort();
+
     List<Widget> dynamicFormFields = [];
-    for (final key in sortedKeys) {
+    for (final key in formKeys) {
       if (skipKeys.contains(key)) continue;
 
       // SCHEMA-DRIVEN: labels, descriptions, dropdowns, and widget types
@@ -429,44 +463,17 @@ class DeviceConfigurationForm extends StatelessWidget {
         provider: provider,
         sectionKey: deviceKey,
         fieldKey: key,
+        // Null for a placeholder — the key is not in the block yet.
         value: deviceData[key],
         // Any property can be removed (confirmed); the Check Defaults
-        // button in the header adds it back later if needed.
+        // button in the header adds it back later if needed. A placeholder is
+        // deletable too — declining the offer is the whole point of the button
+        // on a device whose connection has no use for it.
         onDelete: () =>
             confirmRemoveConfigKey(context, provider, deviceKey, key),
       );
       if (field == null) continue; // Schema marked the key "hidden"
 
-      dynamicFormFields.add(field);
-      dynamicFormFields.add(const SizedBox(height: 16));
-    }
-
-    // DEVICE-TYPE-ONLY FIELDS: "device_fields" entries flagged addIfMissing
-    // render even before the key exists in this device block — the first
-    // edit writes the key into config.json. Lets a new device-type setting
-    // (e.g. a projector-only option) ship via ui_schema.json alone. ('input'
-    // is handled by its own dedicated slot above and is skipped here.)
-    for (final spec in provider.uiSchema.missingFieldsFor(
-        deviceKey, sortedKeys,
-        section: deviceData.map((k, v) => MapEntry(k.toString(), v)))) {
-      if (skipKeys.contains(spec.key)) continue;
-      // Deleted in this session: the schema is offering the key back, and the
-      // user has already said no. Putting the placeholder up again is what
-      // made these look undeletable — the trash button worked and the field
-      // reappeared, so nothing seemed to happen.
-      if (provider.isConfigKeyOmitted(deviceKey, spec.key)) continue;
-      final Widget? field = SchemaFieldBuilder.buildField(
-        context: context,
-        provider: provider,
-        sectionKey: deviceKey,
-        fieldKey: spec.key,
-        value: null,
-        // A placeholder is deletable too — declining the offer is the whole
-        // point of the button on a device whose connection has no use for it.
-        onDelete: () =>
-            confirmRemoveConfigKey(context, provider, deviceKey, spec.key),
-      );
-      if (field == null) continue;
       dynamicFormFields.add(field);
       dynamicFormFields.add(const SizedBox(height: 16));
     }

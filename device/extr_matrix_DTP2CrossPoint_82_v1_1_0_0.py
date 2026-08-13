@@ -25,7 +25,7 @@ DEVICE_INFO = {
         "lbl_name": "Lbl_Switcher_Model",
         "gve_id": "Switch1",
         "name": "Switcher - DTP2 Crosspoint 82",
-        "keep_alive_command": "RefreshMatrix",
+        "keep_alive_command": "Temperature",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
@@ -47,6 +47,7 @@ DEVICE_INFO = {
         "net_port": 2001,
         "service_port": 0,
         "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "password": "ATEC2007",  # the gateway, like the address above
         "host": "processor1",
     },
     "serial": {

@@ -832,7 +832,12 @@ class _AvFlowViewState extends State<AvFlowView> {
             ],
           ),
         ),
-        if (_editMode) _buildCablePanel(provider, model),
+        if (_editMode)
+          BottomPane(
+            storageKey: 'av_flow_cables',
+            initialHeight: 200,
+            child: _buildCablePanel(provider, model),
+          ),
       ],
     );
   }
@@ -2739,13 +2744,15 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 200),
+      // The height belongs to the [BottomPane] this sits in, so the cable
+      // list can be dragged taller — a room's worth of runs does not fit in
+      // 200 pixels, and it is the list somebody is working down.
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: theme.dividerColor)),
       ),
       child: ListView(
-        shrinkWrap: true, // one line of help shouldn't hold open 200px
+        shrinkWrap: true, // one line of help shouldn't hold open the panel
         children: [
           Row(
             children: [

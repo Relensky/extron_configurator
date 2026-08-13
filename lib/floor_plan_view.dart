@@ -14,11 +14,13 @@ import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
+import 'cable_colors_dialog.dart';
 import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
-import 'layout_tools.dart' show pushOutOfRects;
+import 'layout_tools.dart'
+    show pushOutOfRects, rightAngleTurn, snapToRightAngle;
 import 'live_text_field.dart';
 import 'plan_annotations.dart';
 import 'report_tools.dart';
@@ -127,6 +129,18 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// while nobody is dragging it. Live, so the panel follows the cursor
   /// without a provider write (and an undo entry) per frame.
   Offset? _keyDrag;
+
+  /// The bend being dragged: which run, which of its bends, and how far it has
+  /// come since the pointer went down.
+  ///
+  /// Held here rather than written to the provider per pointer event, which is
+  /// what made steering a run on the plan feel like dragging through treacle:
+  /// every move notified every listener, re-routed every run on the sheet and
+  /// re-laid out every caption. Now the drag is local and cheap, and the write
+  /// — with its undo entry — happens once, on release.
+  String _bendRunId = '';
+  int _bendIndex = -1;
+  Offset _bendDelta = Offset.zero;
 
   /// The caption being dragged, by [_PlanRun.edgeKey], and how far it has come
   /// since the pointer went down. Held here for the same reason [_keyDrag] is:
@@ -1013,6 +1027,41 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             AvUndoScope.floorPlans,
             onDone: (m) => _snack(m),
           ),
+          // How many captions are off the sheet, and the one way back.
+          Builder(
+            builder: (ctx) {
+              final hidden = provider.avCabling.hiddenLabels.length;
+              return OutlinedButton.icon(
+                key: const ValueKey('plan_labels'),
+                icon: const Icon(Icons.label_outline, size: 18),
+                label: Text(
+                  hidden == 0 ? 'Labels' : 'Labels ($hidden hidden)',
+                ),
+                onPressed: hidden == 0
+                    ? null
+                    : () {
+                        final back = provider.showAllCablingLabels();
+                        _snack(
+                          'Showing $back label${back == 1 ? '' : 's'} again.',
+                        );
+                      },
+              );
+            },
+          ),
+          // Every cable type's colour, the same dialog the Cabling tab
+          // opens: the two are drawings of one room's cable, and a network
+          // run blue on one and green on the other is two sheets nobody can
+          // read together.
+          OutlinedButton.icon(
+            key: const ValueKey('plan_cable_colors'),
+            icon: const Icon(Icons.palette_outlined, size: 18),
+            label: const Text('Cable colours'),
+            onPressed: () => showCableColorsDialog(
+              context,
+              provider,
+              provider.cablingSchematic(buildAvFlowModel(provider)),
+            ),
+          ),
           // How the writing on this sheet is printed. On the toolbar rather
           // than buried in a settings page: a plan is recoloured while looking
           // at the plan, usually because the drawing underneath it is dark
@@ -1127,7 +1176,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     FloorPlan plan,
     CablingSchematic drawing,
   ) {
+    // The IMAGE, and the SHEET it is mounted on: an architectural export draws
+    // to its own border, so the key and the notes need paper of their own.
+    // Everything on the drawing is in sheet coordinates — see
+    // [AppStateProvider.setAvPlanMargins], which shifts the contents when a
+    // left or top margin is added so nothing slides off the wall it was on.
     final size = _imageSize;
+    final sheet = plan.sheetSize;
     final theme = Theme.of(context);
     // Worked out once and handed to both the router and the captions, so the
     // line you see and the label beside it are dodging the same things.
@@ -1155,11 +1210,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       },
       dark: theme.brightness == Brightness.dark,
       style: plan.styleFor(PlanTextKind.wiring),
+      hiddenLabels: provider.avCabling.hiddenLabels,
     );
 
     return SizedBox(
-      width: size.width,
-      height: size.height,
+      width: sheet.width,
+      height: sheet.height,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         // The runs are handed over with the tap: they were just routed for
@@ -1180,14 +1236,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             : null,
         child: Stack(
           children: [
+            // The paper: the image's own area plus whatever blank space has
+            // been added round it, in one colour so the margin cannot be told
+            // from the sheet in the exported PNG.
             Container(
-              width: size.width,
-              height: size.height,
+              width: sheet.width,
+              height: sheet.height,
               color: theme.brightness == Brightness.dark
                   // The plan is a white drawing; a white mat under it keeps a
                   // transparent PNG from reading as a hole in dark mode.
                   ? const Color(0xFFF3F3F3)
                   : Colors.white,
+            ),
+            Positioned(
+              left: plan.margins.left,
+              top: plan.margins.top,
+              width: size.width,
+              height: size.height,
               child: _image == null
                   ? Center(
                       child: Text(
@@ -1336,11 +1401,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           // that is not in the exported image either.
           provider.updateAvFloorPlan(
             plan.copyWith(
+              // Clamped to the SHEET, not to the image: the blank margin is
+              // exactly where a key is supposed to end up.
               keyPos: Offset(
-                (plan.keyPos.dx + moved.dx)
-                    .clamp(0.0, math.max(0.0, _imageSize.width - _kPlanKeyWidth)),
-                (plan.keyPos.dy + moved.dy)
-                    .clamp(0.0, math.max(0.0, _imageSize.height - 60)),
+                (plan.keyPos.dx + moved.dx).clamp(
+                  0.0,
+                  math.max(0.0, plan.sheetSize.width - _kPlanKeyWidth),
+                ),
+                (plan.keyPos.dy + moved.dy).clamp(
+                  0.0,
+                  math.max(0.0, plan.sheetSize.height - 60),
+                ),
               ),
             ),
           );
@@ -1560,6 +1631,35 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       for (final e in plan.markers.entries) 'loc:${e.key}': e.value,
   };
 
+  /// The bends [runId] is drawn with right now: what the sheet has stored,
+  /// with the bend under the pointer moved to where the pointer has it.
+  ///
+  /// A dragged bend is snapped square with its neighbours as it comes close to
+  /// them, because cable in a building runs along walls and trays, and hitting
+  /// an exact right angle by dragging a dot is a thing nobody can do.
+  List<Offset> _bendsOf(
+    FloorPlan plan,
+    String runId,
+    Offset from,
+    Offset to,
+    List<Rect> keepOut,
+  ) {
+    final stored = plan.waypointsFor(runId);
+    if (runId != _bendRunId || _bendIndex < 0 || _bendIndex >= stored.length) {
+      return stored;
+    }
+    final next = List<Offset>.from(stored);
+    final neighbours = <Offset>[
+      if (_bendIndex == 0) from else next[_bendIndex - 1],
+      if (_bendIndex == next.length - 1) to else next[_bendIndex + 1],
+    ];
+    next[_bendIndex] = pushOutOfRects(
+      snapToRightAngle(next[_bendIndex] + _bendDelta, neighbours),
+      keepOut,
+    );
+    return next;
+  }
+
   /// The runs the cabling drawing knows about, resolved onto this sheet and
   /// routed clear of everything already printed on it.
   ///
@@ -1615,7 +1715,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             from: placed[b.fromBoxId]!,
             to: placed[b.toBoxId]!,
             lane: lanes[b.id] ?? 0,
-            bends: plan.waypointsFor(b.id),
+            bends: _bendsOf(
+              plan,
+              b.id,
+              placed[b.fromBoxId]!,
+              placed[b.toBoxId]!,
+              [...obstacles.dots.values, ...obstacles.always],
+            ),
             // The two dots this run LANDS on are not obstacles to it: it has
             // to reach them. Everything else on the sheet still is — including
             // the names under those two dots.
@@ -1690,7 +1796,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// A short stub from [at] towards the nearest edge of the sheet, stepped
   /// sideways by [index] so several leaving the same place stay apart.
   List<Offset> _offSheetStub(Offset at, FloorPlan plan, int index) {
-    final size = _imageSize;
+    final size = plan.sheetSize;
     // Whichever border is closest — a run leaving the room should head for the
     // way out, not across the drawing to the far side of it.
     final distances = <Offset, double>{
@@ -2727,6 +2833,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             _labelDragKey = '';
             _labelDrag = Offset.zero;
           }),
+          // Right-click takes THIS caption off both sheets. The way back is on
+          // the toolbar: a label that is not drawn cannot be right-clicked to
+          // bring itself back.
+          onSecondaryTap: () {
+            provider.setCablingLabelHidden(caption.edgeKey, true);
+            _snack('Label hidden. "Labels" on the toolbar shows them again.');
+          },
           // The way back. A label put somewhere by hand is left exactly there
           // even when something is drawn over it later, so there has to be one.
           onDoubleTap: caption.moved
@@ -2770,12 +2883,20 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final route = drawn.first.route;
     if (route.length < 2) return const [];
 
-    final bends = plan.waypointsFor(_selectedRunId);
     // A bend may not be dropped on top of a marker or a caption: the router
     // cannot get out of one, so the line would have to cross what it is meant
     // to keep off in order to reach it.
     final obstacles = _planObstacles(provider, plan);
     final keepOut = [...obstacles.dots.values, ...obstacles.always];
+    // What is on SCREEN, drag included, so a handle sits under the pointer
+    // dragging it.
+    final bends = _bendsOf(
+      plan,
+      _selectedRunId,
+      route.first,
+      route.last,
+      keepOut,
+    );
     final color = drawn.first.color;
     const r = 6.0;
     final out = <Widget>[];
@@ -2787,10 +2908,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       final mid = (route[i] + route[i + 1]) / 2;
       out.add(
         Positioned(
+          key: ValueKey('plan_add_bend_${_selectedRunId}_$i'),
           left: mid.dx - r,
           top: mid.dy - r,
           child: GestureDetector(
-            key: ValueKey('plan_add_bend_${_selectedRunId}_$i'),
             onTap: () => provider.setAvRunWaypoints(
               plan.id,
               _selectedRunId,
@@ -2799,8 +2920,21 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 pushOutOfRects(mid, keepOut),
               ),
             ),
+            // A square corner in one click, which is what a cable pulled
+            // along a wall and then across actually does.
+            onSecondaryTap: () => provider.setAvRunWaypoints(
+              plan.id,
+              _selectedRunId,
+              List<Offset>.from(bends)..insertAll(
+                bendInsertIndex(route.first, bends, route.last, mid),
+                [
+                  for (final corner in rightAngleTurn(route[i], route[i + 1]))
+                    pushOutOfRects(corner, keepOut),
+                ],
+              ),
+            ),
             child: Tooltip(
-              message: 'Add a bend here',
+              message: 'Add a bend here · right-click for a 90° turn',
               child: Container(
                 width: r * 2,
                 height: r * 2,
@@ -2818,29 +2952,41 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     for (int i = 0; i < bends.length; i++) {
       out.add(
         Positioned(
+          key: ValueKey('plan_bend_${_selectedRunId}_$i'),
           left: bends[i].dx - r,
           top: bends[i].dy - r,
           child: GestureDetector(
-            key: ValueKey('plan_bend_${_selectedRunId}_$i'),
-            onPanStart: (_) => provider.pushFloorPlanUndo('Route a run'),
-            onPanUpdate: (d) {
-              final next = List<Offset>.from(bends);
-              next[i] = pushOutOfRects(next[i] + d.delta, keepOut);
-              provider.setAvRunWaypoints(
-                plan.id,
-                _selectedRunId,
-                next,
-                recordUndo: false,
-              );
+            // Local while the pointer is down, one write on release: see
+            // [_bendRunId].
+            onPanStart: (_) => setState(() {
+              _bendRunId = _selectedRunId;
+              _bendIndex = i;
+              _bendDelta = Offset.zero;
+            }),
+            onPanUpdate: (d) => setState(() => _bendDelta += d.delta),
+            onPanEnd: (_) {
+              final moved = _bendDelta;
+              setState(() {
+                _bendRunId = '';
+                _bendIndex = -1;
+                _bendDelta = Offset.zero;
+              });
+              if (moved == Offset.zero) return;
+              provider.setAvRunWaypoints(plan.id, _selectedRunId, bends);
             },
+            onPanCancel: () => setState(() {
+              _bendRunId = '';
+              _bendIndex = -1;
+              _bendDelta = Offset.zero;
+            }),
             onDoubleTap: () => provider.setAvRunWaypoints(
               plan.id,
               _selectedRunId,
               List<Offset>.from(bends)..removeAt(i),
             ),
             child: Tooltip(
-              message: 'Drag to route this run · double-click to drop the '
-                  'bend',
+              message: 'Drag to route this run — it snaps square with the '
+                  'bends either side · double-click to drop it',
               child: Container(
                 width: r * 2,
                 height: r * 2,
@@ -3116,6 +3262,15 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     FloorPlan plan,
   ) async {
     final nameController = TextEditingController(text: plan.name);
+    // Blank space round the drawing, one box per side. Whole pixels of the
+    // plan image, which is the unit everything else on this dialog is in.
+    String px(double v) => v <= 0 ? '' : v.round().toString();
+    final marginControllers = {
+      'Left': TextEditingController(text: px(plan.margins.left)),
+      'Top': TextEditingController(text: px(plan.margins.top)),
+      'Right': TextEditingController(text: px(plan.margins.right)),
+      'Bottom': TextEditingController(text: px(plan.margins.bottom)),
+    };
     final scaleController = TextEditingController(
       text: plan.pixelsPerFoot <= 0
           ? ''
@@ -3147,6 +3302,39 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
+                ),
+                const SizedBox(height: 18),
+                Text('Blank space round the drawing',
+                    style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  'An architectural export draws all the way to its border, so '
+                  'the key, the callout list and the notes end up on top of the '
+                  'walls. This is paper added round the plan for them to sit '
+                  'on. It is part of the sheet, so it is in the exported image '
+                  'and in the workbook — and everything already drawn moves '
+                  'with the plan rather than sliding off it.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final side in marginControllers.keys) ...[
+                      Expanded(
+                        child: TextField(
+                          key: ValueKey('plan_margin_${side.toLowerCase()}'),
+                          controller: marginControllers[side],
+                          decoration: InputDecoration(
+                            labelText: side,
+                            hintText: '0',
+                            isDense: true,
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      if (side != 'Bottom') const SizedBox(width: 8),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -3191,6 +3379,20 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ? plan.name
             : nameController.text.trim(),
         pixelsPerFoot: double.tryParse(scaleController.text.trim()) ?? 0,
+      ),
+    );
+    // Through its own call: growing the left or top margin has to shift what
+    // is already drawn by the same amount, which is not something copyWith
+    // can do for itself.
+    double margin(String side) =>
+        double.tryParse(marginControllers[side]!.text.trim()) ?? 0;
+    provider.setAvPlanMargins(
+      plan.id,
+      EdgeInsets.fromLTRB(
+        margin('Left'),
+        margin('Top'),
+        margin('Right'),
+        margin('Bottom'),
       ),
     );
   }
@@ -3592,9 +3794,15 @@ List<_PlanCaption> _planCaptions({
   required Map<String, Offset> nudges,
   required bool dark,
   PlanLabelStyle style = PlanLabelStyle.unset,
+  /// Edge keys whose caption is not printed. Held against the RUN rather than
+  /// the sheet, so a label taken off the cabling drawing is off this one too:
+  /// it is the same cable, and a label that reappears on the other sheet is a
+  /// label somebody has to hide twice.
+  Set<String> hiddenLabels = const {},
 }) {
   final byEdge = <String, List<_PlanRun>>{};
   for (final run in runs) {
+    if (hiddenLabels.contains(run.edgeKey)) continue;
     byEdge.putIfAbsent(run.edgeKey, () => []).add(run);
   }
 

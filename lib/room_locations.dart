@@ -308,6 +308,23 @@ class ScreenSwitch {
   /// pull boxes is three legs on the cabling sheet.
   final List<String> viaLocationIds;
 
+  /// How many cables this run is: 6 Cat 6 to a floor box is one run of six,
+  /// not six runs.
+  ///
+  /// Was always 1, which made every low-voltage run on the drawing a single
+  /// lead and every count off it wrong for the common case.
+  final double cableCount;
+
+  /// How many cables carry on FROM each route point, one entry per
+  /// [viaLocationIds] in the same order. 0 means "the same as [cableCount]",
+  /// which is the normal case and what an entry that was never touched holds.
+  ///
+  /// A route point is where a run can change size: eight cables reach the pull
+  /// box in the ceiling and six carry on to the rack, because two of them
+  /// terminate there. Recording that is the difference between a schedule
+  /// somebody can order against and one they have to re-count by hand.
+  final List<double> viaCounts;
+
   /// What runs between them — '18/2 plenum', 'Cat6', 'line voltage'.
   final String cableType;
 
@@ -332,6 +349,8 @@ class ScreenSwitch {
     this.endLocationId = kNoLocationId,
     this.endNote = '',
     this.viaLocationIds = const [],
+    this.cableCount = 1,
+    this.viaCounts = const [],
     this.cableType = '',
     this.cableNumber = '',
     this.runFeet = 0,
@@ -359,6 +378,21 @@ class ScreenSwitch {
       (from: pathLocationIds[i], to: pathLocationIds[i + 1]),
   ];
 
+  /// How many cables leg [index] carries.
+  ///
+  /// The first leg is the run's own count; every later one is however many
+  /// carry on from the route point it leaves, falling back to the run's count
+  /// when nobody has said otherwise. Never below 1: a leg on the drawing is at
+  /// least one cable, and a 0 would price the pull at nothing.
+  double countForLeg(int index) {
+    final base = cableCount <= 0 ? 1.0 : cableCount;
+    if (index <= 0) return base;
+    final at = index - 1; // leg 1 leaves the first route point
+    if (at >= viaCounts.length) return base;
+    final own = viaCounts[at];
+    return own <= 0 ? base : own;
+  }
+
   ScreenSwitch copyWith({
     String? label,
     String? startLocationId,
@@ -366,6 +400,8 @@ class ScreenSwitch {
     String? endLocationId,
     String? endNote,
     List<String>? viaLocationIds,
+    double? cableCount,
+    List<double>? viaCounts,
     String? cableType,
     String? cableNumber,
     double? runFeet,
@@ -378,6 +414,8 @@ class ScreenSwitch {
     endLocationId: endLocationId ?? this.endLocationId,
     endNote: endNote ?? this.endNote,
     viaLocationIds: viaLocationIds ?? this.viaLocationIds,
+    cableCount: cableCount ?? this.cableCount,
+    viaCounts: viaCounts ?? this.viaCounts,
     cableType: cableType ?? this.cableType,
     cableNumber: cableNumber ?? this.cableNumber,
     runFeet: runFeet ?? this.runFeet,
@@ -392,6 +430,8 @@ class ScreenSwitch {
     endLocationId: endLocationId,
     endNote: endNote,
     viaLocationIds: viaLocationIds,
+    cableCount: cableCount,
+    viaCounts: viaCounts,
     cableType: cableType,
     cableNumber: cableNumber,
     runFeet: runFeet,
@@ -406,6 +446,8 @@ class ScreenSwitch {
     if (endLocationId.isNotEmpty) 'endLocation': endLocationId,
     if (endNote.isNotEmpty) 'endNote': endNote,
     if (viaLocationIds.isNotEmpty) 'via': viaLocationIds,
+    if (cableCount != 1) 'cables': cableCount,
+    if (viaCounts.any((c) => c > 0)) 'viaCables': viaCounts,
     if (cableType.isNotEmpty) 'cableType': cableType,
     if (cableNumber.isNotEmpty) 'cableNumber': cableNumber,
     if (runFeet > 0) 'runFeet': runFeet,
@@ -422,6 +464,13 @@ class ScreenSwitch {
     viaLocationIds: [
       for (final v in (json['via'] as List? ?? []))
         if (v.toString().trim().isNotEmpty) v.toString(),
+    ],
+    // A run written before there was a count is one cable, which is what it
+    // was drawn and scheduled as.
+    cableCount: (json['cables'] as num?)?.toDouble() ?? 1,
+    viaCounts: [
+      for (final v in (json['viaCables'] as List? ?? []))
+        (v as num?)?.toDouble() ?? 0,
     ],
     cableType: json['cableType']?.toString() ?? '',
     cableNumber: json['cableNumber']?.toString() ?? '',
@@ -917,6 +966,21 @@ class FloorPlan {
   /// reflected ceiling plan, and one shared position would put it there.
   final Offset keyPos;
 
+  /// Blank space added around the plan image, in image pixels.
+  ///
+  /// An architectural export is drawing all the way to its border, and the
+  /// key, the callout schedule and the notes all have to go somewhere. Before
+  /// this they went on top of the drawing, over the very walls somebody was
+  /// reading. This is the paper the drawing is mounted on: it is part of the
+  /// sheet, so it is part of the exported PNG and of the workbook image.
+  ///
+  /// The image sits at (left, top) of the sheet and everything drawn keeps its
+  /// coordinates relative to the IMAGE, so a margin added later never moves a
+  /// marker off the wall it was placed on — see
+  /// [AppStateProvider.setAvPlanMargins], which shifts the sheet's contents by
+  /// the same amount it grows the left and top by.
+  final EdgeInsets margins;
+
   /// What the writing on this sheet is printed in, per [PlanTextKind]. A kind
   /// with no entry is drawn the way it always was — see [PlanLabelStyle].
   ///
@@ -945,6 +1009,7 @@ class FloorPlan {
     this.runWaypoints = const {},
     this.runLabelOffsets = const {},
     this.labelStyles = const {},
+    this.margins = EdgeInsets.zero,
     this.keyPos = kDefaultPlanKeyPosition,
     this.keyHidden = false,
   });
@@ -964,6 +1029,12 @@ class FloorPlan {
   );
 
   bool get hasImage => imageFile.trim().isNotEmpty;
+
+  /// The whole sheet: the image plus whatever blank space is around it.
+  Size get sheetSize => Size(
+    imageSize.width + margins.horizontal,
+    imageSize.height + margins.vertical,
+  );
 
   /// True when [locationId] has been dropped on THIS sheet.
   bool hasMarker(String locationId) => markers.containsKey(locationId);
@@ -1022,6 +1093,7 @@ class FloorPlan {
     Map<String, List<Offset>>? runWaypoints,
     Map<String, Offset>? runLabelOffsets,
     Map<PlanTextKind, PlanLabelStyle>? labelStyles,
+    EdgeInsets? margins,
     Offset? keyPos,
     bool? keyHidden,
   }) => FloorPlan(
@@ -1037,6 +1109,7 @@ class FloorPlan {
     runWaypoints: runWaypoints ?? this.runWaypoints,
     runLabelOffsets: runLabelOffsets ?? this.runLabelOffsets,
     labelStyles: labelStyles ?? this.labelStyles,
+    margins: margins ?? this.margins,
     keyPos: keyPos ?? this.keyPos,
     keyHidden: keyHidden ?? this.keyHidden,
   );
@@ -1054,6 +1127,7 @@ class FloorPlan {
     runWaypoints: runWaypoints,
     runLabelOffsets: runLabelOffsets,
     labelStyles: labelStyles,
+    margins: margins,
     keyPos: keyPos,
     keyHidden: keyHidden,
   );
@@ -1092,6 +1166,13 @@ class FloorPlan {
       'labelStyles': {
         for (final e in labelStyles.entries)
           if (!e.value.isDefault) e.key.name: e.value.toJson(),
+      },
+    if (margins != EdgeInsets.zero)
+      'margins': {
+        'l': margins.left,
+        't': margins.top,
+        'r': margins.right,
+        'b': margins.bottom,
       },
     if (keyPos != kDefaultPlanKeyPosition)
       'key': {'x': keyPos.dx, 'y': keyPos.dy},
@@ -1153,6 +1234,14 @@ class FloorPlan {
                 Map<String, dynamic>.from(e.value as Map),
               ),
     },
+    margins: json['margins'] is Map
+        ? EdgeInsets.fromLTRB(
+            ((json['margins'] as Map)['l'] as num?)?.toDouble() ?? 0,
+            ((json['margins'] as Map)['t'] as num?)?.toDouble() ?? 0,
+            ((json['margins'] as Map)['r'] as num?)?.toDouble() ?? 0,
+            ((json['margins'] as Map)['b'] as num?)?.toDouble() ?? 0,
+          )
+        : EdgeInsets.zero,
     keyPos: json['key'] is Map
         ? Offset(
             ((json['key'] as Map)['x'] as num?)?.toDouble() ??
