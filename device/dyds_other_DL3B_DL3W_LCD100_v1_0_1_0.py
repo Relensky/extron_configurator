@@ -3,6 +3,55 @@
 from extronlib.interface import SerialInterface, EthernetClientInterface
 import re
 from extronlib.system import Wait, ProgramLog
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "device_type": "screen",
+    "models": ["DL3B", "DL3W", "LCD100"],
+    "connection": {
+        "com_type": "Serial",
+        "protocol": "",
+        "host": "processor1",
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        # A lift has no connection indicator on the panel, so it carries the
+        # keys with nothing in them rather than naming GUI objects that do not
+        # exist. Fill them in on a room that does draw one.
+        "btn_name": "",
+        "lbl_name": "",
+        "gve_id": "Lift1",
+        "name": "Projector Lift - Display Devices",
+        # The only status this driver can be asked for; there is no power,
+        # temperature or part number to poll on a lift controller.
+        "keep_alive_command": "DeviceStatus",
+        "keep_alive_interval": 30,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "relay_host": "processor1",
+        "user": "admin",
+        "password": "ATEC2008",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". This driver has no vendor communication
+    # sheet, so the figures are the defaults its own wrapper classes declare.
+    "serialoverethernet": {
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "host": "processor1",
+    },
+    "serial": {
+        "baud": 9600,
+        "host": "processor1",  # the processor the COM port is on
+    },
+}
+
 class DeviceClass:
 
 

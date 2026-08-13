@@ -186,7 +186,20 @@ class SchemaFieldBuilder {
           .map((o) => DropdownMenuItem(value: o.value, child: Text(o.label)))
           .toList(),
       onChanged: (val) {
-        if (val != null) provider.updateDeviceValue(sectionKey, fieldKey, val);
+        if (val == null) return;
+        provider.updateDeviceValue(sectionKey, fieldKey, val);
+        // Changing the connection style can pull the driver's own port,
+        // protocol and baud in with it. That is the point of the blocks, and
+        // it still has to be said out loud — values appearing in fields
+        // further down the form with no explanation is how a tool gets
+        // blamed for something it was asked to do.
+        final loaded = provider.lastComTypeDefaults;
+        if (loaded.isEmpty) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Loaded the module\'s $val defaults: ${loaded.join(', ')}',
+          ),
+        ));
       },
     );
   }

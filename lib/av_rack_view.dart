@@ -247,15 +247,28 @@ class _AvRackViewState extends State<AvRackView> {
             onPressed: () => _showRackDialog(provider),
           ),
           // Vent plates, blanks, shelves, drawers — the parts that fill a rack
-          // and never appear on a signal flow diagram.
-          if (widget.editMode)
-            OutlinedButton.icon(
-              icon: const Icon(Icons.dashboard_customize_outlined, size: 18),
-              label: const Text('Add plate / shelf'),
-              onPressed: provider.avRacks.isEmpty
-                  ? null
-                  : () => _showAddHardwareDialog(provider),
-            ),
+          // and never appear on a signal flow diagram. Always on the toolbar,
+          // not only in edit mode: ordering the parts and arranging the frame
+          // are different jobs, and hiding the one behind the other made the
+          // button impossible to find when all you wanted was to quote a shelf.
+          OutlinedButton.icon(
+            icon: const Icon(Icons.dashboard_customize_outlined, size: 18),
+            label: const Text('Add plate / shelf'),
+            onPressed: provider.avRacks.isEmpty
+                ? null
+                : () => _showAddHardwareDialog(provider),
+          ),
+          // A box that is in the rack and not in the catalog — a Cisco switch,
+          // an owner-furnished appliance, the thing nobody has a part number
+          // for yet. It goes on the elevation and onto the estimate flagged as
+          // needing a price.
+          OutlinedButton.icon(
+            icon: const Icon(Icons.add_box_outlined, size: 18),
+            label: const Text('Add other device'),
+            onPressed: provider.avRacks.isEmpty
+                ? null
+                : () => _showAddCustomDeviceDialog(provider),
+          ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
             label: const Text('Fit to view'),
@@ -1487,6 +1500,288 @@ class _AvRackViewState extends State<AvRackView> {
     );
   }
 
+  /// Adds a box that is going in the rack and is not in the catalog — a Cisco
+  /// switch, an owner-furnished appliance, the mini PC on the shelf.
+  ///
+  /// Deliberately NOT a catalog entry. A model nobody has a part number or a
+  /// price for is not a price-list fact, and writing it into av_devices.json
+  /// would put an unpriced entry in front of every future room. It is a fact
+  /// about THIS job, so it lives on the room like any other placed item: it
+  /// takes up rails on the elevation, and it appears on the estimate — under
+  /// Equipment rather than Rack hardware, since it is a box — flagged "Not
+  /// priced" until somebody types a figure, either on the estimate's line or
+  /// back here in the item's own edit dialog.
+  Future<void> _showAddCustomDeviceDialog(AppStateProvider provider) async {
+    if (provider.avRacks.isEmpty) return;
+
+    final nameController = TextEditingController();
+    final partController = TextEditingController();
+    final heightController = TextEditingController(text: '1');
+    final uController = TextEditingController(text: '1');
+    final qtyController = TextEditingController(text: '1');
+    final priceController = TextEditingController();
+    final notesController = TextEditingController();
+    String category = kRackDeviceCategories.first;
+    String rackId = provider.avRacks.first.id;
+    RackFace face = RackFace.front;
+
+    final created = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Add a device that is not in the catalog'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'For the box that is going in the rack and has no catalog '
+                    'entry. It occupies rails like anything else and is quoted '
+                    'with the equipment. Leave the price blank and the cost '
+                    'sheet flags it as needing one.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      hintText: 'e.g. Cisco Catalyst 9300-24P',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: kRackDeviceCategories.contains(category)
+                        ? category
+                        : null,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Kind',
+                      helperText: 'What it is, for the estimate',
+                      isDense: true,
+                    ),
+                    items: [
+                      for (final c in kRackDeviceCategories)
+                        DropdownMenuItem(value: c, child: Text(c)),
+                    ],
+                    onChanged: (v) => setLocal(() => category = v ?? category),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: partController,
+                          decoration: const InputDecoration(
+                            labelText: 'Part number (optional)',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 120,
+                        child: TextField(
+                          controller: heightController,
+                          decoration: const InputDecoration(
+                            labelText: 'Height (U)',
+                            isDense: true,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceController,
+                    decoration: InputDecoration(
+                      labelText: 'Price each (${provider.avCost.currency})',
+                      helperText:
+                          'Blank = the cost sheet reports it as not priced',
+                      isDense: true,
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Note (optional)',
+                      isDense: true,
+                    ),
+                  ),
+                  const Divider(height: 28),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: rackId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Rack',
+                            isDense: true,
+                          ),
+                          items: [
+                            for (final r in provider.avRacks)
+                              DropdownMenuItem(
+                                value: r.id,
+                                child: Text('${r.name} (${r.heightU}U)'),
+                              ),
+                          ],
+                          onChanged: (v) =>
+                              setLocal(() => rackId = v ?? rackId),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SegmentedButton<RackFace>(
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        segments: const [
+                          ButtonSegment(
+                            value: RackFace.front,
+                            label: Text('Front'),
+                          ),
+                          ButtonSegment(
+                            value: RackFace.rear,
+                            label: Text('Rear'),
+                          ),
+                        ],
+                        selected: {face},
+                        onSelectionChanged: (s) =>
+                            setLocal(() => face = s.first),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 130,
+                        child: TextField(
+                          controller: uController,
+                          decoration: const InputDecoration(
+                            labelText: 'Bottom rail (U)',
+                            helperText: 'U1 is the floor',
+                            isDense: true,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 130,
+                        child: TextField(
+                          controller: qtyController,
+                          decoration: const InputDecoration(
+                            labelText: 'How many',
+                            helperText: 'stacked upwards',
+                            isDense: true,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('cancel'),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: nameController.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.of(ctx).pop('hold'),
+              child: const Text('Add unplaced'),
+            ),
+            ElevatedButton(
+              onPressed: nameController.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.of(ctx).pop('add'),
+              child: const Text('Add to rack'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (created != 'add' && created != 'hold') return;
+    final name = nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final bool place = created == 'add';
+    final heightU = math.max(1, int.tryParse(heightController.text.trim()) ?? 1);
+    final startU = math.max(1, int.tryParse(uController.text.trim()) ?? 1);
+    final qty = (int.tryParse(qtyController.text.trim()) ?? 1).clamp(1, 42);
+    final price = double.tryParse(priceController.text.trim()) ?? 0;
+
+    int added = 0;
+    int u = startU;
+    for (int i = 0; i < qty; i++) {
+      final stored = provider.addAvRackItem(
+        RackItem(
+          id: '',
+          label: name,
+          category: category,
+          partNumber: partController.text.trim(),
+          rackUnits: heightU,
+          price: price,
+          notes: notesController.text.trim(),
+        ),
+        rackId: place ? rackId : null,
+        face: face,
+        startU: place ? u : null,
+      );
+      if (stored != null) added++;
+      u += heightU;
+    }
+
+    if (!mounted) return;
+    final pricedNote = price > 0
+        ? ''
+        : ' It is on the cost sheet under Equipment, flagged as not priced — '
+              'type a price there or here.';
+    if (!place) {
+      _snack('$added × $name waiting to be placed.$pricedNote');
+      return;
+    }
+    _snack(
+      added == qty
+          ? '$qty × $name added from U$startU up.$pricedNote'
+          : added == 0
+          ? 'Nothing added — U$startU up is already occupied. '
+                'Add it unplaced and drag it in.'
+          : '$added of $qty added; the rest had nowhere to go.$pricedNote',
+      error: added < qty,
+    );
+  }
+
   /// Edits or removes one placed piece of hardware. The price is editable
   /// here because a plate bought for this job at a different price is a fact
   /// about this job, and should not rewrite the parts list.
@@ -1502,7 +1797,13 @@ class _AvRackViewState extends State<AvRackView> {
       text: item.price <= 0 ? '' : trimNumber(item.price),
     );
     final notesController = TextEditingController(text: item.notes);
-    String category = kRackItemCategories.contains(item.category)
+    // Both lists, because a rail holds parts AND boxes and this is the dialog
+    // for either. Which list the kind comes from is what decides whether the
+    // estimate quotes it as rack hardware or as equipment, so re-typing a
+    // Cisco switch as a "Blank plate" here must be possible — and must not
+    // happen by accident because the dropdown had nowhere else to land.
+    final kinds = [...kRackDeviceCategories, ...kRackItemCategories];
+    String category = kinds.contains(item.category)
         ? item.category
         : kRackItemCategories.last;
 
@@ -1525,9 +1826,13 @@ class _AvRackViewState extends State<AvRackView> {
                 DropdownButtonFormField<String>(
                   initialValue: category,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Kind'),
+                  decoration: const InputDecoration(
+                    labelText: 'Kind',
+                    helperText: 'Rack parts are quoted as hardware; '
+                        'everything else as equipment',
+                  ),
                   items: [
-                    for (final c in kRackItemCategories)
+                    for (final c in kinds)
                       DropdownMenuItem(value: c, child: Text(c)),
                   ],
                   onChanged: (v) => setLocal(() => category = v ?? category),
@@ -1647,6 +1952,19 @@ IconData iconForRackItem(String category) {
       return Icons.inbox;
     case 'cable management':
       return Icons.cable;
+    // The boxes on the rails that came in through "Add other device" — drawn
+    // as gear rather than as a part, because that is what they are.
+    case 'network switch':
+      return Icons.lan;
+    case 'computer':
+      return Icons.computer;
+    case 'appliance':
+    case 'other equipment':
+      return Icons.developer_board;
+    case 'amplifier':
+      return Icons.speaker;
+    case 'power':
+      return Icons.power;
     default:
       return Icons.hardware;
   }

@@ -1,7 +1,6 @@
 from extronlib.interface import SerialInterface, EthernetClientInterface
 import re
-from extronlib.system import Wait, ProgramLog
-from binascii import hexlify
+
 
 # --- Room Config Builder metadata (module level — read by the app, not by
 # the driver). "device_type" controls which device-family tab offers these
@@ -10,11 +9,11 @@ from binascii import hexlify
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "display",
-    "models": ["ME431", "ME501", "ME551", "ME651"],
+    "models": ["PN-LE601", "PN-LE701", "PN-LE801", "PN-LE901"],
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",
-        "net_port": 7142,
+        "net_port": 10064,
         "service_port": 0,
         "host": "processor1",
         "ip_address": "",  # site-specific — blank
@@ -24,7 +23,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Projector1",
         "lbl_name": "Lbl_Proj_Model_Proj1",
         "gve_id": "Proj1",
-        "name": "Display - ME431",
+        "name": "Display - PN-LE601",
         "device_id": None,
         "keep_alive_command": "Power",
         "keep_alive_interval": 30,
@@ -40,7 +39,7 @@ DEVICE_INFO = {
     # defaults declared by the wrapper classes at the bottom of this file.
     "network": {
         "protocol": "TCP",
-        "net_port": 7142,
+        "net_port": 10002,
         "service_port": 0,
     },
     "serialoverethernet": {
@@ -56,298 +55,334 @@ DEVICE_INFO = {
     },
 }
 
-
 class DeviceClass:
     def __init__(self):
 
         self.Unidirectional = 'False'
         self.connectionCounter = 15
         self.DefaultResponseTimeout = 0.3
+        self._compile_list = {}
         self.Subscription = {}
         self.counter = 0
         self.connectionFlag = True
         self.initializationChk = True
         self.Debug = False
-        self._DeviceID = 0x41
         self.Models = {}
-
         self.Commands = {
             'ConnectionStatus': {'Status': {}},
-            'AspectRatio': {'Status': {}, 'AllowedValues': ['Normal', 'Full', 'Wide', 'Zoom', '1:1']},
-            'AudioMute': {'Status': {}, 'AllowedValues': ['On', 'Off']},
-            'Input': {'Status': {}, 'AllowedValues': ['DisplayPort', 'HDMI 1', 'HDMI 2', 'Media Player', 'Compute Module', 'Option']},
-            'Power': {'Status': {}, 'AllowedValues': ['On', 'Off']},
-            'VideoMute': {'Status': {}, 'AllowedValues': ['On', 'Off']},
-            'Volume': {'Status': {}},
+            'AspectRatio': { 'Status': {}},
+            'ATVChannelDirectCommand': { 'Status': {}},
+            'AVMode': { 'Status': {}},
+            'ChannelStep': { 'Status': {}},
+            'ClosedCaption': { 'Status': {}},
+            'DTVChannelAirCommand': { 'Status': {}},
+            'DTVChannelCable1Command': { 'Status': {}},
+            'DTVChannelCable2Command': { 'Status': {}},
+            'Input': { 'Status': {}},
+            'MenuNavigation': { 'Status': {}},
+            'Mute': { 'Status': {}},
+            'Power': { 'Status': {}},
+            'Volume': { 'Status': {}},
         }
-
-        self.groupMatch = {
-            'Broadcast': 0x2A,
-            'Group A': 0x31,
-            'Group B': 0x32,
-            'Group C': 0x33,
-            'Group D': 0x34,
-            'Group E': 0x35,
-            'Group F': 0x36,
-            'Group G': 0x37,
-            'Group H': 0x38,
-            'Group I': 0x39,
-            'Group J': 0x3A,
-        }
-
-    @property
-    def DeviceID(self):
-        return self._DeviceID
-
-    @DeviceID.setter
-    def DeviceID(self, value):
-        if value in self.groupMatch:
-            self._DeviceID = self.groupMatch[value]
-        elif 1 <= int(value) <= 100:
-            self._DeviceID = 0x40 + int(value)
-        else:
-            print('Invalid Device ID parameter.')
-
-    def keep_alive(self):
-
-        command_string = b'\x010\x2A0A06\x0201D6\x03'
-        checksum = self.__calculate_checksum(command_string)
-
-        self.Send(command_string + checksum + b'\r')
-
-    def __calculate_checksum(self, command_string):
-
-        checksum = 0
-        for byte in command_string[1:]:
-            checksum ^= byte
-        return bytes([checksum])
-
-    def __build_setstring(self, op_code_page, op_code, value):
-
-        header = b'\x010' + bytes([self._DeviceID]) + b'0E0A'
-        message = b'\x02' + op_code_page + op_code + b'00' + value + b'\x03'
-        checksum = self.__calculate_checksum(header + message)
-        delimiter = b'\r'
-
-        return header + message + checksum + delimiter
-
-    def __build_getstring(self, op_code_page, op_code):
-
-        header = b'\x010' + bytes([self._DeviceID]) + b'0C06'
-        message = b'\x02' + op_code_page + op_code + b'\x03'
-        checksum = self.__calculate_checksum(header + message)
-        delimiter = b'\r'
-
-        return header + message + checksum + delimiter
 
     def SetAspectRatio(self, value, qualifier):
 
         ValueStateValues = {
-            'Normal': b'01',
-            'Full': b'02',
-            'Wide': b'03',
-            'Zoom': b'04',
-            '1:1': b'07'
+            'Side Bar (AV)'     : 'WIDE1   \r', 
+            'S. Stretch (AV)'   : 'WIDE2   \r', 
+            'Zoom (AV)'         : 'WIDE3   \r', 
+            'Stretch (AV)'      : 'WIDE4   \r', 
+            'Normal (PC)'       : 'WIDE5   \r', 
+            'Dot by Dot (PC)'   : 'WIDE8   \r', 
+            'Stretch (PC)'      : 'WIDE7   \r', 
+            'Full Screen (AV)'  : 'WIDE9   \r', 
+            'Auto'              : 'WIDE10  \r', 
+            'Original'          : 'WIDE11  \r'
         }
 
-        if value in ValueStateValues:
-            AspectRatioCmdString = self.__build_setstring(b'02', b'70', ValueStateValues[value])
-            self.__SetHelper('AspectRatio', AspectRatioCmdString, value, qualifier)
-        else:
-            self.Discard('Invalid Command for SetAspectRatio')
+        AspectRatioCmdString = ValueStateValues[value]
+        self.__SetHelper('AspectRatio', AspectRatioCmdString, value, qualifier)
 
     def UpdateAspectRatio(self, value, qualifier):
 
         ValueStateValues = {
-            b'1': 'Normal',
-            b'2': 'Full',
-            b'3': 'Wide',
-            b'4': 'Zoom',
-            b'7': '1:1'
+            '1' : 'Side Bar (AV)', 
+            '2' : 'S. Stretch (AV)', 
+            '3' : 'Zoom (AV)', 
+            '4' : 'Stretch (AV)', 
+            '5' : 'Normal (PC)', 
+            '8' : 'Dot by Dot (PC)', 
+            '7' : 'Stretch (PC)', 
+            '9' : 'Full Screen (AV)', 
+            '10' : 'Auto', 
+            '11' : 'Original'
         }
 
-        AspectRatioCmdString = self.__build_getstring(b'02', b'70')
+        AspectRatioCmdString = 'WIDE????\r'
         res = self.__UpdateHelper('AspectRatio', AspectRatioCmdString, value, qualifier)
         if res:
             try:
-                value = ValueStateValues[res[23:24]]
+                value = ValueStateValues[res[0:-1]]
                 self.WriteStatus('AspectRatio', value, qualifier)
             except (KeyError, IndexError):
-                self.Error(['Aspect Ratio: Invalid/unexpected response'])
+                self.Error(['Aspect Ratio: Invalid/Unexpected Response'])
 
-    def SetAudioMute(self, value, qualifier):
+    def SetATVChannelDirectCommand(self, value, qualifier):
 
-        ValueStateValues = {
-            'On': b'01',
-            'Off': b'02'
-        }
-
-        if value in ValueStateValues:
-            AudioMuteCmdString = self.__build_setstring(b'00', b'8D', ValueStateValues[value])
-            self.__SetHelper('AudioMute', AudioMuteCmdString, value, qualifier)
+        temp = value
+        if temp:
+            if 1 <= int(temp) <= 135:
+                ATVChannelDirectCommandCmdString = 'DCCH{0} \r'.format(temp.zfill(3))
+                self.__SetHelper('ATVChannelDirectCommand', ATVChannelDirectCommandCmdString, value, qualifier)
+            else:
+                self.Discard('Invalid Command for SetATVChannelDirectCommand')
         else:
-            self.Discard('Invalid Command for SetAudioMute')
+            self.Discard('Invalid Command for SetATVChannelDirectCommand')
 
-    def UpdateAudioMute(self, value, qualifier):
+    def SetAVMode(self, value, qualifier):
 
         ValueStateValues = {
-            b'1': 'On',
-            b'2': 'Off'
+            'Standard'        : 'AVMD1   \r', 
+            'Movie'           : 'AVMD2   \r', 
+            'User'            : 'AVMD4   \r', 
+            'Dynamic (Fixed)' : 'AVMD5   \r', 
+            'Dynamic'         : 'AVMD6   \r', 
+            'PC'              : 'AVMD7   \r'
         }
 
-        AudioMuteCmdString = self.__build_getstring(b'00', b'8D')
-        res = self.__UpdateHelper('AudioMute', AudioMuteCmdString, value, qualifier)
+        AVModeCmdString = ValueStateValues[value]
+        self.__SetHelper('AVMode', AVModeCmdString, value, qualifier)
+
+    def UpdateAVMode(self, value, qualifier):
+
+        ValueStateValues = {
+            '1' : 'Standard', 
+            '2' : 'Movie', 
+            '4' : 'User', 
+            '5' : 'Dynamic (Fixed)', 
+            '6' : 'Dynamic', 
+            '7' : 'PC'
+        }
+
+        AVModeCmdString = 'AVMD????\r'
+        res = self.__UpdateHelper('AVMode', AVModeCmdString, value, qualifier)
         if res:
             try:
-                value = ValueStateValues[res[23:24]]
-                self.WriteStatus('AudioMute', value, qualifier)
+                value = ValueStateValues[res[0:-1]]
+                self.WriteStatus('AVMode', value, qualifier)
             except (KeyError, IndexError):
-                self.Error(['Audio Mute: Invalid/unexpected response'])
+                self.Error(['AV Mode: Invalid/Unexpected Response'])
+
+    def SetChannelStep(self, value, qualifier):
+
+        ValueStateValues = {
+            'Up'    : 'CHUP1   \r', 
+            'Down'  : 'CHDW1   \r'
+        }
+
+        ChannelStepCmdString = ValueStateValues[value]
+        self.__SetHelper('ChannelStep', ChannelStepCmdString, value, qualifier)
+    def SetClosedCaption(self, value, qualifier):
+
+        ClosedCaptionCmdString = 'CLCP1   \r'
+        self.__SetHelper('ClosedCaption', ClosedCaptionCmdString, value, qualifier)
+    def SetDTVChannelAirCommand(self, value, qualifier):
+
+        temp = value
+        if temp:
+            if 100 <= int(temp) <= 9999:
+                DTVChannelAirCommandCmdString = 'DA2P{0:04d}\r'.format(int(temp))
+                self.__SetHelper('DTVChannelAirCommand', DTVChannelAirCommandCmdString, value, qualifier)
+            else:
+                self.Discard('Invalid Command for SetDTVChannelAirCommand')
+
+    def SetDTVChannelCable1Command(self, value, qualifier):
+
+        temp = value
+        if temp:
+            if temp.__contains__('.'):
+                major, minor = temp.split('.')
+            else:   #if major is the only value
+                major = temp
+                minor = '0'
+            if 1 <= int(major) <= 999 and 0 <= int(minor) <= 999:
+                DTVChannelCableMajorCommandCmdString = 'DC2U{0:03d} \rDC2L{1:03d} \r'.format(int(major), int(minor))
+                self.__SetHelper('DTVChannelCable1Command', DTVChannelCableMajorCommandCmdString, value, qualifier)
+            else:
+                self.Discard('Invalid Command for SetDTVChannelCable1Command')
+        else:
+            self.Discard('Invalid Command for SetDTVChannelCable1Command')
+
+    def SetDTVChannelCable2Command(self, value, qualifier):
+
+        temp = value
+        if temp:
+            if 0 <= int(temp) <= 16383:
+                DTVChannelCable2CommandCmdString = 'DC1{0:05d}\r'.format(int(temp))
+                self.__SetHelper('DTVChannelCable2Command', DTVChannelCable2CommandCmdString, value, qualifier)
+            else:
+                self.Discard('Invalid Command for SetDTVChannelCable2Command')
+        else:
+            self.Discard('Invalid Command for SetDTVChannelCable2Command')
 
     def SetInput(self, value, qualifier):
 
         ValueStateValues = {
-            'DisplayPort': b'0F',
-            'HDMI 1': b'11',
-            'HDMI 2': b'12',
-            'Media Player': b'87',
-            'Compute Module': b'88',
-            'Option': b'0D'
+            'HDMI 1'    : 'IAVD1   \r', 
+            'HDMI 2'    : 'IAVD2   \r', 
+            'HDMI 3'    : 'IAVD3   \r', 
+            'Video'     : 'IAVD4   \r', 
+            'Component' : 'IAVD5   \r', 
+            'PC'        : 'IAVD6   \r', 
+            'TV'        : 'ITVD0   \r'
         }
 
-        if value in ValueStateValues:
-            InputCmdString = self.__build_setstring(b'00', b'60', ValueStateValues[value])
-            self.__SetHelper('Input', InputCmdString, value, qualifier)
-        else:
-            self.Discard('Invalid Command for SetInput')
+        InputCmdString = ValueStateValues[value]
+        self.__SetHelper('Input', InputCmdString, value, qualifier)
 
     def UpdateInput(self, value, qualifier):
 
         ValueStateValues = {
-            b'0F': 'DisplayPort',
-            b'11': 'HDMI 1',
-            b'12': 'HDMI 2',
-            b'87': 'Media Player',
-            b'88': 'Compute Module',
-            b'0D': 'Option'
+            '1' : 'HDMI 1', 
+            '2' : 'HDMI 2', 
+            '3' : 'HDMI 3', 
+            '4' : 'Video', 
+            '5' : 'Component', 
+            '6' : 'PC', 
         }
 
-        InputCmdString = self.__build_getstring(b'00', b'60')
+        InputCmdString = 'IAVD????\r'
         res = self.__UpdateHelper('Input', InputCmdString, value, qualifier)
         if res:
             try:
-                value = ValueStateValues[res[22:24]]
+                value = ValueStateValues[res[0:-1]]
                 self.WriteStatus('Input', value, qualifier)
             except (KeyError, IndexError):
-                self.Error(['Input: Invalid/unexpected response'])
+                self.Error(['Input: Invalid/Unexpected Response'])
+
+    def SetMenuNavigation(self, value, qualifier):
+
+        ValueStateValues = {
+            'Menu'      : 'RCKY38  \r', 
+            'Enter'     : 'RCKY40  \r', 
+            'Return'    : 'RCKY45  \r', 
+            'Exit'      : 'RCKY46  \r', 
+            'Up'        : 'RCKY41  \r', 
+            'Down'      : 'RCKY42  \r', 
+            'Left'      : 'RCKY43  \r', 
+            'Right'     : 'RCKY44  \r'
+        }
+
+        MenuNavigationCmdString = ValueStateValues[value]
+        self.__SetHelper('MenuNavigation', MenuNavigationCmdString, value, qualifier)
+
+    def SetMute(self, value, qualifier):
+
+        ValueStateValues = {
+            'On'  : 'MUTE1   \r', 
+            'Off' : 'MUTE2   \r'
+        }
+
+        MuteCmdString = ValueStateValues[value]
+        self.__SetHelper('Mute', MuteCmdString, value, qualifier)
+
+    def UpdateMute(self, value, qualifier):
+
+        ValueStateValues = {
+            '1' : 'On', 
+            '2' : 'Off'
+        }
+
+        MuteCmdString = 'MUTE????\r'
+        res = self.__UpdateHelper('Mute', MuteCmdString, value, qualifier)
+        if res:
+            try:
+                value = ValueStateValues[res[0:-1]]
+                self.WriteStatus('Mute', value, qualifier)
+            except (KeyError, IndexError):
+                self.Error(['Mute: Invalid/Unexpected Response'])
 
     def SetPower(self, value, qualifier):
 
-        ValueStateValues = {
-            'On': b'1',
-            'Off': b'4',
+        PowerState = {
+            'On'    : 'POWR1   \r', 
+            'Off'   : 'POWR0   \r'
         }
 
-        if value in ValueStateValues:
-            temp = b''.join([b'\x010', bytes([self._DeviceID]), b'0A0C\x02C203D6000', ValueStateValues[value], b'\x03'])
-            PowerCmdString = b''.join([temp, self.__calculate_checksum(temp), b'\r'])
-            self.__SetHelper('Power', PowerCmdString, value, qualifier)
+        PowerCmdString = PowerState[value]
+        if value == 'On':
+                self.__SetHelper('Power', PowerCmdString, value, qualifier)
         else:
-            self.Discard('Invalid Command for SetPower')
+            if 'Serial' in self.ConnectionType:
+                self.__SetHelper('Power', 'RSPW1   \r', value, qualifier)
+                self.__SetHelper('Power', PowerCmdString, value, qualifier)
+            else:
+                self.__SetHelper('Power', 'RSPW2   \r', value, qualifier)
+                self.__SetHelper('Power', PowerCmdString, value, qualifier)            
 
     def UpdatePower(self, value, qualifier):
 
         ValueStateValues = {
-            b'1': 'On',
-            b'4': 'Off',
-            b'2': 'Standby (Power Save)'
+            '1' : 'On', 
+            '0' : 'Off'
         }
 
-        temp = b''.join([b'\x010', bytes([self._DeviceID]), b'0A06\x0201D6\x03'])
-        PowerCmdString = b''.join([temp, self.__calculate_checksum(temp), b'\r'])
+        PowerCmdString = 'POWR????\r'
         res = self.__UpdateHelper('Power', PowerCmdString, value, qualifier)
         if res:
             try:
-                value = ValueStateValues[res[23:24]]
+                value = ValueStateValues[res[0:-1]]
                 self.WriteStatus('Power', value, qualifier)
             except (KeyError, IndexError):
-                self.Error(['Power: Invalid/unexpected response'])
-
-    def SetVideoMute(self, value, qualifier):
-
-        ValueStateValues = {
-            'On': b'01',
-            'Off': b'02'
-        }
-
-        if value in ValueStateValues:
-            VideoMuteCmdString = self.__build_setstring(b'10', b'B6', ValueStateValues[value])
-            self.__SetHelper('VideoMute', VideoMuteCmdString, value, qualifier)
-        else:
-            self.Discard('Invalid Command for SetVideoMute')
-
-    def UpdateVideoMute(self, value, qualifier):
-
-        ValueStateValues = {
-            b'1': 'On',
-            b'2': 'Off'
-        }
-
-        VideoMuteCmdString = self.__build_getstring(b'10', b'B6')
-        res = self.__UpdateHelper('VideoMute', VideoMuteCmdString, value, qualifier)
-        if res:
-            try:
-                value = ValueStateValues[res[23:24]]
-                self.WriteStatus('VideoMute', value, qualifier)
-            except (KeyError, IndexError):
-                self.Error(['Video Mute: Invalid/unexpected response'])
+                self.Error(['Power: Invalid/Unexpected Response'])
 
     def SetVolume(self, value, qualifier):
 
-        ValueConstraints = {
-            'Min': 0,
-            'Max': 100
-        }
-
-        if ValueConstraints['Min'] <= value <= ValueConstraints['Max']:
-            VolumeCmdString = self.__build_setstring(b'00', b'62', hexlify(value.to_bytes(1, 'big')).upper())
+        if 0 <= value <= 100:
+            VolumeCmdString = 'VOLM{0:03d} \r'.format(value)
             self.__SetHelper('Volume', VolumeCmdString, value, qualifier)
         else:
             self.Discard('Invalid Command for SetVolume')
 
     def UpdateVolume(self, value, qualifier):
 
-        VolumeCmdString = self.__build_getstring(b'00', b'62')
+        VolumeCmdString = 'VOLM????\r'
         res = self.__UpdateHelper('Volume', VolumeCmdString, value, qualifier)
         if res:
             try:
-                value = int(res[22:24], 16)
+                value = int(res)
                 self.WriteStatus('Volume', value, qualifier)
-            except (ValueError, IndexError):
-                self.Error(['Volume: Invalid/unexpected response'])
+            except ValueError:
+                self.Error(['Volume: Invalid/Unexpected Response'])
 
     def __CheckResponseForErrors(self, sourceCmdName, response):
 
-        if response and response[8:10].decode() == '01':
-            self.Error(['{0}: An error occurred.'.format(sourceCmdName)])
-            response = ''
+        if response:
+            if response[:3] == 'ERR':
+                self.Error(['{0} Communication error or incorrect command'.format(sourceCmdName)])
+                response = ''
         return response
 
     def __SetHelper(self, command, commandstring, value, qualifier):
         self.Debug = True
-
-        if self.Unidirectional == 'True' or self._DeviceID == 0x2A or (0x31 <= self._DeviceID <= 0x3A):
-            self.Send(commandstring)
-        else:
-            res = self.SendAndWait(commandstring, self.DefaultResponseTimeout, deliTag='\r')
-            if not res:
-                self.Error(['{}: Invalid/unexpected response'.format(command)])
+        if self.Unidirectional == 'True':
+            if command == 'Power':
+                self.SendAndWait(commandstring, 3.0, deliTag=b'\r')
             else:
-                res = self.__CheckResponseForErrors(command, res)
+                self.Send(commandstring)
+        else:
+            if command == 'Power':
+                res = self.SendAndWait(commandstring, 3.0, deliTag=b'\r')
+            else:
+                res = self.SendAndWait(commandstring, self.DefaultResponseTimeout, deliTag=b'\r')
+            if not res:
+                self.Error(['{0} Invalid/Unexpected Response'.format(command)])
+            else:
+                self.__CheckResponseForErrors(command, res.decode())
 
     def __UpdateHelper(self, command, commandstring, value, qualifier):
 
-        if self.Unidirectional == 'True' or self._DeviceID == 0x2A or (0x31 <= self._DeviceID <= 0x3A):
+        if self.Unidirectional == 'True':
             self.Discard('Inappropriate Command ' + command)
             return ''
         else:
@@ -359,49 +394,48 @@ class DeviceClass:
             if self.counter > self.connectionCounter and self.connectionFlag:
                 self.OnDisconnected()
 
-            res = self.SendAndWait(commandstring, self.DefaultResponseTimeout, deliTag='\r')
+            res = self.SendAndWait(commandstring, self.DefaultResponseTimeout, deliTag=b'\r')              
             if not res:
-                return ''
+                self.Error(['{0} Invalid/Unexpected Response'.format(command)])
             else:
-                return self.__CheckResponseForErrors(command, res)
+                return self.__CheckResponseForErrors(command, res.decode())          
+                     
 
     def OnConnected(self):
         self.connectionFlag = True
         self.WriteStatus('ConnectionStatus', 'Connected')
         self.counter = 0
 
-
     def OnDisconnected(self):
         self.WriteStatus('ConnectionStatus', 'Disconnected')
         self.connectionFlag = False
 
-    ######################################################
+    ######################################################    
     # RECOMMENDED not to modify the code below this point
     ######################################################
-
-    # Send Control Commands
+	# Send Control Commands
     def Set(self, command, value, qualifier=None):
-        method = getattr(self, 'Set%s' % command, None)
+        method = getattr(self, 'Set%s' % command)
         if method is not None and callable(method):
             method(value, qualifier)
         else:
-            raise AttributeError(command + 'does not support Set.')
+            print(command, 'does not support Set.')
 
 
     # Send Update Commands
     def Update(self, command, qualifier=None):
-        method = getattr(self, 'Update%s' % command, None)
+        method = getattr(self, 'Update%s' % command)
         if method is not None and callable(method):
             method(None, qualifier)
         else:
-            raise AttributeError(command + 'does not support Update.')
+            print(command, 'does not support Update.')
 
     # This method is to tie an specific command with a parameter to a call back method
     # when its value is updated. It sets how often the command will be query, if the command
     # have the update method.
     # If the command doesn't have the update feature then that command is only used for feedback 
     def SubscribeStatus(self, command, qualifier, callback):
-        Command = self.Commands.get(command, None)
+        Command = self.Commands.get(command)
         if Command:
             if command not in self.Subscription:
                 self.Subscription[command] = {'method':{}}
@@ -423,7 +457,7 @@ class DeviceClass:
             Method['callback'] = callback
             Method['qualifier'] = qualifier    
         else:
-            raise KeyError('Invalid command for SubscribeStatus ' + command)
+            print(command, 'does not exist in the module')
 
     # This method is to check the command with new status have a callback method then trigger the callback
     def NewStatus(self, command, value, qualifier):
@@ -467,21 +501,18 @@ class DeviceClass:
 
     # Read the value from a command.
     def ReadStatus(self, command, qualifier=None):
-        Command = self.Commands.get(command, None)
-        if Command:
-            Status = Command['Status']
-            if qualifier:
-                for Parameter in Command['Parameters']:
-                    try:
-                        Status = Status[qualifier[Parameter]]
-                    except KeyError:
-                        return None
-            try:
-                return Status['Live']
-            except:
-                return None
-        else:
-            raise KeyError('Invalid command for ReadStatus: ' + command)
+        Command = self.Commands[command]
+        Status = Command['Status']
+        if qualifier:
+            for Parameter in Command['Parameters']:
+                try:
+                    Status = Status[qualifier[Parameter]]
+                except KeyError:
+                    return None
+        try:
+            return Status['Live']
+        except:
+            return None
 
 class SerialClass(SerialInterface, DeviceClass):
 
@@ -550,3 +581,4 @@ class EthernetClass(EthernetClientInterface, DeviceClass):
     def Disconnect(self):
         EthernetClientInterface.Disconnect(self)
         self.OnDisconnected()
+

@@ -23,7 +23,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_DSP1",
         "lbl_name": "Lbl_DSP_Name_Status",
         "gve_id": "DSP1",
-        "name": "DSP - extr_dsp_DMP_64_Plus_Series",
+        "name": "DSP - extr_dsp_DMP_64_Plus",
         "keep_alive_command": "PartNumber",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
@@ -57,7 +57,6 @@ DEVICE_INFO = {
 
 class DeviceClass:
     def __init__(self):
-
         self.Unidirectional = 'False'
         self.connectionCounter = 15
         self.DefaultResponseTimeout = 0.3
@@ -67,7 +66,7 @@ class DeviceClass:
         self.__maxBufferSize = 2048
         self.__matchStringDict = {}
         self.counter = 0
-        self.connectionFlag = False
+        self.connectionFlag = True
         self.initializationChk = True
         self.Debug = False
         self.Models = {
@@ -388,7 +387,7 @@ class DeviceClass:
             self.AddMatchString(compile(b'Gpi([1-8])\*([0-1])\r\n'), self.__MatchDigitalInputStatus, None)
             self.AddMatchString(compile(b'VoipDND([1-8]),([0-1])\r\n'), self.__MatchDoNotDisturb, None)
             self.AddMatchString(compile(b'VoipDUR([1-8]),([1-8]),([0-9]+)\r\n'), self.__MatchCallDuration, None)
-            self.AddMatchString(compile(b'(Pno60-182[34]-(01|10))\r\n'), self.__MatchPartNumber, None)
+            self.AddMatchString(compile(b'([0-9]{2}-[0-9]{4}-[0-9]{2})\r\n'), self.__MatchPartNumber, None)
             self.AddMatchString(compile(b'DsG(502[0-9]{2})\*([0-9 -]{1,5})\r\n'), self.__MatchExpansionInputPremixerGain, None)
             self.AddMatchString(compile(b'DsM(502[0-9]{2})\*([01])\r\n'), self.__MatchExpansionInputPremixerMute, None)
             self.AddMatchString(compile(b'DsG(60016|60017|60018|60019|60020|60021|60022|60023|60024|60025|60026|60027|60028|60029|60030|60031)\*([0-9 -]{1,5})\r\n'), self.__MatchExpansionOutputAttenuation, None)
@@ -2786,6 +2785,7 @@ class DeviceClass:
         else:
             self.Discard('Invalid Command for UpdatePlayerControl')
 
+
     def __MatchPlayerControl(self, match, tag):
 
         ValueStateValues = {
@@ -3426,6 +3426,7 @@ class DeviceClass:
 
     # Send Control Commands
     def Set(self, command, value, qualifier=None):
+        #print("DMP Set Command, Value, and Qualifier: {}, {}, and {}".format(command, value, qualifier))
         method = getattr(self, 'Set%s' % command, None)
         if method is not None and callable(method):
             method(value, qualifier)
@@ -3434,6 +3435,7 @@ class DeviceClass:
 
     # Send Update Commands
     def Update(self, command, qualifier=None):
+        #print("DMP Update Command and Qualifier: {}, and {}".format(command, qualifier))
         method = getattr(self, 'Update%s' % command, None)
         if method is not None and callable(method):
             method(None, qualifier)
@@ -3445,6 +3447,7 @@ class DeviceClass:
     # have the update method.
     # If the command doesn't have the update feature then that command is only used for feedback 
     def SubscribeStatus(self, command, qualifier, callback):
+        #print("DMP SubscribeStatus Command, Qualifier, and Callback: {}, {}, and {}".format(command, qualifier, callback))
         Command = self.Commands.get(command, None)
         if Command:
             if command not in self.Subscription:
@@ -3471,6 +3474,7 @@ class DeviceClass:
 
     # This method is to check the command with new status have a callback method then trigger the callback
     def NewStatus(self, command, value, qualifier):
+        #print("DMP Newstatus Command, Value, and Qualifier: {}, {}, and {}".format(command, value, qualifier))
         if command in self.Subscription :
             Subscribe = self.Subscription[command]
             Method = Subscribe['method']
@@ -3486,6 +3490,7 @@ class DeviceClass:
 
     # Save new status to the command
     def WriteStatus(self, command, value, qualifier=None):
+        #print("DMP WriteStatus Command, Value, and Qualifier: {}, {}, and {}".format(command, value, qualifier))
         self.counter = 0
         if not self.connectionFlag:
             self.OnConnected()
@@ -3511,6 +3516,7 @@ class DeviceClass:
 
     # Read the value from a command.
     def ReadStatus(self, command, qualifier=None):
+        #print("DMP ReadStatus Command, and Qualifier: {}, and {}".format(command, qualifier))
         Command = self.Commands.get(command, None)
         if Command:
             Status = Command['Status']
@@ -3528,6 +3534,7 @@ class DeviceClass:
             raise KeyError('Invalid command for ReadStatus: ' + command)
         
     def __ReceiveData(self, interface, data):
+        #print("DMP RCV: {}".format(data))
         # Handle incoming data
         self.__receiveBuffer += data
         index = 0    # Start of possible good data
@@ -3553,6 +3560,7 @@ class DeviceClass:
 
     # Add regular expression so that it can be check on incoming data from device.
     def AddMatchString(self, regex_string, callback, arg):
+        #print("DMP REGEX string, callback, and arg: {}, {}, and {}".format(regex_string, callback, arg))
         if regex_string not in self.__matchStringDict:
             self.__matchStringDict[regex_string] = {'callback': callback, 'para':arg}
 

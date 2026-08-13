@@ -110,6 +110,10 @@ class ModelDefaultMismatch {
 /// Every device in the loaded room whose block disagrees with the DEVICE_INFO
 /// of the driver its model names.
 ///
+/// [onlySection] narrows it to one device block — the Devices tab asks about
+/// the device on screen, where "every device in the room" would be a review of
+/// tabs the reader is not looking at.
+///
 /// Two kinds of difference are deliberately NOT reported:
 ///
 ///   * a driver value that is blank against a room value that is not. Every
@@ -118,10 +122,14 @@ class ModelDefaultMismatch {
 ///     wipe the address of a device that is already commissioned.
 ///   * a key the schema hides for the block the change would produce — the
 ///     serial_port on a device the same driver puts on the network.
-List<ModelDefaultMismatch> auditModelDefaults(AppStateProvider provider) {
+List<ModelDefaultMismatch> auditModelDefaults(
+  AppStateProvider provider, {
+  String? onlySection,
+}) {
   final out = <ModelDefaultMismatch>[];
 
   provider.roomConfig.forEach((sectionKey, block) {
+    if (onlySection != null && sectionKey != onlySection) return;
     if (block is! Map) return;
     if (provider.uiSchema.deviceTypeForSection(sectionKey) == null) return;
     final model = block['model']?.toString().trim() ?? '';

@@ -614,6 +614,84 @@ void main() {
     });
   });
 
+  group('what is on the rails', () {
+    /// A rack item added straight to the provider, placed or not — the estimate
+    /// prices it either way.
+    RackItem part(String label, String category, {double price = 0}) =>
+        RackItem(id: '', label: label, category: category, price: price);
+
+    test('a plate is hardware and a switch racked beside it is equipment', () {
+      final p = room();
+      p.addAvRackItem(part('2U vent plate', 'Vent plate', price: 40));
+      p.addAvRackItem(part('Cisco C9300-24P', 'Network switch'));
+
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+        baseCosts: BaseCostBook(),
+      );
+
+      expect(
+        estimate.hardware.map((l) => l.description),
+        ['2U vent plate'],
+      );
+      expect(
+        estimate.equipment.map((l) => l.description),
+        contains('Cisco C9300-24P'),
+      );
+    });
+
+    test('a box with no price is reported as needing one', () {
+      final p = room();
+      p.addAvRackItem(part('Cisco C9300-24P', 'Network switch'));
+
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+        baseCosts: BaseCostBook(),
+      );
+
+      final line = estimate.equipment
+          .firstWhere((l) => l.description == 'Cisco C9300-24P');
+      expect(line.source, PriceSource.none);
+      expect(estimate.isComplete, isFalse);
+      expect(estimate.unpricedDevices, greaterThan(0));
+
+      // ...and a price typed on the line is the whole fix.
+      p.setAvCostPrice(line.key, 4200);
+      final priced = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+        baseCosts: BaseCostBook(),
+      );
+      expect(priced.isComplete, isTrue);
+      expect(
+        priced.equipment
+            .firstWhere((l) => l.description == 'Cisco C9300-24P')
+            .unitPrice,
+        4200,
+      );
+    });
+
+    test('an item written before there were kinds is still hardware', () {
+      final p = room();
+      p.addAvRackItem(part('Blank plate', ''));
+
+      final estimate = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: catalog(),
+        settings: p.avCost,
+        baseCosts: BaseCostBook(),
+      );
+
+      expect(estimate.hardware.single.description, 'Blank plate');
+      expect(estimate.equipment, isEmpty);
+    });
+  });
+
   test('the cost estimate round-trips through the AV flow sidecar', () {
     final p = room();
     p.setAvCostTax(percent: 8.25, label: 'State tax', currency: r'$');

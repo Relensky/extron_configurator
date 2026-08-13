@@ -2,6 +2,53 @@ from extronlib.interface import SerialInterface, EthernetClientInterface
 import re
 from extronlib.system import Wait
 
+# --- Room Config Builder metadata (module level — read by the app, not by
+# the driver). "device_type" controls which device-family tab offers these
+# models; "models" marks this file as the DEFAULT module for those models
+# in the app's Model dropdown; "connection" and "defaults" keys are
+# config.json device properties applied to the device when a model is picked.
+DEVICE_INFO = {
+    "omit": ["group_*"],
+    "device_type": "switcher",
+    "models": ["DTP3 T 212 D"],
+    "connection": {
+        "com_type": "SerialOverEthernet",
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "host": "processor1",
+        "ip_address": "",  # site-specific — blank
+        "serial_port": "",  # site-specific — blank
+    },
+    "defaults": {
+        "btn_name": "Btn_Con_Switcher1",
+        "lbl_name": "Lbl_Switcher_Model",
+        "gve_id": "Switch1",
+        "name": "Wall Switcher - DTP3 T 212 D",
+        "keep_alive_command": "VideoMute",
+        "keep_alive_interval": 30,
+        "keep_alive_trigger": None,
+        "manual_disconnect": False,
+        "user": "admin",
+        "password": "ATEC2007",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". This driver has no vendor communication
+    # sheet, so the figures are the defaults its own wrapper classes declare.
+    "serialoverethernet": {
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "host": "processor1",
+    },
+    "serial": {
+        "baud": 9600,
+        "host": "processor1",  # the processor the COM port is on
+    },
+}
+
 class DeviceClass:
     def __init__(self):
 

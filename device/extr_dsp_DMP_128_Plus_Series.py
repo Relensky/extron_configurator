@@ -9,49 +9,48 @@ from extronlib.system import Wait, ProgramLog
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "dsp",
-    "models": [
-        "DMP 128 Plus",
-        "DMP 128 Plus C",
-        "DMP 128 Plus C AT",
-        "DMP 128 Plus AT",
-        "DMP 128 Plus C V",
-        "DMP 128 Plus C V AT",
-    ],
+    "models": [],
     "connection": {
         "com_type": "Network",
-        "protocol": "TCP",
+        "protocol": "SSH",
         "net_port": 22023,
         "service_port": 0,
         "host": "processor1",
         "ip_address": "",  # site-specific — blank
         "serial_port": "",  # site-specific — blank
     },
-    # "model" and "module" are set by the model picker itself, so they are not
-    # listed here. The "group_*" values are the audio group numbers this DSP
-    # is wired to.
     "defaults": {
         "btn_name": "Btn_Con_DSP1",
         "lbl_name": "Lbl_DSP_Name_Status",
         "gve_id": "DSP1",
-        "name": "DSP - DMP 128 Plus",
-        "device_id": None,
-        "keep_alive_command": "RefreshMatrix",
+        "name": "DSP - extr_dsp_DMP_128_Plus_Series",
+        "keep_alive_command": "PartNumber",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "admin",
-        "password": "",  # site-specific — blank
-        "group_prog_gain": "1",
-        "group_mic_in_room_mute": "2",
-        "group_voice_lift_mute": "3",
-        "group_mic_ceiling_mute": "4",
-        "group_prog_mute": "5",
-        "group_mic_master_mute": "6",
-        "group_pc_mic_input_gain": "7",
-        "group_pc_output_gain": "8",
-        "group_pc_output_mute": "9",
-        "group_mic_master_gain": "10",
-        "group_pc_record_mute": "11",
+        "password": "ATEC2007",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "network": {
+        "protocol": "SSH",
+        "net_port": 22023,
+        "service_port": 0,
+    },
+    "serialoverethernet": {
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "host": "processor1",
+    },
+    "serial": {
+        "baud": 38400,
+        "host": "processor1",  # the processor the COM port is on
     },
 }
 

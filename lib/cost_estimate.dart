@@ -756,7 +756,11 @@ CostEstimate computeRoomCost({
     );
   }
 
-  // --- rack hardware: the plates, shelves and drawers in the frames --------
+  // --- what is in the frames ------------------------------------------------
+  //  Two destinations, one pricing ladder. A plate, a shelf or a lacing bar is
+  //  rack hardware; a Cisco switch racked on the same rail is equipment, and
+  //  listing it under "Rack hardware" would hide a four-figure box in the
+  //  section nobody totals. See [isRackHardwareCategory].
   final hardware = <CostLine>[];
   for (final line in groupRackItems(model.rackItems)) {
     final catalog = library.templateForModel(line.catalogModel);
@@ -788,22 +792,25 @@ CostEstimate computeRoomCost({
       unpricedDevices += line.qty.toInt();
     }
     if (source == PriceSource.catalogOtherTier) otherTierLines++;
-    hardware.add(
-      CostLine(
-        key: line.key,
-        description: line.description,
-        model: line.catalogModel,
-        // The catalog's number, or — when the entry it came from is gone —
-        // the one recorded on the placed item, same as its price.
-        partNumber: catalog?.partNumber.isNotEmpty == true
-            ? catalog!.partNumber
-            : line.partNumber,
-        category: line.category,
-        qty: line.qty,
-        unitPrice: price,
-        source: source,
-      ),
+    final costLine = CostLine(
+      key: line.key,
+      description: line.description,
+      model: line.catalogModel,
+      // The catalog's number, or — when the entry it came from is gone —
+      // the one recorded on the placed item, same as its price.
+      partNumber: catalog?.partNumber.isNotEmpty == true
+          ? catalog!.partNumber
+          : line.partNumber,
+      category: line.category,
+      qty: line.qty,
+      unitPrice: price,
+      source: source,
     );
+    if (isRackHardwareCategory(line.category)) {
+      hardware.add(costLine);
+    } else {
+      equipment.add(costLine);
+    }
   }
 
   // --- hardware and cable bought for the job but not on the drawing -------

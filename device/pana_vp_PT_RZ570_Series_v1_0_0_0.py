@@ -45,7 +45,21 @@ DEVICE_INFO = {
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "",
-        "password": "",  # site-specific — blank
+        "password": "ATEC2008",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "network": {
+        "protocol": "TCP",
+        "net_port": 1024,
+        "service_port": 0,
+    },
+    "serial": {
+        "baud": 9600,
+        "host": "processor1",  # the processor the COM port is on
     },
 }
 
@@ -66,6 +80,11 @@ class DeviceSerialClass():
         self.connectionFlag = True
         self.initializationChk = True
         self.deviceID = '1'
+        # Every serial command frames the ID as \x02AD<id>;. Default it
+        # here so the driver works when the room config has no device_id --
+        # without this self.DeviceID only exists once SetDisplayID() is called,
+        # and the first Update raises AttributeError.
+        self._DeviceID = '\x02AD01;'
         self.Models = {}
 
         self.Commands = {
@@ -86,11 +105,23 @@ class DeviceSerialClass():
             'Volume': {'Status': {}}
             }
 
-    def SetDisplayID(self, DisplayID):    
-        if DisplayID == 'Broadcast':
-            self.DeviceID = '\x02ADZZ;'
+    @property
+    def DeviceID(self):
+        return self._DeviceID
+
+    @DeviceID.setter
+    def DeviceID(self, value):
+        # The wrapper assigns the raw config value ('01', 1, 'Broadcast'), so
+        # frame it here rather than expecting a pre-framed string.
+        if value is None or value == '':
+            return
+        if str(value).lower() == 'broadcast':
+            self._DeviceID = '\x02ADZZ;'
         else:
-            self.DeviceID = '\x02AD' + DisplayID.zfill(2) + ';'            
+            self._DeviceID = '\x02AD' + str(value).zfill(2) + ';'
+
+    def SetDisplayID(self, DisplayID):
+        self.DeviceID = DisplayID
 
     def SetAspectRatio(self, value, qualifier):
         ValueStateValues = {

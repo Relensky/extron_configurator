@@ -11,15 +11,7 @@ import hashlib
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "projector",
-    "models": [
-        "PT-VMZ51S",
-        "PT-BMZ51",
-        "PT-VMZ41",
-        "PT-VMZ71",
-        "PT-VMZ61",
-        "PT-VMW61",
-        "PT-VMW51",
-    ],
+    "models": [],
     "connection": {
         "com_type": "Network",
         "protocol": "TCP",
@@ -33,14 +25,35 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Projector1",
         "lbl_name": "Lbl_Proj_Model_Proj1",
         "gve_id": "Proj1",
-        "name": "Projector - PT-VMZ51S",
+        "name": "Projector - pana_vp_PT_BMZx1_VMWx1_VMZx1_Series_v1_0_3_0",
         "device_id": None,
         "keep_alive_command": "Power",
         "keep_alive_interval": 10,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "",
-        "password": "",  # site-specific — blank
+        "password": "ATEC2008",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "network": {
+        "protocol": "TCP",
+        "net_port": 4352,
+        "service_port": 0,
+    },
+    "serialoverethernet": {
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "host": "processor1",
+    },
+    "serial": {
+        "baud": 9600,
+        "host": "processor1",  # the processor the COM port is on
     },
 }
 

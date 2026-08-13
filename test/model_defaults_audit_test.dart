@@ -176,6 +176,26 @@ void main() {
       expect(auditModelDefaults(provider), isEmpty);
     });
 
+    test('one device can be asked about on its own', () async {
+      await convert(legacyRoom());
+      // What the Devices tab's "Check Module Defaults" button asks: the device
+      // on screen, not every tab behind it.
+      final scoped =
+          auditModelDefaults(provider, onlySection: 'WIRELESSDEVICE_1');
+      expect(scoped.map((m) => m.sectionKey), ['WIRELESSDEVICE_1']);
+      expect(auditModelDefaults(provider).length, greaterThan(scoped.length));
+
+      // And a device that already agrees with its driver reports nothing, so
+      // the button can say so rather than opening an empty review.
+      provider.applyModelDefaultValues('WIRELESSDEVICE_1', {
+        for (final d in scoped.single.diffs) d.key: d.fromModule,
+      });
+      expect(
+        auditModelDefaults(provider, onlySection: 'WIRELESSDEVICE_1'),
+        isEmpty,
+      );
+    });
+
     test('a device whose model no driver claims is left out of it', () async {
       await convert({
         'SYSTEM_SETUP': {'dev_projectors': '1'},

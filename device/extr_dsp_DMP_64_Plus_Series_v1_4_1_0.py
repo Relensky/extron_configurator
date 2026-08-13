@@ -9,7 +9,7 @@ from re import compile, search
 # config.json device properties applied to the device when a model is picked.
 DEVICE_INFO = {
     "device_type": "dsp",
-    "models": [],
+    "models": ["DMP 64 Plus C", "DMP 64 Plus C V", "DMP 64 Plus C AT", "DMP 64 Plus C V AT"],
     "connection": {
         "com_type": "Network",
         "protocol": "SSH",
@@ -23,7 +23,7 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_DSP1",
         "lbl_name": "Lbl_DSP_Name_Status",
         "gve_id": "DSP1",
-        "name": "DSP - extr_dsp_DMP_64_Plus_Series",
+        "name": "DSP - DMP 64 Plus C",
         "keep_alive_command": "PartNumber",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
@@ -67,7 +67,7 @@ class DeviceClass:
         self.__maxBufferSize = 2048
         self.__matchStringDict = {}
         self.counter = 0
-        self.connectionFlag = False
+        self.connectionFlag = True
         self.initializationChk = True
         self.Debug = False
         self.Models = {

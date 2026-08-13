@@ -117,6 +117,18 @@ List<String> activeDeviceKeysIn(
 /// One device in the room whose control module has not been chosen yet.
 typedef UnmodularDevice = ({String key, String name, String model});
 
+/// The connection styles a python driver may publish its own DEVICE_INFO
+/// defaults for, in the spelling [AppStateProvider.normalizeComTypeName]
+/// produces. These are the four the schema's com_type dropdown offers; a block
+/// named anything else in a driver is ignored rather than guessed at, so a
+/// typo shows up as "nothing loaded" instead of as a silent write.
+const Set<String> kComTypeDefaultNames = {
+  'network',
+  'serial',
+  'serialoverethernet',
+  'http',
+};
+
 /// Core State Manager for the Room Configuration Application
 class AppStateProvider extends ChangeNotifier {
   /// Whether this room has a control system yet. See [RoomMode]; persisted in
@@ -3474,6 +3486,10 @@ class AppStateProvider extends ChangeNotifier {
     bool recordUndo = true,
   }) {
     final heightU = rackOccupantHeight(nodeId);
+    // Where it is coming FROM, so the rail it leaves can close its gap. A drag
+    // off a shared rail is the common way a row loses an occupant, and without
+    // this the survivors stayed in halves (or thirds) with a hole beside them.
+    final previous = avRackSlots[nodeId];
 
     final occupants =
         avRackOccupantsAt(rackId: rackId, face: face, startU: startU)
@@ -3493,6 +3509,7 @@ class AppStateProvider extends ChangeNotifier {
       if (recordUndo) _pushAvUndo('Rack ${rackOccupantLabel(nodeId)}', _racksScope);
       avRackSlots[nodeId] =
           RackSlot(rackId: rackId, startU: startU, face: face);
+      _repackVacatedRow(previous, rackId, face, startU);
       notifyListeners();
       return true;
     }
@@ -3526,8 +3543,28 @@ class AppStateProvider extends ChangeNotifier {
       face: face,
       slice: RackColumn(column: occupants.length, columns: columns),
     );
+    _repackVacatedRow(previous, rackId, face, startU);
     notifyListeners();
     return true;
+  }
+
+  /// Closes the gap on the row an occupant just left, when it left one at all.
+  /// A move within the same rail is a re-order, not a departure, so the rows
+  /// are compared before the repack — otherwise the placer's own column
+  /// assignment would be undone the instant it was made.
+  void _repackVacatedRow(
+    RackSlot? previous,
+    String rackId,
+    RackFace face,
+    int startU,
+  ) {
+    if (previous == null) return;
+    if (previous.rackId == rackId &&
+        previous.face == face &&
+        previous.startU == startU) {
+      return;
+    }
+    avRepackRow(previous.rackId, previous.face, previous.startU);
   }
 
   /// Moves [nodeId] to position [target] along the rail it already shares,
@@ -4081,6 +4118,24 @@ class AppStateProvider extends ChangeNotifier {
   // keep_alive_command, input, ...) applied when a model is picked.
   final Map<String, Map<String, dynamic>> moduleDefaults = {};
 
+  /// Per-module, per-connection defaults: DEVICE_INFO's "network", "serial"
+  /// and "serialoverethernet" blocks (and "http"), keyed module stem ->
+  /// normalized com_type -> properties.
+  ///
+  /// A driver usually reaches its box more than one way — the same projector
+  /// on RS-232 in one room and on the network in the next — and the port,
+  /// protocol and baud that go with each are facts about the DEVICE, not about
+  /// the room. One flat "connection" block can only spell out whichever way
+  /// the author happened to write down, so changing com_type in the editor
+  /// left the wrong port behind and somebody found out on site. These blocks
+  /// are what the editor loads when the connection style changes, and what a
+  /// model pick merges over the flat defaults for the connection it lands on.
+  ///
+  /// Keyed the same way as [moduleDefaults], and empty for every driver that
+  /// has not declared any.
+  final Map<String, Map<String, Map<String, dynamic>>> moduleComTypeDefaults =
+      {};
+
   /// Per-module DEVICE_INFO "omit" lists: config-key patterns the model does
   /// NOT use, so a family default that supplies them gets undone. Keyed by
   /// module stem, same as [moduleDefaults].
@@ -4124,6 +4179,44 @@ class AppStateProvider extends ChangeNotifier {
   /// config spelling or the bare stem [moduleDefaults] is keyed by.
   Map<String, dynamic>? moduleDefaultsFor(String moduleValue) =>
       moduleDefaults[moduleStem(moduleValue)];
+
+  /// The module's own defaults for one connection style, or null when the
+  /// driver has not published a block for it. [comType] is the config value
+  /// ('SerialOverEthernet'), spelled however the schema spells it.
+  Map<String, dynamic>? comTypeDefaultsFor(String moduleValue, String comType) =>
+      moduleComTypeDefaults[moduleStem(moduleValue)]
+          ?[normalizeComTypeName(comType)];
+
+  /// The comparison spelling of a com_type: lower case, letters and digits
+  /// only, so 'SerialOverEthernet', 'serial_over_ethernet' and
+  /// 'Serial Over Ethernet' are one connection style and not three.
+  static String normalizeComTypeName(String raw) =>
+      raw.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+
+  /// [moduleDefaults] for [moduleKey] with the per-connection block laid over
+  /// it — the defaults a model pick should actually write.
+  ///
+  /// Which block that is comes from the defaults themselves when they name a
+  /// com_type, and from the device otherwise: a driver whose flat defaults say
+  /// "Network" gets its network block, and one that says nothing about the
+  /// connection leaves the device on the one it is already on.
+  Map<String, dynamic> _mergedModuleDefaults(
+      String moduleKey, String deviceKey) {
+    final base =
+        Map<String, dynamic>.from(moduleDefaults[moduleKey] ?? const {});
+    final dev = roomConfig[deviceKey];
+    final comType = (base['com_type'] ??
+            (dev is Map ? dev['com_type'] : null) ??
+            '')
+        .toString();
+    if (comType.isEmpty) return base;
+    final block =
+        moduleComTypeDefaults[moduleKey]?[normalizeComTypeName(comType)];
+    // The connection block wins: it is the more specific statement, and the
+    // flat block's port is whichever one the author wrote down first.
+    if (block != null) base.addAll(block);
+    return base;
+  }
 
   /// Config-key patterns a module's DEVICE_INFO "omit" list says the model does
   /// not use, keyed the same way as [moduleDefaults]. Empty for most modules.
@@ -4232,6 +4325,7 @@ class AppStateProvider extends ChangeNotifier {
     // Rebuilt from scratch on every scan so renamed/removed files drop out.
     modelRegistry.clear();
     moduleDefaults.clear();
+    moduleComTypeDefaults.clear();
     moduleOmits.clear();
     moduleModels.clear();
     try {
@@ -5893,6 +5987,9 @@ class AppStateProvider extends ChangeNotifier {
   /// Update a specific nested property for a device (e.g., changing keep_alive_command)
   void updateDeviceValue(String deviceKey, String property, dynamic value) {
     if (roomConfig.containsKey(deviceKey)) {
+      // Read before the write, so the com_type handler below can tell a real
+      // change of connection style from a re-pick of the same one.
+      final previous = roomConfig[deviceKey][property];
       // Pasted multiline text can carry real CR control characters — store
       // the two-character backslash+r sequence instead (saved to disk as \\r,
       // e.g. "TLP\\rPoE"), same as every other write path.
@@ -5917,6 +6014,17 @@ class AppStateProvider extends ChangeNotifier {
       if (property == 'module' && value is String && value.isNotEmpty) {
         getCommandsForModule(value);
         getInputsForModule(value);
+      }
+      // Moved onto a different connection style: load whatever the model's own
+      // driver says that style wants (port, protocol, baud). Written BEFORE
+      // the prune below, so a block that mentions a key the new connection has
+      // no use for still gets tidied away by the one rule that does that.
+      if (property == 'com_type' &&
+          value is String &&
+          previous?.toString() != value) {
+        lastComTypeDefaults = applyComTypeDefaults(deviceKey);
+      } else {
+        lastComTypeDefaults = const [];
       }
       // Switching a device to a connection that can't use a property it still
       // carries (com_type Serial -> Network, leaving serial_port behind) drops
@@ -6161,7 +6269,14 @@ class AppStateProvider extends ChangeNotifier {
   //        "defaults": {
   //            "keep_alive_command": "RefreshMatrix",
   //            "keep_alive_interval": 30
-  //        }
+  //        },
+  //        # Optional: what this driver wants on each connection style. Loaded
+  //        # when com_type is changed in the editor, and merged over
+  //        # "connection"/"defaults" when a model is picked. May also be
+  //        # grouped under a "com_types" dict.
+  //        "network": {"protocol": "TCP", "net_port": 22023},
+  //        "serialoverethernet": {"protocol": "TCP", "net_port": 2001},
+  //        "serial": {"baud": 38400, "host": "processor1"}
   //    }
   //
   //  "device_type" (string or list) restricts which device-family tabs
@@ -6171,6 +6286,9 @@ class AppStateProvider extends ChangeNotifier {
   //  "models" marks this file as the DEFAULT module for those models;
   //  "connection" and "defaults" keys are config.json device properties
   //  applied when a model is picked (two keys purely for readability).
+  //  "network" / "serial" / "serialoverethernet" / "http" are the same
+  //  thing per connection style — see [moduleComTypeDefaults] — and are
+  //  what makes changing com_type in the editor load the right port.
   //  Files without DEVICE_INFO still contribute the keys of their
   //  self.Models dict so the dropdown is populated everywhere.
   // ---------------------------------------------------------------------
@@ -6223,6 +6341,33 @@ class AppStateProvider extends ChangeNotifier {
         // Keyed by the stem so [moduleDefaultsFor] finds it from either the
         // bare name used here or the dotted spelling stored in a config.
         if (merged.isNotEmpty) moduleDefaults[moduleStem(moduleName)] = merged;
+
+        // "network" / "serial" / "serialoverethernet" / "http": what this
+        // driver wants when the device is reached THAT way. Read from the top
+        // level of DEVICE_INFO, or from a "com_types" dict for an author who
+        // would rather keep them together; the nested spelling wins, being the
+        // more deliberate of the two. Nulls are dropped for the same reason
+        // they are above — "this model does not use the key", not "write a
+        // null". See [moduleComTypeDefaults].
+        final byComType = <String, Map<String, dynamic>>{};
+        void takeComTypeBlock(dynamic rawName, dynamic value) {
+          if (value is! Map) return;
+          final name = normalizeComTypeName(rawName.toString());
+          if (!kComTypeDefaultNames.contains(name)) return;
+          final props = <String, dynamic>{};
+          value.forEach((k, v) {
+            if (v == null) return;
+            props[k.toString()] = v;
+          });
+          if (props.isNotEmpty) byComType[name] = props;
+        }
+
+        info.forEach(takeComTypeBlock);
+        final nested = info['com_types'] ?? info['connections'];
+        if (nested is Map) nested.forEach(takeComTypeBlock);
+        if (byComType.isNotEmpty) {
+          moduleComTypeDefaults[moduleStem(moduleName)] = byComType;
+        }
 
         // "omit": key patterns this model does NOT use, even when a family
         // default supplies them (an IN1608 gets no group_* audio settings).
@@ -6458,7 +6603,9 @@ class AppStateProvider extends ChangeNotifier {
     final moduleImport = normalizeModuleName(entry.module);
     final currentModule =
         normalizeModuleName(dev['module']?.toString() ?? '');
-    final raw = moduleDefaults[entry.module] ?? const <String, dynamic>{};
+    // Flat defaults with the driver's own block for the connection they land
+    // on laid over them — see [_mergedModuleDefaults].
+    final raw = _mergedModuleDefaults(entry.module, deviceKey);
     final resolved = _dropHiddenDefaults(
         deviceKey,
         _modelSubstitute(
@@ -6503,8 +6650,8 @@ class AppStateProvider extends ChangeNotifier {
         _forgetConversionOrigin(deviceKey, 'module');
         applied.add('module = $moduleImport');
       }
-      final raw = moduleDefaults[entry.module];
-      if (raw != null) {
+      final raw = _mergedModuleDefaults(entry.module, deviceKey);
+      if (raw.isNotEmpty) {
         // One driver serves a whole line, so its defaults name only one of
         // them — rewrite to the model actually picked.
         final resolved = _dropHiddenDefaults(
@@ -6575,6 +6722,64 @@ class AppStateProvider extends ChangeNotifier {
     systemLogs.add(
         "-> Applied driver defaults to '$deviceKey': ${applied.join(', ')}");
     notifyListeners();
+    return applied;
+  }
+
+  /// What the last [updateDeviceValue] com_type change loaded, as "key = value"
+  /// strings, so the field that made the change can say so. Empty for every
+  /// other edit.
+  ///
+  /// A field rather than a return value because [updateDeviceValue] is the one
+  /// write path every editor field shares, and widening its signature for the
+  /// benefit of one dropdown would touch a hundred call sites to tell
+  /// ninety-nine of them nothing.
+  List<String> lastComTypeDefaults = const [];
+
+  /// Loads the module's own defaults for the connection style [deviceKey] is
+  /// NOW on — DEVICE_INFO's "network", "serial" or "serialoverethernet" block.
+  ///
+  /// Applied rather than offered, unlike the driver-defaults review. Changing
+  /// com_type already rewrites the block on its own (the keys the new
+  /// connection cannot use are removed outright), so leaving the port and baud
+  /// of the connection it just left in place would be the inconsistent half of
+  /// the same move. What it will not do is overwrite a site-specific value with
+  /// a blank: an empty string in a driver means "this belongs to the room", the
+  /// same rule the model-pick path follows.
+  ///
+  /// Returns the "key = value" strings written, for the log and the snackbar.
+  List<String> applyComTypeDefaults(String deviceKey) {
+    final dev = roomConfig[deviceKey];
+    if (dev is! Map) return const [];
+    final module = dev['module']?.toString() ?? '';
+    final comType = dev['com_type']?.toString() ?? '';
+    if (module.isEmpty || comType.isEmpty) return const [];
+    final block = comTypeDefaultsFor(module, comType);
+    if (block == null || block.isEmpty) return const [];
+
+    // Resolved for this device the same way a model pick resolves defaults —
+    // the trailing index substituted, the schema's hidden keys dropped — so a
+    // connection block cannot reintroduce a key the connection rules out.
+    final resolved = _dropHiddenDefaults(
+        deviceKey, _indexSubstitute(Map<String, dynamic>.from(block), deviceKey));
+
+    final applied = <String>[];
+    resolved.forEach((key, value) {
+      // 'com_type' itself is what the user just set; a block that repeats it
+      // must not be able to bounce the device back.
+      if (key == 'com_type') return;
+      if (value == null || value.toString().isEmpty) return;
+      if (dev[key] == value) return;
+      dev[key] = value;
+      _forgetConversionOrigin(deviceKey, key);
+      applied.add('$key = $value');
+    });
+    if (applied.isEmpty) return const [];
+
+    AppLogger.logInfo(
+        "Loaded $module's $comType defaults onto $deviceKey: ${applied.join(', ')}");
+    systemLogs.add(
+        "-> Loaded $comType defaults from $module onto '$deviceKey': "
+        "${applied.join(', ')}");
     return applied;
   }
 

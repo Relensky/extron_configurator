@@ -13,12 +13,7 @@ DEVICE_INFO = {
     # used here and are stripped on load.
     "omit": ["group_*"],
     "device_type": "switcher",
-    "models": [
-        "SW2 HD 4K PLUS",
-        "SW4 HD 4K PLUS",
-        "SW6 HD 4K PLUS",
-        "SW8 HD 4K PLUS",
-    ],
+    "models": [],
     "connection": {
         "com_type": "Network",
         "protocol": "SSH",
@@ -32,13 +27,34 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Switcher1",
         "lbl_name": "Lbl_Switcher_Model",
         "gve_id": "Switch1",
-        "name": "Switcher - SW2 HD 4K PLUS",
-        "keep_alive_command": "Input",
+        "name": "Switcher - extr_switcher_SW_HD_4K_Plus_Series_v1_1_5_0",
+        "keep_alive_command": "VideoMute",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "admin",
-        "password": "",  # site-specific — blank
+        "password": "ATEC2007",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "network": {
+        "protocol": "SSH",
+        "net_port": 22023,
+        "service_port": 0,
+    },
+    "serialoverethernet": {
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "host": "processor1",
+    },
+    "serial": {
+        "baud": 9600,
+        "host": "processor1",  # the processor the COM port is on
     },
 }
 

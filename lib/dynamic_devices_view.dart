@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'app_state.dart';
 import 'config_dictionary.dart';
 import 'config_maintenance.dart';
+import 'model_defaults_dialog.dart';
 import 'pdf_viewer_dialog.dart';
 import 'schema_field_builder.dart';
 import 'search_match.dart';
@@ -487,6 +488,23 @@ class DeviceConfigurationForm extends StatelessWidget {
               label: const Text('Check Defaults'),
               onPressed: () =>
                   showCheckDefaultsDialog(context, provider, deviceKey),
+            ),
+            const SizedBox(width: 8),
+            // The other half of the question. "Check Defaults" is about keys
+            // this block is MISSING; this is about keys it has FILLED IN
+            // DIFFERENTLY from what the model's own python driver says — the
+            // device converted to SSH because its family is SSH, while its
+            // driver states TCP on a port of its own. Same review the
+            // conversion offers, put to one device on demand.
+            OutlinedButton.icon(
+              icon: const Icon(Icons.rule),
+              label: const Text('Check Module Defaults'),
+              onPressed: () => offerModelDefaults(
+                context,
+                provider,
+                silentWhenClean: false,
+                onlySection: deviceKey,
+              ),
             ),
           ],
         ),

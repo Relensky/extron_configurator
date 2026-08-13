@@ -395,6 +395,150 @@ class DeviceClass:
       expect(entry.deviceTypes, isEmpty);
     });
 
+    test('per-connection blocks are read off DEVICE_INFO, nested or not',
+        () async {
+      final dir = Directory.systemTemp.createTempSync('comtype_blocks_');
+      addTearDown(() {
+        try {
+          dir.deleteSync(recursive: true);
+        } catch (_) {}
+      });
+      File(path.join(dir.path, 'vendor_flat.py')).writeAsStringSync('''
+DEVICE_INFO = {
+    "device_type": "projector",
+    "models": ["Flat 100"],
+    "connection": {"com_type": "Network"},
+    "network": {"protocol": "TCP", "net_port": 4352},
+    "serial": {"baud": 38400, "host": "processor1", "device_id": None},
+    "serialoverethernet": {"protocol": "TCP", "net_port": 2001},
+}
+''');
+      File(path.join(dir.path, 'vendor_nested.py')).writeAsStringSync('''
+DEVICE_INFO = {
+    "models": ["Nested 200"],
+    "com_types": {
+        "Network": {"net_port": 23},
+        "Serial Over Ethernet": {"net_port": 2101},
+        "bogus_style": {"net_port": 9},
+    },
+}
+''');
+
+      final provider = AppStateProvider(autoLoadSettings: false)
+        ..modulesPath = dir.path;
+      await provider.preloadAllModules();
+
+      expect(provider.moduleComTypeDefaults['vendor_flat'], {
+        'network': {'protocol': 'TCP', 'net_port': 4352},
+        // The None is dropped on the way in, same as everywhere else.
+        'serial': {'baud': 38400, 'host': 'processor1'},
+        'serialoverethernet': {'protocol': 'TCP', 'net_port': 2001},
+      });
+      // Spelled how a person would; matched however they spelled it. A name
+      // that is not a connection style is ignored rather than guessed at.
+      final nested = provider.moduleComTypeDefaults['vendor_nested']!;
+      expect(nested.keys.toSet(), {'network', 'serialoverethernet'});
+      expect(nested['serialoverethernet'], {'net_port': 2101});
+
+      // And the lookup takes either spelling of the module value.
+      expect(
+        provider.comTypeDefaultsFor(
+            'modules.device.vendor_flat', 'SerialOverEthernet'),
+        {'protocol': 'TCP', 'net_port': 2001},
+      );
+      expect(provider.comTypeDefaultsFor('vendor_flat', 'HTTP'), isNull);
+    });
+
+    test('changing com_type loads that connection\'s defaults', () {
+      final provider = AppStateProvider(autoLoadSettings: false);
+      provider.roomConfig['PROJECTORDEVICE_1'] = <String, dynamic>{
+        'model': 'Flat 100',
+        'module': 'modules.device.vendor_flat',
+        'com_type': 'Network',
+        'protocol': 'TCP',
+        'net_port': 4352,
+        'ip_address': '10.1.2.3',
+      };
+      provider.moduleComTypeDefaults['vendor_flat'] = {
+        'network': {'protocol': 'TCP', 'net_port': 4352},
+        'serial': {'baud': 38400, 'host': 'processor1'},
+      };
+
+      provider.updateDeviceValue(
+          'PROJECTORDEVICE_1', 'com_type', 'Serial');
+
+      final dev = provider.roomConfig['PROJECTORDEVICE_1'];
+      expect(dev['baud'], 38400);
+      expect(dev['host'], 'processor1');
+      expect(provider.lastComTypeDefaults,
+          containsAll(<String>['baud = 38400', 'host = processor1']));
+
+      // Back the other way, and the network figures come with it.
+      provider.updateDeviceValue(
+          'PROJECTORDEVICE_1', 'com_type', 'SerialOverEthernet');
+      expect(provider.lastComTypeDefaults, isEmpty,
+          reason: 'no block published for that style');
+
+      provider.updateDeviceValue(
+          'PROJECTORDEVICE_1', 'com_type', 'Network');
+      expect(provider.roomConfig['PROJECTORDEVICE_1']['net_port'], 4352);
+
+      // An ordinary edit says nothing.
+      provider.updateDeviceValue('PROJECTORDEVICE_1', 'name', 'Projector');
+      expect(provider.lastComTypeDefaults, isEmpty);
+    });
+
+    test('a connection block never overwrites a site-specific value with a '
+        'blank, nor bounces com_type back', () {
+      final provider = AppStateProvider(autoLoadSettings: false);
+      provider.roomConfig['PROJECTORDEVICE_1'] = <String, dynamic>{
+        'module': 'vendor_flat',
+        'com_type': 'Network',
+        'ip_address': '10.1.2.3',
+      };
+      provider.moduleComTypeDefaults['vendor_flat'] = {
+        'serial': {
+          'com_type': 'Network', // a block that argues with the user
+          'ip_address': '', // site-specific
+          'baud': 9600,
+        },
+      };
+
+      provider.updateDeviceValue('PROJECTORDEVICE_1', 'com_type', 'Serial');
+
+      final dev = provider.roomConfig['PROJECTORDEVICE_1'];
+      expect(dev['com_type'], 'Serial');
+      expect(dev['ip_address'], '10.1.2.3');
+      expect(dev['baud'], 9600);
+    });
+
+    test('picking a model merges the block for the connection it lands on',
+        () {
+      final provider = AppStateProvider(autoLoadSettings: false);
+      provider.roomConfig['PROJECTORDEVICE_1'] = <String, dynamic>{
+        'model': '',
+        'module': 'old_module',
+      };
+      provider.modelRegistry['Flat 100'] = const ModelEntry(
+          model: 'Flat 100', module: 'vendor_flat', explicit: true);
+      provider.moduleDefaults['vendor_flat'] = {
+        'com_type': 'Network',
+        'net_port': 1, // the flat block's guess
+      };
+      provider.moduleComTypeDefaults['vendor_flat'] = {
+        'network': {'protocol': 'TCP', 'net_port': 4352},
+      };
+
+      final preview =
+          provider.previewModelSelection('PROJECTORDEVICE_1', 'Flat 100');
+      // The connection block is the more specific statement, so it wins.
+      expect(preview.resolvedDefaults['net_port'], 4352);
+      expect(preview.resolvedDefaults['protocol'], 'TCP');
+
+      provider.applyModuleDefaults('PROJECTORDEVICE_1', 'Flat 100');
+      expect(provider.roomConfig['PROJECTORDEVICE_1']['net_port'], 4352);
+    });
+
     test('unknown model: preview reports not-known, keep just saves the text',
         () {
       final provider = AppStateProvider(autoLoadSettings: false);

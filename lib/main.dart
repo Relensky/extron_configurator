@@ -19,7 +19,6 @@ import 'device_editor_view.dart';
 import 'device_start_wizard.dart';
 import 'cabling_view.dart';
 import 'floor_plan_view.dart';
-import 'model_defaults_audit.dart';
 import 'model_defaults_dialog.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
@@ -1135,38 +1134,6 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
       );
     },
   );
-}
-
-/// Puts the driver-defaults question to the user, if there is one to put.
-///
-/// Separate from the acknowledgement dialog that calls it so the same review
-/// can be reached again later without re-running a conversion — the answer
-/// "not now" has to be recoverable.
-Future<void> offerModelDefaults(
-  BuildContext context,
-  AppStateProvider provider, {
-  bool silentWhenClean = true,
-}) async {
-  final mismatches = auditModelDefaults(provider);
-  final messenger = ScaffoldMessenger.of(context);
-  if (mismatches.isEmpty) {
-    if (!silentWhenClean) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text(
-          'Every device already matches its driver’s connection details.',
-        ),
-      ));
-    }
-    return;
-  }
-  final written = await showModelDefaultsDialog(context, provider, mismatches);
-  if (written == 0) return;
-  messenger.showSnackBar(SnackBar(
-    content: Text(
-      'Applied $written driver default${written == 1 ? '' : 's'}. '
-      'Save the config to keep them.',
-    ),
-  ));
 }
 
 /// Swatch grid for a theme color. Used for the primary accent and the

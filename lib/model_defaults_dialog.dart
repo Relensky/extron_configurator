@@ -13,6 +13,50 @@ import 'model_defaults_audit.dart';
 /// because they are facts about the model; the driver's naming comes up
 /// unticked because the room already has names.
 ///
+/// Puts the driver-defaults question to the user, if there is one to put.
+///
+/// Separate from the acknowledgement dialog that calls it so the same review
+/// can be reached again later without re-running a conversion — the answer
+/// "not now" has to be recoverable, and the Devices tab's "Check module
+/// defaults" button is the way back to it.
+///
+/// [onlySection] scopes the review to one device block. Pass it from the
+/// Devices tab, where the question is about the device on screen; leave it off
+/// after a conversion, where it is about the whole file.
+///
+/// [silentWhenClean] false says so when there is nothing to change — a button
+/// that does nothing visible when pressed reads as a broken button.
+Future<void> offerModelDefaults(
+  BuildContext context,
+  AppStateProvider provider, {
+  bool silentWhenClean = true,
+  String? onlySection,
+}) async {
+  final mismatches =
+      auditModelDefaults(provider, onlySection: onlySection);
+  final messenger = ScaffoldMessenger.of(context);
+  if (mismatches.isEmpty) {
+    if (!silentWhenClean) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+          onlySection == null
+              ? 'Every device already matches its driver’s connection details.'
+              : 'This device already matches its driver’s connection details.',
+        ),
+      ));
+    }
+    return;
+  }
+  final written = await showModelDefaultsDialog(context, provider, mismatches);
+  if (written == 0) return;
+  messenger.showSnackBar(SnackBar(
+    content: Text(
+      'Applied $written driver default${written == 1 ? '' : 's'}. '
+      'Save the config to keep them.',
+    ),
+  ));
+}
+
 /// Returns the number of properties written, or 0 when nothing was.
 Future<int> showModelDefaultsDialog(
   BuildContext context,

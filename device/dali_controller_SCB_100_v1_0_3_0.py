@@ -25,13 +25,34 @@ DEVICE_INFO = {
         "btn_name": "Btn_Con_Screen1",
         "lbl_name": "Lbl_Screen1_Model",
         "gve_id": "Screen1",
-        "name": "Screen - SCB-100",
+        "name": "Screen - dali_controller_SCB_100_v1_0_3_0",
         "keep_alive_command": None,
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "admin",
-        "password": "",  # site-specific — blank
+        "password": "ATEC2008",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "network": {
+        "protocol": "TCP",
+        "net_port": 23,
+        "service_port": 0,
+    },
+    "serialoverethernet": {
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "host": "processor1",
+    },
+    "serial": {
+        "baud": 9600,
+        "host": "processor1",  # the processor the COM port is on
     },
 }
 

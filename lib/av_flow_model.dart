@@ -1270,6 +1270,28 @@ const List<String> kRackItemCategories = [
   'Rack hardware',
 ];
 
+/// Kinds offered for a rack occupant that is a BOX rather than a rack part —
+/// the Cisco switch, the owner-furnished appliance, the mini PC on the shelf.
+/// Free text underneath, like [kRackItemCategories]; what matters is that none
+/// of these is in that list, because a category outside it is what puts the
+/// item on the Equipment section of the estimate instead of Rack hardware.
+const List<String> kRackDeviceCategories = [
+  'Network switch',
+  'Computer',
+  'Appliance',
+  'Amplifier',
+  'Power',
+  'Other equipment',
+];
+
+/// True when [category] describes a rack PART (a plate, a shelf, a lacing bar)
+/// rather than a box. An empty category counts as a part: everything written
+/// before there was anything else to be was a plate or a shelf.
+bool isRackHardwareCategory(String category) {
+  final name = category.trim();
+  return name.isEmpty || kRackItemCategories.contains(name);
+}
+
 /// A vent plate, blank plate, shelf or drawer sitting in a rack.
 ///
 /// Not an [AvNode]: none of these carry signal, and putting them on the signal

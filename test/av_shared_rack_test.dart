@@ -176,6 +176,110 @@ void main() {
       expect(p.avRackSlots['A']!.slice.label, 'Full');
     });
 
+    test('the survivors close ranks when one is dragged to another U', () {
+      final p = openedOn(configPath);
+      for (final id in ['A', 'B', 'C']) {
+        p.addAvNode(device(id));
+      }
+      final rack = p.addAvRack('Rack 1', 12);
+      for (final id in ['A', 'B', 'C']) {
+        p.avRackPlaceSharing(
+          nodeId: id,
+          rackId: rack.id,
+          face: RackFace.front,
+          startU: 6,
+        );
+      }
+      expect(p.avRackSlots['A']!.slice.columns, 3);
+
+      // A drag, not an un-rack: the row it LEAVES has to re-split too, or the
+      // survivors sit in thirds with a hole where the third one was.
+      p.avRackPlaceSharing(
+        nodeId: 'B',
+        rackId: rack.id,
+        face: RackFace.front,
+        startU: 9,
+      );
+
+      expect(p.avRackSlots['A']!.slice.columns, 2);
+      expect(p.avRackSlots['A']!.slice.column, 0);
+      expect(p.avRackSlots['C']!.slice.columns, 2);
+      expect(p.avRackSlots['C']!.slice.column, 1);
+      // And the one that moved is alone on its new rail.
+      expect(p.avRackSlots['B']!.slice.columns, 1);
+
+      // Down to one, and it takes the whole rail back.
+      p.avRackPlaceSharing(
+        nodeId: 'C',
+        rackId: rack.id,
+        face: RackFace.front,
+        startU: 2,
+      );
+      expect(p.avRackSlots['A']!.slice.columns, 1);
+      expect(p.avRackSlots['A']!.slice.label, 'Full');
+    });
+
+    test('a drag to the other face closes the rail it left', () {
+      final p = openedOn(configPath);
+      for (final id in ['A', 'B']) {
+        p.addAvNode(device(id));
+      }
+      final rack = p.addAvRack('Rack 1', 12);
+      for (final id in ['A', 'B']) {
+        p.avRackPlaceSharing(
+          nodeId: id,
+          rackId: rack.id,
+          face: RackFace.front,
+          startU: 4,
+        );
+      }
+      expect(p.avRackSlots['A']!.slice.columns, 2);
+
+      p.avRackPlaceSharing(
+        nodeId: 'B',
+        rackId: rack.id,
+        face: RackFace.rear,
+        startU: 4,
+      );
+
+      expect(p.avRackSlots['A']!.slice.columns, 1);
+      expect(p.avRackSlots['B']!.slice.columns, 1);
+    });
+
+    test('landing back on the same rail is a re-order, not a departure', () {
+      final p = openedOn(configPath);
+      for (final id in ['A', 'B', 'C']) {
+        p.addAvNode(device(id));
+      }
+      final rack = p.addAvRack('Rack 1', 12);
+      for (final id in ['A', 'B', 'C']) {
+        p.avRackPlaceSharing(
+          nodeId: id,
+          rackId: rack.id,
+          face: RackFace.front,
+          startU: 6,
+        );
+      }
+
+      // Dropped on the rail it is already on: nothing left the row, so the
+      // repack must not fire and undo the placer's own column assignment.
+      p.avRackPlaceSharing(
+        nodeId: 'A',
+        rackId: rack.id,
+        face: RackFace.front,
+        startU: 6,
+      );
+
+      for (final id in ['A', 'B', 'C']) {
+        expect(p.avRackSlots[id]!.slice.columns, 3, reason: id);
+      }
+      expect(
+        p.avRackOccupantsAt(rackId: rack.id, face: RackFace.front, startU: 6)
+            .toSet(),
+        {'A', 'B', 'C'},
+      );
+    });
+
     test('reordering slides the neighbors rather than swapping', () {
       final p = openedOn(configPath);
       for (final id in ['A', 'B', 'C']) {

@@ -18,6 +18,9 @@ DEVICE_INFO = {
     "omit": ["group_*"],                  # keys this model does NOT use
     "connection": { ... },                # config.json device properties, and
     "defaults":   { ... },                #   these — merged by the app
+    "network":            { ... },        # and these, per connection style
+    "serial":             { ... },
+    "serialoverethernet": { ... },
 }
 ```
 
@@ -66,6 +69,43 @@ DEVICE_INFO = {
   the device's index into `btn_name`/`gve_id`) or **Keep current settings** (a
   conversion — leaves the device untouched and lists which fields differ from
   the module defaults).
+
+- **`network` / `serial` / `serialoverethernet` / `http`** — the same kind of
+  block, per connection style. One flat `connection` block can only spell out
+  one way of reaching the box, so a driver that speaks both RS-232 and TCP left
+  the wrong port behind when somebody changed `com_type` in the editor. Declare
+  the connection-specific half here and:
+
+  - changing **Com Type** on the Devices tab loads that block straight away
+    (and says so in a snackbar). Blank values are never written over a
+    site-specific one, and a block that repeats `com_type` cannot bounce the
+    choice back;
+  - picking a **model** merges the block for whichever connection the defaults
+    land on over the flat `connection` + `defaults`, so the specific figure
+    wins.
+
+  They may also be grouped under a `"com_types": { ... }` dict, which wins over
+  the top-level spelling. Names are matched case- and punctuation-insensitively
+  (`SerialOverEthernet`, `serial_over_ethernet`, `Serial Over Ethernet`); a
+  block named anything else is ignored rather than guessed at.
+
+  ```python
+  DEVICE_INFO = {
+      "models": ["VPL-PHZ60"],
+      "connection": {"com_type": "Network", "host": "processor1"},
+      "network":            {"protocol": "TCP", "net_port": 53595},
+      "serialoverethernet": {"protocol": "TCP", "net_port": 2001},
+      "serial":             {"baud": 38400},
+  }
+  ```
+
+- **Check Module Defaults** (Devices tab) — the review that runs after a
+  conversion, on demand, for the device on screen. It lists every property the
+  block has filled in **differently** from what the model's own driver states —
+  the device converted to SSH because its family is SSH while its driver says
+  TCP on a port of its own — with the connection and keep-alive keys ticked and
+  the driver's naming left alone. Its neighbour **Check Defaults** answers the
+  other question: which keys the block is *missing*.
 
 ## Device Editor (the `Catalog` tab)
 
@@ -155,6 +195,28 @@ choice. Which token entitles which key is schema-driven — `source_inputs` in
 that has not *stated* its sources at all is left alone: a silence is a question,
 not a No.
 
+## Rack elevations (the `Racks` tab)
+
+Frames drawn to scale with numbered U rails. Anything with a rack height drops
+into a free span, and several small boxes share one rail — the row re-splits to
+fit them and closes ranks again the moment one is dragged off it, so two
+survivors of a three-way split go back to halves rather than sitting in thirds
+with a hole beside them.
+
+Two ways to put something in that is not a device on the signal flow:
+
+- **Add plate / shelf** — vent plates, blanks, shelves, drawers and lacing
+  bars, off the catalog's rack categories, priced into the estimate under Rack
+  hardware. On the toolbar whether or not edit mode is on: ordering the parts
+  and arranging the frame are different jobs.
+- **Add other device** — the box in the rack that has no catalog entry, a Cisco
+  switch or an owner-furnished appliance. It occupies rails like anything else
+  and is quoted under **Equipment**, not Rack hardware — a four-figure box
+  filed with the blanking plates is a four-figure box nobody totals. Leave the
+  price blank and the cost sheet reports it as **not priced** until somebody
+  fills one in. It is deliberately not written to the catalog: a model with no
+  part number and no price is a fact about this job, not a price-list entry.
+
 ## Cost estimate (the `Cost` tab)
 
 Prices the room that is drawn on the AV canvas. Quantities are the devices on
@@ -175,6 +237,17 @@ On top of the equipment:
 
 Devices nobody has priced are counted and called out rather than being quietly
 totalled as free.
+
+**Add to catalog** (the 📚 icon on any line added by hand) is the trip back the
+other way. A typed line is how a part enters the building — somebody is quoted
+a figure over the phone and types it on the job in front of them — and until
+now that was where it stopped, so the next room typed the same box in again at
+whatever price that person remembered. It writes the entry to `av_devices.json`
+once, points the line at it and drops the typed price, so the line is priced
+like everything else from then on and a revision reaches every room that uses
+it. Offered on Equipment, Rack hardware, Cabling and Other items; greyed out on
+a line that already comes off the catalog, and on a counted line, whose price
+belongs to the thing on the diagram.
 
 **Screenshot** renders the estimate as a PNG with every control hidden and the
 page forced light — the image is the quote, not a picture of the app with an

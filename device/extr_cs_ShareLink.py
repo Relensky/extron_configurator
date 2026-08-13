@@ -27,12 +27,22 @@ DEVICE_INFO = {
         "lbl_name": "Lbl_Wireless_Model",
         "gve_id": "Wireless1",
         "name": "Wireless - ShareLink Pro",
-        "keep_alive_command": "ConfirmationCode",
+        "keep_alive_command": "VideoMute",
         "keep_alive_interval": 10,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "admin",
-        "password": "",  # site-specific — blank
+        "password": "ATEC2007",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "network": {
+        "protocol": "SSH",
+        "net_port": 22023,
+        "service_port": 0,
     },
 }
 

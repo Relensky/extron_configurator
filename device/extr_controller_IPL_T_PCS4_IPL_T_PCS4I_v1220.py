@@ -28,8 +28,18 @@ DEVICE_INFO = {
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
-        "user": "",
-        "password": "",  # site-specific — blank
+        "user": "admin",
+        "password": "ATEC2007",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "network": {
+        "protocol": "TCP",
+        "net_port": 23,
+        "service_port": 0,
     },
 }
 

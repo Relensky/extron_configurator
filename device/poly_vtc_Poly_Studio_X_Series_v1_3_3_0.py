@@ -15,7 +15,7 @@ DEVICE_INFO = {
     "device_type": "vtc",
     "models": ["Poly Studio X50", "Poly Studio X30", "Poly Studio X70", "Poly Studio X52"],
     "connection": {
-        "com_type": "Network",
+        "com_type": "HTTP",
         "protocol": "TCP",
         "net_port": 443,
         "service_port": 0,
@@ -28,12 +28,22 @@ DEVICE_INFO = {
         "lbl_name": "",
         "gve_id": "",
         "name": "Video Conference - Poly Studio X50",
-        "keep_alive_command": None,
+        "keep_alive_command": "VideoMute",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "admin",
-        "password": "",  # site-specific — blank
+        "password": "ATEC2008",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "http": {
+        "protocol": "TCP",
+        "net_port": 443,
+        "service_port": 0,
     },
 }
 

@@ -22,7 +22,7 @@ DEVICE_INFO = {
         "UN85TU8000",
     ],
     "connection": {
-        "com_type": "Network",
+        "com_type": "HTTP",
         "protocol": "TCP",
         "net_port": 1516,
         "service_port": 0,
@@ -41,7 +41,29 @@ DEVICE_INFO = {
         "keep_alive_trigger": None,
         "manual_disconnect": False,
         "user": "",
-        "password": "",  # site-specific — blank
+        "password": "ATEC2008",
+    },
+    # How this driver is reached on each connection style, read by the app:
+    # changing com_type loads the matching block, and picking a model merges it
+    # over "connection" + "defaults". Ports are the ones the module's
+    # communication sheet documents; protocol, baud and service port are the
+    # defaults declared by the wrapper classes at the bottom of this file.
+    "serialoverethernet": {
+        "protocol": "TCP",
+        "net_port": 2001,
+        "service_port": 0,
+        "ip_address": "192.168.254.254",  # the Extron gateway, not the device
+        "host": "processor1",
+    },
+    "serial": {
+        "baud": 9600,
+        "host": "processor1",  # the processor the COM port is on
+    },
+    "http": {
+        "protocol": "TCP",
+        "net_port": 1516,
+        "service_port": 0,
+        "keep_alive_command": "Input",  # this connection's command set differs
     },
 }
 

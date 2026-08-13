@@ -529,9 +529,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         Expanded(
                           child: Text(
                             '${estimate.unpricedDevices} device'
-                            '${estimate.unpricedDevices == 1 ? '' : 's'} have '
+                            '${estimate.unpricedDevices == 1 ? ' has' : 's have'} '
                             'no price — the total below is short by whatever '
-                            'they cost.',
+                            '${estimate.unpricedDevices == 1 ? 'it costs' : 'they cost'}.',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.error,
                             ),
@@ -605,7 +605,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               (width: 142.0, flex: 0, text: 'Unit price'),
               (width: 122.0, flex: 0, text: 'Extended'),
               (width: 104.0, flex: 0, text: 'Price from'),
-              (width: 34.0, flex: 0, text: ''),
+              (width: 68.0, flex: 0, text: ''),
             ]),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
@@ -733,6 +733,27 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             ),
                           ),
                         ),
+                        // A hand-typed line is a part nobody has entered yet.
+                        // The column is present on every row so the table
+                        // still lines up.
+                        avRowIcon(
+                          Icons.library_add_outlined,
+                          extra == null
+                              ? 'Only a line added here can be added to the '
+                                    'catalog'
+                              : extra.catalogModel.isNotEmpty
+                              ? 'Already priced from the catalog '
+                                    '(${extra.catalogModel})'
+                              : 'Add this line to the device catalog',
+                          extra == null || extra.catalogModel.isNotEmpty
+                              ? null
+                              : () => _addLineToCatalog(
+                                  context,
+                                  provider,
+                                  extra,
+                                  kind: _ExtraPart.equipment,
+                                ),
+                        ),
                         if (extra == null)
                           avRowIcon(
                             Icons.restart_alt,
@@ -818,7 +839,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 (width: 142.0, flex: 0, text: 'Unit price'),
                 (width: 122.0, flex: 0, text: 'Extended'),
                 (width: 104.0, flex: 0, text: 'Price from'),
-                (width: 34.0, flex: 0, text: ''),
+                (width: 68.0, flex: 0, text: ''),
               ]),
               const Divider(height: 12),
               for (final line in estimate.hardware)
@@ -932,6 +953,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 : theme.disabledColor,
                           ),
                         ),
+                      ),
+                      avRowIcon(
+                        Icons.library_add_outlined,
+                        extra == null
+                            ? 'Only a line added here can be added to the '
+                                  'parts list'
+                            : extra.catalogModel.isNotEmpty
+                            ? 'Already priced from the parts list '
+                                  '(${extra.catalogModel})'
+                            : 'Add this line to the parts list',
+                        extra == null || extra.catalogModel.isNotEmpty
+                            ? null
+                            : () => _addLineToCatalog(
+                                context,
+                                provider,
+                                extra,
+                                kind: _ExtraPart.hardware,
+                              ),
                       ),
                       if (extra == null)
                         avRowIcon(
@@ -1051,7 +1090,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 (width: 66.0, flex: 0, text: 'Total'),
                 (width: 142.0, flex: 0, text: 'Unit price'),
                 (width: 122.0, flex: 0, text: 'Extended'),
-                (width: 34.0, flex: 0, text: ''),
+                (width: 68.0, flex: 0, text: ''),
               ]),
               const Divider(height: 12),
               for (final signal in types)
@@ -1162,6 +1201,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                          ),
+                          // A counted run is priced off the cable TYPE, which
+                          // already has its catalog entry — nothing to
+                          // promote. The column stays so the rows line up.
+                          avRowIcon(
+                            Icons.library_add_outlined,
+                            'Cable types are edited on the Catalog tab',
+                            null,
                           ),
                           avRowIcon(
                             Icons.restart_alt,
@@ -1278,6 +1325,21 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                          ),
+                          avRowIcon(
+                            Icons.library_add_outlined,
+                            item.catalogModel.isNotEmpty
+                                ? 'Already priced from the catalog '
+                                      '(${item.catalogModel})'
+                                : 'Add this line to the device catalog',
+                            item.catalogModel.isNotEmpty
+                                ? null
+                                : () => _addLineToCatalog(
+                                    context,
+                                    provider,
+                                    item,
+                                    kind: _ExtraPart.cable,
+                                  ),
                           ),
                           avRowIcon(
                             Icons.delete_outline,
@@ -1547,6 +1609,301 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           qty: qty,
         );
     }
+  }
+
+  // --- turning a typed line into a catalog entry ---------------------------
+
+  /// Promotes a hand-typed estimate line into a device catalog entry.
+  ///
+  /// The reverse trip of [_addExtraPart], and the one that was missing. A line
+  /// typed by hand is how a part enters the building — somebody is quoted a
+  /// figure over the phone and types it on the job in front of them — and
+  /// until now that was where it stopped: the next room typed the same box in
+  /// again, at whatever price that person remembered. This writes it to
+  /// av_devices.json once, points the line at the new entry and drops the
+  /// typed price, so from here the line is priced like everything else and a
+  /// revision reaches every room that uses it.
+  ///
+  /// Only offered on a line with no [CostLineItem.catalogModel]: a line that is
+  /// already off the catalog has nothing to promote.
+  Future<void> _addLineToCatalog(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLineItem item, {
+    required _ExtraPart kind,
+  }) async {
+    final library = provider.avDeviceLibrary;
+    final messenger = ScaffoldMessenger.of(context);
+
+    // What this room is paying, in the order the estimate itself resolves it:
+    // the figure typed in the Unit price box, else the one on the line.
+    final typed = provider.avCost.priceOverrides[item.id] ?? item.unitPrice;
+
+    final modelController = TextEditingController(text: item.description.trim());
+    final makerController = TextEditingController();
+    final partController = TextEditingController();
+    final uController = TextEditingController(text: '0');
+    final priceController =
+        TextEditingController(text: typed > 0 ? trimNumber(typed) : '');
+    final eduController = TextEditingController();
+    final notesController = TextEditingController();
+    String category = item.category.trim().isNotEmpty
+        ? item.category.trim()
+        : switch (kind) {
+            _ExtraPart.equipment => '',
+            _ExtraPart.cable => kCategoryCable,
+            _ExtraPart.hardware => kCategoryRackHardware,
+            _ExtraPart.misc => kCategoryMisc,
+          };
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final model = modelController.text.trim();
+          // Typing the name of something already in the catalog is nearly
+          // always "I did not know it was there" rather than "replace it", so
+          // it is said out loud before the button is pressed rather than
+          // reported afterwards.
+          final existing = model.isEmpty
+              ? null
+              : library.templateForModel(model);
+          final categories = <String>{
+            ...library.categories,
+            if (category.isNotEmpty) category,
+          }.toList()
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          return AlertDialog(
+            title: const Text('Add this line to the catalog'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Writes a catalog entry and points this line at it, so '
+                      'the price comes from the catalog from now on and every '
+                      'other room can quote the same part. The quantity stays '
+                      'on the line — it is about this job, not about the part.',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: modelController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Model',
+                        helperText: 'How the catalog will list it',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setLocal(() {}),
+                    ),
+                    if (existing != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'The catalog already has "${existing.model}" — saving '
+                        'replaces its entry.',
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(ctx).colorScheme.error,
+                            ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: makerController,
+                            decoration: const InputDecoration(
+                              labelText: 'Manufacturer',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: partController,
+                            decoration: const InputDecoration(
+                              labelText: 'Part number',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue:
+                                categories.contains(category) ? category : null,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Category',
+                              isDense: true,
+                            ),
+                            items: [
+                              for (final c in categories)
+                                DropdownMenuItem(value: c, child: Text(c)),
+                            ],
+                            onChanged: (v) =>
+                                setLocal(() => category = v ?? category),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 120,
+                          child: TextField(
+                            controller: uController,
+                            decoration: const InputDecoration(
+                              labelText: 'Rack U',
+                              helperText: '0 = not racked',
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: priceController,
+                            decoration: InputDecoration(
+                              labelText:
+                                  'List price (${provider.currencySymbol})',
+                              isDense: true,
+                            ),
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'[0-9.]')),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: eduController,
+                            decoration: InputDecoration(
+                              labelText:
+                                  'Education price (${provider.currencySymbol})',
+                              helperText: 'optional',
+                              isDense: true,
+                            ),
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'[0-9.]')),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: notesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Note',
+                        helperText: 'e.g. where the price came from',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Connectors, power draw and heat are left blank — fill '
+                      'them in on the Device Editor tab if this part ends up '
+                      'on a diagram.',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: model.isEmpty
+                    ? null
+                    : () => Navigator.of(ctx).pop(true),
+                child: Text(existing == null ? 'Add to catalog' : 'Replace'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (saved != true) return;
+    final model = modelController.text.trim();
+    if (model.isEmpty) return;
+
+    final existing = library.templateForModel(model);
+    library.upsert(
+      AvDeviceTemplate(
+        model: model,
+        manufacturer: makerController.text.trim(),
+        partNumber: partController.text.trim(),
+        category: category,
+        rackUnits: int.tryParse(uController.text.trim()) ?? 0,
+        price: double.tryParse(priceController.text.trim()) ?? 0,
+        educationPrice: double.tryParse(eduController.text.trim()) ?? 0,
+        notes: notesController.text.trim(),
+        // Replacing keeps whatever connectors the old entry had: this dialog
+        // knows about money, not about ports, and dropping a port list it
+        // never showed would be a silent edit.
+        ports: existing?.ports ?? const [],
+      ),
+      previousModel: existing?.model ?? '',
+    );
+    final file = await provider.saveAvDeviceLibrary();
+
+    // The line now points at the entry. The typed price and the room override
+    // both go, or they would keep winning over the catalog figure and the
+    // promotion would look like it had done nothing.
+    final linked = item.copyWith(catalogModel: model, unitPrice: 0);
+    switch (kind) {
+      case _ExtraPart.equipment:
+        provider.updateAvCostExtraEquipment(linked);
+      case _ExtraPart.cable:
+        provider.updateAvCostExtraCable(linked);
+      case _ExtraPart.hardware:
+        provider.updateAvCostExtraHardware(linked);
+      case _ExtraPart.misc:
+        provider.updateAvCostItem(linked);
+    }
+    provider.setAvCostPrice(item.id, null);
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          file.isEmpty
+              ? '"$model" added to the catalog in memory, but the catalog file '
+                    'could not be written — check the Device Editor tab.'
+              : '"$model" added to the catalog ($file). This line now takes '
+                    'its price from it.',
+        ),
+      ),
+    );
   }
 
   // --- export --------------------------------------------------------------
@@ -1909,7 +2266,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 (width: 138.0, flex: 0, text: 'Unit price'),
                 (width: 122.0, flex: 0, text: 'Extended'),
                 (width: 92.0, flex: 0, text: 'Taxable'),
-                (width: 34.0, flex: 0, text: ''),
+                (width: 68.0, flex: 0, text: ''),
               ]),
               const Divider(height: 12),
             ],
@@ -1988,6 +2345,21 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           item.copyWith(taxable: v ?? true),
                         ),
                       ),
+                    ),
+                    avRowIcon(
+                      Icons.library_add_outlined,
+                      item.catalogModel.isNotEmpty
+                          ? 'Already priced from the catalog '
+                                '(${item.catalogModel})'
+                          : 'Add this item to the device catalog',
+                      item.catalogModel.isNotEmpty
+                          ? null
+                          : () => _addLineToCatalog(
+                              context,
+                              provider,
+                              item,
+                              kind: _ExtraPart.misc,
+                            ),
                     ),
                     avRowIcon(
                       Icons.delete_outline,
