@@ -129,6 +129,16 @@ const Set<String> kComTypeDefaultNames = {
   'http',
 };
 
+/// The normalized block name -> the com_type value the config and the schema's
+/// dropdown actually use, in the order that dropdown lists them. What the
+/// driver-defaults review offers as the connection to compare against.
+const Map<String, String> kComTypeStyleLabels = {
+  'serial': 'Serial',
+  'serialoverethernet': 'SerialOverEthernet',
+  'network': 'Network',
+  'http': 'HTTP',
+};
+
 /// Core State Manager for the Room Configuration Application
 class AppStateProvider extends ChangeNotifier {
   /// Whether this room has a control system yet. See [RoomMode]; persisted in
@@ -4187,6 +4197,21 @@ class AppStateProvider extends ChangeNotifier {
       moduleComTypeDefaults[moduleStem(moduleValue)]
           ?[normalizeComTypeName(comType)];
 
+  /// The connection styles [moduleValue] publishes a block for, in the schema's
+  /// spelling and the order the com_type dropdown lists them.
+  ///
+  /// What the driver-defaults review offers to compare against: a device on a
+  /// COM port should be able to ask "what does my driver say about SERIAL",
+  /// not only about whichever connection the module happens to name first.
+  List<String> comTypeStylesFor(String moduleValue) {
+    final blocks = moduleComTypeDefaults[moduleStem(moduleValue)];
+    if (blocks == null) return const [];
+    return [
+      for (final style in kComTypeStyleLabels.keys)
+        if (blocks.containsKey(style)) kComTypeStyleLabels[style]!,
+    ];
+  }
+
   /// The comparison spelling of a com_type: lower case, letters and digits
   /// only, so 'SerialOverEthernet', 'serial_over_ethernet' and
   /// 'Serial Over Ethernet' are one connection style and not three.
@@ -4200,16 +4225,39 @@ class AppStateProvider extends ChangeNotifier {
   /// com_type, and from the device otherwise: a driver whose flat defaults say
   /// "Network" gets its network block, and one that says nothing about the
   /// connection leaves the device on the one it is already on.
+  ///
+  /// [comType] overrides both. Picking a model is the driver telling you how
+  /// the box is reached, so there the module's own answer should win — but
+  /// REVIEWING a device that is already on a COM port is a different question,
+  /// and answering it with the network block is how a serial device came to be
+  /// offered a net_port. The review passes the connection it is asking about.
   Map<String, dynamic> _mergedModuleDefaults(
-      String moduleKey, String deviceKey) {
+      String moduleKey, String deviceKey, {String? comType}) {
     final base =
         Map<String, dynamic>.from(moduleDefaults[moduleKey] ?? const {});
     final dev = roomConfig[deviceKey];
-    final comType = (base['com_type'] ??
+    if (comType != null && comType.isNotEmpty) {
+      final wanted =
+          moduleComTypeDefaults[moduleKey]?[normalizeComTypeName(comType)];
+      if (wanted != null) {
+        // The connection asked about, and the com_type that goes with it: a
+        // review that proposes a baud rate has to propose the Serial that
+        // makes the baud rate mean something.
+        base.addAll(wanted);
+        base['com_type'] = comType;
+        return base;
+      }
+    }
+    final resolved = (base['com_type'] ??
             (dev is Map ? dev['com_type'] : null) ??
             '')
         .toString();
-    if (comType.isEmpty) return base;
+    if (resolved.isEmpty) return base;
+    return _layerComTypeBlock(base, moduleKey, resolved);
+  }
+
+  Map<String, dynamic> _layerComTypeBlock(
+      Map<String, dynamic> base, String moduleKey, String comType) {
     final block =
         moduleComTypeDefaults[moduleKey]?[normalizeComTypeName(comType)];
     // The connection block wins: it is the more specific statement, and the
@@ -6586,7 +6634,10 @@ class AppStateProvider extends ChangeNotifier {
   /// module's DEVICE_INFO defaults resolved for this device (trailing index
   /// substituted; site-specific blanks kept), and the fields whose current
   /// value differs from those defaults.
-  ModelChangePreview previewModelSelection(String deviceKey, String model) {
+  /// [comType] asks what the driver says about ONE connection style rather
+  /// than about the one the module names — see [_mergedModuleDefaults].
+  ModelChangePreview previewModelSelection(String deviceKey, String model,
+      {String? comType}) {
     final dev = roomConfig[deviceKey];
     final entry = modelRegistry[model];
     if (dev is! Map || entry == null) {
@@ -6605,7 +6656,8 @@ class AppStateProvider extends ChangeNotifier {
         normalizeModuleName(dev['module']?.toString() ?? '');
     // Flat defaults with the driver's own block for the connection they land
     // on laid over them — see [_mergedModuleDefaults].
-    final raw = _mergedModuleDefaults(entry.module, deviceKey);
+    final raw = _mergedModuleDefaults(entry.module, deviceKey,
+        comType: comType);
     final resolved = _dropHiddenDefaults(
         deviceKey,
         _modelSubstitute(

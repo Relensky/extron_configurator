@@ -47,7 +47,8 @@ Future<void> offerModelDefaults(
     }
     return;
   }
-  final written = await showModelDefaultsDialog(context, provider, mismatches);
+  final written = await showModelDefaultsDialog(context, provider, mismatches,
+      onlySection: onlySection);
   if (written == 0) return;
   messenger.showSnackBar(SnackBar(
     content: Text(
@@ -61,13 +62,31 @@ Future<void> offerModelDefaults(
 Future<int> showModelDefaultsDialog(
   BuildContext context,
   AppStateProvider provider,
-  List<ModelDefaultMismatch> mismatches,
-) async {
+  List<ModelDefaultMismatch> mismatches, {
+  /// Set when the review was opened for ONE device, which is what makes the
+  /// connection picker meaningful: re-running the audit for another style is
+  /// only a sensible question about a single block.
+  String? onlySection,
+}) async {
   if (mismatches.isEmpty) return 0;
+  var shown = mismatches;
+  // Which connection the driver is being asked about. Null means "whatever
+  // each device is on", which is what the review answers by default.
+  String? askingAbout;
   // section -> the keys ticked right now.
-  final selection = <String, Set<String>>{
-    for (final m in mismatches) m.sectionKey: {...m.defaultSelection},
+  var selection = <String, Set<String>>{
+    for (final m in shown) m.sectionKey: {...m.defaultSelection},
   };
+
+  // Every style any driver in this review publishes a block for, so a device
+  // on a COM port can be asked what it would look like on the network.
+  final styles = <String>{
+    for (final m in shown) ...m.availableComTypes,
+  }.toList()
+    ..sort((a, b) => kComTypeStyleLabels.values
+        .toList()
+        .indexOf(a)
+        .compareTo(kComTypeStyleLabels.values.toList().indexOf(b)));
 
   final bool? apply = await showDialog<bool>(
     context: context,
@@ -76,6 +95,18 @@ Future<int> showModelDefaultsDialog(
         final theme = Theme.of(ctx);
         final int ticked =
             selection.values.fold(0, (sum, keys) => sum + keys.length);
+
+        void askAbout(String? style) {
+          setLocal(() {
+            askingAbout = style;
+            shown = auditModelDefaults(provider,
+                onlySection: onlySection, comType: style);
+            selection = {
+              for (final m in shown) m.sectionKey: {...m.defaultSelection},
+            };
+          });
+        }
+
         return AlertDialog(
           title: const Text('Use the driver’s connection details?'),
           content: SizedBox(
@@ -97,11 +128,58 @@ Future<int> showModelDefaultsDialog(
                   'own naming is not, because this room is already named.',
                   style: theme.textTheme.bodySmall,
                 ),
+                // The driver states its details PER CONNECTION. By default
+                // each device is compared against the one it is on; this asks
+                // what the same driver says about another, which is how you
+                // see the baud rate before moving a device onto a COM port.
+                if (styles.length > 1) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('Compare against:',
+                          style: theme.textTheme.bodySmall),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SegmentedButton<String>(
+                            style: const ButtonStyle(
+                                visualDensity: VisualDensity.compact),
+                            segments: [
+                              const ButtonSegment(
+                                value: '',
+                                label: Text('Its own connection'),
+                              ),
+                              for (final s in styles)
+                                ButtonSegment(value: s, label: Text(s)),
+                            ],
+                            selected: {askingAbout ?? ''},
+                            onSelectionChanged: (v) => askAbout(
+                                v.first.isEmpty ? null : v.first),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const Divider(height: 16),
+                if (shown.every((m) => m.diffs.isEmpty))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      askingAbout == null
+                          ? 'Every device already matches its driver on the '
+                              'connection it is using. Pick a connection above '
+                              'to see what the driver says about that one.'
+                          : 'Nothing to change for a $askingAbout connection — '
+                              'the block already says what the driver does.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
                 Expanded(
                   child: ListView(
                     children: [
-                      for (final m in mismatches) ...[
+                      for (final m in shown) ...[
                         Padding(
                           padding: const EdgeInsets.only(top: 6, bottom: 2),
                           child: Row(
@@ -113,6 +191,16 @@ Future<int> showModelDefaultsDialog(
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              // Which connection these figures describe. Worth
+                              // saying on every row: the same driver answers
+                              // differently for a COM port and a network port.
+                              if (m.comType.isNotEmpty)
+                                Text(
+                                  '${m.comType}  ·  ',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
                               Text(
                                 m.sectionKey,
                                 style: theme.textTheme.bodySmall?.copyWith(
@@ -186,7 +274,9 @@ Future<int> showModelDefaultsDialog(
   if (apply != true) return 0;
 
   int written = 0;
-  for (final m in mismatches) {
+  // What is on SCREEN when Apply is pressed, not what the review opened with:
+  // the connection picker can have replaced the whole list since then.
+  for (final m in shown) {
     final keys = selection[m.sectionKey] ?? const <String>{};
     if (keys.isEmpty) continue;
     written += provider

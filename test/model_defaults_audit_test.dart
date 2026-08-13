@@ -24,6 +24,10 @@ void main() {
     provider = AppStateProvider(autoLoadSettings: false)
       ..modulesPath = path.join(Directory.current.path, 'device');
     await provider.preloadAllModules();
+    // The shipped schema too: its "hideWhen" rules are what keep a net_port
+    // out of a review of a serial connection, so a review tested without them
+    // is not the review the app runs.
+    await provider.loadUiSchema();
   });
 
   /// Runs [config] through the shipped conversion, the way opening a legacy
@@ -194,6 +198,82 @@ void main() {
         auditModelDefaults(provider, onlySection: 'WIRELESSDEVICE_1'),
         isEmpty,
       );
+    });
+
+    test('a device is reviewed against the connection it is actually on',
+        () async {
+      // The complaint this fixes: a device on a COM port was compared against
+      // the driver's NETWORK block, so it was offered a net_port and told
+      // nothing about its baud rate.
+      // Whichever file the registry gives this model — two copies of the DMP
+      // driver ship, and which one wins is not what this test is about.
+      final owner = provider.modelRegistry['DMP 64 Plus C']!.module;
+      provider.roomConfig = <String, dynamic>{
+        'SYSTEM_SETUP': <String, dynamic>{'dev_dsps': '1'},
+        'DSPDEVICE_1': <String, dynamic>{
+          'com_type': 'Serial',
+          'model': 'DMP 64 Plus C',
+          'module': 'modules.device.$owner',
+          'serial_port': 'COM1',
+        },
+      };
+
+      final onSerial =
+          auditModelDefaults(provider, onlySection: 'DSPDEVICE_1');
+      expect(onSerial, hasLength(1));
+      expect(onSerial.single.comType, 'Serial');
+      final serialKeys = onSerial.single.diffs.map((d) => d.key).toSet();
+      expect(serialKeys, contains('baud'));
+      expect(serialKeys, isNot(contains('net_port')),
+          reason: 'a COM port has no network port to propose');
+
+      // ...and the picker can still ask what the same driver says about the
+      // network, which is how you see the port before moving the device.
+      final onNetwork = auditModelDefaults(provider,
+          onlySection: 'DSPDEVICE_1', comType: 'Network');
+      expect(onNetwork, hasLength(1));
+      expect(onNetwork.single.comType, 'Network');
+      final networkKeys = onNetwork.single.diffs.map((d) => d.key).toSet();
+      expect(networkKeys, contains('net_port'));
+      expect(networkKeys, contains('protocol'));
+      // Asking about a connection also proposes the com_type that goes with
+      // it — a baud rate on a device still set to Network means nothing.
+      expect(
+        onNetwork.single.diffs
+            .firstWhere((d) => d.key == 'com_type')
+            .fromModule,
+        'Network',
+      );
+    });
+
+    test('the review still opens when only another connection has anything '
+        'to say', () async {
+      // Everything already agrees for the connection this device is on, but
+      // the driver has a serial block too — so the one-device review opens
+      // with no rows and the picker available, rather than reporting "clean"
+      // and leaving no way to look.
+      final owner = provider.modelRegistry['DMP 64 Plus C']!.module;
+      provider.roomConfig = <String, dynamic>{
+        'SYSTEM_SETUP': <String, dynamic>{'dev_dsps': '1'},
+        'DSPDEVICE_1': <String, dynamic>{
+          'com_type': 'Network',
+          'model': 'DMP 64 Plus C',
+          'module': 'modules.device.$owner',
+        },
+      };
+      for (final m in auditModelDefaults(provider, onlySection: 'DSPDEVICE_1')) {
+        provider.applyModelDefaultValues(m.sectionKey, {
+          for (final d in m.diffs) d.key: d.fromModule,
+        });
+      }
+
+      final scoped = auditModelDefaults(provider, onlySection: 'DSPDEVICE_1');
+      expect(scoped, hasLength(1));
+      expect(scoped.single.diffs, isEmpty);
+      expect(scoped.single.availableComTypes, contains('Serial'));
+
+      // The whole-file review keeps its old manners and stays shut.
+      expect(auditModelDefaults(provider), isEmpty);
     });
 
     test('a device whose model no driver claims is left out of it', () async {

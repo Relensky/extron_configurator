@@ -82,6 +82,65 @@ void main() {
       );
     });
 
+    test('a run to a device nobody has placed is still on the drawing', () {
+      // It used to vanish: a cable drawn on the signal flow, with one end on
+      // a device that had no location, was dropped from the cabling sheet
+      // with nothing said. That reads as the drawing being broken, and hides
+      // cable somebody still has to pull.
+      final p = room();
+      p.addAvNode(device('LOOSE', 'Wall plate', kNoLocationId));
+      p.addAvCable(
+        fromNodeId: 'A0',
+        fromPortId: 'p2',
+        toNodeId: 'LOOSE',
+        toPortId: 'p1',
+        signal: SignalType.network,
+      );
+
+      final drawing = drawingOf(p);
+      final holding = drawing.boxes.where((b) => b.id == kUnplacedBoxId);
+      expect(holding, hasLength(1), reason: 'the run needs somewhere to land');
+      expect(holding.single.label, 'Not placed yet');
+      expect(holding.single.body, contains('1 run'));
+
+      final run = drawing.bundles.where(
+          (b) => b.fromBoxId == kUnplacedBoxId || b.toBoxId == kUnplacedBoxId);
+      expect(run, hasLength(1));
+      expect(run.single.count, 1);
+      // The other end is the real place it comes from, not a second sentinel.
+      expect(
+        run.single.fromBoxId == kUnplacedBoxId
+            ? run.single.toBoxId
+            : run.single.fromBoxId,
+        'loc:LOC_1',
+      );
+    });
+
+    test('a room whose devices all know where they are grows no such box', () {
+      final drawing = drawingOf(room());
+      expect(drawing.boxes.map((b) => b.id), isNot(contains(kUnplacedBoxId)));
+    });
+
+    test('two unplaced ends are not drawn as a run to nowhere', () {
+      // Both ends in the same non-place is not a run BETWEEN places, and a
+      // bundle from a box to itself cannot be drawn.
+      final p = room();
+      p.addAvNode(device('L1', 'Loose 1', kNoLocationId));
+      p.addAvNode(device('L2', 'Loose 2', kNoLocationId));
+      p.addAvCable(
+        fromNodeId: 'L1',
+        fromPortId: 'p1',
+        toNodeId: 'L2',
+        toPortId: 'p1',
+        signal: SignalType.network,
+      );
+      final drawing = drawingOf(p);
+      expect(drawing.bundles.where((b) =>
+          b.fromBoxId == kUnplacedBoxId && b.toBoxId == kUnplacedBoxId),
+          isEmpty);
+      expect(drawing.boxes.map((b) => b.id), isNot(contains(kUnplacedBoxId)));
+    });
+
     test('a pull box is drawn on the strength of existing', () {
       // Nothing terminates in one, so waiting for a device to name it would
       // keep it off the drawing forever.

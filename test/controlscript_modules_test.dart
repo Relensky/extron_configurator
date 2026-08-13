@@ -67,12 +67,39 @@ void main() {
   }, skip: !available);
 
   test('serial over ethernet is the Extron gateway everywhere', () {
+    var counted = 0;
     for (final entry in provider.moduleComTypeDefaults.entries) {
       final soe = entry.value['serialoverethernet'];
       if (soe == null) continue;
+      counted++;
       expect(soe['net_port'], 2001, reason: entry.key);
       expect(soe['ip_address'], '192.168.254.254', reason: entry.key);
+      // The credential is checked by the gateway the COM port hangs off, not
+      // by the device on the far end, so it is the Extron one whoever made
+      // the box being controlled.
+      expect(soe['password'], 'ATEC2007', reason: entry.key);
     }
+    expect(counted, 62);
+  }, skip: !available);
+
+  test('the SoE password wins over the device password when switched to', () {
+    // A Sony projector: root/ATEC2008 on its own network port, but ATEC2007
+    // once it is reached through an Extron gateway.
+    provider.roomConfig['PROJECTORDEVICE_1'] = <String, dynamic>{
+      'model': 'VPL-PHZ60',
+      'module': 'modules.device.sony_vp_VPL_P_Series',
+      'com_type': 'Network',
+      'password': 'ATEC2008',
+      'ip_address': '10.1.2.3',
+    };
+
+    provider.updateDeviceValue(
+        'PROJECTORDEVICE_1', 'com_type', 'SerialOverEthernet');
+
+    final dev = provider.roomConfig['PROJECTORDEVICE_1'];
+    expect(dev['password'], 'ATEC2007');
+    expect(dev['ip_address'], '192.168.254.254');
+    expect(dev['net_port'], 2001);
   }, skip: !available);
 
   test('Extron gear carries the house credentials', () {

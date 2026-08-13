@@ -92,12 +92,21 @@ class ModelDefaultMismatch {
 
   final List<ModelDefaultDiff> diffs;
 
+  /// The connection this comparison was made against ('Serial'), and every
+  /// style the driver publishes a block for. The review offers the second so
+  /// somebody can ask what the driver says about a connection the device is
+  /// not on yet — the answer to "what would this look like over serial".
+  final String comType;
+  final List<String> availableComTypes;
+
   const ModelDefaultMismatch({
     required this.sectionKey,
     required this.name,
     required this.model,
     required this.module,
     required this.diffs,
+    this.comType = '',
+    this.availableComTypes = const [],
   });
 
   /// The keys ticked when the review opens.
@@ -114,6 +123,13 @@ class ModelDefaultMismatch {
 /// the device on screen, where "every device in the room" would be a review of
 /// tabs the reader is not looking at.
 ///
+/// [comType] asks what the driver says about ONE connection style. Left null,
+/// each device is compared against the block for the connection IT IS ON,
+/// which is the question somebody opening the review is actually asking — a
+/// device on a COM port compared against the network block is offered a
+/// net_port and a protocol it has no use for, and told nothing about its baud
+/// rate. Set it to look at another connection before committing to it.
+///
 /// Two kinds of difference are deliberately NOT reported:
 ///
 ///   * a driver value that is blank against a room value that is not. Every
@@ -125,6 +141,7 @@ class ModelDefaultMismatch {
 List<ModelDefaultMismatch> auditModelDefaults(
   AppStateProvider provider, {
   String? onlySection,
+  String? comType,
 }) {
   final out = <ModelDefaultMismatch>[];
 
@@ -137,7 +154,12 @@ List<ModelDefaultMismatch> auditModelDefaults(
     final entry = provider.modelRegistry[model];
     if (entry == null) return;
 
-    final preview = provider.previewModelSelection(sectionKey, model);
+    // The connection this device is ON, unless the reader asked about another
+    // one. Without this a serial device is reviewed against the network block,
+    // which is every wrong key and none of the right ones.
+    final against = comType ?? block['com_type']?.toString() ?? '';
+    final preview = provider.previewModelSelection(sectionKey, model,
+        comType: against.isEmpty ? null : against);
     if (!preview.known) return;
 
     final diffs = <ModelDefaultDiff>[];
@@ -165,7 +187,28 @@ List<ModelDefaultMismatch> auditModelDefaults(
         connection: kConnectionDefaultKeys.contains(d.key),
       ));
     }
-    if (diffs.isEmpty) return;
+    final styles = provider.comTypeStylesFor(preview.newModule);
+    if (diffs.isEmpty) {
+      // Nothing to change on THIS connection. When one device was asked about
+      // by name, the review still opens if the driver has something to say
+      // about a connection it is not on — that is the whole point of the
+      // picker, and it cannot be reached through a dialog that never opens.
+      // A whole-file review after a conversion keeps its old manners and stays
+      // shut when the room already agrees with its drivers.
+      if (onlySection == null || comType != null || styles.length < 2) return;
+      out.add(ModelDefaultMismatch(
+        sectionKey: sectionKey,
+        name: block['name']?.toString().trim().isNotEmpty == true
+            ? block['name'].toString().trim()
+            : sectionKey,
+        model: model,
+        module: preview.newModule,
+        diffs: const [],
+        comType: against,
+        availableComTypes: styles,
+      ));
+      return;
+    }
 
     diffs.sort((a, b) {
       // Connection first, then alphabetical: the reader is here for the port.
@@ -181,6 +224,8 @@ List<ModelDefaultMismatch> auditModelDefaults(
       model: model,
       module: preview.newModule,
       diffs: diffs,
+      comType: against,
+      availableComTypes: styles,
     ));
   });
 
