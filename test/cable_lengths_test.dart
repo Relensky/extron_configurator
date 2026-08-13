@@ -238,15 +238,22 @@ void main() {
         reason: '$caption is over right-aligned figures',
       );
     }
-    // ...and the two that sit over TEXT BOXES stay left, where the box's own
-    // text starts.
-    for (final caption in const ['Cable type', 'Spares', 'Unit price']) {
+    // The two that sit over INPUT BOXES are right-aligned as well, which this
+    // used to have backwards: a numeric LiveTextField right-aligns its figure,
+    // so a caption left in the box's cell is a caption at the far end of the
+    // column from the number. See cost_header_alignment_test.dart, which
+    // measures where each one actually lands.
+    for (final caption in const ['Spares', 'Unit price']) {
       final header =
           find.descendant(of: headerRow, matching: find.text(caption));
       expect(header, findsOneWidget, reason: caption);
-      expect(tester.widget<Text>(header).textAlign, TextAlign.left,
-          reason: '$caption is over a field');
+      expect(tester.widget<Text>(header).textAlign, TextAlign.right,
+          reason: '$caption is over a right-aligned figure in a box');
     }
+    // Prose reads from the left, and it is a plain cell rather than a box.
+    final cableType =
+        find.descendant(of: headerRow, matching: find.text('Cable type'));
+    expect(tester.widget<Text>(cableType).textAlign, TextAlign.left);
 
     // The captions and the cells are laid out from the same gaps and widths,
     // so a column's caption box ends where the column does. 'Extended' is the

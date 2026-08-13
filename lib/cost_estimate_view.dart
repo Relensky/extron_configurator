@@ -594,21 +594,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             const SizedBox(height: 8),
-            _headerRow(theme, const [
-              (gap: 0.0, width: 0.0, flex: 3, text: 'Device',
-                  align: TextAlign.left),
-              (gap: 0.0, width: 0.0, flex: 2, text: 'Model',
-                  align: TextAlign.left),
-              (gap: 0.0, width: 60.0, flex: 0, text: 'Qty',
-                  align: TextAlign.right),
-              (gap: 12.0, width: 130.0, flex: 0, text: 'Unit price',
-                  align: TextAlign.left),
-              (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
-                  align: TextAlign.right),
-              (gap: 12.0, width: 92.0, flex: 0, text: 'Price from',
-                  align: TextAlign.left),
-              (gap: 0.0, width: 80.0, flex: 0, text: '',
-                  align: TextAlign.left),
+            _headerRow(context, const [
+              _Col('Device', flex: 3),
+              _Col('Model', flex: 2),
+              // A device off the diagram prints its count as plain text; only
+              // a line added here is a box. The commoner cell wins.
+              _Col('Qty', width: 60, align: TextAlign.right),
+              _Col.field('Unit price', gap: 12, width: 130, numeric: true),
+              _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+              _Col('Price from', gap: 12, width: 92),
+              // Two row buttons, 40 wide as they render.
+              _Col('', width: 80),
             ]),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
@@ -860,25 +856,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               )
             else ...[
               const SizedBox(height: 8),
-              _headerRow(theme, const [
-                (gap: 0.0, width: 0.0, flex: 3, text: 'Item',
-                    align: TextAlign.left),
-                (gap: 0.0, width: 0.0, flex: 2, text: 'Kind',
-                    align: TextAlign.left),
-                (gap: 0.0, width: 60.0, flex: 0, text: 'Qty',
-                    align: TextAlign.right),
-                (gap: 12.0, width: 130.0, flex: 0, text: 'Unit price',
-                    align: TextAlign.left),
-                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
-                    align: TextAlign.right),
-                (gap: 12.0, width: 92.0, flex: 0, text: 'Price from',
-                    align: TextAlign.left),
-                // Two row buttons. They are constrained to 34 and render at 40, which
-                // is what the column actually takes — and the 12 pixels of
-                // difference is what put every caption on this row a column
-                // out.
-                (gap: 0.0, width: 80.0, flex: 0, text: '',
-                    align: TextAlign.left),
+              _headerRow(context, const [
+                _Col('Item', flex: 3),
+                _Col('Kind', flex: 2),
+                _Col('Qty', width: 60, align: TextAlign.right),
+                _Col.field('Unit price', gap: 12, width: 130, numeric: true),
+                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+                _Col('Price from', gap: 12, width: 92),
+                // Two row buttons. They are constrained to 34 and render at
+                // 40, which is what the column actually takes.
+                _Col('', width: 80),
               ]),
               const Divider(height: 12),
               for (final line in estimate.hardware)
@@ -1147,25 +1134,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               )
             else ...[
               const SizedBox(height: 8),
-              _headerRow(theme, const [
-                (gap: 0.0, width: 0.0, flex: 3, text: 'Cable type',
-                    align: TextAlign.left),
-                (gap: 0.0, width: 66.0, flex: 0, text: 'Drawn',
-                    align: TextAlign.right),
-                (gap: 12.0, width: 80.0, flex: 0, text: 'Spares',
-                    align: TextAlign.left),
-                (gap: 12.0, width: 54.0, flex: 0, text: 'Total',
-                    align: TextAlign.right),
-                (gap: 12.0, width: 130.0, flex: 0, text: 'Unit price',
-                    align: TextAlign.left),
-                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
-                    align: TextAlign.right),
-                // Two row buttons. They are constrained to 34 and render at 40, which
-                // is what the column actually takes — and the 12 pixels of
-                // difference is what put every caption on this row a column
-                // out.
-                (gap: 0.0, width: 80.0, flex: 0, text: '',
-                    align: TextAlign.left),
+              _headerRow(context, const [
+                _Col('Cable type', flex: 3),
+                _Col('Drawn', width: 66, align: TextAlign.right),
+                _Col.field('Spares', gap: 12, width: 80, numeric: true),
+                _Col('Total', gap: 12, width: 54, align: TextAlign.right),
+                _Col.field('Unit price', gap: 12, width: 130, numeric: true),
+                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+                // Two row buttons. They are constrained to 34 and render at
+                // 40, which is what the column actually takes.
+                _Col('', width: 80),
               ]),
               const Divider(height: 12),
               // ONE ROW PER LINE THE ESTIMATE MADE, not one per signal type.
@@ -2287,24 +2265,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
             if (lines.isNotEmpty) ...[
               const SizedBox(height: 4),
-              _headerRow(theme, const [
-                (gap: 0.0, width: 182.0, flex: 0, text: 'Job type',
-                    align: TextAlign.left),
-                (gap: 8.0, width: 0.0, flex: 3, text: 'Scope',
-                    align: TextAlign.left),
-                (gap: 8.0, width: 78.0, flex: 0, text: 'Techs',
-                    align: TextAlign.left),
-                (gap: 8.0, width: 86.0, flex: 0, text: 'Hours ea.',
-                    align: TextAlign.left),
-                (gap: 8.0, width: 76.0, flex: 0, text: 'Rate/hr',
-                    align: TextAlign.left),
-                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
-                    align: TextAlign.right),
-                (gap: 0.0, width: 92.0, flex: 0, text: 'Taxable',
-                    align: TextAlign.center),
+              _headerRow(context, const [
+                // The picker is a box on the page AND in the photograph, so
+                // its caption keeps the box's inset either way.
+                _Col.field('Job type', width: 182, keepsBox: true),
+                _Col.field('Scope', gap: 8, flex: 3),
+                _Col.field('Techs', gap: 8, width: 78, numeric: true),
+                _Col.field('Hours ea.', gap: 8, width: 86, numeric: true),
+                _Col.field('Rate/hr', gap: 8, width: 76, numeric: true),
+                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+                _Col('Taxable', width: 92, align: TextAlign.center),
                 // One row button, 40 wide as it renders.
-                (gap: 0.0, width: 40.0, flex: 0, text: '',
-                    align: TextAlign.left),
+                _Col('', width: 40),
               ]),
               const Divider(height: 12),
             ],
@@ -2438,7 +2410,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     AppStateProvider provider,
     CostEstimate estimate,
   ) {
-    final theme = Theme.of(context);
     final currency = estimate.currency;
     final items = provider.avCost.items;
     return Card(
@@ -2473,25 +2444,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
             if (items.isNotEmpty) ...[
               const SizedBox(height: 4),
-              _headerRow(theme, const [
-                (gap: 0.0, width: 0.0, flex: 3, text: 'Description',
-                    align: TextAlign.left),
-                (gap: 8.0, width: 0.0, flex: 2, text: 'Category',
-                    align: TextAlign.left),
-                (gap: 8.0, width: 70.0, flex: 0, text: 'Qty',
-                    align: TextAlign.left),
-                (gap: 8.0, width: 130.0, flex: 0, text: 'Unit price',
-                    align: TextAlign.left),
-                (gap: 12.0, width: 110.0, flex: 0, text: 'Extended',
-                    align: TextAlign.right),
-                (gap: 0.0, width: 92.0, flex: 0, text: 'Taxable',
-                    align: TextAlign.center),
-                // Two row buttons. They are constrained to 34 and render at 40, which
-                // is what the column actually takes — and the 12 pixels of
-                // difference is what put every caption on this row a column
-                // out.
-                (gap: 0.0, width: 80.0, flex: 0, text: '',
-                    align: TextAlign.left),
+              _headerRow(context, const [
+                _Col.field('Description', flex: 3),
+                _Col.field('Category', gap: 8, flex: 2),
+                _Col.field('Qty', gap: 8, width: 70, numeric: true),
+                _Col.field('Unit price', gap: 8, width: 130, numeric: true),
+                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+                _Col('Taxable', width: 92, align: TextAlign.center),
+                // Two row buttons. They are constrained to 34 and render at
+                // 40, which is what the column actually takes.
+                _Col('', width: 80),
               ]),
               const Divider(height: 12),
             ],
@@ -2848,46 +2810,123 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ///
   /// The rows below are Rows of SizedBoxes, not a Table, so nothing lines a
   /// caption up with its column except this — which means it has to mirror the
-  /// row it captions EXACTLY: the same [gap] in front of each cell, the same
-  /// [width] or [flex] for the cell itself, and the same [align] the value in
-  /// it uses.
+  /// row it captions EXACTLY: the same [_Col.gap] in front of each cell, the
+  /// same [_Col.width] or [_Col.flex] for the cell itself, and the same
+  /// alignment and inset the value in it is drawn with.
   ///
   /// It used to fold the gap into the width and left-align every caption,
   /// which put "Drawn", "Total" and "Extended" a gap-and-a-bit to the left of
   /// the right-aligned figures they name. On the cabling table, where the
   /// cells are narrow and the gaps many, they read as belonging to the column
   /// before.
-  Widget _headerRow(
-    ThemeData theme,
-    List<
-        ({
-          double gap,
-          double width,
-          int flex,
-          String text,
-          TextAlign align,
-        })> columns,
-  ) {
-    final style = theme.textTheme.labelSmall;
-    return Row(
-      children: [
-        for (final c in columns) ...[
-          if (c.gap > 0) SizedBox(width: c.gap),
-          if (c.flex > 0)
-            Expanded(
-              flex: c.flex,
-              child: Text(c.text, style: style, textAlign: c.align),
-            )
-          else
-            SizedBox(
-              width: c.width,
-              child: Text(c.text, style: style, textAlign: c.align),
-            ),
-        ],
-      ],
+  ///
+  /// The cells then came out right and the captions inside them still did not,
+  /// because half the columns are input boxes: a box right-aligns its figure
+  /// and holds it 16 pixels off its own border, so "Unit price" sat hard left
+  /// over a number hard right, and "Techs" and "Hours ea." the same. Which
+  /// cells are boxes is therefore part of the column spec — see [_Col.field].
+  ///
+  /// Built through a [Builder] so the print skin is read from INSIDE the
+  /// captured tree: the cards are built before the [PrintMode] that wraps
+  /// them, and a caption that asked from out here would always be told the
+  /// page is on screen.
+  Widget _headerRow(BuildContext context, List<_Col> columns) {
+    return Builder(
+      builder: (ctx) {
+        final style = Theme.of(ctx).textTheme.labelSmall;
+        final printing = PrintMode.of(ctx);
+        Widget caption(_Col c) => Padding(
+          padding: c.padding(printing),
+          child: Text(c.text, style: style, textAlign: c.align),
+        );
+        return Row(
+          children: [
+            for (final c in columns) ...[
+              if (c.gap > 0) SizedBox(width: c.gap),
+              if (c.flex > 0)
+                Expanded(flex: c.flex, child: caption(c))
+              else
+                SizedBox(width: c.width, child: caption(c)),
+            ],
+          ],
+        );
+      },
     );
   }
 }
+
+/// One column of a table caption, mirroring the cell under it.
+///
+/// See [_CostEstimateViewState._headerRow] for why every one of these has to
+/// match the row below by hand.
+class _Col {
+  /// The blank the row puts in FRONT of this cell — the `SizedBox(width: n)`
+  /// between two cells, repeated here so the caption starts where the cell
+  /// does.
+  final double gap;
+
+  /// The cell's fixed width, or 0 when [flex] carries it instead.
+  final double width;
+
+  /// The cell's `Expanded` flex, or 0 when [width] is fixed.
+  final int flex;
+
+  final String text;
+  final TextAlign align;
+
+  /// How far the value under this caption is held off the cell's edge.
+  ///
+  /// A plain Text cell paints right at the edge, so nothing. An input box
+  /// paints its text [kFieldTextInset] in from its border, and a caption flush
+  /// against the cell edge is a caption that far from the thing it names.
+  final double inset;
+
+  /// True when the cell stays an input box in the captured estimate. The text
+  /// fields print their bare value instead ([LiveTextField]), which sits much
+  /// closer to the edge; the job-type picker keeps its box either way.
+  final bool keepsBox;
+
+  /// A caption over a plain cell — a figure, a name, a checkbox.
+  const _Col(
+    this.text, {
+    this.gap = 0,
+    this.width = 0,
+    this.flex = 0,
+    this.align = TextAlign.left,
+  }) : inset = 0,
+       keepsBox = false;
+
+  /// A caption over an input box. [numeric] right-aligns it, because that is
+  /// where a numeric field puts its figure.
+  const _Col.field(
+    this.text, {
+    this.gap = 0,
+    this.width = 0,
+    this.flex = 0,
+    bool numeric = false,
+    this.keepsBox = false,
+  }) : align = numeric ? TextAlign.right : TextAlign.left,
+       inset = kFieldTextInset;
+
+  /// The inset as padding on whichever side the caption is drawn against.
+  EdgeInsets padding(bool printing) {
+    final gap = inset == 0
+        ? 0.0
+        : (printing && !keepsBox ? kPrintValueInset : inset);
+    if (gap == 0) return EdgeInsets.zero;
+    return align == TextAlign.right
+        ? EdgeInsets.only(right: gap)
+        : EdgeInsets.only(left: gap);
+  }
+}
+
+/// How far a dense outlined text field holds its text off its own border.
+/// Measured rather than assumed — see `test/cost_header_alignment_test.dart`,
+/// which fails if the framework's padding ever changes underneath this.
+const double kFieldTextInset = 16.0;
+
+/// The same, for a [LiveTextField] printing its value instead of its box.
+const double kPrintValueInset = 2.0;
 
 // ---------------------------------------------------------------------------
 //  CARD HEADINGS
