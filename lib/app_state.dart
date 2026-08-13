@@ -40,6 +40,10 @@ enum AppTab {
   wizard('wizard'),
   devices('devices'),
   system('system'),
+  // Beside System, because the two are the same document seen two ways: the
+  // form and the file it writes. Somebody checking what a field did to the
+  // config should not have to cross nine drawing tabs to look.
+  rawJson('raw_json'),
   schematic('schematic'),
   avFlow('av_flow'),
   floorPlan('floor_plan'),
@@ -47,7 +51,6 @@ enum AppTab {
   racks('racks'),
   cost('cost'),
   deviceEditor('device_editor'),
-  rawJson('raw_json'),
   appConfig('app_config');
 
   /// Token used in screenshot file names.
@@ -784,6 +787,30 @@ class AppStateProvider extends ChangeNotifier {
   /// Used to diff against and to restore individual rejected changes.
   Map<String, dynamic> _originalLoadedConfig = {};
 
+  /// Loaded-file section name -> what the conversion renamed it to
+  /// ('CAMERA1DEVICE' -> 'CAMERADEVICE_1'), from the last load.
+  Map<String, String> lastSectionRenames = const {};
+
+  /// The block [sectionKey] came from in the pre-conversion file, or null when
+  /// the original has nothing under that name.
+  ///
+  /// Tries the section's own name first, then the name it was renamed FROM, so
+  /// a legacy `CAMERA1DEVICE` still answers for `CAMERADEVICE_1`.
+  Map<String, dynamic>? originalBlockFor(String sectionKey) {
+    dynamic block = _originalLoadedConfig[sectionKey];
+    if (block is! Map) {
+      for (final entry in lastSectionRenames.entries) {
+        if (entry.value != sectionKey) continue;
+        block = _originalLoadedConfig[entry.key];
+        break;
+      }
+    }
+    if (block is! Map) return null;
+    return {
+      for (final e in block.entries) e.key.toString(): e.value,
+    };
+  }
+
   ValueOrigin? originFor(String sectionKey, String fieldKey) =>
       valueOrigins['$sectionKey.$fieldKey'];
 
@@ -805,6 +832,75 @@ class AppStateProvider extends ChangeNotifier {
   @visibleForTesting
   set originalLoadedConfig(Map<String, dynamic> value) =>
       _originalLoadedConfig = value;
+
+  /// The file as it was parsed, before any conversion step — read-only.
+  ///
+  /// Empty when this session never loaded a legacy file. See
+  /// [ensureOriginalFileConfig], which fills it from the `_old_config.json`
+  /// backup beside the working file when the room was converted in an earlier
+  /// session and re-opened in this one.
+  Map<String, dynamic> get originalLoadedConfig => _originalLoadedConfig;
+
+  /// True when there is an original, pre-conversion copy of this room to
+  /// compare a device block against — in memory, or on disk beside the config.
+  bool get hasOriginalFileConfig =>
+      _originalLoadedConfig.isNotEmpty || originalConfigBackupPath.isNotEmpty;
+
+  /// The `*_old_config.json` this room's conversion left in the config's own
+  /// folder, or '' when there is none.
+  ///
+  /// The backup is written by [_processLoadedConfig] on every load of a file
+  /// that needed converting, and it is the ONLY record of what the room said
+  /// before the app touched it once the session that converted it has gone.
+  /// Found by name rather than remembered, so re-opening the room next month
+  /// still finds it.
+  String get originalConfigBackupPath {
+    if (currentConfigPath.isEmpty) return '';
+    try {
+      final dir = Directory(path.dirname(currentConfigPath));
+      if (!dir.existsSync()) return '';
+      final stem = path
+          .basenameWithoutExtension(currentConfigPath)
+          .toLowerCase();
+      String fallback = '';
+      for (final entity in dir.listSync()) {
+        if (entity is! File) continue;
+        final name = path.basename(entity.path).toLowerCase();
+        if (!name.endsWith('_old_config.json')) continue;
+        // The one named for THIS room wins over any other conversion that
+        // happens to be sitting in the same folder.
+        final base = name.substring(0, name.length - '_old_config.json'.length);
+        if (stem.contains(base) || base.contains(stem)) return entity.path;
+        if (fallback.isEmpty) fallback = entity.path;
+      }
+      return fallback;
+    } catch (e) {
+      AppLogger.logError('Could not look for an original config backup', e);
+      return '';
+    }
+  }
+
+  /// Reads the on-disk `_old_config.json` into [originalLoadedConfig] when the
+  /// session has no in-memory copy. Returns true when there is one to compare
+  /// against afterwards.
+  ///
+  /// Called before the driver-defaults review opens, so its "Original File"
+  /// comparison works on a room that was converted and saved days ago.
+  Future<bool> ensureOriginalFileConfig() async {
+    if (_originalLoadedConfig.isNotEmpty) return true;
+    final backup = originalConfigBackupPath;
+    if (backup.isEmpty) return false;
+    try {
+      final parsed = jsonDecode(await File(backup).readAsString());
+      if (parsed is! Map) return false;
+      _originalLoadedConfig = Map<String, dynamic>.from(parsed);
+      AppLogger.logInfo('Loaded the pre-conversion copy from $backup');
+      return _originalLoadedConfig.isNotEmpty;
+    } catch (e, stack) {
+      AppLogger.logError('Could not read the original config backup', e, stack);
+      return false;
+    }
+  }
 
   /// Drops the coloring and the preview — for a config that wasn't converted
   /// (built from the template, or reloaded as-is).
@@ -1641,6 +1737,63 @@ class AppStateProvider extends ChangeNotifier {
   String rackOccupantLabel(String id) =>
       avNodeById(id)?.label ?? avRackItemById(id)?.label ?? id;
 
+  /// The rails whatever is stored under [id] wants left EMPTY, off its catalog
+  /// entry. (0, 0) for anything the catalog says nothing about.
+  ///
+  /// Read from the catalog at draw time rather than copied onto the placement:
+  /// clearance is a fact about the MODEL, and a room drawn last year should
+  /// start warning the moment somebody records that the amplifier in it needs
+  /// a rail above.
+  ({int above, int below}) rackClearanceFor(String id) {
+    final model = avNodeById(id)?.model ?? avRackItemById(id)?.catalogModel;
+    if (model == null || model.trim().isEmpty) return (above: 0, below: 0);
+    final template = avDeviceLibrary.templateForModel(model);
+    if (template == null) return (above: 0, below: 0);
+    return (
+      above: math.max(0, template.clearanceAboveU),
+      below: math.max(0, template.clearanceBelowU),
+    );
+  }
+
+  /// Which rails of one rack face something wants kept clear, and why.
+  ///
+  /// U number -> the sentence the elevation shows on that rail. A WARNING and
+  /// nothing more: the rack still accepts every drop, because the person in
+  /// front of the frame knows things the catalog does not, and a tool that
+  /// refuses a placement somebody has decided on is a tool they stop recording
+  /// placements in.
+  Map<int, String> rackClearanceWarnings({
+    required String rackId,
+    required RackFace face,
+    required int heightU,
+  }) {
+    final out = <int, String>{};
+    void mark(int u, String why) {
+      if (u < 1 || u > heightU) return;
+      final existing = out[u];
+      // Two boxes can want the same rail; both reasons are worth reading.
+      out[u] = existing == null || existing.contains(why)
+          ? why
+          : '$existing\n$why';
+    }
+
+    for (final entry in avRackSlots.entries) {
+      final slot = entry.value;
+      if (slot.rackId != rackId || slot.face != face) continue;
+      final clearance = rackClearanceFor(entry.key);
+      if (clearance.above == 0 && clearance.below == 0) continue;
+      final label = rackOccupantLabel(entry.key);
+      final top = slot.startU + rackOccupantHeight(entry.key) - 1;
+      for (int i = 1; i <= clearance.above; i++) {
+        mark(top + i, '$label wants ${clearance.above}U clear above it');
+      }
+      for (int i = 1; i <= clearance.below; i++) {
+        mark(slot.startU - i, '$label wants ${clearance.below}U clear below it');
+      }
+    }
+    return out;
+  }
+
   /// Adds a piece of rack hardware and — when [rackId] and [startU] are given
   /// — drops it straight into a frame. Returns the stored item, whose id the
   /// rack slot map keys on, or null when a requested placement would not fit.
@@ -1699,6 +1852,38 @@ class AppStateProvider extends ChangeNotifier {
     _pushAvUndo('Edit ${item.label}', _racksScope);
     avRackItems[index] = item;
     notifyListeners();
+  }
+
+  /// Points every placed piece of hardware called [label] that has no catalog
+  /// entry yet at [catalogModel]. Returns how many were stamped.
+  ///
+  /// The other half of "add this line to the catalog" for rack hardware: the
+  /// quote line is a GROUP of identical items in the frames, so promoting it
+  /// has to reach all of them or the elevation and the estimate disagree about
+  /// what the same plate is. Items that already name a catalog entry are left
+  /// alone — they are a different part that happens to share a label.
+  int linkAvRackItemsToCatalog({
+    required String label,
+    required String catalogModel,
+  }) {
+    final wanted = label.trim().toLowerCase();
+    if (wanted.isEmpty || catalogModel.trim().isEmpty) return 0;
+    final matched = [
+      for (int i = 0; i < avRackItems.length; i++)
+        if (avRackItems[i].catalogModel.trim().isEmpty &&
+            avRackItems[i].label.trim().toLowerCase() == wanted)
+          i,
+    ];
+    if (matched.isEmpty) return 0;
+    _pushAvUndo('Catalog $label', _racksScope);
+    for (final i in matched) {
+      avRackItems[i] = avRackItems[i].copyWith(catalogModel: catalogModel);
+    }
+    AppLogger.logInfo(
+        'Linked ${matched.length} rack item(s) named "$label" to catalog '
+        'entry "$catalogModel".');
+    notifyListeners();
+    return matched.length;
   }
 
   void removeAvRackItem(String itemId) {
@@ -1840,6 +2025,31 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
     avFloorPlans[index] = sheet.withRunLabelOffset(edgeKey, by);
+    notifyListeners();
+  }
+
+  /// Sets the plate and ink one kind of text is printed in on [planId].
+  ///
+  /// A drawing decision like the key's position or a bend in a run, so it goes
+  /// through the plans' undo scope with them: recolouring every label on a
+  /// sheet and not being able to take it back is not a change anybody tries
+  /// twice.
+  void setAvPlanLabelStyle(
+    String planId,
+    PlanTextKind kind,
+    PlanLabelStyle style,
+  ) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    if (sheet == null) return;
+    final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
+    if (index < 0) return;
+    _pushAvUndo(
+      style.isDefault
+          ? '${kPlanTextKindLabels[kind]} back to standard'
+          : 'Recolour ${kPlanTextKindLabels[kind]?.toLowerCase()}',
+      _plansScope,
+    );
+    avFloorPlans[index] = sheet.withLabelStyle(kind, style);
     notifyListeners();
   }
 
@@ -5230,6 +5440,10 @@ class AppStateProvider extends ChangeNotifier {
     // original gives the full picture: which values came from the old file
     // (orange), which the conversion wrote (white), and the reversible list
     // the preview offers per change.
+    // Kept for the driver-defaults review's "Original File" comparison, which
+    // has to line a converted block up with the section it came from long
+    // after the provenance colouring has been read and forgotten.
+    lastSectionRenames = sectionRenames;
     computeConversionProvenance(sectionRenames, conflicts);
 
     // Warn (never auto-change) when more device blocks exist than the dev_

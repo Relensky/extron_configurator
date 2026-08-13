@@ -763,6 +763,73 @@ const List<int> kPlanAnnotationColors = [
   0xFF212121, // near-black, for a note that is not an exception
 ];
 
+// ---------------------------------------------------------------------------
+//  THE TEXT PRINTED ON A SHEET
+// ---------------------------------------------------------------------------
+
+/// The three kinds of writing a plan sheet carries, each with its own plate
+/// colour and ink.
+///
+/// They are separate because they are read at different moments by different
+/// people: the trades read the LOCATION names, the drawing set's reader
+/// follows the CALLOUTS, and whoever is pulling cable reads the WIRING. A
+/// sheet issued for rough-in wants the runs shouting and the callouts quiet;
+/// the same sheet in a design review wants the opposite.
+enum PlanTextKind { location, callout, wiring }
+
+const Map<PlanTextKind, String> kPlanTextKindLabels = {
+  PlanTextKind.location: 'Location names',
+  PlanTextKind.callout: 'Callout markers',
+  PlanTextKind.wiring: 'Cable run labels',
+};
+
+/// What one kind of text on a sheet is printed in.
+///
+/// Both colours are ARGB, and 0 means "whatever the sheet has always used" —
+/// the plate the app picks for the theme it is drawn in. Kept as a sentinel
+/// rather than as the built-in value so a sheet that has never been recoloured
+/// still follows the light/dark drawing it sits on, and so a later change to
+/// the defaults reaches every drawing nobody has overridden.
+class PlanLabelStyle {
+  /// The plate behind the words. Architectural exports are line drawings —
+  /// text with no plate lands on top of a wall and neither can be read.
+  final int background;
+
+  /// The words themselves.
+  final int ink;
+
+  const PlanLabelStyle({this.background = 0, this.ink = 0});
+
+  static const PlanLabelStyle unset = PlanLabelStyle();
+
+  bool get isDefault => background == 0 && ink == 0;
+
+  PlanLabelStyle copyWith({int? background, int? ink}) => PlanLabelStyle(
+    background: background ?? this.background,
+    ink: ink ?? this.ink,
+  );
+
+  Map<String, dynamic> toJson() => {
+    if (background != 0) 'bg': background,
+    if (ink != 0) 'ink': ink,
+  };
+
+  factory PlanLabelStyle.fromJson(Map<String, dynamic> json) => PlanLabelStyle(
+    background: (json['bg'] as num?)?.toInt() ?? 0,
+    ink: (json['ink'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// The plate colour to paint [style] with, or [fallback] when this sheet has
+/// never been recoloured. Every place that draws text on a plan goes through
+/// these two, so a sheet cannot end up recoloured in one drawing pass and not
+/// in the next.
+Color planLabelBackground(PlanLabelStyle style, Color fallback) =>
+    style.background == 0 ? fallback : Color(style.background);
+
+Color planLabelInk(PlanLabelStyle style, Color fallback) =>
+    style.ink == 0 ? fallback : Color(style.ink);
+
 /// A floor plan image the room's locations and callouts are placed on.
 ///
 /// The image is referenced by FILE NAME, not embedded. A room folder is
@@ -850,6 +917,14 @@ class FloorPlan {
   /// reflected ceiling plan, and one shared position would put it there.
   final Offset keyPos;
 
+  /// What the writing on this sheet is printed in, per [PlanTextKind]. A kind
+  /// with no entry is drawn the way it always was — see [PlanLabelStyle].
+  ///
+  /// Per sheet like everything else drawn on one: the plan issued to the
+  /// electrician and the one in the design pack are the same room and not the
+  /// same drawing.
+  final Map<PlanTextKind, PlanLabelStyle> labelStyles;
+
   /// True when somebody has taken the key OFF this sheet.
   ///
   /// Stored the way round that makes the default "shown": a drawing whose
@@ -869,9 +944,24 @@ class FloorPlan {
     this.markers = const {},
     this.runWaypoints = const {},
     this.runLabelOffsets = const {},
+    this.labelStyles = const {},
     this.keyPos = kDefaultPlanKeyPosition,
     this.keyHidden = false,
   });
+
+  /// How [kind] is printed on this sheet.
+  PlanLabelStyle styleFor(PlanTextKind kind) =>
+      labelStyles[kind] ?? PlanLabelStyle.unset;
+
+  /// This sheet with [kind] printed in [style]. A default style is dropped
+  /// rather than stored, so a sheet put back to the standard colours saves as
+  /// one that was never touched.
+  FloorPlan withLabelStyle(PlanTextKind kind, PlanLabelStyle style) => copyWith(
+    labelStyles: {
+      ...labelStyles,
+      if (!style.isDefault) kind: style,
+    }..removeWhere((k, _) => k == kind && style.isDefault),
+  );
 
   bool get hasImage => imageFile.trim().isNotEmpty;
 
@@ -931,6 +1021,7 @@ class FloorPlan {
     Map<String, Offset>? markers,
     Map<String, List<Offset>>? runWaypoints,
     Map<String, Offset>? runLabelOffsets,
+    Map<PlanTextKind, PlanLabelStyle>? labelStyles,
     Offset? keyPos,
     bool? keyHidden,
   }) => FloorPlan(
@@ -945,6 +1036,7 @@ class FloorPlan {
     markers: markers ?? this.markers,
     runWaypoints: runWaypoints ?? this.runWaypoints,
     runLabelOffsets: runLabelOffsets ?? this.runLabelOffsets,
+    labelStyles: labelStyles ?? this.labelStyles,
     keyPos: keyPos ?? this.keyPos,
     keyHidden: keyHidden ?? this.keyHidden,
   );
@@ -961,6 +1053,7 @@ class FloorPlan {
     markers: markers,
     runWaypoints: runWaypoints,
     runLabelOffsets: runLabelOffsets,
+    labelStyles: labelStyles,
     keyPos: keyPos,
     keyHidden: keyHidden,
   );
@@ -994,6 +1087,11 @@ class FloorPlan {
         for (final e in runLabelOffsets.entries)
           if (e.value != Offset.zero)
             e.key: {'x': e.value.dx, 'y': e.value.dy},
+      },
+    if (labelStyles.isNotEmpty)
+      'labelStyles': {
+        for (final e in labelStyles.entries)
+          if (!e.value.isDefault) e.key.name: e.value.toJson(),
       },
     if (keyPos != kDefaultPlanKeyPosition)
       'key': {'x': keyPos.dx, 'y': keyPos.dy},
@@ -1045,6 +1143,15 @@ class FloorPlan {
             ((e.value as Map)['x'] as num?)?.toDouble() ?? 0,
             ((e.value as Map)['y'] as num?)?.toDouble() ?? 0,
           ),
+    },
+    labelStyles: {
+      for (final e in (json['labelStyles'] as Map? ?? {}).entries)
+        if (e.value is Map)
+          for (final kind in PlanTextKind.values)
+            if (kind.name == e.key.toString())
+              kind: PlanLabelStyle.fromJson(
+                Map<String, dynamic>.from(e.value as Map),
+              ),
     },
     keyPos: json['key'] is Map
         ? Offset(

@@ -24,6 +24,7 @@ enum DeviceField {
   partNumber,
   category,
   rackUnits,
+  clearance,
   powerWatts,
   price,
   notes,
@@ -35,6 +36,7 @@ const Map<DeviceField, String> kDeviceFieldLabels = {
   DeviceField.partNumber: 'Part number',
   DeviceField.category: 'Category',
   DeviceField.rackUnits: 'Rack units',
+  DeviceField.clearance: 'Rack clearance (U above / below)',
   DeviceField.powerWatts: 'Power (W)',
   DeviceField.price: 'Unit price',
   DeviceField.notes: 'Notes',
@@ -72,6 +74,13 @@ class DeviceFieldDiff {
         return base.copyWith(category: theirs.category);
       case DeviceField.rackUnits:
         return base.copyWith(rackUnits: theirs.rackUnits);
+      case DeviceField.clearance:
+        // One decision, because the two halves describe one requirement: an
+        // amplifier wanting a rail either side is not two facts to tick.
+        return base.copyWith(
+          clearanceAboveU: theirs.clearanceAboveU,
+          clearanceBelowU: theirs.clearanceBelowU,
+        );
       case DeviceField.powerWatts:
         return base.copyWith(powerWatts: theirs.powerWatts);
       case DeviceField.price:
@@ -216,6 +225,19 @@ List<DeviceFieldDiff> _fieldDiffs(
   text(DeviceField.partNumber, mine.partNumber, theirs.partNumber);
   text(DeviceField.category, mine.category, theirs.category);
   number(DeviceField.rackUnits, mine.rackUnits, theirs.rackUnits);
+  String clearance(AvDeviceTemplate t) =>
+      t.clearanceAboveU == 0 && t.clearanceBelowU == 0
+          ? '—'
+          : '${t.clearanceAboveU} above / ${t.clearanceBelowU} below';
+  if ((theirs.clearanceAboveU > 0 || theirs.clearanceBelowU > 0) &&
+      (mine.clearanceAboveU != theirs.clearanceAboveU ||
+          mine.clearanceBelowU != theirs.clearanceBelowU)) {
+    out.add(DeviceFieldDiff(
+      field: DeviceField.clearance,
+      mine: clearance(mine),
+      theirs: clearance(theirs),
+    ));
+  }
   number(DeviceField.powerWatts, mine.powerWatts, theirs.powerWatts);
   number(DeviceField.price, mine.price, theirs.price, decimals: 2);
   text(DeviceField.notes, mine.notes, theirs.notes);

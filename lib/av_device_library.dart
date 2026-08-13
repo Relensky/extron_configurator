@@ -29,6 +29,7 @@ import 'av_flow_model.dart';
 ///      { "model": "DTP CrossPoint 108 4K IPCP MA 70",
 ///        "manufacturer": "Extron", "partNumber": "60-1439-13",
 ///        "category": "Switcher", "rackUnits": 2,
+///        "clearanceAboveU": 1, "clearanceBelowU": 0,
 ///        "powerWatts": 90, "price": 8500,
 ///        "ports": [
 ///          {"id":"in_hdmi_1","label":"HDMI IN 1","signal":"hdmi","direction":"input"},
@@ -39,6 +40,11 @@ import 'av_flow_model.dart';
 ///      "CAMERADEVICE_": { "rackUnits": 0, "ports": [ ... ] }
 ///    }
 ///  }
+///
+///  `clearanceAboveU` / `clearanceBelowU` are the rails this model wants left
+///  EMPTY around it in a frame — the amplifier that vents upwards, the drawer
+///  whose lid opens. The rack elevation shades them light red as a warning and
+///  still allows the placement; see [AvDeviceTemplate.clearanceAboveU].
 ///
 ///  `powerWatts` and `price` are what the power estimate and the room cost
 ///  estimate are built from; both default to 0, meaning "not recorded", and
@@ -171,6 +177,24 @@ class AvDeviceTemplate {
 
   final int rackUnits;
 
+  /// Rails this model wants kept EMPTY above and below it, and 0 when it does
+  /// not care.
+  ///
+  /// A rack elevation says what fits; it says nothing about what should not be
+  /// touching. An amplifier that vents upwards, a shelf whose lid opens, a
+  /// projector-style intake on the top cover — all of them fit perfectly well
+  /// under the next box and all of them fail on site. The catalog is where that
+  /// belongs, because it is a fact about the MODEL: whoever records the rack
+  /// height knows the clearance at the same moment, and every room that racks
+  /// the part inherits it.
+  ///
+  /// A WARNING and not a rule. The rack shades the rails light red and lets
+  /// anything be dropped there anyway — the person in front of the frame knows
+  /// things the catalog does not, and a tool that refuses a placement somebody
+  /// has decided on is a tool they stop recording placements in.
+  final int clearanceAboveU;
+  final int clearanceBelowU;
+
   /// Typical draw in watts; 0 = not recorded.
   final double powerWatts;
 
@@ -224,6 +248,8 @@ class AvDeviceTemplate {
     this.partNumber = '',
     this.category = '',
     this.rackUnits = 0,
+    this.clearanceAboveU = 0,
+    this.clearanceBelowU = 0,
     this.powerWatts = 0,
     this.btuPerHour = 0,
     this.powerInput = PowerInput.mains,
@@ -288,6 +314,8 @@ class AvDeviceTemplate {
     String? partNumber,
     String? category,
     int? rackUnits,
+    int? clearanceAboveU,
+    int? clearanceBelowU,
     double? powerWatts,
     double? btuPerHour,
     PowerInput? powerInput,
@@ -306,6 +334,8 @@ class AvDeviceTemplate {
     partNumber: partNumber ?? this.partNumber,
     category: category ?? this.category,
     rackUnits: rackUnits ?? this.rackUnits,
+    clearanceAboveU: clearanceAboveU ?? this.clearanceAboveU,
+    clearanceBelowU: clearanceBelowU ?? this.clearanceBelowU,
     powerWatts: powerWatts ?? this.powerWatts,
     btuPerHour: btuPerHour ?? this.btuPerHour,
     powerInput: powerInput ?? this.powerInput,
@@ -325,6 +355,8 @@ class AvDeviceTemplate {
     if (partNumber.isNotEmpty) 'partNumber': partNumber,
     if (category.isNotEmpty) 'category': category,
     'rackUnits': rackUnits,
+    if (clearanceAboveU > 0) 'clearanceAboveU': clearanceAboveU,
+    if (clearanceBelowU > 0) 'clearanceBelowU': clearanceBelowU,
     if (powerWatts > 0) 'powerWatts': powerWatts,
     if (btuPerHour > 0) 'btuPerHour': btuPerHour,
     if (powerInput != PowerInput.mains) 'powerInput': powerInput.name,
@@ -346,6 +378,8 @@ class AvDeviceTemplate {
     partNumber: json['partNumber']?.toString() ?? '',
     category: json['category']?.toString() ?? '',
     rackUnits: (json['rackUnits'] as num?)?.toInt() ?? 0,
+    clearanceAboveU: (json['clearanceAboveU'] as num?)?.toInt() ?? 0,
+    clearanceBelowU: (json['clearanceBelowU'] as num?)?.toInt() ?? 0,
     // 'watts' and 'cost' are read as aliases: they are what people write by
     // hand in a price list before they see the documented spelling.
     powerWatts:

@@ -13,6 +13,7 @@ import 'av_port_editor.dart';
 import 'cost_estimate.dart' show trimNumber, formatMoney;
 import 'device_merge.dart';
 import 'live_text_field.dart';
+import 'side_pane.dart';
 
 /// ============================================================================
 ///  DEVICE EDITOR TAB
@@ -133,8 +134,18 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         Expanded(
           child: Row(
             children: [
-              SizedBox(width: 340, child: _buildList(entries)),
-              const VerticalDivider(width: 1, thickness: 1),
+              // Draggable and foldable: the entry form beside it is wide, and
+              // on a laptop 340 pixels of model list is most of the screen
+              // when you are filling one entry in.
+              SidePane(
+                side: PaneSide.left,
+                title: 'Models',
+                storageKey: 'catalog_list',
+                initialWidth: 340,
+                minWidth: 200,
+                maxWidth: 560,
+                child: _buildList(entries),
+              ),
               Expanded(child: _buildDetail(provider, library)),
             ],
           ),
@@ -580,6 +591,80 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             ),
           ],
         ),
+        // WHAT MUST BE LEFT EMPTY AROUND IT. A rack elevation says what fits
+        // and nothing about what should not be touching: an amplifier that
+        // vents upwards, a drawer whose lid opens, a box with its intake on
+        // the top cover. All of them fit under the next unit and all of them
+        // fail on site. Recorded on the MODEL because whoever reads the rack
+        // height off the back of the box is looking at the vents while they do
+        // it, and every room that racks the part then inherits it.
+        if (entry.rackUnits > 0) ...[
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 130,
+                child: LiveTextField(
+                  fieldId: 'clrabove_$key',
+                  initial: entry.clearanceAboveU == 0
+                      ? ''
+                      : '${entry.clearanceAboveU}',
+                  label: 'Keep clear above',
+                  helper: 'U',
+                  numeric: true,
+                  onChanged: (v) => setState(
+                    () => _apply(
+                      entry.copyWith(
+                        clearanceAboveU: int.tryParse(v.trim()) ?? 0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 130,
+                child: LiveTextField(
+                  fieldId: 'clrbelow_$key',
+                  initial: entry.clearanceBelowU == 0
+                      ? ''
+                      : '${entry.clearanceBelowU}',
+                  label: 'Keep clear below',
+                  helper: 'U',
+                  numeric: true,
+                  onChanged: (v) => setState(
+                    () => _apply(
+                      entry.copyWith(
+                        clearanceBelowU: int.tryParse(v.trim()) ?? 0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    entry.clearanceAboveU == 0 && entry.clearanceBelowU == 0
+                        ? 'Minimum space around this part in a frame — leave '
+                              'blank when it does not need any. The rails are '
+                              'shaded light red on the rack elevation as a '
+                              'warning; nothing is ever refused.'
+                        : 'The rack elevation shades '
+                              '${entry.clearanceAboveU} U above and '
+                              '${entry.clearanceBelowU} U below every one of '
+                              'these light red. A warning to whoever is '
+                              'planning the frame, not a lock — anything can '
+                              'still be placed there.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 8),
         // Retiring a part keeps everything it knows — ports, prices, rack
         // height — for the rooms that already have one, and takes it out of

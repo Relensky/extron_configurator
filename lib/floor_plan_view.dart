@@ -28,6 +28,7 @@ import 'undo_bar.dart';
 import 'room_locations.dart';
 import 'room_locations_view.dart';
 import 'screenshot_tools.dart';
+import 'side_pane.dart';
 import 'view_zoom.dart';
 import 'xlsx_writer.dart';
 
@@ -491,9 +492,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                         ),
                       ),
               ),
-              const VerticalDivider(width: 1, thickness: 1),
-              SizedBox(
-                width: 320,
+              // Draggable and foldable: the sheet is the point of this page,
+              // and on a laptop the list beside it is a third of the window.
+              SidePane(
+                side: PaneSide.right,
+                title: 'Sheet & locations',
+                storageKey: 'floor_plan_side',
                 child: _sidePanel(provider, model, plan),
               ),
             ],
@@ -1009,6 +1013,17 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             AvUndoScope.floorPlans,
             onDone: (m) => _snack(m),
           ),
+          // How the writing on this sheet is printed. On the toolbar rather
+          // than buried in a settings page: a plan is recoloured while looking
+          // at the plan, usually because the drawing underneath it is dark
+          // exactly where the labels landed.
+          if (plan != null)
+            OutlinedButton.icon(
+              key: const ValueKey('plan_label_colors'),
+              icon: const Icon(Icons.format_color_text, size: 18),
+              label: const Text('Label colours'),
+              onPressed: () => _showLabelColorDialog(provider, plan),
+            ),
           if (plan != null)
             PopupMenuButton<String>(
               tooltip: 'Export the plan',
@@ -1139,6 +1154,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           _labelDragKey: plan.labelOffsetFor(_labelDragKey) + _labelDrag,
       },
       dark: theme.brightness == Brightness.dark,
+      style: plan.styleFor(PlanTextKind.wiring),
     );
 
     return SizedBox(
@@ -1192,6 +1208,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                       captions: captions,
                       keepClear: keepClear,
                       dark: theme.brightness == Brightness.dark,
+                      style: plan.styleFor(PlanTextKind.wiring),
                     ),
                   ),
                 ),
@@ -1793,6 +1810,228 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
   }
 
+  /// What the writing on this sheet is printed in — a plate and an ink per
+  /// kind of label.
+  ///
+  /// One dialog for all three because they are read against each other: the
+  /// point of giving the runs a yellow plate is that the location names are
+  /// white, and choosing them on separate screens is choosing them blind.
+  Future<void> _showLabelColorDialog(
+    AppStateProvider provider,
+    FloorPlan plan,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          // Read live off the provider so the sheet behind the dialog and the
+          // swatches in it cannot disagree.
+          final sheet = provider.avFloorPlanById(plan.id) ?? plan;
+          final theme = Theme.of(ctx);
+
+          Future<void> pick(
+            PlanTextKind kind, {
+            required bool background,
+          }) async {
+            final style = sheet.styleFor(kind);
+            final fallback = _defaultLabelColors(kind, ctx);
+            final picked = await showColorWheelDialog(
+              ctx,
+              initial: background
+                  ? planLabelBackground(style, fallback.background)
+                  : planLabelInk(style, fallback.ink),
+              title: background
+                  ? 'Background for ${kPlanTextKindLabels[kind]?.toLowerCase()}'
+                  : 'Text colour for '
+                      '${kPlanTextKindLabels[kind]?.toLowerCase()}',
+            );
+            if (picked == null) return;
+            provider.setAvPlanLabelStyle(
+              plan.id,
+              kind,
+              background
+                  ? style.copyWith(background: picked.toARGB32())
+                  : style.copyWith(ink: picked.toARGB32()),
+            );
+            setLocal(() {});
+          }
+
+          Widget swatch(
+            PlanTextKind kind, {
+            required bool background,
+          }) {
+            final style = sheet.styleFor(kind);
+            final fallback = _defaultLabelColors(kind, ctx);
+            final color = background
+                ? planLabelBackground(style, fallback.background)
+                : planLabelInk(style, fallback.ink);
+            return Tooltip(
+              message: background ? 'Background' : 'Text',
+              child: InkWell(
+                onTap: () => pick(kind, background: background),
+                child: Container(
+                  width: 46,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: theme.dividerColor),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    background
+                        ? Icons.format_color_fill
+                        : Icons.text_fields,
+                    size: 13,
+                    // Whichever of black or white can be seen on it.
+                    color: ThemeData.estimateBrightnessForColor(color) ==
+                            Brightness.dark
+                        ? Colors.white70
+                        : Colors.black54,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return AlertDialog(
+            title: const Text('Label colours on this sheet'),
+            content: SizedBox(
+              width: 470,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'An architectural plan is a line drawing, and text dropped '
+                    'straight onto one lands on a wall. Every label is printed '
+                    'on a plate; this is what colour that plate and the words '
+                    'on it are, on ${sheet.name}.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 14),
+                  for (final kind in PlanTextKind.values)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  kPlanTextKindLabels[kind] ?? kind.name,
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                                Text(
+                                  _labelKindHint(kind),
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Painted the way it will actually print, so the
+                          // decision is made on the thing rather than on two
+                          // squares of colour.
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: planLabelBackground(
+                                sheet.styleFor(kind),
+                                _defaultLabelColors(kind, ctx).background,
+                              ),
+                              borderRadius: BorderRadius.circular(3),
+                              border: Border.all(color: theme.dividerColor),
+                            ),
+                            child: Text(
+                              kind == PlanTextKind.callout ? '1' : 'Sample',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: planLabelInk(
+                                  sheet.styleFor(kind),
+                                  _defaultLabelColors(kind, ctx).ink,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          swatch(kind, background: true),
+                          const SizedBox(width: 6),
+                          swatch(kind, background: false),
+                          IconButton(
+                            icon: const Icon(Icons.restart_alt, size: 18),
+                            tooltip: 'Back to the standard colours',
+                            onPressed: sheet.styleFor(kind).isDefault
+                                ? null
+                                : () {
+                                    provider.setAvPlanLabelStyle(
+                                      plan.id,
+                                      kind,
+                                      PlanLabelStyle.unset,
+                                    );
+                                    setLocal(() {});
+                                  },
+                          ),
+                        ],
+                      ),
+                    ),
+                  Text(
+                    'Standard colours follow the light or dark drawing they '
+                    'are on. A colour set here is used on both.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.disabledColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  /// What each kind of label is printed in when the sheet says nothing — the
+  /// same figures the markers and the painter fall back to.
+  ({Color background, Color ink}) _defaultLabelColors(
+    PlanTextKind kind,
+    BuildContext ctx,
+  ) {
+    final dark = Theme.of(ctx).brightness == Brightness.dark;
+    return switch (kind) {
+      PlanTextKind.location => (
+        background: const Color(0xD9FFFFFF),
+        ink: Colors.black87,
+      ),
+      PlanTextKind.callout => (
+        background: const Color(0xFFD84315),
+        ink: Colors.white,
+      ),
+      PlanTextKind.wiring => (
+        background: dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
+        ink: dark ? Colors.white : Colors.black87,
+      ),
+    };
+  }
+
+  String _labelKindHint(PlanTextKind kind) => switch (kind) {
+    PlanTextKind.location => 'The name plate under each location dot.',
+    PlanTextKind.callout => 'The numbered markers and their tags.',
+    PlanTextKind.wiring => 'Cable counts and what each run lands on.',
+  };
+
   /// The cable types this sheet could show, in the order the drawing lists
   /// them, each with the colour it is drawn in.
   List<({String type, Color color})> _cableLayers(
@@ -2271,14 +2510,21 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     vertical: 1,
                   ),
                   constraints: const BoxConstraints(maxWidth: w),
-                  color: Colors.white.withValues(alpha: 0.85),
+                  // The plate and the ink this sheet prints location names in.
+                  color: planLabelBackground(
+                    plan.styleFor(PlanTextKind.location),
+                    const Color(0xD9FFFFFF),
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         kRoomZoneIcons[location.zone] ?? Icons.place,
                         size: kLocationZoneIconSize,
-                        color: Colors.black87,
+                        color: planLabelInk(
+                          plan.styleFor(PlanTextKind.location),
+                          Colors.black87,
+                        ),
                         semanticLabel: kRoomZoneLabels[location.zone],
                       ),
                       const SizedBox(width: kLocationZoneIconGap),
@@ -2288,9 +2534,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: kLocationLabelFontSize,
-                            color: Colors.black87,
+                            color: planLabelInk(
+                              plan.styleFor(PlanTextKind.location),
+                              Colors.black87,
+                            ),
                           ),
                         ),
                       ),
@@ -2339,7 +2588,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             width: r * 2,
             height: r * 2,
             decoration: BoxDecoration(
-              color: const Color(0xFFD84315),
+              // The marker IS the plate its tag is printed on, so recolouring
+              // callout text recolours the disc.
+              color: planLabelBackground(
+                plan.styleFor(PlanTextKind.callout),
+                const Color(0xFFD84315),
+              ),
               shape: BoxShape.circle,
               border: Border.all(
                 color: selected ? Colors.yellow : Colors.white,
@@ -2349,8 +2603,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             alignment: Alignment.center,
             child: Text(
               callout.tag,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: planLabelInk(
+                  plan.styleFor(PlanTextKind.callout),
+                  Colors.white,
+                ),
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
@@ -2747,7 +3004,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             ),
             IconButton(
               icon: const Icon(Icons.add, size: 20),
-              tooltip: 'Add a cable run',
+              tooltip: 'Add low voltage or other runs to document',
               onPressed: () async {
                 await showScreenSwitchEditor(context, provider, null);
                 if (mounted) setState(() {});
@@ -2756,10 +3013,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ],
         ),
         Text(
-          'Cable between two places in this room that no device on the signal '
-          'flow accounts for — a screen switch and the motor it drives, a '
-          'spare conduit, somebody else\'s contract. Recorded here, they get '
-          'costed, scheduled and drawn on the cabling sheet with the rest.',
+          'Add low voltage or other runs to document for contractors, or '
+          'internal use. Lines added transfer to the cabling tab.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 6),
@@ -3178,11 +3433,17 @@ class _PlanCablePainter extends CustomPainter {
 
   final bool dark;
 
+  /// What this sheet prints cable-run text in. See [PlanLabelStyle]: an unset
+  /// style leaves the theme's own plate, which is what every sheet drawn
+  /// before this existed still gets.
+  final PlanLabelStyle style;
+
   const _PlanCablePainter({
     required this.runs,
     required this.captions,
     required this.keepClear,
     required this.dark,
+    this.style = PlanLabelStyle.unset,
   });
 
   @override
@@ -3243,6 +3504,8 @@ class _PlanCablePainter extends CustomPainter {
           color: run.color,
           dark: dark,
           taken: taken,
+          background: style.background == 0 ? null : Color(style.background),
+          ink: style.ink == 0 ? null : Color(style.ink),
         );
         if (placed != null) taken.add(placed);
       }
@@ -3255,7 +3518,11 @@ class _PlanCablePainter extends CustomPainter {
       RRect.fromRectAndRadius(caption.box, const Radius.circular(3)),
       // The plan underneath is a drawing, not a background — the label needs
       // something solid behind it or it lands on top of a wall line.
-      Paint()..color = dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
+      Paint()
+        ..color = planLabelBackground(
+          style,
+          dark ? const Color(0xE6202428) : const Color(0xE6FFFFFF),
+        ),
     );
 
     double y = caption.box.top + _kCaptionPad;
@@ -3281,7 +3548,9 @@ class _PlanCablePainter extends CustomPainter {
       old.runs != runs ||
       old.captions != captions ||
       old.keepClear != keepClear ||
-      old.dark != dark;
+      old.dark != dark ||
+      old.style.background != style.background ||
+      old.style.ink != style.ink;
 }
 
 /// The padding, dash and gaps a caption block is laid out with. Shared by the
@@ -3322,6 +3591,7 @@ List<_PlanCaption> _planCaptions({
   required List<Rect> keepClear,
   required Map<String, Offset> nudges,
   required bool dark,
+  PlanLabelStyle style = PlanLabelStyle.unset,
 }) {
   final byEdge = <String, List<_PlanRun>>{};
   for (final run in runs) {
@@ -3341,7 +3611,7 @@ List<_PlanCaption> _planCaptions({
           text: TextSpan(
             text: run.label,
             style: TextStyle(
-              color: dark ? Colors.white : Colors.black87,
+              color: planLabelInk(style, dark ? Colors.white : Colors.black87),
               fontSize: 11,
               fontWeight: FontWeight.bold,
             ),

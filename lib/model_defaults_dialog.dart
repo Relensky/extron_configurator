@@ -32,16 +32,24 @@ Future<void> offerModelDefaults(
   bool silentWhenClean = true,
   String? onlySection,
 }) async {
+  // Before anything is measured: the "Original File" comparison reads the
+  // pre-conversion copy, and on a room converted in an earlier session that
+  // copy is a file beside the config rather than something in memory.
+  await provider.ensureOriginalFileConfig();
+  if (!context.mounted) return;
   final mismatches =
       auditModelDefaults(provider, onlySection: onlySection);
   final messenger = ScaffoldMessenger.of(context);
-  if (mismatches.isEmpty) {
+  if (mismatches.isEmpty &&
+      auditOriginalFile(provider, onlySection: onlySection).isEmpty) {
     if (!silentWhenClean) {
       messenger.showSnackBar(SnackBar(
         content: Text(
           onlySection == null
-              ? 'Every device already matches its driver’s connection details.'
-              : 'This device already matches its driver’s connection details.',
+              ? 'Every device already matches its python module’s connection '
+                  'settings.'
+              : 'This device already matches its python module’s connection '
+                  'settings.',
         ),
       ));
     }
@@ -52,7 +60,7 @@ Future<void> offerModelDefaults(
   if (written == 0) return;
   messenger.showSnackBar(SnackBar(
     content: Text(
-      'Applied $written driver default${written == 1 ? '' : 's'}. '
+      'Applied $written setting${written == 1 ? '' : 's'}. '
       'Save the config to keep them.',
     ),
   ));
@@ -68,25 +76,29 @@ Future<int> showModelDefaultsDialog(
   /// only a sensible question about a single block.
   String? onlySection,
 }) async {
-  if (mismatches.isEmpty) return 0;
   var shown = mismatches;
-  // Which connection the driver is being asked about. Null means "whatever
-  // each device is on", which is what the review answers by default.
+  // Which connection the module is being asked about. Null means "whatever
+  // each device is on", which is what the review answers by default;
+  // [kOriginalFileComparison] means the pre-conversion file rather than the
+  // module at all.
   String? askingAbout;
   // section -> the keys ticked right now.
   var selection = <String, Set<String>>{
     for (final m in shown) m.sectionKey: {...m.defaultSelection},
   };
 
-  // Every style any driver in this review publishes a block for, so a device
-  // on a COM port can be asked what it would look like on the network.
-  final styles = <String>{
-    for (final m in shown) ...m.availableComTypes,
-  }.toList()
-    ..sort((a, b) => kComTypeStyleLabels.values
-        .toList()
-        .indexOf(a)
-        .compareTo(kComTypeStyleLabels.values.toList().indexOf(b)));
+  // Every style any driver in scope publishes a block for, so a device on a
+  // COM port can be asked what it would look like on the network.
+  final styles = comparableComTypes(provider, onlySection: onlySection);
+
+  // Only offered when this room HAS a pre-conversion copy to read — either the
+  // one this session parsed, or the `_old_config.json` the conversion left in
+  // the folder. A button that opens an empty list is a button that reads as a
+  // fault.
+  final bool hasOriginal = provider.originalLoadedConfig.isNotEmpty &&
+      auditOriginalFile(provider, onlySection: onlySection).isNotEmpty;
+
+  if (shown.isEmpty && !hasOriginal) return 0;
 
   final bool? apply = await showDialog<bool>(
     context: context,
@@ -99,16 +111,24 @@ Future<int> showModelDefaultsDialog(
         void askAbout(String? style) {
           setLocal(() {
             askingAbout = style;
-            shown = auditModelDefaults(provider,
-                onlySection: onlySection, comType: style);
+            shown = style == kOriginalFileComparison
+                // A different question entirely — what the file said before
+                // the conversion — answered by a different audit.
+                ? auditOriginalFile(provider, onlySection: onlySection)
+                : auditModelDefaults(provider,
+                    onlySection: onlySection, comType: style);
             selection = {
               for (final m in shown) m.sectionKey: {...m.defaultSelection},
             };
           });
         }
 
+        final bool onOriginal = askingAbout == kOriginalFileComparison;
+
         return AlertDialog(
-          title: const Text('Use the driver’s connection details?'),
+          title: const Text(
+            'Use the python module’s default connection settings?',
+          ),
           content: SizedBox(
             width: 720,
             height: 460,
@@ -116,23 +136,32 @@ Future<int> showModelDefaultsDialog(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'These devices name a model whose python driver states how '
-                  'it is reached. The conversion filled them from the family '
-                  'defaults instead, which is right for most of the family and '
-                  'wrong for the exceptions.',
+                  'You can compare the current application device '
+                  'configuration against the preset values in the python '
+                  'module. Use the check boxes to transfer settings.',
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Connection and keep-alive settings are ticked; the driver’s '
-                  'own naming is not, because this room is already named.',
+                  onOriginal
+                      ? 'Showing what the original file said before the '
+                          'conversion. Nothing is ticked — the converted value '
+                          'is usually the right one, so this is a list to read '
+                          'before it is a list to take.'
+                      : 'Connection and keep-alive settings are ticked; the '
+                          'module’s own naming is not, because this room is '
+                          'already named.',
                   style: theme.textTheme.bodySmall,
                 ),
-                // The driver states its details PER CONNECTION. By default
+                // The module states its details PER CONNECTION. By default
                 // each device is compared against the one it is on; this asks
-                // what the same driver says about another, which is how you
+                // what the same module says about another, which is how you
                 // see the baud rate before moving a device onto a COM port.
-                if (styles.length > 1) ...[
+                //
+                // Original File comes last, after every connection, because it
+                // is not one of them: it is the file this room was converted
+                // FROM.
+                if (styles.isNotEmpty || hasOriginal) ...[
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -148,10 +177,15 @@ Future<int> showModelDefaultsDialog(
                             segments: [
                               const ButtonSegment(
                                 value: '',
-                                label: Text('Its own connection'),
+                                label: Text('As configured'),
                               ),
                               for (final s in styles)
                                 ButtonSegment(value: s, label: Text(s)),
+                              if (hasOriginal)
+                                const ButtonSegment(
+                                  value: kOriginalFileComparison,
+                                  label: Text(kOriginalFileComparison),
+                                ),
                             ],
                             selected: {askingAbout ?? ''},
                             onSelectionChanged: (v) => askAbout(
@@ -167,12 +201,16 @@ Future<int> showModelDefaultsDialog(
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Text(
-                      askingAbout == null
-                          ? 'Every device already matches its driver on the '
-                              'connection it is using. Pick a connection above '
-                              'to see what the driver says about that one.'
-                          : 'Nothing to change for a $askingAbout connection — '
-                              'the block already says what the driver does.',
+                      onOriginal
+                          ? 'Nothing here differs from the original file.'
+                          : askingAbout == null
+                              ? 'Every device already matches its python module '
+                                  'on the connection it is using. Pick a '
+                                  'connection above to see what the module says '
+                                  'about that one.'
+                              : 'Nothing to change for a $askingAbout '
+                                  'connection — the block already says what the '
+                                  'module does.',
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
@@ -186,7 +224,9 @@ Future<int> showModelDefaultsDialog(
                             children: [
                               Expanded(
                                 child: Text(
-                                  '${m.name}  ·  ${m.model}',
+                                  m.model.isEmpty
+                                      ? m.name
+                                      : '${m.name}  ·  ${m.model}',
                                   style: theme.textTheme.titleSmall,
                                   overflow: TextOverflow.ellipsis,
                                 ),

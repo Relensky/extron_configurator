@@ -116,6 +116,128 @@ class ModelDefaultMismatch {
   };
 }
 
+/// Every connection style any driver in scope publishes a block for, in the
+/// order the com_type dropdown lists them.
+///
+/// Read off the DEVICES rather than off an audit result, so the picker still
+/// offers Serial on a room whose blocks all agree with their drivers already —
+/// "what would this look like over serial" is a question about a device, not
+/// about a disagreement.
+List<String> comparableComTypes(
+  AppStateProvider provider, {
+  String? onlySection,
+}) {
+  final found = <String>{};
+  provider.roomConfig.forEach((sectionKey, block) {
+    if (onlySection != null && sectionKey != onlySection) return;
+    if (block is! Map) return;
+    if (provider.uiSchema.deviceTypeForSection(sectionKey) == null) return;
+    final model = block['model']?.toString().trim() ?? '';
+    final module = provider.modelRegistry[model]?.module ??
+        block['module']?.toString().trim() ??
+        '';
+    if (module.isEmpty) return;
+    found.addAll(provider.comTypeStylesFor(module));
+  });
+  final order = kComTypeStyleLabels.values.toList();
+  return [
+    for (final label in order)
+      if (found.contains(label)) label,
+  ];
+}
+
+/// The label the review's connection picker uses for the pre-conversion file,
+/// and the [ModelDefaultMismatch.comType] the original-file comparison carries.
+///
+/// Not a connection style — it is the fifth thing the same review can be asked
+/// to compare a block against, and it is spelled in a way no com_type ever will
+/// be so the two can never be confused for one another.
+const String kOriginalFileComparison = 'Original File';
+
+/// What the room said BEFORE the conversion touched it, per device block.
+///
+/// The driver comparison answers "what does the python module say this model
+/// wants". This answers the other question a converted room raises — "what did
+/// the file I opened actually have here" — for the case the conversion got
+/// wrong: a port the site had changed on purpose, a name somebody had agreed, a
+/// baud rate the family default overwrote.
+///
+/// Reported on the same terms as the driver comparison, and applied through the
+/// same tick boxes, so putting one value back is one click rather than a trip
+/// through the raw editor.
+///
+/// Nothing is ticked by default. A converted value is usually the right one —
+/// that is why the conversion exists — so this is a list to read, not a list to
+/// accept.
+///
+/// Two kinds of difference are left out, for the same reasons the driver
+/// comparison leaves them out: a key the original did not carry at all (the
+/// conversion ADDING a property is what it is for), and a key the schema hides
+/// for this block.
+List<ModelDefaultMismatch> auditOriginalFile(
+  AppStateProvider provider, {
+  String? onlySection,
+}) {
+  final out = <ModelDefaultMismatch>[];
+  if (provider.originalLoadedConfig.isEmpty) return out;
+
+  provider.roomConfig.forEach((sectionKey, block) {
+    if (onlySection != null && sectionKey != onlySection) return;
+    if (block is! Map) return;
+    if (provider.uiSchema.deviceTypeForSection(sectionKey) == null) return;
+    final original = provider.originalBlockFor(sectionKey);
+    if (original == null) return;
+
+    // Lined up on the comparison spelling the key mapper itself uses, so a
+    // legacy COMTYPE is recognized as the com_type it became rather than
+    // reported as a property the conversion invented.
+    String norm(String s) => s.toLowerCase().replaceAll('_', '');
+    final byNorm = <String, dynamic>{
+      for (final e in original.entries) norm(e.key): e.value,
+    };
+
+    final diffs = <ModelDefaultDiff>[];
+    block.forEach((rawKey, current) {
+      final key = rawKey.toString();
+      if (!byNorm.containsKey(norm(key))) return; // the conversion added it
+      final before = byNorm[norm(key)];
+      if (before is Map || before is List) return; // not a field on the form
+      if (provider.uiSchema.isHiddenFor(
+        key,
+        {for (final e in block.entries) e.key.toString(): e.value},
+        sectionKey: sectionKey,
+      )) {
+        return;
+      }
+      if (before?.toString() == current?.toString()) return;
+      diffs.add(ModelDefaultDiff(
+        key: key,
+        current: current,
+        fromModule: before,
+        // Never ticked: see above — the conversion's answer is the one to
+        // keep unless a human decides otherwise.
+        connection: false,
+      ));
+    });
+    if (diffs.isEmpty) return;
+    diffs.sort((a, b) => a.key.compareTo(b.key));
+
+    out.add(ModelDefaultMismatch(
+      sectionKey: sectionKey,
+      name: block['name']?.toString().trim().isNotEmpty == true
+          ? block['name'].toString().trim()
+          : sectionKey,
+      model: block['model']?.toString().trim() ?? '',
+      module: block['module']?.toString().trim() ?? '',
+      diffs: diffs,
+      comType: kOriginalFileComparison,
+    ));
+  });
+
+  out.sort((a, b) => a.sectionKey.compareTo(b.sectionKey));
+  return out;
+}
+
 /// Every device in the loaded room whose block disagrees with the DEVICE_INFO
 /// of the driver its model names.
 ///

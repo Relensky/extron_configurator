@@ -48,9 +48,11 @@ Future<RoomLocation?> showLocationEditor(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'A place in the room that gear lands in. Devices, jack fields '
-                'and control runs name one, so the reports can count jacks and '
-                'cable per location and group them by mounting surface.',
+                'Set locations for cabling to run to for the run schedule '
+                'report and cabling tabs. You can add locations as '
+                'intermediaries such as a pull box or cable tray. Reports will '
+                'count jacks and cable runs by grouping them by mounting '
+                'surface.',
                 style: Theme.of(ctx).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
@@ -203,9 +205,10 @@ class _LocationManagerDialogState extends State<_LocationManagerDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Every device, jack field and control run can name one of these. '
-              'The reports count jacks and cable runs per location and group '
-              'them by mounting surface.',
+              'Set locations for cabling to run to for the run schedule report '
+              'and cabling tabs. You can add locations as intermediaries such '
+              'as a pull box or cable tray. Reports will count jacks and cable '
+              'runs by grouping them by mounting surface.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 10),
@@ -395,10 +398,8 @@ Future<bool> showScreenSwitchEditor(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'A low-voltage run with two ends and no signal — the screen '
-                  'switch by the door and the motor above the board. Neither '
-                  'end is a box on the signal flow, so this is where it gets '
-                  'recorded, costed and pulled.',
+                  'Add low voltage or other runs to document for contractors, '
+                  'or internal use. Lines added transfer to the cabling tab.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),

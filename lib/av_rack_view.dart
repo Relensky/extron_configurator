@@ -32,6 +32,16 @@ const double kRackInnerWidth = 250;
 const double kRailWidth = 26;
 const double kRackTopPad = 34;
 
+/// How a rail somebody asked to be kept clear is drawn: a light red wash over
+/// the slot, and the same red on the rail number and on anything sitting in it.
+///
+/// Light on purpose. This is advice — the catalog says the amplifier wants a
+/// rail above it — and advice that shouts louder than the drawing gets turned
+/// off. Nothing here refuses a placement; see
+/// [AppStateProvider.rackClearanceWarnings].
+const Color kRackClearanceWash = Color(0x26E53935);
+const Color kRackClearanceInk = Color(0xFFC62828);
+
 class AvRackView extends StatefulWidget {
   /// The AV tab's shared capture key, so Export PNG grabs whichever page is
   /// showing without a second export button.
@@ -489,6 +499,13 @@ class _AvRackViewState extends State<AvRackView> {
     final occupants = provider.avRackSlots.entries
         .where((e) => e.value.rackId == rack.id && e.value.face == face)
         .toList();
+    // The rails something in this face wants kept empty. Computed once per
+    // face rather than per slot: every rail has to ask the same question.
+    final warnings = provider.rackClearanceWarnings(
+      rackId: rack.id,
+      face: face,
+      heightU: rack.heightU,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,11 +533,25 @@ class _AvRackViewState extends State<AvRackView> {
                   // U1 is the bottom rail, so it is drawn last from the top.
                   top: (rack.heightU - u) * kUHeight,
                   height: kUHeight,
-                  child: _buildUSlot(provider, rack, face, u, theme),
+                  child: _buildUSlot(
+                    provider,
+                    rack,
+                    face,
+                    u,
+                    theme,
+                    warning: warnings[u],
+                  ),
                 ),
               // Devices.
               for (final entry in occupants)
-                _buildRackedDevice(provider, rack, face, entry, theme),
+                _buildRackedDevice(
+                  provider,
+                  rack,
+                  face,
+                  entry,
+                  theme,
+                  warnings: warnings,
+                ),
             ],
           ),
         ),
@@ -537,14 +568,22 @@ class _AvRackViewState extends State<AvRackView> {
     RackFrame rack,
     RackFace face,
     int u,
-    ThemeData theme,
-  ) {
+    ThemeData theme, {
+    /// Why something already in this frame wants this rail left empty, or null
+    /// when nothing does. See [AppStateProvider.rackClearanceWarnings].
+    String? warning,
+  }) {
     Widget rail() => SizedBox(
       width: kRailWidth,
       child: Center(
         child: Text(
           '$u',
-          style: TextStyle(fontSize: 9, color: theme.hintColor),
+          style: TextStyle(
+            fontSize: 9,
+            // The rail number goes red with the slot, so the warning is
+            // legible on a printed elevation as well as on screen.
+            color: warning == null ? theme.hintColor : kRackClearanceInk,
+          ),
         ),
       ),
     );
@@ -552,7 +591,10 @@ class _AvRackViewState extends State<AvRackView> {
     return Row(
       children: [
         rail(),
-        Expanded(child: _buildDropZone(provider, rack, face, u, theme)),
+        Expanded(
+          child: _buildDropZone(provider, rack, face, u, theme,
+              warning: warning),
+        ),
         rail(),
       ],
     );
@@ -563,8 +605,9 @@ class _AvRackViewState extends State<AvRackView> {
     RackFrame rack,
     RackFace face,
     int u,
-    ThemeData theme,
-  ) {
+    ThemeData theme, {
+    String? warning,
+  }) {
     return DragTarget<String>(
       key: ValueKey('u_${rack.id}_${face.name}_$u'),
       onWillAcceptWithDetails: (details) =>
@@ -575,9 +618,11 @@ class _AvRackViewState extends State<AvRackView> {
         final hovering = candidate.isNotEmpty;
         final rejecting = rejected.isNotEmpty;
         // Only tint while something is in flight or in hand — an idle rack
-        // should look like a rack, not a grid of buttons.
+        // should look like a rack, not a grid of buttons. The clearance shade
+        // is the exception: it is a fact about the frame, and it is on the
+        // drawing whether or not anybody is holding something.
         final carrying = _carriedNodeId != null;
-        return InkWell(
+        final zone = InkWell(
           onTap: carrying ? () => _place(provider, rack, face, u) : null,
           child: Container(
             decoration: BoxDecoration(
@@ -593,9 +638,16 @@ class _AvRackViewState extends State<AvRackView> {
                   ? Colors.red.withValues(alpha: 0.18)
                   : carrying
                   ? theme.colorScheme.primary.withValues(alpha: 0.06)
+                  : warning != null
+                  ? kRackClearanceWash
                   : null,
             ),
           ),
+        );
+        if (warning == null) return zone;
+        return Tooltip(
+          message: '$warning\nYou can still put something here.',
+          child: zone,
         );
       },
     );
@@ -706,8 +758,12 @@ class _AvRackViewState extends State<AvRackView> {
     RackFrame rack,
     RackFace face,
     MapEntry<String, RackSlot> entry,
-    ThemeData theme,
-  ) {
+    ThemeData theme, {
+    /// The face's kept-clear rails, so a box standing IN one says so. This is
+    /// the case the shading exists for — an empty red rail is a reminder, a
+    /// full one is the thing that fails on site.
+    Map<int, String> warnings = const {},
+  }) {
     final node = provider.avNodeById(entry.key);
     // A rail can hold a device OR a piece of rack hardware; both are keyed
     // into the same slot map, because both take up rails.
@@ -738,6 +794,15 @@ class _AvRackViewState extends State<AvRackView> {
     final double blockWidth = kRackInnerWidth / slice.columns;
     final double left = kRailWidth + kRackInnerWidth * slice.start;
 
+    // Standing on a rail its neighbour asked to be left empty. The warning is
+    // its OWN clearance ignored as readily as anyone else's — a box with a
+    // rail to keep clear below it, dropped straight on top of another, is the
+    // same mistake seen from the other end.
+    final fouled = [
+      for (int u = slot.startU; u <= slot.startU + height - 1; u++)
+        if (warnings[u] != null) warnings[u]!,
+    ];
+
     return Positioned(
       left: left,
       width: blockWidth,
@@ -750,6 +815,7 @@ class _AvRackViewState extends State<AvRackView> {
             'U${slot.startU}'
             '${height == 1 ? '' : '–U${slot.startU + height - 1}'}'
             '${shared ? ' · ${slice.label} of the rail' : ''}'
+            '${fouled.isEmpty ? '' : '\n⚠ ${fouled.join('\n⚠ ')}'}'
             '${widget.editMode ? '\nDrag to move • click to pick up • '
                       'double-click to type a U • right-click to un-rack' : ''}',
         // A placed device covers the rail's drop target, so it has to accept
@@ -801,7 +867,12 @@ class _AvRackViewState extends State<AvRackView> {
                             ? const Color(0xFF283039)
                             : const Color(0xFFD7DEE8)),
                   borderRadius: BorderRadius.circular(3),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                  border: Border.all(
+                    color: fouled.isEmpty
+                        ? theme.colorScheme.outlineVariant
+                        : kRackClearanceInk,
+                    width: fouled.isEmpty ? 1 : 1.6,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -813,6 +884,14 @@ class _AvRackViewState extends State<AvRackView> {
                       color: item != null ? theme.hintColor : null,
                     ),
                     const SizedBox(width: 5),
+                    if (fouled.isNotEmpty) ...[
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 13,
+                        color: kRackClearanceInk,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                     Expanded(
                       child: Text(
                         label,

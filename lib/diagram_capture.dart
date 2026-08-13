@@ -40,6 +40,21 @@ void unregisterDiagramCanvas(AppTab tab, GlobalKey key) {
   if (identical(_canvases[tab], key)) _canvases.remove(tab);
 }
 
+/// The drawing on [tab] as it is on screen RIGHT NOW, or null when that tab
+/// has no canvas registered (it is not the tab being looked at, or it is not a
+/// drawing tab at all).
+///
+/// What the per-tab exports use: the tab exporting itself is by definition the
+/// one on screen, so there is nothing to visit and nothing to put back.
+Future<Uint8List?> captureCurrentDiagram(
+  AppTab tab, {
+  double pixelRatio = 1.5,
+}) async {
+  final key = _canvases[tab];
+  if (key == null) return null;
+  return captureBoundary(key, pixelRatio: pixelRatio);
+}
+
 /// What a capture run produced. Null means that drawing could not be had —
 /// the tab does not exist in this room, or it had nothing on it.
 typedef DiagramImages = ({

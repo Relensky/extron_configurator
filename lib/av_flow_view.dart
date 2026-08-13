@@ -29,6 +29,7 @@ import 'undo_bar.dart';
 import 'room_locations_view.dart';
 import 'room_presets.dart';
 import 'screenshot_tools.dart';
+import 'side_pane.dart';
 import 'workbook_export.dart';
 import 'xlsx_writer.dart';
 
@@ -817,10 +818,17 @@ class _AvFlowViewState extends State<AvFlowView> {
                   ),
                 ),
               ),
-              if (_showPalette) ...[
-                const VerticalDivider(width: 1, thickness: 1),
-                _buildPalette(provider, model),
-              ],
+              // The toolbar's switch still says whether the palette is on the
+              // page at all; the pane itself is what makes it resizable and
+              // foldable once it is.
+              if (_showPalette)
+                SidePane(
+                  side: PaneSide.right,
+                  title: 'Devices',
+                  storageKey: 'av_flow_palette',
+                  initialWidth: 260,
+                  child: _buildPalette(provider, model),
+                ),
             ],
           ),
         ),
@@ -1345,17 +1353,14 @@ class _AvFlowViewState extends State<AvFlowView> {
 
   // --- palette ------------------------------------------------------------
 
+  /// The palette's contents. The width and the header belong to the [SidePane]
+  /// this is dropped into, so the column no longer sets either.
   Widget _buildPalette(AppStateProvider provider, AvFlowModel model) {
     final theme = Theme.of(context);
-    return SizedBox(
-      width: 260,
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-            child: Text('Devices', style: theme.textTheme.titleSmall),
-          ),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
@@ -1442,7 +1447,6 @@ class _AvFlowViewState extends State<AvFlowView> {
             ),
           ),
         ],
-      ),
     );
   }
 

@@ -117,11 +117,25 @@ rather than being re-typed per room.
 
 The tab edits `av_devices.json` (Root Folder, or wherever the loaded one came
 from). Per model: **connectors** (in/out, signal type, which edge of the box),
-**rack units**, **power in** (mains / PoE / none), **estimated power draw**,
-**heat output**, **unit price**, plus manufacturer, part number, category and
-notes. Entries here override the app's built-in models; a built-in you never
+**rack units**, **keep clear above / below**, **power in** (mains / PoE /
+none), **estimated power draw**, **heat output**, **unit price**, plus
+manufacturer, part number, category and notes. Entries here override the app's built-in models; a built-in you never
 touch stays built-in, so a later app build can still improve it, and **Save
 catalog** only writes the entries that are yours.
+
+### Minimum space in a rack
+
+A rack elevation says what fits and nothing about what should not be touching.
+An amplifier that vents upwards, a drawer whose lid opens, a box with its
+intake on the top cover — all of them fit under the next unit and all of them
+fail on site. **Keep clear above** and **Keep clear below** record that on the
+model, in rack units, and every room that racks the part inherits it
+(`clearanceAboveU` / `clearanceBelowU` in `av_devices.json`).
+
+The rack elevation shades those rails **light red**, and a box standing in one
+is outlined in red with a warning in its tooltip. It is a warning and never a
+rule: the rack still accepts every drop, because the person in front of the
+frame knows things the catalog does not.
 
 ### Power in, and heat out
 
@@ -314,6 +328,20 @@ number, the **callouts** and what each points at, and the **notation** colours.
 Drag it where it reads best (per sheet — a legend clear of the title block on
 one drawing can be on top of it on another) or turn it off from the toolbar.
 
+### Label colours
+
+An architectural plan is a line drawing, and text dropped straight onto one
+lands on a wall. Every label on the sheet is therefore printed on a plate, and
+**Label colours** on the toolbar says what colour that plate and the words on
+it are — separately for **location names**, **callout markers** and **cable run
+labels**, because the three are read at different moments by different people:
+a sheet issued for rough-in wants the runs shouting and the callouts quiet, and
+the same sheet in a design review wants the opposite.
+
+The colours are per sheet, like everything else drawn on one, and stored in the
+sidecar. A kind nobody has recoloured follows the light or dark drawing it is
+on, exactly as it always did; the reset arrow on each row puts it back.
+
 ### Reading a drawing that is not in colour
 
 Colour alone fails the moment a sheet is printed, photocopied, or read by
@@ -412,8 +440,8 @@ raised rather than reset.
 
 ## The room workbook
 
-**Report → Full room workbook (.xlsx)**, on both the Schematic and AV Flow
-tabs, writes one book with a tab per question:
+**The book icon in the toolbar**, on every tab, writes one book with a tab per
+question:
 
 | Sheet | Contents |
 |---|---|
@@ -425,8 +453,18 @@ tabs, writes one book with a tab per question:
 
 Every sheet is dealt from the same section builders the single-sheet exports
 use, so a figure cannot differ between the two buttons. The diagram image can
-only be captured from the page on screen, so the tab you export from is the one
-that gets illustrated.
+only be captured from the page on screen, so the export visits each drawing tab
+in turn and puts you back where you were.
+
+### One tab at a time
+
+Beside the workbook button is the **download icon**: the tab you are on, on its
+own, as a **spreadsheet (.xlsx)**, as **plain text (.txt)**, or **copied to the
+clipboard**. Same tables, same builders — the electrician gets the run
+schedule, purchasing gets the estimate, and neither has to be sent the other
+four sheets. The .xlsx carries that tab's own drawing when it is a drawing tab.
+The Catalog exports with no room loaded, since it is the app's price list
+rather than a room document.
 
 ## Devices without a control module
 

@@ -305,10 +305,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text('Room Cost Estimate', style: theme.textTheme.titleLarge),
-                const Spacer(),
+            _CardHeading(
+              title: 'Room Cost Estimate',
+              titleStyle: theme.textTheme.titleLarge,
+              actions: [
                 // Every control drops out for the frame the screenshot
                 // catches, so the image is the quote and nothing else.
                 if (!_capturing) ...[
@@ -317,13 +317,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     label: const Text('Labor rates'),
                     onPressed: () => showLaborRatesDialog(context, provider),
                   ),
-                  const SizedBox(width: 8),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.price_change_outlined, size: 18),
                     label: const Text('Base costs'),
                     onPressed: () => showBaseCostsDialog(context, provider),
                   ),
-                  const SizedBox(width: 8),
                   // Two ways round, because the image lands in two kinds of
                   // document: white for a quote that gets printed or pasted
                   // into a Word file, dark to sit in a dark deck without a
@@ -362,7 +360,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.save, size: 18),
                     label: const Text('Save AV Setup'),
@@ -380,7 +377,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       );
                     },
                   ),
-                  const SizedBox(width: 8),
                   // Three ways out, because an estimate gets read in three
                   // places: a spreadsheet somebody sums, a text file that goes
                   // in a ticket, and a paste into an email.
@@ -733,25 +729,50 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             ),
                           ),
                         ),
-                        // A hand-typed line is a part nobody has entered yet.
-                        // The column is present on every row so the table
-                        // still lines up.
+                        // Anything on this row can become a catalog entry —
+                        // the box on the drawing as readily as the line
+                        // somebody typed. A row already priced FROM the
+                        // catalog is the one case with nothing to write.
                         avRowIcon(
                           Icons.library_add_outlined,
-                          extra == null
-                              ? 'Only a line added here can be added to the '
-                                    'catalog'
-                              : extra.catalogModel.isNotEmpty
+                          extra != null && extra.catalogModel.isNotEmpty
                               ? 'Already priced from the catalog '
                                     '(${extra.catalogModel})'
+                              : isCatalogSource(line.source)
+                              ? 'Already in the catalog as ${line.model}'
                               : 'Add this line to the device catalog',
-                          extra == null || extra.catalogModel.isNotEmpty
+                          (extra != null && extra.catalogModel.isNotEmpty) ||
+                                  isCatalogSource(line.source)
                               ? null
-                              : () => _addLineToCatalog(
+                              : extra != null
+                              ? () => _addLineToCatalog(
                                   context,
                                   provider,
                                   extra,
                                   kind: _ExtraPart.equipment,
+                                )
+                              : () => _addToCatalog(
+                                  context,
+                                  provider,
+                                  suggestedModel: line.model.isNotEmpty
+                                      ? line.model
+                                      : line.description,
+                                  partNumber: line.partNumber,
+                                  category: line.category,
+                                  price:
+                                      provider.avCost
+                                              .priceOverrides[line.key] ??
+                                          line.unitPrice,
+                                  priceKey: line.key,
+                                  // A device with no model has nothing for the
+                                  // estimate to match the new entry against.
+                                  unlinkedNote: line.model.isEmpty
+                                      ? 'This device has no model, so the row '
+                                            'cannot pick the entry up on its '
+                                            'own — set the model on the '
+                                            'Devices tab to the name below and '
+                                            'it will.'
+                                      : null,
                                 ),
                         ),
                         if (extra == null)
@@ -954,22 +975,49 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                         ),
                       ),
+                      // Placed hardware is promoted the same way a typed line
+                      // is, and the items in the frames are stamped with the
+                      // new entry so the elevation and the quote agree.
                       avRowIcon(
                         Icons.library_add_outlined,
-                        extra == null
-                            ? 'Only a line added here can be added to the '
-                                  'parts list'
-                            : extra.catalogModel.isNotEmpty
+                        extra != null && extra.catalogModel.isNotEmpty
                             ? 'Already priced from the parts list '
                                   '(${extra.catalogModel})'
+                            : isCatalogSource(line.source)
+                            ? 'Already on the parts list'
                             : 'Add this line to the parts list',
-                        extra == null || extra.catalogModel.isNotEmpty
+                        (extra != null && extra.catalogModel.isNotEmpty) ||
+                                isCatalogSource(line.source)
                             ? null
-                            : () => _addLineToCatalog(
+                            : extra != null
+                            ? () => _addLineToCatalog(
                                 context,
                                 provider,
                                 extra,
                                 kind: _ExtraPart.hardware,
+                              )
+                            : () => _addToCatalog(
+                                context,
+                                provider,
+                                suggestedModel: line.description,
+                                partNumber: line.partNumber,
+                                category: line.category.isEmpty
+                                    ? kCategoryRackHardware
+                                    : line.category,
+                                rackUnits: provider.avRackItems
+                                        .where((i) =>
+                                            i.label.trim().toLowerCase() ==
+                                            line.description
+                                                .trim()
+                                                .toLowerCase())
+                                        .firstOrNull
+                                        ?.rackUnits ??
+                                    1,
+                                price:
+                                    provider.avCost.priceOverrides[line.key] ??
+                                        line.unitPrice,
+                                rackItemLabel: line.description,
+                                priceKey: line.key,
                               ),
                       ),
                       if (extra == null)
@@ -1031,32 +1079,30 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text('Cabling', style: theme.textTheme.titleSmall),
-                const SizedBox(width: 8),
-                Text(
-                  'one lead per run on the signal flow diagram',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.disabledColor,
-                  ),
-                ),
-                const Spacer(),
+            _CardHeading(
+              title: 'Cabling',
+              subtitle: 'one lead per run on the signal flow diagram',
+              actions: [
                 PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add cable'),
                   onPressed: () => _addExtraPart(context, provider,
                       kind: _ExtraPart.cable),
                 )),
-                const SizedBox(width: 8),
+                // The switch and the word it belongs to are one control, so
+                // they wrap as one rather than ending up on separate lines.
                 PrintHide(
-                  child: Switch(
-                    value: settings.includeCabling,
-                    onChanged: (v) => provider.setAvCostIncludeCabling(v),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Switch(
+                        value: settings.includeCabling,
+                        onChanged: (v) => provider.setAvCostIncludeCabling(v),
+                      ),
+                      const SizedBox(width: 4),
+                      const Text('Include', style: TextStyle(fontSize: 12)),
+                    ],
                   ),
-                ),
-                const PrintHide(
-                  child: Text('Include', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -1202,13 +1248,33 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               ),
                             ),
                           ),
-                          // A counted run is priced off the cable TYPE, which
-                          // already has its catalog entry — nothing to
-                          // promote. The column stays so the rows line up.
+                          // A counted run is priced off the cable TYPE. When
+                          // that type has an entry there is nothing to
+                          // promote; when it has none, this is where the
+                          // room's cable finally gets one, tagged with the
+                          // signal so every future room's runs price
+                          // themselves off it.
                           avRowIcon(
                             Icons.library_add_outlined,
-                            'Cable types are edited on the Catalog tab',
-                            null,
+                            catalog != null
+                                ? 'Cable types are edited on the Catalog tab'
+                                : 'Add this cable type to the catalog',
+                            catalog != null
+                                ? null
+                                : () => _addToCatalog(
+                                      context,
+                                      provider,
+                                      suggestedModel:
+                                          '${kSignalLabels[signal] ?? signal.name} cable',
+                                      category: kCategoryCable,
+                                      cableSignal: signal,
+                                      price: line == null
+                                          ? unit
+                                          : provider.avCost
+                                                  .priceOverrides[key] ??
+                                              line.unitPrice,
+                                      priceKey: key,
+                                    ),
                           ),
                           avRowIcon(
                             Icons.restart_alt,
@@ -1624,36 +1690,86 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// typed price, so from here the line is priced like everything else and a
   /// revision reaches every room that uses it.
   ///
-  /// Only offered on a line with no [CostLineItem.catalogModel]: a line that is
+  /// Offered on a line with no [CostLineItem.catalogModel]: a line that is
   /// already off the catalog has nothing to promote.
   Future<void> _addLineToCatalog(
     BuildContext context,
     AppStateProvider provider,
     CostLineItem item, {
     required _ExtraPart kind,
+  }) =>
+      _addToCatalog(
+        context,
+        provider,
+        suggestedModel: item.description,
+        category: item.category,
+        // The figure typed in the Unit price box, else the one on the line —
+        // the same order the estimate itself resolves the price in.
+        price: provider.avCost.priceOverrides[item.id] ?? item.unitPrice,
+        link: item,
+        linkKind: kind,
+      );
+
+  /// Writes a catalog entry for ANYTHING on the estimate, and wires whatever
+  /// can be wired to it.
+  ///
+  /// The generalization of the line-item promotion above, and the answer to the
+  /// obvious next question: a device on the drawing, a plate in a frame or a
+  /// cable type with no catalog entry is exactly as much "a part the shop now
+  /// knows about" as a line somebody typed, and it was the only one of them
+  /// that could not be recorded. Everything on the page can now be recorded
+  /// from the row it is on.
+  ///
+  /// What happens after the write depends on what the line IS:
+  ///
+  ///   * a typed line ([link]) is pointed at the entry and loses its typed
+  ///     price, so a revision reaches it;
+  ///   * placed rack hardware ([rackItemLabel]) is stamped with the model, so
+  ///     the frame and the quote agree;
+  ///   * a device on the drawing needs nothing: the estimate prices it by
+  ///     model, so an entry under that model is picked up on the next build.
+  ///     When the device has no model to match, [unlinkedNote] says so before
+  ///     the entry is written rather than leaving somebody to wonder why the
+  ///     row did not change.
+  Future<void> _addToCatalog(
+    BuildContext context,
+    AppStateProvider provider, {
+    required String suggestedModel,
+    String partNumber = '',
+    String category = '',
+    int rackUnits = 0,
+    double price = 0,
+    SignalType? cableSignal,
+    CostLineItem? link,
+    _ExtraPart? linkKind,
+    String? rackItemLabel,
+    /// The room override to clear once the catalog is the source of the price.
+    String? priceKey,
+    /// Said in the dialog when the entry cannot be tied to this row.
+    String? unlinkedNote,
   }) async {
     final library = provider.avDeviceLibrary;
     final messenger = ScaffoldMessenger.of(context);
 
-    // What this room is paying, in the order the estimate itself resolves it:
-    // the figure typed in the Unit price box, else the one on the line.
-    final typed = provider.avCost.priceOverrides[item.id] ?? item.unitPrice;
-
-    final modelController = TextEditingController(text: item.description.trim());
+    final modelController =
+        TextEditingController(text: suggestedModel.trim());
     final makerController = TextEditingController();
-    final partController = TextEditingController();
-    final uController = TextEditingController(text: '0');
+    final partController = TextEditingController(text: partNumber.trim());
+    final uController = TextEditingController(text: rackUnits.toString());
     final priceController =
-        TextEditingController(text: typed > 0 ? trimNumber(typed) : '');
+        TextEditingController(text: price > 0 ? trimNumber(price) : '');
     final eduController = TextEditingController();
     final notesController = TextEditingController();
-    String category = item.category.trim().isNotEmpty
-        ? item.category.trim()
-        : switch (kind) {
+    // Reassigned rather than shadowed: everything below reads `category` as
+    // the live value of the dropdown.
+    category = category.trim().isNotEmpty
+        ? category.trim()
+        : switch (linkKind) {
             _ExtraPart.equipment => '',
             _ExtraPart.cable => kCategoryCable,
             _ExtraPart.hardware => kCategoryRackHardware,
             _ExtraPart.misc => kCategoryMisc,
+            null => cableSignal != null ? kCategoryCable : '',
           };
 
     final saved = await showDialog<bool>(
@@ -1689,6 +1805,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       'on the line — it is about this job, not about the part.',
                       style: Theme.of(ctx).textTheme.bodySmall,
                     ),
+                    if (unlinkedNote != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        unlinkedNote,
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(ctx).colorScheme.error,
+                            ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     TextField(
                       controller: modelController,
@@ -1868,6 +1993,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         price: double.tryParse(priceController.text.trim()) ?? 0,
         educationPrice: double.tryParse(eduController.text.trim()) ?? 0,
         notes: notesController.text.trim(),
+        // What signal a CABLE entry carries, so the counted runs of that type
+        // find it. Kept from the old entry when one is being replaced.
+        cableSignal: cableSignal ?? existing?.cableSignal,
         // Replacing keeps whatever connectors the old entry had: this dialog
         // knows about money, not about ports, and dropping a port list it
         // never showed would be a silent edit.
@@ -1880,18 +2008,30 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // The line now points at the entry. The typed price and the room override
     // both go, or they would keep winning over the catalog figure and the
     // promotion would look like it had done nothing.
-    final linked = item.copyWith(catalogModel: model, unitPrice: 0);
-    switch (kind) {
-      case _ExtraPart.equipment:
-        provider.updateAvCostExtraEquipment(linked);
-      case _ExtraPart.cable:
-        provider.updateAvCostExtraCable(linked);
-      case _ExtraPart.hardware:
-        provider.updateAvCostExtraHardware(linked);
-      case _ExtraPart.misc:
-        provider.updateAvCostItem(linked);
+    if (link != null && linkKind != null) {
+      final linked = link.copyWith(catalogModel: model, unitPrice: 0);
+      switch (linkKind) {
+        case _ExtraPart.equipment:
+          provider.updateAvCostExtraEquipment(linked);
+        case _ExtraPart.cable:
+          provider.updateAvCostExtraCable(linked);
+        case _ExtraPart.hardware:
+          provider.updateAvCostExtraHardware(linked);
+        case _ExtraPart.misc:
+          provider.updateAvCostItem(linked);
+      }
     }
-    provider.setAvCostPrice(item.id, null);
+    // Hardware already in a frame is stamped with the model instead: the item
+    // in the rack and the line on the quote are the same part, and only the
+    // rack knows how many of them there are.
+    final stamped = rackItemLabel == null
+        ? 0
+        : provider.linkAvRackItemsToCatalog(
+            label: rackItemLabel,
+            catalogModel: model,
+          );
+    final key = priceKey ?? link?.id;
+    if (key != null) provider.setAvCostPrice(key, null);
 
     messenger.showSnackBar(
       SnackBar(
@@ -1899,6 +2039,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           file.isEmpty
               ? '"$model" added to the catalog in memory, but the catalog file '
                     'could not be written — check the Device Editor tab.'
+              : stamped > 1
+              ? '"$model" added to the catalog ($file). All $stamped of them '
+                    'in the racks now take their price from it.'
               : '"$model" added to the catalog ($file). This line now takes '
                     'its price from it.',
         ),
@@ -2030,19 +2173,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text('Labor', style: theme.textTheme.titleSmall),
-                const SizedBox(width: 8),
-                Text(
-                  estimate.labor.isEmpty
-                      ? 'rate x techs x hours, off the shared rate card'
-                      : '${trimNumber(estimate.laborHours)} tech-hours',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.disabledColor,
-                  ),
-                ),
-                const Spacer(),
+            _CardHeading(
+              title: 'Labor',
+              subtitle: estimate.labor.isEmpty
+                  ? 'rate x techs x hours, off the shared rate card'
+                  : '${trimNumber(estimate.laborHours)} tech-hours',
+              actions: [
                 PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add crew'),
@@ -2227,17 +2363,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text('Other items', style: theme.textTheme.titleSmall),
-                const SizedBox(width: 8),
-                Text(
+            _CardHeading(
+              title: 'Other items',
+              subtitle:
                   'labor, cable, mounts — anything not a device on the canvas',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.disabledColor,
-                  ),
-                ),
-                const Spacer(),
+              actions: [
                 // Two ways on: off the catalog, so a price agreed once is not
                 // retyped per room and follows a revision; or a blank line for
                 // the one-off nobody will ever quote again.
@@ -2389,17 +2519,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text('Fees', style: theme.textTheme.titleSmall),
-                const SizedBox(width: 8),
-                Text(
-                  'each a percentage of the subtotal before tax',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.disabledColor,
-                  ),
-                ),
-                const Spacer(),
+            _CardHeading(
+              title: 'Fees',
+              subtitle: 'each a percentage of the subtotal before tax',
+              actions: [
                 PrintHide(child: TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add fee'),
@@ -2648,6 +2771,87 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               width: c.width,
               child: Text(c.text, style: style),
             ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  CARD HEADINGS
+// ---------------------------------------------------------------------------
+
+/// The heading of one card on the estimate: what the card is, a sentence
+/// saying what belongs on it, and the buttons that add to it.
+///
+/// A [Wrap] rather than a Row with a Spacer in it, because a Row of that shape
+/// is a Row that overflows. The sentence takes whatever width it wants and the
+/// buttons are three or four wide, so on anything narrower than a maximized
+/// window — a laptop, or a maximized window with the side panes open — the
+/// buttons were painted past the edge of the card under a yellow-and-black
+/// bar, and the last one could not be clicked at all.
+///
+/// Wrapping puts the buttons on a line of their own instead. That is also a
+/// layout the screenshot can carry: the estimate is captured as a picture of
+/// this page, so nothing here may depend on the window being wide.
+class _CardHeading extends StatelessWidget {
+  final String title;
+
+  /// The line under the title, in the muted style every card uses for it.
+  /// Shrinks and ellipsizes before anything else does — it is the one part of
+  /// a heading that can be read from the section below it.
+  final String? subtitle;
+
+  /// Null uses the card style; the estimate's own heading passes titleLarge.
+  final TextStyle? titleStyle;
+
+  /// Laid out in one group so they wrap together rather than one at a time.
+  final List<Widget> actions;
+
+  const _CardHeading({
+    required this.title,
+    this.subtitle,
+    this.titleStyle,
+    this.actions = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      // Title left, buttons right, exactly as the Spacer had them — until
+      // they stop fitting on one line, when the buttons drop below.
+      alignment: WrapAlignment.spaceBetween,
+      spacing: 12,
+      runSpacing: 6,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(title, style: titleStyle ?? theme.textTheme.titleSmall),
+            if (subtitle != null && subtitle!.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  subtitle!,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.disabledColor,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (actions.isNotEmpty)
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
+            children: actions,
+          ),
       ],
     );
   }

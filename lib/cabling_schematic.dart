@@ -920,6 +920,10 @@ Rect? paintRunEndLabel({
   required Color color,
   required bool dark,
   required List<Rect> taken,
+  /// The sheet's own plate and ink for cable-run text, when somebody has set
+  /// them. Null means the theme's — see [PlanLabelStyle].
+  Color? background,
+  Color? ink,
 }) {
   final trimmed = text.trim();
   if (trimmed.isEmpty) return null;
@@ -928,7 +932,7 @@ Rect? paintRunEndLabel({
     text: TextSpan(
       text: trimmed,
       style: TextStyle(
-        color: dark ? Colors.white : Colors.black87,
+        color: ink ?? (dark ? Colors.white : Colors.black87),
         fontSize: 10,
         fontWeight: FontWeight.w600,
       ),
@@ -977,7 +981,9 @@ Rect? paintRunEndLabel({
 
   canvas.drawRRect(
     RRect.fromRectAndRadius(box, const Radius.circular(3)),
-    Paint()..color = dark ? const Color(0xF014181C) : const Color(0xF0FFFFFF),
+    Paint()
+      ..color = background ??
+          (dark ? const Color(0xF014181C) : const Color(0xF0FFFFFF)),
   );
   canvas.drawRRect(
     RRect.fromRectAndRadius(box, const Radius.circular(3)),

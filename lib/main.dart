@@ -28,7 +28,10 @@ import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
+import 'side_pane.dart';
 import 'system_settings_view.dart';
+import 'tab_export.dart';
+import 'workbook_export.dart';
 
 void main() {
   runApp(
@@ -510,6 +513,57 @@ class _MainDashboardState extends State<MainDashboard> {
       appBar: AppBar(
         title: const Text('Room Config Builder'),
         actions: [
+          // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
+          // to live on two of the twelve tabs, which made "send me the
+          // workbook" a question about which page somebody happened to be on.
+          IconButton(
+            key: const ValueKey('export_workbook'),
+            icon: const Icon(Icons.menu_book),
+            tooltip: hasConfig
+                ? 'Export the full room workbook — every tab, one .xlsx'
+                : 'Export the full room workbook — nothing loaded yet',
+            onPressed:
+                hasConfig ? () => exportRoomWorkbook(context, provider) : null,
+          ),
+          // ...and THIS tab on its own, the three ways a document leaves this
+          // app. Beside the workbook button so the answer to "can I get this
+          // as a spreadsheet" is in the same place on every page.
+          PopupMenuButton<String>(
+            key: const ValueKey('export_tab_menu'),
+            icon: const Icon(Icons.file_download_outlined),
+            tooltip: _tabExportTooltip(selectedIndex, hasConfig),
+            // The catalog is the app's own price list, so it exports with no
+            // room loaded — everything else needs one.
+            enabled: _tabExports(selectedIndex) &&
+                (hasConfig || _tabWorksWithoutConfig(selectedIndex)),
+            onSelected: (v) => exportTabReport(
+              context,
+              provider,
+              AppTab.values[selectedIndex],
+              v,
+            ),
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'xlsx',
+                child: Text(
+                  '${_tabExportLabel(selectedIndex)} as a spreadsheet (.xlsx)',
+                ),
+              ),
+              PopupMenuItem(
+                value: 'txt',
+                child: Text(
+                  '${_tabExportLabel(selectedIndex)} as plain text (.txt)',
+                ),
+              ),
+              PopupMenuItem(
+                value: 'copy',
+                child: Text(
+                  'Copy ${_tabExportLabel(selectedIndex).toLowerCase()} to the '
+                  'clipboard',
+                ),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.photo_camera),
             tooltip: 'Screenshot & annotate',
@@ -695,7 +749,7 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
       body: Row(
         children: [
-          // The rail is ten destinations tall and a laptop window is not.
+          // The rail is twelve destinations tall and a laptop window is not.
           // NavigationRail is a Column, so on a short window the bottom tabs
           // were simply cut off — App Config unreachable, and a layout
           // exception on every launch before the window is maximized.
@@ -703,21 +757,37 @@ class _MainDashboardState extends State<MainDashboard> {
           // This is the documented way to make one scroll: give it the
           // viewport's height as a MINIMUM so the normal case still fills the
           // side of the window, and let it scroll past that when it can't fit.
-          LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(
+          //
+          // Inside a [SidePane] so the whole rail can be narrowed to icons or
+          // folded away entirely: on a laptop, a drawing is worth more than a
+          // column of labels, and the tab you are on is the only one you are
+          // reading.
+          SidePane(
+            side: PaneSide.left,
+            title: 'Tabs',
+            storageKey: 'nav_rail',
+            initialWidth: 108,
+            minWidth: 72,
+            maxWidth: 220,
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
                   child: NavigationRail(
                     selectedIndex: selectedIndex,
                     onDestinationSelected: (int index) {
                       provider.selectTab(index);
                     },
+                    // Fills whatever the pane has been dragged to, so the
+                    // labels wrap instead of overflowing when it is narrowed.
+                    minWidth: constraints.maxWidth,
                     labelType: NavigationRailLabelType.all,
                     destinations: const [
                       NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
                       NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
                       NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
+                      NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
                       NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
                       NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
                       NavigationRailDestination(icon: Icon(Icons.map), label: Text('Floor Plan')),
@@ -725,15 +795,14 @@ class _MainDashboardState extends State<MainDashboard> {
                       NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
                       NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
                       NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
-                      NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
                       NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
                     ],
+                  ),
                   ),
                 ),
               ),
             ),
           ),
-          const VerticalDivider(thickness: 1, width: 1),
           Expanded(
             child: RepaintBoundary(
               key: _captureKey,
@@ -750,6 +819,27 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
     );
   }
+
+  /// The three helpers behind the per-tab export button, each guarding the
+  /// same thing: [selectedTabIndex] is an int, and an int can be out of range
+  /// for a moment while the rail is rebuilt.
+  static bool _tabExports(int index) =>
+      index >= 0 &&
+      index < AppTab.values.length &&
+      tabCanExport(AppTab.values[index]);
+
+  static String _tabExportLabel(int index) =>
+      index >= 0 && index < AppTab.values.length
+          ? tabExportLabel(AppTab.values[index])
+          : 'This tab';
+
+  static String _tabExportTooltip(int index, bool hasConfig) =>
+      !_tabExports(index)
+          ? 'This tab has no tables to export'
+          : (!hasConfig && !_tabWorksWithoutConfig(index))
+              ? 'Export this tab — nothing loaded yet'
+              : 'Export ${_tabExportLabel(index).toLowerCase()} — spreadsheet, '
+                  'plain text or clipboard';
 
   static bool _tabWorksWithoutConfig(int index) =>
       index >= 0 &&
