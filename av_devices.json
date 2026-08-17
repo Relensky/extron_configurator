@@ -2,26 +2,6 @@
   "__readme": "AV device catalog for the Room Config Builder: connectors, rack height, estimated power draw and unit price per model. Edited on the Device Editor tab; entries here override the app's built-in models.",
   "devices": [
     {
-      "model": "Document Camera",
-      "rackUnits": 0,
-      "ports": [
-        {
-          "id": "out_1",
-          "label": "HDMI OUT",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "DTP CrossPoint 84 4K IPCP MA 70",
       "partNumber": "60-1515-23",
       "category": "Matrix",
@@ -115,7 +95,7 @@
         },
         {
           "id": "dtp_in_1",
-          "label": "DTP IN 1",
+          "label": "DTP IN 7",
           "signal": "hdbaset",
           "direction": "input",
           "side": "left"
@@ -129,7 +109,7 @@
         },
         {
           "id": "dtp_in_2",
-          "label": "DTP IN 2",
+          "label": "DTP IN 8",
           "signal": "hdbaset",
           "direction": "input",
           "side": "left"
@@ -277,7 +257,7 @@
         {
           "id": "dmp_exp",
           "label": "DMP EXP",
-          "signal": "network",
+          "signal": "dante",
           "direction": "output",
           "side": "right"
         },
@@ -398,6 +378,13 @@
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
+        },
+        {
+          "id": "port_1786645419251345",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
         },
         {
           "id": "in_power",
@@ -756,6 +743,43 @@
       ]
     },
     {
+      "model": "Cam570",
+      "manufacturer": "AVer",
+      "category": "Camera",
+      "rackUnits": 0,
+      "notes": "Driven by avr_camera_CAM570.py",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "bottom"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "PTZ310",
       "manufacturer": "AVer",
       "category": "Camera",
@@ -849,50 +873,6 @@
       "category": "Camera",
       "rackUnits": 0,
       "notes": "Driven by avr_camera_PTZ310_PTZ330_v1_0_4_0.py",
-      "ports": [
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI OUT",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_usb_1",
-          "label": "USB",
-          "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_sdi_1",
-          "label": "SDI OUT",
-          "signal": "sdi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "Cam570",
-      "manufacturer": "AVer",
-      "category": "Camera",
-      "rackUnits": 0,
-      "notes": "Driven by avr_camera_CAM570.py",
       "ports": [
         {
           "id": "out_hdmi_1",
@@ -1171,6 +1151,117 @@
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Network switch",
+      "manufacturer": "Cisco",
+      "partNumber": "CBS350-8P-E-2G-NA",
+      "category": "Misc",
+      "rackUnits": 0,
+      "price": 500.0,
+      "educationPrice": 306.93,
+      "ports": [
+        {
+          "id": "lan_1",
+          "label": "PORT 1",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_2",
+          "label": "PORT 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_3",
+          "label": "PORT 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_4",
+          "label": "PORT 4",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_5",
+          "label": "PORT 5",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "lan_6",
+          "label": "PORT 6",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "lan_7",
+          "label": "PORT 7",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "lan_8",
+          "label": "PORT 8",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Controller",
+      "manufacturer": "Da-Lite",
+      "category": "Architectural",
+      "rackUnits": 0,
+      "notes": "Da-Lite screen controller. Driven by dali_controller.py over the network; the screen motor hangs off its relay contacts.",
+      "ports": [
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_motor_1",
+          "label": "SCREEN MOTOR",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -2709,6 +2800,38 @@
           "id": "in_ctrl_1",
           "label": "RS-232",
           "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Document Camera",
+      "manufacturer": "Epson",
+      "partNumber": "DC-13",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "price": 520.0,
+      "educationPrice": 300.0,
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "port_1786645719293090",
+          "label": "USB OUT",
+          "signal": "usbData",
           "direction": "input",
           "side": "left"
         },
@@ -11279,6 +11402,13 @@
       "notes": "6x4 ProDSP Digital Matrix Processors — 6x4 Digital Matrix Processor w/ AEC and Dante",
       "ports": [
         {
+          "id": "port_1786645606221064",
+          "label": "DMP EXP",
+          "signal": "dante",
+          "direction": "input",
+          "side": "left"
+        },
+        {
           "id": "mic_line_1",
           "label": "MIC/LINE 1",
           "signal": "micLine",
@@ -11402,6 +11532,13 @@
           "label": "DIG I/O 4",
           "signal": "analogAudio",
           "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "port_1786645739822174",
+          "label": "USB OUT",
+          "signal": "usbData",
+          "direction": "input",
           "side": "right"
         },
         {
@@ -72996,57 +73133,6 @@
       ]
     },
     {
-      "model": "Toggle",
-      "manufacturer": "Inogeni",
-      "category": "USB",
-      "rackUnits": 0,
-      "notes": "USB 3.0 sharing switch: two computers, one set of room peripherals. Driven by igen_switcher_Toggle.py over RS-232.",
-      "ports": [
-        {
-          "id": "in_usb_1",
-          "label": "USB HOST 1",
-          "signal": "usbData",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_usb_2",
-          "label": "USB HOST 2",
-          "signal": "usbData",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_usb_1",
-          "label": "USB DEVICE 1",
-          "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_usb_2",
-          "label": "USB DEVICE 2",
-          "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "in_ctrl_1",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "USB-C HD 101",
       "manufacturer": "Extron",
       "partNumber": "60-1883-01",
@@ -73057,8 +73143,8 @@
       "ports": [
         {
           "id": "usb",
-          "label": "USB",
-          "signal": "usbData",
+          "label": "USB-C",
+          "signal": "usbC",
           "direction": "input",
           "side": "left"
         },
@@ -80079,6 +80165,57 @@
       ]
     },
     {
+      "model": "Toggle",
+      "manufacturer": "Inogeni",
+      "category": "USB",
+      "rackUnits": 0,
+      "notes": "USB 3.0 sharing switch: two computers, one set of room peripherals. Driven by igen_switcher_Toggle.py over RS-232.",
+      "ports": [
+        {
+          "id": "in_usb_1",
+          "label": "USB HOST 1",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_usb_2",
+          "label": "USB HOST 2",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB DEVICE 1",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_2",
+          "label": "USB DEVICE 2",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "VIA GO",
       "manufacturer": "Kramer",
       "category": "Wireless presentation",
@@ -80169,6 +80306,89 @@
         {
           "id": "lan_1",
           "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Clamping shelf 2U",
+      "manufacturer": "Middle Atlanic",
+      "partNumber": "RC-2",
+      "category": "Clamping shelf",
+      "rackUnits": 2,
+      "powerInput": "none",
+      "price": 117.0,
+      "educationPrice": 90.0,
+      "ports": []
+    },
+    {
+      "model": "Clamping shelf 3U",
+      "manufacturer": "Middle Atlantic",
+      "partNumber": "RC-3",
+      "category": "Clamping shelf",
+      "rackUnits": 3,
+      "price": 125.0,
+      "educationPrice": 100.0,
+      "ports": [
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Blank plate 1U",
+      "manufacturer": "Monoprice",
+      "partNumber": "7261",
+      "category": "Blank plate",
+      "rackUnits": 1,
+      "price": 3.99,
+      "ports": [
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Neat Bar",
+      "manufacturer": "Neat",
+      "category": "USB interface",
+      "rackUnits": 0,
+      "notes": "All-in-one camera, mic array and speaker bar for a small meeting room. Runs the meeting itself (Teams/Zoom) rather than presenting a USB device to a room PC, so nothing in the room switches its audio. No ControlScript module - it is not driven by the processor.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_poe",
+          "label": "LAN PoE",
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
@@ -80736,6 +80956,71 @@
           "id": "out_aud_1",
           "label": "AUDIO OUT",
           "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TT-7523Q",
+      "manufacturer": "Newline",
+      "category": "Display",
+      "rackUnits": 0,
+      "notes": "75\" interactive flat panel used as a student-station display in a NAV share room. Driven by new_tdisplay_TT_xx21Q_Series_v1_1_0_0.py over RS-232; the USB TOUCH lead is what the share page's Control mode hands to the instructor.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_touch",
+          "label": "USB TOUCH",
+          "signal": "usbData",
           "direction": "output",
           "side": "right"
         },
@@ -88063,43 +88348,6 @@
       ]
     },
     {
-      "model": "Neat Bar",
-      "manufacturer": "Neat",
-      "category": "USB interface",
-      "rackUnits": 0,
-      "notes": "All-in-one camera, mic array and speaker bar for a small meeting room. Runs the meeting itself (Teams/Zoom) rather than presenting a USB device to a room PC, so nothing in the room switches its audio. No ControlScript module - it is not driven by the processor.",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI IN",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI OUT",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_poe",
-          "label": "LAN PoE",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "12X-SDI-G2",
       "manufacturer": "PTZOptics",
       "category": "Camera",
@@ -90858,6 +91106,38 @@
       ]
     },
     {
+      "model": "Ceiling microphone",
+      "manufacturer": "Shure",
+      "partNumber": "MXA920W-S",
+      "category": "Audio",
+      "rackUnits": 0,
+      "price": 5000.0,
+      "educationPrice": 4145.9,
+      "ports": [
+        {
+          "id": "out_mic_1",
+          "label": "MIC OUT",
+          "signal": "micLine",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dante_1",
+          "label": "DANTE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "bottom"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "MXWAPXD2",
       "manufacturer": "Shure",
       "category": "DSP",
@@ -91421,6 +91701,64 @@
       ]
     },
     {
+      "model": "AV Bridge",
+      "manufacturer": "Vaddio",
+      "category": "Recorder / streamer",
+      "rackUnits": 1,
+      "notes": "The original single-input AV Bridge, still in service in the older BSS rooms. No ControlScript module claims it - vadd_switcher_AV_Bridge_2x1.py declares only the 2x1 - so a room using it ships with a blank module.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB OUT",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "AV Bridge 2x1",
       "manufacturer": "Vaddio",
       "category": "Switcher",
@@ -91491,164 +91829,11 @@
           "side": "left"
         },
         {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "AV Bridge",
-      "manufacturer": "Vaddio",
-      "category": "Recorder / streamer",
-      "rackUnits": 1,
-      "notes": "The original single-input AV Bridge, still in service in the older BSS rooms. No ControlScript module claims it - vadd_switcher_AV_Bridge_2x1.py declares only the 2x1 - so a room using it ships with a blank module.",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI IN",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_aud_1",
-          "label": "AUDIO IN",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_usb_1",
+          "id": "port_1786645836574383",
           "label": "USB OUT",
           "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_aud_1",
-          "label": "AUDIO OUT",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
           "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_ctrl_1",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "Controller",
-      "manufacturer": "Da-Lite",
-      "category": "Architectural",
-      "rackUnits": 0,
-      "notes": "Da-Lite screen controller. Driven by dali_controller.py over the network; the screen motor hangs off its relay contacts.",
-      "ports": [
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_ctrl_1",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_motor_1",
-          "label": "SCREEN MOTOR",
-          "signal": "other",
-          "direction": "output",
           "side": "right"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "TT-7523Q",
-      "manufacturer": "Newline",
-      "category": "Display",
-      "rackUnits": 0,
-      "notes": "75\" interactive flat panel used as a student-station display in a NAV share room. Driven by new_tdisplay_TT_xx21Q_Series_v1_1_0_0.py over RS-232; the USB TOUCH lead is what the share page's Control mode hands to the instructor.",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_2",
-          "label": "HDMI 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_3",
-          "label": "HDMI 3",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI OUT",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_usb_touch",
-          "label": "USB TOUCH",
-          "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_ctrl_1",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "input",
-          "side": "left"
         },
         {
           "id": "in_power",
