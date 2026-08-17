@@ -365,6 +365,13 @@
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
+        },
+        {
+          "id": "in_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
         }
       ]
     },
@@ -67332,7 +67339,15 @@
       "educationPrice": 504.6,
       "url": "https://www.extron.com/product/sm28",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 8\" Woofer — 8 ohm - Black, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 28 White",
@@ -67345,7 +67360,15 @@
       "educationPrice": 504.6,
       "url": "https://www.extron.com/product/sm28",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 8\" Woofer — 8 ohm - White, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 28T Black",
@@ -67358,7 +67381,15 @@
       "educationPrice": 539.4,
       "url": "https://www.extron.com/product/sm28",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 8\" Woofer — Transformer - Black, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 28T White",
@@ -67371,7 +67402,15 @@
       "educationPrice": 539.4,
       "url": "https://www.extron.com/product/sm28",
       "notes": "SpeedMount Two-Way Surface Mount Speakers with 8\" Woofer — Transformer - White, Pair",
-      "ports": []
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
+        }
+      ]
     },
     {
       "model": "SM 3 Black",

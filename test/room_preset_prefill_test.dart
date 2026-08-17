@@ -115,15 +115,17 @@ void main() {
     const allowed = {
       'Instructor PC',
       'Room PC',
-      'Laptop at the lectern plate',
+      'Laptop at the lectern',
       'Lectern DTP transmitter',
+      'Credenza DTP transmitter',
       'Room-end DTP receiver',
       'Ceiling speakers',
+      'Speakers - SM 28',
       'Ceiling mic array',
       'Confidence monitor',
       'AV LAN switch',
       'Neat Bar',
-      'Control processor - IPL Pro S1 xi',
+      'Control processor - IPCP Pro PCS1 xi',
       'Touch panel - TLP Pro 525M',
     };
 

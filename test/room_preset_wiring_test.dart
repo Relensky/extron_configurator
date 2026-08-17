@@ -8,9 +8,8 @@ import 'package:extron_configurator/room_presets.dart';
 
 /// The shipped room types are DRAWINGS, and a drawing with a cable landing on a
 /// connector that isn't there is worse than no drawing: it looks finished. The
-/// four presets are now modelled on real rooms (AJH 125A, BSS 239, BSS 122 and
-/// the huddle build) with real models on them, which buys three things that
-/// have to actually hold:
+/// four presets are modelled on builds that exist, with real models on them,
+/// which buys three things that have to actually hold:
 ///
 ///   * every cable ends on a port that exists, at both ends;
 ///   * every node sits in a location the preset ships;
@@ -29,6 +28,40 @@ void main() {
       expect(p.builtIn, isTrue, reason: p.name);
       expect(p.description, isNotEmpty, reason: p.name);
     }
+  });
+
+  test('no shipped type carries a wall plate', () {
+    // A plate is what a particular building asks for, not part of the room
+    // type: these rooms are drawn device-to-device, and the laptop plugs into
+    // the transmitter (or the switcher) rather than into a box on the wall.
+    for (final preset in presets) {
+      expect(
+        preset.nodes.where((n) => n.isJackField),
+        isEmpty,
+        reason: '${preset.name} still has a jack field',
+      );
+      expect(preset.jackCount, 0, reason: preset.name);
+    }
+  });
+
+  test('the huddle room is the small-room build', () {
+    final huddle = presets.firstWhere((p) => p.name == 'Huddle');
+    final models = huddle.nodes.map((n) => n.model).toSet();
+
+    // The processor is a control processor, not the IP Link interface the
+    // preset used to name.
+    expect(models, contains('IPCP Pro PCS1 xi'));
+    expect(models, contains('VIA GO2'));
+    // One twisted pair crosses the room in place of the table plate.
+    expect(models, contains('DTP HDMI 4K 230 Tx'));
+    expect(models, contains('DTP HDMI 4K 230 Rx'));
+  });
+
+  test('the one-projector classroom names its speakers', () {
+    final basic = presets.firstWhere((p) => p.name == 'Basic classroom');
+    // 8 ohm rather than the 70V SM 28T: this room's IN1608 SA drives them
+    // directly off its own amplifier.
+    expect(basic.nodes.map((n) => n.model), contains('SM 28 Black'));
   });
 
   test('every cable lands on a port that exists', () {

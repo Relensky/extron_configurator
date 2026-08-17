@@ -251,9 +251,16 @@ void main() {
     });
 
     test('the jacks are renumbered into this room\'s scheme', () {
+      // Built from scratch rather than from a shipped type: none of the four
+      // carries a plate any more (they are drawn device-to-device), and the
+      // renumbering is for the presets a shop saves from a room that does.
       final p = room();
       p.applyRoomPreset(
-        builtInRoomPresets().firstWhere((x) => x.name == 'Basic classroom'),
+        RoomPreset(
+          name: 'Plated classroom',
+          jackPrefix: 'RM',
+          nodes: [jackField('N1', 'Lectern plate', ['RM01', 'RM02', 'RM03'])],
+        ),
         jackPrefix: '1110',
       );
 
@@ -262,12 +269,7 @@ void main() {
           if (n.isJackField)
             for (final port in n.ports) port.label,
       ];
-      expect(jacks, isNotEmpty);
-      expect(
-        jacks.every((j) => j.startsWith('1110')),
-        isTrue,
-        reason: 'jacks: $jacks',
-      );
+      expect(jacks, ['111001', '111002', '111003']);
     });
 
     test('applying twice doubles the gear rather than colliding with it', () {
@@ -295,8 +297,10 @@ void main() {
       final p = room();
       p.applyRoomPreset(
         builtInRoomPresets().firstWhere((x) => x.name == 'Basic classroom'),
-        jackPrefix: '1110',
       );
+      // A plate of this room's own, so there is a prefix to be detected: the
+      // shipped types no longer carry one.
+      p.addAvNode(jackField('WB1', 'Lectern plate', ['111001', '111002']));
       p.setAvCostTax(percent: 8.25);
 
       final preset = p.currentRoomAsPreset(name: 'Our classroom');
