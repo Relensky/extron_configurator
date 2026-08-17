@@ -166,9 +166,9 @@ void main() {
         presets.map((p) => p.name),
         containsAll([
           'Basic classroom',
-          'Hyflex classroom',
-          'Huddle space',
-          'Active learning space',
+          'Hyflex',
+          'Huddle',
+          'Active learning',
         ]),
       );
       expect(presets.every((p) => p.builtIn), isTrue);
@@ -273,7 +273,7 @@ void main() {
     test('applying twice doubles the gear rather than colliding with it', () {
       final p = room();
       final preset = builtInRoomPresets()
-          .firstWhere((x) => x.name == 'Huddle space');
+          .firstWhere((x) => x.name == 'Huddle');
 
       p.applyRoomPreset(preset);
       final afterOne = p.avNodes.length;

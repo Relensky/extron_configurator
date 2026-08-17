@@ -2014,10 +2014,12 @@ class _AvFlowViewState extends State<AvFlowView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'The equipment, the cabling, the locations, the racks and '
-                    'the screen runs are saved. The cost estimate, the floor '
-                    'plan and this room\'s name and number are not — a price '
-                    'belongs to a job and a drawing belongs to a building.',
+                    'The equipment, the cabling, the locations, the racks, the '
+                    'screen runs and this room\'s switcher input and output '
+                    'numbers are saved. The cost estimate, the floor plan, the '
+                    'addresses and this room\'s name and number are not — a '
+                    'price belongs to a job and a drawing belongs to a '
+                    'building.',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),

@@ -441,19 +441,30 @@ A shop builds the same four or five rooms over and over, and starting each from
 an empty canvas is how two rooms of the same type end up with different jack
 prefixes and cable counts nobody can compare. A **room type** is a document —
 the equipment, the locations, the jack fields with their numbering, the cabling,
-the racks and the screen runs — offered when a room is created.
+the racks, the screen runs and the switcher input and output numbers the wiring
+lands on — offered when a room is created.
 
 Presets are files under `room_presets/` in the Root Folder, so they sit on the
 same drive the catalog and the rate card already do. Four ship with the app —
-**basic classroom, hyflex classroom, huddle space, active learning space** —
-written out on first use rather than compiled in, because the first thing
-anybody will do is change them; an edited copy is never overwritten. **Report →
-Save this room as a room type** writes the room you are looking at as another.
+**Basic classroom, Hyflex, Huddle, Active learning** — written out on first use
+rather than compiled in, because the first thing anybody will do is change them;
+an edited copy is never overwritten. They are named for the type and never for a
+room: a preset called after one room reads as a record of that room, and it is
+neither. **Report → Save this room as a room type** writes the room you are
+looking at as another.
 
 Applying one renumbers its jacks into this room's scheme, re-keys everything so
 applying twice gives twice the gear rather than a collision, and reuses a
 location that already exists by name rather than creating a second "Ceiling".
-The room number, the building and the control config are left alone.
+The room number, the building and the addresses are left alone.
+
+In a room with a control system, applying a type also builds the control side in
+the same pass: one device block per drawn device with its python module filled
+in where the library claims the model (see below), the hardware counts that go
+with them, and then the room type's own SYSTEM_SETUP values — the switcher I/O
+map and the source layout. Those OVERWRITE what the template shipped, which is
+the point: the template carries a demonstration room's input numbers, and the
+preset's are the ones that agree with the drawing.
 
 ## Building the control side of a room that was only budgeted
 

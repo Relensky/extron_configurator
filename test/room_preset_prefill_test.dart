@@ -55,7 +55,7 @@ void main() {
       'CAMERADEVICE_': 2, // TR311 + the doc cam
       'SWITCHERDEVICE_': 1,
     },
-    'Hyflex classroom': {
+    'Hyflex': {
       'PROJECTORDEVICE_': 1,
       'CAMERADEVICE_': 3, // instructor + audience + the doc cam
       'SWITCHERDEVICE_': 1,
@@ -66,7 +66,7 @@ void main() {
       'WIRELESSDEVICE_': 1,
       'SCREENDEVICE_': 1,
     },
-    'Active learning space': {
+    'Active learning': {
       'PROJECTORDEVICE_': 2,
       'CAMERADEVICE_': 3, // instructor + audience + the doc cam
       'SWITCHERDEVICE_': 3,
@@ -80,7 +80,7 @@ void main() {
       'NAVDEVICE_': 1,
       'STATIONDEVICE_': 7,
     },
-    'Huddle space': {
+    'Huddle': {
       'PROJECTORDEVICE_': 1,
       'WIRELESSDEVICE_': 1,
     },

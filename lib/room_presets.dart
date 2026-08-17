@@ -68,6 +68,26 @@ class RoomPreset {
   /// into a room with a different number can renumber them.
   final String jackPrefix;
 
+  /// SYSTEM_SETUP values this room TYPE decides, written into the config when
+  /// the preset is applied.
+  ///
+  /// The switcher input and output numbers are the ones the preset's own
+  /// cabling lands on — a preset that draws the PC into HDMI IN 3 and says
+  /// nothing about `input_pc` has left the reader to read the numbers off the
+  /// drawing and type them in, which is the second pass this whole file exists
+  /// to remove. The source layout (`gui_inputs` / `gui_tab_type`) and the
+  /// routing mode belong here for the same reason: how many source buttons a
+  /// hyflex room has is a fact about hyflex rooms.
+  ///
+  /// Still NOT here, and still deliberately: IP addresses, GVE ids, the room
+  /// number, and anything a specific building decides. Those are the room.
+  ///
+  /// A key mapped to '' is a statement, not an omission — "this room type has
+  /// no assisted-listening feed" — and is written as a blank, because the
+  /// template config carries a demonstration room's number in every one of
+  /// these fields and a number nobody chose is worse than an empty box.
+  final Map<String, String> systemSetup;
+
   const RoomPreset({
     required this.name,
     this.description = '',
@@ -80,6 +100,7 @@ class RoomPreset {
     this.rackItems = const [],
     this.screenSwitches = const [],
     this.jackPrefix = '',
+    this.systemSetup = const {},
   });
 
   /// How many jacks this room type lays in, for the picker's summary.
@@ -102,6 +123,7 @@ class RoomPreset {
     if (description.isNotEmpty) 'description': description,
     if (builtIn) 'builtIn': true,
     if (jackPrefix.isNotEmpty) 'jackPrefix': jackPrefix,
+    if (systemSetup.isNotEmpty) 'systemSetup': systemSetup,
     'locations': [for (final l in locations) l.toJson()],
     'nodes': [for (final n in nodes) n.toJson()],
     'cables': [for (final c in cables) c.toJson()],
@@ -123,11 +145,23 @@ class RoomPreset {
         }
       });
     }
+    // Everything in SYSTEM_SETUP is written as a string by the rest of the
+    // app, so a preset file that spells a number as a JSON number still comes
+    // back as the '3' the config wants rather than as an int the field
+    // editors would refuse to show.
+    final settings = <String, String>{};
+    final rawSettings = json['systemSetup'];
+    if (rawSettings is Map) {
+      rawSettings.forEach((key, value) {
+        settings[key.toString()] = value?.toString() ?? '';
+      });
+    }
     return RoomPreset(
       name: json['name']?.toString() ?? 'Room type',
       description: json['description']?.toString() ?? '',
       builtIn: json['builtIn'] == true,
       jackPrefix: json['jackPrefix']?.toString() ?? '',
+      systemSetup: settings,
       locations: [
         for (final l in (json['locations'] as List? ?? []))
           if (l is Map) RoomLocation.fromJson(Map<String, dynamic>.from(l)),
@@ -155,6 +189,44 @@ class RoomPreset {
       ],
     );
   }
+}
+
+/// The `gui_*` settings a room TYPE decides, as opposed to the ones a
+/// particular room does.
+///
+/// An allow-list rather than a prefix match, because the `gui_` namespace also
+/// holds `gui_full_room_name` — the room's own name, which is exactly what a
+/// preset must never carry — and the camera preset labels, which name one
+/// room's whiteboards.
+const Set<String> kPresetGuiKeys = {
+  'gui_inputs',
+  'gui_tab_type',
+  'gui_routing_mode',
+  'gui_routing_available',
+  'gui_capture_source_available',
+  'gui_mic_mix',
+  'gui_usb_or_vga',
+};
+
+/// The SYSTEM_SETUP keys worth saving into a preset, pulled out of a live
+/// room's block.
+///
+/// Every `input_*` and `output_*` (the switcher I/O map, which is decided by
+/// how the room type is wired) plus [kPresetGuiKeys]. Everything else — the
+/// addresses, the GVE ids, the room number, the hardware counts the prefill
+/// works out for itself — is left where it is.
+Map<String, String> presetSystemSetupFrom(Map<dynamic, dynamic> setup) {
+  final out = <String, String>{};
+  setup.forEach((rawKey, value) {
+    final key = rawKey.toString();
+    final wanted =
+        key.startsWith('input_') ||
+        key.startsWith('output_') ||
+        kPresetGuiKeys.contains(key);
+    if (!wanted) return;
+    out[key] = value?.toString() ?? '';
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,12 +286,29 @@ String saveRoomPreset(String rootFolder, RoomPreset preset) {
   }
 }
 
+/// Room types that shipped under a longer name, and what they are called now.
+///
+/// Keyed by the OLD name. A folder written by an earlier version has files
+/// called "Hyflex classroom.roompreset.json"; leaving them there beside the
+/// new "Hyflex.roompreset.json" would put the same room type in the picker
+/// twice, and deleting them would throw away whatever a shop had changed. So
+/// the old file is renamed and its `name` rewritten, which keeps the edits and
+/// leaves one entry.
+const Map<String, String> kRenamedBuiltInPresets = {
+  'Hyflex classroom': 'Hyflex',
+  'Huddle space': 'Huddle',
+  'Active learning space': 'Active learning',
+};
+
 /// Puts the four shipped room types in the folder if they are not there yet.
 ///
 /// Only writes what is MISSING. A shop that has edited "Basic classroom" keeps
 /// its version — the whole point of shipping these as files is that the first
 /// thing anybody does is change them — and one deleted on purpose comes back,
 /// which is the trade that keeps this from needing a settings page.
+///
+/// Presets that have been renamed since are migrated rather than duplicated —
+/// see [kRenamedBuiltInPresets].
 int ensureBuiltInRoomPresets(String rootFolder) {
   int written = 0;
   try {
@@ -227,6 +316,7 @@ int ensureBuiltInRoomPresets(String rootFolder) {
     for (final preset in builtInRoomPresets()) {
       final file = File(path.join(dir.path, preset.fileName));
       if (file.existsSync()) continue;
+      if (_migrateRenamedPreset(dir, preset)) continue;
       file.writeAsStringSync(
         const JsonEncoder.withIndent('  ').convert(preset.toJson()),
       );
@@ -243,6 +333,53 @@ int ensureBuiltInRoomPresets(String rootFolder) {
   return written;
 }
 
+/// Renames the file [preset] used to ship under, if it is still there.
+///
+/// Returns true when a file was migrated, which tells the caller not to write
+/// the shipped copy over the top of somebody's edited one.
+///
+/// The `name` inside the file is rewritten along with the file name, because
+/// the name in the JSON is what the picker shows — migrating one without the
+/// other gives an entry that reads "Hyflex classroom" out of a file called
+/// Hyflex. Anything else in the file is left exactly as it was found.
+bool _migrateRenamedPreset(Directory dir, RoomPreset preset) {
+  String? oldName;
+  kRenamedBuiltInPresets.forEach((was, now) {
+    if (now == preset.name) oldName = was;
+  });
+  if (oldName == null) return false;
+
+  final legacy = File(
+    path.join(dir.path, RoomPreset(name: oldName!).fileName),
+  );
+  if (!legacy.existsSync()) return false;
+
+  try {
+    final doc = jsonDecode(legacy.readAsStringSync());
+    if (doc is! Map) return false;
+    final updated = Map<String, dynamic>.from(doc);
+    updated['name'] = preset.name;
+    File(path.join(dir.path, preset.fileName)).writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(updated),
+    );
+    legacy.deleteSync();
+    AppLogger.logInfo(
+      'Renamed the "$oldName" room preset to "${preset.name}".',
+    );
+    return true;
+  } catch (e, stack) {
+    // A file that cannot be read is left alone rather than deleted, and the
+    // shipped copy is written beside it. Two entries in the picker is a
+    // nuisance; losing a shop's edited preset is not.
+    AppLogger.logError(
+      'Could not rename the "$oldName" room preset — leaving it as it is',
+      e,
+      stack,
+    );
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 //  THE FOUR SHIPPED ROOM TYPES
 // ---------------------------------------------------------------------------
@@ -253,20 +390,26 @@ const String kPresetJackPrefix = 'RM';
 
 /// The four room types this app ships.
 ///
-/// Each one is a REAL ROOM rather than an idea of one: the basic classroom is
-/// AJH 125A with an Epson in place of its Panasonic, the hyflex classroom is
-/// BSS 239, the active learning space is BSS 122, and the huddle space is the
-/// small-room build. They name manufacturers and models, which the earlier
-/// generic versions deliberately did not, and that was the mistake: a preset
-/// with a nameless "Switcher" in it saves nobody the decision that actually
-/// costs time, and every one of these rooms gets built again next summer with
-/// the same box in it. The model is also what makes the rest of the app work —
-/// the catalog knows its connectors and its price, and the module library
-/// knows which python driver claims it, so a preset that names the model comes
-/// out the far end as a costed drawing and a set of control blocks.
+/// Each one is drawn from a build that actually exists, but it is named for
+/// the TYPE and never for the room: "Hyflex", not the room the drawing was
+/// taken off. A preset called after a specific room reads as a record of that
+/// room — somebody opens it expecting that room's numbering and that room's
+/// gear, and a preset is neither. It is the shape every room of this kind
+/// starts from.
 ///
-/// What is deliberately NOT here: IP addresses, GVE ids, room numbers and
-/// switcher input numbers. Those are the room, and the room is still the room.
+/// They do name manufacturers and models, which the earlier generic versions
+/// deliberately did not, and that was the mistake: a preset with a nameless
+/// "Switcher" in it saves nobody the decision that actually costs time, and
+/// every one of these rooms gets built again next summer with the same box in
+/// it. The model is also what makes the rest of the app work — the catalog
+/// knows its connectors and its price, and the module library knows which
+/// python driver claims it, so a preset that names the model comes out the far
+/// end as a costed drawing and a set of control blocks.
+///
+/// What is deliberately NOT here: IP addresses, GVE ids and room numbers.
+/// Those are the room, and the room is still the room. Switcher input and
+/// output numbers ARE here now — see [RoomPreset.systemSetup] — because they
+/// are decided by the wiring the preset itself draws.
 List<RoomPreset> builtInRoomPresets() => [
   _basicClassroom(),
   _hyflexClassroom(),
@@ -430,18 +573,17 @@ const _credenza = RoomLocation(
 );
 
 // ---------------------------------------------------------------------------
-//  1. BASIC CLASSROOM  —  AJH 125A, with an Epson on the wall
+//  1. BASIC CLASSROOM
 // ---------------------------------------------------------------------------
 
 /// The room most of the campus is made of: one projector, one switcher, a
 /// lectern PC and a doc cam, and a DTP pair carrying the lectern's laptop feed
 /// out and the projector feed back.
 ///
-/// AJH 125A itself runs a Panasonic PT-FW430U. The Epson PowerLite L630U is
-/// here instead because that is what goes in when one of these is replaced —
-/// the projector is the one box in this room that is chosen per job, and
-/// starting from the current standard rather than the installed one is the
-/// point of a preset.
+/// The projector is the one box in this room that gets chosen per job, so it
+/// is the current standard (an Epson PowerLite L630U) rather than whatever is
+/// on the wall of any particular room — starting from what goes in on a
+/// replacement is the point of a preset.
 RoomPreset _basicClassroom() {
   final nodes = [
     _device(
@@ -564,12 +706,39 @@ RoomPreset _basicClassroom() {
   return RoomPreset(
     name: 'Basic classroom',
     description:
-        'AJH 125A: an Epson PowerLite L630U on the front wall fed over DTP '
-        'from an Extron IN1608 SA, an instructor PC, a doc cam, a lectern '
-        'laptop plate and a TR311 camera. Three jacks at the lectern, one 12U '
-        'rack.',
+        'An Epson PowerLite L630U on the front wall fed over DTP from an '
+        'Extron IN1608 SA, an instructor PC, a doc cam, a lectern laptop plate '
+        'and a TR311 camera. Three jacks at the lectern, one 12U rack.',
     builtIn: true,
     jackPrefix: kPresetJackPrefix,
+    // Read off the cabling below. The IN1608's scaled output goes out of both
+    // the HDMI and the DTP connector, so the projector and the program audio
+    // are both output 1.
+    //
+    // gui_inputs / gui_tab_type are deliberately absent: this room's sources
+    // are PC, HDMI and a doc cam, and every three- and four-source layout the
+    // schema offers adds a USB, VGA or wireless input this room does not have.
+    // Picking the nearest one would put a dead button on the panel, so the
+    // choice is left to whoever builds the room.
+    systemSetup: const {
+      'input_pc': '3',
+      'input_doc_cam': '4',
+      'input_inst_cam': '5',
+      'input_hdmi': '7',
+      'input_aud_cam': '',
+      'input_wireless': '',
+      'input_usb': '',
+      'input_pc_extended': '',
+      'output_proj_1': '1',
+      'output_audio': '1',
+      'output_monitor_1': '',
+      'output_cc': '',
+      'output_cc2': '',
+      'output_audio_ald': '',
+      'gui_routing_mode': 'Normal',
+      'gui_routing_available': 'No',
+      'gui_capture_source_available': 'No',
+    },
     locations: const [_lectern, _frontWall, _ceiling, _rackLocation],
     nodes: nodes,
     cables: [
@@ -618,16 +787,16 @@ RoomPreset _basicClassroom() {
 }
 
 // ---------------------------------------------------------------------------
-//  2. HYFLEX CLASSROOM  —  BSS 239
+//  2. HYFLEX
 // ---------------------------------------------------------------------------
 
 /// A classroom that also has to work for the people who are not in it.
 ///
-/// BSS 239 is the current standard build for that: a DTP CrossPoint 84 doing
-/// the routing, a DMP 64 doing the audio, two AVer cameras, an AV Bridge
-/// making the USB capture feed and an Inogeni Toggle handing that feed to
-/// whichever computer is running the call. Everything that is not the projector
-/// lives in one credenza rack, on an APC the panel can power-cycle.
+/// The current standard build for that: a DTP CrossPoint 84 doing the routing,
+/// a DMP 64 doing the audio, two AVer cameras, an AV Bridge making the USB
+/// capture feed and an Inogeni Toggle handing that feed to whichever computer
+/// is running the call. Everything that is not the projector lives in one
+/// credenza rack, on an APC the panel can power-cycle.
 RoomPreset _hyflexClassroom() {
   final nodes = [
     _device(
@@ -840,14 +1009,39 @@ RoomPreset _hyflexClassroom() {
   ];
 
   return RoomPreset(
-    name: 'Hyflex classroom',
+    name: 'Hyflex',
     description:
-        'BSS 239: DTP CrossPoint 84 and a DMP 64 in a credenza rack, an Epson '
-        'PowerLite L630U, instructor and audience cameras, a ceiling mic '
-        'array, an AV Bridge capture feed through an Inogeni Toggle, a VIA GO2 '
-        'and a networked DaLite screen controller — all on an APC AP7900B.',
+        'DTP CrossPoint 84 and a DMP 64 in a credenza rack, an Epson PowerLite '
+        'L630U, instructor and audience cameras, a ceiling mic array, an AV '
+        'Bridge capture feed through an Inogeni Toggle, a VIA GO2 and a '
+        'networked DaLite screen controller — all on an APC AP7900B.',
     builtIn: true,
     jackPrefix: kPresetJackPrefix,
+    // Read off the cabling below. The projector hangs off DTP OUT 3B, which
+    // the processor reads as output 3 — the letter is kept because that is
+    // what is printed on the connector somebody has to plug into.
+    systemSetup: const {
+      'input_pc': '1',
+      'input_hdmi': '2',
+      'input_wireless': '3',
+      'input_doc_cam': '4',
+      'input_inst_cam': '5',
+      'input_aud_cam': '6',
+      'input_usb': '',
+      'input_pc_extended': '',
+      'output_cc': '1',
+      'output_monitor_1': '2',
+      'output_proj_1': '3B',
+      'output_audio': '1',
+      'output_cc2': '',
+      'output_audio_ald': '',
+      // PC, HDMI, doc cam and the VIA — the four things with a source button.
+      'gui_inputs': '4',
+      'gui_tab_type': 'DOC_WL',
+      'gui_routing_mode': 'Normal',
+      'gui_capture_source_available': 'Yes',
+      'gui_mic_mix': 'Ceiling',
+    },
     locations: const [
       _lectern,
       _frontWall,
@@ -926,7 +1120,7 @@ RoomPreset _hyflexClassroom() {
 }
 
 // ---------------------------------------------------------------------------
-//  3. HUDDLE SPACE
+//  3. HUDDLE
 // ---------------------------------------------------------------------------
 
 /// A small meeting room with no rack and no matrix.
@@ -938,13 +1132,37 @@ RoomPreset _hyflexClassroom() {
 /// which is why there is no camera, no DSP and no capture card in this room —
 /// the bar IS all three, and nothing in the rack list switches its audio.
 RoomPreset _huddleSpace() => RoomPreset(
-  name: 'Huddle space',
+  name: 'Huddle',
   description:
       'A small meeting room: a Neat Bar under the display running the call, a '
       'PC micro, a VIA GO3 for wireless, a table plate, and an IPL Pro S1 xi '
       'with a TouchLink panel driving the display. No rack.',
   builtIn: true,
   jackPrefix: kPresetJackPrefix,
+  // There is no matrix in this room — the plate goes to the Neat Bar, the bar
+  // and the PC go to the display's two HDMI inputs, and the processor's whole
+  // job is the display's RS-232. So every switcher I/O number is blank on
+  // purpose, and output_proj_1 is the documented 'None': there is no switcher
+  // output to send a video mute to.
+  systemSetup: const {
+    'input_pc': '',
+    'input_hdmi': '',
+    'input_wireless': '',
+    'input_doc_cam': '',
+    'input_usb': '',
+    'input_inst_cam': '',
+    'input_aud_cam': '',
+    'input_pc_extended': '',
+    'output_proj_1': 'None',
+    'output_audio': '',
+    'output_audio_ald': '',
+    'output_monitor_1': '',
+    'output_cc': '',
+    'output_cc2': '',
+    'gui_routing_mode': 'Normal',
+    'gui_routing_available': 'No',
+    'gui_capture_source_available': 'No',
+  },
   locations: const [_credenza, _frontWall, _ceiling],
   nodes: [
     _jackField(
@@ -1057,16 +1275,16 @@ RoomPreset _huddleSpace() => RoomPreset(
 );
 
 // ---------------------------------------------------------------------------
-//  4. ACTIVE LEARNING SPACE  —  BSS 122
+//  4. ACTIVE LEARNING
 // ---------------------------------------------------------------------------
 
 /// A flat-floor room with seven student stations, run over AV-over-IP.
 ///
-/// BSS 122 is the NAV share room the ControlScript template's NavShareManager
-/// was written for: each station is a Newline panel on the AV LAN, an encoder
-/// input and a decoder output on the NAVigator, and the instructor can Share
-/// one station to every screen, Preview it on the confidence monitor, or take
-/// its USB and drive it from the front of the room.
+/// The NAV share room the ControlScript template's NavShareManager was written
+/// for: each station is a Newline panel on the AV LAN, an encoder input and a
+/// decoder output on the NAVigator, and the instructor can Share one station
+/// to every screen, Preview it on the confidence monitor, or take its USB and
+/// drive it from the front of the room.
 ///
 /// The encoder/decoder pairs themselves are NOT drawn. They are configuration
 /// on the NAVigator rather than boxes with a control block, and drawing
@@ -1405,15 +1623,44 @@ RoomPreset _activeLearningSpace() {
   ];
 
   return RoomPreset(
-    name: 'Active learning space',
+    name: 'Active learning',
     description:
-        'BSS 122: a NAV share room. Seven Newline student stations on the AV '
-        'LAN behind a NAVigator, two Epson projectors, two DaLite screens, a '
-        'DTP CrossPoint 84 with an IN1804 and an SW4 behind it, a DMP 64, a '
+        'A NAV share room. Seven Newline student stations on the AV LAN behind '
+        'a NAVigator, two Epson projectors, two DaLite screens, a DTP '
+        'CrossPoint 84 with an IN1804 and an SW4 behind it, a DMP 64, a '
         'MediaPort 200 and an AV Bridge 2x1. Twenty-one station jacks before '
         'the lectern is counted.',
     builtIn: true,
     jackPrefix: kPresetJackPrefix,
+    // Read off the cabling below. The station input/output numbers are NOT
+    // here: they are NAVigator encoder and decoder assignments, and this
+    // preset does not draw the encoders (see the note above it), so there is
+    // nothing to read them off.
+    systemSetup: const {
+      'input_pc': '1',
+      'input_hdmi': '2',
+      'input_wireless': '3',
+      'input_doc_cam': '4',
+      'input_inst_cam': '5',
+      'input_aud_cam': '6',
+      'input_usb': '',
+      'input_pc_extended': '',
+      'output_cc': '1',
+      'output_monitor_1': '2',
+      'output_proj_1': '3B',
+      'output_proj_2': '4B',
+      'output_audio': '1',
+      'output_cc2': '',
+      'output_audio_ald': '',
+      'gui_inputs': '4',
+      'gui_tab_type': 'DOC_WL',
+      'gui_routing_mode': 'Normal',
+      // Two displays that can show different things, and a capture feed the
+      // instructor picks a source for — both routing pages earn their place.
+      'gui_routing_available': 'Yes',
+      'gui_capture_source_available': 'Yes',
+      'gui_mic_mix': 'Ceiling',
+    },
     locations: const [
       _lectern,
       _studentTable,

@@ -11,6 +11,7 @@ import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_only_notice.dart';
 import 'av_flow_view.dart';
+import 'control_prefill.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
 import 'diagram_capture.dart';
@@ -241,15 +242,31 @@ class _MainDashboardState extends State<MainDashboard> {
           // until somebody renumbers the boxes.
           jackPrefix: _roomJackPrefix(provider),
         );
+
+        // The control side, built from what the preset just drew. Skipped for
+        // an AV-only room, which by definition has no control system yet — the
+        // banner on the Wizard tab is how that room gets one, when somebody
+        // decides it should have one.
+        final control = choice.mode == RoomMode.avOnly
+            ? null
+            : buildControlSideForPreset(provider, preset);
+
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 8),
             content: Text(
               '${preset.name}: ${summary.devices} devices, ${summary.jacks} '
               'jacks, ${summary.cables} runs and ${summary.racks} rack'
-              '${summary.racks == 1 ? '' : 's'} added. Set the room number on '
-              'the Wizard tab, then check the jack numbering.',
+              '${summary.racks == 1 ? '' : 's'} added.'
+              '${control == null ? '' : ' ${control.blocks} control block'
+                  '${control.blocks == 1 ? '' : 's'} and ${control.settings} '
+                  'system setting${control.settings == 1 ? '' : 's'} filled in'
+                  '${control.withoutModule == 0 ? '' : ', ${control.withoutModule} '
+                      'device${control.withoutModule == 1 ? '' : 's'} still '
+                      'needing a python module'}.'}'
+              ' Set the room number on the Wizard tab, then check the jack '
+              'numbering.',
             ),
           ),
         );

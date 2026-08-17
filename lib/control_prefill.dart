@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'app_logger.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
+import 'room_presets.dart';
 import 'ui_schema.dart';
 
 /// ============================================================================
@@ -359,5 +360,48 @@ ControlPrefillResult applyControlSide(
     withoutModule: withoutModule,
     skipped: plan.unplaceable.length,
     sectionKeys: created,
+  );
+}
+
+/// What applying a room type did to the control side.
+typedef PresetControlResult = ({
+  int blocks,
+  int withoutModule,
+  int unplaceable,
+  int settings,
+});
+
+/// Builds the whole control side of a room that has just been stamped out of
+/// [preset], in the order the three steps depend on each other.
+///
+/// This runs with no review dialog, unlike [showControlPrefillDialog], and the
+/// reason is the room it runs on: a config created from the template seconds
+/// ago, with every hardware count zeroed and every device block pruned. There
+/// is nothing here to overwrite and nothing to lose, so asking "are you sure"
+/// about writing the blocks for the gear the user just picked is a question
+/// with one answer. Devices with no python module are counted and reported
+/// rather than dwelt on — the Wizard tab's own banner is already the place
+/// that list lives.
+///
+/// The order matters:
+///   1. the device blocks, which is also what sets the hardware counts;
+///   2. the system settings, which read those counts to decide which source
+///      inputs the room is entitled to keep.
+///
+/// Applying it to a room that already has control blocks is safe — the prefill
+/// skips anything already configured — but it is not what this is for.
+PresetControlResult buildControlSideForPreset(
+  AppStateProvider provider,
+  RoomPreset preset,
+) {
+  final plan = planControlSide(provider);
+  final result = applyControlSide(provider, plan);
+  final settings = provider.applyPresetSystemSetup(preset);
+
+  return (
+    blocks: result.created,
+    withoutModule: result.withoutModule,
+    unplaceable: result.skipped,
+    settings: settings,
   );
 }

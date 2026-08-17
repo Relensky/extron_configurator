@@ -3122,6 +3122,60 @@ class AppStateProvider extends ChangeNotifier {
     );
   }
 
+  /// Writes [preset]'s SYSTEM_SETUP values into the room, and returns how many
+  /// keys it set.
+  ///
+  /// These OVERWRITE what is there, which is the opposite of how the rest of
+  /// the preset behaves and is deliberate. The template config ships a
+  /// demonstration room's numbers in every I/O field — `input_pc` is 1,
+  /// `output_proj_1` is 5B — so "only fill what is blank" would fill nothing
+  /// and leave the room pointing at a switcher nobody wired. A preset that
+  /// draws the PC into HDMI IN 3 is a better answer than the template's, and
+  /// it is the only one that agrees with the drawing.
+  ///
+  /// The one thing it will not do is resurrect a key: a blank in the preset
+  /// clears a value the room has, but a key the room has already pruned away
+  /// (a camera input in a room with no cameras) stays gone.
+  ///
+  /// Run this AFTER the control-side prefill. The prefill sets the hardware
+  /// counts, and both the family key restore and the source-input tidy below
+  /// read those counts to decide what this room is entitled to.
+  int applyPresetSystemSetup(RoomPreset preset) {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map || preset.systemSetup.isEmpty) return 0;
+
+    // Hardware the prefill just put in the room gets its own settings back
+    // first, so a preset value written below always wins over a restored one.
+    for (final spec in uiSchema.deviceTypes) {
+      final raw = setup[spec.countKey]?.toString() ?? '';
+      final count = raw.toLowerCase() == 'yes' ? 1 : (int.tryParse(raw) ?? 0);
+      _restoreSystemKeysForCount(spec.countKey, count);
+    }
+
+    final written = <String>[];
+    preset.systemSetup.forEach((key, value) {
+      if (value.isEmpty && !setup.containsKey(key)) return;
+      if (setup[key]?.toString() == value) return;
+      setup[key] = value;
+      written.add(key);
+    });
+
+    // The source list and the camera count are both settled now, so the
+    // input_* keys this room has no source for can go — including any the
+    // preset itself has just written, which is the right answer: a preset
+    // that names an input the panel draws no button for is wrong about it.
+    pruneUnusedSourceInputs();
+
+    if (written.isNotEmpty) {
+      AppLogger.logInfo(
+        'The "${preset.name}" room type set ${written.length} system '
+        'setting(s): ${written.join(', ')}.',
+      );
+    }
+    notifyListeners();
+    return written.length;
+  }
+
   /// A preset's jack labels under this room's prefix.
   ///
   /// The preset writes 'RM01'; a room numbered 1110 wants '111001'. Only the
@@ -3146,15 +3200,23 @@ class AppStateProvider extends ChangeNotifier {
   /// identity: a negotiated price belongs to a job, a drawing belongs to a
   /// building, and a preset that carried "Bessey 103" into every room built
   /// from it would be a preset nobody could use twice.
+  ///
+  /// The switcher I/O map and the source layout DO come along — see
+  /// [presetSystemSetupFrom]. They are decided by how this type of room is
+  /// wired, and a preset that brought the gear and the cabling but left the
+  /// input numbers behind would still leave somebody reading them off the
+  /// drawing and typing them in.
   RoomPreset currentRoomAsPreset({
     required String name,
     String description = '',
   }) {
     final jackPrefix = _dominantJackPrefix();
+    final setup = roomConfig['SYSTEM_SETUP'];
     return RoomPreset(
       name: name,
       description: description,
       jackPrefix: jackPrefix,
+      systemSetup: setup is Map ? presetSystemSetupFrom(setup) : const {},
       locations: List<RoomLocation>.from(avLocations),
       // The markers go: they are positions on a plan this preset does not
       // carry, and a location that claims to be placed with no plan behind it
