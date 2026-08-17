@@ -7016,7 +7016,11 @@ class AppStateProvider extends ChangeNotifier {
     final idxMatch = RegExp(r'(\d+)$').firstMatch(deviceKey);
     if (idxMatch == null) return map;
     final idx = idxMatch.group(1)!;
-    for (final key in const ['btn_name', 'gve_id']) {
+    // 'alias' is on this list because a button panel is addressed by it — it
+    // is that family's btn_name, naming the device in the GC project, and a
+    // second panel copied from the first with Button_Panel_1 still in it
+    // silently drives the first one.
+    for (final key in const ['btn_name', 'gve_id', 'alias']) {
       final v = map[key];
       if (v != null && v.toString().isNotEmpty) {
         final raw = v.toString();

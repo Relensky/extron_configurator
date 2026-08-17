@@ -73,7 +73,8 @@
     "dev_screens": "SCREENDEVICE_",
     "dev_power_controllers": "POWERDEVICE_",
     "dev_nav_switchers": "NAVDEVICE_",
-    "dev_share_stations": "STATIONDEVICE_"
+    "dev_share_stations": "STATIONDEVICE_",
+    "dev_nbps": "NBPDEVICE_"
   },
   "escape_carriage_returns": true,
   "connection_fields": {
@@ -163,7 +164,8 @@
     "RECORDERDEVICE_": "Recorder",
     "SCREENDEVICE_": "Screen",
     "NAVDEVICE_": "NAVigator",
-    "STATIONDEVICE_": "Station Display"
+    "STATIONDEVICE_": "Station Display",
+    "NBPDEVICE_": "Button Panel"
   },
   "device_templates": {
     "__comment": "Reference blocks from the current template config. btn_name/lbl_name carry over by device NUMBER; module/keep_alive_trigger carry over when the legacy MODEL matches. Add blocks here (or new models) as the template grows - no rebuild needed.",
@@ -298,6 +300,14 @@
       "lbl_name": "",
       "model": "TT-7523Q",
       "module": "modules.device.new_tdisplay_TT_xx21Q_Series_v1_1_0_0",
+      "keep_alive_trigger": null
+    },
+    "NBPDEVICE_1": {
+      "__comment": "A button panel has no model and no module — it is a UI device on the AV LAN, not something a driver talks to — so there is nothing here to carry over except the absence of a connection button.",
+      "btn_name": "",
+      "lbl_name": "",
+      "model": "",
+      "module": "",
       "keep_alive_trigger": null
     }
   },
@@ -445,6 +455,18 @@
     {
       "match": "STATIONDEVICE",
       "rename_to": "STATIONDEVICE_1"
+    },
+    {
+      "match": "NBP(\\d+)DEVICE",
+      "rename_to": "NBPDEVICE_$1"
+    },
+    {
+      "match": "NBPDEVICE(\\d+)",
+      "rename_to": "NBPDEVICE_$1"
+    },
+    {
+      "match": "NBPDEVICE",
+      "rename_to": "NBPDEVICE_1"
     },
     {
       "match": "SYSTEM|SYSTEMSETUP|SYSTEM SETUP",
@@ -791,6 +813,14 @@
       "host": "spdevice1",
       "gve_id": "NAV{n}",
       "manual_disconnect": false
+    },
+    "NBPDEVICE_*": {
+      "__comment": "A button panel carries none of the connection defaults every other family gets: no host, no protocol, no keep-alive. Its address is 'alias', which names the device in the room's GC project and cannot be guessed here.",
+      "gve_id": "NBP{n}",
+      "volume_default": 30,
+      "volume_min": 0,
+      "volume_max": 100,
+      "volume_step": 5
     },
     "STATIONDEVICE_*": {
       "__comment": "A share room's student-station display, wired to COM1 of its own SP device. gve_id is TV{n} because GVE inventories these as televisions, and the status lamp is the station's own button on the share page rather than a Btn_Con_ in the device bar.",

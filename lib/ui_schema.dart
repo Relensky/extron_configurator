@@ -613,6 +613,11 @@ class UiSchema {
           'output_station_*',
           'share_station_*',
         ]),
+    // The one family with no connection at all: a button panel is a UI device
+    // on the AV LAN, addressed by its GC alias, and DeviceHandler skips it by
+    // name rather than looking for a module.
+    DeviceTypeSpec(
+        countKey: 'dev_nbps', prefix: 'NBPDEVICE_', label: 'Button Panels (NBP)'),
   ];
 
   /// Wizard display order (file order when "device_types" is defined).

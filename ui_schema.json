@@ -222,6 +222,28 @@
         "name": "Station Display - TT-7523Q",
         "serial_port": "COM1"
       }
+    },
+    "dev_nbps": {
+      "prefix": "NBPDEVICE_",
+      "label": "Button Panels (NBP)",
+      "max": 8,
+      "__comment": "Extron network button panels. The one family in this list with NO CONNECTION: a panel is a UI device on the AV LAN built alongside the touch panels, addressed by its GC alias, and DeviceHandler skips the family by name rather than looking for a module. That is why its blocks carry no com_type, no ip_address and no module, and why the connection fields are switched off for it under 'device_fields' below.",
+      "template": {
+        "alias": "Button_Panel_1",
+        "display": 1,
+        "element_ids": {},
+        "gve_id": "NBP1",
+        "name": "Button Panel",
+        "sources": [
+          { "label": "Wireless", "input": "HDMI 1" },
+          { "label": "Laptop", "input": "HDMI 2" },
+          { "label": "Stream", "input": "HDMI 3" }
+        ],
+        "volume_default": 30,
+        "volume_max": 100,
+        "volume_min": 0,
+        "volume_step": 5
+      }
     }
   },
   "system_defaults": {
@@ -251,6 +273,10 @@
     "active_share_room": false,
     "share_room_type": "display",
     "share_room_default_mode": "combined",
+    "gui_presenter_mode_available": "No",
+    "gui_annex_mute_available": "No",
+    "dev_source_control": "Auto",
+    "dev_volume_control": "Auto",
     "sub_switch_sources": "",
     "input_sub_switcher": "",
     "sub_switch_switcher": "2"
@@ -360,7 +386,17 @@
       "relay_host": "processor1",
       "speaker_mute": true,
       "speaker_mute_method": "volume",
-      "speaker_unmute_volume": null
+      "speaker_unmute_volume": null,
+      "source_follow": true,
+      "source_fixed": null,
+      "source_overrides": {},
+      "presenter_follow": true
+    },
+    "NBPDEVICE_*": {
+      "volume_default": 30,
+      "volume_min": 0,
+      "volume_max": 100,
+      "volume_step": 5
     },
     "DSPDEVICE_*": {
       "group_mic_ceiling_mute": "4",
@@ -397,6 +433,86 @@
       "here - which is how use_device_mute is offered on the screens and",
       "nowhere else."
     ],
+    "NBPDEVICE_*": {
+      "__connection_note": {
+        "__comment": [
+          "EVERY CONNECTION KEY IS SWITCHED OFF HERE, and this is the only",
+          "family that needs that. The 'hideWhen' rules on ip_address and the",
+          "rest are written against com_type, and a button panel has NO",
+          "com_type at all - so none of those conditions match, and every one",
+          "of them would be offered on this tab and written into the block on",
+          "the first edit. Setting addIfMissing false in a scoped entry",
+          "overrides the global one, which is what keeps a UI device from",
+          "growing a net_port it can never use."
+        ]
+      },
+      "com_type": { "addIfMissing": false, "type": "hidden" },
+      "ip_address": { "addIfMissing": false, "type": "hidden" },
+      "net_port": { "addIfMissing": false, "type": "hidden" },
+      "protocol": { "addIfMissing": false, "type": "hidden" },
+      "service_port": { "addIfMissing": false, "type": "hidden" },
+      "user": { "addIfMissing": false, "type": "hidden" },
+      "password": { "addIfMissing": false, "type": "hidden" },
+      "serial_port": { "addIfMissing": false, "type": "hidden" },
+      "baud": { "addIfMissing": false, "type": "hidden" },
+      "model": { "addIfMissing": false, "type": "hidden" },
+      "module": { "addIfMissing": false, "type": "hidden" },
+      "lbl_name": { "addIfMissing": false, "type": "hidden" },
+      "btn_name": { "addIfMissing": false, "type": "hidden" },
+      "manual_disconnect": { "addIfMissing": false, "type": "hidden" },
+      "keep_alive_command": { "addIfMissing": false, "type": "hidden" },
+      "keep_alive_interval": { "addIfMissing": false, "type": "hidden" },
+      "keep_alive_qualifier": { "addIfMissing": false, "type": "hidden" },
+      "keep_alive_trigger": { "addIfMissing": false, "type": "hidden" },
+      "alias": {
+        "label": "Panel Alias (alias)",
+        "addIfMissing": true,
+        "helperText": "Must match the device alias in the room's GC project",
+        "description": "The panel's device alias, and its whole address — a button panel has no IP and no COM port, it is a UI device on the AV LAN built alongside the touch panels. This is also how the processor tells the panels apart: every NBP carries the SAME element ids, burned into the hardware rather than drawn in a layout, so every command is sent with tps=<alias> and every press is traced back through the alias it arrived on. Two panels sharing an alias means one of them silently drives the other."
+      },
+      "display": {
+        "type": "int",
+        "label": "Display Driven (display)",
+        "addIfMissing": true,
+        "helperText": "The PROJECTORDEVICE_n number this panel owns",
+        "description": "Which display this panel controls, as the number in its PROJECTORDEVICE_n block. The panel owns that display outright — power, source and volume — with no involvement from the room's switcher or the main touch panel, so the display it names should be one the room source never routes: set 'source_follow' false on that block. A display number with no handler behind it lights the panel up and controls nothing, and the processor says so at startup."
+      },
+      "sources": {
+        "type": "hidden",
+        "description": "The panel's source buttons, in order, as a list of {\"label\", \"input\"} pairs — the text on the button and the input to select. The 'input' values are whatever the DISPLAY's own module calls them ('HDMI 1'), not switcher numbers, because this routes on the display rather than through a matrix. Three buttons by default; a panel with more needs matching element_ids. Edited on the Raw JSON tab: it is a list of objects, and a text box would turn it into a string.",
+        "__comment": "Hidden because the device tab renders scalars. Described here so the info button and the device report still have the text."
+      },
+      "element_ids": {
+        "type": "hidden",
+        "description": "Per-room overrides for the panel's button and knob ids, as {\"power_on\": 60021, ...}. Empty is the normal case: the ids are burned into the NBP hardware and the template already knows the defaults (power_on/power_off, source_1..3, mute, knob_volume, level_volume). Fill it in only for a panel model whose ids differ, or one with more than three source buttons. Edited on the Raw JSON tab.",
+        "__comment": "Hidden for the same reason as 'sources' — it is an object, not a scalar."
+      },
+      "volume_default": {
+        "type": "int",
+        "addIfMissing": true,
+        "label": "Startup Volume (volume_default)",
+        "description": "The level the panel's display is set to when the room comes up. In the display's own volume scale, not dB — see volume_min and volume_max."
+      },
+      "volume_min": {
+        "type": "int",
+        "addIfMissing": true,
+        "label": "Minimum Volume (volume_min)",
+        "description": "The bottom of the panel's volume knob, in the display's own scale (usually 0). The floor a user can turn down to, not a mute — the panel has its own mute button."
+      },
+      "volume_max": {
+        "type": "int",
+        "addIfMissing": true,
+        "label": "Maximum Volume (volume_max)",
+        "description": "The top of the panel's volume knob, in the display's own scale (usually 100)."
+      },
+      "volume_step": {
+        "type": "int",
+        "addIfMissing": true,
+        "label": "Volume Step (volume_step)",
+        "helperText": "How far one click of the knob moves the level",
+        "description": "How much one detent of the panel's volume knob changes the level. 5 on a 0-100 scale gives twenty clicks end to end."
+      }
+    },
     "PROJECTORDEVICE_*": {
       "use_device_mute": {
         "type": "bool",
@@ -421,6 +537,42 @@
         ],
         "helperText": "Blank falls back to the processor's display-model list",
         "description": "Whether this slot is a flat panel or a lamp projector. The processor asks that question in three places — whether to read lamp hours, whether to build a box-power relay, and whether the panel says 'Display' or 'Projector' — and this key answers all three at once. Left blank it falls back to the processor's display-model list, which is demonstrably incomplete (the Sharp PN-C603D and PN-LE601 are panels and are not on it), so set it explicitly on anything the list gets wrong. An unrecognised value is logged and falls back to the list."
+      },
+      "__source_rules_note": {
+        "__comment": [
+          "PER-DISPLAY SOURCE RULES. By default every display follows the",
+          "source the room picked, and a room that declares none of the four",
+          "keys below behaves exactly as it did before they existed. They are",
+          "for the second image that is NOT the room's: a confidence monitor",
+          "always on the PC, an overflow projector parked on the extended",
+          "desktop, an annex panel on its own inputs with a button panel",
+          "driving it. Presenter Mode is the override switch over all of it."
+        ]
+      },
+      "source_follow": {
+        "type": "bool",
+        "label": "Follows Source Selection (source_follow)",
+        "addIfMissing": true,
+        "helperText": "Off takes this display out of the room's source buttons",
+        "description": "Whether this display follows the source the room picked. On (the processor's default when the key is absent) is what a normal room wants and what every room built before this key existed does. Turn it OFF for a display that is not part of source selection — one pinned to a fixed image, or one an NBP button panel drives off its own inputs. A display with this off and no 'source_fixed' is never routed at all, which is exactly what an annex display hanging off its own plates wants."
+      },
+      "source_fixed": {
+        "label": "Pinned Source (source_fixed)",
+        "addIfMissing": true,
+        "helperText": "Only read when source_follow is off. Blank = never routed",
+        "description": "The source name this display holds instead of following the room — 'pc', 'pc_extended', 'hdmi' and so on, matching the panel's own source names. Only read while source_follow is off. Leave it blank to take the display out of routing entirely rather than pin it to something."
+      },
+      "source_overrides": {
+        "type": "hidden",
+        "description": "Source substitutions for this display, as {\"pc\": \"pc_extended\"} — while the room source is the key, route the value here instead. For the display that mirrors the extended desktop only when the PC is up, and follows normally for everything else. Names are matched lower-case on both sides. Edited on the Raw JSON tab: it is an object, and a text box would turn it into a string.",
+        "__comment": "Hidden because the device tab renders scalars; the description is here so the info button and the report still have it."
+      },
+      "presenter_follow": {
+        "type": "bool",
+        "label": "Joins Presenter Mode (presenter_follow)",
+        "addIfMissing": true,
+        "helperText": "Off keeps this display out of the all-screens mirror",
+        "description": "Whether Presenter Mode puts the selected source on this display. On by default. Turn it OFF alongside source_follow for a display that is not on the room's switcher at all — otherwise Presenter Mode tries to route an output the switcher does not have. Presenter Mode is the override for the pinning and override rules above: with it on, every display whose presenter_follow is true shows the one selected source."
       },
       "input_individual": {
         "type": "module_states",
@@ -965,6 +1117,68 @@
     },
     "dev_share_stations": {
       "description": "How many student stations a NAV share room has. Sets how many STATIONDEVICE_n blocks exist and how many station buttons the share page draws. Dropping it to 0 also clears the per-station input_station_*, output_station_* and share_station_* keys. Needs active_share_room on and share_room_type \"nav\" to mean anything."
+    },
+    "dev_nbps": {
+      "description": "How many Extron network button panels the room has. Sets how many NBPDEVICE_n blocks exist. A button panel is a wall plate in a space the touch panel does not cover — an annex, a divisible half, an overflow room — and it owns one display outright: power, source and volume, with no involvement from the room's switcher. Unlike every other family here the panels have no module and no connection to open; they are built as UI devices on the AV LAN alongside the touch panels."
+    },
+    "gui_presenter_mode_available": {
+      "type": "dropdown",
+      "label": "Presenter Mode Button (gui_presenter_mode_available)",
+      "options": [ "Yes", "No" ],
+      "helperText": "Needs Btn_Presenter_Mode (ID 151) on the layout and more than one display",
+      "description": "Whether the panel offers Presenter Mode — one button that puts the selected source on every display, overriding each display's own source_follow / source_fixed / source_overrides rules, and puts the room back to its normal layout when pressed again. Shown only when this is Yes AND dev_projectors is more than one, since a single-display room has nothing to mirror. The button has to exist on the panel layout (ID 151); the processor logs it and carries on if it does not."
+    },
+    "gui_annex_mute_available": {
+      "type": "dropdown",
+      "label": "Annex Mute Button (gui_annex_mute_available)",
+      "options": [ "Yes", "No" ],
+      "helperText": "Needs Btn_Annex_Mute (ID 20258) and a switcher whose module has AnalogMute",
+      "description": "Whether the panel offers the Annex Mute button — one switcher analog output muted on its own, so the instructor can drop the audio feeding an annex, an overflow room or a lobby without changing anything the room itself hears. Only linked when switcher 1's module exposes an AnalogMute command, which today is the DTP CrossPoint family; checked once at link time rather than on every press."
+    },
+    "annex_mute_label": {
+      "helperText": "Panel button text — \"Annex\" reads \"Annex\\rMute\" / \"Annex\\rMuted\"",
+      "description": "What the space being muted is called on the button. The processor writes the button text itself as '<label>\\rMute' when it is open and '<label>\\rMuted' when it is muted, so this is the only half that needs setting. Defaults to 'Annex'."
+    },
+    "annex_mute_output": {
+      "helperText": "A switcher ANALOG output number. Default 1",
+      "description": "Which of the switcher's analog audio outputs feeds the annex. This is the only output Annex Mute touches — program audio, the ALD feed and everything else are left alone, which is the whole point of having a separate button for it."
+    },
+    "annex_mute_channels": {
+      "helperText": "Comma separated — \"Left,Right\" for a stereo feed",
+      "description": "Which sides of the annex output are muted, comma separated. 'Left,Right' (the default) is a stereo feed; a mono feed names just the side it is actually wired to, so the mute does not report an error on a channel that carries nothing."
+    },
+    "dev_source_control": {
+      "type": "dropdown",
+      "label": "Where Source Selection Lands (dev_source_control)",
+      "options": [
+        { "value": "Auto", "label": "Auto — decide from the room's device counts" },
+        { "value": "Switcher", "label": "Switcher — source buttons drive the matrix" },
+        { "value": "Display", "label": "Display — source buttons drive the display's own input" }
+      ],
+      "helperText": "Auto picks Display when dev_switchers is 0 and the room has a display",
+      "description": "Where a source button press actually goes. Most rooms here route through a switcher, and that is what Auto picks whenever the room has one. A huddle space does not work that way: one flat panel with a couple of things plugged straight into it, no switcher and no DSP, so the source buttons have to pick the DISPLAY's input. Before this key existed such a room got dead source buttons and no error at all. Spell it out as 'Display' when the room keeps a switcher for something other than routing, because Auto would otherwise pick the switcher."
+    },
+    "dev_volume_control": {
+      "type": "dropdown",
+      "label": "Where the Volume Slider Lands (dev_volume_control)",
+      "options": [
+        { "value": "Auto", "label": "Auto — decide from the room's device counts" },
+        { "value": "DSP", "label": "DSP — levels go to the DSP's audio groups" },
+        { "value": "Switcher", "label": "Switcher — levels go to the switcher" },
+        { "value": "Display", "label": "Display — levels drive the display's own volume" }
+      ],
+      "helperText": "Auto picks DSP, then Switcher, then Display, by what the room has",
+      "description": "Where the program volume slider sends its levels. Auto resolves from the counts the room already declares — DSP when dev_dsps is above zero, else the switcher when dev_switchers is, else the display — so an existing room needs neither this nor dev_source_control. Set it explicitly when the room is wired against its own device list. A room whose sources route on the display but whose volume goes to a switcher that is not there is not a configuration, it is a bug, which is why both keys live together."
+    },
+    "display_min_volume": {
+      "type": "int",
+      "helperText": "Bottom of the slider in the DISPLAY's own scale (default 0)",
+      "description": "The quietest the program slider can reach in a room whose volume lands on the display (dev_volume_control 'Display'). In the display's own volume scale — usually 0-100 — not dB, which is what switch_min_volume and the DSP use. Ignored in a room whose volume goes to a switcher or a DSP."
+    },
+    "display_max_volume": {
+      "type": "int",
+      "helperText": "Top of the slider in the DISPLAY's own scale (default 100)",
+      "description": "The loudest the program slider can reach in a room whose volume lands on the display. In the display's own volume scale, paired with display_min_volume; the switcher and DSP equivalents are switch_max_volume and the DSP's own groups."
     },
     "METRICS_CONFIG": {
       "label": "Metrics (Python Metric Tracking)",
