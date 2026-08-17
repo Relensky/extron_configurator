@@ -383,6 +383,9 @@
       "group_prog_mute": "5",
       "group_room_mute": "3",
       "group_voice_lift_mute": "7"
+    },
+    "USBDEVICE_*": {
+      "default_input": "1"
     }
   },
   "device_fields": {
@@ -451,6 +454,19 @@
         "addIfMissing": true,
         "helperText": "Only read when the method is 'volume'. Blank/absent = unmute with the mute command instead",
         "description": "The level restored when unmuting a display that was silenced by volume: setting a volume to 0 does not record what it replaced, so there is nothing to go back to without this. Left unset, the processor unmutes with the module's mute command rather than pick a number that could be far too loud in an empty room. Note that 0 is a real level here and would leave the room silent — clear the key (trash button) instead of typing 0 if you want the fallback."
+      }
+    },
+    "USBDEVICE_*": {
+      "default_input": {
+        "type": "dropdown",
+        "label": "Default Input (default_input)",
+        "addIfMissing": true,
+        "options": [
+          { "value": "1", "label": "1 (the room PC / first host)" },
+          { "value": "2", "label": "2 (the laptop plate / second host)" }
+        ],
+        "helperText": "The input the room sits on. The morning restart toggles away from it and back",
+        "description": "Which host the USB switcher hands the room's camera and microphone to when nobody has chosen. The processor drives this input once at startup, and the morning restart toggles to the OTHER input and back to force the USB devices to re-enumerate — so this is what the room comes up on every day. Only 1 and 2 are accepted: these are two-input switchers, and the processor logs a warning and falls back to 1 for anything else. Set it to 2 in a room wired with the laptop plate on the first port."
       }
     }
   },

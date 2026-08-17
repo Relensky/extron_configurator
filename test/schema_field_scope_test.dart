@@ -127,6 +127,44 @@ void main() {
     });
   });
 
+  group('default_input', () {
+    test('is offered on USB switchers and nowhere else', () {
+      expect(offeredOn('USBDEVICE_1'), contains('default_input'));
+      expect(offeredOn('USBDEVICE_2'), contains('default_input'));
+      for (final section in const [
+        'PROJECTORDEVICE_1',
+        'SWITCHERDEVICE_1',
+        'CAMERADEVICE_1',
+        'DSPDEVICE_1',
+        'MEDIAPORTDEVICE_1',
+      ]) {
+        expect(
+          offeredOn(section),
+          isNot(contains('default_input')),
+          reason: '$section has no USB host to park on',
+        );
+      }
+    });
+
+    test('a new USB block is created sitting on input 1', () {
+      expect(schema.defaultsFor('USBDEVICE_1')['default_input'], '1');
+      expect(schema.defaultsFor('USBDEVICE_2')['default_input'], '1');
+      expect(
+        schema.defaultsFor('PROJECTORDEVICE_1').containsKey('default_input'),
+        isFalse,
+      );
+    });
+
+    test('offers only the two inputs the switchers have', () {
+      // The processor rejects anything but 1 or 2 and falls back to 1, so the
+      // dropdown must not be able to write a third value into the config.
+      final spec = schema.specFor('default_input', sectionKey: 'USBDEVICE_1');
+      expect(spec, isNotNull);
+      expect(spec!.type, 'dropdown');
+      expect(spec.options.map((o) => o.value), ['1', '2']);
+    });
+  });
+
   group('the != condition', () {
     test('reads the key and the value off either side of it', () {
       final spec = FieldSpec(key: 'x', hideWhen: ['mode!=Conference']);

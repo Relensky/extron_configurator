@@ -71,6 +71,38 @@ void main() {
     });
   });
 
+  group('use_device_mute belongs to the displays', () {
+    test('no other family carries it in the template', () {
+      // The wizard deep-copies the template block when it creates a device, so
+      // a key left on the wrong family here is written into every new room's
+      // camera and switcher — for a setting only a display has a picture to
+      // act on, and only PROJECTORDEVICE_* is offered it in the schema.
+      final carriers = [
+        for (final entry in template().entries)
+          if (entry.value is Map &&
+              (entry.value as Map).containsKey('use_device_mute'))
+            entry.key,
+      ]..sort();
+
+      expect(
+        carriers,
+        ['PROJECTORDEVICE_1', 'PROJECTORDEVICE_2', 'PROJECTORDEVICE_3',
+          'PROJECTORDEVICE_4'],
+      );
+    });
+  });
+
+  group('the USB switcher home input', () {
+    test('the template names one, so a new room is deterministic', () {
+      // The processor drives this input at startup and the morning restart
+      // toggles away from it and back. Absent, the room comes up on whatever
+      // the switcher was left on.
+      final usb = template()['USBDEVICE_1'];
+      expect(usb, isA<Map>());
+      expect((usb as Map)['default_input'], '1');
+    });
+  });
+
   group('pcmac is retired', () {
     test('the template no longer offers it as a default', () {
       expect(systemSetup().containsKey('pcmac'), isFalse,

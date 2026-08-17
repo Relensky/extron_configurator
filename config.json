@@ -19,7 +19,6 @@
         "password": "ATEC2008",
         "protocol": "UDP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "main"
     },
     "CAMERADEVICE_2": {
@@ -42,7 +41,6 @@
         "password": "Atec!2008",
         "protocol": "UDP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "averadmin"
     },
     "DSPDEVICE_1": {
@@ -76,7 +74,6 @@
         "password": "ATEC2007",
         "protocol": "TCP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "MEDIAPORTDEVICE_1": {
@@ -99,7 +96,6 @@
         "password": "ATEC2007",
         "protocol": "SSH",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "ENVIRONMENT": {
@@ -146,7 +142,6 @@
         "password": "ATEC2008",
         "protocol": "TCP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "apc"
     },
     "PROJECTORDEVICE_1": {
@@ -281,7 +276,6 @@
         "password": "ATEC2008",
         "protocol": "TCP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "SCREENDEVICE_1": {
@@ -308,7 +302,6 @@
         "password": "ATEC2008",
         "protocol": "TCP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "SCREENDEVICE_2": {
@@ -335,7 +328,6 @@
         "password": "ATEC2008",
         "protocol": "TCP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "STATIONDEVICE_1": {
@@ -354,8 +346,7 @@
         "model": "TT-7523Q",
         "module": "modules.device.new_tdisplay_TT_xx21Q_Series_v1_1_0_0",
         "name": "Station 1 Display - TT-7523Q",
-        "serial_port": "COM1",
-        "use_device_mute": false
+        "serial_port": "COM1"
     },
     "SWITCHERDEVICE_1": {
         "btn_name": "Btn_Con_Switcher1",
@@ -384,7 +375,6 @@
         "password": "ATEC2007",
         "protocol": "SSH",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "SWITCHERDEVICE_2": {
@@ -407,7 +397,6 @@
         "password": "ATEC2007",
         "protocol": "TCP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "SWITCHERDEVICE_3": {
@@ -430,7 +419,6 @@
         "password": "ATEC2007",
         "protocol": "TCP",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "SYSTEM_SETUP": {
@@ -581,6 +569,7 @@
     "USBDEVICE_1": {
         "btn_name": "Btn_Con_USB1",
         "com_type": "Serial",
+        "default_input": "1",
         "device_id": null,
         "host": "processor1",
         "gve_id": "USB1",
@@ -594,8 +583,7 @@
         "module": "modules.device.igen_switcher_Toggle",
         "name": "USB Switcher - Toggle",
         "serial_port": "COM1",
-        "baud": 9600,
-        "use_device_mute": false
+        "baud": 9600
     },
     "WIRELESSDEVICE_1": {
         "auto_reconnect": true,
@@ -618,7 +606,6 @@
         "password": "ATEC2007",
         "protocol": "SSH",
         "service_port": 0,
-        "use_device_mute": false,
         "user": "admin"
     },
     "startup_watchdog_stage": 0
