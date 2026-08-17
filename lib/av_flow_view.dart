@@ -14,6 +14,7 @@ import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
+import 'av_flow_routing_dialog.dart';
 import 'av_port_editor.dart';
 import 'color_wheel_picker.dart';
 import 'cost_estimate.dart';
@@ -1431,6 +1432,16 @@ class _AvFlowViewState extends State<AvFlowView> {
                   icon: const Icon(Icons.sync, size: 18),
                   label: const Text('Place all from config'),
                   onPressed: () => _seedFromConfig(provider),
+                ),
+                const SizedBox(height: 8),
+                // The boxes are only half of what the config knows. The other
+                // half is the switcher input and output numbers, which say
+                // which box feeds which — and used to be read off the System
+                // tab and drawn by hand.
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.route, size: 18),
+                  label: const Text('Draw the routing from config'),
+                  onPressed: () => showRoutingDialog(context, provider),
                 ),
                 const SizedBox(height: 8),
                 // A device copies the catalog's rack height and draw the day

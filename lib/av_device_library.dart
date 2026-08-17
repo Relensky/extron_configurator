@@ -968,7 +968,7 @@ class AvDeviceLibrary {
   /// in / 1 out) and otherwise picks a conservative default.
   static AvDeviceTemplate _familyFallback(String configKey, String model) {
     if (configKey.startsWith('SWITCHERDEVICE_')) {
-      final (ins, outs) = _switcherSize(model);
+      final (ins, outs) = switcherSize(model);
       return AvDeviceTemplate(
         model: model,
         rackUnits: ins > 4 ? 2 : 1,
@@ -1157,7 +1157,14 @@ class AvDeviceLibrary {
   /// is 10x8, "CrossPoint 84" is 8x4 — so a 3-digit group splits 2+1 and a
   /// 2-digit group splits 1+1. "SW4", "IN1804" and similar name only their
   /// input count, which lands on the single-output default.
-  static (int, int) _switcherSize(String model) {
+  ///
+  /// Public because it answers a question the connector labels cannot: how
+  /// many outputs the box HAS. A catalog entry that labels an 84's two DTP
+  /// sockets "DTP OUT 1" and "DTP OUT 2" is counting connectors of that type,
+  /// not outputs, and only the model number says those are outputs 3 and 4 —
+  /// which is what `output_proj_1: "3B"` has to land on. See
+  /// av_flow_routing.dart.
+  static (int, int) switcherSize(String model) {
     final upper = model.toUpperCase();
 
     final crossPoint = RegExp(r'CROSS\s*POINT\s+(\d{2,3})').firstMatch(upper);

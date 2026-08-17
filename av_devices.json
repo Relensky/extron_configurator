@@ -460,6 +460,21 @@
       ]
     },
     {
+      "model": "USB-C Laptop",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "notes": "A laptop on the room's USB-C plate — one lead carrying picture, USB for the room's camera and mic, and charge. Which of USB-C and VGA a room has is SYSTEM_SETUP gui_usb_or_vga; both land on the same switcher input, input_usb.",
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "USB-C OUT",
+          "signal": "usbC",
+          "direction": "output",
+          "side": "right"
+        }
+      ]
+    },
+    {
       "model": "Fan panel Intake 2U",
       "manufacturer": "AC Infinitry",
       "partNumber": "T7-N",
@@ -775,7 +790,7 @@
           "label": "LAN",
           "signal": "network",
           "direction": "bidirectional",
-          "side": "bottom"
+          "side": "left"
         },
         {
           "id": "in_power",
@@ -1210,28 +1225,28 @@
           "label": "PORT 5",
           "signal": "network",
           "direction": "bidirectional",
-          "side": "right"
+          "side": "left"
         },
         {
           "id": "lan_6",
           "label": "PORT 6",
           "signal": "network",
           "direction": "bidirectional",
-          "side": "right"
+          "side": "left"
         },
         {
           "id": "lan_7",
           "label": "PORT 7",
           "signal": "network",
           "direction": "bidirectional",
-          "side": "right"
+          "side": "left"
         },
         {
           "id": "lan_8",
           "label": "PORT 8",
           "signal": "network",
           "direction": "bidirectional",
-          "side": "right"
+          "side": "left"
         },
         {
           "id": "in_power",
@@ -2839,8 +2854,8 @@
           "id": "port_1786645719293090",
           "label": "USB OUT",
           "signal": "usbData",
-          "direction": "input",
-          "side": "left"
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -11545,7 +11560,7 @@
           "id": "port_1786645739822174",
           "label": "USB OUT",
           "signal": "usbData",
-          "direction": "input",
+          "direction": "output",
           "side": "right"
         },
         {
@@ -91165,7 +91180,7 @@
           "label": "DANTE",
           "signal": "dante",
           "direction": "bidirectional",
-          "side": "bottom"
+          "side": "left"
         },
         {
           "id": "in_power",
@@ -91871,7 +91886,7 @@
           "id": "port_1786645836574383",
           "label": "USB OUT",
           "signal": "usbData",
-          "direction": "bidirectional",
+          "direction": "output",
           "side": "right"
         },
         {
@@ -91880,6 +91895,138 @@
           "signal": "power",
           "direction": "input",
           "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "DVD Player",
+      "category": "Misc",
+      "rackUnits": 0,
+      "notes": "Room DVD player, reached on the switcher input named by SYSTEM_SETUP input_dvd.",
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Blu-ray Player",
+      "category": "Misc",
+      "rackUnits": 0,
+      "notes": "Room Blu-ray player, reached on the switcher input named by SYSTEM_SETUP input_blu_ray.",
+      "ports": [
+        {
+          "id": "out_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Confidence Monitor",
+      "category": "Display",
+      "rackUnits": 0,
+      "notes": "The lectern monitor an instructor watches instead of turning round. Fed by the switcher output named in SYSTEM_SETUP output_monitor_1 (and _2 for a second one).",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Assisted Listening",
+      "category": "Audio",
+      "rackUnits": 0,
+      "notes": "Assisted listening transmitter. Gets the same audio tie as the program feed on every source change, from the switcher output named in SYSTEM_SETUP output_audio_ald.",
+      "ports": [
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Ceiling Speakers",
+      "category": "Audio",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "notes": "The room's ceiling speaker run, drawn as one load. What drives it is the amplifier in the switcher (an SA or MA build) or a separate amp fed from the DSP.",
+      "ports": [
+        {
+          "id": "in_spk_1",
+          "label": "SPEAKER IN",
+          "signal": "speaker",
+          "direction": "input",
+          "side": "left"
         }
       ]
     }
