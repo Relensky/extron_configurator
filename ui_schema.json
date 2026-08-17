@@ -171,6 +171,57 @@
       "label": "Screens (Relays/Network)",
       "max": 8,
       "keepAlivePreference": [ "Power" ]
+    },
+    "dev_nav_switchers": {
+      "prefix": "NAVDEVICE_",
+      "label": "NAV Stream Managers",
+      "max": 4,
+      "__comment": "AV-over-IP stream managers (NAVigator), deliberately NOT part of dev_switchers: SwitcherManager sends its handlers Set(\"Input\", ...) and reads temperature off them, and a NAVigator answers none of that. It is a matrix of encoders and decoders only NavShareManager knows how to tie, so it has its own family and its own count. The room-wide share_* keys below are its systemKeys - dropping the count to 0 takes them with it.",
+      "systemKeys": [
+        "share_nav_device",
+        "share_room_outputs",
+        "share_stop_ties",
+        "share_stop_ties_wireless",
+        "share_preview_*",
+        "share_instructor_*",
+        "share_usb_*",
+        "share_audio_*"
+      ],
+      "template": {
+        "com_type": "SPI",
+        "gve_id": "NAV1",
+        "host": "spdevice1",
+        "manual_disconnect": false,
+        "model": "NAVigator",
+        "module": "modules.device.extr_sm_NAVigator_v1_0_1_4",
+        "name": "NAVigator - Stream Manager"
+      }
+    },
+    "dev_share_stations": {
+      "prefix": "STATIONDEVICE_",
+      "label": "Share Stations (NAV)",
+      "max": 13,
+      "keepAlivePreference": [ "Power" ],
+      "__comment": "The student-station displays on a NAV share room's share page. Each one is an encoder input and a decoder output on the NAVigator, and is usually reached serially over its own SP device (com_type SPI's cousin: com_type Serial with 'host' set to an spdevice<n> alias). Its per-station SYSTEM_SETUP keys are the systemKeys below, so a room that is not a NAV share room carries none of them.",
+      "systemKeys": [
+        "input_station_*",
+        "output_station_*",
+        "share_station_*"
+      ],
+      "template": {
+        "baud": 19200,
+        "btn_name": "Btn_Station_{n}_Status",
+        "com_type": "Serial",
+        "gve_id": "TV{n}",
+        "host": "spdevice2",
+        "keep_alive_command": "Power",
+        "keep_alive_interval": 15,
+        "manual_disconnect": false,
+        "model": "TT-7523Q",
+        "module": "modules.device.new_tdisplay_TT_xx21Q_Series_v1_1_0_0",
+        "name": "Station Display - TT-7523Q",
+        "serial_port": "COM1"
+      }
     }
   },
   "system_defaults": {
@@ -198,6 +249,7 @@
     "reboot_listener_token": "",
     "reboot_listener_client_password": "",
     "active_share_room": false,
+    "share_room_type": "display",
     "share_room_default_mode": "combined",
     "sub_switch_sources": "",
     "input_sub_switcher": "",
@@ -491,17 +543,18 @@
       "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."
     },
     "com_type": {
-      "description": "Type of connection as a string. 'Serial' opens a COM port on the host processor/spdevice (the only one that reads serial_port and baud); 'SerialOverEthernet' and 'Network' both reach the device by ip_address + net_port; 'HTTP' posts to it over ip_address + net_port with the user/password credentials.",
+      "description": "Type of connection as a string. 'Serial' opens a COM port on the host processor/spdevice (the only one that reads serial_port and baud); 'SerialOverEthernet' and 'Network' both reach the device by ip_address + net_port; 'HTTP' posts to it over ip_address + net_port with the user/password credentials; 'SPI' reaches the device over the Extron SP bus, where the host alias IS the address and there is nothing else to give.",
       "type": "dropdown",
       "options": [
         "Serial",
         "SerialOverEthernet",
         "Network",
-        "HTTP"
+        "HTTP",
+        "SPI"
       ]
     },
     "host": {
-      "description": "The processor or spdevice in use for serial connections."
+      "description": "The processor or spdevice in use for serial connections. On an SPI device it is the whole address: 'host' has to name an spdevice<n> alias from SYSTEM_SETUP, and the processor logs a warning and falls back to processor1 for anything else."
     },
     "relay_host": {
       "description": "The processor in use for the relay power control."
@@ -514,6 +567,10 @@
         "  Serial only     serial_port, baud",
         "  Network / SoE   ip_address, net_port, protocol, service_port,",
         "                  user, password",
+        "  SPI             NEITHER half. An Extron SP bus device (a NAVigator)",
+        "                  is addressed by 'host' alone - the spdevice<n> alias",
+        "                  IS the address - so it is the one connection with no",
+        "                  port, no socket and no credential to fill in.",
         "Switching com_type in the editor removes whichever set just became",
         "irrelevant, and key_map.json applies the same split on conversion.",
         "'host' is on neither list - it names the processor/spdevice a serial",
@@ -531,8 +588,8 @@
     },
     "ip_address": {
       "addIfMissing": true,
-      "hideWhen": [ "com_type=Serial" ],
-      "description": "IP address for the device as a string. Network, SerialOverEthernet and HTTP all reach the device through it; a Serial device is wired to a COM port on its host instead and does not carry the key."
+      "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
+      "description": "IP address for the device as a string. Network, SerialOverEthernet and HTTP all reach the device through it; a Serial device is wired to a COM port on its host instead and does not carry the key, and an SPI device is addressed by its spdevice alias alone."
     },
     "keep_alive_command": {
       "description": "Command as a string to send to the device once connected. Chosen from the dictionary of commands in the module."
@@ -604,29 +661,30 @@
     "net_port": {
       "type": "int",
       "addIfMissing": true,
-      "hideWhen": [ "com_type=Serial" ],
-      "description": "Network Port used to send communications on network connected devices. Not carried by a Serial device, which talks over serial_port at the baud rate instead."
+      "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
+      "description": "Network Port used to send communications on network connected devices. Not carried by a Serial device, which talks over serial_port at the baud rate instead, nor by an SPI device, which has no socket at all."
     },
     "protocol": {
       "type": "dropdown",
       "addIfMissing": true,
-      "hideWhen": [ "com_type=Serial" ],
+      "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
       "options": [
         "TCP",
         "SSH",
         "UDP"
       ],
-      "description": "Protocol in use for network connections (TCP, SSH, or UDP). SSH is what makes the processor send user + password as credentials on connect. Not carried by a Serial device."
+      "description": "Protocol in use for network connections (TCP, SSH, or UDP). SSH is what makes the processor send user + password as credentials on connect. Not carried by a Serial or SPI device."
     },
     "serial_port": {
       "addIfMissing": true,
       "hideWhen": [
         "com_type=Network",
         "com_type=SerialOverEthernet",
-        "com_type=HTTP"
+        "com_type=HTTP",
+        "com_type=SPI"
       ],
       "helperText": "Serial connections only",
-      "description": "Serial port in use if using Serial as the com type (e.g. COM1). Only the Serial connection opens a port on the host — a Network or SerialOverEthernet device reaches its hardware by ip_address + net_port, so the field is not offered and the key is not written for those."
+      "description": "Serial port in use if using Serial as the com type (e.g. COM1). Only the Serial connection opens a port on the host — a Network or SerialOverEthernet device reaches its hardware by ip_address + net_port, and an SPI device by its spdevice alias, so the field is not offered and the key is not written for those."
     },
     "baud": {
       "type": "int",
@@ -635,7 +693,8 @@
       "hideWhen": [
         "com_type=Network",
         "com_type=SerialOverEthernet",
-        "com_type=HTTP"
+        "com_type=HTTP",
+        "com_type=SPI"
       ],
       "helperText": "Serial connections only. Processor default 9600",
       "description": "Line speed of the serial connection, passed to the processor's SerialInterface when the port is opened (default 9600). Match whatever the device's own RS-232 settings say. Serial-only, like serial_port."
@@ -643,8 +702,8 @@
     "service_port": {
       "type": "int",
       "addIfMissing": true,
-      "hideWhen": [ "com_type=Serial" ],
-      "description": "Port for the response from the device. 0 is automatically assigned by the processor. Not carried by a Serial device — the processor has no service port to open for a COM line."
+      "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
+      "description": "Port for the response from the device. 0 is automatically assigned by the processor. Not carried by a Serial or SPI device — the processor has no service port to open for a COM line or an SP bus."
     },
     "use_device_mute": {
       "type": "bool",
@@ -652,13 +711,13 @@
     },
     "user": {
       "addIfMissing": true,
-      "hideWhen": [ "com_type=Serial" ],
-      "description": "Username for the device when using a network connection. Sent as a credential on an SSH or HTTP connection, and pushed into the module's deviceUsername on a plain TCP/UDP one when the driver has that field. Not carried by a Serial device."
+      "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
+      "description": "Username for the device when using a network connection. Sent as a credential on an SSH or HTTP connection, and pushed into the module's deviceUsername on a plain TCP/UDP one when the driver has that field. Not carried by a Serial or SPI device."
     },
     "password": {
       "addIfMissing": true,
-      "hideWhen": [ "com_type=Serial" ],
-      "description": "Password in use while using a network connection that requires authentication. Paired with 'user' — see that key for how each connection sends it. Not carried by a Serial device."
+      "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
+      "description": "Password in use while using a network connection that requires authentication. Paired with 'user' — see that key for how each connection sends it. Not carried by a Serial or SPI device."
     },
     "__group_keys_note": {
       "__comment": [
@@ -679,6 +738,11 @@
     },
     "spdevice2": {
       "description": "Device alias for import from the room's Extron json file. These can be used to set the host on serial devices."
+    },
+    "spdevice*": {
+      "helperText": "Blank = the alias is not in this room; the processor skips it",
+      "description": "Device alias for an Extron SP device (an SP bus expander, a NAVigator, an eBUS panel), matching the name in the room's Extron json file. A device names one of these in its 'host' to say which box its COM port is on — a share room's station displays are each on COM1 of their own SP device, which is why the aliases run past spdevice2. It is also the whole address of a com_type 'SPI' device. A blank alias is skipped by the processor rather than built, so the unused ones cost nothing.",
+      "__comment": "Wildcard fallback covering spdevice3 upward; the exact spdevice1/spdevice2 entries above still win."
     },
     "active_debug_server": {
       "type": "bool",
@@ -773,6 +837,118 @@
       ],
       "helperText": "Which switcher block is the sub switcher (default 2)",
       "description": "Which switcher handler does the source picking for sub_switch_sources: SWITCHERDEVICE_2 or SWITCHERDEVICE_3. Defaults to 2. Only read when sub_switch_sources names at least one source, and the chosen block has to exist — check dev_switchers covers it."
+    },
+    "__nav_share_note": {
+      "__comment": [
+        "THE TWO KINDS OF SHARE ROOM. 'active_share_room' turns one of them on",
+        "and 'share_room_type' picks which, because they answer the same",
+        "question ('which picture is on the screens?') with different hardware",
+        "and share nothing but the word:",
+        "  display  a wall of panels on a distribution amp (OCNL346), switched",
+        "           between the room's source and their own local input as a",
+        "           room-wide combined/individual mode. The screens are",
+        "           PROJECTORDEVICE_n blocks counted by dev_projectors, and",
+        "           input_individual on a screen is what makes it a station.",
+        "           This is DisplayManager, and it is the default.",
+        "  nav      a ring of student stations on AV-over-IP (BSS122). Each",
+        "           station is an encoder input and a decoder output on a",
+        "           NAVigator, its display is a STATIONDEVICE_n block, and the",
+        "           instructor can Share / Preview / Control any one of them.",
+        "           This is NavShareManager, and every key below is read only",
+        "           in this mode.",
+        "Setting dev_nav_switchers or dev_share_stations to 0 in the wizard",
+        "removes the keys that family owns (device_types 'systemKeys'), which",
+        "is why a normal teaching room carries none of this."
+      ]
+    },
+    "share_room_type": {
+      "type": "dropdown",
+      "label": "Share Room Type (share_room_type)",
+      "options": [
+        { "value": "display", "label": "display — panels on a DA, combined/individual (DisplayManager)" },
+        { "value": "nav", "label": "nav — student stations over AV-over-IP (NavShareManager)" }
+      ],
+      "helperText": "Only read while active_share_room is on. Absent = display",
+      "description": "Which of the two share rooms this is — see the note above. 'display' is the processor's default when the key is absent, so an existing OCNL346-style room keeps working untouched; 'nav' swaps in the whole station page and needs a NAVDEVICE block, a STATIONDEVICE block per station, and the share_* keys below. Anything else is logged and treated as 'display'."
+    },
+    "share_nav_device": {
+      "helperText": "Which NAVDEVICE_n is the matrix (default 1)",
+      "description": "Which NAVDEVICE_n block is the NAVigator the stations are tied on. Defaults to 1, and a value that is not a device number is logged and falls back to NAVDEVICE_1. Only matters in a room with more than one NAV stream manager."
+    },
+    "input_station_*": {
+      "helperText": "NAV encoder input for station n's room feed",
+      "description": "Encoder input carrying station n's normal picture — the room feed it shows when nothing is being shared. Read by NavShareManager when it ties a station onto the instructor's confidence monitor (Preview) or onto every screen (Share). NAV share rooms only."
+    },
+    "input_station_*_laptop": {
+      "helperText": "The station's OWN laptop encoder input — blank means it has none",
+      "description": "Encoder input carrying the laptop plugged in AT station n. A station without one can never be switched to 'HDMI' on the share page and its signal lamp stays dark, which is the correct behaviour for a station with no plate — so leave it blank rather than pointing it at something else.",
+      "__comment": "Listed after input_station_* so the more specific pattern wins (patterns match in reverse file order)."
+    },
+    "output_station_*": {
+      "helperText": "NAV decoder output feeding station n's display",
+      "description": "Decoder output the station n display hangs off. Everything the share page does to a station — putting the room on it, putting it back on its own picture, handing its USB over — lands on this output. NAV share rooms only."
+    },
+    "share_station_*_name": {
+      "helperText": "Panel button text — defaults to \"Station n\"",
+      "description": "What the share page calls station n. Only needs setting where the stations have real names (a pod letter, a table number) rather than being counted."
+    },
+    "share_instructor_name": {
+      "helperText": "Defaults to \"Instructor Station\"",
+      "description": "What the share page calls the instructor position. The instructor is a station on that page in every way except that it has no laptop input, no display of its own and no USB to take."
+    },
+    "share_instructor_input": {
+      "helperText": "The instructor's own encoder input",
+      "description": "Encoder input carrying the instructor position — what Share sends to the room when 'Instructor' is picked, and what the confidence monitor goes back to when Preview is left (unless share_preview_idle_input says otherwise)."
+    },
+    "share_instructor_wireless_input": {
+      "helperText": "Optional — the encoder the wireless receiver arrives on",
+      "description": "Encoder carrying the wireless receiver. Sharing 'Instructor' while the room is on its wireless source shares THIS instead, because the instructor position is showing wireless and that is a different encoder. Leave it blank in a room whose wireless does not reach the NAV."
+    },
+    "share_room_outputs": {
+      "helperText": "Comma-separated decoder outputs, e.g. \"201,202,205\"",
+      "description": "The decoder outputs that follow the shared source — the room's projectors and the instructor monitor. These are what a station lands on when it is shared, and what share_stop_ties puts back when sharing stops."
+    },
+    "share_stop_ties": {
+      "helperText": "\"output:input\" pairs, comma separated — e.g. \"201:1,202:2\"",
+      "description": "What to re-tie on the share_room_outputs when sharing stops. Sharing displaces whatever the room was showing, and an instructor who stops sharing expects the room back on its source, not black — so this is the room's normal picture written down. Every output named in share_room_outputs should appear here."
+    },
+    "share_stop_ties_wireless": {
+      "helperText": "Optional — the same pairs, for when the room is on wireless",
+      "description": "share_stop_ties for a room whose selected source is wireless, which arrives on a different encoder. Optional: absent, the plain share_stop_ties are used and a wireless room comes back on the wrong input."
+    },
+    "share_preview_output": {
+      "helperText": "Decoder output feeding the instructor's confidence monitor",
+      "description": "The output Preview mode puts a station on — the instructor sees that station and nobody else's screen changes. A room without this key has no Preview mode, and the processor says so in the log once rather than on every press."
+    },
+    "share_preview_idle_input": {
+      "helperText": "Defaults to share_instructor_input",
+      "description": "What to put back on the preview output when Preview is left. Defaults to the instructor's own encoder, which is what the confidence monitor normally shows."
+    },
+    "share_usb_device_output": {
+      "helperText": "The instructor's USB device number on the NAV",
+      "description": "USB device number the instructor's peripherals hang off. Control mode ties a station's USB — its touch overlay, mainly — to this, so the instructor can drive that station from the front of the room."
+    },
+    "share_usb_station_offset": {
+      "helperText": "Station n's USB device is offset + n. Default 100",
+      "description": "How a station's USB device number is derived from its station number: device = offset + n. The default 100 gives 101, 102, ... which is also what each station's USB is tied back to when the instructor releases Control."
+    },
+    "share_audio_switcher": {
+      "helperText": "Optional — omit it and sharing makes no audio tie",
+      "description": "Which SWITCHERDEVICE_n carries room audio while a station is being shared. A station's audio only exists on the NAV, so it has to come back into the room through a switcher input — see share_audio_nav_input. Leave it blank in a room where sharing is video only."
+    },
+    "share_audio_output": {
+      "helperText": "That switcher's audio output",
+      "description": "The output on share_audio_switcher that room audio is tied to while sharing. Normally the same output as output_audio."
+    },
+    "share_audio_nav_input": {
+      "helperText": "That switcher's input carrying the NAVigator's audio return",
+      "description": "The input on share_audio_switcher that the NAVigator's audio return is wired to. Room audio comes back through here whenever a station is being shared."
+    },
+    "dev_nav_switchers": {
+      "description": "How many NAV stream managers (NAVigators) the room has. Sets how many NAVDEVICE_n blocks exist. Deliberately not counted in dev_switchers: a NAVigator is a matrix of encoders and decoders that only the share page knows how to tie, and the switcher pages would send it commands it does not answer. Dropping this to 0 also clears the room-wide share_* keys, since they configure nothing without a NAV behind them."
+    },
+    "dev_share_stations": {
+      "description": "How many student stations a NAV share room has. Sets how many STATIONDEVICE_n blocks exist and how many station buttons the share page draws. Dropping it to 0 also clears the per-station input_station_*, output_station_* and share_station_* keys. Needs active_share_room on and share_room_type \"nav\" to mean anything."
     },
     "METRICS_CONFIG": {
       "label": "Metrics (Python Metric Tracking)",

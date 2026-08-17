@@ -122,7 +122,7 @@ typedef UnmodularDevice = ({String key, String name, String model});
 
 /// The connection styles a python driver may publish its own DEVICE_INFO
 /// defaults for, in the spelling [AppStateProvider.normalizeComTypeName]
-/// produces. These are the four the schema's com_type dropdown offers; a block
+/// produces. These are the five the schema's com_type dropdown offers; a block
 /// named anything else in a driver is ignored rather than guessed at, so a
 /// typo shows up as "nothing loaded" instead of as a silent write.
 const Set<String> kComTypeDefaultNames = {
@@ -130,6 +130,10 @@ const Set<String> kComTypeDefaultNames = {
   'serial',
   'serialoverethernet',
   'http',
+  // The Extron SP bus (a NAVigator). Nothing to publish but the com_type
+  // itself — the device is addressed by its spdevice alias — but the block
+  // has to be recognised or a driver that declares it looks like a typo.
+  'spi',
 };
 
 /// The normalized block name -> the com_type value the config and the schema's
@@ -140,6 +144,7 @@ const Map<String, String> kComTypeStyleLabels = {
   'serialoverethernet': 'SerialOverEthernet',
   'network': 'Network',
   'http': 'HTTP',
+  'spi': 'SPI',
 };
 
 /// Core State Manager for the Room Configuration Application
@@ -6939,6 +6944,11 @@ class AppStateProvider extends ChangeNotifier {
   /// A trailing "_X" placeholder (the synthesized template, e.g.
   /// Btn_Con_PROJECTORDEVICE_X) becomes the index too. Values with neither
   /// (or an empty value) are left alone.
+  ///
+  /// A `{n}` anywhere in the value is also replaced, which is the only thing
+  /// that works for a name whose number is in the MIDDLE — the share room's
+  /// stations are `Btn_Station_1_Status`, so the trailing-digit rule above
+  /// would have handed every station the same button.
   Map<String, dynamic> _indexSubstitute(
       Map<String, dynamic> map, String deviceKey) {
     final idxMatch = RegExp(r'(\d+)$').firstMatch(deviceKey);
@@ -6947,12 +6957,14 @@ class AppStateProvider extends ChangeNotifier {
     for (final key in const ['btn_name', 'gve_id']) {
       final v = map[key];
       if (v != null && v.toString().isNotEmpty) {
-        map[key] = v
-            .toString()
-            .replaceFirst(RegExp(r'\d+$'), idx)
-            // Only an X directly after an underscore is a placeholder — a
-            // btn_name legitimately ending in X (e.g. "..._MTX") is kept.
-            .replaceFirst(RegExp(r'(?<=_)X$'), idx);
+        final raw = v.toString();
+        map[key] = raw.contains('{n}')
+            ? raw.replaceAll('{n}', idx)
+            : raw
+                .replaceFirst(RegExp(r'\d+$'), idx)
+                // Only an X directly after an underscore is a placeholder — a
+                // btn_name legitimately ending in X (e.g. "..._MTX") is kept.
+                .replaceFirst(RegExp(r'(?<=_)X$'), idx);
       }
     }
     return map;

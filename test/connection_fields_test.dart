@@ -162,8 +162,15 @@ void main() {
       }
     });
 
+    test('offers an SPI device neither half', () async {
+      final keys = await offered({'com_type': 'SPI'});
+      for (final key in [...networkKeys, ...serialKeys]) {
+        expect(keys, isNot(contains(key)), reason: key);
+      }
+    });
+
     test('offers the always-present keys on every connection', () async {
-      for (final com in ['Serial', 'SerialOverEthernet', 'Network']) {
+      for (final com in ['Serial', 'SerialOverEthernet', 'Network', 'SPI']) {
         final keys = await offered({'com_type': com});
         // 'model' has its own dedicated slot at the top of the tab, so the
         // device form skips it in this list; the rest render inline.
@@ -202,7 +209,8 @@ void main() {
     test('gives a network device its settings and no COM port', () {
       final offenders = <String>[];
       devices().forEach((section, block) {
-        if (block['com_type'].toString().toLowerCase() == 'serial') return;
+        final com = block['com_type'].toString().toLowerCase();
+        if (com == 'serial' || com == 'spi') return;
         for (final key in networkKeys) {
           if (!block.containsKey(key)) offenders.add('$section.$key missing');
         }
@@ -225,6 +233,25 @@ void main() {
           if (block.containsKey(key)) offenders.add('$section.$key present');
         }
       });
+      expect(offenders, isEmpty);
+    });
+
+    /// The third connection, and the only one that carries NEITHER half: an
+    /// Extron SP bus device (the NAVigator) is addressed by its `host` alias
+    /// alone, so a port, a socket or a credential on one is dead data.
+    test('gives an SPI device neither half of the connection', () {
+      final offenders = <String>[];
+      int seen = 0;
+      devices().forEach((section, block) {
+        if (block['com_type'].toString().toLowerCase() != 'spi') return;
+        seen++;
+        for (final key in [...networkKeys, ...serialKeys]) {
+          if (block.containsKey(key)) offenders.add('$section.$key present');
+        }
+        if (!block.containsKey('host')) offenders.add('$section.host missing');
+      });
+      expect(seen, greaterThan(0),
+          reason: 'the template should ship an SPI device to check');
       expect(offenders, isEmpty);
     });
   });

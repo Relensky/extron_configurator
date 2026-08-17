@@ -409,6 +409,49 @@
       ]
     },
     {
+      "model": "PC Micro",
+      "category": "Misc",
+      "rackUnits": 0,
+      "notes": "Small-form-factor room PC (a 1L micro/mini desktop), mounted behind the display or under the table. Two display outputs, so it can drive a confidence monitor as well.",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_dp_1",
+          "label": "DISPLAYPORT OUT",
+          "signal": "displayPort",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "VGA Laptop",
       "rackUnits": 0,
       "powerInput": "none",
@@ -806,6 +849,50 @@
       "category": "Camera",
       "rackUnits": 0,
       "notes": "Driven by avr_camera_PTZ310_PTZ330_v1_0_4_0.py",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_sdi_1",
+          "label": "SDI OUT",
+          "signal": "sdi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Cam570",
+      "manufacturer": "AVer",
+      "category": "Camera",
+      "rackUnits": 0,
+      "notes": "Driven by avr_camera_CAM570.py",
       "ports": [
         {
           "id": "out_hdmi_1",
@@ -48003,6 +48090,13 @@
           "side": "left"
         },
         {
+          "id": "ma_out_70v",
+          "label": "70V AMP OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -48080,6 +48174,13 @@
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
+        },
+        {
+          "id": "ma_out_70v",
+          "label": "70V AMP OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -48161,6 +48262,13 @@
           "side": "left"
         },
         {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -48238,6 +48346,13 @@
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
+        },
+        {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -48319,6 +48434,13 @@
           "side": "left"
         },
         {
+          "id": "ma_out_70v",
+          "label": "70V AMP OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -48398,6 +48520,13 @@
           "side": "left"
         },
         {
+          "id": "ma_out_70v",
+          "label": "70V AMP OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -48475,6 +48604,13 @@
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
+        },
+        {
+          "id": "ma_out_70v",
+          "label": "70V AMP OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -48591,6 +48727,13 @@
           "side": "left"
         },
         {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -48668,6 +48811,13 @@
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
+        },
+        {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -50304,6 +50454,13 @@
           "side": "left"
         },
         {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -50591,6 +50748,13 @@
           "side": "left"
         },
         {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -50876,6 +51040,13 @@
           "side": "left"
         },
         {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
+        },
+        {
           "id": "in_power",
           "label": "POWER",
           "signal": "power",
@@ -51159,6 +51330,13 @@
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
+        },
+        {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -51579,6 +51757,13 @@
           "signal": "network",
           "direction": "bidirectional",
           "side": "left"
+        },
+        {
+          "id": "sa_out",
+          "label": "SPEAKER OUT",
+          "signal": "speaker",
+          "direction": "output",
+          "side": "right"
         },
         {
           "id": "in_power",
@@ -72811,6 +72996,57 @@
       ]
     },
     {
+      "model": "Toggle",
+      "manufacturer": "Inogeni",
+      "category": "USB",
+      "rackUnits": 0,
+      "notes": "USB 3.0 sharing switch: two computers, one set of room peripherals. Driven by igen_switcher_Toggle.py over RS-232.",
+      "ports": [
+        {
+          "id": "in_usb_1",
+          "label": "USB HOST 1",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_usb_2",
+          "label": "USB HOST 2",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB DEVICE 1",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_2",
+          "label": "USB DEVICE 2",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "USB-C HD 101",
       "manufacturer": "Extron",
       "partNumber": "60-1883-01",
@@ -79897,6 +80133,36 @@
           "id": "out_aud_1",
           "label": "AUDIO OUT",
           "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "VIA GO3",
+      "manufacturer": "Kramer",
+      "category": "Wireless presentation",
+      "rackUnits": 0,
+      "notes": "Wireless presentation receiver. No ControlScript module claims it yet - krmr_VIA_GO.py declares only VIA GO and VIA GO2, so a room using this one ships with a blank module until that driver is extended.",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
@@ -87797,6 +88063,43 @@
       ]
     },
     {
+      "model": "Neat Bar",
+      "manufacturer": "Neat",
+      "category": "USB interface",
+      "rackUnits": 0,
+      "notes": "All-in-one camera, mic array and speaker bar for a small meeting room. Runs the meeting itself (Teams/Zoom) rather than presenting a USB device to a room PC, so nothing in the room switches its audio. No ControlScript module - it is not driven by the processor.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_poe",
+          "label": "LAN PoE",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "12X-SDI-G2",
       "manufacturer": "PTZOptics",
       "category": "Camera",
@@ -91185,6 +91488,166 @@
           "label": "LAN",
           "signal": "network",
           "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "AV Bridge",
+      "manufacturer": "Vaddio",
+      "category": "Recorder / streamer",
+      "rackUnits": 1,
+      "notes": "The original single-input AV Bridge, still in service in the older BSS rooms. No ControlScript module claims it - vadd_switcher_AV_Bridge_2x1.py declares only the 2x1 - so a room using it ships with a blank module.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB OUT",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Controller",
+      "manufacturer": "Da-Lite",
+      "category": "Architectural",
+      "rackUnits": 0,
+      "notes": "Da-Lite screen controller. Driven by dali_controller.py over the network; the screen motor hangs off its relay contacts.",
+      "ports": [
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_motor_1",
+          "label": "SCREEN MOTOR",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TT-7523Q",
+      "manufacturer": "Newline",
+      "category": "Display",
+      "rackUnits": 0,
+      "notes": "75\" interactive flat panel used as a student-station display in a NAV share room. Driven by new_tdisplay_TT_xx21Q_Series_v1_1_0_0.py over RS-232; the USB TOUCH lead is what the share page's Control mode hands to the instructor.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_touch",
+          "label": "USB TOUCH",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
           "side": "left"
         },
         {

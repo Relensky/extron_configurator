@@ -71,7 +71,9 @@
     "dev_wireless": "WIRELESSDEVICE_",
     "dev_recorders": "RECORDERDEVICE_",
     "dev_screens": "SCREENDEVICE_",
-    "dev_power_controllers": "POWERDEVICE_"
+    "dev_power_controllers": "POWERDEVICE_",
+    "dev_nav_switchers": "NAVDEVICE_",
+    "dev_share_stations": "STATIONDEVICE_"
   },
   "escape_carriage_returns": true,
   "connection_fields": {
@@ -93,6 +95,16 @@
       "baud"
     ],
     "http": [
+      "serial_port",
+      "baud"
+    ],
+    "spi": [
+      "ip_address",
+      "net_port",
+      "protocol",
+      "service_port",
+      "password",
+      "user",
       "serial_port",
       "baud"
     ]
@@ -149,7 +161,9 @@
     "MEDIAPORTDEVICE_": "MediaPort",
     "WIRELESSDEVICE_": "Wireless",
     "RECORDERDEVICE_": "Recorder",
-    "SCREENDEVICE_": "Screen"
+    "SCREENDEVICE_": "Screen",
+    "NAVDEVICE_": "NAVigator",
+    "STATIONDEVICE_": "Station Display"
   },
   "device_templates": {
     "__comment": "Reference blocks from the current template config. btn_name/lbl_name carry over by device NUMBER; module/keep_alive_trigger carry over when the legacy MODEL matches. Add blocks here (or new models) as the template grows - no rebuild needed.",
@@ -270,6 +284,20 @@
       "lbl_name": "Lbl_Wireless_Model",
       "model": "ShareLink Pro 2000",
       "module": "modules.device.extr_cs_ShareLink",
+      "keep_alive_trigger": null
+    },
+    "NAVDEVICE_1": {
+      "btn_name": "",
+      "lbl_name": "",
+      "model": "NAVigator",
+      "module": "modules.device.extr_sm_NAVigator_v1_0_1_4",
+      "keep_alive_trigger": null
+    },
+    "STATIONDEVICE_1": {
+      "btn_name": "Btn_Station_1_Status",
+      "lbl_name": "",
+      "model": "TT-7523Q",
+      "module": "modules.device.new_tdisplay_TT_xx21Q_Series_v1_1_0_0",
       "keep_alive_trigger": null
     }
   },
@@ -393,6 +421,30 @@
     {
       "match": "SCREENDEVICE",
       "rename_to": "SCREENDEVICE_1"
+    },
+    {
+      "match": "NAV(\\d+)DEVICE",
+      "rename_to": "NAVDEVICE_$1"
+    },
+    {
+      "match": "NAVDEVICE(\\d+)",
+      "rename_to": "NAVDEVICE_$1"
+    },
+    {
+      "match": "NAVDEVICE",
+      "rename_to": "NAVDEVICE_1"
+    },
+    {
+      "match": "STATION(\\d+)DEVICE",
+      "rename_to": "STATIONDEVICE_$1"
+    },
+    {
+      "match": "STATIONDEVICE(\\d+)",
+      "rename_to": "STATIONDEVICE_$1"
+    },
+    {
+      "match": "STATIONDEVICE",
+      "rename_to": "STATIONDEVICE_1"
     },
     {
       "match": "SYSTEM|SYSTEMSETUP|SYSTEM SETUP",
@@ -528,7 +580,9 @@
     "com_type": {
       "NETWORK": "Network",
       "SERIAL": "Serial",
-      "SERIALOVERETHERNET": "SerialOverEthernet"
+      "SERIALOVERETHERNET": "SerialOverEthernet",
+      "spi": "SPI",
+      "Spi": "SPI"
     },
     "protocol": {
       "TCP/IP": "TCP",
@@ -730,6 +784,25 @@
       "lbl_name": "Lbl_Screen1_Model",
       "manual_disconnect": false,
       "protocol": "TCP"
+    },
+    "NAVDEVICE_*": {
+      "__comment": "A NAVigator is reached over the Extron SP bus, so it carries no address, port or credential - 'host' names an spdevice<n> alias in SYSTEM_SETUP and the alias IS the address. It has no connection button or model label of its own either: the share page reports it, not the device bar.",
+      "com_type": "SPI",
+      "host": "spdevice1",
+      "gve_id": "NAV{n}",
+      "manual_disconnect": false
+    },
+    "STATIONDEVICE_*": {
+      "__comment": "A share room's student-station display, wired to COM1 of its own SP device. gve_id is TV{n} because GVE inventories these as televisions, and the status lamp is the station's own button on the share page rather than a Btn_Con_ in the device bar.",
+      "btn_name": "Btn_Station_{n}_Status",
+      "com_type": "Serial",
+      "host": "spdevice1",
+      "serial_port": "COM1",
+      "baud": 19200,
+      "gve_id": "TV{n}",
+      "keep_alive_command": "Power",
+      "keep_alive_interval": 15,
+      "manual_disconnect": false
     }
   }
 }

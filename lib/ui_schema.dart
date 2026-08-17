@@ -582,6 +582,37 @@ class UiSchema {
     DeviceTypeSpec(countKey: 'dev_wireless', prefix: 'WIRELESSDEVICE_', label: 'Wireless (ShareLink)'),
     DeviceTypeSpec(countKey: 'dev_recorders', prefix: 'RECORDERDEVICE_', label: 'Recorders'),
     DeviceTypeSpec(countKey: 'dev_screens', prefix: 'SCREENDEVICE_', label: 'Screens (Relays/Network)'),
+    // The NAV share room's two families. A NAVigator is not a room switcher —
+    // SwitcherManager sends its handlers Set("Input", ...) and a NAVigator
+    // answers none of that — so it has its own count key, and the stations
+    // hanging off it have theirs. Both carry SYSTEM_SETUP keys that mean
+    // nothing without the hardware, so a room that is not a share room drops
+    // them the same way a room with no power controller drops its outlets.
+    DeviceTypeSpec(
+        countKey: 'dev_nav_switchers',
+        prefix: 'NAVDEVICE_',
+        label: 'NAV Stream Managers',
+        maxCount: 4,
+        systemKeys: [
+          'share_nav_device',
+          'share_room_outputs',
+          'share_stop_ties',
+          'share_stop_ties_wireless',
+          'share_preview_*',
+          'share_instructor_*',
+          'share_usb_*',
+          'share_audio_*',
+        ]),
+    DeviceTypeSpec(
+        countKey: 'dev_share_stations',
+        prefix: 'STATIONDEVICE_',
+        label: 'Share Stations (NAV)',
+        maxCount: 13,
+        systemKeys: [
+          'input_station_*',
+          'output_station_*',
+          'share_station_*',
+        ]),
   ];
 
   /// Wizard display order (file order when "device_types" is defined).
