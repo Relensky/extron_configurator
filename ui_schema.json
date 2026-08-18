@@ -1126,14 +1126,14 @@
       "type": "dropdown",
       "label": "Presenter Mode button on the panel (gui_presenter_mode_available)",
       "options": [ "Yes", "No" ],
-      "helperText": "Needs Btn_Presenter_Mode (ID 151) on the layout and more than one display",
-      "description": "Whether the panel gets a Presenter Mode button. Pressing it puts the selected source on every screen at once, ignoring what each screen was set to follow, pin or substitute; pressing it again puts the room back the way it was. The button appears only when this is Yes and the room has more than one display, since there is nothing to mirror onto a single screen. The button also has to exist on the panel layout (ID 151) — if it does not, the processor writes a line to the log and carries on."
+      "helperText": "For BSS 237, 238, 241, and 375. Needs Btn_Presenter_Mode (ID 151), the _Presenter footer popups and more than one display",
+      "description": "Whether the panel gets a Presenter Mode button. Pressing it puts the selected source on every screen at once, ignoring what each screen was set to follow, pin or substitute; pressing it again puts the room back the way it was. The button appears only when this is Yes and the room has more than one display, since there is nothing to mirror onto a single screen."
     },
     "gui_annex_mute_available": {
       "type": "dropdown",
       "label": "Annex Mute Button (gui_annex_mute_available)",
       "options": [ "Yes", "No" ],
-      "helperText": "Needs Btn_Annex_Mute (ID 20258) and a switcher whose module has AnalogMute",
+      "helperText": "For BSS 375. Needs Btn_Annex_Mute (ID 20258) and a switcher whose module has AnalogMute",
       "description": "Whether the panel offers the Annex Mute button — one switcher analog output muted on its own, so the instructor can drop the audio feeding an annex, an overflow room or a lobby without changing anything the room itself hears. Only linked when switcher 1's module exposes an AnalogMute command, which today is the DTP CrossPoint family; checked once at link time rather than on every press."
     },
     "annex_mute_label": {
