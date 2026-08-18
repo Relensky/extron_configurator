@@ -1093,10 +1093,18 @@ class AvDeviceLibrary {
       );
     }
     if (configKey.startsWith('RECORDERDEVICE_')) {
+      // The AV Bridge 2x1's shape: two HDMI inputs, a loop-through out and
+      // the USB the room's conferencing actually runs on. A recorder block
+      // with no model on it yet is one of these until somebody says
+      // otherwise — it is what goes in every build — and giving the fallback
+      // one HDMI input meant the second camera or the second source had
+      // nowhere to land on the drawing.
       return AvDeviceTemplate(
         model: model,
+        rackUnits: 1,
         ports: [
-          _videoIn('in_hdmi_1', 'HDMI IN', SignalType.hdmi),
+          _videoIn('in_hdmi_1', 'HDMI IN 1', SignalType.hdmi),
+          _videoIn('in_hdmi_2', 'HDMI IN 2', SignalType.hdmi),
           _audioIn('in_aud_1', 'AUDIO IN'),
           _videoOut('out_hdmi_1', 'HDMI OUT', SignalType.hdmi),
           AvPort(

@@ -235,7 +235,7 @@
     "RECORDERDEVICE_1": {
       "btn_name": "Btn_Con_Recorder1",
       "lbl_name": "Lbl_Recorder_Model",
-      "model": "AV Bridge",
+      "model": "AV Bridge 2x1",
       "module": "",
       "keep_alive_trigger": null
     },

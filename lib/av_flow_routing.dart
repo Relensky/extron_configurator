@@ -1088,11 +1088,12 @@ RoutingPlan planRoutingFromConfig(
   //  called PC is plugged into outlet 1. Nobody had ever drawn it.
   //
   //  A name is matched onto a box only when every word of it lands (see
-  //  [outletNameScore]), and never when two boxes fit equally well: 'Switch'
-  //  on a room with a video switcher and a USB switcher on the canvas is a
-  //  coin toss, and a power lead drawn to the wrong box is a lead somebody
-  //  unplugs the wrong thing by. An outlet naming something the drawing does
-  //  not show — the network switch, the intake fans — is normal and silent.
+  //  [outletNameScore]), and never when two boxes fit equally well: a power
+  //  lead drawn to the wrong box is a lead somebody unplugs the wrong thing
+  //  by. The names that are not a coin toss at all, because the trade already
+  //  agreed what they mean, are settled first — see [_outletAliases]. An
+  //  outlet naming something the drawing does not show, the network switch or
+  //  the intake fans, is normal and silent.
   final powered = <String>[];
   final outletKey = RegExp(r'^power(\d+)_outlet_(\d+)$');
 
@@ -1120,35 +1121,58 @@ RoutingPlan planRoutingFromConfig(
     }
 
     final wanted = outletNameTokens(name);
-    var best = 0;
-    final winners = <AvNode>[];
-    for (final node in [...provider.avNodes, ...newNodes]) {
-      if (node.id == controller.id || node.isJackField) continue;
-      // A box fed over the network is not on a mains outlet, whatever the
-      // label says, and a passive one has no inlet to plug in at all.
-      if (node.powerSource == PowerSource.poe) continue;
-      if (node.portById(kPowerPortId) == null) continue;
-      final score = outletNameScore(wanted, node);
-      if (score == 0 || score < best) continue;
-      if (score > best) {
-        best = score;
-        winners.clear();
+
+    /// True when this box could be on a mains outlet at all. A box fed over
+    /// the network is not, whatever the label says, and a passive one has no
+    /// inlet to plug into.
+    bool canBePlugged(AvNode node) =>
+        node.id != controller.id &&
+        !node.isJackField &&
+        node.powerSource != PowerSource.poe &&
+        node.portById(kPowerPortId) != null;
+
+    // The names the trade has already settled. Lowest-numbered block placed:
+    // the main switcher is SWITCHERDEVICE_1, and the ones with numbers after
+    // it are the sub switchers hanging off it.
+    final aliasPrefix = _outletAliases[wanted.join(' ')];
+    AvNode? target;
+    if (aliasPrefix != null) {
+      for (var n = 1; n <= 8 && target == null; n++) {
+        final node = nodesById['$aliasPrefix$n'];
+        if (node != null && canBePlugged(node)) target = node;
       }
-      winners.add(node);
     }
 
-    if (winners.isEmpty) continue;
-    if (winners.length > 1) {
-      unresolved.add(UnroutedTie(
-          entry.key.toString(),
-          name,
-          '${winners.length} boxes answer to "$name" — '
-          '${winners.map((n) => n.label).join(', ')}. Nothing is drawn '
-          'rather than the wrong one; plug this outlet in by hand.'));
-      continue;
+    // Failing that — an aliased name in a room that has no such block, or any
+    // other name — whichever box the label describes best, and nothing at all
+    // when two describe it equally well.
+    if (target == null) {
+      var best = 0;
+      final winners = <AvNode>[];
+      for (final node in [...provider.avNodes, ...newNodes]) {
+        if (!canBePlugged(node)) continue;
+        final score = outletNameScore(wanted, node);
+        if (score == 0 || score < best) continue;
+        if (score > best) {
+          best = score;
+          winners.clear();
+        }
+        winners.add(node);
+      }
+
+      if (winners.isEmpty) continue;
+      if (winners.length > 1) {
+        unresolved.add(UnroutedTie(
+            entry.key.toString(),
+            name,
+            '${winners.length} boxes answer to "$name" — '
+            '${winners.map((n) => n.label).join(', ')}. Nothing is drawn '
+            'rather than the wrong one; plug this outlet in by hand.'));
+        continue;
+      }
+      target = winners.first;
     }
 
-    final target = winners.first;
     draw(
       configKey: entry.key.toString(),
       value: name,
@@ -1220,6 +1244,23 @@ int outletNameScore(List<String> wanted, AvNode node) {
   }
   return score;
 }
+
+/// Outlet names that name a config device outright, whatever else on the
+/// canvas happens to answer to the word.
+///
+/// 'Switch' is the one that needs saying. In a room built out of Extron gear
+/// it means the switcher — the matrix everything is plugged into — and the
+/// word alone is not enough for [outletNameScore] to know that, because 'USB
+/// Switcher' and 'Switcher 2' and 'Switcher 3' all start with the same six
+/// letters. Left to the scoring it was a tie and nothing was drawn, in every
+/// room on the estate.
+///
+/// Keyed on the whole outlet name, so this decides 'Switch' and touches
+/// nothing else: 'USB Switch' is two words, misses this table, and goes on
+/// resolving onto the USB switcher the way it always did.
+const Map<String, String> _outletAliases = {
+  'switch': 'SWITCHERDEVICE_',
+};
 
 /// One end of a DTP run, cabled: the box, the socket the signal arrives on and
 /// the socket it leaves by. Null when the catalog entry has no such pair, in

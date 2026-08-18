@@ -272,6 +272,10 @@ void main() {
     // The APC's outlet names are a wiring list nobody had drawn: outlet 1 is
     // 'PC', and the PC is the box the room's own sources list put on input 1.
     expect(power(plan, 'power1_outlet_1'), 'OUTLET 1 -> Room PC');
+    // 'Switch' in a room built out of Extron gear is the matrix. Scored on
+    // the label alone it tied with the USB switcher and nothing was drawn.
+    expect(power(plan, 'power1_outlet_2'),
+        'OUTLET 2 -> Switcher - DTP CrossPoint 84 4K IPCP MA 70');
     expect(power(plan, 'power1_outlet_3'), 'OUTLET 3 -> Wireless - Via Go2');
     expect(power(plan, 'power1_outlet_6'),
         'OUTLET 6 -> DSP - Extron DMP 64 Plus C AT');
@@ -280,16 +284,12 @@ void main() {
     expect(power(plan, 'power1_outlet_8'),
         'OUTLET 8 -> USB Switcher - Inogeni Toggle');
 
-    // Two findings, both real, neither a failure to resolve. BSS 239 has one
-    // projector and still carries an output_proj_2; and outlet 2 is labelled
-    // 'Switch' in a room holding a video switcher and a USB switcher, which is
-    // a coin toss this declines to call.
-    expect(plan.unresolved.map((u) => u.configKey),
-        ['output_proj_2', 'power1_outlet_2']);
+    // One finding, and it is a real one about the config rather than a failure
+    // to resolve: BSS 239 has one projector and still carries an
+    // output_proj_2, so nothing is drawn for it and the reason says why.
+    expect(plan.unresolved.map((u) => u.configKey), ['output_proj_2']);
     expect(plan.unresolved.first.reason, contains('1 display'));
     expect(plan.unresolved.first.reason, contains('dev_projectors'));
-    expect(plan.unresolved.last.reason, contains('Switcher'));
-    expect(plan.unresolved.last.reason, contains('USB Switcher'));
   });
 
   test('BSS 122 — the catalog counts connectors on this one', () async {

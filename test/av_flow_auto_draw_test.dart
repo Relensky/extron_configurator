@@ -55,7 +55,9 @@ void main() {
       // DTP IN 7 on this matrix, and a camera has an HDMI socket.
       'input_inst_cam': '7',
       'output_proj_1': '3B',
+      'dev_usb_switchers': '1',
       'power1_outlet_1': 'PC',
+      'power1_outlet_2': 'Switch',
       'power1_outlet_6': 'Doc\\rCam',
       'power1_outlet_7': 'Intake Fans',
     };
@@ -80,12 +82,18 @@ void main() {
       'model': 'DTP CrossPoint 84 4K IPCP MA 70',
       'com_type': 'Network',
     };
+    p.roomConfig['USBDEVICE_1'] = <String, dynamic>{
+      'name': 'USB Switcher - Toggle',
+      'model': 'Toggle',
+      'com_type': 'Serial',
+    };
 
     for (final key in const [
       'SWITCHERDEVICE_1',
       'PROJECTORDEVICE_1',
       'CAMERADEVICE_1',
       'POWERDEVICE_1',
+      'USBDEVICE_1',
     ]) {
       final dev = p.roomConfig[key] as Map;
       final template = p.avDeviceLibrary
@@ -229,6 +237,32 @@ void main() {
       // diagram.
       expect(p.avNodeById(avAutoNodeId('input_pc'))?.powerSource,
           PowerSource.controller);
+    });
+
+    test('"Switch" is the switcher, not a coin toss', () {
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+
+      // In a room built out of Extron gear the word means the matrix, and
+      // 'Switcher - ...' and 'USB Switcher - ...' both start with the same
+      // six letters. Scored on the label alone it was a tie and nothing was
+      // drawn — in every room on the estate.
+      expect(outlet(p, 'OUTLET 2'),
+          'Switcher - DTP CrossPoint 84 4K IPCP MA 70');
+      expect(
+        planRoutingFromConfig(p).unresolved.map((u) => u.configKey),
+        isNot(contains('power1_outlet_2')),
+      );
+    });
+
+    test('and "USB Switch" is still the USB switcher', () {
+      final p = room();
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['power1_outlet_2'] = 'USB Switch';
+      autoDrawRoutingFromConfig(p);
+
+      // Two words, so it misses the alias table entirely and goes on being
+      // scored the way it always was.
+      expect(outlet(p, 'OUTLET 2'), 'USB Switcher - Toggle');
     });
 
     test('an outlet naming something the drawing does not show is quiet', () {
