@@ -151,11 +151,17 @@ void main() {
 
       expect(result.blocks, greaterThan(0));
       expect(result.settings, greaterThan(0));
-      expect(setup['input_pc'], '3');
-      expect(setup['input_doc_cam'], '4');
+      // The CrossPoint 82's own numbering: the PC, the doc cam and the
+      // camera on HDMI 1-3, and the lectern plate on DTP IN 1, which is
+      // input 7 on an 8x2.
+      expect(setup['input_pc'], '1');
+      expect(setup['input_doc_cam'], '2');
+      expect(setup['input_inst_cam'], '3');
       expect(setup['input_hdmi'], '7');
       expect(setup['output_proj_1'], '1');
       expect(setup['output_audio'], '1');
+      // Output 2's HDMI connector, into the USB interface.
+      expect(setup['output_cc'], '2');
     });
 
     test('fills the source layout and the I/O map together', () async {

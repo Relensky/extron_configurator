@@ -26,6 +26,10 @@ import 'config_dictionary.dart';
 ///               ("writes" array + "options" with a "values" array per option)
 ///    "hidden"   never render this key (e.g. keys managed by a combo or wizard)
 ///
+///    "room_sources" dropdown whose options are the sources THIS room has,
+///               read off the input_* keys in SYSTEM_SETUP (see
+///               [roomSourceNames])
+///
 ///    "module_states" dropdown/autocomplete whose options are parsed LIVE from
 ///               the device's selected Python module: the states of one
 ///               command in the module's `self.Commands` dictionary
@@ -400,6 +404,49 @@ class ConsistencyRule {
             : message,
         section);
   }
+}
+
+/// The panel source names this room actually has, for a screen that is pinned
+/// to one instead of following the room.
+///
+/// The room already states this, twice over: every source it carries has an
+/// `input_*` key in SYSTEM_SETUP holding the switcher input it is wired to. A
+/// key with a value is a source the room has; a blank one is a source it does
+/// not. So the list of things a display could be pinned to is not a judgement
+/// call, it is a read — which is the whole point, because typing 'doccam' into
+/// a room whose panel calls it 'doc_cam' produces a display that is never
+/// routed and nothing that says why.
+///
+/// The name is the key without its `input_` prefix, which is what the panel
+/// and the processor call it: `input_pc_extended` is 'pc_extended'. Two
+/// exceptions, both real:
+///
+///   * the plate that is USB in a new room and VGA in an old one is one key
+///     with two names, and `gui_usb_or_vga` says which;
+///   * `input_sub_switcher` and the `input_station_*` keys are left out —
+///     a sub switcher is a box, not a source button, and a station's own feed
+///     belongs to that station rather than to the room.
+List<String> roomSourceNames(Map<String, dynamic> setup) {
+  const notASource = {'input_sub_switcher'};
+  final names = <String>{};
+
+  setup.forEach((key, value) {
+    if (!key.startsWith('input_')) return;
+    if (notASource.contains(key)) return;
+    if (key.startsWith('input_station_')) return;
+    if (value == null || value.toString().trim().isEmpty) return;
+
+    if (key == 'input_usb') {
+      final vga = (setup['gui_usb_or_vga']?.toString().trim().toUpperCase() ??
+              'USB') ==
+          'VGA';
+      names.add(vga ? 'vga' : 'usb');
+      return;
+    }
+    names.add(key.substring('input_'.length));
+  });
+
+  return names.toList()..sort();
 }
 
 /// Which `input_*` keys a room is entitled to, given the sources it has.

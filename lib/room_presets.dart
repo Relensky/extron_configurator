@@ -42,8 +42,13 @@ const String kRoomPresetExtension = '.roompreset.json';
 /// One saved room type.
 ///
 /// Holds the same shapes the AV sidecar does, minus everything room-specific:
-/// no cost overrides (a negotiated price belongs to a job), no floor plan (a
-/// drawing belongs to a building), no room name.
+/// no cost overrides (a negotiated price belongs to a job) and no room name.
+///
+/// A DRAWING still belongs to a building and is still not here. What is here
+/// is the SHEET — blank paper with the room's own locations already placed on
+/// it, so the layout can be walked and marked up before anybody has the
+/// architect's PDF. Import one later and the markers are already where this
+/// room type puts them.
 class RoomPreset {
   /// Shown in the picker.
   final String name;
@@ -63,6 +68,12 @@ class RoomPreset {
   final Map<String, RackSlot> rackSlots;
   final List<RackItem> rackItems;
   final List<ScreenSwitch> screenSwitches;
+
+  /// Sheets this room type lays out on, with its locations already placed.
+  ///
+  /// The marker keys are the preset's own location ids ('LOC_1'); applying it
+  /// remaps them onto whatever ids the room ends up giving those locations.
+  final List<FloorPlan> floorPlans;
 
   /// The jack prefix these numbers were written with, so applying the preset
   /// into a room with a different number can renumber them.
@@ -99,6 +110,7 @@ class RoomPreset {
     this.rackSlots = const {},
     this.rackItems = const [],
     this.screenSwitches = const [],
+    this.floorPlans = const [],
     this.jackPrefix = '',
     this.systemSetup = const {},
   });
@@ -131,6 +143,8 @@ class RoomPreset {
     'rackItems': [for (final i in rackItems) i.toJson()],
     'rackSlots': rackSlots.map((id, s) => MapEntry(id, s.toJson())),
     'screenSwitches': [for (final s in screenSwitches) s.toJson()],
+    if (floorPlans.isNotEmpty)
+      'floorPlans': [for (final f in floorPlans) f.toJson()],
   };
 
   factory RoomPreset.fromJson(Map<String, dynamic> json) {
@@ -183,6 +197,11 @@ class RoomPreset {
           if (i is Map) RackItem.fromJson(Map<String, dynamic>.from(i)),
       ],
       rackSlots: slots,
+      floorPlans: [
+        for (final f in (json['floorPlans'] as List? ?? []))
+          if (f is Map)
+            FloorPlan.fromJson(Map<String, dynamic>.from(f)),
+      ],
       screenSwitches: [
         for (final s in (json['screenSwitches'] as List? ?? []))
           if (s is Map) ScreenSwitch.fromJson(Map<String, dynamic>.from(s)),
@@ -494,9 +513,13 @@ AvCable _cable(
 //  digits, so they get a name here rather than being pasted into a cable list
 //  where nobody can check them.
 
-/// IN1608 SA — HDMI IN 5 and the first DTP (HDBaseT) input.
-const String _in1608Hdmi5 = 'port_1786393528064191';
-const String _in1608DtpIn = 'port_1786393608561286';
+/// The DMP 64 Plus C AT's expansion-bus socket, which only ever meets the
+/// matrix's own — see [expansionBusFor].
+const String _dmpExpIn = 'port_1786645606221064';
+
+/// The room PC's USB socket, and the AV Bridge 2x1's USB output.
+const String _pcUsbIn = 'port_1786645419251345';
+const String _avBridgeUsbOut = 'port_1786645836574383';
 
 /// DTP HDMI 4K 230 transmitter output / receiver input.
 const String _dtpTxOut = 'port_1786393062452313';
@@ -564,16 +587,50 @@ const _credenza = RoomLocation(
 /// is the current standard (an Epson PowerLite L630U) rather than whatever is
 /// on the wall of any particular room — starting from what goes in on a
 /// replacement is the point of a preset.
+/// A blank sheet with this room type's locations already on it.
+///
+/// No image: it is paper. The point is to have something to walk the room
+/// against before the architect's PDF turns up — and when one does turn up,
+/// the markers are already where this room type puts them, so importing it is
+/// a background change rather than a re-survey.
+///
+/// The coordinates are a plan-view arrangement of a generic room on a
+/// 1200x900 sheet, not a measurement: the front wall along the top, the
+/// lectern below it, the rack to one side, seating in the middle. Drag them
+/// onto the real thing when there is a real thing.
+FloorPlan _blankSheet(Map<String, Offset> markers) => FloorPlan(
+  id: '',
+  name: 'Room layout',
+  markers: markers,
+);
+
+/// Where each location sits on that generic sheet.
+const Offset _planFrontWall = Offset(600, 120);
+const Offset _planLectern = Offset(420, 300);
+const Offset _planCeiling = Offset(600, 470);
+const Offset _planRack = Offset(180, 320);
+const Offset _planStudentTable = Offset(600, 620);
+const Offset _planRearWall = Offset(600, 800);
+
 RoomPreset _basicClassroom() {
   final nodes = [
     _device(
       'AVNODE_1',
       'Instructor PC',
       _lectern.id,
-      [_p('out_1', 'HDMI OUT', SignalType.hdmi, PortDirection.output)],
+      [
+        _p('out_1', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
+        // Where the room's picture comes back INTO the PC, so a call running
+        // on it can share what is on the screens — see AVNODE_8.
+        _p(_pcUsbIn, 'USB', SignalType.usbData, PortDirection.input),
+      ],
       pos: const Offset(40, 60),
       model: 'PC',
     ),
+    // The doc cam is a source and nothing else: no config block, no module,
+    // no line on the control schematic. It is on the drawing because a lead
+    // runs from it, and on the estimate because somebody buys it — exactly
+    // what input_pc and input_hdmi are.
     _device(
       'AVNODE_2',
       'Document camera',
@@ -591,6 +648,21 @@ RoomPreset _basicClassroom() {
       model: 'HDMI Laptop',
       power: PowerInput.none,
     ),
+    // Output 2's HDMI connector goes here rather than to a second screen: the
+    // interface turns the room's program feed into a USB camera the PC's own
+    // conferencing software picks up. There is no driver for it — it is a
+    // converter, and nothing about it is worth a control line.
+    _device(
+      'AVNODE_8',
+      'AverMedia USB Interface',
+      _lectern.id,
+      [
+        _p('in_hdmi_1', 'HDMI IN', SignalType.hdmi, PortDirection.input),
+        _p('out_usb_1', 'USB OUT', SignalType.usbData, PortDirection.output),
+      ],
+      pos: const Offset(1120, 240),
+      model: 'AverMedia USB Interface',
+    ),
     _device(
       'AVNODE_5',
       'Lectern DTP transmitter',
@@ -605,26 +677,29 @@ RoomPreset _basicClassroom() {
     ),
     _device(
       'SWITCHERDEVICE_1',
-      'Switcher - IN1608 SA',
+      'Switcher - DTP CrossPoint 82 4K IPCP SA',
       _rackLocation.id,
       [
-        _p('in_hdmi_3', 'HDMI IN 3', SignalType.hdmi, PortDirection.input),
-        _p('in_hdmi_4', 'HDMI IN 4', SignalType.hdmi, PortDirection.input),
-        _p(_in1608Hdmi5, 'HDMI IN 5', SignalType.hdmi, PortDirection.input),
-        _p(_in1608DtpIn, 'DTP IN 7', SignalType.hdbaset, PortDirection.input),
-        _p('out_hdmi_1', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
-        _p('out_dtp_1', 'DTP OUT', SignalType.hdbaset, PortDirection.output),
-        _p('out_aud_1', 'AUDIO OUT', SignalType.analogAudio,
+        _p('hdmi_1', 'HDMI 1', SignalType.hdmi, PortDirection.input),
+        _p('hdmi_2', 'HDMI 2', SignalType.hdmi, PortDirection.input),
+        _p('hdmi_3', 'HDMI 3', SignalType.hdmi, PortDirection.input),
+        // Inputs 7 and 8 on this box, whatever the connector is printed with.
+        _p('dtp_in_1', 'DTP IN 1', SignalType.hdbaset, PortDirection.input),
+        // Output 1 goes to the projector over twisted pair; output 2's HDMI
+        // connector is the loop-thru the USB interface takes.
+        _p('dtp_out_1', 'DTP OUT 1', SignalType.hdbaset, PortDirection.output),
+        _p('hdmi_002a', 'HDMI 002A', SignalType.hdmi, PortDirection.output),
+        _p('audio_1_2', 'AUDIO 1', SignalType.analogAudio,
             PortDirection.output),
-        // The SA is the stereo-amplifier build: the ceiling speakers land on
-        // its own amp output, so this room has no separate amplifier.
-        _p('sa_out', 'SPEAKER OUT', SignalType.speaker,
+        // The SA build has the amplifier in it: the ceiling speakers land on
+        // its own output, so this room has no separate amplifier.
+        _p('sa_out_8_4', 'SA OUT 8\u03A9/4\u03A9', SignalType.speaker,
             PortDirection.output),
-        _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
+        _p('lan', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
       pos: const Offset(760, 240),
-      rackUnits: 1,
-      model: 'IN1608 SA',
+      rackUnits: 2,
+      model: 'DTP CrossPoint 82 4K IPCP SA',
     ),
     _device(
       'AVNODE_6',
@@ -678,9 +753,11 @@ RoomPreset _basicClassroom() {
   return RoomPreset(
     name: 'Basic classroom',
     description:
-        'An Epson PowerLite L630U on the front wall fed over DTP from an '
-        'Extron IN1608 SA, an instructor PC, a doc cam, a lectern laptop feed '
-        'and a TR311 camera, on a pair of SM 28s. One 12U rack.',
+        'A single projector room. One screen on the front wall fed over DTP '
+        'from an Extron DTP CrossPoint 82 4K IPCP SA, an instructor PC, a doc '
+        'cam, a lectern laptop feed and a TR311 camera, on a pair of SM 28s. '
+        'The loop-thru output goes through an AverMedia USB interface so the '
+        'PC can share the room. One 12U rack.',
     builtIn: true,
     jackPrefix: kPresetJackPrefix,
     // Read off the cabling below. The IN1608's scaled output goes out of both
@@ -693,9 +770,11 @@ RoomPreset _basicClassroom() {
     // Picking the nearest one would put a dead button on the panel, so the
     // choice is left to whoever builds the room.
     systemSetup: const {
-      'input_pc': '3',
-      'input_doc_cam': '4',
-      'input_inst_cam': '5',
+      'input_pc': '1',
+      'input_doc_cam': '2',
+      'input_inst_cam': '3',
+      // DTP IN 1 is input 7 on an 8x2 CrossPoint — six HDMI, then the two
+      // twisted-pair inputs — whatever the connector itself is printed with.
       'input_hdmi': '7',
       'input_aud_cam': '',
       'input_wireless': '',
@@ -704,7 +783,9 @@ RoomPreset _basicClassroom() {
       'output_proj_1': '1',
       'output_audio': '1',
       'output_monitor_1': '',
-      'output_cc': '',
+      // Output 2's HDMI connector, into the USB interface. It is a capture
+      // feed in everything but name: what leaves the room on a call.
+      'output_cc': '2',
       'output_cc2': '',
       'output_audio_ald': '',
       'gui_routing_mode': 'Normal',
@@ -714,24 +795,30 @@ RoomPreset _basicClassroom() {
     locations: const [_lectern, _frontWall, _ceiling, _rackLocation],
     nodes: nodes,
     cables: [
-      _cable('C1', 'AVNODE_1', 'out_1', 'SWITCHERDEVICE_1', 'in_hdmi_3',
+      _cable('C1', 'AVNODE_1', 'out_1', 'SWITCHERDEVICE_1', 'hdmi_1',
           SignalType.hdmi, label: 'AV-01'),
-      _cable('C2', 'AVNODE_2', 'out_1', 'SWITCHERDEVICE_1', 'in_hdmi_4',
+      _cable('C2', 'AVNODE_2', 'out_1', 'SWITCHERDEVICE_1', 'hdmi_2',
           SignalType.hdmi, label: 'AV-02'),
       // The laptop plugs straight into the transmitter at the lectern — there
       // is no plate between them any more.
       _cable('C3', 'AVNODE_3', 'out_1', 'AVNODE_5', 'hdmi', SignalType.hdmi,
           label: 'AV-03'),
-      _cable('C4', 'AVNODE_5', _dtpTxOut, 'SWITCHERDEVICE_1', _in1608DtpIn,
+      _cable('C4', 'AVNODE_5', _dtpTxOut, 'SWITCHERDEVICE_1', 'dtp_in_1',
           SignalType.hdbaset, label: 'AV-04'),
       _cable('C5', 'CAMERADEVICE_1', 'out_hdmi_1', 'SWITCHERDEVICE_1',
-          _in1608Hdmi5, SignalType.hdmi, label: 'AV-05'),
-      _cable('C6', 'SWITCHERDEVICE_1', 'out_dtp_1', 'AVNODE_6', _dtpRxIn,
+          'hdmi_3', SignalType.hdmi, label: 'AV-05'),
+      _cable('C6', 'SWITCHERDEVICE_1', 'dtp_out_1', 'AVNODE_6', _dtpRxIn,
           SignalType.hdbaset, label: 'AV-06'),
       _cable('C7', 'AVNODE_6', 'hdmi', 'PROJECTORDEVICE_1', 'in_hdmi_1',
           SignalType.hdmi, label: 'AV-07'),
-      _cable('C8', 'SWITCHERDEVICE_1', 'sa_out', 'AVNODE_7', 'in_spk_1',
+      _cable('C8', 'SWITCHERDEVICE_1', 'sa_out_8_4', 'AVNODE_7', 'in_spk_1',
           SignalType.speaker, label: 'SPK-01'),
+      // The loop-thru, and what it is for: out of the switcher, through the
+      // converter, into the PC as a camera.
+      _cable('C9', 'SWITCHERDEVICE_1', 'hdmi_002a', 'AVNODE_8', 'in_hdmi_1',
+          SignalType.hdmi, label: 'AV-08'),
+      _cable('C10', 'AVNODE_8', 'out_usb_1', 'AVNODE_1', _pcUsbIn,
+          SignalType.usbData, label: 'USB-01'),
     ],
     racks: const [
       RackFrame(
@@ -744,6 +831,14 @@ RoomPreset _basicClassroom() {
     rackSlots: const {
       'SWITCHERDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 3),
     },
+    floorPlans: [
+      _blankSheet(const {
+        'LOC_1': _planLectern,
+        'LOC_2': _planFrontWall,
+        'LOC_3': _planCeiling,
+        'LOC_4': _planRack,
+      }),
+    ],
     screenSwitches: const [
       ScreenSwitch(
         id: 'SCRSW_1',
@@ -892,17 +987,19 @@ RoomPreset _hyflexClassroom() {
     ),
     _device(
       'RECORDERDEVICE_1',
-      'Recorder - AV Bridge',
+      'Recorder - AV Bridge 2x1',
       _rackLocation.id,
       [
-        _p('in_hdmi_1', 'HDMI IN', SignalType.hdmi, PortDirection.input),
+        _p('in_hdmi_1', 'HDMI IN 1', SignalType.hdmi, PortDirection.input),
+        _p('in_hdmi_2', 'HDMI IN 2', SignalType.hdmi, PortDirection.input),
         _p('in_aud_1', 'AUDIO IN', SignalType.analogAudio, PortDirection.input),
-        _p('out_usb_1', 'USB OUT', SignalType.usbData, PortDirection.output),
+        _p(_avBridgeUsbOut, 'USB OUT', SignalType.usbData,
+            PortDirection.output),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
       pos: const Offset(960, 940),
       rackUnits: 1,
-      model: 'AV Bridge',
+      model: 'AV Bridge 2x1',
     ),
     _device(
       'USBDEVICE_1',
@@ -980,7 +1077,7 @@ RoomPreset _hyflexClassroom() {
     description:
         'DTP CrossPoint 84 and a DMP 64 in a credenza rack, an Epson PowerLite '
         'L630U, instructor and audience cameras, a ceiling mic array, an AV '
-        'Bridge capture feed through an Inogeni Toggle, a VIA GO2 and a '
+        'Bridge 2x1 capture feed through an Inogeni Toggle, a VIA GO2 and a '
         'networked DaLite screen controller — all on an APC AP7900B.',
     builtIn: true,
     jackPrefix: kPresetJackPrefix,
@@ -1039,7 +1136,8 @@ RoomPreset _hyflexClassroom() {
       // laptop can take the room's camera and mic for its own call.
       _cable('C9', 'SWITCHERDEVICE_1', 'hdmi_001', 'RECORDERDEVICE_1',
           'in_hdmi_1', SignalType.hdmi, label: 'AV-09'),
-      _cable('C10', 'RECORDERDEVICE_1', 'out_usb_1', 'USBDEVICE_1', 'in_usb_1',
+      _cable('C10', 'RECORDERDEVICE_1', _avBridgeUsbOut, 'USBDEVICE_1',
+          'in_usb_1',
           SignalType.usbData, label: 'USB-01'),
       _cable('C11', 'USBDEVICE_1', 'out_usb_1', 'AVNODE_3', 'in_usb_1',
           SignalType.usbData, label: 'USB-02'),
@@ -1070,6 +1168,15 @@ RoomPreset _hyflexClassroom() {
       'RECORDERDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 6),
       'POWERDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 1),
     },
+    floorPlans: [
+      _blankSheet(const {
+        'LOC_1': _planLectern,
+        'LOC_2': _planFrontWall,
+        'LOC_3': _planCeiling,
+        'LOC_4': _planRack,
+        'LOC_6': _planRearWall,
+      }),
+    ],
     screenSwitches: const [
       ScreenSwitch(
         id: 'SCRSW_1',
@@ -1265,21 +1372,35 @@ RoomPreset _huddleSpace() => RoomPreset(
 //  4. ACTIVE LEARNING
 // ---------------------------------------------------------------------------
 
-/// A flat-floor room with seven student stations, run over AV-over-IP.
+/// A flat-floor room with seven student stations, every one of them fed from
+/// the room's own matrix.
 ///
-/// The NAV share room the ControlScript template's NavShareManager was written
-/// for: each station is a Newline panel on the AV LAN, an encoder input and a
-/// decoder output on the NAVigator, and the instructor can Share one station
-/// to every screen, Preview it on the confidence monitor, or take its USB and
-/// drive it from the front of the room.
+/// This used to be a NAV room: each station was an encoder input and a decoder
+/// output on a NAVigator, and the panels hung off an AV LAN. It is now built
+/// the way the rest of the estate is — a DTP CrossPoint 108 with a twisted
+/// pair to every screen — which costs the room its AV-over-IP flexibility and
+/// buys back a room where every box has a driver and every run is a cable
+/// somebody can trace.
 ///
-/// The encoder/decoder pairs themselves are NOT drawn. They are configuration
-/// on the NAVigator rather than boxes with a control block, and drawing
-/// fourteen of them would bury the seven things this room is actually about.
-/// What IS drawn is the AV LAN they all hang off, because that switch is a
-/// real purchase and a real rack space.
+/// HOW A SCREEN IS FED depends on which kind of output it comes off, and the
+/// matrix has both kinds:
+///
+///   * a DTP output is twisted pair already, so it runs straight to a receiver
+///     behind the panel — or straight into a projector, which has an HDBaseT
+///     socket of its own and needs no box at all;
+///   * an HDMI output is not, so it goes into a transmitter in the rack first
+///     and comes out of a receiver at the far end.
+///
+/// That is the whole rule, and it is why this preset carries five
+/// transmitters and seven receivers: they are real boxes, in real rack units,
+/// at real money, and a drawing that ran HDMI two hundred feet to a student
+/// table would be quoting a room that cannot be built.
 RoomPreset _activeLearningSpace() {
   const stations = 7;
+
+  /// Stations 1 and 2 come off the matrix's two spare DTP outputs. The other
+  /// five come off HDMI outputs and need a transmitter each.
+  const stationsOnDtp = 2;
 
   final nodes = <AvNode>[
     _device(
@@ -1290,6 +1411,9 @@ RoomPreset _activeLearningSpace() {
       pos: const Offset(40, 60),
       model: 'PC',
     ),
+    // A source and nothing else — no config block, no driver, no line on the
+    // control schematic. It is on the drawing because a lead runs from it and
+    // on the estimate because somebody buys it, exactly like input_pc.
     _device(
       'AVNODE_2',
       'Document camera',
@@ -1304,8 +1428,9 @@ RoomPreset _activeLearningSpace() {
       _lectern.id,
       [
         _p('out_1', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
-        // The MediaPort's USB lands here — see the Hyflex preset's laptop for
-        // why this port exists.
+        // Where the room hands over its camera and microphone: the Toggle's
+        // output lands here, so a call on the instructor's own laptop uses
+        // the room rather than the lid camera.
         _p('in_usb_1', 'USB', SignalType.usbData, PortDirection.input),
       ],
       pos: const Offset(40, 420),
@@ -1322,93 +1447,73 @@ RoomPreset _activeLearningSpace() {
             PortDirection.output),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
-      pos: const Offset(40, 800),
+      pos: const Offset(40, 620),
       model: 'VIA GO',
     ),
     _device(
       'CAMERADEVICE_1',
-      'Camera 1 - Instructor TR311HWV2',
+      'Camera 1 - Instructor TR211',
       _rearWall.id,
       [
         _p('out_hdmi_1', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
+        _p('out_usb_1', 'USB', SignalType.usbData, PortDirection.output),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
-      pos: const Offset(40, 980),
-      model: 'TR311HWV2',
+      pos: const Offset(40, 820),
+      model: 'TR211',
     ),
     _device(
       'CAMERADEVICE_2',
-      'Camera 2 - Audience PTZ330',
+      'Camera 2 - Audience Cam570',
       _frontWall.id,
       [
         _p('out_hdmi_1', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
         _p('out_usb_1', 'USB', SignalType.usbData, PortDirection.output),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
-      pos: const Offset(40, 1160),
-      model: 'PTZ330',
+      pos: const Offset(40, 1020),
+      model: 'Cam570',
     ),
     _device(
       'AVNODE_5',
       'Ceiling mic array',
       _ceiling.id,
       [_p('out_mic_1', 'MIC OUT', SignalType.micLine, PortDirection.output)],
-      pos: const Offset(40, 1340),
+      pos: const Offset(40, 1220),
     ),
+    // --- the rack --------------------------------------------------------
     _device(
       'SWITCHERDEVICE_1',
-      'Switcher 1 - DTP CrossPoint 84 4K',
+      'Switcher - DTP CrossPoint 108 4K IPCP MA 70',
       _rackLocation.id,
       [
-        _p('hdmi_001', 'HDMI IN 1', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_002', 'HDMI IN 2', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_003', 'HDMI IN 3', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_004', 'HDMI IN 4', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_005', 'HDMI IN 5', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_006', 'HDMI IN 6', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_1', 'HDMI OUT 1', SignalType.hdmi, PortDirection.output),
-        _p('hdmi_2', 'HDMI OUT 2', SignalType.hdmi, PortDirection.output),
-        _p('dtp_out_1', 'DTP OUT 3B', SignalType.hdbaset,
+        _p('hdmi_001', 'HDMI 001', SignalType.hdmi, PortDirection.input),
+        _p('hdmi_002', 'HDMI 002', SignalType.hdmi, PortDirection.input),
+        _p('hdmi_003', 'HDMI 003', SignalType.hdmi, PortDirection.input),
+        _p('hdmi_004', 'HDMI 004', SignalType.hdmi, PortDirection.input),
+        _p('hdmi_005', 'HDMI 005', SignalType.hdmi, PortDirection.input),
+        _p('hdmi_006', 'HDMI 006', SignalType.hdmi, PortDirection.input),
+        // Capture out, then the five HDMI outputs the student panels come off.
+        _p('hdmi_1', 'HDMI 1', SignalType.hdmi, PortDirection.output),
+        _p('hdmi_2', 'HDMI 2', SignalType.hdmi, PortDirection.output),
+        _p('hdmi_3', 'HDMI 3', SignalType.hdmi, PortDirection.output),
+        _p('hdmi_4', 'HDMI 4', SignalType.hdmi, PortDirection.output),
+        _p('hdmi_5', 'HDMI 5', SignalType.hdmi, PortDirection.output),
+        _p('hdmi_6', 'HDMI 6', SignalType.hdmi, PortDirection.output),
+        // Twisted pair already: the two projectors and the two student panels
+        // near enough to reach.
+        _p('dtp_out_1', 'DTP OUT 1', SignalType.hdbaset, PortDirection.output),
+        _p('dtp_out_2', 'DTP OUT 2', SignalType.hdbaset, PortDirection.output),
+        _p('dtp_out_3', 'DTP OUT 3', SignalType.hdbaset, PortDirection.output),
+        _p('dtp_out_4', 'DTP OUT 4', SignalType.hdbaset, PortDirection.output),
+        _p('audio_1_2', 'AUDIO 1', SignalType.analogAudio,
             PortDirection.output),
-        _p('dtp_out_2', 'DTP OUT 4B', SignalType.hdbaset,
-            PortDirection.output),
-        _p('audio_1_2', 'AUDIO OUT 1', SignalType.analogAudio,
-            PortDirection.output),
-        _p('dmp_exp', 'DMP EXPANSION', SignalType.network,
-            PortDirection.output),
+        _p('dmp_exp', 'DMP EXP', SignalType.network, PortDirection.output),
         _p('lan', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
       pos: const Offset(500, 240),
-      rackUnits: 2,
-      model: 'DTP CrossPoint 84 4K',
-    ),
-    _device(
-      'SWITCHERDEVICE_2',
-      'Switcher 2 - IN1804',
-      _rackLocation.id,
-      [
-        _p('hdmi_002', 'HDMI IN 2', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_003', 'HDMI IN 3', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_cec_1a', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
-        _p('lan', 'LAN', SignalType.network, PortDirection.bidirectional),
-      ],
-      pos: const Offset(500, 900),
-      rackUnits: 1,
-      model: 'IN1804',
-    ),
-    _device(
-      'SWITCHERDEVICE_3',
-      'Switcher 3 - SW4 HD 4K PLUS',
-      _rackLocation.id,
-      [
-        _p('hdmi_1', 'HDMI IN 1', SignalType.hdmi, PortDirection.input),
-        _p('hdmi_2', 'HDMI IN 2', SignalType.hdmi, PortDirection.input),
-        _p('hdmi', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
-        _p('rs_232', 'RS-232', SignalType.serial, PortDirection.bidirectional),
-      ],
-      pos: const Offset(500, 1140),
-      rackUnits: 1,
-      model: 'SW4 HD 4K PLUS',
+      rackUnits: 3,
+      model: 'DTP CrossPoint 108 4K IPCP MA 70',
     ),
     _device(
       'DSPDEVICE_1',
@@ -1421,23 +1526,11 @@ RoomPreset _activeLearningSpace() {
             PortDirection.output),
         _p('audio_2', 'AUDIO OUT 2', SignalType.analogAudio,
             PortDirection.output),
+        _p(_dmpExpIn, 'DMP EXP', SignalType.dante, PortDirection.input),
       ],
-      pos: const Offset(960, 700),
+      pos: const Offset(500, 900),
       rackUnits: 1,
       model: 'DMP 64 Plus C AT',
-    ),
-    _device(
-      'MEDIAPORTDEVICE_1',
-      'MediaPort - MediaPort 200',
-      _rackLocation.id,
-      [
-        _p('hdmi', 'HDMI IN', SignalType.hdmi, PortDirection.input),
-        _p('audio', 'AUDIO IN', SignalType.analogAudio, PortDirection.input),
-        _p('usb', 'USB OUT', SignalType.usbData, PortDirection.output),
-      ],
-      pos: const Offset(960, 940),
-      rackUnits: 1,
-      model: 'MediaPort 200',
     ),
     _device(
       'RECORDERDEVICE_1',
@@ -1448,9 +1541,11 @@ RoomPreset _activeLearningSpace() {
         _p('in_hdmi_2', 'HDMI IN 2', SignalType.hdmi, PortDirection.input),
         _p('out_hdmi_1', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
         _p('in_aud_1', 'AUDIO IN', SignalType.analogAudio, PortDirection.input),
+        _p(_avBridgeUsbOut, 'USB OUT', SignalType.usbData,
+            PortDirection.output),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
-      pos: const Offset(960, 1180),
+      pos: const Offset(500, 1120),
       rackUnits: 1,
       model: 'AV Bridge 2x1',
     ),
@@ -1465,7 +1560,7 @@ RoomPreset _activeLearningSpace() {
             PortDirection.output),
         _p('in_ctrl_1', 'RS-232', SignalType.serial, PortDirection.input),
       ],
-      pos: const Offset(960, 1420),
+      pos: const Offset(500, 1340),
       model: 'Toggle',
     ),
     _device(
@@ -1473,40 +1568,64 @@ RoomPreset _activeLearningSpace() {
       'Power Controller - APC AP7921B',
       _rackLocation.id,
       [
-        _p('out_pwr_1', 'OUTLET 1', SignalType.power, PortDirection.output),
-        _p('out_pwr_2', 'OUTLET 2', SignalType.power, PortDirection.output),
-        _p('out_pwr_3', 'OUTLET 3', SignalType.power, PortDirection.output),
-        _p('out_pwr_4', 'OUTLET 4', SignalType.power, PortDirection.output),
+        for (int i = 1; i <= 8; i++)
+          _p('out_pwr_$i', 'OUTLET $i', SignalType.power,
+              PortDirection.output),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
-      pos: const Offset(960, 1660),
+      pos: const Offset(500, 1560),
       rackUnits: 1,
       model: 'AP7921B',
     ),
-    // The AV-over-IP half of the room.
-    _device(
-      'NAVDEVICE_1',
-      'NAVigator - Stream Manager',
-      _rackLocation.id,
-      [
-        _p('nav', 'AV LAN', SignalType.network, PortDirection.output),
-        _p('oob', 'OOB LAN', SignalType.network, PortDirection.output),
-      ],
-      pos: const Offset(1420, 700),
-      model: 'NAVigator',
-    ),
+    // The control drops. Not an AV LAN any more — no streams cross it — but
+    // every panel, camera and box in this room is reached over the network,
+    // so the switch is still a real purchase and a real rack unit.
     _device(
       'AVNODE_6',
-      'AV LAN switch',
+      // NOT "network switch": familyForNode reads an unmodelled box's label
+      // as words, and the screen family's own label is "Screens
+      // (Relays/Network)", so the word network files this under Screens.
+      'Control LAN switch',
       _rackLocation.id,
       [
         _p('uplink', 'UPLINK', SignalType.network, PortDirection.input),
         for (int i = 1; i <= stations; i++)
           _p('lan_$i', 'PORT $i', SignalType.network, PortDirection.output),
       ],
-      pos: const Offset(1420, 940),
+      pos: const Offset(500, 1780),
       rackUnits: 1,
     ),
+    // --- the extenders ---------------------------------------------------
+    // One transmitter per HDMI output that has to cross the room.
+    for (int i = stationsOnDtp + 1; i <= stations; i++)
+      _device(
+        'AVNODE_${20 + i}',
+        // Numbered for the student table it feeds. NOT "station $i": an
+        // unmodelled box is filed by the words in its label, and the word
+        // station would make each of these a STATIONDEVICE block.
+        'DTP transmitter $i',
+        _rackLocation.id,
+        [
+          _p('hdmi', 'HDMI', SignalType.hdmi, PortDirection.input),
+          _p(_dtpTxOut, 'DTP', SignalType.hdbaset, PortDirection.output),
+        ],
+        pos: Offset(960, 60 + (i - stationsOnDtp - 1) * 200),
+        model: 'DTP HDMI 4K 230 Tx',
+      ),
+    // And one receiver behind every panel, however the pair got there.
+    for (int i = 1; i <= stations; i++)
+      _device(
+        'AVNODE_${30 + i}',
+        'DTP receiver $i',
+        _studentTable.id,
+        [
+          _p(_dtpRxIn, 'DTP IN', SignalType.hdbaset, PortDirection.input),
+          _p('hdmi', 'HDMI OUT', SignalType.hdmi, PortDirection.output),
+        ],
+        pos: Offset(1420, 60 + (i - 1) * 200),
+        model: 'DTP HDMI 4K 230 Rx',
+      ),
+    // --- the front of the room -------------------------------------------
     _device(
       'PROJECTORDEVICE_1',
       'Projector 1 - PowerLite L630U',
@@ -1516,7 +1635,7 @@ RoomPreset _activeLearningSpace() {
         _p('in_hdbt_1', 'HDBaseT', SignalType.hdbaset, PortDirection.input),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
-      pos: const Offset(1420, 60),
+      pos: const Offset(1880, 60),
       model: 'PowerLite L630U',
     ),
     _device(
@@ -1528,7 +1647,7 @@ RoomPreset _activeLearningSpace() {
         _p('in_hdbt_1', 'HDBaseT', SignalType.hdbaset, PortDirection.input),
         _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
       ],
-      pos: const Offset(1420, 300),
+      pos: const Offset(1880, 300),
       model: 'PowerLite L630U',
     ),
     _device(
@@ -1540,7 +1659,7 @@ RoomPreset _activeLearningSpace() {
         _p('out_motor_1', 'SCREEN MOTOR', SignalType.other,
             PortDirection.output),
       ],
-      pos: const Offset(1880, 60),
+      pos: const Offset(1880, 540),
       model: 'Controller',
     ),
     _device(
@@ -1552,22 +1671,26 @@ RoomPreset _activeLearningSpace() {
         _p('out_motor_1', 'SCREEN MOTOR', SignalType.other,
             PortDirection.output),
       ],
-      pos: const Offset(1880, 300),
+      pos: const Offset(1880, 780),
       model: 'Controller',
     ),
+    // Off the AV Bridge's loop-through rather than a matrix output: the
+    // instructor's monitor should show what is going out on the call, and
+    // that is exactly what the capture box is passing on. It also leaves a
+    // matrix output free for a student panel, which is the scarce thing here.
     _device(
       'AVNODE_7',
       'Confidence monitor',
       _lectern.id,
       [_p('in_hdmi_1', 'HDMI 1', SignalType.hdmi, PortDirection.input)],
-      pos: const Offset(1880, 540),
+      pos: const Offset(1880, 1020),
     ),
     _device(
       'AVNODE_8',
       'Ceiling speakers',
       _ceiling.id,
       [_p('in_spk_1', 'SPEAKER IN', SignalType.speaker, PortDirection.input)],
-      pos: const Offset(1880, 760),
+      pos: const Offset(1880, 1240),
       power: PowerInput.none,
     ),
     // One student station: a Newline panel the student plugs into directly.
@@ -1585,7 +1708,7 @@ RoomPreset _activeLearningSpace() {
           _p('lan_1', 'LAN', SignalType.network, PortDirection.bidirectional),
           _p('in_ctrl_1', 'RS-232', SignalType.serial, PortDirection.input),
         ],
-        pos: Offset(2800, 60 + (i - 1) * 240),
+        pos: Offset(2340, 60 + (i - 1) * 200),
         model: 'TT-7523Q',
       ),
   ];
@@ -1593,16 +1716,16 @@ RoomPreset _activeLearningSpace() {
   return RoomPreset(
     name: 'Active learning',
     description:
-        'A NAV share room. Seven Newline student stations on the AV LAN behind '
-        'a NAVigator, two Epson projectors, two DaLite screens, a DTP '
-        'CrossPoint 84 with an IN1804 and an SW4 behind it, a DMP 64, a '
-        'MediaPort 200 and an AV Bridge 2x1.',
+        'A flat-floor room with seven Newline student stations, each on its '
+        'own twisted pair from a DTP CrossPoint 108, two Epson projectors, '
+        'two DaLite screens, a DMP 64 and an AV Bridge 2x1. Every box in it '
+        'has a driver.',
     builtIn: true,
     jackPrefix: kPresetJackPrefix,
-    // Read off the cabling below. The station input/output numbers are NOT
-    // here: they are NAVigator encoder and decoder assignments, and this
-    // preset does not draw the encoders (see the note above it), so there is
-    // nothing to read them off.
+    // Read off the cabling below. The station feeds have no SYSTEM_SETUP key
+    // of their own — the schema has input_station_n but no output for one —
+    // so which matrix output a panel is on is stated by the drawing and the
+    // cable schedule rather than here.
     systemSetup: const {
       'input_pc': '1',
       'input_hdmi': '2',
@@ -1612,17 +1735,22 @@ RoomPreset _activeLearningSpace() {
       'input_aud_cam': '6',
       'input_usb': '',
       'input_pc_extended': '',
-      'output_cc': '1',
-      'output_monitor_1': '2',
-      'output_proj_1': '3B',
-      'output_proj_2': '4B',
-      'output_audio': '1',
+      // Outputs 1 and 2 are the matrix's first two DTP connectors, straight
+      // into each projector's own HDBaseT socket.
+      'output_proj_1': '1',
+      'output_proj_2': '2',
+      // The capture feed, off HDMI 1 into the AV Bridge.
+      'output_cc': '3',
       'output_cc2': '',
+      // The confidence monitor hangs off the AV Bridge's loop-through, not
+      // off the matrix, so there is no output for the processor to route.
+      'output_monitor_1': '',
+      'output_audio': '1',
       'output_audio_ald': '',
       'gui_inputs': '4',
       'gui_tab_type': 'DOC_WL',
       'gui_routing_mode': 'Normal',
-      // Two displays that can show different things, and a capture feed the
+      // Nine screens that can show different things, and a capture feed the
       // instructor picks a source for — both routing pages earn their place.
       'gui_routing_available': 'Yes',
       'gui_capture_source_available': 'Yes',
@@ -1638,6 +1766,7 @@ RoomPreset _activeLearningSpace() {
     ],
     nodes: nodes,
     cables: [
+      // --- sources in ----------------------------------------------------
       _cable('C1', 'AVNODE_1', 'out_1', 'SWITCHERDEVICE_1', 'hdmi_001',
           SignalType.hdmi, label: 'AV-01'),
       _cable('C2', 'AVNODE_3', 'out_1', 'SWITCHERDEVICE_1', 'hdmi_002',
@@ -1650,46 +1779,67 @@ RoomPreset _activeLearningSpace() {
           'hdmi_005', SignalType.hdmi, label: 'AV-05'),
       _cable('C6', 'CAMERADEVICE_2', 'out_hdmi_1', 'SWITCHERDEVICE_1',
           'hdmi_006', SignalType.hdmi, label: 'AV-06'),
+      // --- the two projectors: DTP straight into HDBaseT -----------------
       _cable('C7', 'SWITCHERDEVICE_1', 'dtp_out_1', 'PROJECTORDEVICE_1',
           'in_hdbt_1', SignalType.hdbaset, label: 'AV-07'),
       _cable('C8', 'SWITCHERDEVICE_1', 'dtp_out_2', 'PROJECTORDEVICE_2',
           'in_hdbt_1', SignalType.hdbaset, label: 'AV-08'),
-      _cable('C9', 'SWITCHERDEVICE_1', 'hdmi_2', 'AVNODE_7', 'in_hdmi_1',
-          SignalType.hdmi, label: 'AV-09'),
-      // Capture: switcher 1 to the AV Bridge, switcher 2 picking which camera
-      // the MediaPort sends, switcher 3 doing the same for the conference feed.
-      _cable('C10', 'SWITCHERDEVICE_1', 'hdmi_1', 'RECORDERDEVICE_1',
-          'in_hdmi_1', SignalType.hdmi, label: 'AV-10'),
-      _cable('C11', 'CAMERADEVICE_1', 'out_hdmi_1', 'SWITCHERDEVICE_2',
-          'hdmi_002', SignalType.hdmi, label: 'AV-11'),
-      _cable('C12', 'CAMERADEVICE_2', 'out_hdmi_1', 'SWITCHERDEVICE_2',
-          'hdmi_003', SignalType.hdmi, label: 'AV-12'),
-      _cable('C13', 'SWITCHERDEVICE_2', 'hdmi_cec_1a', 'MEDIAPORTDEVICE_1',
-          'hdmi', SignalType.hdmi, label: 'AV-13'),
-      _cable('C14', 'SWITCHERDEVICE_1', 'hdmi_1', 'SWITCHERDEVICE_3', 'hdmi_1',
-          SignalType.hdmi, label: 'AV-14'),
-      _cable('C15', 'MEDIAPORTDEVICE_1', 'usb', 'USBDEVICE_1', 'in_usb_1',
-          SignalType.usbData, label: 'USB-01'),
-      _cable('C16', 'USBDEVICE_1', 'out_usb_1', 'AVNODE_3', 'in_usb_1',
+      // --- capture, and the monitor off its loop-through -----------------
+      _cable('C9', 'SWITCHERDEVICE_1', 'hdmi_1', 'RECORDERDEVICE_1',
+          'in_hdmi_1', SignalType.hdmi, label: 'AV-09'),
+      _cable('C10', 'RECORDERDEVICE_1', 'out_hdmi_1', 'AVNODE_7', 'in_hdmi_1',
+          SignalType.hdmi, label: 'AV-10'),
+      // --- USB: the room's camera and mic, into the lectern laptop -------
+      _cable('C11', 'RECORDERDEVICE_1', _avBridgeUsbOut, 'USBDEVICE_1',
+          'in_usb_1', SignalType.usbData, label: 'USB-01'),
+      _cable('C12', 'CAMERADEVICE_2', 'out_usb_1', 'USBDEVICE_1', 'in_usb_2',
           SignalType.usbData, label: 'USB-02'),
-      // Audio.
-      _cable('C17', 'AVNODE_5', 'out_mic_1', 'DSPDEVICE_1', 'mic_line_1',
+      _cable('C13', 'USBDEVICE_1', 'out_usb_1', 'AVNODE_3', 'in_usb_1',
+          SignalType.usbData, label: 'USB-03'),
+      // --- audio ---------------------------------------------------------
+      _cable('C14', 'AVNODE_5', 'out_mic_1', 'DSPDEVICE_1', 'mic_line_1',
           SignalType.micLine, label: 'AUD-01'),
-      _cable('C18', 'SWITCHERDEVICE_1', 'audio_1_2', 'DSPDEVICE_1', 'acp',
+      _cable('C15', 'SWITCHERDEVICE_1', 'audio_1_2', 'DSPDEVICE_1', 'acp',
           SignalType.analogAudio, label: 'AUD-02'),
-      _cable('C19', 'DSPDEVICE_1', 'audio_1', 'AVNODE_8', 'in_spk_1',
+      _cable('C16', 'DSPDEVICE_1', 'audio_1', 'AVNODE_8', 'in_spk_1',
           SignalType.speaker, label: 'SPK-01'),
-      _cable('C20', 'DSPDEVICE_1', 'audio_2', 'MEDIAPORTDEVICE_1', 'audio',
+      _cable('C17', 'DSPDEVICE_1', 'audio_2', 'RECORDERDEVICE_1', 'in_aud_1',
           SignalType.analogAudio, label: 'AUD-03'),
-      // The AV LAN: the NAVigator's stream port feeds the switch, and every
-      // station display hangs off it. The encoder/decoder at each station sits
-      // on the same drop — see the note above the preset. A student's own
-      // laptop goes into the panel's spare HDMI directly; there is no plate.
-      _cable('C21', 'NAVDEVICE_1', 'nav', 'AVNODE_6', 'uplink',
+      // The matrix and the DSP on the expansion bus, which is the one link
+      // that only ever goes between those two sockets.
+      _cable('C18', 'SWITCHERDEVICE_1', 'dmp_exp', 'DSPDEVICE_1', _dmpExpIn,
+          SignalType.network, label: 'AUD-04'),
+      // --- the student panels --------------------------------------------
+      // Stations 1 and 2 are on the spare DTP outputs: one pair each, straight
+      // to the receiver behind the panel.
+      for (int i = 1; i <= stationsOnDtp; i++) ...[
+        _cable('CD$i', 'SWITCHERDEVICE_1', 'dtp_out_${i + 2}',
+            'AVNODE_${30 + i}', _dtpRxIn, SignalType.hdbaset,
+            label: 'AV-${(10 + i).toString().padLeft(2, '0')}'),
+        _cable('CR$i', 'AVNODE_${30 + i}', 'hdmi', 'STATIONDEVICE_$i',
+            'in_hdmi_1', SignalType.hdmi,
+            label: 'AV-${(20 + i).toString().padLeft(2, '0')}'),
+      ],
+      // The rest come off HDMI outputs, so each one is a transmitter in the
+      // rack, a pair across the room, and a receiver behind the panel.
+      for (int i = stationsOnDtp + 1; i <= stations; i++) ...[
+        _cable('CT$i', 'SWITCHERDEVICE_1', 'hdmi_${i - stationsOnDtp + 1}',
+            'AVNODE_${20 + i}', 'hdmi', SignalType.hdmi,
+            label: 'AV-${(10 + i).toString().padLeft(2, '0')}'),
+        _cable('CD$i', 'AVNODE_${20 + i}', _dtpTxOut, 'AVNODE_${30 + i}',
+            _dtpRxIn, SignalType.hdbaset,
+            label: 'AV-${(20 + i).toString().padLeft(2, '0')}'),
+        _cable('CR$i', 'AVNODE_${30 + i}', 'hdmi', 'STATIONDEVICE_$i',
+            'in_hdmi_1', SignalType.hdmi,
+            label: 'AV-${(30 + i).toString().padLeft(2, '0')}'),
+      ],
+      // --- control drops --------------------------------------------------
+      _cable('CN0', 'SWITCHERDEVICE_1', 'lan', 'AVNODE_6', 'uplink',
           SignalType.network, label: 'NET-01'),
       for (int i = 1; i <= stations; i++)
-        _cable('C${21 + i}', 'AVNODE_6', 'lan_$i', 'STATIONDEVICE_$i', 'lan_1',
-            SignalType.network, label: 'NET-${(i + 1).toString().padLeft(2, '0')}'),
+        _cable('CN$i', 'AVNODE_6', 'lan_$i', 'STATIONDEVICE_$i', 'lan_1',
+            SignalType.network,
+            label: 'NET-${(i + 1).toString().padLeft(2, '0')}'),
     ],
     racks: const [
       RackFrame(
@@ -1702,13 +1852,20 @@ RoomPreset _activeLearningSpace() {
     rackSlots: const {
       'POWERDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 1),
       'SWITCHERDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 3),
-      'SWITCHERDEVICE_2': RackSlot(rackId: 'RACK_1', startU: 5),
-      'SWITCHERDEVICE_3': RackSlot(rackId: 'RACK_1', startU: 6),
-      'DSPDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 7),
-      'MEDIAPORTDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 8),
-      'RECORDERDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 9),
-      'AVNODE_6': RackSlot(rackId: 'RACK_1', startU: 11),
+      'DSPDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 6),
+      'RECORDERDEVICE_1': RackSlot(rackId: 'RACK_1', startU: 7),
+      'AVNODE_6': RackSlot(rackId: 'RACK_1', startU: 9),
     },
+    floorPlans: [
+      _blankSheet(const {
+        'LOC_1': _planLectern,
+        'LOC_2': _planFrontWall,
+        'LOC_3': _planCeiling,
+        'LOC_4': _planRack,
+        'LOC_5': _planStudentTable,
+        'LOC_6': _planRearWall,
+      }),
+    ],
     screenSwitches: const [
       ScreenSwitch(
         id: 'SCRSW_1',

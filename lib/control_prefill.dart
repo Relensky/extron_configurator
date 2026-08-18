@@ -237,6 +237,11 @@ DeviceTypeSpec? familyForNode(AppStateProvider provider, AvNode node) {
   final byId = provider.uiSchema.deviceTypeForSection(node.id);
   if (byId != null) return byId;
 
+  // A box that is a SOURCE and never a controlled device, whatever its name
+  // reads like. Checked after the id, so a device somebody deliberately made
+  // a camera block stays one.
+  if (isSourceOnlyDevice(node.model, node.label)) return null;
+
   final template = provider.avDeviceLibrary.templateForModel(node.model);
 
   // Every token this device offers about what it is, best evidence first.
@@ -265,6 +270,31 @@ DeviceTypeSpec? familyForNode(AppStateProvider provider, AvNode node) {
     }
   }
   return null;
+}
+
+/// True for a box that is plugged in and looked at, and never talked to.
+///
+/// The document camera is the one that keeps happening. Nothing drives it: it
+/// sits on the desk pointed at a page, it has no driver and no address, and it
+/// belongs with input_pc and input_hdmi — a source the room has, on the
+/// drawing because a lead runs from it and on the estimate because somebody
+/// buys it.
+///
+/// But the word "camera" is in its name, and [familyForNode]'s last resort is
+/// to read a model and a label as words. So every room built from a preset got
+/// a CAMERADEVICE block for it, with an empty module, a line on the control
+/// schematic and a slot on the Devices page waiting for an IP address that
+/// does not exist.
+///
+/// A list rather than a rule, because there is no rule: this is a fact about
+/// particular products, and the honest way to say it is to name them.
+bool isSourceOnlyDevice(String model, String label) {
+  String flat(String s) =>
+      s.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+  const sources = {'documentcamera', 'doccam', 'documentcam'};
+  final m = flat(model);
+  final l = flat(label);
+  return sources.any((s) => m == s || l == s);
 }
 
 /// The words a family answers to.

@@ -3173,6 +3173,33 @@ class AppStateProvider extends ChangeNotifier {
       'Applied the "${preset.name}" room type: ${preset.nodes.length} boxes, '
       '$cables cables, ${preset.racks.length} racks.',
     );
+
+    // --- the sheets the room lays out on -------------------------------------
+    //  Blank paper, with this room type's locations already placed on it. The
+    //  markers are keyed by the PRESET's location ids, which are not the ids
+    //  this room gave those locations — a room that already had a "Ceiling"
+    //  reused its own — so every key goes through the same map the nodes did.
+    //  A marker whose location did not come across is dropped rather than left
+    //  pointing at an id nothing answers to.
+    //
+    //  Never replaces a sheet the room already has: an imported drawing is a
+    //  fact about the building and a preset has no business overwriting one.
+    for (final sheet in preset.floorPlans) {
+      final already = avFloorPlans.any(
+        (p) => p.name.trim().toLowerCase() == sheet.name.trim().toLowerCase(),
+      );
+      if (already) continue;
+      addAvFloorPlan(
+        sheet.withId('').copyWith(
+          markers: {
+            for (final entry in sheet.markers.entries)
+              if (locationMap[entry.key] != null)
+                locationMap[entry.key]!: entry.value,
+          },
+        ),
+      );
+    }
+
     notifyListeners();
 
     return (

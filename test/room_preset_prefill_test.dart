@@ -52,12 +52,13 @@ void main() {
   const expected = {
     'Basic classroom': {
       'PROJECTORDEVICE_': 1,
-      'CAMERADEVICE_': 2, // TR311 + the doc cam
+      // The TR311 and nothing else: a doc cam is a source, not a device.
+      'CAMERADEVICE_': 1,
       'SWITCHERDEVICE_': 1,
     },
     'Hyflex': {
       'PROJECTORDEVICE_': 1,
-      'CAMERADEVICE_': 3, // instructor + audience + the doc cam
+      'CAMERADEVICE_': 2, // instructor + audience; the doc cam is a source
       'SWITCHERDEVICE_': 1,
       'DSPDEVICE_': 1,
       'RECORDERDEVICE_': 1,
@@ -68,16 +69,18 @@ void main() {
     },
     'Active learning': {
       'PROJECTORDEVICE_': 2,
-      'CAMERADEVICE_': 3, // instructor + audience + the doc cam
-      'SWITCHERDEVICE_': 3,
+      'CAMERADEVICE_': 2, // instructor + audience; the doc cam is a source
+      // One matrix now, and no NAVigator or MediaPort behind it: every
+      // student panel hangs off a DTP pair from the CrossPoint 108.
+      'SWITCHERDEVICE_': 1,
       'DSPDEVICE_': 1,
-      'MEDIAPORTDEVICE_': 1,
+      'MEDIAPORTDEVICE_': 0,
       'RECORDERDEVICE_': 1,
       'USBDEVICE_': 1,
       'POWERDEVICE_': 1,
       'WIRELESSDEVICE_': 1,
       'SCREENDEVICE_': 2,
-      'NAVDEVICE_': 1,
+      'NAVDEVICE_': 0,
       'STATIONDEVICE_': 7,
     },
     'Huddle': {
@@ -124,17 +127,29 @@ void main() {
       'Ceiling mic array',
       'Confidence monitor',
       'AV LAN switch',
+      'Control LAN switch',
+      // Plugged in and pointed at a page. Nothing talks to it, so it has no
+      // block, no module and no line on the control schematic — see
+      // [isSourceOnlyDevice].
+      'Document camera',
       'Neat Bar',
       'Control processor - IPCP Pro PCS1 xi',
       'Touch panel - TLP Pro 525M',
     };
+
+    /// The extenders, which are numbered per station and so cannot be listed
+    /// one by one. A DTP pair is a wire with a box at each end.
+    bool isExtender(String label) =>
+        label.startsWith('DTP transmitter') ||
+        label.startsWith('DTP receiver');
 
     final offenders = <String>[];
     for (final preset in builtInRoomPresets()) {
       final p = await emptyRoom();
       p.applyRoomPreset(preset);
       for (final entry in planControlSide(p).unplaceable) {
-        if (!allowed.contains(entry.nodeLabel)) {
+        if (!allowed.contains(entry.nodeLabel) &&
+            !isExtender(entry.nodeLabel)) {
           offenders.add('${preset.name}/${entry.nodeLabel}');
         }
       }

@@ -67,6 +67,10 @@ class SchemaFieldBuilder {
       case 'dropdown':
         field = _buildDropdown(context, provider, sectionKey, fieldKey, spec!, label, value);
         break;
+      case 'room_sources':
+        field = _buildRoomSources(
+            context, provider, sectionKey, fieldKey, spec, label, value);
+        break;
       case 'module_states':
         field = _buildModuleStates(
             context, provider, sectionKey, fieldKey, spec!, label, value);
@@ -102,6 +106,64 @@ class SchemaFieldBuilder {
 
     return _wrapWithInfo(context, schema, fieldKey, field,
         isUnknown: isUnknown, sectionKey: sectionKey, onDelete: onDelete);
+  }
+
+  /// A dropdown of the sources THIS room has, for pinning one screen to one
+  /// of them.
+  ///
+  /// The options are read off SYSTEM_SETUP's `input_*` keys — see
+  /// [roomSourceNames] — so the list is the room's own answer rather than a
+  /// fixed menu that is wrong in most rooms. A room that has not filled its
+  /// inputs in yet offers nothing, and says so, which is more use than an
+  /// empty box.
+  ///
+  /// A value already in the file that is NOT one of those names is kept and
+  /// listed, marked as not being one of this room's sources. It is either a
+  /// source somebody has not wired up yet or a typo, and both are things to
+  /// see rather than things to silently overwrite the moment the field is
+  /// rendered.
+  static Widget _buildRoomSources(
+    BuildContext context,
+    AppStateProvider provider,
+    String sectionKey,
+    String fieldKey,
+    FieldSpec? spec,
+    String label,
+    dynamic value,
+  ) {
+    final setup = _sectionMap(provider, 'SYSTEM_SETUP');
+    final sources = roomSourceNames(setup);
+    final current = value?.toString().trim() ?? '';
+    final stray = current.isNotEmpty && !sources.contains(current);
+
+    return DropdownButtonFormField<String>(
+      key: ValueKey('room_sources_${sectionKey}_$fieldKey'),
+      initialValue: current,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: sources.isEmpty
+            ? 'This room has no sources filled in yet — set the input_ keys '
+                'on the System tab'
+            : spec?.helperText,
+        helperMaxLines: 3,
+      ),
+      items: [
+        const DropdownMenuItem(
+          value: '',
+          child: Text('Not pinned — this screen is not routed'),
+        ),
+        for (final name in sources)
+          DropdownMenuItem(value: name, child: Text(name)),
+        if (stray)
+          DropdownMenuItem(
+            value: current,
+            child: Text('$current  (not one of this room\'s sources)'),
+          ),
+      ],
+      onChanged: (v) =>
+          provider.updateDeviceValue(sectionKey, fieldKey, v ?? ''),
+    );
   }
 
   /// The config block [sectionKey] names, as a plain string-keyed map (empty

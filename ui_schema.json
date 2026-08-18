@@ -540,27 +540,28 @@
       },
       "__source_rules_note": {
         "__comment": [
-          "PER-DISPLAY SOURCE RULES. By default every display follows the",
-          "source the room picked, and a room that declares none of the four",
-          "keys below behaves exactly as it did before they existed. They are",
-          "for the second image that is NOT the room's: a confidence monitor",
-          "always on the PC, an overflow projector parked on the extended",
-          "desktop, an annex panel on its own inputs with a button panel",
-          "driving it. Presenter Mode is the override switch over all of it."
+          "PER-SCREEN SOURCE RULES. Every screen follows the room's source",
+          "buttons unless it is told otherwise, and a room that sets none of",
+          "the four keys below behaves exactly as it did before they existed.",
+          "They are for the second image that is NOT the room's: a confidence",
+          "monitor always on the PC, an overflow projector parked on the",
+          "extended desktop, an annex panel on its own inputs with a button",
+          "panel driving it. Presenter Mode overrides all of it while it runs."
         ]
       },
       "source_follow": {
         "type": "bool",
-        "label": "Follows Source Selection (source_follow)",
+        "label": "Follows the room's source buttons (source_follow)",
         "addIfMissing": true,
-        "helperText": "Off takes this display out of the room's source buttons",
-        "description": "Whether this display follows the source the room picked. On (the processor's default when the key is absent) is what a normal room wants and what every room built before this key existed does. Turn it OFF for a display that is not part of source selection — one pinned to a fixed image, or one an NBP button panel drives off its own inputs. A display with this off and no 'source_fixed' is never routed at all, which is exactly what an annex display hanging off its own plates wants."
+        "helperText": "Off: this screen ignores the room's source buttons",
+        "description": "Leave this on for any screen that shows whatever the room has selected — that is nearly every screen, and it is what a room built before this setting existed already does. Turn it off for a screen that is not part of source selection: one that always shows the same thing, or one a button panel drives from its own inputs. With this off and no pinned source, the screen is never routed at all, which is exactly what an annex display fed from its own wall plates wants."
       },
       "source_fixed": {
-        "label": "Pinned Source (source_fixed)",
+        "type": "room_sources",
+        "label": "Always shows this source (source_fixed)",
         "addIfMissing": true,
-        "helperText": "Only read when source_follow is off. Blank = never routed",
-        "description": "The source name this display holds instead of following the room — 'pc', 'pc_extended', 'hdmi' and so on, matching the panel's own source names. Only read while source_follow is off. Leave it blank to take the display out of routing entirely rather than pin it to something."
+        "helperText": "Only used when the setting above is off. Blank = not routed",
+        "description": "The one source this screen always shows, whatever the room has selected — the confidence monitor that stays on the PC, the overflow projector parked on the extended desktop. The list is this room's own sources, read off the input_ keys on the System tab. Only used when \"Follows the room's source buttons\" is off. Leave it blank to take the screen out of routing altogether rather than pin it to anything."
       },
       "source_overrides": {
         "type": "hidden",
@@ -569,10 +570,10 @@
       },
       "presenter_follow": {
         "type": "bool",
-        "label": "Joins Presenter Mode (presenter_follow)",
+        "label": "Included in Presenter Mode (presenter_follow)",
         "addIfMissing": true,
-        "helperText": "Off keeps this display out of the all-screens mirror",
-        "description": "Whether Presenter Mode puts the selected source on this display. On by default. Turn it OFF alongside source_follow for a display that is not on the room's switcher at all — otherwise Presenter Mode tries to route an output the switcher does not have. Presenter Mode is the override for the pinning and override rules above: with it on, every display whose presenter_follow is true shows the one selected source."
+        "helperText": "Off: Presenter Mode leaves this screen alone",
+        "description": "Presenter Mode is the one button that throws the selected source onto every screen at once. Leave this on and this screen joins in, ignoring its own pinned source and substitutions for as long as the mode is running. Turn it off for a screen the room's switcher does not drive at all — otherwise Presenter Mode tries to route an output that is not there. Turn off \"Follows the room's source buttons\" for that screen too."
       },
       "input_individual": {
         "type": "module_states",
@@ -1123,10 +1124,10 @@
     },
     "gui_presenter_mode_available": {
       "type": "dropdown",
-      "label": "Presenter Mode Button (gui_presenter_mode_available)",
+      "label": "Presenter Mode button on the panel (gui_presenter_mode_available)",
       "options": [ "Yes", "No" ],
       "helperText": "Needs Btn_Presenter_Mode (ID 151) on the layout and more than one display",
-      "description": "Whether the panel offers Presenter Mode — one button that puts the selected source on every display, overriding each display's own source_follow / source_fixed / source_overrides rules, and puts the room back to its normal layout when pressed again. Shown only when this is Yes AND dev_projectors is more than one, since a single-display room has nothing to mirror. The button has to exist on the panel layout (ID 151); the processor logs it and carries on if it does not."
+      "description": "Whether the panel gets a Presenter Mode button. Pressing it puts the selected source on every screen at once, ignoring what each screen was set to follow, pin or substitute; pressing it again puts the room back the way it was. The button appears only when this is Yes and the room has more than one display, since there is nothing to mirror onto a single screen. The button also has to exist on the panel layout (ID 151) — if it does not, the processor writes a line to the log and carries on."
     },
     "gui_annex_mute_available": {
       "type": "dropdown",

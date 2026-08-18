@@ -91813,6 +91813,36 @@
       ]
     },
     {
+      "model": "AverMedia USB Interface",
+      "manufacturer": "AVerMedia",
+      "category": "Recorder / streamer",
+      "rackUnits": 0,
+      "notes": "HDMI to USB capture. No driver — it presents itself to the PC as a webcam, and there is nothing about it to control.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB OUT",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "AV Bridge 2x1",
       "manufacturer": "Vaddio",
       "category": "Recorder / streamer",

@@ -63,6 +63,22 @@ import 'xlsx_writer.dart';
 ///  embedded in a sidecar that is otherwise hand-readable.
 /// ============================================================================
 
+/// The sheets worth putting on paper.
+///
+/// A sheet used to need an image: without one it rendered as the message
+/// saying so, and a picture of that message illustrates nothing. A sheet with
+/// no image is now blank paper you can lay the room out on, so the test is
+/// whether anything has been PLACED on it — a marker, an annotation — rather
+/// than whether a drawing sits behind it.
+///
+/// A sheet somebody named and then did nothing with is still skipped, which is
+/// the half of the old rule that was always right.
+List<FloorPlan> sheetsWorthDrawing(AppStateProvider provider) => provider
+    .avFloorPlans
+    .where((s) =>
+        s.hasImage || s.markers.isNotEmpty || s.annotations.isNotEmpty)
+    .toList();
+
 class FloorPlanView extends StatefulWidget {
   const FloorPlanView({super.key});
 
@@ -318,11 +334,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final provider = context.read<AppStateProvider>();
     final drawing = provider.cablingSchematic(buildAvFlowModel(provider));
     final startingSheet = provider.activeFloorPlan?.id ?? '';
-    // Sheets with nothing behind them are skipped: a sheet somebody named but
-    // has not imported a drawing for renders as the message saying so, which
-    // is not an illustration of anything. With none of them drawn on, the one
-    // on screen is still captured — that is what "export this view" means.
-    final drawn = provider.avFloorPlans.where((s) => s.hasImage).toList();
+    final drawn = sheetsWorthDrawing(provider);
     final sheets = <FloorPlan?>[
       if (drawn.isEmpty) provider.activeFloorPlan else ...drawn,
     ];
@@ -448,7 +460,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     );
     final what = monochrome ? 'Floor plan (black & white)' : 'Floor plan';
 
-    if (provider.avFloorPlans.where((s) => s.hasImage).length > 1) {
+    if (sheetsWorthDrawing(provider).length > 1) {
       final folder = await FilePicker.getDirectoryPath(
         dialogTitle: monochrome
             ? 'Where should the sheets for printing go?'
@@ -1203,9 +1215,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               // that decides whether it asks for a file or a folder: a room
               // with one sheet still writes one image, exactly as before.
               itemBuilder: (ctx) {
-                final drawn = provider.avFloorPlans
-                    .where((s) => s.hasImage)
-                    .length;
+                final drawn = sheetsWorthDrawing(provider).length;
                 final each = drawn > 1
                     ? 'Every sheet ($drawn .png files)'
                     : 'This view (.png)';
@@ -1386,14 +1396,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               top: plan.margins.top,
               width: size.width,
               height: size.height,
-              child: _image == null
-                  ? Center(
-                      child: Text(
-                        'The plan image could not be found at\n$_imagePath',
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  : Image(image: _image!, fit: BoxFit.fill),
+              // Three states, and only one of them is a problem. A sheet
+              // with a drawing shows it. A sheet that never had one is BLANK
+              // PAPER — the room laid out on nothing, which is what you want
+              // before the architect's PDF turns up and is how the room
+              // presets ship. A sheet whose image has gone missing is the
+              // only one that gets a message, and it earns it.
+              child: _image != null
+                  ? Image(image: _image!, fit: BoxFit.fill)
+                  : plan.hasImage
+                      ? Center(
+                          child: Text(
+                            'The plan image could not be found at\n'
+                            '$_imagePath',
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
             ),
             // Under the markers: a run ends AT a location, so the dot it lands
             // on should sit on top of it rather than the line crossing over.
