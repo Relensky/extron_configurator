@@ -115,6 +115,64 @@ IconData relatedNodeIcon(String key) =>
     (kRelatedNodeIcons[key] ?? kRelatedNodeIcons[kDefaultRelatedNodeIcon]!)
         .icon;
 
+/// True when this address is on the AV LAN rather than the building network.
+///
+/// 192. and nothing else. Every one of these rooms puts its AV gear on a
+/// 192.168 range behind the processor and its building drops on the campus
+/// range, so the first octet is the whole test — and it is a fact already
+/// written in the config, on every device, which the drawing was ignoring.
+///
+/// Deliberately not `192.168.`: a room numbered 192.0.2.x is still somebody
+/// deciding it is not on the campus network, and treating it as a building
+/// drop because of the second octet would be a surprise nobody could see.
+bool isAvLanAddress(String ip) => ip.trim().startsWith('192.');
+
+/// The note written beside a drop that is not on the building switch.
+const String kAvLanNote = 'AV LAN';
+
+/// The label on a network drop: what it speaks, on what port, and — when the
+/// drop is not the IDF — that it is on the AV LAN.
+///
+/// The note only goes on the ones that need it. A drop to the IDF is the
+/// ordinary case and says the ordinary thing; writing "AV LAN" on every line
+/// would make the word mean nothing, which is the opposite of the point.
+String networkEdgeLabel({
+  required String protocol,
+  required String netPort,
+  required bool avLan,
+}) {
+  // Protocol and port stay space-joined, which is how every drawing already
+  // reads them. The note is set off with a bullet because it is a different
+  // kind of fact — not another field of the connection, but which network the
+  // connection is on.
+  final port = netPort.trim();
+  final base = [
+    protocol.trim(),
+    if (port.isNotEmpty && port != '0') port,
+  ].where((s) => s.isNotEmpty).join(' ');
+  if (!avLan) return base;
+  return base.isEmpty ? kAvLanNote : '$base • $kAvLanNote';
+}
+
+/// What the drawing says a device's line actually does, for the report's
+/// Connection column.
+///
+/// 'Network (via IDF)' is the category, and it stops being true the moment a
+/// 192. drop is landed on the processor or on a switch of the room's own. The
+/// report is the half of this document that gets handed to the network people,
+/// so it has to agree with the picture rather than with the enum.
+String connectionSummary(SchematicModel model, SchematicNode node) {
+  final base = kConnLabels[node.conn] ?? '';
+  if (node.conn != ConnType.network) return base;
+  for (final e in model.edges) {
+    if (e.fromId != node.id || e.kind != ConnType.network) continue;
+    if (e.toId == kSchematicIdf) return base;
+    final to = model.nodeById(e.toId);
+    return 'Network via ${to?.title ?? e.toId} ($kAvLanNote)';
+  }
+  return base;
+}
+
 /// One box on the diagram.
 class SchematicNode {
   final String id; // device key, 'PROCESSOR', 'IDF', 'TOUCHPANEL', 'EXTRA_n'
@@ -199,8 +257,13 @@ class SchematicModel {
   /// Auto edges suppressed by the user (edit panel offers a restore).
   final List<SchematicEdge> hiddenEdges;
 
+  /// True when at least one device is on a 192. address — that is, when the
+  /// AV LAN control has anything to move. A room with none of them does not
+  /// need it, and a toolbar of switches that do nothing is one nobody reads.
+  final bool hasAvLanDevices;
+
   SchematicModel(this.nodes, this.edges, this.canvasSize, this.roomTitle,
-      [this.hiddenEdges = const []]);
+      [this.hiddenEdges = const [], this.hasAvLanDevices = false]);
 
   SchematicNode? nodeById(String id) {
     for (final n in nodes) {
@@ -301,6 +364,25 @@ class SchematicModel {
 
     final List<SchematicNode> nodes = [];
     final List<SchematicEdge> edges = [];
+    var sawAvLanDevice = false;
+
+    /// Where a recorded landing choice actually lands.
+    ///
+    /// The choice outlives the box it names — delete the switch box it points
+    /// at and the drops would otherwise run to an id nothing draws, which is a
+    /// line to nowhere rather than a visible mistake. Falling back to the IDF
+    /// puts them where they were before anybody chose.
+    String landing(String recorded) {
+      if (recorded == kSchematicProcessor) return kSchematicProcessor;
+      if (recorded == kSchematicIdf) return hasIdf ? kSchematicIdf : kSchematicProcessor;
+      final exists =
+          provider.schematicExtraNodes.any((n) => n['id'] == recorded);
+      if (exists) return recorded;
+      return hasIdf ? kSchematicIdf : kSchematicProcessor;
+    }
+
+    final avLanTarget = landing(provider.schematicAvLanTarget);
+    final panelTarget = landing(provider.schematicPanelTarget);
 
     // Processor: vertical center.
     final processorY = canvasH / 2 - kNodeHeight / 2;
@@ -366,13 +448,21 @@ class SchematicModel {
         case ConnType.network:
           final protocol = dev['protocol']?.toString() ?? '';
           final netPort = dev['net_port']?.toString() ?? '';
+          // A 192. address is an AV LAN address, and where the AV LAN lands
+          // is the room's recorded answer. Everything else is a building
+          // drop and goes to the IDF, as it always did.
+          final onAvLan = isAvLanAddress(ip);
+          if (onAvLan) sawAvLanDevice = true;
+          final to = onAvLan ? avLanTarget : landing(kSchematicIdf);
           edges.add(SchematicEdge(
             fromId: key,
-            toId: 'IDF',
+            toId: to,
             color: connColor(ConnType.network, provider),
-            label: [protocol, if (netPort.isNotEmpty && netPort != '0') netPort]
-                .where((s) => s.isNotEmpty)
-                .join(' '),
+            label: networkEdgeLabel(
+              protocol: protocol,
+              netPort: netPort,
+              avLan: onAvLan && to != kSchematicIdf,
+            ),
             kind: ConnType.network,
           ));
           break;
@@ -426,7 +516,7 @@ class SchematicModel {
     // Touch panel below the processor, linked to the IDF.
     if (hasTouchPanel) {
       nodes.add(SchematicNode(
-        id: 'TOUCHPANEL',
+        id: kSchematicTouchPanel,
         title: 'Touch Panel',
         subtitle: '$tlpId • $tabCount tab${tabCount == 1 ? '' : 's'}',
         icon: Icons.tab, // replaced by the custom-painted window icon
@@ -436,10 +526,12 @@ class SchematicModel {
             'TOUCHPANEL', Offset(colProcessorX, processorY + kNodeHeight + 60)),
       ));
       edges.add(SchematicEdge(
-        fromId: 'TOUCHPANEL',
-        toId: hasIdf ? 'IDF' : 'PROCESSOR',
+        fromId: kSchematicTouchPanel,
+        toId: panelTarget,
         color: connColor(ConnType.touchpanel, provider),
-        label: 'PoE',
+        // Still PoE wherever it lands — that is how the panel is powered, not
+        // where it is plugged. The note says which network it is on.
+        label: panelTarget == kSchematicIdf ? 'PoE' : 'PoE • $kAvLanNote',
         kind: ConnType.touchpanel,
       ));
     }
@@ -515,6 +607,7 @@ class SchematicModel {
       Size(maxX, maxY),
       systemSetup['gui_full_room_name']?.toString() ?? '',
       hiddenEdges,
+      sawAvLanDevice,
     );
   }
 
@@ -1004,7 +1097,7 @@ class _SchematicViewState extends State<SchematicView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildToolbar(provider),
+        _buildToolbar(provider, model),
         const Divider(height: 1),
         Expanded(
           key: _viewportKey,
@@ -1033,7 +1126,68 @@ class _SchematicViewState extends State<SchematicView> {
     );
   }
 
-  Widget _buildToolbar(AppStateProvider provider) {
+  /// The boxes a network drop can be landed on: the building switch, the
+  /// processor's own AV LAN port, and any switch somebody drew by hand.
+  List<({String id, String label})> _landingChoices(
+    AppStateProvider provider,
+    SchematicModel model,
+  ) =>
+      [
+        if (model.nodeById(kSchematicIdf) != null)
+          (id: kSchematicIdf, label: 'Network IDF'),
+        (id: kSchematicProcessor, label: 'Processor (AV LAN)'),
+        for (final n in provider.schematicExtraNodes)
+          if (n['icon'] == 'switch')
+            (id: n['id'] ?? '', label: n['title'] ?? 'Switch'),
+      ];
+
+  /// One "where does this land" control.
+  ///
+  /// A dropdown rather than the two-state toggle it started as: the third
+  /// answer — a switch of the room's own, drawn by hand — is as real as the
+  /// other two, and a toggle that could not reach it would send somebody back
+  /// to drawing the line themselves.
+  Widget _landingControl(
+    AppStateProvider provider, {
+    required String keyName,
+    required String label,
+    required String value,
+    required List<({String id, String label})> choices,
+    required bool avLan,
+  }) {
+    // A choice pointing at a box that has since been deleted shows as the IDF,
+    // which is where its drops are actually being drawn.
+    final known = {for (final c in choices) c.id};
+    final safe = known.contains(value) ? value : kSchematicIdf;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(width: 6),
+        DropdownButton<String>(
+          key: ValueKey(keyName),
+          value: known.contains(safe) ? safe : choices.first.id,
+          isDense: true,
+          underline: const SizedBox.shrink(),
+          items: [
+            for (final c in choices)
+              DropdownMenuItem(
+                value: c.id,
+                child: Text(c.label, style: const TextStyle(fontSize: 13)),
+              ),
+          ],
+          onChanged: (v) {
+            if (v == null) return;
+            provider.setSchematicLanding(v, avLan: avLan);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToolbar(AppStateProvider provider, SchematicModel model) {
+    final choices = _landingChoices(provider, model);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Wrap(
@@ -1109,6 +1263,27 @@ class _SchematicViewState extends State<SchematicView> {
                     ? 'Failed to save layout.'
                     : 'Layout saved to $saved');
               },
+            ),
+          // Where the room's networking actually goes. Not behind Edit: this
+          // is a fact about the room being stated, not a drawing being tidied,
+          // and it is the thing somebody opens this tab to check.
+          if (model.hasAvLanDevices)
+            _landingControl(
+              provider,
+              keyName: 'schematic_avlan_target',
+              label: '192.x drops:',
+              value: provider.schematicAvLanTarget,
+              choices: choices,
+              avLan: true,
+            ),
+          if (model.nodeById(kSchematicTouchPanel) != null)
+            _landingControl(
+              provider,
+              keyName: 'schematic_panel_target',
+              label: 'Touch panel:',
+              value: provider.schematicPanelTarget,
+              choices: choices,
+              avLan: false,
             ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
@@ -1390,8 +1565,8 @@ class _SchematicViewState extends State<SchematicView> {
       maxX = math.max(maxX, n.pos.dx + kNodeWidth + 30);
       maxY = math.max(maxY, n.pos.dy + kNodeHeight + 30);
     }
-    return SchematicModel(nodes, model.edges, Size(maxX, maxY), model.roomTitle,
-        model.hiddenEdges);
+    return SchematicModel(nodes, model.edges, Size(maxX, maxY),
+        model.roomTitle, model.hiddenEdges, model.hasAvLanDevices);
   }
 
   /// [startPos] is captured here rather than read back on release: by then
@@ -2343,7 +2518,7 @@ List<ReportSection> reportSections(AppStateProvider provider, SchematicModel mod
       family?.label ?? '',
       _friendlyValue(dev['model']),
       _friendlyValue(dev['gve_id']),
-      kConnLabels[node.conn] ?? '',
+      connectionSummary(model, node),
       _friendlyValue(dev['ip_address']),
       _friendlyValue(dev['protocol']),
       _friendlyValue(dev['net_port']),

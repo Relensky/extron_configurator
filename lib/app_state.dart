@@ -148,6 +148,15 @@ const Map<String, String> kComTypeStyleLabels = {
 };
 
 /// Core State Manager for the Room Configuration Application
+/// The control schematic's three generated boxes. Named because they are now
+/// referred to from two layers — the diagram draws them, and the room records
+/// which of them its AV LAN and its touch panel land on — and a drop that
+/// silently stopped working because one end was spelled 'Processor' would be
+/// invisible until somebody read the drawing closely.
+const String kSchematicProcessor = 'PROCESSOR';
+const String kSchematicIdf = 'IDF';
+const String kSchematicTouchPanel = 'TOUCHPANEL';
+
 class AppStateProvider extends ChangeNotifier {
   /// Whether this room has a control system yet. See [RoomMode]; persisted in
   /// the AV sidecar, because for an AV-only room that is the only document
@@ -1045,8 +1054,9 @@ class AppStateProvider extends ChangeNotifier {
   //  own, the UI asks first — see schematicLayoutNeedsChoice.
   // ---------------------------------------------------------------------
 
-  /// Node id (device key / 'PROCESSOR' / 'IDF' / 'TOUCHPANEL') -> position
-  /// override. Nodes absent from the map sit at their auto-layout spot.
+  /// Node id (device key / [kSchematicProcessor] / [kSchematicIdf] /
+  /// [kSchematicTouchPanel]) -> position override. Nodes absent from the map
+  /// sit at their auto-layout spot.
   final Map<String, Offset> schematicPositions = {};
 
   /// User-drawn lines: {'from': id, 'to': id, 'color': 'RRGGBB', 'label': s}.
@@ -1071,12 +1081,50 @@ class AppStateProvider extends ChangeNotifier {
   /// [schematicLinks] (plain strings) so the sidecar stays a flat document.
   final List<Map<String, String>> schematicExtraNodes = [];
 
+  /// Where the room's AV LAN devices land on the control schematic.
+  ///
+  /// A device whose `ip_address` starts with 192. is not on the building
+  /// network — it is on the AV LAN, which in most of these rooms is the
+  /// processor's own second NIC and in some is a small switch of its own. The
+  /// drawing used to run every network device to the IDF regardless, which is
+  /// the one thing about the room's networking somebody actually needs the
+  /// drawing to tell them, said wrong.
+  ///
+  /// Which of the three it is varies by building and cannot be read off the
+  /// config, so it is a choice the room records: 'IDF', 'PROCESSOR', or the id
+  /// of a box added by hand ([schematicExtraNodes]).
+  String schematicAvLanTarget = kSchematicIdf;
+
+  /// Where the touch panel lands, same three answers. Separate from
+  /// [schematicAvLanTarget] because it is a separate decision: a panel on PoE
+  /// off the building switch is as ordinary as one on the AV LAN beside the
+  /// processor, and a room can be built either way whatever its devices do.
+  String schematicPanelTarget = kSchematicIdf;
+
+  /// True when either landing choice is anything but the default.
+  bool get _schematicLandingsMoved =>
+      schematicAvLanTarget != kSchematicIdf ||
+      schematicPanelTarget != kSchematicIdf;
+
+  /// Records where one group of drops lands. [avLan] false sets the panel's.
+  void setSchematicLanding(String target, {required bool avLan}) {
+    final clean = target.trim().isEmpty ? kSchematicIdf : target.trim();
+    if ((avLan ? schematicAvLanTarget : schematicPanelTarget) == clean) return;
+    _pushSchematicUndo(avLan ? 'AV LAN drops' : 'Touch panel drop');
+    if (avLan) {
+      schematicAvLanTarget = clean;
+    } else {
+      schematicPanelTarget = clean;
+    }
+    notifyListeners();
+  }
+
   /// Ids [SchematicModel] would generate itself, which a hand-added box must
   /// never collide with — it would silently take a real device's place in the
   /// links and the positions.
   static const Set<String> _kSchematicReservedIds = {
-    'PROCESSOR',
-    'IDF',
+    kSchematicProcessor,
+    kSchematicIdf,
     'TOUCHPANEL',
   };
 
@@ -1115,7 +1163,8 @@ class AppStateProvider extends ChangeNotifier {
 
   final List<({String label, Map<String, Offset> positions,
       List<Map<String, String>> links, Set<String> hidden,
-      Map<int, Color> colors, List<Map<String, String>> extras})>
+      Map<int, Color> colors, List<Map<String, String>> extras,
+      String avLan, String panel})>
       _schematicUndoStack = [];
 
   bool get canUndoSchematic => _schematicUndoStack.isNotEmpty;
@@ -1134,6 +1183,8 @@ class AppStateProvider extends ChangeNotifier {
       extras: [
         for (final n in schematicExtraNodes) Map<String, String>.from(n),
       ],
+      avLan: schematicAvLanTarget,
+      panel: schematicPanelTarget,
     ));
     if (_schematicUndoStack.length > _kMaxUndoDepth) {
       _schematicUndoStack.removeAt(0);
@@ -1160,6 +1211,8 @@ class AppStateProvider extends ChangeNotifier {
     schematicExtraNodes
       ..clear()
       ..addAll(entry.extras);
+    schematicAvLanTarget = entry.avLan;
+    schematicPanelTarget = entry.panel;
     AppLogger.logInfo('Undid: ${entry.label}');
     notifyListeners();
     return entry.label;
@@ -1323,7 +1376,8 @@ class AppStateProvider extends ChangeNotifier {
       schematicLinks.isNotEmpty ||
       schematicHiddenEdges.isNotEmpty ||
       schematicConnColors.isNotEmpty ||
-      schematicExtraNodes.isNotEmpty;
+      schematicExtraNodes.isNotEmpty ||
+      _schematicLandingsMoved;
 
   /// True when a saved control schematic sits next to the working config,
   /// under either the current name or the pre-rename one.
@@ -1349,6 +1403,8 @@ class AppStateProvider extends ChangeNotifier {
     schematicHiddenEdges.clear();
     schematicConnColors.clear();
     schematicExtraNodes.clear();
+    schematicAvLanTarget = kSchematicIdf;
+    schematicPanelTarget = kSchematicIdf;
   }
 
   /// Adopts the CURRENT in-memory diagram for the working config, ignoring any
@@ -1436,6 +1492,10 @@ class AppStateProvider extends ChangeNotifier {
           });
         }
       }
+      final avLan = doc['avLanTarget']?.toString().trim() ?? '';
+      if (avLan.isNotEmpty) schematicAvLanTarget = avLan;
+      final panel = doc['panelTarget']?.toString().trim() ?? '';
+      if (panel.isNotEmpty) schematicPanelTarget = panel;
       final lineColors = doc['connColors'];
       if (lineColors is Map) {
         lineColors.forEach((index, hex) {
@@ -1478,6 +1538,8 @@ class AppStateProvider extends ChangeNotifier {
         'links': schematicLinks,
         'hiddenEdges': schematicHiddenEdges.toList(),
         'extraNodes': schematicExtraNodes,
+        'avLanTarget': schematicAvLanTarget,
+        'panelTarget': schematicPanelTarget,
         'connColors': {
           for (final e in schematicConnColors.entries)
             e.key.toString(): (e.value.toARGB32() & 0xFFFFFF)

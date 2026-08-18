@@ -91834,20 +91834,6 @@
           "side": "left"
         },
         {
-          "id": "in_hdmi_3",
-          "label": "HDMI IN 3",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_4",
-          "label": "HDMI IN 4",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
           "id": "out_hdmi_1",
           "label": "HDMI OUT",
           "signal": "hdmi",
