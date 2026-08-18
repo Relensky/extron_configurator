@@ -23,7 +23,7 @@ DEVICE_INFO = {
         "lbl_name": "Lbl_Proj_Model_Proj1",
         "gve_id": "Proj1",
         "name": "Display - E758",
-        "device_id": None,
+        "device_id": "1",
         "keep_alive_command": "Power",
         "keep_alive_interval": 30,
         "keep_alive_trigger": None,

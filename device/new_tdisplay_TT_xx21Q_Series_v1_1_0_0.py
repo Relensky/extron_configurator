@@ -13,9 +13,7 @@ DEVICE_INFO = {
     "connection": {
         "com_type": "Serial",
         "baud": 19200,
-        # An spdevice<n> alias when the panel hangs off the SP bus, which is
-        # how every one of these on the estate is reached today.
-        "host": "processor1",
+        "host": "processor1",  # an spdevice<n> alias when the panel is on the SP bus
         "serial_port": "",  # site-specific — blank
     },
     "defaults": {
@@ -34,10 +32,10 @@ DEVICE_INFO = {
     # over "connection" + "defaults".
     #
     # There is deliberately NO "network" block. The driver has an EthernetClass
-    # and the panel will answer on a socket, but nothing to hand says which —
-    # and a port nobody looked up is a room that does not connect and a number
-    # the next person believes. Every one of these on the estate is on a COM
-    # port; add the block when somebody has the panel's manual open.
+    # and the panel will answer on a socket, but nothing in the documentation
+    # says which — and a port nobody looked up is a room that does not connect
+    # and a number the next person believes. The panels on the estate are all
+    # on a COM port; add the block when somebody has the panel's manual open.
     "serialoverethernet": {
         "protocol": "TCP",
         "net_port": 2001,

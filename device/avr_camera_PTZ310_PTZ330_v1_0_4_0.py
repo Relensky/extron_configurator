@@ -587,6 +587,23 @@ class DeviceEthernetClass:
         self._DeviceID = b"\x81"
         self.Models = {}
 
+        # The vendor shipped this class without the status/lifecycle API that
+        # DeviceSerialClass carries, so EthernetClass had no OnConnected /
+        # OnDisconnected / WriteStatus / SubscribeStatus. The framework calls
+        # OnDisconnected() unguarded during device init, which raised
+        # AttributeError and silently discarded the whole handler. The state
+        # below backs the methods added at the end of this class.
+        self.Unidirectional = "False"
+        self.connectionCounter = 15
+        self.connectionFlag = True
+        self.initializationChk = True
+        self.counter = 0
+        self.Subscription = {}
+        self.ReceiveData = self.__ReceiveData
+        self.__receiveBuffer = b""
+        self.__maxBufferSize = 2048
+        self.__matchStringDict = {}
+
         self.Commands = {
             "ConnectionStatus": {"Status": {}},
             "AutoExposure": {
@@ -636,6 +653,20 @@ class DeviceEthernetClass:
                 "AllowedValues": ["Tele", "Wide", "Stop"],
             },
         }
+
+        # VISCA-over-IP replies carry the same payload as serial, wrapped in the
+        # 8 byte header, so the serial patterns match once re.search skips it.
+        if self.Unidirectional == "False":
+            self.AddMatchString(
+                re.compile(b"[\x90\xa0\xb0\xc0\xd0\xe0\xf0]\x50([\x02\x03])\xff"),
+                self.__MatchPower,
+                None,
+            )
+            self.AddMatchString(
+                re.compile(b"[\x90\xa0\xb0\xc0\xd0\xe0\xf0](\x60\x02|\x61\x41)\xff"),
+                self.__MatchError,
+                None,
+            )
 
     @property
     def DeviceID(self):
@@ -900,6 +931,52 @@ class DeviceEthernetClass:
         self.Send(b"\x02\x00\x00\x01\x00\x00\x00\x00\x01")
         self.Send(commandstring)
 
+    def UpdatePower(self, value, qualifier):
+
+        PowerCmdString = self.SetHeader(self._DeviceID + b"\x09\x04\x00\xff")
+        self.__UpdateHelper("Power", PowerCmdString, value, qualifier)
+
+    def __UpdateHelper(self, command, commandstring, value, qualifier):
+
+        if self.Unidirectional == "True":
+            self.Discard("Inappropriate Command " + command)
+        else:
+            if self.initializationChk:
+                self.OnConnected()
+                self.initializationChk = False
+
+            self.counter = self.counter + 1
+            if self.counter > self.connectionCounter and self.connectionFlag:
+                self.OnDisconnected()
+
+            self.Send(commandstring)
+
+    def __MatchPower(self, match, tag):
+
+        ValueStateValues = {b"\x02": "On", b"\x03": "Off"}
+
+        value = ValueStateValues[match.group(1)]
+        self.WriteStatus("Power", value, None)
+
+    def __MatchError(self, match, tag):
+        self.counter = 0
+
+        DEVICE_ERROR_CODES = {
+            b"\x60\x02": "Syntax Error.",
+            b"\x61\x41": "Command Not Executable.",
+        }
+
+        self.Error([DEVICE_ERROR_CODES[match.group(1)]])
+
+    def OnConnected(self):
+        self.connectionFlag = True
+        self.WriteStatus("ConnectionStatus", "Connected")
+        self.counter = 0
+
+    def OnDisconnected(self):
+        self.WriteStatus("ConnectionStatus", "Disconnected")
+        self.connectionFlag = False
+
     ######################################################
     # RECOMMENDED not to modify the code below this point
     ######################################################
@@ -911,6 +988,133 @@ class DeviceEthernetClass:
             method(value, qualifier)
         else:
             raise AttributeError(command + "does not support Set.")
+
+    # Send Update Commands
+    def Update(self, command, qualifier=None):
+        method = getattr(self, "Update%s" % command, None)
+        if method is not None and callable(method):
+            method(None, qualifier)
+        else:
+            raise AttributeError(command + "does not support Update.")
+
+    # This method is to tie an specific command with a parameter to a call back method
+    # when its value is updated. It sets how often the command will be query, if the command
+    # have the update method.
+    # If the command doesn't have the update feature then that command is only used for feedback
+    def SubscribeStatus(self, command, qualifier, callback):
+        Command = self.Commands.get(command, None)
+        if Command:
+            if command not in self.Subscription:
+                self.Subscription[command] = {"method": {}}
+
+            Subscribe = self.Subscription[command]
+            Method = Subscribe["method"]
+
+            if qualifier:
+                for Parameter in Command["Parameters"]:
+                    try:
+                        Method = Method[qualifier[Parameter]]
+                    except:
+                        if Parameter in qualifier:
+                            Method[qualifier[Parameter]] = {}
+                            Method = Method[qualifier[Parameter]]
+                        else:
+                            return
+
+            Method["callback"] = callback
+            Method["qualifier"] = qualifier
+        else:
+            raise KeyError("Invalid command for SubscribeStatus " + command)
+
+    # This method is to check the command with new status have a callback method then trigger the callback
+    def NewStatus(self, command, value, qualifier):
+        if command in self.Subscription:
+            Subscribe = self.Subscription[command]
+            Method = Subscribe["method"]
+            Command = self.Commands[command]
+            if qualifier:
+                for Parameter in Command["Parameters"]:
+                    try:
+                        Method = Method[qualifier[Parameter]]
+                    except:
+                        break
+            if "callback" in Method and Method["callback"]:
+                Method["callback"](command, value, qualifier)
+
+    # Save new status to the command
+    def WriteStatus(self, command, value, qualifier=None):
+        self.counter = 0
+        if not self.connectionFlag:
+            self.OnConnected()
+        Command = self.Commands[command]
+        Status = Command["Status"]
+        if qualifier:
+            for Parameter in Command["Parameters"]:
+                try:
+                    Status = Status[qualifier[Parameter]]
+                except KeyError:
+                    if Parameter in qualifier:
+                        Status[qualifier[Parameter]] = {}
+                        Status = Status[qualifier[Parameter]]
+                    else:
+                        return
+        try:
+            if Status["Live"] != value:
+                Status["Live"] = value
+                self.NewStatus(command, value, qualifier)
+        except:
+            Status["Live"] = value
+            self.NewStatus(command, value, qualifier)
+
+    # Read the value from a command.
+    def ReadStatus(self, command, qualifier=None):
+        Command = self.Commands.get(command, None)
+        if Command:
+            Status = Command["Status"]
+            if qualifier:
+                for Parameter in Command["Parameters"]:
+                    try:
+                        Status = Status[qualifier[Parameter]]
+                    except KeyError:
+                        return None
+            try:
+                return Status["Live"]
+            except:
+                return None
+        else:
+            raise KeyError("Invalid command for ReadStatus: " + command)
+
+    def __ReceiveData(self, interface, data):
+        # Handle incoming data
+        self.__receiveBuffer += data
+        index = 0  # Start of possible good data
+
+        # check incoming data if it matched any expected data from device module
+        for regexString, CurrentMatch in self.__matchStringDict.items():
+            while True:
+                result = re.search(regexString, self.__receiveBuffer)
+                if result:
+                    index = result.start()
+                    CurrentMatch["callback"](result, CurrentMatch["para"])
+                    self.__receiveBuffer = (
+                        self.__receiveBuffer[: result.start()]
+                        + self.__receiveBuffer[result.end() :]
+                    )
+                else:
+                    break
+
+        if index:
+            # Clear out any junk data that came in before any good matches.
+            self.__receiveBuffer = self.__receiveBuffer[index:]
+        else:
+            # In rare cases, the buffer could be filled with garbage quickly.
+            # Make sure the buffer is capped.  Max buffer size set in init.
+            self.__receiveBuffer = self.__receiveBuffer[-self.__maxBufferSize :]
+
+    # Add regular expression so that it can be check on incoming data from device.
+    def AddMatchString(self, regex_string, callback, arg):
+        if regex_string not in self.__matchStringDict:
+            self.__matchStringDict[regex_string] = {"callback": callback, "para": arg}
 
 
 class SerialClass(SerialInterface, DeviceSerialClass):
