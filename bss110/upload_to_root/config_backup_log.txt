@@ -1,0 +1,36 @@
+==================================================
+CONFIG LOAD CHANGE LOG
+Loaded:  2026-08-18T08:27:34.548210
+Source:  C:\GitHub\ControlScript-Template\rooms\BSS110\code\upload_to_root\config.json
+==================================================
+BACKUP SAVED: Original file preserved as 'BSS110_old_config.json'
+--------------------------------------------------
+SYSTEM MIGRATION: Added 8 missing schema properties to match current template standards.
+KEY MAPPING: Translated 7 legacy item(s) using C:\Users\dstanley\Desktop\room_config_builder\key_map.json
+KEYMAP: added missing 'SWITCHERDEVICE_1.group_ceil_mute' (default: '4')
+KEYMAP: added missing 'SWITCHERDEVICE_1.group_mic_gain' (default: '10')
+KEYMAP: added missing 'SWITCHERDEVICE_1.group_mic_mute' (default: '2')
+KEYMAP: added missing 'SWITCHERDEVICE_1.group_prog_gain' (default: '1')
+KEYMAP: added missing 'SWITCHERDEVICE_1.group_prog_mute' (default: '5')
+KEYMAP: added missing 'SWITCHERDEVICE_1.group_room_mute' (default: '3')
+KEYMAP: added missing 'SWITCHERDEVICE_1.group_voice_lift_mute' (default: '7')
+--------------------------------------------------
+-> Added missing property: 'share_room_type' (Default: 'display')
+-> Added missing property: 'gui_presenter_mode_available' (Default: 'No')
+-> Added missing property: 'gui_annex_mute_available' (Default: 'No')
+-> Added missing property: 'dev_source_control' (Default: 'Auto')
+-> Added missing property: 'dev_volume_control' (Default: 'Auto')
+-> Added missing property: 'dev_nav_switchers' (Default: '0')
+-> Added missing property: 'dev_share_stations' (Default: '0')
+-> Added missing property: 'dev_nbps' (Default: '0')
+-> Added missing device property: 'PROJECTORDEVICE_1.source_follow' (Default: 'true')
+-> Added missing device property: 'PROJECTORDEVICE_1.source_fixed' (Default: 'null')
+-> Added missing device property: 'PROJECTORDEVICE_1.source_overrides' (Default: '{}')
+-> Added missing device property: 'PROJECTORDEVICE_1.presenter_follow' (Default: 'true')
+-> Added missing device property: 'PROJECTORDEVICE_2.source_follow' (Default: 'true')
+-> Added missing device property: 'PROJECTORDEVICE_2.source_fixed' (Default: 'null')
+-> Added missing device property: 'PROJECTORDEVICE_2.source_overrides' (Default: '{}')
+-> Added missing device property: 'PROJECTORDEVICE_2.presenter_follow' (Default: 'true')
+DEFAULTS: Added 8 missing device properties from ui_schema.json device_defaults.
+TEMPLATE AUDIT: All items match the default config template.
+

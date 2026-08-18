@@ -1,0 +1,15 @@
+{
+  "__readme": "Control Schematic tab layout for the Room Config Builder: dragged node positions, user-drawn connection lines, and boxes added by hand for equipment the control system does not talk to. (Before the tab was renamed this file was called <config>_schematic.json.)",
+  "positions": {
+    "SWITCHERDEVICE_1": [
+      721.0,
+      292.0
+    ]
+  },
+  "links": [],
+  "hiddenEdges": [],
+  "extraNodes": [],
+  "avLanTarget": "PROCESSOR",
+  "panelTarget": "PROCESSOR",
+  "connColors": {}
+}

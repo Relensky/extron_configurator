@@ -1,0 +1,13 @@
+{
+  "__readme": "This room's cost estimate: tax, fees, labor, quoted prices and the lines added by hand. The rates and base costs it draws on are shared files in the Root Folder, not here.",
+  "cost": {
+    "currency": "$",
+    "taxLabel": "Sales tax",
+    "taxPercent": 0.0,
+    "includeCabling": true,
+    "fees": [],
+    "priceOverrides": {},
+    "items": [],
+    "labor": []
+  }
+}

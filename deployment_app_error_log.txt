@@ -1,0 +1,78 @@
+[2026-08-18T08:56:36.230637] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_a8fc40e1\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T08:59:30.459630] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_bd1e72b6\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:00:16.100690] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_4162a0d3\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:00:20.815779] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_10780640\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:03:15.074181] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_be2a4a8c\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:03:59.255004] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_1dfd6cc8\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:04:03.679524] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_c90ae460\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:15:59.780560] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_ebe9ab45\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:16:52.223508] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_de871be4\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:16:56.896168] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_64ae910\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:20:06.103837] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_47c0538d\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:20:48.151186] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_6f9b7331\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-18T09:20:52.614483] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_feaa824b\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------

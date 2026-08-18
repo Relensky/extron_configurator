@@ -891,10 +891,11 @@ CostEstimate computeRoomCost({
     hardware.add(extraLine(item, kCategoryRackHardware));
   }
 
-  // --- cabling: one line per signal type on the diagram, plus spares -------
+  // --- cabling: one line per lead the room buys, plus spares ---------------
   final cabling = <CostLine>[];
   if (settings.includeCabling) {
     final counts = countCableRuns(model);
+    final nodesById = model.nodesById;
     // A spare for a type with no runs drawn is still a thing being bought, so
     // the two sets are merged rather than the spares only topping up runs.
     final types = <SignalType>{
@@ -907,55 +908,123 @@ CostEstimate computeRoomCost({
       final spares = settings.cableSpares[signal.name] ?? 0;
       if (drawn + spares <= 0) continue;
 
-      // WHICH LEAD EACH RUN IS BOUGHT AS. A room does not buy "HDMI cable", it
-      // buys a 3 ft one and a 25 ft one at different prices — so every drawn
-      // run goes on the shortest stock length that reaches it, and each of
-      // those becomes a line of its own. A catalog with one entry for the type
-      // (or none) produces exactly the one line it always did.
-      final byEntry = <String, ({AvDeviceTemplate? entry, double qty})>{};
-      void add(AvDeviceTemplate? entry, double qty) {
-        final id = entry?.model ?? '';
-        final at = byEntry[id];
-        byEntry[id] = (entry: entry ?? at?.entry, qty: (at?.qty ?? 0) + qty);
+      // WHICH LEAD EACH RUN IS BOUGHT AS. A room does not buy "HDMI cable",
+      // it buys a 3 ft one and a 25 ft one at different prices — so runs are
+      // grouped by the LENGTH TYPED ON THE DIAGRAM as well as by the catalog
+      // entry they land on, and each group becomes a line of its own with its
+      // own price box. A 25 ft run and a 50 ft run are two orders at two
+      // prices even when the catalog has one entry for the type or none at
+      // all, which is the usual case: the shipped catalog prices cable by the
+      // made-up lead rather than by the signal, so before this every length
+      // in the room collapsed onto one unpriceable line.
+      final byGroup =
+          <String, ({AvDeviceTemplate? entry, double lengthFt, double qty})>{};
+      String groupId(AvDeviceTemplate? entry, double lengthFt) =>
+          '${entry?.model ?? ''}|$lengthFt';
+      void add(AvDeviceTemplate? entry, double lengthFt, double qty) {
+        final id = groupId(entry, lengthFt);
+        final at = byGroup[id];
+        byGroup[id] = (
+          entry: entry ?? at?.entry,
+          lengthFt: lengthFt,
+          qty: (at?.qty ?? 0) + qty,
+        );
       }
 
       final options = library.cablesForSignal(signal);
       final splitByLength = options.where((t) => t.cableLengthFt > 0).length > 1;
-      // The type's MAIN lead: the shortest stock length (bulk cable last).
+      // The type's DEFAULT lead: the shortest stock length (bulk cable last).
       // Deterministic on purpose — it decides which line keeps the key
       // `cable:<signal>`, and therefore which line a price typed before
-      // anybody broke the type down still applies to.
-      final mainEntry = options.isEmpty ? null : options.first;
-      if (splitByLength) {
-        for (final c in model.cables) {
-          if (c.signal != signal) continue;
-          add(library.cableForRun(signal, c.lengthFt), 1);
+      // anybody measured a run still applies to.
+      final defaultEntry =
+          splitByLength ? options.first : library.cableForSignal(signal);
+
+      // Only the runs the canvas would actually draw, so these quantities add
+      // up to the "drawn" figure instead of counting a cable whose ends have
+      // been deleted.
+      final runs = model.cables
+          .where((c) =>
+              c.signal == signal &&
+              AvFlowModel.cableIsResolvable(c, nodesById))
+          .toList();
+      for (final c in runs) {
+        add(
+          splitByLength ? library.cableForRun(signal, c.lengthFt) : defaultEntry,
+          c.lengthFt,
+          1,
+        );
+      }
+      // Runs the diagram counts that are not cables on it go on the type's
+      // default lead with no length, which is where the spares land too.
+      final loose = drawn - runs.length.toDouble();
+      if (loose > 0) add(defaultEntry, 0, loose);
+
+      // THE TYPE'S MAIN LINE: the one keyed `cable:<signal>`, which carries
+      // the spares box and any price typed against the type before anybody
+      // measured a run. It is the default lead's shortest group — the
+      // unmeasured one (length 0) when there is one, since that is exactly
+      // the single line a room with no lengths on its diagram has always had.
+      String? mainId;
+      var shortest = double.infinity;
+      for (final e in byGroup.entries) {
+        if ((e.value.entry?.model ?? '') != (defaultEntry?.model ?? '')) {
+          continue;
         }
-        // Runs the diagram counts that are not cables on it (a screen switch
-        // run, a count typed over the drawing) and the spares both go on the
-        // type's default lead.
-        final loose = drawn -
-            model.cables.where((c) => c.signal == signal).length.toDouble();
-        if (loose > 0) add(mainEntry, loose);
-        if (spares > 0) add(mainEntry, spares);
-      } else {
-        add(library.cableForSignal(signal), drawn + spares);
+        if (e.value.lengthFt < shortest) {
+          shortest = e.value.lengthFt;
+          mainId = e.key;
+        }
+      }
+      if (spares > 0) {
+        if (mainId == null) {
+          add(defaultEntry, 0, spares);
+          mainId = groupId(defaultEntry, 0);
+        } else {
+          final at = byGroup[mainId]!;
+          byGroup[mainId] = (
+            entry: at.entry,
+            lengthFt: at.lengthFt,
+            qty: at.qty + spares,
+          );
+        }
       }
 
-      for (final grouped in byEntry.entries) {
+      // The type's own line first, then shortest lead to longest: the order a
+      // cable schedule is read in.
+      final ordered = byGroup.entries.toList()
+        ..sort((a, b) {
+          if (a.key == mainId) return -1;
+          if (b.key == mainId) return 1;
+          final byLength = a.value.lengthFt.compareTo(b.value.lengthFt);
+          return byLength != 0
+              ? byLength
+              : (a.value.entry?.model ?? '')
+                  .toLowerCase()
+                  .compareTo((b.value.entry?.model ?? '').toLowerCase());
+        });
+
+      for (final grouped in ordered) {
         final catalog = grouped.value.entry;
         final qty = grouped.value.qty;
+        final runLengthFt = grouped.value.lengthFt;
         if (qty <= 0) continue;
 
         // The line key is what a typed price is filed under, so the type's
         // MAIN line keeps the key it has always had — a room that priced its
-        // HDMI by hand keeps that price when somebody later breaks the type
-        // down by length.
-        final key = catalog == null ||
-                !splitByLength ||
-                catalog.model == mainEntry?.model
+        // HDMI by hand keeps that price when somebody later measures the
+        // runs. Every other group is keyed by whatever makes it a separate
+        // order: the catalog entry, the run length, or both.
+        final parts = [
+          if (catalog != null &&
+              catalog.model.isNotEmpty &&
+              catalog.model != defaultEntry?.model)
+            catalog.model,
+          if (runLengthFt > 0) formatCableLength(runLengthFt),
+        ];
+        final key = grouped.key == mainId || parts.isEmpty
             ? 'cable:${signal.name}'
-            : 'cable:${signal.name}@${catalog.model}';
+            : 'cable:${signal.name}@${parts.join('@')}';
         final override = settings.priceOverrides[key];
         final catalogPrice = catalog?.priceForTier(tier);
 
@@ -979,23 +1048,15 @@ CostEstimate computeRoomCost({
         }
         if (source == PriceSource.catalogOtherTier) otherTierLines++;
 
-        // The lead lengths behind this line, so it says what to order rather
-        // than just how many. Runs with no length set are left out of the note
-        // — they are counted in the quantity either way.
-        final byLength = <double, int>{};
-        for (final c in model.cables) {
-          if (c.signal != signal || c.lengthFt <= 0) continue;
-          if (splitByLength &&
-              library.cableForRun(signal, c.lengthFt)?.model !=
-                  catalog?.model) {
-            continue;
-          }
-          byLength[c.lengthFt] = (byLength[c.lengthFt] ?? 0) + 1;
-        }
-        final lengths = (byLength.keys.toList()..sort())
-            .map((ft) => '${byLength[ft]}× ${formatCableLength(ft)}')
-            .join(', ');
-        final carriesSpares = spares > 0 && key == 'cable:${signal.name}';
+        // The runs behind this line, so it says what to order rather than
+        // just how many. A group IS one length now, so this is that length
+        // and how many of it; it is only worth printing next to a made-up
+        // lead, where the lead's length and the run's are different facts.
+        final drawnHere = runs.where((c) => c.lengthFt == runLengthFt).length;
+        final showRuns = (catalog?.cableLengthFt ?? 0) > 0 &&
+            runLengthFt > 0 &&
+            drawnHere > 0;
+        final carriesSpares = spares > 0 && grouped.key == mainId;
 
         cabling.add(
           CostLine(
@@ -1011,10 +1072,14 @@ CostEstimate computeRoomCost({
                         '(${cableSignalSubLabel(signal)})',
                       'cable',
                     ].join(' '),
-              // What the entry itself is bought in, when it is a made-up lead.
+              // What the entry itself is bought in, when it is a made-up lead;
+              // failing that the run length this line is for, which is the
+              // only thing separating it from the type's other lines.
               if ((catalog?.cableLengthFt ?? 0) > 0)
-                '— ${formatCableLength(catalog!.cableLengthFt)}',
-              if (lengths.isNotEmpty) '[$lengths]',
+                '— ${formatCableLength(catalog!.cableLengthFt)}'
+              else if (runLengthFt > 0)
+                '— ${formatCableLength(runLengthFt)}',
+              if (showRuns) '[$drawnHere× ${formatCableLength(runLengthFt)}]',
               if (carriesSpares)
                 '(${trimNumber(qty - spares)} drawn + '
                     '${trimNumber(spares)} spare)',

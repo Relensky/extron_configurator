@@ -316,6 +316,46 @@ ConnectorRef parsePortLabel(String label) {
   return (number: null, letter: '');
 }
 
+/// The box's expansion-bus connector, or null when it has none.
+///
+/// Extron spells it 'DMP EXP' on both the switcher and the DMP, and other
+/// families spell their own bus 'EXPANSION' or 'EXP' — matched on the word so
+/// a new model does not need a table entry. Deliberately NOT matched on the
+/// signal: the catalog files this connector under Dante on the boxes that
+/// have it, and it is not a Dante socket in any sense a network engineer
+/// would recognise.
+AvPort? _expansionPort(AvNode node) {
+  for (final p in node.ports) {
+    final words = p.label.toUpperCase().split(RegExp(r'[^A-Z0-9]+'));
+    if (words.contains('EXP') || words.contains('EXPANSION')) return p;
+  }
+  return null;
+}
+
+/// The connectors on [dest] a tie of [signals] could land on, in the order the
+/// catalog lists them.
+List<AvPort> landingCandidates(AvNode dest, Set<SignalType> signals) => [
+      for (final p in dest.ports)
+        if (signals.contains(p.signal) &&
+            (p.isInput || p.direction == PortDirection.bidirectional))
+          p,
+    ];
+
+/// How good a landing [port] is for a run leaving [fromPort], higher first.
+///
+/// A NUMBERED connector is a general-purpose one — 'MIC/LINE 1', 'HDMI IN 2',
+/// 'AUDIO 3' — and a named one is almost always special-purpose: 'DMP EXP' is
+/// the bus between two DSPs, 'ACP' is Extron's control pad, 'USB AUDIO' is the
+/// box's own soundcard. None of the three is where a program feed lands, and
+/// on a DMP 64 Plus C AT the expansion port is listed FIRST, so taking the
+/// first matching connector drew the matrix into it every time.
+///
+/// Matching the source's own signal breaks the remaining ties, so a run stays
+/// on one kind of connector when the box offers a conversion as well.
+int landingRank(AvPort port, AvPort fromPort) =>
+    (parsePortLabel(port.label).number != null ? 2 : 0) +
+    (port.signal == fromPort.signal ? 1 : 0);
+
 /// The signal an output's connector letter implies on Extron gear: A is the
 /// HDMI socket of that output, B the DTP/HDBaseT one.
 SignalType? _signalForLetter(String letter) => switch (letter) {
@@ -651,6 +691,34 @@ RoutingPlan planRoutingFromConfig(
     ));
   }
 
+  /// The far end of everything already landing on one connector — cables on
+  /// the canvas and the ones this plan has decided to draw, since a plan that
+  /// only looks at the canvas puts its own second tie on top of its first.
+  List<({String node, String port})> feedsInto(String nodeId, String portId) {
+    final out = <({String node, String port})>[];
+    void consider(String fromNode, String fromPort, String toNode,
+        String toPort) {
+      if (toNode == nodeId && toPort == portId) {
+        out.add((node: fromNode, port: fromPort));
+      } else if (fromNode == nodeId && fromPort == portId) {
+        out.add((node: toNode, port: toPort));
+      }
+    }
+
+    for (final c in provider.avCables) {
+      consider(c.fromNodeId, c.fromPortId, c.toNodeId, c.toPortId);
+    }
+    for (final c in cables) {
+      consider(c.fromNodeId, c.fromPortId, c.toNodeId, c.toPortId);
+    }
+    return out;
+  }
+
+  /// Whether [nodeId] is already on the far end of [port] of [node] — used to
+  /// recognise the receiver a DTP run was drawn through on an earlier pass.
+  bool joinedTo(AvNode node, AvPort port, String nodeId) =>
+      feedsInto(node.id, port.id).any((f) => f.node == nodeId);
+
   // --- the sources -----------------------------------------------------------
   //  Every one of these is "this box is on switcher input N", so they all end
   //  the same way: find input N on the switcher, find the box's own output,
@@ -912,15 +980,58 @@ RoutingPlan planRoutingFromConfig(
           'names on the device tab and draw this one by hand.'));
       return;
     }
+    // WHICH SOCKET ON THE FAR BOX. This used to be `firstOrNull` — the first
+    // connector of a matching signal, every time — and it is wrong twice over.
+    //
+    //  * Two ties that land on the SAME box both took connector one.
+    //    `output_cc: 1` and `output_cc2: 2` into an AV Bridge 2x1 came out as
+    //    two leads from the DTP CrossPoint drawn onto HDMI IN 1, which is a
+    //    socket that takes one lead.
+    //  * The first connector is not always a connector a program feed goes
+    //    to. A DMP 64 Plus C AT lists 'DMP EXP' first — the expansion bus
+    //    between two DSPs — so `output_audio: 1` was drawn from the matrix
+    //    into the DSP's expansion port instead of a MIC/LINE input.
+    //
+    // So: the tie's own socket if it already has one, else the best free one,
+    // where "best" prefers a NUMBERED general-purpose connector (MIC/LINE 1,
+    // HDMI IN 2) over a named special-purpose one (ACP, DMP EXP, USB AUDIO),
+    // and a connector of the switcher's own signal over a conversion.
+    final candidates = landingCandidates(dest, signals);
+
+    /// True when what is already on [p] is THIS tie's cable — drawn straight
+    /// off the switcher's output, or off the receiver that output feeds. A
+    /// second pass has to recognise its own work, or it walks along the box's
+    /// inputs drawing a fresh lead every time it runs.
+    bool ownedByThisTie(AvPort p) => feedsInto(dest.id, p.id).any((f) =>
+        (f.node == switcher.id && f.port == switcherPort.id) ||
+        joinedTo(switcher, switcherPort, f.node));
+
+    // Best rank first, and the catalog's own order inside a rank — so two
+    // ties onto the same box take connector one and connector two, in that
+    // order, rather than fighting over whichever sorted first this run.
+    final free = [
+      for (final (i, p) in candidates.indexed)
+        if (feedsInto(dest.id, p.id).isEmpty) (index: i, port: p),
+    ]..sort((a, b) {
+        final byRank = landingRank(b.port, switcherPort)
+            .compareTo(landingRank(a.port, switcherPort));
+        return byRank != 0 ? byRank : a.index.compareTo(b.index);
+      });
+
     final landing = toPort ??
-        dest.ports
-            .where((p) =>
-                signals.contains(p.signal) &&
-                (p.isInput || p.direction == PortDirection.bidirectional))
-            .firstOrNull;
+        candidates.where(ownedByThisTie).firstOrNull ??
+        free.firstOrNull?.port;
     if (landing == null) {
       unresolved.add(UnroutedTie(
-          key, value, '${dest.label} has no matching input to land on.'));
+          key,
+          value,
+          candidates.isEmpty
+              ? '${dest.label} has no matching input to land on.'
+              : 'Every input on ${dest.label} that could take $value is '
+                  'already fed by something else '
+                  '(${candidates.map((p) => p.label).join(', ')}). Nothing is '
+                  'drawn rather than a second lead onto a socket that already '
+                  'has one.'));
       return;
     }
 
@@ -1068,26 +1179,73 @@ RoutingPlan planRoutingFromConfig(
     );
   }
 
-  // Program audio: to the DSP when the room has one — that is what "DSP
-  // system" mode means — and to the ceiling speakers otherwise, where the
-  // amplifier is inside the switcher (an SA or MA build) and the cable is
-  // speaker level rather than line.
+  // PROGRAM AUDIO.
+  //
+  // In a room with a DSP, `output_audio` is the LINK on the switcher side —
+  // the number of the tie that feeds the DSP over the expansion bus, not a
+  // discrete analog output somebody runs a lead from. So nothing is drawn
+  // from it here: the pair is joined by their DMP EXP connectors below, which
+  // is the one cable that actually exists between them.
+  //
+  // Without a DSP the same key means what it always did: the amplifier is
+  // inside the switcher (an SA or MA build) and the run is speaker level to
+  // the ceiling.
   final audioValue = setup['output_audio']?.toString().trim() ?? '';
-  if (audioValue.isNotEmpty && audioValue.toLowerCase() != 'none') {
-    final dsp = nodesById['DSPDEVICE_1'];
-    if (dsp != null) {
-      routeDestination('output_audio', dsp, signals: _lineAudio);
-    } else {
-      final existing = _existingByModelOrLabel(
-          provider, const ['Ceiling Speakers'], 'output_audio');
-      final node = existing ??
-          place(
-              const _SourceSpec(
-                  'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
-              avAutoNodeId('output_audio'),
-              onLeft: false);
-      routeDestination('output_audio', node, signals: _speakerAudio);
-    }
+  if (audioValue.isNotEmpty &&
+      audioValue.toLowerCase() != 'none' &&
+      nodesById['DSPDEVICE_1'] == null) {
+    final existing = _existingByModelOrLabel(
+        provider, const ['Ceiling Speakers'], 'output_audio');
+    final node = existing ??
+        place(
+            const _SourceSpec(
+                'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
+            avAutoNodeId('output_audio'),
+            onLeft: false);
+    routeDestination('output_audio', node, signals: _speakerAudio);
+  }
+
+  // --- the expansion bus -----------------------------------------------------
+  //  'DMP EXP' is the ribbon between an Extron switcher with a DSP in it and
+  //  the DMP racked beside it. The program audio never leaves the pair as
+  //  analog — it stays on the bus — which is why `output_audio` draws no lead
+  //  of its own and why drawing one into a MIC/LINE input was wrong twice
+  //  over: the cable does not exist and the connector it landed on is not an
+  //  input anybody patches.
+  //
+  //  Every box in the room carrying one is chained to the next, in rack
+  //  order: the switcher, then the DSPs by their block number, then anything
+  //  else that has the connector. A project with one such box has no link to
+  //  draw and nothing happens.
+  final expansion = <AvNode>[
+    for (final node in [
+      switcher,
+      for (var n = 1; n <= 8; n++)
+        if (nodesById['DSPDEVICE_$n'] != null) nodesById['DSPDEVICE_$n']!,
+      ...provider.avNodes,
+      ...newNodes,
+    ])
+      if (_expansionPort(node) != null) node,
+  ];
+  final chained = <String>{};
+  final links = <AvNode>[];
+  for (final node in expansion) {
+    if (chained.add(node.id)) links.add(node);
+  }
+  for (var i = 0; i + 1 < links.length; i++) {
+    final from = links[i];
+    final to = links[i + 1];
+    final fromPort = _expansionPort(from)!;
+    final toPort = _expansionPort(to)!;
+    draw(
+      configKey: 'output_audio',
+      value: audioValue,
+      from: from,
+      fromPort: fromPort,
+      to: to,
+      toPort: toPort,
+      signal: fromPort.signal,
+    );
   }
 
   // Capture: whichever box this room makes its USB feed with.
@@ -1419,9 +1577,60 @@ const RoutingResult _noRouting =
 /// counted and dropped here; **Draw the routing from config** is still the way
 /// to see WHY, one line per tie with the key and the value behind it.
 RoutingResult autoDrawRoutingFromConfig(AppStateProvider provider) {
+  // ONCE PER CHANGE TO THE CONFIG, not once per visit. The drawing is a
+  // document: after the conversion has put the room on the canvas, opening
+  // the tab again should show it exactly as it was left. Re-running the pass
+  // every time meant a room nobody had touched could still change under them
+  // — a catalog revision moving a connector, or this file changing its mind
+  // about which socket a tie lands on, is enough.
+  //
+  // The fingerprint covers everything the pass reads, so editing a device or
+  // any of the routing values lets it run again, which is the case the repeat
+  // pass existed for: a doc cam added to the config last week belongs on the
+  // drawing this week.
+  final fingerprint = routingFingerprint(provider);
+  if (fingerprint.isNotEmpty && fingerprint == provider.avRoutedFingerprint) {
+    return _noRouting;
+  }
   final plan = planRoutingFromConfig(provider, respectDismissed: true);
   if (plan.isEmpty) return _noRouting;
-  return applyRoutingFromConfig(provider, plan, quiet: true);
+  final result = applyRoutingFromConfig(provider, plan, quiet: true);
+  provider.avRoutedFingerprint = fingerprint;
+  return result;
+}
+
+/// Everything the routing pass reads out of the config, as one string.
+///
+/// The routing values in SYSTEM_SETUP (`input_*`, `output_*`, the outlet
+/// names) and, for every device block, its key, model and the connector its
+/// own `input` names — the three facts a tie is resolved from. Change any of
+/// them and the drawing is out of date; change anything else in the room and
+/// it is not.
+String routingFingerprint(AppStateProvider provider) {
+  final config = provider.roomConfig;
+  final setup = config['SYSTEM_SETUP'];
+  if (setup is! Map) return '';
+
+  final parts = <String>[];
+  final keys = setup.keys.map((k) => k.toString()).toList()..sort();
+  for (final key in keys) {
+    if (!key.startsWith('input_') &&
+        !key.startsWith('output_') &&
+        !key.startsWith('dev_') &&
+        !RegExp(r'^power\d+_outlet_\d+$').hasMatch(key)) {
+      continue;
+    }
+    parts.add('$key=${setup[key]?.toString().trim() ?? ''}');
+  }
+
+  final blocks = config.keys.map((k) => k.toString()).toList()..sort();
+  for (final key in blocks) {
+    final block = config[key];
+    if (block is! Map || !block.containsKey('model')) continue;
+    parts.add('$key/${block['model']?.toString().trim() ?? ''}'
+        '/${block['input']?.toString().trim() ?? ''}');
+  }
+  return parts.join(';');
 }
 
 /// Draws [plan] onto the canvas.

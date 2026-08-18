@@ -501,6 +501,25 @@ class AvDeviceLibrary {
   /// the built-ins is loaded. [save] writes here when it is set.
   String filePath = '';
 
+  /// The custom entries EXACTLY as the file held them the last time this copy
+  /// read or wrote it, keyed the same way as [_byModel]. Empty when nothing
+  /// has been read from a file.
+  ///
+  /// This is the third side of the merge that makes a shared catalog safe —
+  /// see [_reconcileWithDisk]. Without it a save cannot tell "I changed this"
+  /// from "somebody else changed this", and the only available answer is to
+  /// overwrite everything.
+  final Map<String, AvDeviceTemplate> _baseline = {};
+
+  /// Remembers the current custom entries as the state of the file on disk.
+  void _markBaseline() {
+    _baseline
+      ..clear()
+      ..addEntries(
+        _byModel.entries.where((e) => e.value.custom),
+      );
+  }
+
   int get modelCount => _byModel.length;
 
   /// Entries that belong to the user — loaded from av_devices.json or edited
@@ -788,6 +807,16 @@ class AvDeviceLibrary {
     final target = toPath.isNotEmpty ? toPath : filePath;
     if (target.isEmpty) return '';
     try {
+      // Whoever else has been in the file since this copy read it keeps their
+      // work — a catalog on a share is edited by more than one person and a
+      // full-file rewrite would silently undo them.
+      //
+      // BEFORE the power inlets are normalized, not after: normalizing adds a
+      // POWER connector to entries that need one, and a merge cannot tell
+      // that from something the person at this keyboard drew. Run the other
+      // way round it counted every entry as locally edited and threw away the
+      // other editor's connectors.
+      final adopted = rebind ? await _reconcileWithDisk(target) : 0;
       // Nothing inconsistent reaches the file: the catalog in memory is
       // brought into line first, so what is on disk and what the editor shows
       // are the same entries.
@@ -795,7 +824,8 @@ class AvDeviceLibrary {
       final custom = all.where((t) => t.custom).toList();
       const encoder = JsonEncoder.withIndent('  ');
       await File(target).parent.create(recursive: true);
-      await File(target).writeAsString(
+      await _writeAtomically(
+        target,
         encoder.convert({
           '__readme':
               'AV device catalog for the Room Config Builder: connectors, '
@@ -813,10 +843,14 @@ class AvDeviceLibrary {
       if (rebind) {
         filePath = target;
         source = target;
+        // What is now on disk is what the next save has to measure against.
+        _markBaseline();
       }
       AppLogger.logInfo(
         'AV device catalog saved to $target (${custom.length} entries'
-        '${reconciled > 0 ? ', $reconciled power inlet(s) reconciled' : ''}).',
+        '${reconciled > 0 ? ', $reconciled power inlet(s) reconciled' : ''}'
+        '${adopted > 0 ? ', $adopted entr${adopted == 1 ? 'y' : 'ies'} kept '
+            'from another editor' : ''}).',
       );
       return target;
     } catch (e, stack) {
@@ -826,6 +860,144 @@ class AvDeviceLibrary {
         stack,
       );
       return '';
+    }
+  }
+
+  /// Folds anybody else's edits into this catalog before it is written over
+  /// the top of theirs. Returns how many entries were taken from the file.
+  ///
+  /// A SHARED CATALOG IS EDITED BY MORE THAN ONE PERSON. Everybody's Save
+  /// rewrites the whole file, so whoever pressed it last used to erase every
+  /// price the other had typed since — silently, because the file it wrote
+  /// was perfectly valid.
+  ///
+  /// So the file is read back immediately before writing and settled FIELD BY
+  /// FIELD against [_baseline], the entries as they were when this copy last
+  /// read or wrote it:
+  ///
+  ///   * unchanged on disk — nobody else touched it, mine is written;
+  ///   * changed on disk, mine still at the baseline — theirs, and it lives;
+  ///   * both moved — mine, because this is the save being pressed.
+  ///
+  /// Two people pricing different models both keep their work, and so do one
+  /// pricing a switcher and another drawing its connectors. Only the same
+  /// field of the same model, edited by two people in the same window, is a
+  /// contest — and there the one who saved second wins, which for a price
+  /// revision is the right answer anyway.
+  ///
+  /// A model on disk this copy has never seen is somebody's new entry and is
+  /// kept. A model missing from disk is not treated as a deletion: the merge
+  /// adds and updates and never deletes, the same rule the Device Editor's
+  /// merge dialog follows.
+  Future<int> _reconcileWithDisk(String target) async {
+    // Nothing to measure against: this is a first save, or an export to a
+    // file this copy has never read. Overwriting is the only thing it could
+    // mean.
+    if (_baseline.isEmpty) return 0;
+    late final AvDeviceLibrary disk;
+    try {
+      if (!await File(target).exists()) return 0;
+      disk = await readFile(target);
+    } catch (e, stack) {
+      // A file that cannot be read cannot be merged with. Saving over it is
+      // still better than refusing to save, but it is worth a line in the log.
+      AppLogger.logError(
+        'Could not re-read $target before saving, so another editor\'s '
+        'changes (if any) could not be kept.',
+        e,
+        stack,
+      );
+      return 0;
+    }
+
+    var adopted = 0;
+    for (final theirs in disk.all) {
+      final key = _norm(theirs.model);
+      final base = _baseline[key];
+      final mine = _byModel[key];
+
+      // Theirs alone: a model somebody else added since this copy read the
+      // file. Nothing of mine to weigh it against, so it stays.
+      if (base == null) {
+        if (mine == null) {
+          _byModel[key] = theirs;
+          adopted++;
+        }
+        continue;
+      }
+      // I deleted it and they did not. Mine is the edit being saved.
+      if (mine == null) continue;
+
+      final merged = _mergeFields(base: base, mine: mine, theirs: theirs);
+      if (merged == null) continue;
+      _byModel[key] = merged;
+      adopted++;
+    }
+
+    // Family defaults are a whole-entry decision — a fallback port set is one
+    // fact, not ten — so one somebody else added is kept and anything this
+    // copy holds a view on stays as it is.
+    for (final e in disk._familyDefaults.entries) {
+      _familyDefaults.putIfAbsent(e.key, () => e.value);
+    }
+
+    if (adopted > 0) _invalidate();
+    return adopted;
+  }
+
+  /// One entry settled field by field, or null when nothing of theirs is
+  /// worth taking.
+  ///
+  /// Compared through [AvDeviceTemplate.toJson] rather than field by hand, so
+  /// a field added to the template later is merged without anybody having to
+  /// remember this function exists. The encoding matters: `toJson` leaves a
+  /// default OUT, so a key's absence is a value like any other.
+  static AvDeviceTemplate? _mergeFields({
+    required AvDeviceTemplate base,
+    required AvDeviceTemplate mine,
+    required AvDeviceTemplate theirs,
+  }) {
+    final baseJson = base.toJson();
+    final mineJson = mine.toJson();
+    final theirsJson = theirs.toJson();
+
+    final out = Map<String, dynamic>.from(mineJson);
+    var took = 0;
+    for (final field in {
+      ...baseJson.keys,
+      ...mineJson.keys,
+      ...theirsJson.keys,
+    }) {
+      final atBase = jsonEncode(baseJson[field]);
+      // They left it where it was, so there is nothing of theirs to take.
+      if (jsonEncode(theirsJson[field]) == atBase) continue;
+      // I moved it too. This is my save.
+      if (jsonEncode(mineJson[field]) != atBase) continue;
+      if (theirsJson.containsKey(field)) {
+        out[field] = theirsJson[field];
+      } else {
+        out.remove(field);
+      }
+      took++;
+    }
+    if (took == 0) return null;
+    return AvDeviceTemplate.fromJson(out, custom: true);
+  }
+
+  /// Writes [contents] to [target] through a temporary file, so a reader on
+  /// the share never opens a half-written catalog.
+  static Future<void> _writeAtomically(String target, String contents) async {
+    final temp = File('$target.tmp');
+    await temp.writeAsString(contents, flush: true);
+    try {
+      await temp.rename(target);
+    } catch (_) {
+      // Some network shares refuse a rename over an existing file. Falling
+      // back to a plain write is the behavior this has always had.
+      await File(target).writeAsString(contents, flush: true);
+      try {
+        await temp.delete();
+      } catch (_) {}
     }
   }
 
@@ -850,6 +1022,7 @@ class AvDeviceLibrary {
     library._invalidate();
     library.filePath = filePath;
     library.source = filePath;
+    library._markBaseline();
     return library;
   }
 
@@ -914,6 +1087,9 @@ class AvDeviceLibrary {
         }
         library.filePath = candidate;
         library.source = candidate;
+        // What the file held when it was read, which is what a later save
+        // measures another editor's changes against.
+        library._markBaseline();
         AppLogger.logInfo(
           'AV device library loaded from $candidate ($added models, '
           '${library._familyDefaults.length} family defaults).',

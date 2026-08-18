@@ -3382,6 +3382,22 @@ class AppStateProvider extends ChangeNotifier {
   /// re-seeding doesn't keep dragging them back.
   final Set<String> avDismissedDevices = {};
 
+  /// The config the automatic routing pass was last run against, as a
+  /// fingerprint of everything that pass reads — see [routingFingerprint].
+  ///
+  /// THE DRAWING IS A DOCUMENT, NOT A VIEW. Once the room has been converted
+  /// and the cables are on the canvas, opening the tab again should show the
+  /// diagram exactly as it was left: boxes where they were dragged, cables
+  /// where they were drawn. The automatic pass used to run on every visit, so
+  /// a catalog revision or a change of mind about which connector a tie lands
+  /// on could quietly redraw a room nobody had touched.
+  ///
+  /// Empty means it has never run — an older room, or one just converted —
+  /// and the pass runs once and records what it read. After that it only runs
+  /// again when this stops matching the config, which is exactly when a device
+  /// or one of the routing values has been edited.
+  String avRoutedFingerprint = '';
+
   /// Per-room overrides of the signal-type palette. Recoloring HDMI here
   /// moves every HDMI cable, every HDMI port dot and the legend entry
   /// together — the point being that the key keeps describing the drawing.
@@ -3844,14 +3860,19 @@ class AppStateProvider extends ChangeNotifier {
 
     if (recordUndo) _pushAvUndo('Draw cable', _flowScope);
     _avCableCounter++;
+    final id = 'C$_avCableCounter';
     final cable = AvCable(
-      id: 'C$_avCableCounter',
+      id: id,
       fromNodeId: fromNodeId,
       fromPortId: fromPortId,
       toNodeId: toNodeId,
       toPortId: toPortId,
       signal: signal,
-      label: label,
+      // A run with no label is a run nobody can find again at the far end, so
+      // every one is born carrying its own cable number. It is only a
+      // default: the label is edited on the run's own dialog, and the cable
+      // schedule and the diagram both follow whatever it says.
+      label: label.isEmpty ? id : label,
     );
     avCables.add(cable);
     notifyListeners();
@@ -4228,6 +4249,7 @@ class AppStateProvider extends ChangeNotifier {
     avFloorPlans.clear();
     avFlowBackground = const DiagramBackground();
     avDismissedDevices.clear();
+    avRoutedFingerprint = '';
     avSignalColors.clear();
     avCost.clear();
     // The currency is an app setting, not a per-room one; clear() resets the
@@ -4393,6 +4415,7 @@ class AppStateProvider extends ChangeNotifier {
       if (dismissed is List) {
         avDismissedDevices.addAll(dismissed.map((e) => e.toString()));
       }
+      avRoutedFingerprint = doc['routedFrom']?.toString() ?? '';
       final palette = doc['signalColors'];
       if (palette is Map) {
         palette.forEach((name, hex) {
@@ -4435,6 +4458,14 @@ class AppStateProvider extends ChangeNotifier {
         if (match != null) {
           _avCableCounter =
               math.max(_avCableCounter, int.parse(match.group(1)!));
+        }
+      }
+
+      // Rooms drawn before cables carried their number: an unlabeled run gets
+      // its cable id, which is what the schedule was printing for it anyway.
+      for (var i = 0; i < avCables.length; i++) {
+        if (avCables[i].label.trim().isEmpty) {
+          avCables[i] = avCables[i].copyWith(label: avCables[i].id);
         }
       }
       for (final id in [
@@ -4567,6 +4598,8 @@ class AppStateProvider extends ChangeNotifier {
           'flowBackground': avFlowBackground.toJson(),
         'floorPlans': avFloorPlans.map((p) => p.toJson()).toList(),
         'dismissedDevices': avDismissedDevices.toList(),
+        if (avRoutedFingerprint.isNotEmpty)
+          'routedFrom': avRoutedFingerprint,
         'roomMode': roomMode.name,
         'signalColors': {
           for (final e in avSignalColors.entries)

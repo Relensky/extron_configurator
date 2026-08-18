@@ -455,6 +455,224 @@ void main() {
     });
   });
 
+  group('two ties onto one box', () {
+    /// The same room with a recorder and both capture feeds configured.
+    AppStateProvider withRecorder(String model) {
+      final p = room();
+      final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
+      setup['dev_recorders'] = '1';
+      setup['output_cc'] = '1';
+      setup['output_cc2'] = '2';
+      p.roomConfig['RECORDERDEVICE_1'] = <String, dynamic>{
+        'name': 'Recorder - $model',
+        'model': model,
+        'com_type': 'Network',
+      };
+      final template =
+          p.avDeviceLibrary.resolve(configKey: 'RECORDERDEVICE_1', model: model);
+      p.addAvNode(AvNode(
+        id: 'RECORDERDEVICE_1',
+        label: 'Recorder - $model',
+        model: model,
+        pos: Offset.zero,
+        ports: withPowerInlet(template.ports, template.powerInput),
+        fromConfig: true,
+      ));
+      return p;
+    }
+
+    /// Where the capture feeds land on the recorder.
+    List<String> captureInputs(AppStateProvider p) => [
+          for (final c in p.avCables)
+            if (c.toNodeId == 'RECORDERDEVICE_1')
+              p.avNodeById(c.toNodeId)!.portById(c.toPortId)!.label,
+        ];
+
+    test('take a connector each', () {
+      // THE BUG: both ties took the box's FIRST matching connector, so
+      // output_cc and output_cc2 came out as two leads from the DTP
+      // CrossPoint drawn onto HDMI IN 1 — a socket that takes one lead.
+      final p = withRecorder('AV Bridge 2x1');
+      autoDrawRoutingFromConfig(p);
+      expect(captureInputs(p), ['HDMI IN 1', 'HDMI IN 2']);
+    });
+
+    test('and a box with only one says so rather than doubling up', () {
+      // The older AV Bridge has a single HDMI input. Nothing is drawn for the
+      // second feed, and the report says why.
+      final p = withRecorder('AV Bridge');
+      autoDrawRoutingFromConfig(p);
+      expect(captureInputs(p), ['HDMI IN']);
+      expect(
+        planRoutingFromConfig(p)
+            .unresolved
+            .where((u) => u.configKey == 'output_cc2')
+            .single
+            .reason,
+        contains('already fed'),
+      );
+    });
+
+    test('a second pass leaves both where they are', () {
+      final p = withRecorder('AV Bridge 2x1');
+      autoDrawRoutingFromConfig(p);
+      // Even forced past the fingerprint, the plan has to recognise its own
+      // cables rather than walk along the box's inputs drawing a fresh lead.
+      p.avRoutedFingerprint = '';
+      autoDrawRoutingFromConfig(p);
+      expect(captureInputs(p), ['HDMI IN 1', 'HDMI IN 2']);
+    });
+  });
+
+  group('the program audio', () {
+    /// The same room with a DSP racked beside the matrix, and an assisted
+    /// listening tie.
+    AppStateProvider withDsp({String ald = '4'}) {
+      final p = room();
+      final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
+      setup['dev_dsps'] = '1';
+      setup['output_audio'] = '1';
+      setup['output_audio_ald'] = ald;
+      p.roomConfig['DSPDEVICE_1'] = <String, dynamic>{
+        'name': 'DSP - Extron DMP 64 Plus C AT',
+        'model': 'DMP 64 Plus C AT',
+        'com_type': 'Network',
+      };
+      final template = p.avDeviceLibrary
+          .resolve(configKey: 'DSPDEVICE_1', model: 'DMP 64 Plus C AT');
+      p.addAvNode(AvNode(
+        id: 'DSPDEVICE_1',
+        label: 'DSP - Extron DMP 64 Plus C AT',
+        model: 'DMP 64 Plus C AT',
+        pos: Offset.zero,
+        ports: withPowerInlet(template.ports, template.powerInput),
+        fromConfig: true,
+      ));
+      return p;
+    }
+
+    /// The connectors a cable between the switcher and the DSP joins.
+    List<String> switcherToDsp(AppStateProvider p) => [
+          for (final c in p.avCables)
+            if (c.fromNodeId == 'SWITCHERDEVICE_1' &&
+                c.toNodeId == 'DSPDEVICE_1')
+              '${p.avNodeById(c.fromNodeId)!.portById(c.fromPortId)!.label}'
+                  ' -> '
+                  '${p.avNodeById(c.toNodeId)!.portById(c.toPortId)!.label}',
+        ];
+
+    test('stays on the expansion bus, with no analog lead invented', () {
+      // `output_audio` is the number of the LINK on the switcher side, not a
+      // discrete output somebody runs a lead from. Drawing one put a cable
+      // into the DSP's own expansion port — a connector nobody patches — and
+      // quoted a run that does not exist.
+      final p = withDsp();
+      autoDrawRoutingFromConfig(p);
+      expect(switcherToDsp(p), ['DMP EXP -> DMP EXP']);
+    });
+
+    test('a room with no DSP still feeds the ceiling', () {
+      // The amplifier is inside the switcher on an SA or MA build, and there
+      // the same key really is a run — speaker level, to the ceiling.
+      final p = room();
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['output_audio'] = '1';
+      autoDrawRoutingFromConfig(p);
+      expect(p.avNodeById(avAutoNodeId('output_audio'))?.label,
+          'Ceiling speakers');
+    });
+
+    test('assisted listening is a box of its own, cabled and quoted', () {
+      final p = withDsp();
+      autoDrawRoutingFromConfig(p);
+
+      final ald = p.avNodeById(avAutoNodeId('output_audio_ald'));
+      expect(ald, isNotNull);
+      expect(ald!.model, 'Assisted Listening');
+      // Its own tie off the matrix, landing on the box's audio input.
+      final lead = p.avCables
+          .firstWhere((c) => c.toNodeId == ald.id && c.signal != SignalType.power);
+      expect(ald.portById(lead.toPortId)?.label, 'AUDIO IN');
+      // And it is on the quote — a box the room is buying, not scenery.
+      expect(ald.excludeFromCost, isFalse);
+      expect(
+        computeRoomCost(
+          model: buildAvFlowModel(p),
+          library: library,
+          settings: RoomCostSettings(),
+        ).equipment.any((l) => l.model == 'Assisted Listening'),
+        isTrue,
+      );
+    });
+
+    test('a room without one gets no assisted listening box', () {
+      final p = withDsp(ald: '');
+      autoDrawRoutingFromConfig(p);
+      expect(p.avNodeById(avAutoNodeId('output_audio_ald')), isNull);
+    });
+  });
+
+  group('the drawing stays put', () {
+    // THE DIAGRAM IS A DOCUMENT. After the conversion has put the room on the
+    // canvas, opening the tab again should show it as it was left. The pass
+    // used to run on every visit, so a room nobody had touched could still be
+    // redrawn under them — by a catalog revision moving a connector, or by
+    // this file changing its mind about which socket a tie lands on.
+    test('a second visit with nothing changed draws nothing', () {
+      final p = room();
+      final first = autoDrawRoutingFromConfig(p);
+      expect(first.cablesDrawn, greaterThan(0));
+
+      final before = p.avCables.length;
+      final again = autoDrawRoutingFromConfig(p);
+      expect(again, (nodesAdded: 0, cablesDrawn: 0, unresolved: 0));
+      expect(p.avCables, hasLength(before));
+    });
+
+    test('a cable moved by hand is not moved back', () {
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+
+      // Somebody decides the PC belongs on input 2 of the matrix and drags
+      // that end of the lead across. The config still says 1.
+      final lead = p.avCables
+          .firstWhere((c) => c.fromNodeId == avAutoNodeId('input_pc'));
+      p.updateAvCable(lead.copyWith(toPortId: 'hdmi_2'));
+
+      autoDrawRoutingFromConfig(p);
+      expect(p.avCables.where((c) => c.id == lead.id).single.toPortId,
+          'hdmi_2');
+      expect(
+          p.avCables
+              .where((c) => c.fromNodeId == avAutoNodeId('input_pc')),
+          hasLength(1),
+          reason: 'and no second lead drawn to put it right');
+    });
+
+    test('editing the config lets the pass run again', () {
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+      final before = p.avCables.length;
+
+      // A doc cam added to the config last week belongs on the drawing this
+      // week — which is the case the repeat pass exists for.
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['input_dvd'] = '2';
+      autoDrawRoutingFromConfig(p);
+
+      expect(p.avNodeById(avAutoNodeId('input_dvd')), isNotNull);
+      expect(p.avCables.length, greaterThan(before));
+    });
+
+    test('a device swapped for another model lets it run again too', () {
+      final p = room();
+      autoDrawRoutingFromConfig(p);
+      final fingerprint = p.avRoutedFingerprint;
+      expect(fingerprint, isNotEmpty);
+
+      (p.roomConfig['PROJECTORDEVICE_1'] as Map)['model'] = 'TT-7523Q';
+      expect(routingFingerprint(p), isNot(fingerprint));
+    });
+  });
+
   group('and the estimate counts them', () {
     CostEstimate estimateFor(AppStateProvider p) => computeRoomCost(
           model: buildAvFlowModel(p),

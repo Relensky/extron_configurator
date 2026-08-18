@@ -148,12 +148,52 @@ void main() {
       );
     });
 
-    test('a type with one entry is the single line it always was', () {
+    test('one entry, two lengths drawn, is still two lines', () {
+      // The lengths on the DRAWING split the order even when the catalog has
+      // a single entry for the type — which is the usual case, since the
+      // shipped catalog prices cable by the made-up lead rather than by the
+      // signal. A 3 ft patch and a 20 ft run are two prices, and collapsing
+      // them onto one row leaves nowhere to type the second.
       final p = room([3, 20], [lead('HDMI patch', 0, 15)]);
+      final lines = cost(p).cabling;
+      expect(lines, hasLength(2));
+      expect(lines.map((l) => l.qty), [1, 1]);
+      // The shorter one keeps the key the type has always had, so a price
+      // typed against 'HDMI' before anybody measured a run still lands.
+      expect(lines.map((l) => l.key), ['cable:hdmi', 'cable:hdmi@20ft']);
+      expect(lines.every((l) => l.model == 'HDMI patch'), isTrue);
+    });
+
+    test('a room with no lengths measured is the single line it always was',
+        () {
+      final p = room([0, 0], [lead('HDMI patch', 0, 15)]);
       final lines = cost(p).cabling;
       expect(lines, hasLength(1));
       expect(lines.single.qty, 2);
       expect(lines.single.key, 'cable:hdmi');
+    });
+
+    test('an uncatalogued type splits by length too, and says which', () {
+      // No catalog entry at all: the line is named for the signal, and the
+      // length is the only thing telling the two rows apart — so it has to be
+      // in the description as well as in the key.
+      final p = room([25, 25, 50], []);
+      final lines = cost(p).cabling;
+      expect(lines, hasLength(2));
+      expect(lines.first.qty, 2);
+      expect(lines.first.description, contains('25ft'));
+      expect(lines.last.qty, 1);
+      expect(lines.last.description, contains('50ft'));
+      expect(lines.last.key, 'cable:hdmi@50ft');
+    });
+
+    test('each length carries its own price', () {
+      final p = room([25, 50], []);
+      p.setAvCostPrice('cable:hdmi', 40);
+      p.setAvCostPrice('cable:hdmi@50ft', 75);
+      final lines = cost(p).cabling;
+      expect(lines.map((l) => l.unitPrice), [40, 75]);
+      expect(lines.fold<double>(0, (sum, l) => sum + l.total), 115);
     });
 
     test('the spares sit on the type, not on one of its lengths', () {

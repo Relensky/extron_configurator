@@ -284,12 +284,31 @@ void main() {
     expect(power(plan, 'power1_outlet_8'),
         'OUTLET 8 -> USB Switcher - Inogeni Toggle');
 
-    // One finding, and it is a real one about the config rather than a failure
-    // to resolve: BSS 239 has one projector and still carries an
-    // output_proj_2, so nothing is drawn for it and the reason says why.
-    expect(plan.unresolved.map((u) => u.configKey), ['output_proj_2']);
+    // The program audio stays on the expansion bus. `output_audio` is the
+    // number of that link on the switcher side, not a discrete analog output
+    // — so the one cable drawn is DMP EXP to DMP EXP, and no lead is run into
+    // a MIC/LINE input that nobody patches.
+    expect(tie(plan, 'output_audio'), 'DMP EXP -> DMP EXP');
+    expect(
+      plan.cables.where((c) => c.fromPortLabel.startsWith('AUDIO')),
+      isEmpty,
+    );
+
+    // Two findings, and both are real facts about the config rather than a
+    // failure to resolve.
+    //
+    // BSS 239 has one projector and still carries an output_proj_2, so
+    // nothing is drawn for it and the reason says why. And its recorder is
+    // the older one-input AV Bridge while the config asks for two capture
+    // feeds — output_cc takes the one HDMI input and output_cc2 has nowhere
+    // to go, which is worth saying rather than drawing a second lead onto a
+    // socket that already has one.
+    expect(plan.unresolved.map((u) => u.configKey),
+        ['output_proj_2', 'output_cc2']);
     expect(plan.unresolved.first.reason, contains('1 display'));
     expect(plan.unresolved.first.reason, contains('dev_projectors'));
+    expect(plan.unresolved.last.reason, contains('already fed'));
+    expect(tie(plan, 'output_cc'), 'HDMI 001 -> HDMI IN');
   });
 
   test('BSS 122 — the catalog counts connectors on this one', () async {

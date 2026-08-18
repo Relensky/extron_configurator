@@ -297,7 +297,7 @@ void main() {
       expect(cell(counts, av, 'Runs'), 1);
     });
 
-    test('unlabeled runs are counted and named as such', () {
+    test('a run drawn on the canvas carries its cable number', () {
       final p = room();
       p.addAvNode(
         AvNode(
@@ -325,12 +325,26 @@ void main() {
         signal: SignalType.hdmi,
       );
 
+      // A run with no label is a run nobody can find again at the far end,
+      // so every one drawn is born carrying its own cable number — the same
+      // number the schedule prints in its Cable ID column.
+      expect(p.avCables.single.label, p.avCables.single.id);
+
       final counts = sectionNamed(
         avReportSections(p, buildAvFlowModel(p)),
         'Line Counts by Label',
       );
-      expect(counts.rows.single.first, '(no label)');
+      expect(counts.rows.single.first, 'C');
       expect(cell(counts, counts.rows.single, 'Runs'), 1);
+
+      // Cleared by hand, it goes back to being a run nobody can find — which
+      // the report still says out loud rather than quietly dropping.
+      p.updateAvCable(p.avCables.single.copyWith(label: ''));
+      final cleared = sectionNamed(
+        avReportSections(p, buildAvFlowModel(p)),
+        'Line Counts by Label',
+      );
+      expect(cleared.rows.single.first, '(no label)');
     });
 
     test('the stem stops before the number', () {
