@@ -40,7 +40,10 @@ void main() {
   ///
   /// [projectorInput] is the projector block's own `input`: the connector
   /// somebody plugged into, and the fact the far end of the run turns on.
-  AppStateProvider room({String projectorInput = 'HDBaseT'}) {
+  AppStateProvider room({
+    String projectorInput = 'HDBaseT',
+    String projectorModel = 'PowerLite L630U',
+  }) {
     final p = AppStateProvider(autoLoadSettings: false)
       ..uiSchema = schema
       ..avDeviceLibrary = library;
@@ -73,7 +76,7 @@ void main() {
     };
     p.roomConfig['PROJECTORDEVICE_1'] = <String, dynamic>{
       'name': 'Projector - PowerLite L630U',
-      'model': 'PowerLite L630U',
+      'model': projectorModel,
       'input': projectorInput,
       'com_type': 'Network',
     };
@@ -292,6 +295,22 @@ void main() {
   });
 
   group('the outputs', () {
+    test('a DTP output to a display that takes twisted pair skips the box',
+        () {
+      // The projector's config says HDMI 1, but it has an HDBaseT socket and
+      // the matrix output is twisted pair — so the pair goes into that socket
+      // and no receiver is bought. The declared input records which connector
+      // somebody plugged into; a room wired like this has an answer already.
+      final p = room(projectorInput: 'HDMI 1');
+      autoDrawRoutingFromConfig(p);
+
+      expect(
+        runsFrom(p, 'SWITCHERDEVICE_1'),
+        contains('DTP OUT 003B -> Projector - PowerLite L630U (HDBaseT)'),
+      );
+      expect(p.avNodeById(avAutoNodeId('output_proj_1_rx')), isNull);
+    });
+
     test('a DTP output to a display on HDBaseT is one cable', () {
       final p = room(projectorInput: 'HDBaseT');
       autoDrawRoutingFromConfig(p);
@@ -307,7 +326,7 @@ void main() {
     });
 
     test('a DTP output to a display on HDMI puts the receiver in', () {
-      final p = room(projectorInput: 'HDMI 1');
+      final p = room(projectorInput: 'HDMI 1', projectorModel: 'TT-7523Q');
       autoDrawRoutingFromConfig(p);
 
       // The cable that cannot exist is not drawn. A DTP output is twisted pair
@@ -336,7 +355,7 @@ void main() {
     });
 
     test('the receiver lands upstream of the display it feeds', () {
-      final p = room(projectorInput: 'HDMI 1');
+      final p = room(projectorInput: 'HDMI 1', projectorModel: 'TT-7523Q');
       p.setAvNodePosition('PROJECTORDEVICE_1', const Offset(1200, 300));
       autoDrawRoutingFromConfig(p);
 
@@ -346,7 +365,7 @@ void main() {
     });
 
     test('a receiver already on the diagram is used, not duplicated', () {
-      final p = room(projectorInput: 'HDMI 1');
+      final p = room(projectorInput: 'HDMI 1', projectorModel: 'TT-7523Q');
 
       // A diagram drawn by hand before any of this existed: the receiver is
       // there, cabled to the projector, under whatever name somebody gave it.
@@ -383,7 +402,7 @@ void main() {
 
   group('running by itself', () {
     test('a second pass changes nothing', () {
-      final p = room(projectorInput: 'HDMI 1');
+      final p = room(projectorInput: 'HDMI 1', projectorModel: 'TT-7523Q');
       autoDrawRoutingFromConfig(p);
       final nodes = p.avNodes.length;
       final cables = p.avCables.length;
@@ -412,7 +431,7 @@ void main() {
     });
 
     test('a receiver deleted by hand takes its two cables with it', () {
-      final p = room(projectorInput: 'HDMI 1');
+      final p = room(projectorInput: 'HDMI 1', projectorModel: 'TT-7523Q');
       autoDrawRoutingFromConfig(p);
 
       p.removeAvNode(avAutoNodeId('output_proj_1_rx'));
@@ -461,7 +480,7 @@ void main() {
     });
 
     test('so is the receiver the run needs', () {
-      final p = room(projectorInput: 'HDMI 1');
+      final p = room(projectorInput: 'HDMI 1', projectorModel: 'TT-7523Q');
       autoDrawRoutingFromConfig(p);
 
       final line = estimateFor(p)

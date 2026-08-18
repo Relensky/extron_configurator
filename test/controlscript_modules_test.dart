@@ -81,8 +81,9 @@ void main() {
     }
     // A tally rather than a "greater than": the point is to notice a driver
     // arriving without its gateway block, and only an exact number does that.
-    // Bump it when one is added — the Newline TT panels made it 63.
-    expect(counted, 63);
+    // Bump it when one is added — the Newline TT panels and the Sony Bravia
+    // professional displays made it 64.
+    expect(counted, 64);
   }, skip: !available);
 
   test('the SoE password wins over the device password when switched to', () {

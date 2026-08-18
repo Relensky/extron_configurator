@@ -886,6 +886,14 @@ Color planLabelInk(PlanLabelStyle style, Color fallback) =>
 /// plan travels with it as one more file, and a 4 MB architectural export
 /// stays out of a JSON sidecar that is otherwise hand-readable and diffable.
 /// [imageFile] is resolved against the folder the config lives in.
+/// A stored `RRGGBB` paper colour, or null for "follow the theme".
+Color? _paperFromJson(dynamic raw) {
+  final text = raw?.toString().trim() ?? '';
+  if (text.isEmpty) return null;
+  final value = int.tryParse(text, radix: 16);
+  return value == null ? null : Color(0xFF000000 | value);
+}
+
 class FloorPlan {
   /// `PLAN_<n>`.
   final String id;
@@ -902,6 +910,18 @@ class FloorPlan {
   /// How the plan is drawn behind the signal flow: 1 is opaque, and the
   /// default is faint enough that the diagram still reads over it.
   final double opacity;
+
+  /// What the paper is. Null — the normal case — means "follow the theme",
+  /// which is [kPaperLight] on a light screen and [kPaperDark] on a dark one.
+  ///
+  /// It matters most on a sheet with no image, because then the paper IS the
+  /// drawing: a blank sheet used to be a white rectangle whatever the app was
+  /// set to, which in a dark room is a lamp. A sheet WITH a drawing keeps
+  /// wanting something near-white behind it — an architect's export is black
+  /// ink on nothing, and it disappears on a dark mat — so the theme default
+  /// stays light-ish either way and this is the override for a room that
+  /// wants its own.
+  final Color? paperColor;
 
   /// Plan pixels per foot, when somebody has calibrated it. 0 means uncalibrated
   /// — lengths are then left blank rather than being reported in pixels.
@@ -1002,6 +1022,7 @@ class FloorPlan {
     this.imageFile = '',
     this.imageSize = const Size(1200, 900),
     this.opacity = 0.35,
+    this.paperColor,
     this.pixelsPerFoot = 0,
     this.callouts = const [],
     this.annotations = const [],
@@ -1046,6 +1067,19 @@ class FloorPlan {
   Offset? markerFor(String locationId) => markers[locationId];
 
   /// This sheet with [locationId] at [pos].
+  /// The paper a sheet is drawn on when it has not chosen its own.
+  ///
+  /// Not white on a dark screen. A blank sheet is mostly paper, and a full
+  /// white rectangle in a dark room is the thing people turn the lights on
+  /// for. Dark enough to stop being a lamp, light enough that black ink from
+  /// an architect's export still reads on it.
+  static const Color kPaperLight = Color(0xFFFFFFFF);
+  static const Color kPaperDark = Color(0xFFE3E5E8);
+
+  /// What to paint the paper, given the screen's brightness.
+  Color paperFor({required bool dark}) =>
+      paperColor ?? (dark ? kPaperDark : kPaperLight);
+
   FloorPlan withMarker(String locationId, Offset pos) =>
       copyWith(markers: {...markers, locationId: pos});
 
@@ -1086,6 +1120,8 @@ class FloorPlan {
     String? imageFile,
     Size? imageSize,
     double? opacity,
+    Color? paperColor,
+    bool clearPaperColor = false,
     double? pixelsPerFoot,
     List<FloorPlanCallout>? callouts,
     List<PlanAnnotation>? annotations,
@@ -1102,6 +1138,9 @@ class FloorPlan {
     imageFile: imageFile ?? this.imageFile,
     imageSize: imageSize ?? this.imageSize,
     opacity: opacity ?? this.opacity,
+    // clearPaperColor because passing null cannot be told apart from "leave
+    // it alone" — the same reason the cable's colour override needs one.
+    paperColor: clearPaperColor ? null : (paperColor ?? this.paperColor),
     pixelsPerFoot: pixelsPerFoot ?? this.pixelsPerFoot,
     callouts: callouts ?? this.callouts,
     annotations: annotations ?? this.annotations,
@@ -1139,6 +1178,10 @@ class FloorPlan {
     'width': imageSize.width,
     'height': imageSize.height,
     'opacity': opacity,
+    if (paperColor != null)
+      'paper': (paperColor!.toARGB32() & 0xFFFFFF)
+          .toRadixString(16)
+          .padLeft(6, '0'),
     if (pixelsPerFoot > 0) 'pixelsPerFoot': pixelsPerFoot,
     'callouts': [for (final c in callouts) c.toJson()],
     if (annotations.isNotEmpty)
@@ -1188,6 +1231,7 @@ class FloorPlan {
       (json['height'] as num?)?.toDouble() ?? 900,
     ),
     opacity: ((json['opacity'] as num?)?.toDouble() ?? 0.35).clamp(0.05, 1.0),
+    paperColor: _paperFromJson(json['paper']),
     pixelsPerFoot: (json['pixelsPerFoot'] as num?)?.toDouble() ?? 0,
     callouts: [
       for (final c in (json['callouts'] as List? ?? []))

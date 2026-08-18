@@ -628,7 +628,7 @@ class UiSchema {
     DeviceTypeSpec(countKey: 'dev_media_ports', prefix: 'MEDIAPORTDEVICE_', label: 'MediaPorts'),
     DeviceTypeSpec(countKey: 'dev_wireless', prefix: 'WIRELESSDEVICE_', label: 'Wireless'),
     DeviceTypeSpec(countKey: 'dev_recorders', prefix: 'RECORDERDEVICE_', label: 'Recorders'),
-    DeviceTypeSpec(countKey: 'dev_screens', prefix: 'SCREENDEVICE_', label: 'Screens (Relays/Network)'),
+    DeviceTypeSpec(countKey: 'dev_screens', prefix: 'SCREENDEVICE_', label: 'Screens / Network'),
     // The NAV share room's two families. A NAVigator is not a room switcher —
     // SwitcherManager sends its handlers Set("Input", ...) and a NAVigator
     // answers none of that — so it has its own count key, and the stations

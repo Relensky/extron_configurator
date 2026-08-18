@@ -1381,7 +1381,7 @@ RoomPreset _huddleSpace() => RoomPreset(
     ),
     _device(
       'PROJECTORDEVICE_1',
-      'Display',
+      'Display 1',
       _frontWall.id,
       [
         _p('in_hdmi_1', 'HDMI 1', SignalType.hdmi, PortDirection.input),

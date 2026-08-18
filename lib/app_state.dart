@@ -2074,6 +2074,21 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// What one sheet's paper is painted. Null puts it back to following the
+  /// theme — see [FloorPlan.paperFor].
+  void setAvPlanPaperColor(String planId, Color? color) {
+    final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
+    if (sheet == null) return;
+    final index = avFloorPlans.indexWhere((p) => p.id == sheet.id);
+    if (index < 0) return;
+    _pushAvUndo('Sheet colour', _plansScope);
+    avFloorPlans[index] = sheet.copyWith(
+      paperColor: color,
+      clearPaperColor: color == null,
+    );
+    notifyListeners();
+  }
+
   /// Takes an undo snapshot of the floor plans before a gesture that will
   /// write through them over and over. Dragging a bend writes on every pointer
   /// event, and one drag has to be one undo.

@@ -79,6 +79,20 @@ List<FloorPlan> sheetsWorthDrawing(AppStateProvider provider) => provider
         s.hasImage || s.markers.isNotEmpty || s.annotations.isNotEmpty)
     .toList();
 
+/// Paper colours offered before the wheel. Papers, not paints: a sheet is
+/// something drawn on, and a saturated one makes every marker on it harder to
+/// read rather than easier.
+const List<Color> kPaperSwatches = [
+  Color(0xFFFFFFFF), // white
+  Color(0xFFF3F3F3), // near-white
+  Color(0xFFE3E5E8), // the dark-mode default
+  Color(0xFFCFD4DA), // grey
+  Color(0xFFF6F1E7), // buff
+  Color(0xFFE8F0E8), // pale green
+  Color(0xFFE7EEF6), // pale blue
+  Color(0xFF9AA3AC), // slate
+];
+
 class FloorPlanView extends StatefulWidget {
   const FloorPlanView({super.key});
 
@@ -1062,6 +1076,104 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     if (ok == true) provider.removeAvFloorPlan(sheet.id);
   }
 
+  /// Picks what this sheet's paper is painted.
+  ///
+  /// Per sheet rather than per room, like everything else a sheet owns: the
+  /// blank layout sheet and an imported architectural export want different
+  /// backgrounds, and one shared colour would make the second unreadable to
+  /// fix the first.
+  Future<void> _showPaperColorDialog(
+    AppStateProvider provider,
+    FloorPlan plan,
+  ) async {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final sheet = provider.avFloorPlanById(plan.id) ?? plan;
+          return AlertDialog(
+            title: Text('Colour for ${sheet.name}'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sheet.hasImage
+                        ? 'What sits behind the drawing. Keep it near-white '
+                            'unless the export has its own background — black '
+                            'ink on a dark mat is ink nobody can read.'
+                        : 'This sheet has no drawing, so the colour IS the '
+                            'sheet. Following the theme keeps it off white in '
+                            'dark mode.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 2,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ColorSwatchButton(
+                        key: const ValueKey('paper_follow_theme'),
+                        color: sheet.paperFor(dark: dark),
+                        selected: sheet.paperColor == null,
+                        badge: Icons.auto_awesome,
+                        tooltip: 'Follow the theme',
+                        onTap: () {
+                          provider.setAvPlanPaperColor(sheet.id, null);
+                          setLocal(() {});
+                        },
+                      ),
+                      for (final c in kPaperSwatches)
+                        ColorSwatchButton(
+                          key: ValueKey('paper_'
+                              '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}'),
+                          color: c,
+                          selected:
+                              sheet.paperColor?.toARGB32() == c.toARGB32(),
+                          onTap: () {
+                            provider.setAvPlanPaperColor(sheet.id, c);
+                            setLocal(() {});
+                          },
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.colorize, size: 16),
+                          label: const Text('Custom'),
+                          onPressed: () async {
+                            final picked = await showColorWheelDialog(
+                              ctx,
+                              initial: sheet.paperFor(dark: dark),
+                              title: 'Colour for ${sheet.name}',
+                            );
+                            if (picked != null) {
+                              provider.setAvPlanPaperColor(sheet.id, picked);
+                              setLocal(() {});
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _toolbar(AppStateProvider provider, FloorPlan? plan) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1077,6 +1189,23 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             label: Text(plan == null ? 'Import a plan' : 'Replace the image'),
             onPressed: () => _importPlan(provider),
           ),
+          if (plan != null)
+            OutlinedButton.icon(
+              key: const ValueKey('plan_paper_color'),
+              icon: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: plan.paperFor(
+                    dark: Theme.of(context).brightness == Brightness.dark,
+                  ),
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              label: const Text('Sheet colour'),
+              onPressed: () => _showPaperColorDialog(provider, plan),
+            ),
           if (plan != null) ...[
             FilterChip(
               avatar: const Icon(Icons.add_location_alt_outlined, size: 18),
@@ -1385,11 +1514,13 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             Container(
               width: sheet.width,
               height: sheet.height,
-              color: theme.brightness == Brightness.dark
-                  // The plan is a white drawing; a white mat under it keeps a
-                  // transparent PNG from reading as a hole in dark mode.
-                  ? const Color(0xFFF3F3F3)
-                  : Colors.white,
+              // The paper. A sheet with a drawing wants something near-white
+              // behind it — an architect's export is black ink on nothing and
+              // a transparent PNG would read as a hole — but a BLANK sheet is
+              // nothing but paper, and a full white rectangle in a dark room
+              // is what people turn the lights on for. So the default follows
+              // the theme, and a room that wants its own says so.
+              color: plan.paperFor(dark: theme.brightness == Brightness.dark),
             ),
             Positioned(
               left: plan.margins.left,

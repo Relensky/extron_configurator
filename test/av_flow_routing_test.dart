@@ -305,22 +305,17 @@ void main() {
     expect(ties(plan, 'input_inst_cam'),
         ['HDMI OUT -> HDMI', 'DTP -> DTP IN 008']);
 
-    // Both projectors say 'HDMI 1' and the matrix outputs are DTP — the real
-    // room this feature was described from. A DTP output does not plug into an
-    // HDMI input, so each run is two cables and a receiver, and each display
-    // gets its own. The matrix outputs are the inferred ones: DTP OUT 1 is
-    // output 3.
-    expect(ties(plan, 'output_proj_1'),
-        ['DTP OUT 1 -> DTP IN', 'HDMI OUT -> HDMI 1']);
-    expect(ties(plan, 'output_proj_2'),
-        ['DTP OUT 2 -> DTP IN', 'HDMI OUT -> HDMI 1']);
+    // Both projectors say 'HDMI 1' and the matrix outputs are DTP. Both
+    // PowerLites have an HDBaseT socket, so the pair goes into that and no
+    // receiver is bought: the declared input records which connector somebody
+    // plugged into, and a room wired like this already has the answer. The
+    // matrix outputs are the inferred ones: DTP OUT 1 is output 3.
+    expect(ties(plan, 'output_proj_1'), ['DTP OUT 1 -> HDBaseT']);
+    expect(ties(plan, 'output_proj_2'), ['DTP OUT 2 -> HDBaseT']);
 
-    final receivers =
-        plan.newNodes.where((n) => n.model == 'DTP HDMI 4K 230 Rx');
-    expect(receivers, hasLength(2));
-    // Two displays, two receivers, and the labels say which is which — one
-    // line on the quote of quantity two, but two boxes to hang on two walls.
-    expect(receivers.map((n) => n.label).toSet(), hasLength(2));
+    // And nothing was invented to get there.
+    expect(plan.newNodes.where((n) => n.model == 'DTP HDMI 4K 230 Rx'),
+        isEmpty);
   });
 
   test('AJH 125A — an IN1608, whose outputs are lettered', () async {

@@ -168,7 +168,7 @@
     },
     "dev_screens": {
       "prefix": "SCREENDEVICE_",
-      "label": "Screens (Relays/Network)",
+      "label": "Screens / Network",
       "max": 8,
       "keepAlivePreference": [ "Power" ]
     },

@@ -930,6 +930,32 @@ RoutingPlan planRoutingFromConfig(
     // a lead that cannot be bought.
     if (switcherPort.signal == SignalType.hdbaset &&
         landing.signal == SignalType.hdmi) {
+      // Before inventing a box: does the far end take twisted pair itself?
+      //
+      // A projector with an HDBaseT socket needs no receiver, whatever its
+      // config block's `input` happens to name — that field records which
+      // connector somebody plugged into, and a room whose matrix output is
+      // DTP and whose display has a DTP socket is a room where the answer is
+      // that socket. Drawing a receiver into it quotes a box the room does
+      // not need and puts a join in a run that has none.
+      final native = dest.ports
+          .where((p) =>
+              p.signal == SignalType.hdbaset &&
+              (p.isInput || p.direction == PortDirection.bidirectional))
+          .firstOrNull;
+      if (native != null) {
+        draw(
+          configKey: key,
+          value: value,
+          from: switcher,
+          fromPort: switcherPort,
+          to: dest,
+          toPort: native,
+          signal: SignalType.hdbaset,
+        );
+        return;
+      }
+
       // The receiver taken off the canvas by hand takes its two cables with
       // it: half a run drawn to a box that is not there is worse than none.
       if (dismissed('${key}_rx')) return;
