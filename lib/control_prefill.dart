@@ -245,10 +245,30 @@ DeviceTypeSpec? familyForNode(AppStateProvider provider, AvNode node) {
   final template = provider.avDeviceLibrary.templateForModel(node.model);
 
   // Every token this device offers about what it is, best evidence first.
+  //
+  // THE LABEL IS THE WEAKEST EVIDENCE THERE IS, and for a long time it was
+  // treated as the same as the rest: every word in it was tried against every
+  // family. A label is whatever somebody typed while drawing, and these rooms
+  // are full of boxes whose honest description contains a word that names a
+  // family — "DTP transmitter — camera 1", "Control network switch", "DTP
+  // transmitter — station 3". Each of those became a device block with a
+  // driver slot, an address field and a line on the control schematic, for a
+  // passive box nothing talks to.
+  //
+  // So the label is now read two ways less freely:
+  //
+  //   * a box whose MODEL the catalog knows does not consult its label at
+  //     all. The catalog exists to record what a thing is, and a transmitter
+  //     is a transmitter whatever the drawing calls it;
+  //   * a box with no catalog entry — a generic one somebody typed in — is
+  //     read on the LAST word of its label only. That is the noun: "Power
+  //     controller" is a controller, "Projector" is a projector, and
+  //     "Control network switch" is a switch rather than a network. Trailing
+  //     numbers are skipped, so "Projector 2" still reads as a projector.
   final candidates = <String>[
     if (template != null) template.category,
     ...node.model.split(RegExp(r'[^A-Za-z0-9]+')),
-    ...node.label.split(RegExp(r'[^A-Za-z0-9]+')),
+    if (template == null) ..._labelNoun(node.label),
   ].where((s) => s.trim().isNotEmpty).toList();
 
   for (final candidate in candidates) {
@@ -270,6 +290,24 @@ DeviceTypeSpec? familyForNode(AppStateProvider provider, AvNode node) {
     }
   }
   return null;
+}
+
+/// The noun at the end of a label — what the thing IS, as opposed to which one
+/// of them it is.
+///
+/// "Power controller" is a controller; "Projector 2" is a projector, because a
+/// trailing number says which and not what. Returns at most one word, and
+/// nothing at all for a label that is only digits.
+List<String> _labelNoun(String label) {
+  final words = label
+      .split(RegExp(r'[^A-Za-z0-9]+'))
+      .where((w) => w.trim().isNotEmpty)
+      .toList();
+  for (var i = words.length - 1; i >= 0; i--) {
+    if (int.tryParse(words[i]) != null) continue;
+    return [words[i]];
+  }
+  return const [];
 }
 
 /// True for a box that is plugged in and looked at, and never talked to.

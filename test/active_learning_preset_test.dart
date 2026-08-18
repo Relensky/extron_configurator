@@ -105,10 +105,11 @@ void main() {
       }
     });
 
-    test('so the room buys five transmitters and seven receivers', () {
-      // Two panels on DTP need no transmitter; the other five do. Every panel
-      // needs a receiver. They are real boxes at real money.
-      expect(withModel('DTP HDMI 4K 230 Tx'), hasLength(5));
+    test('so the room buys seven transmitters and seven receivers', () {
+      // Five for the panels — two are on DTP outputs and need none — plus one
+      // beside each camera. Every panel needs a receiver. They are real boxes
+      // at real money.
+      expect(withModel('DTP HDMI 4K 230 Tx'), hasLength(7));
       expect(withModel('DTP HDMI 4K 230 Rx'), hasLength(7));
     });
 
@@ -165,21 +166,14 @@ void main() {
     // the processor can actually drive. A block with no module is a device
     // somebody has to go and find a driver for.
     //
-    // The seven Newline panels are the exception, and it is not one this
-    // preset can fix: the driver library has nothing for a TT-7523Q, by any
-    // name. Named here rather than waved through, so the day somebody writes
-    // that driver this test says so by failing.
+    // The seven Newline panels were the one gap when this room was rebuilt —
+    // the library had nothing for a TT-7523Q by any name. It does now, so
+    // there is no exception left to make.
     final plan = planControlSide(p);
-    final gaps = plan.withoutModule
-        .map((e) => '${e.sectionKey} (${e.model})')
-        .toList();
     expect(
-      gaps.where((g) => !g.startsWith('STATIONDEVICE_')),
+      plan.withoutModule.map((e) => '${e.sectionKey} (${e.model})'),
       isEmpty,
       reason: 'these would be created with no driver',
     );
-    expect(gaps.where((g) => g.startsWith('STATIONDEVICE_')), hasLength(7),
-        reason: 'if this drops to 0 the TT-7523Q has a driver now — take the '
-            'exception out');
   });
 }

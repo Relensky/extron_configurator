@@ -523,6 +523,39 @@
       ]
     },
     {
+      "model": "SX-DPP-102",
+      "manufacturer": "SurgeX",
+      "partNumber": "SX-DPP-102",
+      "category": "Power controller",
+      "rackUnits": 0,
+      "price": 409.0,
+      "educationPrice": 246.0,
+      "notes": "DisplayPak+ 2-outlet PDU. Surge and power conditioning behind a display; no network, no driver, nothing to switch remotely.",
+      "ports": [
+        {
+          "id": "out_pwr_1",
+          "label": "OUTLET 1",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_2",
+          "label": "OUTLET 2",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "AP7900B",
       "manufacturer": "APC",
       "category": "Power controller",
@@ -80235,6 +80268,13 @@
         {
           "id": "in_usb_2",
           "label": "USB HOST 2",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_usb_3",
+          "label": "USB HOST 3",
           "signal": "usbData",
           "direction": "input",
           "side": "left"

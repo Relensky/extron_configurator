@@ -133,7 +133,10 @@ void main() {
       // [isSourceOnlyDevice].
       'Document camera',
       'Neat Bar',
-      'Control processor - IPCP Pro PCS1 xi',
+      'Control processor - IPCP Pro 255Q xi',
+      // Conditions the power behind the display and does nothing else: no
+      // network, no driver, nothing to switch remotely.
+      'Power - SurgeX DisplayPak+',
       'Touch panel - TLP Pro 525M',
     };
 

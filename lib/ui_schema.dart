@@ -626,7 +626,7 @@ class UiSchema {
         // the key_map.json removal that already does this on load.
         systemKeys: ['power*_outlet_*']),
     DeviceTypeSpec(countKey: 'dev_media_ports', prefix: 'MEDIAPORTDEVICE_', label: 'MediaPorts'),
-    DeviceTypeSpec(countKey: 'dev_wireless', prefix: 'WIRELESSDEVICE_', label: 'Wireless (ShareLink)'),
+    DeviceTypeSpec(countKey: 'dev_wireless', prefix: 'WIRELESSDEVICE_', label: 'Wireless'),
     DeviceTypeSpec(countKey: 'dev_recorders', prefix: 'RECORDERDEVICE_', label: 'Recorders'),
     DeviceTypeSpec(countKey: 'dev_screens', prefix: 'SCREENDEVICE_', label: 'Screens (Relays/Network)'),
     // The NAV share room's two families. A NAVigator is not a room switcher —
@@ -653,7 +653,7 @@ class UiSchema {
     DeviceTypeSpec(
         countKey: 'dev_share_stations',
         prefix: 'STATIONDEVICE_',
-        label: 'Share Stations (NAV)',
+        label: 'Share Stations',
         maxCount: 13,
         systemKeys: [
           'input_station_*',

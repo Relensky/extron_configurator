@@ -156,7 +156,8 @@ void main() {
       // input 7 on an 8x2.
       expect(setup['input_pc'], '1');
       expect(setup['input_doc_cam'], '2');
-      expect(setup['input_inst_cam'], '3');
+      // DTP IN 2 — input 8 on an 8x2: the camera crosses the room on a pair.
+      expect(setup['input_inst_cam'], '8');
       expect(setup['input_hdmi'], '7');
       expect(setup['output_proj_1'], '1');
       expect(setup['output_audio'], '1');

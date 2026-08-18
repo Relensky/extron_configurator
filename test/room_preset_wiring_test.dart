@@ -50,7 +50,7 @@ void main() {
 
     // The processor is a control processor, not the IP Link interface the
     // preset used to name.
-    expect(models, contains('IPCP Pro PCS1 xi'));
+    expect(models, contains('IPCP Pro 255Q xi'));
     expect(models, contains('VIA GO2'));
     // One twisted pair crosses the room in place of the table plate.
     expect(models, contains('DTP HDMI 4K 230 Tx'));

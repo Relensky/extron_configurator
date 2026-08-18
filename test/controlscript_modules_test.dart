@@ -79,7 +79,10 @@ void main() {
       // the box being controlled.
       expect(soe['password'], 'ATEC2007', reason: entry.key);
     }
-    expect(counted, 62);
+    // A tally rather than a "greater than": the point is to notice a driver
+    // arriving without its gateway block, and only an exact number does that.
+    // Bump it when one is added — the Newline TT panels made it 63.
+    expect(counted, 63);
   }, skip: !available);
 
   test('the SoE password wins over the device password when switched to', () {

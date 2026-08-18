@@ -156,7 +156,7 @@
     },
     "dev_wireless": {
       "prefix": "WIRELESSDEVICE_",
-      "label": "Wireless (ShareLink)",
+      "label": "Wireless",
       "max": 8,
       "keepAlivePreference": [ "ConfirmationCode", "Power" ]
     },
@@ -199,7 +199,7 @@
     },
     "dev_share_stations": {
       "prefix": "STATIONDEVICE_",
-      "label": "Share Stations (NAV)",
+      "label": "Share Stations",
       "max": 13,
       "keepAlivePreference": [ "Power" ],
       "__comment": "The student-station displays on a NAV share room's share page. Each one is an encoder input and a decoder output on the NAVigator, and is usually reached serially over its own SP device (com_type SPI's cousin: com_type Serial with 'host' set to an spdevice<n> alias). Its per-station SYSTEM_SETUP keys are the systemKeys below, so a room that is not a NAV share room carries none of them.",
