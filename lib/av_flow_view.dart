@@ -16,6 +16,7 @@ import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'av_flow_routing.dart';
 import 'av_flow_routing_dialog.dart';
+import 'av_flow_swap_dialogs.dart';
 import 'av_port_editor.dart';
 import 'color_wheel_picker.dart';
 import 'cost_estimate.dart';
@@ -2249,6 +2250,10 @@ class _AvFlowViewState extends State<AvFlowView> {
     PowerSource powerSource = node.powerSource;
     bool excludeFromCost = node.excludeFromCost;
     String locationId = node.locationId;
+    // Where this box's cables move to when the model under it is swapped, as
+    // old port id -> new port id. Empty until somebody does swap it; see
+    // [remapPorts] for how the two connector lists are lined up.
+    var portRemap = <String, String>{};
     // Owned out here rather than built inside the dialog's builder: the
     // scrollbar needs the same controller as the list it is describing, and
     // one created per rebuild loses its position on every keystroke.
@@ -2279,7 +2284,59 @@ class _AvFlowViewState extends State<AvFlowView> {
                     Expanded(
                       child: TextField(
                         controller: modelController,
-                        decoration: const InputDecoration(labelText: 'Model'),
+                        decoration: InputDecoration(
+                          labelText: 'Model',
+                          // Typing a model name here renames the box and
+                          // nothing else. Swapping the box for a different
+                          // product means new connectors, a new rack height
+                          // and a new price, which is what this fetches.
+                          suffixIcon: IconButton(
+                            key: const ValueKey('node_swap_model'),
+                            icon: const Icon(Icons.find_replace, size: 18),
+                            tooltip: 'Replace with a model from the catalog',
+                            onPressed: () async {
+                              final picked = await pickCatalogModel(
+                                ctx,
+                                provider,
+                                title: 'Replace ${node.label}',
+                                actionLabel: 'Replace',
+                                currentModel: modelController.text.trim(),
+                                note: 'The connectors come with it. Cables '
+                                    'are carried over to the matching '
+                                    'connector on the new box wherever there '
+                                    'is one.',
+                              );
+                              if (picked == null) return;
+                              final swapped = withPowerInlet(
+                                picked.ports,
+                                picked.powerInput,
+                              );
+                              setLocal(() {
+                                portRemap = remapPorts(ports, swapped);
+                                ports
+                                  ..clear()
+                                  ..addAll(swapped);
+                                modelController.text = picked.model;
+                                rackUnitsController.text =
+                                    picked.rackUnits.toString();
+                                wattsController.text = picked.powerWatts <= 0
+                                    ? ''
+                                    : trimNumber(picked.powerWatts);
+                                btuController.text = picked.btuPerHour <= 0
+                                    ? ''
+                                    : trimNumber(picked.btuPerHour);
+                                // Only when the model DECIDES it — a mains box
+                                // is plugged in wherever this room plugs it
+                                // in, and that is not the catalog's business.
+                                final implied =
+                                    powerSourceForInput(picked.powerInput);
+                                if (implied != PowerSource.unspecified) {
+                                  powerSource = implied;
+                                }
+                              });
+                            },
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2718,11 +2775,30 @@ class _AvFlowViewState extends State<AvFlowView> {
       }
     }
 
+    // A swapped model brings a different set of connectors, and the runs
+    // already drawn to this box are moved onto their counterparts on the new
+    // one. What has no counterpart falls through to the sweep below, which is
+    // the right order: carry across what can be carried, then say out loud
+    // what could not.
+    if (portRemap.isNotEmpty) {
+      for (final c in List<AvCable>.from(provider.avCables)) {
+        final fromMoved =
+            c.fromNodeId == node.id ? portRemap[c.fromPortId] : null;
+        final toMoved = c.toNodeId == node.id ? portRemap[c.toPortId] : null;
+        if (fromMoved == null && toMoved == null) continue;
+        provider.updateAvCable(
+          c.copyWith(fromPortId: fromMoved, toPortId: toMoved),
+          recordUndo: false,
+        );
+      }
+    }
+
     // Cables referencing a port that was deleted or re-id'd disappear on the
     // next build (cableIsResolvable), so warn rather than silently dropping.
     final removedIds = node.ports
         .map((p) => p.id)
-        .where((id) => !ports.any((p) => p.id == id))
+        .where((id) =>
+            !portRemap.containsKey(id) && !ports.any((p) => p.id == id))
         .toSet();
     if (removedIds.isNotEmpty) {
       final orphaned = provider.avCables
@@ -2738,8 +2814,16 @@ class _AvFlowViewState extends State<AvFlowView> {
       }
       if (orphaned.isNotEmpty) {
         _snack(
-          '${orphaned.length} cable${orphaned.length == 1 ? '' : 's'} '
-          'removed with the deleted connectors.',
+          portRemap.isEmpty
+              ? '${orphaned.length} cable'
+                  '${orphaned.length == 1 ? '' : 's'} removed with the '
+                  'deleted connectors.'
+              : '${orphaned.length} cable'
+                  '${orphaned.length == 1 ? '' : 's'} removed — '
+                  '${modelController.text.trim()} has no connector matching '
+                  'the one ${orphaned.length == 1 ? 'it was' : 'they were'} '
+                  'drawn to. Draw ${orphaned.length == 1 ? 'it' : 'them'} '
+                  'again on the new box.',
         );
       }
     }
@@ -3067,6 +3151,10 @@ class _AvFlowViewState extends State<AvFlowView> {
     SignalType signal = cable.signal;
     double lengthFt = cable.lengthFt;
     Color? colorOverride = cable.colorOverride;
+    // Where the run lands. Held here rather than written straight through, so
+    // Cancel still means cancel after moving an end.
+    var from = (nodeId: cable.fromNodeId, portId: cable.fromPortId);
+    var to = (nodeId: cable.toNodeId, portId: cable.toPortId);
 
     final result = await showDialog<String>(
       context: context,
@@ -3079,7 +3167,53 @@ class _AvFlowViewState extends State<AvFlowView> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Which connectors the run lands on. Editable because a lead
+                // that turned out to be on input 4 rather than input 3 is the
+                // same lead: deleting and redrawing it loses the cable id, the
+                // label and the length somebody had filled in.
+                Text('Connection', style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                _cableEndRow(
+                  ctx,
+                  provider,
+                  keyName: 'cable_from_end',
+                  heading: 'Output',
+                  end: from,
+                  buttonLabel: 'Change output',
+                  otherEnd: to,
+                  movingSource: true,
+                  onPicked: (picked) => setLocal(() {
+                    // The signal follows the source unless somebody has
+                    // already overridden it: moving a run onto a DTP output
+                    // and leaving it drawn as HDMI helps nobody, and quietly
+                    // discarding a deliberate choice helps less.
+                    final oldPort =
+                        provider.avNodeById(from.nodeId)?.portById(from.portId);
+                    final newPort = provider
+                        .avNodeById(picked.nodeId)
+                        ?.portById(picked.portId);
+                    if (oldPort != null &&
+                        newPort != null &&
+                        signal == oldPort.signal) {
+                      signal = newPort.signal;
+                    }
+                    from = picked;
+                  }),
+                ),
+                _cableEndRow(
+                  ctx,
+                  provider,
+                  keyName: 'cable_to_end',
+                  heading: 'Input',
+                  end: to,
+                  buttonLabel: 'Change input',
+                  otherEnd: from,
+                  movingSource: false,
+                  onPicked: (picked) => setLocal(() => to = picked),
+                ),
+                const Divider(height: 20),
                 DropdownButtonFormField<SignalType>(
+                  key: ValueKey('cable_signal_${signal.name}'),
                   initialValue: signal,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Signal type'),
@@ -3220,14 +3354,100 @@ class _AvFlowViewState extends State<AvFlowView> {
     );
 
     if (result == null || result == 'cancel') return;
+
+    final moved = from.nodeId != cable.fromNodeId ||
+        from.portId != cable.fromPortId ||
+        to.nodeId != cable.toNodeId ||
+        to.portId != cable.toPortId;
+    if (moved &&
+        provider.avCables.any((c) =>
+            c.id != cable.id &&
+            c.fromNodeId == from.nodeId &&
+            c.fromPortId == from.portId &&
+            c.toNodeId == to.nodeId &&
+            c.toPortId == to.portId)) {
+      _snack(
+        'Those two connectors are already cabled together — the move was not '
+        'made.',
+        error: true,
+      );
+      return;
+    }
+
     provider.updateAvCable(
       cable.copyWith(
+        fromNodeId: from.nodeId,
+        fromPortId: from.portId,
+        toNodeId: to.nodeId,
+        toPortId: to.portId,
         signal: signal,
         label: labelController.text.trim(),
         lengthFt: lengthFt,
-        waypoints: result == 'straighten' ? const [] : cable.waypoints,
+        // A route bent by hand is a route around the boxes it used to run
+        // between. Landed on a different connector it describes a path that no
+        // longer exists, so the bends go with the move.
+        waypoints:
+            result == 'straighten' || moved ? const [] : cable.waypoints,
         colorOverride: colorOverride,
         clearColorOverride: colorOverride == null,
+      ),
+    );
+  }
+
+  /// One end of a cable in the cable dialog: where it lands now, and a button
+  /// to land it somewhere else.
+  Widget _cableEndRow(
+    BuildContext ctx,
+    AppStateProvider provider, {
+    required String keyName,
+    required String heading,
+    required CableEnd end,
+    required CableEnd otherEnd,
+    required bool movingSource,
+    required String buttonLabel,
+    required ValueChanged<CableEnd> onPicked,
+  }) {
+    final node = provider.avNodeById(end.nodeId);
+    final port = node?.portById(end.portId);
+    final fixedNode = provider.avNodeById(otherEnd.nodeId);
+    final fixedPort = fixedNode?.portById(otherEnd.portId);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 58,
+            child: Text(heading, style: Theme.of(ctx).textTheme.bodySmall),
+          ),
+          Expanded(
+            child: Text(
+              '${node?.label ?? end.nodeId} · ${port?.label ?? end.portId}',
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            key: ValueKey(keyName),
+            // Nothing to move it against when the other end has gone: that is
+            // a cable the canvas already declines to draw.
+            onPressed: fixedNode == null || fixedPort == null
+                ? null
+                : () async {
+                    final picked = await pickCableEnd(
+                      ctx,
+                      provider,
+                      movingSource: movingSource,
+                      fixedNode: fixedNode,
+                      fixedPort: fixedPort,
+                      current: end,
+                    );
+                    if (picked != null) onPicked(picked);
+                  },
+            child: Text(buttonLabel),
+          ),
+        ],
       ),
     );
   }

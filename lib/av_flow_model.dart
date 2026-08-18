@@ -482,6 +482,105 @@ class AvPort {
   }
 }
 
+/// The expansion bus a connector belongs to, or null for an ordinary socket.
+///
+/// An Extron matrix links to its DSP over the DMP expansion bus, and the
+/// signal type cannot say so: the catalog spells that socket `network` on most
+/// CrossPoints, `dante` on the 84 4K IPCP MA 70, and `dante` again on the DMP
+/// 64 Plus C AT at the far end. Matching on the signal therefore let `DMP EXP`
+/// pair with every LAN socket and every Dante channel in the room, and a lead
+/// drawn from the expansion bus to a network switch is a lead that will never
+/// carry anything.
+///
+/// The label is the only place the fact is recorded, so the label is what this
+/// reads. `EXP BUS` is the same socket under the name the non-IPCP DTP3 622 /
+/// 642 / 662 give it.
+///
+/// Other kinds of expansion connector — the AXI's `EXP INPUT` / `EXP THRU`,
+/// the Quantum's `EXP A/B/C` — are different buses on different products and
+/// are deliberately not folded in here: they would then mate with a DMP EXP,
+/// which is the mistake this exists to stop.
+String? expansionBusFor(String label) {
+  final flat = label.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '');
+  if (flat == 'DMPEXP' || flat == 'EXPBUS') return 'dmp';
+  return null;
+}
+
+/// How one model's connectors line up with another's, as old port id -> new
+/// port id. Used when the model under a box is swapped for a different one and
+/// the box already has cables on it.
+///
+/// A lead drawn to "HDMI 3" is a lead drawn to HDMI 3, and it should still be
+/// there after the IN1608 under it becomes an IN1804. Three passes, each
+/// claiming a new connector at most once and each weaker than the last:
+///
+///   1. the same port id — Extron entries share ids like `in_hdmi_1` across a
+///      whole product line, so this alone carries most swaps;
+///   2. the same label of the same kind, punctuation and case ignored;
+///   3. the nth connector of that signal and direction onto the nth of the
+///      same kind — input 3 stays input 3 even when the two boxes spell it
+///      differently.
+///
+/// An old port with no counterpart is simply absent from the map, and its
+/// cables are the caller's problem to report: silently re-landing a run on a
+/// connector that is not its equivalent is worse than saying it could not be
+/// carried across.
+Map<String, String> remapPorts(List<AvPort> from, List<AvPort> to) {
+  final out = <String, String>{};
+  final claimed = <String>{};
+
+  String flat(String s) => s.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+
+  // Every pass insists on the same direction. An output is not an input
+  // however alike the two are otherwise, and both ends of a DTP pair spell
+  // their HDMI socket 'hdmi' — one taking the signal in, one sending it out.
+  for (final old in from) {
+    final match = to
+        .where((p) =>
+            p.id == old.id &&
+            p.direction == old.direction &&
+            !claimed.contains(p.id))
+        .firstOrNull;
+    if (match == null) continue;
+    out[old.id] = match.id;
+    claimed.add(match.id);
+  }
+
+  for (final old in from) {
+    if (out.containsKey(old.id)) continue;
+    final key = flat(old.label);
+    final match = to
+        .where((p) =>
+            !claimed.contains(p.id) &&
+            p.direction == old.direction &&
+            p.signal == old.signal &&
+            flat(p.label) == key)
+        .firstOrNull;
+    if (match == null) continue;
+    out[old.id] = match.id;
+    claimed.add(match.id);
+  }
+
+  /// The ports of one signal and direction, in the order the box lists them.
+  List<AvPort> kind(List<AvPort> ports, AvPort like) => ports
+      .where((p) => p.signal == like.signal && p.direction == like.direction)
+      .toList();
+
+  for (final old in from) {
+    if (out.containsKey(old.id)) continue;
+    final index = kind(from, old).indexWhere((p) => p.id == old.id);
+    if (index < 0) continue;
+    final sameKind = kind(to, old);
+    if (index >= sameKind.length) continue;
+    final match = sameKind[index];
+    if (claimed.contains(match.id)) continue;
+    out[old.id] = match.id;
+    claimed.add(match.id);
+  }
+
+  return out;
+}
+
 /// The outcome of checking whether two ports may be cabled together.
 enum PortMatch {
   /// Same signal type, output into input — draw it.
@@ -507,6 +606,18 @@ PortMatch checkPortMatch(
   final fromCanSource = from.direction != PortDirection.input;
   final toCanSink = to.direction != PortDirection.output;
   if (!fromCanSource || !toCanSink) return PortMatch.invalid;
+
+  // An expansion bus only ever meets its own kind — see [expansionBusFor].
+  final fromBus = expansionBusFor(from.label);
+  final toBus = expansionBusFor(to.label);
+  if (fromBus != null || toBus != null) {
+    if (fromBus != toBus) return PortMatch.invalid;
+    // Both ends are the same bus, so this IS the lead — no confirm, whatever
+    // the two catalog entries happen to call the signal. That disagreement is
+    // in the catalog, not in the room.
+    return PortMatch.ok;
+  }
+
   if (from.signal == to.signal) return PortMatch.ok;
   return PortMatch.signalMismatch;
 }
@@ -898,7 +1009,15 @@ class AvCable {
 
   /// [clearColorOverride] exists because passing null to [colorOverride]
   /// cannot be told apart from "leave it alone" in a copyWith.
+  /// The four endpoint fields are here so one end of a drawn run can be moved
+  /// to another connector without deleting it: a lead that turned out to be on
+  /// input 4 rather than input 3 is the same lead, with the same id, label and
+  /// length, and redrawing it loses all three.
   AvCable copyWith({
+    String? fromNodeId,
+    String? fromPortId,
+    String? toNodeId,
+    String? toPortId,
     SignalType? signal,
     String? label,
     double? lengthFt,
@@ -907,10 +1026,10 @@ class AvCable {
     bool clearColorOverride = false,
   }) => AvCable(
     id: id,
-    fromNodeId: fromNodeId,
-    fromPortId: fromPortId,
-    toNodeId: toNodeId,
-    toPortId: toPortId,
+    fromNodeId: fromNodeId ?? this.fromNodeId,
+    fromPortId: fromPortId ?? this.fromPortId,
+    toNodeId: toNodeId ?? this.toNodeId,
+    toPortId: toPortId ?? this.toPortId,
     signal: signal ?? this.signal,
     label: label ?? this.label,
     lengthFt: lengthFt ?? this.lengthFt,
