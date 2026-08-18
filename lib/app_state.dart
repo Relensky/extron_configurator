@@ -227,6 +227,13 @@ class AppStateProvider extends ChangeNotifier {
   String templateFilePath = '';
   String uiSchemaPath = ''; // Optional path to ui_schema.json (GUI field definitions)
   String keyMapPath = '';   // Optional path to key_map.json (legacy key translation)
+  /// Optional path to av_devices.json — the connector sets the AV Flow draws
+  /// ports from and the price list the estimate reads.
+  ///
+  /// Worth pointing somewhere OFF this machine: one catalog on a share is one
+  /// price list for the department, and a save merges another editor's
+  /// changes rather than overwriting them (see [AvDeviceLibrary.save]).
+  String avDevicesFilePath = '';
   String documentationPath = ''; // Folder of per-module PDF manuals (blank = <root>/documentation)
 
   // --- Processor connection settings (App Config > Processor Connection) ---
@@ -521,6 +528,7 @@ class AppStateProvider extends ChangeNotifier {
       'templateFilePath': templateFilePath,
       'uiSchemaPath': uiSchemaPath,
       'keyMapPath': keyMapPath,
+      'avDevicesFilePath': avDevicesFilePath,
       'documentationPath': documentationPath,
       'sftpUsername': sftpUsername,
       'sftpPort': sftpPort,
@@ -5429,6 +5437,7 @@ class AppStateProvider extends ChangeNotifier {
       templateFilePath = str('templateFilePath', '');
       uiSchemaPath = str('uiSchemaPath', '');
       keyMapPath = str('keyMapPath', '');
+      avDevicesFilePath = str('avDevicesFilePath', '');
       documentationPath = str('documentationPath', '');
       sftpUsername = str('sftpUsername', 'admin');
       sftpPort = str('sftpPort', '22022');
@@ -5476,7 +5485,8 @@ class AppStateProvider extends ChangeNotifier {
           modulesPath.isNotEmpty ||
           processorsFilePath.isNotEmpty ||
           buildingsFilePath.isNotEmpty ||
-          templateFilePath.isNotEmpty;
+          templateFilePath.isNotEmpty ||
+          avDevicesFilePath.isNotEmpty;
       if (setupDone || hasAnySavedPath) {
         firstRunSetupNeeded = false;
         // Grandfather existing installs in so they're never asked.
@@ -6273,6 +6283,11 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadKeyMap(); // Re-resolve the legacy key translation rules
         break;
+      case 'avDevicesFilePath':
+        avDevicesFilePath = value;
+        // ignore: unawaited_futures
+        loadAvDeviceLibrary(); // Re-read the catalog from the new location
+        break;
       case 'documentationPath':
         documentationPath = value; // PDFs are resolved on demand — no reload
         break;
@@ -6349,7 +6364,8 @@ class AppStateProvider extends ChangeNotifier {
   /// logged.
   Future<void> loadAvDeviceLibrary() async {
     avDeviceLibrary = await AvDeviceLibrary.load(
-        explicitPath: _resolveOptionalFile('', 'av_devices.json'));
+        explicitPath:
+            _resolveOptionalFile(avDevicesFilePath, 'av_devices.json'));
     notifyListeners();
   }
 
@@ -6357,9 +6373,15 @@ class AppStateProvider extends ChangeNotifier {
   /// when there is one, otherwise `<root>/av_devices.json` — so a first save
   /// lands next to ui_schema.json and processors.json rather than wherever
   /// the app happened to be launched from.
-  String get effectiveAvDevicesPath => avDeviceLibrary.filePath.isNotEmpty
-      ? avDeviceLibrary.filePath
-      : path.join(effectiveRootFolder, 'av_devices.json');
+  ///
+  /// The chosen path wins even when nothing has been read from it yet — a
+  /// catalog pointed at a share that does not have the file in it yet is a
+  /// first save into the share, not a stray copy left in the root folder.
+  String get effectiveAvDevicesPath => avDevicesFilePath.isNotEmpty
+      ? avDevicesFilePath
+      : avDeviceLibrary.filePath.isNotEmpty
+          ? avDeviceLibrary.filePath
+          : path.join(effectiveRootFolder, 'av_devices.json');
 
   /// Writes the device catalog. Returns the file written, or '' on failure.
   Future<String> saveAvDeviceLibrary() async {

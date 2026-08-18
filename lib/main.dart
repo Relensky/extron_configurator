@@ -1978,6 +1978,74 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // Device Catalog (av_devices.json) Path
+        //
+        // The one worth pointing at a SHARE: the catalog is the department's
+        // price list, and a save merges another editor's changes rather than
+        // overwriting them, so several people can keep it up to date at once.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(
+                    'avDevicesFilePath_${provider.avDevicesFilePath}'),
+                decoration: InputDecoration(
+                  labelText: 'Device Catalog File Path (av_devices.json)',
+                  hintText:
+                      'Blank = av_devices.json in the Root Folder / next to the app',
+                  helperText:
+                      'Active catalog: ${provider.avDeviceLibrary.source} — '
+                      '${provider.avDeviceLibrary.customCount} priced entries. '
+                      'Put it on a shared drive to keep one price list for '
+                      'everybody; saves merge rather than overwrite.',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await FilePicker.pickFiles(
+                        type: FileType.custom,
+                        allowedExtensions: ['json'],
+                      );
+                      if (result != null) {
+                        provider.updateSetting(
+                            'avDevicesFilePath', result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.avDevicesFilePath,
+                onChanged: (val) =>
+                    provider.updateSetting('avDevicesFilePath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56, // Matches the height of the TextFormField
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload Catalog'),
+                onPressed: () async {
+                  // Pick up what a colleague has saved to the share since
+                  // this copy read it — and reset the baseline a merge
+                  // measures against, so the next save is weighed against
+                  // what is actually in the file now.
+                  await provider.loadAvDeviceLibrary();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          'Catalog reloaded: ${provider.avDeviceLibrary.source} '
+                          '(${provider.avDeviceLibrary.customCount} entries)'),
+                    ));
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
         // Legacy Key Map (key_map.json) Path
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2579,6 +2647,8 @@ class FirstRunSetupDialog extends StatelessWidget {
     final bool buildingsExists = File(provider.effectiveBuildingsFilePath).existsSync();
     final bool schemaExists = File(provider.effectiveUiSchemaPath).existsSync();
     final bool keyMapExists = File(provider.effectiveKeyMapPath).existsSync();
+    final bool avDevicesExists =
+        File(provider.effectiveAvDevicesPath).existsSync();
     final bool modulesExists = Directory(provider.effectiveModulesPath).existsSync();
     final bool documentationExists = Directory(provider.effectiveDocumentationPath).existsSync();
 
@@ -2662,6 +2732,12 @@ class FirstRunSetupDialog extends StatelessWidget {
                   value: provider.effectiveKeyMapPath,
                   exists: keyMapExists,
                   settingKey: 'keyMapPath'),
+              _pathRow(context, provider,
+                  label: 'av_devices.json (device catalog & price list — put '
+                      'it on a share to keep one between you)',
+                  value: provider.effectiveAvDevicesPath,
+                  exists: avDevicesExists,
+                  settingKey: 'avDevicesFilePath'),
               _pathRow(context, provider,
                   label: 'Python modules folder (default: "devices" sub-folder)',
                   value: provider.effectiveModulesPath,
