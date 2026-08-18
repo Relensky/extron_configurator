@@ -167,6 +167,12 @@
     "STATIONDEVICE_": "Station Display",
     "NBPDEVICE_": "Button Panel"
   },
+  "model_renames": {
+    "__comment": "Legacy model names the conversion brings up to date, per device family. Applied BEFORE the generated name and BEFORE module/keep_alive_trigger carry over from device_templates, so the renamed model matches its template block and picks up the right driver. Matching ignores case and spacing; a model already carrying a module is left alone, because a room that names its own driver has already been decided.",
+    "RECORDERDEVICE_*": {
+      "AV Bridge": "AV Bridge 2x1"
+    }
+  },
   "device_templates": {
     "__comment": "Reference blocks from the current template config. btn_name/lbl_name carry over by device NUMBER; module/keep_alive_trigger carry over when the legacy MODEL matches. Add blocks here (or new models) as the template grows - no rebuild needed.",
     "CAMERADEVICE_1": {
@@ -236,7 +242,7 @@
       "btn_name": "Btn_Con_Recorder1",
       "lbl_name": "Lbl_Recorder_Model",
       "model": "AV Bridge 2x1",
-      "module": "",
+      "module": "modules.device.vadd_switcher_AV_Bridge_2x1",
       "keep_alive_trigger": null
     },
     "SCREENDEVICE_1": {

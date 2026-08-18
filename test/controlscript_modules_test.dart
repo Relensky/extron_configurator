@@ -111,10 +111,26 @@ void main() {
   }, skip: !available);
 
   test('everything else takes the other password', () {
+    // The AVer CAM570 is set to a different one on the hardware — see the
+    // driver's own DEVICE_INFO, changed deliberately alongside its protocol
+    // and its serial_port. Named here rather than allowed by a loosened
+    // matcher, so the next driver that drifts off the house password still
+    // fails this.
+    const exceptions = {'avr_camera_CAM570': 'Atec!2008'};
+
     for (final entry in provider.moduleDefaults.entries) {
       if (entry.key.startsWith('extr_')) continue;
       if (!entry.value.containsKey('password')) continue;
-      expect(entry.value['password'], 'ATEC2008', reason: entry.key);
+      expect(entry.value['password'], exceptions[entry.key] ?? 'ATEC2008',
+          reason: entry.key);
+    }
+
+    // And the exception is still there to be excepted: a driver renamed or
+    // brought back into line leaves a stale entry above that would quietly
+    // stop checking anything.
+    for (final key in exceptions.keys) {
+      expect(provider.moduleDefaults, contains(key),
+          reason: '$key is gone — drop it from the exception list');
     }
   }, skip: !available);
 
@@ -146,18 +162,39 @@ void main() {
     expect(provider.roomConfig['DSPDEVICE_1']['protocol'], 'SSH');
   }, skip: !available);
 
-  test('the matrix switchers still refresh their ties', () {
-    // RefreshMatrix re-reads every tie as well as proving the connection, so
-    // it stays the keep alive on the five DTP CrossPoints and the NAVigator
-    // whatever the preference order would otherwise pick.
+  test('the matrix switchers poll the command their driver chose', () {
+    // These used to be checked as a group, on the assumption that a matrix
+    // keeps itself alive with RefreshMatrix — it re-reads every tie as well
+    // as proving the connection. The library since decided otherwise, one
+    // driver at a time: the five DTP CrossPoints poll Temperature like the
+    // scalers do, and the NAVigator polls PartNumber, which is a different
+    // answer again and so plainly not a bulk edit.
+    //
+    // So the group rule is gone and the per-driver choice is what is pinned.
+    // Pinned rather than dropped, because this is the command a room sends
+    // its matrix every thirty seconds forever: it should not be able to
+    // change without somebody saying so here.
+    const expected = {
+      'extr_matrix_DTP2CrossPoint_82_v1_1_0_0': 'Temperature',
+      'extr_matrix_DTPCrossPoint84_v1_5_6_0': 'Temperature',
+      'extr_matrix_DTPCrossPoint_86_1084K': 'Temperature',
+      'extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1871': 'Temperature',
+      'extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1872': 'Temperature',
+      'extr_sm_NAVigator_v1_0_1_4': 'PartNumber',
+    };
+
     final matrices = provider.moduleDefaults.keys
         .where((k) => k.startsWith('extr_matrix_') || k.contains('NAVigator'))
         .toList();
-    expect(matrices.length, 6);
+    expect(matrices.toSet(), expected.keys.toSet(),
+        reason: 'a matrix driver was added or renamed');
+
     for (final key in matrices) {
-      expect(provider.moduleDefaults[key]!['keep_alive_command'],
-          'RefreshMatrix',
-          reason: key);
+      final defaults = provider.moduleDefaults[key]!;
+      expect(defaults['keep_alive_command'], expected[key], reason: key);
+      // Whatever it polls, it polls on a timer — a keep alive with no
+      // interval never fires.
+      expect(defaults['keep_alive_interval'], 30, reason: key);
       // ...and no per-connection block quietly overrides it.
       for (final block
           in (provider.moduleComTypeDefaults[key] ?? {}).values) {

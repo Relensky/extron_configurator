@@ -91815,7 +91815,7 @@
     {
       "model": "AV Bridge 2x1",
       "manufacturer": "Vaddio",
-      "category": "Switcher",
+      "category": "Recorder / streamer",
       "rackUnits": 1,
       "notes": "Driven by vadd_switcher_AV_Bridge_2x1.py",
       "ports": [
@@ -91837,13 +91837,6 @@
           "id": "out_hdmi_1",
           "label": "HDMI OUT",
           "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_dtp_1",
-          "label": "DTP OUT",
-          "signal": "hdbaset",
           "direction": "output",
           "side": "right"
         },

@@ -27,18 +27,18 @@ already used in `config.json`. Passwords, IPs and COM ports are left blank
 | extr_dsp_DMP_64_Plus.py | dsp | none (fallback) | none declared | SSH 22023 | PartNumber / 30s |
 | extr_dsp_DMP_64_Plus_Series.py | dsp | none (fallback) | none declared | SSH 22023 | PartNumber / 30s |
 | extr_dsp_DMP_64_Plus_Series_v1_4_1_0.py | dsp | 4: DMP 64 Plus C, DMP 64 Plus C V, DMP 64 Plus C AT, DMP 64 Plus C V AT | driver self.Models | SSH 22023 | PartNumber / 30s |
-| extr_matrix_DTP2CrossPoint_82_v1_1_0_0.py | switcher | 3: DTP2 Crosspoint 82, DTP2 Crosspoint 82 IPCP MA 70, DTP2 Crosspoint 82 IPCP SA | documentation PDF | SSH 22023 | RefreshMatrix / 30s |
-| extr_matrix_DTPCrossPoint84_v1_5_6_0.py | switcher | 3: DTP CrossPoint 84, DTP CrossPoint 84 IPCP MA, DTP CrossPoint 84 IPCP SA | documentation PDF | TCP 23 | RefreshMatrix / 30s |
-| extr_matrix_DTPCrossPoint_86_1084K.py | switcher | 6: DTP CrossPoint 108 4K, DTP CrossPoint 108 4K IPCP SA, DTP CrossPoint 108 4K IPCP MA 70, DTP CrossPoint 86 4K ... | driver self.Models | SSH 22023 | RefreshMatrix / 30s |
-| extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1871.py | switcher | none (fallback) | none declared | SSH 22023 | RefreshMatrix / 30s |
-| extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1872.py | switcher | 6: DTP CrossPoint 82 4K, DTP CrossPoint 82 4K IPCP MA 70, DTP CrossPoint 82 4K IPCP SA, DTP CrossPoint 84 4K ... | driver self.Models | SSH 22023 | RefreshMatrix / 30s |
+| extr_matrix_DTP2CrossPoint_82_v1_1_0_0.py | switcher | 3: DTP2 Crosspoint 82, DTP2 Crosspoint 82 IPCP MA 70, DTP2 Crosspoint 82 IPCP SA | documentation PDF | SSH 22023 | Temperature / 30s |
+| extr_matrix_DTPCrossPoint84_v1_5_6_0.py | switcher | 3: DTP CrossPoint 84, DTP CrossPoint 84 IPCP MA, DTP CrossPoint 84 IPCP SA | documentation PDF | TCP 23 | Temperature / 30s |
+| extr_matrix_DTPCrossPoint_86_1084K.py | switcher | 6: DTP CrossPoint 108 4K, DTP CrossPoint 108 4K IPCP SA, DTP CrossPoint 108 4K IPCP MA 70, DTP CrossPoint 86 4K ... | driver self.Models | SSH 22023 | Temperature / 30s |
+| extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1871.py | switcher | none (fallback) | none declared | SSH 22023 | Temperature / 30s |
+| extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1872.py | switcher | 6: DTP CrossPoint 82 4K, DTP CrossPoint 82 4K IPCP MA 70, DTP CrossPoint 82 4K IPCP SA, DTP CrossPoint 84 4K ... | driver self.Models | SSH 22023 | Temperature / 30s |
 | extr_other_DTP_HD_DA4_4K_Series_v1_2_0_0.py | switcher | 4: DTP HD DA4 4K 230, DTP HD DA4 4K 330, DTP HD DA8 4K 230, DTP HD DA8 4K 330 | driver self.Models | SSH 22023 | PartNumber / 30s |
 | extr_other_MediaPort200_v1_3_0_0.py | mediaport | 1: MediaPort 200 | documentation PDF | SSH 22023 | USBHostStatus / 60s |
 | extr_scaler_IN1606_IN1608_Series_v1_7_0_0.py | switcher | 13: IN1606, IN1608, IN1608 MA, IN1608 SA ... | driver self.Models | SSH 22023 | Temperature / 30s |
 | extr_scaler_IN1608xi_Series_v1_1_3_0.py | switcher | 5: IN1608 xi, IN1608 xi SA, IN1608 xi MA 70, IN1608 xi IPCP SA ... | driver self.Models | TCP 23 | Temperature / 30s |
 | extr_scaler_IN1804_Series_v1_2_4_0.py | switcher | 4: IN1804, IN1804 DI, IN1804 DO, IN1804 DI/DO | documentation PDF | SSH 22023 | Temperature / 30s |
 | extr_scaler_IN2004_Series_v1_0_3_0.py | switcher | 3: IN2004, DTP3 IN2004 DI/DO, DTP3 IN2004 DO | driver self.Models | SSH 22023 | Temperature / 30s |
-| extr_sm_NAVigator_v1_0_1_4.py | switcher | 1: NAVigator | driver self.Models | SSH 22023 | RefreshMatrix / 30s |
+| extr_sm_NAVigator_v1_0_1_4.py | switcher | 1: NAVigator | driver self.Models | SSH 22023 | PartNumber / 30s |
 | extr_sm_SMP_300_Series_v1_19_15_0.py | recorder | 4: SMP 351, SMP 351 3G-SDI, SMP 352, SMP 352 3G-SDI | driver self.Models | SSH 22023 | InputStatus / 30s |
 | extr_switcher_SW_HD_4K_PLUS_Series_v1_1_9_0.py | switcher | 4: SW2 HD 4K PLUS, SW4 HD 4K PLUS, SW6 HD 4K PLUS, SW8 HD 4K PLUS | driver self.Models | SSH 22023 | Input / 30s |
 | extr_switcher_SW_HD_4K_Plus_Series_v1_1_5_0.py | switcher | none (fallback) | none declared | SSH 22023 | Input / 30s |

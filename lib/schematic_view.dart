@@ -563,6 +563,27 @@ class SchematicModel {
       ));
     }
 
+    // A switch of the room's own is a box on the way to the processor, not a
+    // destination: the drops land on it and it goes on to the processor, and
+    // without that uplink the drawing has a switch feeding nothing and a
+    // processor that reaches none of the gear plugged into it. Drawn like the
+    // IDF's own uplink — same colour, same weight — because it is the same
+    // kind of line, with the note saying which network it carries.
+    //
+    // One per box, however many things land on it: the devices and the panel
+    // pointed at the same switch is one uplink, not two on top of each other.
+    for (final id in {avLanTarget, panelTarget}) {
+      if (id == kSchematicIdf || id == kSchematicProcessor) continue;
+      edges.add(SchematicEdge(
+        fromId: id,
+        toId: kSchematicProcessor,
+        color: connColor(ConnType.network, provider),
+        width: 3.5,
+        label: kAvLanNote,
+        kind: ConnType.network,
+      ));
+    }
+
     // Auto edges the user deleted/re-routed are pulled aside (still listed
     // grayed-out in the edit panel so they can be restored).
     final List<SchematicEdge> hiddenEdges = [];

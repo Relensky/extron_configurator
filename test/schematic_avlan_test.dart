@@ -152,6 +152,70 @@ void main() {
       expect(drop(m, 'SWITCHERDEVICE_1').label, 'TCP 23 • AV LAN');
     });
 
+    test('and the switch itself gets an uplink to the processor', () {
+      final p = room();
+      p.addSchematicExtraNode(
+          title: 'AV switch', subtitle: '', icon: 'switch');
+      final id = p.schematicExtraNodes.single['id']!;
+      p.setSchematicLanding(id, avLan: true);
+
+      final m = SchematicModel.build(p);
+      // Without it the drawing has a switch feeding nothing and a processor
+      // that reaches none of the gear plugged into it.
+      final uplink = m.edges.singleWhere(
+          (e) => e.fromId == id && e.toId == kSchematicProcessor);
+      expect(uplink.label, 'AV LAN');
+      // Drawn like the IDF's own uplink, because it is the same kind of line.
+      expect(uplink.width, 3.5);
+      expect(uplink.kind, ConnType.network);
+    });
+
+    test('the panel on the same switch does not draw a second uplink', () {
+      final p = room();
+      p.addSchematicExtraNode(
+          title: 'AV switch', subtitle: '', icon: 'switch');
+      final id = p.schematicExtraNodes.single['id']!;
+      p.setSchematicLanding(id, avLan: true);
+      p.setSchematicLanding(id, avLan: false);
+
+      final m = SchematicModel.build(p);
+      expect(
+        m.edges.where((e) => e.fromId == id && e.toId == kSchematicProcessor),
+        hasLength(1),
+      );
+    });
+
+    test('two switches each get their own', () {
+      final p = room();
+      p.addSchematicExtraNode(title: 'AV switch', icon: 'switch');
+      p.addSchematicExtraNode(title: 'Panel switch', icon: 'switch');
+      final ids =
+          [for (final n in p.schematicExtraNodes) n['id']!];
+      p.setSchematicLanding(ids[0], avLan: true);
+      p.setSchematicLanding(ids[1], avLan: false);
+
+      final m = SchematicModel.build(p);
+      for (final id in ids) {
+        expect(
+          m.edges.where(
+              (e) => e.fromId == id && e.toId == kSchematicProcessor),
+          hasLength(1),
+          reason: '$id has no way back to the processor',
+        );
+      }
+    });
+
+    test('nothing on a switch means no uplink to draw', () {
+      final p = room();
+      p.addSchematicExtraNode(title: 'AV switch', icon: 'switch');
+      final id = p.schematicExtraNodes.single['id']!;
+
+      // The box is on the drawing but nothing lands on it. It is related
+      // equipment like any other and the control system does not talk to it.
+      final m = SchematicModel.build(p);
+      expect(m.edges.any((e) => e.fromId == id), isFalse);
+    });
+
     test('deleting that box puts its drops back on the IDF', () {
       final p = room();
       p.addSchematicExtraNode(
@@ -166,6 +230,8 @@ void main() {
       final m = SchematicModel.build(p);
       expect(drop(m, 'SWITCHERDEVICE_1').to, kSchematicIdf);
       expect(drop(m, 'SWITCHERDEVICE_1').label, 'TCP 23');
+      expect(m.edges.any((e) => e.fromId == id), isFalse,
+          reason: 'the uplink went with the box it came from');
     });
   });
 

@@ -255,13 +255,27 @@ class ConfigKeyMap {
   /// by matching MODEL when converting legacy files.
   final Map<String, Map<String, dynamic>> deviceTemplates = {};
 
+  /// Legacy model names to bring up to date, as section pattern -> {old
+  /// model -> new model}.
+  ///
+  /// A room documented before a product was superseded still names the old
+  /// box, and the name is the only thing tying it to a driver: 'AV Bridge'
+  /// matches no template block, so the converted room came out with no module
+  /// at all and somebody had to know to pick one. Renaming it first makes the
+  /// rest of the carry-over work exactly as it does for a current model.
+  ///
+  /// Scoped by section rather than global on purpose — 'AV Bridge' means the
+  /// recorder in a RECORDERDEVICE block and is not a licence to rewrite the
+  /// word wherever else it appears.
+  final Map<String, Map<String, String>> modelRenames = {};
+
   /// Where this map came from, for display in App Config.
   String source = 'Built-in (no mapping rules)';
 
   int get ruleCount =>
       sections.length + properties.length + valueMap.length + moves.length +
       defaults.length + deviceCounts.length + companions.length +
-      removals.length + connectionFields.length;
+      removals.length + connectionFields.length + modelRenames.length;
 
   /// The built-in map is intentionally EMPTY: legacy naming is site-specific,
   /// so all rules come from key_map.json. With no file present, loading a
@@ -287,6 +301,20 @@ class ConfigKeyMap {
       (doc['device_labels'] as Map).forEach((k, v) {
         if (k.toString().startsWith('__')) return;
         deviceLabels[k.toString()] = v.toString();
+      });
+    }
+
+    // Legacy model names -> current ones, per device family
+    if (doc['model_renames'] is Map) {
+      (doc['model_renames'] as Map).forEach((pattern, renames) {
+        if (pattern.toString().startsWith('__')) return;
+        if (renames is! Map) return;
+        final entries = <String, String>{};
+        renames.forEach((from, to) {
+          if (from.toString().startsWith('__')) return;
+          entries[from.toString()] = to.toString();
+        });
+        if (entries.isNotEmpty) modelRenames[pattern.toString()] = entries;
       });
     }
 
@@ -457,6 +485,12 @@ class ConfigKeyMap {
   }
 
   /// Simple '*' wildcard match for defaults patterns like "CAMERADEVICE_*".
+  /// Two model names that are the same box: case and spacing are how the
+  /// same model gets written down differently, not how two models differ.
+  bool _sameModel(String a, String b) =>
+      a.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '') ==
+      b.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
   bool _wildcardMatch(String pattern, String value) {
     final regex =
         RegExp('^${RegExp.escape(pattern).replaceAll(r'\*', '.*')}\$');
@@ -766,6 +800,25 @@ class ConfigKeyMap {
         if (matchedPrefix == null) return;
         final String pfx = matchedPrefix;
         final String n = sectionName.substring(pfx.length);
+
+        // (0) Superseded model name -> the current one. First, because the
+        // generated name below quotes the model and the module carry-over
+        // below that matches on it.
+        final String rawModel = section['model']?.toString().trim() ?? '';
+        if (rawModel.isNotEmpty &&
+            (section['module']?.toString().trim().isEmpty ?? true)) {
+          for (final rule in modelRenames.entries) {
+            if (!_wildcardMatch(rule.key, sectionName)) continue;
+            for (final rename in rule.value.entries) {
+              if (_sameModel(rename.key, rawModel)) {
+                section['model'] = rename.value;
+                changes.add("KEYMAP: '$sectionName.model' '$rawModel' -> "
+                    "'${rename.value}' (superseded model)");
+                break;
+              }
+            }
+          }
+        }
 
         // (a) Friendly generated name
         if (!section.containsKey('name')) {
