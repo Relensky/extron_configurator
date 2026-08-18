@@ -3666,10 +3666,13 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   /// Replaces a node in place (drag, rename, port edit).
-  void updateAvNode(AvNode node) {
+  ///
+  /// [recordUndo] false is for a batch that has already taken its own
+  /// snapshot — see [addAvNode].
+  void updateAvNode(AvNode node, {bool recordUndo = true}) {
     final index = avNodes.indexWhere((n) => n.id == node.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${node.label}', _flowScope);
+    if (recordUndo) _pushAvUndo('Edit ${node.label}', _flowScope);
     avNodes[index] = node;
     notifyListeners();
   }

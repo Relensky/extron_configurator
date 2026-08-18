@@ -14,6 +14,7 @@ import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
+import 'av_flow_routing.dart';
 import 'av_flow_routing_dialog.dart';
 import 'av_port_editor.dart';
 import 'color_wheel_picker.dart';
@@ -130,6 +131,12 @@ AvFlowModel buildAvFlowModel(AppStateProvider provider) {
 /// switcher feeds processing, processing feeds the displays. Power and
 /// anything unrecognized go in the source column so they don't split a row.
 int _columnForDevice(String key) {
+  // Boxes the routing put in, named after the config field that placed them:
+  // a source or its transmitter reads on the left, a display's receiver on the
+  // right beside the display it feeds. Without this they all fell to column 0
+  // and Auto-arrange dragged every receiver across the page.
+  if (key.startsWith('AVSOURCE_INPUT_')) return 0;
+  if (key.startsWith('AVSOURCE_OUTPUT_')) return 3;
   if (key.startsWith('SWITCHERDEVICE_')) return 1;
   if (key.startsWith('DSPDEVICE_') || key.startsWith('RECORDERDEVICE_')) {
     return 2;
@@ -251,6 +258,14 @@ class _AvFlowViewState extends State<AvFlowView> {
       if (provider.avNodes.isEmpty && provider.roomConfig.isNotEmpty) {
         _seedFromConfig(provider, silent: true);
       }
+      // Then the cabling the config already states: every source on the
+      // switcher input the System tab gives it, every display on the output
+      // that feeds it, and the boxes with no config block of their own — the
+      // PC, the doc cam, the DTP receivers — put in to carry it. Every visit,
+      // not just the first: a doc cam added to the config last week should be
+      // on the drawing this week. See [autoDrawRoutingFromConfig] for why it
+      // is safe to run repeatedly.
+      autoDrawRoutingFromConfig(provider);
       _syncBackgroundImage(provider);
     });
   }

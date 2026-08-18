@@ -11,6 +11,7 @@ import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart' show driverGapSections;
+import 'av_flow_routing.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'av_rack_view.dart' show iconForRackItem;
@@ -95,7 +96,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       if (!mounted) return;
       // The estimate lives in the AV sidecar, which is only read on the first
       // visit to whichever tab gets there first.
-      context.read<AppStateProvider>().ensureAvFlowForCurrentConfig();
+      final provider = context.read<AppStateProvider>();
+      provider.ensureAvFlowForCurrentConfig();
+      // The estimate counts the boxes on the diagram, so the ones the config
+      // names but has no block for — the PC, the doc cam, the DTP receiver
+      // each DTP-to-HDMI run needs — have to be on it or the quote is for a
+      // room without them. Drawing it here as well as on the AV Flow tab means
+      // the number is right whichever tab was opened first. A no-op in a room
+      // whose diagram has not been drawn yet.
+      autoDrawRoutingFromConfig(provider);
     });
   }
 

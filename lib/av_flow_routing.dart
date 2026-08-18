@@ -82,7 +82,18 @@ class _SourceSpec {
   /// disc players sit in the rack.
   final RoomZone zone;
 
-  const _SourceSpec(this.label, this.model, [this.zone = RoomZone.lectern]);
+  /// True for a box the room does not buy. The laptop at a plate is the
+  /// presenter's own machine: the plate and the lead are real, so the box
+  /// belongs on the diagram, but putting it on the quote is quoting somebody
+  /// for their own laptop. See [AvNode.excludeFromCost].
+  final bool excludeFromCost;
+
+  const _SourceSpec(
+    this.label,
+    this.model, [
+    this.zone = RoomZone.lectern,
+    this.excludeFromCost = false,
+  ]);
 }
 
 /// The `input_*` keys that mean "a box nobody wrote a control block for".
@@ -93,7 +104,8 @@ class _SourceSpec {
 const Map<String, _SourceSpec> _passiveSources = {
   'input_pc': _SourceSpec('Room PC', 'PC'),
   'input_doc_cam': _SourceSpec('Document camera', 'Document Camera'),
-  'input_hdmi': _SourceSpec('Laptop at the HDMI plate', 'HDMI Laptop'),
+  'input_hdmi': _SourceSpec(
+      'Laptop at the HDMI plate', 'HDMI Laptop', RoomZone.lectern, true),
   'input_dvd': _SourceSpec('DVD player', 'DVD Player', RoomZone.rack),
   'input_blu_ray': _SourceSpec('Blu-ray player', 'Blu-ray Player',
       RoomZone.rack),
@@ -120,6 +132,41 @@ const Map<String, String> _deviceDestinations = {
   'output_proj_3': 'PROJECTORDEVICE_3',
   'output_proj_4': 'PROJECTORDEVICE_4',
 };
+
+/// The box that goes in when the switcher end of a run is DTP and the display
+/// end is HDMI.
+///
+/// A DTP output does not plug into a display. It is twisted pair carrying
+/// HDBaseT, and it lands on a receiver at the room end which turns it back
+/// into an HDMI lead a foot long. Everybody who builds these rooms knows that
+/// and nobody writes it in the config — `output_proj_1: "3B"` and the
+/// projector's `input: "HDMI 1"` are both true, and the receiver between them
+/// is assumed. A drawing that joins those two directly is drawing a cable that
+/// cannot exist, and an estimate taken off that drawing is missing a $600 box
+/// per display.
+///
+/// The 230 rather than the 330: it is what the room presets build with, and it
+/// is the entry whose catalog ports are complete enough to cable — see
+/// [room_presets.dart]. Swap the model on the box if the run is longer than
+/// 230 feet.
+const _dtpReceiver = _SourceSpec(
+  'Room-end DTP receiver',
+  'DTP HDMI 4K 230 Rx',
+  RoomZone.wall,
+);
+
+/// The box that goes in at the other end of the same problem: a source with an
+/// HDMI output on a DTP input of the switcher.
+///
+/// The cameras are the ones this happens to — `input_inst_cam: "8"` on a DTP
+/// CrossPoint is DTP IN 8, and a camera has an HDMI socket and nothing else.
+/// Same fact as [_dtpReceiver], read the other way round: twisted pair at the
+/// switcher end, a short HDMI lead at the far end, and a box where they meet
+/// that the config never mentions because everybody knows it is there.
+const _dtpTransmitter = _SourceSpec(
+  'DTP transmitter',
+  'DTP HDMI 4K 230 Tx',
+);
 
 /// The `output_*` keys that feed a box no control block describes.
 const Map<String, _SourceSpec> _passiveDestinations = {
@@ -195,14 +242,23 @@ class RoutingPlan {
   /// review can say why the number is smaller than the config's.
   final int alreadyDrawn;
 
+  /// Nodes this would record as fed from a power controller outlet.
+  ///
+  /// Carried separately from the cable because they are two different facts:
+  /// the cable is the lead, and [AvNode.powerSource] is what the Power
+  /// Schedule prints in its Source column. Drawing the one and leaving the
+  /// other saying "Not recorded" is a report that contradicts its own diagram.
+  final List<String> powered;
+
   const RoutingPlan({
     this.newNodes = const [],
     this.cables = const [],
     this.unresolved = const [],
     this.alreadyDrawn = 0,
+    this.powered = const [],
   });
 
-  bool get isEmpty => newNodes.isEmpty && cables.isEmpty;
+  bool get isEmpty => newNodes.isEmpty && cables.isEmpty && powered.isEmpty;
 }
 
 // ---------------------------------------------------------------------------
@@ -432,7 +488,16 @@ AvPort? _sourceOutputPort(AvNode node) {
 /// every `input_*` and `output_*` number is a number on. A room with no
 /// switcher block, or one that is not on the canvas yet, gets an empty plan
 /// and a reason — there is nothing to route through.
-RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
+///
+/// [respectDismissed] leaves out a box somebody took off the canvas by hand.
+/// Only the automatic pass ([autoDrawRoutingFromConfig]) sets it; pressing
+/// **Draw the routing from config** is an explicit "draw it again", the same
+/// distinction the config seed makes between its silent first visit and
+/// **Place all from config**.
+RoutingPlan planRoutingFromConfig(
+  AppStateProvider provider, {
+  bool respectDismissed = false,
+}) {
   final config = provider.roomConfig;
   final setup = config['SYSTEM_SETUP'];
   if (setup is! Map) {
@@ -468,6 +533,11 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
   final unresolved = <UnroutedTie>[];
   int alreadyDrawn = 0;
 
+  /// True when the box this field would place was deleted from the canvas.
+  bool dismissed(String key) =>
+      respectDismissed &&
+      provider.avDismissedDevices.contains(avAutoNodeId(key));
+
   // How many outputs the box HAS, which its connector labels do not always
   // say — see [portForIoValue] pass 5.
   final declaredOutputs =
@@ -479,13 +549,25 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
   double rightX = 40;
   for (final n in provider.avNodes) {
     rightX = math.max(rightX, n.pos.dx + 340);
+    // Below what is already in the left column, not on top of it. A second
+    // pass that adds one transmitter used to drop it at y=60 over the PC.
+    if (n.pos.dx < 340) leftY = math.max(leftY, n.pos.dy + n.height + 30);
   }
 
   final lectern = _locationFor(provider, RoomZone.lectern);
   final rack = _locationFor(provider, RoomZone.rack);
   final wall = _locationFor(provider, RoomZone.wall);
 
-  AvNode place(_SourceSpec spec, String nodeId, {required bool onLeft}) {
+  /// [at] overrides the running column position, for a box whose place on the
+  /// page is decided by the box it feeds rather than by the order it was
+  /// created in — a receiver belongs immediately upstream of its display.
+  AvNode place(
+    _SourceSpec spec,
+    String nodeId, {
+    required bool onLeft,
+    Offset? at,
+    String? label,
+  }) {
     final template = provider.avDeviceLibrary.resolve(
       configKey: nodeId,
       model: spec.model,
@@ -493,10 +575,15 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
     final y = onLeft ? leftY : rightY;
     final node = AvNode(
       id: nodeId,
-      label: spec.label,
+      label: label ?? spec.label,
       model: spec.model,
-      pos: Offset(onLeft ? 40 : rightX, y),
+      pos: at ?? Offset(onLeft ? 40 : rightX, y),
       ports: withPowerInlet(template.ports, template.powerInput),
+      // The config field put it here, so it is a config device: the report
+      // says where it came from, and taking it off the canvas is remembered
+      // rather than undone by the next automatic pass.
+      fromConfig: true,
+      excludeFromCost: spec.excludeFromCost,
       rackUnits: template.rackUnits,
       powerWatts: template.powerWatts,
       btuPerHour: template.btuPerHour,
@@ -507,10 +594,13 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
         _ => lectern,
       },
     );
-    if (onLeft) {
-      leftY = y + node.height + 30;
-    } else {
-      rightY = y + node.height + 30;
+    // A box given its own position has not consumed a slot in either column.
+    if (at == null) {
+      if (onLeft) {
+        leftY = y + node.height + 30;
+      } else {
+        rightY = y + node.height + 30;
+      }
     }
     newNodes.add(node);
     return node;
@@ -566,6 +656,29 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
   //  the same way: find input N on the switcher, find the box's own output,
   //  and join the two.
 
+  /// The transmitter for one DTP run in, found the same three ways the
+  /// receiver is: its stable id, a box this plan already placed, and a
+  /// transmitter already cabled off this source on a diagram drawn by hand.
+  ({AvNode node, AvPort input, AvPort output})?
+      transmitterFor(String key, AvNode source) {
+    final txId = avAutoNodeId('${key}_tx');
+
+    AvNode? existing = nodesById[txId];
+    for (final n in newNodes) {
+      if (n.id == txId) existing = n;
+    }
+    existing ??= _transmitterFedBy(provider, source);
+
+    final node = existing ??
+        place(
+          _dtpTransmitter,
+          txId,
+          onLeft: true,
+          label: '${_dtpTransmitter.label} — ${source.label}',
+        );
+    return _extenderPorts(node, SignalType.hdmi, SignalType.hdbaset);
+  }
+
   void routeSource(String key, AvNode source, {AvPort? fromPort}) {
     final value = setup[key]?.toString().trim() ?? '';
     if (value.isEmpty) return;
@@ -582,6 +695,48 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
           '${source.label} has no video output to run from.'));
       return;
     }
+    // The other half of what [_dtpReceiver] fixes, and the more common one:
+    // the cameras land on DTP inputs and a camera has an HDMI socket. Twisted
+    // pair into the switcher, a short HDMI lead at the camera, and a
+    // transmitter where the two meet.
+    if (switcherPort.signal == SignalType.hdbaset &&
+        out.signal == SignalType.hdmi) {
+      // Deleted by hand takes both its cables with it — half a run drawn to a
+      // box that is not there is worse than the gap it leaves.
+      if (dismissed('${key}_tx')) return;
+      final tx = transmitterFor(key, source);
+      if (tx == null) {
+        unresolved.add(UnroutedTie(
+            key,
+            value,
+            '${source.label} leaves by ${out.label} and '
+            '${switcherPort.label} is a DTP input, so the run needs a '
+            'transmitter — and the catalog entry for '
+            '${_dtpTransmitter.model} has no HDMI input and DTP output to '
+            'cable it by. Draw this one by hand.'));
+        return;
+      }
+      draw(
+        configKey: key,
+        value: value,
+        from: source,
+        fromPort: out,
+        to: tx.node,
+        toPort: tx.input,
+        signal: SignalType.hdmi,
+      );
+      draw(
+        configKey: key,
+        value: value,
+        from: tx.node,
+        fromPort: tx.output,
+        to: switcher,
+        toPort: switcherPort,
+        signal: SignalType.hdbaset,
+      );
+      return;
+    }
+
     draw(
       configKey: key,
       value: value,
@@ -602,9 +757,9 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
   AvNode? pc;
   final pcValue = setup['input_pc']?.toString().trim() ?? '';
   final pcExtended = setup['input_pc_extended']?.toString().trim() ?? '';
-  if (pcValue.isNotEmpty || pcExtended.isNotEmpty) {
+  if ((pcValue.isNotEmpty || pcExtended.isNotEmpty) && !dismissed('input_pc')) {
     pc = _existingByModelOrLabel(provider, const ['PC', 'PC Micro'], 'pc') ??
-        place(_passiveSources['input_pc']!, _freeId(provider, newNodes),
+        place(_passiveSources['input_pc']!, avAutoNodeId('input_pc'),
             onLeft: true);
     if (pcExtended.isNotEmpty) {
       final outs = pc.ports
@@ -640,11 +795,11 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
   for (final entry in _passiveSources.entries) {
     if (entry.key == 'input_pc') continue; // handled above, with its second lead
     final value = setup[entry.key]?.toString().trim() ?? '';
-    if (value.isEmpty) continue;
+    if (value.isEmpty || dismissed(entry.key)) continue;
     final existing =
         _existingByModelOrLabel(provider, [entry.value.model], entry.key);
     final node = existing ??
-        place(entry.value, _freeId(provider, newNodes), onLeft: true);
+        place(entry.value, avAutoNodeId(entry.key), onLeft: true);
     routeSource(entry.key, node);
   }
 
@@ -653,17 +808,20 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
   // is actually hanging off it — so the box drawn has to follow that setting
   // or the drawing contradicts the panel's own button.
   final usbValue = setup['input_usb']?.toString().trim() ?? '';
-  if (usbValue.isNotEmpty) {
+  if (usbValue.isNotEmpty && !dismissed('input_usb')) {
     final isVga =
         (setup['gui_usb_or_vga']?.toString().trim().toUpperCase() ?? 'USB') ==
             'VGA';
     final spec = isVga
-        ? const _SourceSpec('Laptop at the VGA plate', 'VGA Laptop')
-        : const _SourceSpec('Laptop at the USB-C plate', 'USB-C Laptop');
+        ? const _SourceSpec(
+            'Laptop at the VGA plate', 'VGA Laptop', RoomZone.lectern, true)
+        : const _SourceSpec(
+            'Laptop at the USB-C plate', 'USB-C Laptop', RoomZone.lectern,
+            true);
     final existing =
         _existingByModelOrLabel(provider, [spec.model], 'input_usb');
     final node =
-        existing ?? place(spec, _freeId(provider, newNodes), onLeft: true);
+        existing ?? place(spec, avAutoNodeId('input_usb'), onLeft: true);
     routeSource('input_usb', node);
   }
 
@@ -696,6 +854,38 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
   // --- the destinations ------------------------------------------------------
   //  The mirror image: find output N on the switcher, find the socket the far
   //  box's own config says the lead goes into, and join those.
+
+  /// The receiver for one DTP run: the box, the socket the twisted pair
+  /// lands on and the socket the short HDMI lead leaves by.
+  ///
+  /// Recognised before it is created, three ways, because none of them is
+  /// reliable on its own: the id this feature gives it, a box this same
+  /// plan has already put in, and — for a diagram drawn before any of this
+  /// existed — a receiver already cabled into the display, whatever it was
+  /// called when somebody dragged it there.
+  ({AvNode node, AvPort input, AvPort output})?
+      receiverFor(String key, AvNode dest) {
+    final rxId = avAutoNodeId('${key}_rx');
+
+    AvNode? existing = nodesById[rxId];
+    for (final n in newNodes) {
+      if (n.id == rxId) existing = n;
+    }
+    existing ??= _receiverFeeding(provider, dest);
+
+    final node = existing ??
+        place(
+          _dtpReceiver,
+          rxId,
+          onLeft: false,
+          // Immediately upstream of what it feeds, which is where it is in
+          // the room: the receiver is on the wall behind the display.
+          at: Offset(math.max(40, dest.pos.dx - 340), dest.pos.dy),
+          label: '${_dtpReceiver.label} — ${dest.label}',
+        );
+
+    return _extenderPorts(node, SignalType.hdbaset, SignalType.hdmi);
+  }
 
   void routeDestination(
     String key,
@@ -733,6 +923,49 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
           key, value, '${dest.label} has no matching input to land on.'));
       return;
     }
+
+    // A DTP output feeding an HDMI input is not one cable, it is two and a
+    // receiver — see [_dtpReceiver]. The config states both ends and leaves
+    // the box between them unsaid, so it is put in here rather than drawn as
+    // a lead that cannot be bought.
+    if (switcherPort.signal == SignalType.hdbaset &&
+        landing.signal == SignalType.hdmi) {
+      // The receiver taken off the canvas by hand takes its two cables with
+      // it: half a run drawn to a box that is not there is worse than none.
+      if (dismissed('${key}_rx')) return;
+      final rx = receiverFor(key, dest);
+      if (rx == null) {
+        unresolved.add(UnroutedTie(
+            key,
+            value,
+            '${switcherPort.label} is a DTP output and '
+            '${dest.label} takes ${landing.label}, so the run needs a '
+            'receiver — and the catalog entry for '
+            '${_dtpReceiver.model} has no DTP input and HDMI output to '
+            'cable it by. Draw this one by hand.'));
+        return;
+      }
+      draw(
+        configKey: key,
+        value: value,
+        from: switcher,
+        fromPort: switcherPort,
+        to: rx.node,
+        toPort: rx.input,
+        signal: SignalType.hdbaset,
+      );
+      draw(
+        configKey: key,
+        value: value,
+        from: rx.node,
+        fromPort: rx.output,
+        to: dest,
+        toPort: landing,
+        signal: SignalType.hdmi,
+      );
+      return;
+    }
+
     draw(
       configKey: key,
       value: value,
@@ -793,11 +1026,15 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
 
   for (final entry in _passiveDestinations.entries) {
     final value = setup[entry.key]?.toString().trim() ?? '';
-    if (value.isEmpty || value.toLowerCase() == 'none') continue;
+    if (value.isEmpty ||
+        value.toLowerCase() == 'none' ||
+        dismissed(entry.key)) {
+      continue;
+    }
     final existing =
         _existingByModelOrLabel(provider, [entry.value.model], entry.key);
     final node = existing ??
-        place(entry.value, _freeId(provider, newNodes), onLeft: false);
+        place(entry.value, avAutoNodeId(entry.key), onLeft: false);
     routeDestination(
       entry.key,
       node,
@@ -821,7 +1058,7 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
           place(
               const _SourceSpec(
                   'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
-              _freeId(provider, newNodes),
+              avAutoNodeId('output_audio'),
               onLeft: false);
       routeDestination('output_audio', node, signals: _speakerAudio);
     }
@@ -843,12 +1080,207 @@ RoutingPlan planRoutingFromConfig(AppStateProvider provider) {
     routeDestination(key, node);
   }
 
+  // --- the power controller --------------------------------------------------
+  //  The APC's outlets are named in the config — power1_outlet_1 is 'PC',
+  //  outlet 6 is 'Doc\rCam' — because those names are printed on the touch
+  //  panel's power page, so somebody standing at the lectern can reboot the
+  //  right thing. They are also, read the other way, a wiring list: the box
+  //  called PC is plugged into outlet 1. Nobody had ever drawn it.
+  //
+  //  A name is matched onto a box only when every word of it lands (see
+  //  [outletNameScore]), and never when two boxes fit equally well: 'Switch'
+  //  on a room with a video switcher and a USB switcher on the canvas is a
+  //  coin toss, and a power lead drawn to the wrong box is a lead somebody
+  //  unplugs the wrong thing by. An outlet naming something the drawing does
+  //  not show — the network switch, the intake fans — is normal and silent.
+  final powered = <String>[];
+  final outletKey = RegExp(r'^power(\d+)_outlet_(\d+)$');
+
+  for (final entry in setup.entries) {
+    final match = outletKey.firstMatch(entry.key.toString());
+    if (match == null) continue;
+    final name = entry.value?.toString().trim() ?? '';
+    if (name.isEmpty || name.toLowerCase() == 'none') continue;
+
+    final controller = nodesById['POWERDEVICE_${match.group(1)}'];
+    if (controller == null) continue;
+
+    final number = int.parse(match.group(2)!);
+    final outlet = controller.portById('out_pwr_$number') ??
+        controller.ports
+            .where((p) =>
+                p.signal == SignalType.power &&
+                p.isOutput &&
+                parsePortLabel(p.label).number == number)
+            .firstOrNull;
+    if (outlet == null) {
+      unresolved.add(UnroutedTie(entry.key.toString(), name,
+          '${controller.label} has no outlet $number to plug this into.'));
+      continue;
+    }
+
+    final wanted = outletNameTokens(name);
+    var best = 0;
+    final winners = <AvNode>[];
+    for (final node in [...provider.avNodes, ...newNodes]) {
+      if (node.id == controller.id || node.isJackField) continue;
+      // A box fed over the network is not on a mains outlet, whatever the
+      // label says, and a passive one has no inlet to plug in at all.
+      if (node.powerSource == PowerSource.poe) continue;
+      if (node.portById(kPowerPortId) == null) continue;
+      final score = outletNameScore(wanted, node);
+      if (score == 0 || score < best) continue;
+      if (score > best) {
+        best = score;
+        winners.clear();
+      }
+      winners.add(node);
+    }
+
+    if (winners.isEmpty) continue;
+    if (winners.length > 1) {
+      unresolved.add(UnroutedTie(
+          entry.key.toString(),
+          name,
+          '${winners.length} boxes answer to "$name" — '
+          '${winners.map((n) => n.label).join(', ')}. Nothing is drawn '
+          'rather than the wrong one; plug this outlet in by hand.'));
+      continue;
+    }
+
+    final target = winners.first;
+    draw(
+      configKey: entry.key.toString(),
+      value: name,
+      from: controller,
+      fromPort: outlet,
+      to: target,
+      toPort: target.portById(kPowerPortId)!,
+      signal: SignalType.power,
+    );
+    powered.add(target.id);
+  }
+
   return RoutingPlan(
     newNodes: newNodes,
     cables: cables,
     unresolved: unresolved,
     alreadyDrawn: alreadyDrawn,
+    powered: powered,
   );
+}
+
+// ---------------------------------------------------------------------------
+//  MATCHING AN OUTLET LABEL ONTO A DEVICE
+// ---------------------------------------------------------------------------
+
+/// The words in an outlet label or a device name.
+///
+/// `power1_outlet_6` holds `Doc\rCam`, and that \r is a
+/// literal backslash and r — two characters put there to break the label
+/// over two lines on the touch panel button. Splitting on punctuation
+/// without stripping it first yields "doc" and "rcam", so the line break
+/// goes before anything else does.
+List<String> outletNameTokens(String raw) => raw
+    .replaceAll(r'\r', ' ')
+    .replaceAll(r'\n', ' ')
+    .replaceAll('\r', ' ')
+    .replaceAll('\n', ' ')
+    .toLowerCase()
+    .split(RegExp('[^a-z0-9]+'))
+    .where((t) => t.isNotEmpty)
+    .toList();
+
+/// How well [wanted] describes [node]: 2 a word, 1 a word it starts, 0 when
+/// any word is missing entirely.
+///
+/// Every word has to land. "Doc Cam" is not the doc camera and the camera
+/// separately — an outlet label is a whole name, and half of one matching is
+/// the way a power lead gets drawn to the wrong box. The prefix rule is what
+/// makes "Doc Cam" reach "Document camera" and "Amp" reach "Amplifier", and it
+/// is off for words under three letters: "PC" would otherwise find "PCs", and
+/// the "C" of "USB-C" would find everything.
+int outletNameScore(List<String> wanted, AvNode node) {
+  if (wanted.isEmpty) return 0;
+  final have = <String>{
+    ...outletNameTokens(node.label),
+    ...outletNameTokens(node.model),
+  };
+  var score = 0;
+  for (final word in wanted) {
+    if (have.contains(word)) {
+      score += 2;
+      continue;
+    }
+    if (word.length < 3) return 0;
+    final near = have.any((h) =>
+        h.length >= 3 && (h.startsWith(word) || word.startsWith(h)));
+    if (!near) return 0;
+    score += 1;
+  }
+  return score;
+}
+
+/// One end of a DTP run, cabled: the box, the socket the signal arrives on and
+/// the socket it leaves by. Null when the catalog entry has no such pair, in
+/// which case there is nothing to draw and saying so beats guessing.
+({AvNode node, AvPort input, AvPort output})? _extenderPorts(
+  AvNode node,
+  SignalType inSignal,
+  SignalType outSignal,
+) {
+  AvPort? input, output;
+  for (final p in node.ports) {
+    final takesIn = p.isInput || p.direction == PortDirection.bidirectional;
+    if (input == null && takesIn && p.signal == inSignal) input = p;
+    if (output == null && p.isOutput && p.signal == outSignal) output = p;
+  }
+  if (input == null || output == null) return null;
+  return (node: node, input: input, output: output);
+}
+
+/// The DTP transmitter already fed by [source], for a diagram somebody drew
+/// before this put them in. The mirror of [_receiverFeeding], and it refuses a
+/// config box for the same reason.
+AvNode? _transmitterFedBy(AppStateProvider provider, AvNode source) {
+  for (final cable in provider.avCables) {
+    if (cable.fromNodeId != source.id) continue;
+    final to = provider.avNodeById(cable.toNodeId);
+    if (to == null) continue;
+    if (provider.roomConfig.containsKey(to.id)) continue;
+    final takesHdmi = to.ports.any((p) =>
+        p.signal == SignalType.hdmi &&
+        (p.isInput || p.direction == PortDirection.bidirectional));
+    final sendsDtp =
+        to.ports.any((p) => p.signal == SignalType.hdbaset && p.isOutput);
+    if (takesHdmi && sendsDtp) return to;
+  }
+  return null;
+}
+
+/// The DTP receiver already feeding [dest], for a diagram somebody drew before
+/// this put them in. Matched on what it DOES — a box with a DTP input and a
+/// cable into this display — rather than on its model, because the room end of
+/// a run gets built with whatever receiver was on the shelf.
+AvNode? _receiverFeeding(AppStateProvider provider, AvNode dest) {
+  for (final cable in provider.avCables) {
+    if (cable.toNodeId != dest.id) continue;
+    final from = provider.avNodeById(cable.fromNodeId);
+    if (from == null) continue;
+    // Never a box the config describes. The switcher itself has DTP inputs
+    // and HDMI outputs and would match this shape, and a diagram that already
+    // ran the old direct DTP-to-HDMI cable would then have the switcher
+    // cabled to itself. The config having no block for it is the whole reason
+    // the receiver is being invented.
+    if (provider.roomConfig.containsKey(from.id)) continue;
+    final takesDtp = from.ports.any((p) =>
+        p.signal == SignalType.hdbaset &&
+        (p.isInput || p.direction == PortDirection.bidirectional));
+    final sendsHdmi = from.ports
+        .any((p) => p.signal == SignalType.hdmi && p.isOutput);
+    if (takesDtp && sendsHdmi) return from;
+  }
+  return null;
 }
 
 /// A node already on the canvas that IS one of these models, or whose label
@@ -866,19 +1298,15 @@ AvNode? _existingByModelOrLabel(
   return null;
 }
 
-/// The next free `AVNODE_<n>`, counting the ones this plan has already claimed
-/// as well as the ones on the canvas.
-String _freeId(AppStateProvider provider, List<AvNode> pending) {
-  final taken = {
-    ...provider.avNodes.map((n) => n.id),
-    ...pending.map((n) => n.id),
-  };
-  int n = 1;
-  while (taken.contains('AVNODE_$n')) {
-    n++;
-  }
-  return 'AVNODE_$n';
-}
+/// The node id a box placed from a config field is given.
+///
+/// A generated `AVNODE_7` would be a different box every time the numbers were
+/// read again. Keyed on the field that placed it, the PC that `input_pc` puts
+/// on the canvas is the same node on every pass — which is what lets this run
+/// by itself: a second pass recognises the box instead of drawing a second
+/// one, and a box somebody deleted on purpose is remembered as deleted (see
+/// [AppStateProvider.avDismissedDevices]).
+String avAutoNodeId(String configKey) => 'AVSOURCE_${configKey.toUpperCase()}';
 
 /// The room's location for a zone, or [kNoLocationId] when it has none. A box
 /// drawn into a room that has recorded its locations should land in one;
@@ -897,6 +1325,38 @@ String _locationFor(AppStateProvider provider, RoomZone zone) {
 /// What drawing the routing actually did.
 typedef RoutingResult = ({int nodesAdded, int cablesDrawn, int unresolved});
 
+/// Nothing happened, because there was nothing to do.
+const RoutingResult _noRouting =
+    (nodesAdded: 0, cablesDrawn: 0, unresolved: 0);
+
+/// Draws the room the config already describes — without asking.
+///
+/// The whole routing, both halves. `input_pc: "1"` means there is a PC and it
+/// is on input 1; `output_proj_1: "3B"` and the projector's own `input:
+/// "HDBaseT"` name the two ends of the run to the display. None of that is a
+/// preference anybody has to be consulted about, so making somebody press a
+/// button and read a review to find out what the file already says was a step
+/// that only ever had one answer. The consequence reaches past the drawing:
+/// the estimate counts the boxes on the canvas, so a room whose PC, doc cam
+/// and DTP receivers were never placed was quoting a room without them in it.
+///
+/// Safe to call on every visit to any tab that reads the diagram:
+///
+///   * a box already on the canvas is recognised, not duplicated;
+///   * a cable already drawn between the same two connectors is left alone;
+///   * a box somebody deleted stays deleted;
+///   * a room with no switcher on the canvas yet is left completely alone —
+///     there is nothing for a cable to run to.
+///
+/// What it does NOT do is report. A number that resolves onto no connector is
+/// counted and dropped here; **Draw the routing from config** is still the way
+/// to see WHY, one line per tie with the key and the value behind it.
+RoutingResult autoDrawRoutingFromConfig(AppStateProvider provider) {
+  final plan = planRoutingFromConfig(provider, respectDismissed: true);
+  if (plan.isEmpty) return _noRouting;
+  return applyRoutingFromConfig(provider, plan, quiet: true);
+}
+
 /// Draws [plan] onto the canvas.
 ///
 /// Nothing is destructive: an existing cable between the same two connectors
@@ -905,10 +1365,23 @@ typedef RoutingResult = ({int nodesAdded, int cablesDrawn, int unresolved});
 /// mention is not a tie the config says is wrong.
 RoutingResult applyRoutingFromConfig(
   AppStateProvider provider,
-  RoutingPlan plan,
-) {
+  RoutingPlan plan, {
+  bool quiet = false,
+}) {
   for (final node in plan.newNodes) {
     provider.addAvNode(node, recordUndo: false);
+  }
+
+  // What the diagram now says out loud: these are on a controller outlet.
+  // recordUndo false because the batch has already taken its snapshot — one
+  // press of Undo should put the room back, not twenty.
+  for (final id in plan.powered) {
+    final node = provider.avNodeById(id);
+    if (node == null || node.powerSource == PowerSource.controller) continue;
+    provider.updateAvNode(
+      node.copyWith(powerSource: PowerSource.controller),
+      recordUndo: false,
+    );
   }
 
   int drawn = 0;
@@ -925,11 +1398,18 @@ RoutingResult applyRoutingFromConfig(
     if (added != null) drawn++;
   }
 
-  AppLogger.logInfo(
-    'Drew the routing from the config: ${plan.newNodes.length} box(es) added, '
-    '$drawn cable(s) drawn, ${plan.unresolved.length} tie(s) the numbers did '
-    'not resolve.',
-  );
+  if (!quiet) {
+    AppLogger.logInfo(
+      'Drew the routing from the config: ${plan.newNodes.length} box(es) '
+      'added, $drawn cable(s) drawn, ${plan.unresolved.length} tie(s) the '
+      'numbers did not resolve.',
+    );
+  } else if (plan.newNodes.isNotEmpty || drawn > 0) {
+    AppLogger.logInfo(
+      'Drew the routing the config describes: ${plan.newNodes.length} '
+      'box(es) added, $drawn cable(s) drawn.',
+    );
+  }
 
   return (
     nodesAdded: plan.newNodes.length,

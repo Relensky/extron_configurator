@@ -224,6 +224,22 @@ void main() {
     return null;
   }
 
+  /// Every cable a key produced, in the order they run. One key is not always
+  /// one cable: a DTP output feeding a display on HDMI is two, with the
+  /// receiver between them.
+  List<String> ties(RoutingPlan plan, String key) => [
+        for (final c in plan.cables)
+          if (c.configKey == key) '${c.fromPortLabel} -> ${c.toPortLabel}',
+      ];
+
+  /// The mains lead an outlet key produced, as "outlet -> box".
+  String? power(RoutingPlan plan, String key) {
+    for (final c in plan.cables) {
+      if (c.configKey == key) return '${c.fromPortLabel} -> ${c.toLabel}';
+    }
+    return null;
+  }
+
   const template = 'C:/GitHub/ControlScript-Template/rooms';
 
   test('BSS 239 — the current standard hyflex build', () async {
@@ -237,19 +253,43 @@ void main() {
     expect(tie(plan, 'input_hdmi'), 'HDMI OUT -> HDMI 4');
     expect(tie(plan, 'input_usb'), 'USB-C OUT -> HDMI 5');
     expect(tie(plan, 'input_doc_cam'), 'HDMI OUT -> HDMI 6');
-    expect(tie(plan, 'input_aud_cam'), 'HDMI OUT -> DTP IN 7');
-    expect(tie(plan, 'input_inst_cam'), 'HDMI OUT -> DTP IN 8');
+    // The cameras are on DTP inputs and a camera has an HDMI socket and
+    // nothing else, so each of those two runs is a transmitter and two leads.
+    expect(ties(plan, 'input_aud_cam'),
+        ['HDMI OUT -> HDMI', 'DTP -> DTP IN 7']);
+    expect(ties(plan, 'input_inst_cam'),
+        ['HDMI OUT -> HDMI', 'DTP -> DTP IN 8']);
+    expect(
+      plan.newNodes.where((n) => n.model == 'DTP HDMI 4K 230 Tx'),
+      hasLength(2),
+      reason: 'one per camera, not one shared between them',
+    );
 
     // The output the question was about: 3B on the matrix, HDBaseT at the
     // projector, and the cable joins exactly those two.
     expect(tie(plan, 'output_proj_1'), 'DTP OUT 003B -> HDBaseT');
 
-    // The only thing left over is a real finding about the config rather than
-    // a failure to resolve: BSS 239 has one projector and still carries an
-    // output_proj_2, so nothing is drawn for it and the reason says why.
-    expect(plan.unresolved.map((u) => u.configKey), ['output_proj_2']);
+    // The APC's outlet names are a wiring list nobody had drawn: outlet 1 is
+    // 'PC', and the PC is the box the room's own sources list put on input 1.
+    expect(power(plan, 'power1_outlet_1'), 'OUTLET 1 -> Room PC');
+    expect(power(plan, 'power1_outlet_3'), 'OUTLET 3 -> Wireless - Via Go2');
+    expect(power(plan, 'power1_outlet_6'),
+        'OUTLET 6 -> DSP - Extron DMP 64 Plus C AT');
+    // The outlet 8 label carries the touch panel's line break, and
+    // stripping it is what makes its two words readable as two words.
+    expect(power(plan, 'power1_outlet_8'),
+        'OUTLET 8 -> USB Switcher - Inogeni Toggle');
+
+    // Two findings, both real, neither a failure to resolve. BSS 239 has one
+    // projector and still carries an output_proj_2; and outlet 2 is labelled
+    // 'Switch' in a room holding a video switcher and a USB switcher, which is
+    // a coin toss this declines to call.
+    expect(plan.unresolved.map((u) => u.configKey),
+        ['output_proj_2', 'power1_outlet_2']);
     expect(plan.unresolved.first.reason, contains('1 display'));
     expect(plan.unresolved.first.reason, contains('dev_projectors'));
+    expect(plan.unresolved.last.reason, contains('Switcher'));
+    expect(plan.unresolved.last.reason, contains('USB Switcher'));
   });
 
   test('BSS 122 — the catalog counts connectors on this one', () async {
@@ -260,13 +300,27 @@ void main() {
     expect(tie(plan, 'input_pc'), 'HDMI OUT -> HDMI 001');
     expect(tie(plan, 'input_wireless'), 'HDMI OUT -> HDMI 003');
     expect(tie(plan, 'input_usb'), 'USB-C OUT -> HDMI 005');
-    expect(tie(plan, 'input_hdmi'), 'HDMI OUT -> DTP IN 007');
-    expect(tie(plan, 'input_inst_cam'), 'HDMI OUT -> DTP IN 008');
+    // The HDMI plate and the camera are both on DTP inputs here.
+    expect(ties(plan, 'input_hdmi'), ['HDMI OUT -> HDMI', 'DTP -> DTP IN 007']);
+    expect(ties(plan, 'input_inst_cam'),
+        ['HDMI OUT -> HDMI', 'DTP -> DTP IN 008']);
 
-    // Both projectors say 'HDMI 1', and the matrix outputs are the inferred
-    // ones — DTP OUT 1 is output 3.
-    expect(tie(plan, 'output_proj_1'), 'DTP OUT 1 -> HDMI 1');
-    expect(tie(plan, 'output_proj_2'), 'DTP OUT 2 -> HDMI 1');
+    // Both projectors say 'HDMI 1' and the matrix outputs are DTP — the real
+    // room this feature was described from. A DTP output does not plug into an
+    // HDMI input, so each run is two cables and a receiver, and each display
+    // gets its own. The matrix outputs are the inferred ones: DTP OUT 1 is
+    // output 3.
+    expect(ties(plan, 'output_proj_1'),
+        ['DTP OUT 1 -> DTP IN', 'HDMI OUT -> HDMI 1']);
+    expect(ties(plan, 'output_proj_2'),
+        ['DTP OUT 2 -> DTP IN', 'HDMI OUT -> HDMI 1']);
+
+    final receivers =
+        plan.newNodes.where((n) => n.model == 'DTP HDMI 4K 230 Rx');
+    expect(receivers, hasLength(2));
+    // Two displays, two receivers, and the labels say which is which — one
+    // line on the quote of quantity two, but two boxes to hang on two walls.
+    expect(receivers.map((n) => n.label).toSet(), hasLength(2));
   });
 
   test('AJH 125A — an IN1608, whose outputs are lettered', () async {
@@ -279,7 +333,8 @@ void main() {
     expect(tie(plan, 'input_pc'), 'HDMI OUT -> HDMI IN 3');
     expect(tie(plan, 'input_hdmi'), 'HDMI OUT -> HDMI IN 4');
     expect(tie(plan, 'input_doc_cam'), 'HDMI OUT -> HDMI IN 5');
-    expect(tie(plan, 'input_inst_cam'), 'HDMI OUT -> DTP IN 7');
+    expect(ties(plan, 'input_inst_cam'),
+        ['HDMI OUT -> HDMI', 'DTP -> DTP IN 7']);
 
     // output_proj_1 is the bare letter 'C'.
     expect(tie(plan, 'output_proj_1'), startsWith('DTP OUT C -> '));
