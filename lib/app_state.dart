@@ -3720,20 +3720,23 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Extra runs of [signal] to buy beyond what the diagram shows. 0 clears the
-  /// entry rather than storing a zero, so the sidecar only records decisions
-  /// somebody actually made.
-  void setAvCableSpares(SignalType signal, double qty) {
+  /// Extra runs to buy beyond what the diagram shows, against one cabling
+  /// LINE — `cable:hdmi`, `cable:hdmi@50ft`. Per line rather than per signal
+  /// type because a length is what gets ordered: two spare patch leads and
+  /// two spare 50 ft runs are two decisions at two prices.
+  ///
+  /// 0 clears the entry rather than storing a zero, so the sidecar only
+  /// records decisions somebody actually made.
+  void setAvCableSpares(String lineKey, double qty) {
     if (qty <= 0) {
-      avCost.cableSpares.remove(signal.name);
+      avCost.cableSpares.remove(lineKey);
     } else {
-      avCost.cableSpares[signal.name] = qty;
+      avCost.cableSpares[lineKey] = qty;
     }
     notifyListeners();
   }
 
-  double avCableSpares(SignalType signal) =>
-      avCost.cableSpares[signal.name] ?? 0;
+  double avCableSpares(String lineKey) => avCost.cableSpares[lineKey] ?? 0;
 
   /// The color a signal type is drawn in for this room.
   Color avSignalColor(SignalType s) => signalColor(s, avSignalColors);

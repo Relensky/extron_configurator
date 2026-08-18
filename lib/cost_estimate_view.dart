@@ -1084,7 +1084,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // spare for a type you didn't draw is still cable somebody is buying.
     final types = <SignalType>{
       ...drawn.keys,
-      for (final name in settings.cableSpares.keys) signalFromName(name),
+      for (final key in settings.cableSpares.keys)
+        if (cableSignalOfKey(key) != null) cableSignalOfKey(key)!,
     }.toList()..sort((a, b) => a.index.compareTo(b.index));
 
     return Card(
@@ -1166,11 +1167,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   Builder(
                     builder: (context) {
                       final signal = cableSignalOfKey(line.key)!;
-                      // The spares belong to the TYPE, so they sit on the
-                      // type's main line — the one keyed without a lead.
-                      final carriesSpares = line.key == 'cable:${signal.name}';
-                      final spares = provider.avCableSpares(signal);
-                      final runs = line.qty - (carriesSpares ? spares : 0);
+                      // EVERY LENGTH GETS ITS OWN SPARES BOX. A length is
+                      // what gets ordered — two spare 3 ft patch leads and
+                      // two spare 50 ft runs are two decisions at two prices
+                      // — so one box against "HDMI" could only ever record
+                      // one of them.
+                      final spares = provider.avCableSpares(line.key);
+                      final runs = line.qty - spares;
                       final catalog =
                           library.templateForModel(line.model) ??
                               library.cableForSignal(signal);
@@ -1212,28 +1215,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             const SizedBox(width: 12),
                             SizedBox(
                               width: 80,
-                              child: carriesSpares
-                                  ? LiveTextField(
-                                      fieldId: 'spare_${signal.name}',
-                                      initial:
-                                          spares == 0 ? '' : trimNumber(spares),
-                                      numeric: true,
-                                      hint: '0',
-                                      onChanged: (v) =>
-                                          provider.setAvCableSpares(
-                                        signal,
-                                        double.tryParse(v) ?? 0,
-                                      ),
-                                    )
-                                  // Spares are ordered against the type, not
-                                  // against one of its lengths.
-                                  : Text(
-                                      '—',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: theme.disabledColor,
-                                      ),
-                                    ),
+                              child: LiveTextField(
+                                fieldId: 'spare_${line.key}',
+                                initial:
+                                    spares == 0 ? '' : trimNumber(spares),
+                                numeric: true,
+                                hint: '0',
+                                onChanged: (v) => provider.setAvCableSpares(
+                                  line.key,
+                                  double.tryParse(v) ?? 0,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             SizedBox(

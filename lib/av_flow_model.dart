@@ -981,6 +981,15 @@ class AvCable {
   /// Cable ID / note shown on the line and in the schedule.
   final String label;
 
+  /// Where the label sits relative to where the route would put it — the
+  /// midpoint of the run's longest leg. Zero, the normal case, means "leave
+  /// it where it lands", so a run that is later rerouted takes its label with
+  /// it instead of stranding it over open canvas.
+  ///
+  /// Dragged on the AV Flow page, the same way a floor-plan callout and a
+  /// cabling-schematic run label are moved.
+  final Offset labelOffset;
+
   /// How long the lead is, in feet — one of [kCableLengthsFt], or 0 when
   /// nobody has said. Zero rather than null so a room saved before lengths
   /// existed reads back as "not set" rather than as a one-foot patch lead.
@@ -1002,6 +1011,7 @@ class AvCable {
     required this.toPortId,
     required this.signal,
     this.label = '',
+    this.labelOffset = Offset.zero,
     this.lengthFt = 0,
     this.waypoints = const [],
     this.colorOverride,
@@ -1020,6 +1030,7 @@ class AvCable {
     String? toPortId,
     SignalType? signal,
     String? label,
+    Offset? labelOffset,
     double? lengthFt,
     List<Offset>? waypoints,
     Color? colorOverride,
@@ -1032,6 +1043,7 @@ class AvCable {
     toPortId: toPortId ?? this.toPortId,
     signal: signal ?? this.signal,
     label: label ?? this.label,
+    labelOffset: labelOffset ?? this.labelOffset,
     lengthFt: lengthFt ?? this.lengthFt,
     waypoints: waypoints ?? this.waypoints,
     colorOverride: clearColorOverride
@@ -1056,6 +1068,8 @@ class AvCable {
     'toPort': toPortId,
     'signal': signal.name,
     if (label.isNotEmpty) 'label': label,
+    if (labelOffset != Offset.zero)
+      'labelOffset': {'x': labelOffset.dx, 'y': labelOffset.dy},
     if (lengthFt > 0) 'lengthFt': lengthFt,
     if (colorOverride != null)
       'color': (colorOverride!.toARGB32() & 0xFFFFFF)
@@ -1078,6 +1092,12 @@ class AvCable {
       toPortId: json['toPort']?.toString() ?? '',
       signal: signalFromName(json['signal']?.toString()),
       label: json['label']?.toString() ?? '',
+      labelOffset: json['labelOffset'] is Map
+          ? Offset(
+              (json['labelOffset']['x'] as num?)?.toDouble() ?? 0,
+              (json['labelOffset']['y'] as num?)?.toDouble() ?? 0,
+            )
+          : Offset.zero,
       lengthFt: (json['lengthFt'] as num?)?.toDouble() ?? 0,
       colorOverride: parsed == null ? null : Color(0xFF000000 | parsed),
       waypoints: [

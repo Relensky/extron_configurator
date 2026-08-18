@@ -5248,7 +5248,10 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "partNumber": "V11H744520",
+      "price": 1654.0,
+      "educationPrice": 1297.0
     },
     {
       "model": "PowerLite 800F",
@@ -5315,7 +5318,10 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "partNumber": "V11H923520",
+      "price": 2986.0,
+      "educationPrice": 2529.0
     },
     {
       "model": "PowerLite 805F",
@@ -5382,7 +5388,10 @@
           "direction": "input",
           "side": "bottom"
         }
-      ]
+      ],
+      "partNumber": "V11H923620",
+      "price": 2986.0,
+      "educationPrice": 2529.0
     },
     {
       "model": "PowerLite L400U",
@@ -92078,6 +92087,5085 @@
           "side": "left"
         }
       ]
+    },
+    {
+      "model": "BrightLink 760Wi",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA80020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2247.0,
+      "educationPrice": 1775.0
+    },
+    {
+      "model": "BrightLink 770Fi",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA78020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2637.0,
+      "educationPrice": 2108.0
+    },
+    {
+      "model": "BrightLink 1480Fi",
+      "manufacturer": "Epson",
+      "partNumber": "V11H921520",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 3221.0,
+      "educationPrice": 2644.0
+    },
+    {
+      "model": "BrightLink 1485Fi",
+      "manufacturer": "Epson",
+      "partNumber": "V11H919520",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 3568.0,
+      "educationPrice": 2990.0
+    },
+    {
+      "model": "PowerLite 760W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA81020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2034.0,
+      "educationPrice": 1442.0
+    },
+    {
+      "model": "PowerLite 770F",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA79020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2247.0,
+      "educationPrice": 1775.0
+    },
+    {
+      "model": "PowerLite 775F",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA83120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2247.0,
+      "educationPrice": 1775.0
+    },
+    {
+      "model": "PowerLite 810E",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA99020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 3662.0,
+      "educationPrice": 3463.0
+    },
+    {
+      "model": "PowerLite 815E",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA99120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 3662.0,
+      "educationPrice": 3463.0
+    },
+    {
+      "model": "PowerLite L210SW",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA76020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1604.0,
+      "educationPrice": 1366.0
+    },
+    {
+      "model": "PowerLite L210SF",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA75020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1717.0,
+      "educationPrice": 1479.0
+    },
+    {
+      "model": "PowerLite L690SU",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB31020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 4661.0,
+      "educationPrice": 4502.0
+    },
+    {
+      "model": "PowerLite L695SU",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB31120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 4661.0,
+      "educationPrice": 4502.0
+    },
+    {
+      "model": "PowerLite L790SE",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB26020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 6349.0,
+      "educationPrice": 5771.0
+    },
+    {
+      "model": "PowerLite L795SE",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB26120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 6349.0,
+      "educationPrice": 5771.0
+    },
+    {
+      "model": "PowerLite L690SE",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB36020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 5710.0,
+      "educationPrice": 5483.0
+    },
+    {
+      "model": "PowerLite L695SE",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB36120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 5710.0,
+      "educationPrice": 5483.0
+    },
+    {
+      "model": "LightScene EV110",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA22020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2774.0,
+      "educationPrice": 1789.0
+    },
+    {
+      "model": "LightScene EV115",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA22120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2774.0,
+      "educationPrice": 1789.0
+    },
+    {
+      "model": "PowerLite L210W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA70020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1089.0,
+      "educationPrice": 934.0
+    },
+    {
+      "model": "PowerLite L260F",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA69020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1416.0,
+      "educationPrice": 1106.0
+    },
+    {
+      "model": "PowerLite L265F",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA72120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER 1",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_2",
+          "label": "COMPUTER 2",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1416.0,
+      "educationPrice": 1106.0
+    },
+    {
+      "model": "PowerLite L270F",
+      "manufacturer": "Epson",
+      "partNumber": "V11HC68020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1410.0,
+      "educationPrice": 1154.0
+    },
+    {
+      "model": "PowerLite L530U",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA27020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 2943.0,
+      "educationPrice": 2590.0
+    },
+    {
+      "model": "PowerLite L690E",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB25020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 4169.0,
+      "educationPrice": 3669.0
+    },
+    {
+      "model": "PowerLite L690U",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB29020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 3515.0,
+      "educationPrice": 3192.0
+    },
+    {
+      "model": "PowerLite L790U",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB28020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 4502.0,
+      "educationPrice": 4155.0
+    },
+    {
+      "model": "PowerLite L890E",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB24020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 5811.0,
+      "educationPrice": 5283.0
+    },
+    {
+      "model": "PowerLite L890U",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB27020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 4996.0,
+      "educationPrice": 4593.0
+    },
+    {
+      "model": "PowerLite L895E",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB24120",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 5811.0,
+      "educationPrice": 5283.0
+    },
+    {
+      "model": "PowerLite E24",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB51020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_5",
+          "label": "HDMI 5",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_6",
+          "label": "HDMI 6",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_7",
+          "label": "HDMI 7",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 430.0,
+      "educationPrice": 430.0
+    },
+    {
+      "model": "PowerLite X49",
+      "manufacturer": "Epson",
+      "partNumber": "V11H982020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_5",
+          "label": "HDMI 5",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_6",
+          "label": "HDMI 6",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_7",
+          "label": "HDMI 7",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 508.0,
+      "educationPrice": 484.0
+    },
+    {
+      "model": "PowerLite W49",
+      "manufacturer": "Epson",
+      "partNumber": "V11H983020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 668.0,
+      "educationPrice": 521.0
+    },
+    {
+      "model": "PowerLite 118",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA03020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 580.0,
+      "educationPrice": 513.0
+    },
+    {
+      "model": "PowerLite 119W",
+      "manufacturer": "Epson",
+      "partNumber": "V11H985020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 685.0,
+      "educationPrice": 548.0
+    },
+    {
+      "model": "PowerLite 982W",
+      "manufacturer": "Epson",
+      "partNumber": "V11H987020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 962.0,
+      "educationPrice": 679.0
+    },
+    {
+      "model": "PowerLite 994F",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB60020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "video",
+          "label": "VIDEO",
+          "signal": "other",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1263.0,
+      "educationPrice": 962.0
+    },
+    {
+      "model": "PowerLite 1290",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB59220",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_b",
+          "label": "USB-B",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb_a",
+          "label": "USB-A",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 986.0,
+      "educationPrice": 803.0
+    },
+    {
+      "model": "PowerLite 1785W",
+      "manufacturer": "Epson",
+      "partNumber": "V11H793020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1049.0,
+      "educationPrice": 945.0
+    },
+    {
+      "model": "PowerLite 1795F",
+      "manufacturer": "Epson",
+      "partNumber": "V11H796020",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 1166.0,
+      "educationPrice": 1030.0
+    },
+    {
+      "model": "EB-PU1006W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA35920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 8388.0,
+      "educationPrice": 5630.0
+    },
+    {
+      "model": "EB-PU1007W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA34920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 9525.0,
+      "educationPrice": 6408.0
+    },
+    {
+      "model": "EB-PU1007B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA34820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 9525.0,
+      "educationPrice": 6408.0
+    },
+    {
+      "model": "EB-PU1008W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA33920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 12230.0,
+      "educationPrice": 7907.0
+    },
+    {
+      "model": "EB-PU1008B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA33820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 12230.0,
+      "educationPrice": 7907.0
+    },
+    {
+      "model": "EB-PU2010W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA52920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 20030.0,
+      "educationPrice": 12214.0
+    },
+    {
+      "model": "EB-PU2010B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA52820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 20030.0,
+      "educationPrice": 12214.0
+    },
+    {
+      "model": "EB-PU2113W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA65920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 22165.0,
+      "educationPrice": 14084.0
+    },
+    {
+      "model": "EB-PU2213B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA68820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 22835.0,
+      "educationPrice": 14546.0
+    },
+    {
+      "model": "EB-PU2116W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA64920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 31169.0,
+      "educationPrice": 19856.0
+    },
+    {
+      "model": "EB-PU2216B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA67820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 31977.0,
+      "educationPrice": 20433.0
+    },
+    {
+      "model": "EB-PU2120W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA63920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 51074.0,
+      "educationPrice": 33773.0
+    },
+    {
+      "model": "EB-PU2220B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HA66820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 50660.0,
+      "educationPrice": 34817.0
+    },
+    {
+      "model": "EB-PQ2008W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB01920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 20521.0,
+      "educationPrice": 11646.0
+    },
+    {
+      "model": "EB-PQ2008B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB01820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 20521.0,
+      "educationPrice": 11646.0
+    },
+    {
+      "model": "EB-PQ2010W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB02920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 32721.0,
+      "educationPrice": 20365.0
+    },
+    {
+      "model": "EB-PQ2010B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB02820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 32721.0,
+      "educationPrice": 20365.0
+    },
+    {
+      "model": "EB-PQ2213B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB03820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 42930.0,
+      "educationPrice": 24253.0
+    },
+    {
+      "model": "EB-PQ2216W",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB04920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 53316.0,
+      "educationPrice": 34068.0
+    },
+    {
+      "model": "EB-PQ2216B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB04820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 53316.0,
+      "educationPrice": 34068.0
+    },
+    {
+      "model": "EB-PQ2220B",
+      "manufacturer": "Epson",
+      "partNumber": "V11HB05820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 71790.0,
+      "educationPrice": 47440.0
+    },
+    {
+      "model": "Pro L30000UNL",
+      "manufacturer": "Epson",
+      "partNumber": "V11H944820",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 101234.0,
+      "educationPrice": 70595.0
+    },
+    {
+      "model": "Pro L30002UNL",
+      "manufacturer": "Epson",
+      "partNumber": "V11H944920",
+      "category": "Projector",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdbaset",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "sdi",
+          "label": "SDI",
+          "signal": "sdi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_in",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 101234.0,
+      "educationPrice": 73419.0
+    },
+    {
+      "model": "LE-C1135",
+      "manufacturer": "Epson",
+      "partNumber": "V12HC89020",
+      "category": "Display",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 39990.0,
+      "educationPrice": 29990.0
+    },
+    {
+      "model": "LE-C1162",
+      "manufacturer": "Epson",
+      "partNumber": "V12HC90020",
+      "category": "Display",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 56990.0,
+      "educationPrice": 42990.0
+    },
+    {
+      "model": "LE-C14K135",
+      "manufacturer": "Epson",
+      "partNumber": "V12HC91020",
+      "category": "Display",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "rs232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 118990.0,
+      "educationPrice": 89990.0
+    },
+    {
+      "model": "ELPEC01 PixAlign Camera",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA46010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 588.0,
+      "educationPrice": 588.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPAP10 Wireless LAN Module (for projector model compatibility, see individual spec sheets)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H731P02",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 140.0,
+      "educationPrice": 140.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPAP11 Wireless LAN Module (for projector model compatibility, see individual spec sheets)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H005A02",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 140.0,
+      "educationPrice": 140.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPHD02 HDBaseT Transmitter/Control Pad",
+      "manufacturer": "Epson",
+      "partNumber": "V12H007A14",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 346.0,
+      "educationPrice": 346.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPSP02 Active Speakers",
+      "manufacturer": "Epson",
+      "partNumber": "V12H467020",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 219.0,
+      "educationPrice": 150.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPSP10 PixelPlus™ Projector Controller",
+      "manufacturer": "Epson",
+      "partNumber": "ELPSP10",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 406.0,
+      "educationPrice": 285.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPCS01 Mobile Projector Cart (for PowerLite 810E, 815E)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HB45020",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 2308.0,
+      "educationPrice": 2077.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPCS01 Mobile Projector Cart Bundle (with PowerLite 815E)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HB450205E",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 5771.0,
+      "educationPrice": 5310.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Replacement Filter for PowerLite L Series Projectors / L69X, L79X, L88X",
+      "manufacturer": "Epson",
+      "partNumber": "V13H134AF0",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 58.0,
+      "educationPrice": 58.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Document Camera (DC-07)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H759020",
+      "category": "Camera",
+      "ports": [
+        {
+          "id": "hdmi_out",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "usb_out",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 230.0,
+      "educationPrice": 207.0
+    },
+    {
+      "model": "Document Camera (DC-13)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H757020",
+      "category": "Camera",
+      "ports": [
+        {
+          "id": "hdmi_out",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "usb_out",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 519.0,
+      "educationPrice": 461.0
+    },
+    {
+      "model": "Document Camera (DC-21)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H758020",
+      "category": "Camera",
+      "ports": [
+        {
+          "id": "hdmi_out",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "usb_out",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "price": 601.0,
+      "educationPrice": 508.0
+    },
+    {
+      "model": "ELPFT01 Interactive Touch Module (for BrightLink 760Wi, 770Fi, 1480Fi)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H007A23",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 230.0,
+      "educationPrice": 230.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Finger Touch Bracket (supports mounting of Interactive Touch Module above whiteboards)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA05A09",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 58.0,
+      "educationPrice": 58.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Replacement Interactive Pen A Orange (BrightLink 436Wi/536Wi, BrightLink 470W/480W, 500/600/700/1400 series)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H773010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 46.0,
+      "educationPrice": 46.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Replacement Interactive Pen B Blue (BrightLink 436Wi/536Wi, BrightLink 470W/480W, 500/600/700/1400 series)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H774010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 46.0,
+      "educationPrice": 46.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Replacement Pen Tips (hardtip/ion) for pens included with BrightLink 600, 700, 1400 series",
+      "manufacturer": "Epson",
+      "partNumber": "V12H775010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 20.0,
+      "educationPrice": 20.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Replacement Pen Tips (soft/felt) for pens included with BrightLink 600, 700, 1400 series",
+      "manufacturer": "Epson",
+      "partNumber": "V12H776010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 20.0,
+      "educationPrice": 20.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Replacement Pen Tips - (hard/felton) for V12H667010/V12H668010 pens included with BrightLink 400 series pens and 500 series projectors",
+      "manufacturer": "Epson",
+      "partNumber": "V12H668010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 13.0,
+      "educationPrice": 13.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "100\" whiteboard for projection and dry-erase (16:10) (for BrightLink 760Wi)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H831000",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1027.0,
+      "educationPrice": 923.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "100\" whiteboard for projection and dry-erase (16:9) (for BrightLink 770Fi, 1480Fi, 1485Fi)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H006A02",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1027.0,
+      "educationPrice": 923.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB59 Projector Stacking and Rigging Frame",
+      "manufacturer": "Epson",
+      "partNumber": "V12H996A01",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 4318.0,
+      "educationPrice": 2935.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB67 Adjustable Ceiling Mount",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA54010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 367.0,
+      "educationPrice": 367.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMFP15 Suspension Adapter for ELPMB67 Ceiling Mount",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA55010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 195.0,
+      "educationPrice": 195.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB68 Ceiling Mount with Precision Adjust (PowerLite L, EB-PU, and EB-PQ Series)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H006AE0",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 457.0,
+      "educationPrice": 457.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB76 Projector Stacking Frame Alfa (EB-PU and EB-PQ Series, up to 10K lumens)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H006AN0",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1294.0,
+      "educationPrice": 1294.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB84 Projector Stacking Frame Beta (EB-PU and EB-PQ Series, 13K lumens and up)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H006AW0",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1444.0,
+      "educationPrice": 1444.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB77 Tilt Mounting Plate Adapter (EB-PU and EB-PQ series)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H006AP0",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1398.0,
+      "educationPrice": 1398.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELP-KMS01 Mobile Cart for 135\" dvLED",
+      "manufacturer": "Epson",
+      "partNumber": "V12H006BH0",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 695.0,
+      "educationPrice": 695.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMBPJG Universal Projector Ceiling Mount Kit (extension column available)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H808001",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 197.0,
+      "educationPrice": 107.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMBC02 9–12\" Adjustable Extension Column",
+      "manufacturer": "Epson",
+      "partNumber": "V12H810001",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 90.0,
+      "educationPrice": 67.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB75 Extreme Short Throw Wall Mount (for PowerLite 810E, White only)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HB12010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 207.0,
+      "educationPrice": 207.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB87 Extreme Short Throw Wall Mount (for PowerLite 815E, Black)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H006AZ0",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 332.0,
+      "educationPrice": 332.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB62 Ultra-Short Throw Wall Mount (for BrightLink 760Wi, 770Fi, 1480Fi, 1485Fi, PowerLite 685W, 700W, 770F, 800F)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA06A05",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 133.0,
+      "educationPrice": 133.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB64 Short-Throw Wall Mount (for PowerLite L210SW, L210SF)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA39010",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 181.0,
+      "educationPrice": 181.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Table Mount (for BrightLink 760Wi, 770Fi)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H516020",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 243.0,
+      "educationPrice": 173.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMBP04 SpeedConnect Above Tile Suspended Ceiling Kit",
+      "manufacturer": "Epson",
+      "partNumber": "V12H804001",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 141.0,
+      "educationPrice": 108.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMBP05 Suspended Ceiling Tile Replacement Kit",
+      "manufacturer": "Epson",
+      "partNumber": "V12H805001",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 158.0,
+      "educationPrice": 121.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMBP06 SpeedConnect Suspended Ceiling Tile Replacement Kit",
+      "manufacturer": "Epson",
+      "partNumber": "V12H806001",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 195.0,
+      "educationPrice": 146.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMBPRH Custom Micro-Adjustable Projector Mount",
+      "manufacturer": "Epson",
+      "partNumber": "V12H809001",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 206.0,
+      "educationPrice": 151.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB60B Ceiling Mount/Floor Stand (Black) (PowerLite L265F)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H963110",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 171.0,
+      "educationPrice": 171.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB60W Ceiling Mount/Floor Stand (White) (PowerLite L210W, L260F)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H963210",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 134.0,
+      "educationPrice": 128.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB22 Ceiling Mount (PowerLite 810E, 815E, L520, L530, L630, L700 series)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H003B22",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 230.0,
+      "educationPrice": 230.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB30 Low Profile Ceiling Mount (PowerLite 810E, 815E, L520, L530, L630, L700 series)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H526040",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 185.0,
+      "educationPrice": 185.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "ELPMB61W Lighting Track Mount (White) (PowerLite L210W, L260F)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H964220",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 307.0,
+      "educationPrice": 307.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "LightScene Floor Mount (White) (EV 100 /110)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H888W10",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 181.0,
+      "educationPrice": 181.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "LightScene Floor Mount (Black) (EV 105 /115)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H888B10",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 181.0,
+      "educationPrice": 181.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "LightScene Lighting Track Mount (White) (EV 110)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA32020",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 424.0,
+      "educationPrice": 424.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "LightScene Lighting Track Mount (Black) (EV 115)",
+      "manufacturer": "Epson",
+      "partNumber": "V12HA32120",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 424.0,
+      "educationPrice": 424.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "Ultra Short-Throw Lens (V12H004X0A)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004X0A",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 8657.0,
+      "educationPrice": 6580.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 0.35:1",
+      "powerInput": "none"
+    },
+    {
+      "model": "Ultra Short-Throw Lens (Lens in white) (V12H004Y0A)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004Y0A",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 8657.0,
+      "educationPrice": 6580.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 0.35:1",
+      "powerInput": "none"
+    },
+    {
+      "model": "Ultra Short-Throw Lens (V12H004X0B)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004X0B",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 16161.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 0.35:1",
+      "powerInput": "none"
+    },
+    {
+      "model": "Ultra Short-Throw Lens (Lens in white) (V12H004Y0B)",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004Y0B",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 16161.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 0.35:1",
+      "powerInput": "none"
+    },
+    {
+      "model": "Short-Throw Lens #1",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004UA3",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 4267.0,
+      "educationPrice": 3080.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 0.65 to 0.78 / 0.48 to 0.57",
+      "powerInput": "none"
+    },
+    {
+      "model": "Short-Throw Lens #2",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004U04",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 4000.0,
+      "educationPrice": 2799.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 0.87 to 1.06 / 0.64 to 0.78",
+      "powerInput": "none"
+    },
+    {
+      "model": "Wide-Throw Lens #1",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004W05",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 2557.0,
+      "educationPrice": 1719.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 1.04 to 1.46 / 0.76 to 1.07",
+      "powerInput": "none"
+    },
+    {
+      "model": "Wide-Throw Lens #2",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004W06",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 3866.0,
+      "educationPrice": 2707.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 1.63 to 2.22 / 1.19 to 1.63",
+      "powerInput": "none"
+    },
+    {
+      "model": "Wide-Throw Lens #3",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004W08",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 12953.0,
+      "educationPrice": 9329.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 1.18 to 1.56 / 0.86 to 1.21",
+      "powerInput": "none"
+    },
+    {
+      "model": "Middle-Throw Lens #1",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004M08",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 522.0,
+      "educationPrice": 424.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 1.44 to 2.32 / NA",
+      "powerInput": "none"
+    },
+    {
+      "model": "Middle-Throw Lens #2",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004M0F",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1956.0,
+      "educationPrice": 1314.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 2.16 to 3.48 / 1.58 to 2.56",
+      "powerInput": "none"
+    },
+    {
+      "model": "Middle-Throw Lens #3",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004M0A",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 2533.0,
+      "educationPrice": 1703.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 3.33 to 5.06 / 2.43 to 3.71",
+      "powerInput": "none"
+    },
+    {
+      "model": "Middle-Throw Lens #4",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004M0B",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 2533.0,
+      "educationPrice": 1703.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 4.86 to 7.39 / 3.54 to 5.41",
+      "powerInput": "none"
+    },
+    {
+      "model": "Long-Throw Lens",
+      "manufacturer": "Epson",
+      "partNumber": "V12H004L08",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 3866.0,
+      "educationPrice": 2707.0,
+      "notes": "Throw ratio (WUXGA / WXGA): 7.22 to 10.12 / 5.28 to 7.42",
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange (Years 3-5), PowerLite Series Below Model 2000",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPA1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 113.0,
+      "educationPrice": 113.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Next Business Day Whole Unit Exchange (Years 3-5), PowerLite Series Below Model 2000",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPA2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 169.0,
+      "educationPrice": 169.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "3-Year Next Business Day Whole Unit Exchange (Years 3-5), PowerLite Series Below Model 2000",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPA3",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 215.0,
+      "educationPrice": 215.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange (Years 3-5), PowerLite Series Model 2000 and above",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPB1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 226.0,
+      "educationPrice": 226.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Next Business Day Whole Unit Exchange (Years 3-5), PowerLite Series Model 2000 and above",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPB2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 208.0,
+      "educationPrice": 208.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "3-Year Next Business Day Whole Unit Exchange (Years 3-5), PowerLite Series Model 2000 and above",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPB3",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 292.0,
+      "educationPrice": 292.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange (Year 4 or 5), EB-PU1000/2000",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPC1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 668.0,
+      "educationPrice": 668.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Next Business Day Whole Unit Exchange (Year 4 or 5), EB-PU1000/2000",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPC2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1155.0,
+      "educationPrice": 1155.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Return for Repair Extension (Years 4 or 5), Pro L30000UNL",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPD1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 2357.0,
+      "educationPrice": 2357.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Return for Repair Extension (Years 4-5), Pro L30000UNL",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPD2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 4419.0,
+      "educationPrice": 4419.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange, PowerLite L Series, LightScene® Series",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPE1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 158.0,
+      "educationPrice": 158.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Next Business Day Whole Unit Exchange, PowerLite L Series, LightScene® Series",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPE2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 260.0,
+      "educationPrice": 260.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange (Years 4 or 5), BrightLink®, PowerLite 700 and 800 Series",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPF1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 226.0,
+      "educationPrice": 226.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Next Business Day Whole Unit Exchange (Years 4-5), BrightLink®, PowerLite 700 and 800 Series",
+      "manufacturer": "Epson",
+      "partNumber": "EPPEXPF2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 317.0,
+      "educationPrice": 317.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "3-Year Shipping Upgrade to Next Business Day (Years 1-3), EB-PU2100/2200",
+      "manufacturer": "Epson",
+      "partNumber": "EPPPRJPU3",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 301.0,
+      "educationPrice": 301.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "5-Year Next Business Day Upgrade (Years 1-3) and Extension (Years 4-5), EB-PU2113W, EB-PU2116W, EB-PU2213B,EB-PU2216B",
+      "manufacturer": "Epson",
+      "partNumber": "EPPPRJPUE5",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1399.0,
+      "educationPrice": 1399.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "5-Year Next Business Day Upgrade (Years 1-3) and Extension (Years 4-5), EB-PU2120W, EB-PU2220B",
+      "manufacturer": "Epson",
+      "partNumber": "EPPPRJPU20E5",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 3229.0,
+      "educationPrice": 3229.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Next Business Day Whole Unit Exchange (Years 4-5), EB-PU2113W, EB-PU2116W, EB-PU2213B, EB-PU2216B",
+      "manufacturer": "Epson",
+      "partNumber": "EPPPRJPUE2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1291.0,
+      "educationPrice": 1291.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Next Business Day Whole Unit Exchange (Years 4-5), EB-PU2120W, EB-PU2220B",
+      "manufacturer": "Epson",
+      "partNumber": "EPPPRJPU20E2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 3111.0,
+      "educationPrice": 3111.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Return for Repair Extension (Years 4-5), EB-PU2113W, EB-PU2116W, EB-PU2213B, EB-PU2216B",
+      "manufacturer": "Epson",
+      "partNumber": "EPPPRJPUR2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 1076.0,
+      "educationPrice": 1076.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "2-Year Return for Repair Extension (Years 4-5), EB-PU2120W, EB-PU2220B",
+      "manufacturer": "Epson",
+      "partNumber": "EPPPRJPU20R2",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 2195.0,
+      "educationPrice": 2195.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange, DC-07",
+      "manufacturer": "Epson",
+      "partNumber": "EPPDCAE1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 19.0,
+      "educationPrice": 19.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "3-Year Next Business Day Whole Unit Exchange, DC-07",
+      "manufacturer": "Epson",
+      "partNumber": "EPPDCAE3",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 57.0,
+      "educationPrice": 57.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange, DC-13, DC-21",
+      "manufacturer": "Epson",
+      "partNumber": "EPPDCBE1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 46.0,
+      "educationPrice": 46.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "3-Year Next Business Day Whole Unit Exchange, DC-13, DC-21",
+      "manufacturer": "Epson",
+      "partNumber": "EPPDCBE3",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 136.0,
+      "educationPrice": 136.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "1-Year Next Business Day Whole Unit Exchange, DC-30",
+      "manufacturer": "Epson",
+      "partNumber": "EPPDCCE1",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 57.0,
+      "educationPrice": 57.0,
+      "powerInput": "none"
+    },
+    {
+      "model": "3-Year Next Business Day Whole Unit Exchange, DC-30",
+      "manufacturer": "Epson",
+      "partNumber": "EPPDCCE3",
+      "category": "AV / Misc",
+      "ports": [],
+      "price": 170.0,
+      "educationPrice": 170.0,
+      "powerInput": "none"
     }
   ]
 }

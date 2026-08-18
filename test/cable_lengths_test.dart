@@ -196,19 +196,43 @@ void main() {
       expect(lines.fold<double>(0, (sum, l) => sum + l.total), 115);
     });
 
-    test('the spares sit on the type, not on one of its lengths', () {
+    test('spares land on the length they were typed against', () {
+      // A length is what gets ordered, so every row has its own spares box:
+      // two spare 3 ft patch leads and two spare 50 ft runs are two decisions
+      // at two prices, and one box against "HDMI" could only record one.
       final p = room([3, 20], [lead('HDMI 3', 3, 12), lead('HDMI 25', 25, 40)]);
-      p.setAvCableSpares(SignalType.hdmi, 2);
+      p.setAvCableSpares('cable:hdmi', 2);
+      p.setAvCableSpares('cable:hdmi@HDMI 25@20ft', 1);
       final lines = cost(p).cabling;
 
       final main = lines.firstWhere((l) => l.key == 'cable:hdmi');
-      expect(main.qty, 3, reason: 'its own run plus the two spares');
-      expect(main.description, contains('spare'));
-      expect(
-        lines.where((l) => l.key != 'cable:hdmi').single.qty,
-        1,
-        reason: 'the other length carries no spares',
-      );
+      expect(main.qty, 3, reason: 'its own run plus its two spares');
+      expect(main.description, contains('2 spare'));
+
+      final other = lines.firstWhere((l) => l.key != 'cable:hdmi');
+      expect(other.qty, 2, reason: 'its own run plus its one spare');
+      expect(other.description, contains('1 spare'));
+    });
+
+    test('a spare on a length nobody drew still gets a line', () {
+      final p = room([25], []);
+      p.setAvCableSpares('cable:hdmi@50ft', 3);
+      final lines = cost(p).cabling;
+
+      expect(lines.map((l) => l.key), ['cable:hdmi', 'cable:hdmi@50ft']);
+      expect(lines.last.qty, 3);
+      expect(lines.last.description, contains('50ft'));
+    });
+
+    test('spares saved against the whole type read back onto its own line',
+        () {
+      // Rooms written before spares were per length wrote the bare signal
+      // name, which is the line those spares have always sat on.
+      final settings = RoomCostSettings()
+        ..readJson({
+          'cableSpares': {'hdmi': 2.0},
+        });
+      expect(settings.cableSpares, {'cable:hdmi': 2.0});
     });
 
     test('a price typed on the type keeps its key when lengths appear', () {

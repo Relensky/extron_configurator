@@ -1238,6 +1238,10 @@ class _AvFlowViewState extends State<AvFlowView> {
                 ),
               ),
             ),
+          // Cable numbers, above the boxes so a run crossing behind one is
+          // still readable — and draggable, the same way a floor-plan callout
+          // and a cabling-schematic run label are moved.
+          ..._buildCableLabels(provider, model, theme),
           // Route handles for the selected cable, above the boxes so they can
           // always be grabbed.
           if (_editMode && _selectedCableId != null)
@@ -1269,6 +1273,94 @@ class _AvFlowViewState extends State<AvFlowView> {
         ],
       ),
     );
+  }
+
+  /// The cable numbers, one per labelled run.
+  ///
+  /// Widgets rather than paint because they are DRAGGED: a run's number lands
+  /// on the midpoint of its longest leg, which is right most of the time and
+  /// unreadable the rest — two runs sharing a corridor put their labels on
+  /// top of each other. Dragging one stores an offset from that anchor, so
+  /// the label still follows the run when the route changes.
+  ///
+  /// Double-tap opens the run, matching a double-tap on the line itself.
+  List<Widget> _buildCableLabels(
+    AppStateProvider provider,
+    AvFlowModel model,
+    ThemeData theme,
+  ) {
+    final widgets = <Widget>[];
+    for (final cable in model.cables) {
+      if (cable.label.isEmpty) continue;
+      final points = _paths[cable.id];
+      if (points == null || points.length < 2) continue;
+      final anchor = cableLabelAnchor(points);
+      if (anchor == null) continue;
+
+      final at = anchor + cable.labelOffset;
+      final selected = _selectedCableId == cable.id;
+      final color = cable.colorFor(provider.avSignalColors);
+      widgets.add(
+        Positioned(
+          // Centred on the anchor. FractionalTranslation rather than measuring
+          // the text: the label is as wide as whatever somebody typed in it.
+          left: at.dx,
+          top: at.dy,
+          child: FractionalTranslation(
+            translation: const Offset(-0.5, -0.5),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _selectedCableId = cable.id),
+              onDoubleTap: () => _showCableDialog(provider, cable),
+              onPanStart: _editMode
+                  ? (_) {
+                      setState(() => _selectedCableId = cable.id);
+                      // ONE snapshot for the whole gesture, taken before it
+                      // moves: the updates below record none, so a drag is
+                      // one press of Undo rather than fifty.
+                      provider.updateAvCable(cable);
+                    }
+                  : null,
+              onPanUpdate: _editMode
+                  ? (d) => provider.updateAvCable(
+                        cable.copyWith(
+                          labelOffset: cable.labelOffset + d.delta,
+                        ),
+                        recordUndo: false,
+                      )
+                  : null,
+              child: Tooltip(
+                message: _editMode
+                    ? 'Drag to move • double-tap to edit the run'
+                    : cable.label,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: theme.brightness == Brightness.dark
+                        ? const Color(0xFF15181C)
+                        : const Color(0xFFFAFAFA),
+                    borderRadius: BorderRadius.circular(3),
+                    border: selected
+                        ? Border.all(color: color, width: 1)
+                        : null,
+                  ),
+                  child: Text(
+                    cable.label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
   }
 
   /// Draggable dots on the selected cable: one per existing waypoint (drag to
@@ -3149,6 +3241,7 @@ class _AvFlowViewState extends State<AvFlowView> {
   ) async {
     final labelController = TextEditingController(text: cable.label);
     SignalType signal = cable.signal;
+    Offset labelOffset = cable.labelOffset;
     double lengthFt = cable.lengthFt;
     Color? colorOverride = cable.colorOverride;
     // Where the run lands. Held here rather than written straight through, so
@@ -3260,9 +3353,20 @@ class _AvFlowViewState extends State<AvFlowView> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: labelController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Label / cable ID',
                     hintText: 'e.g. HDMI-04',
+                    helperText: 'Drag it on the diagram to move it',
+                    // Only offered once it HAS been moved: a button that does
+                    // nothing is a button somebody presses to find out.
+                    suffixIcon: labelOffset == Offset.zero
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.restart_alt, size: 18),
+                            tooltip: 'Put the label back on the line',
+                            onPressed: () =>
+                                setLocal(() => labelOffset = Offset.zero),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -3382,6 +3486,7 @@ class _AvFlowViewState extends State<AvFlowView> {
         toPortId: to.portId,
         signal: signal,
         label: labelController.text.trim(),
+        labelOffset: labelOffset,
         lengthFt: lengthFt,
         // A route bent by hand is a route around the boxes it used to run
         // between. Landed on a different connector it describes a path that no
@@ -4001,6 +4106,26 @@ class _AvNodeBox extends StatelessWidget {
 //  CABLE PAINTER
 // ---------------------------------------------------------------------------
 
+/// Where a run's label sits before anybody drags it: the midpoint of the
+/// longest leg, which is the stretch with the most room for text.
+///
+/// Null when no leg is long enough to write on — a two-inch patch between
+/// adjacent boxes is better left unlabelled on the drawing than covered by
+/// its own cable number.
+Offset? cableLabelAnchor(List<Offset> points) {
+  var bestIndex = 0;
+  var bestLength = 0.0;
+  for (int i = 0; i < points.length - 1; i++) {
+    final length = (points[i + 1] - points[i]).distance;
+    if (length > bestLength) {
+      bestLength = length;
+      bestIndex = i;
+    }
+  }
+  if (bestLength < 30) return null;
+  return (points[bestIndex] + points[bestIndex + 1]) / 2;
+}
+
 class _CablePainter extends CustomPainter {
   final List<AvCable> cables;
   final Map<String, List<Offset>> paths;
@@ -4047,9 +4172,8 @@ class _CablePainter extends CustomPainter {
       canvas.drawPath(_polyline(points), paint);
 
       _drawArrowHead(canvas, points[points.length - 2], points.last, color);
-      if (cable.label.isNotEmpty) {
-        _drawLabel(canvas, points, cable.label, color);
-      }
+      // The label is a WIDGET, not paint — see [_buildCableLabels]. It has to
+      // be draggable, and a hit target you can pick up is a widget's job.
     }
   }
 
@@ -4111,52 +4235,6 @@ class _CablePainter extends CustomPainter {
       ..lineTo(base.dx - normal.dx * half, base.dy - normal.dy * half)
       ..close();
     canvas.drawPath(path, Paint()..color = color);
-  }
-
-  void _drawLabel(
-    Canvas canvas,
-    List<Offset> points,
-    String label,
-    Color color,
-  ) {
-    // Midpoint of the longest segment: the most room for text.
-    var bestIndex = 0;
-    var bestLength = 0.0;
-    for (int i = 0; i < points.length - 1; i++) {
-      final length = (points[i + 1] - points[i]).distance;
-      if (length > bestLength) {
-        bestLength = length;
-        bestIndex = i;
-      }
-    }
-    if (bestLength < 30) return;
-    final mid = (points[bestIndex] + points[bestIndex + 1]) / 2;
-
-    final painter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          fontSize: 10,
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    final rect = Rect.fromCenter(
-      center: mid,
-      width: painter.width + 8,
-      height: painter.height + 3,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(3)),
-      Paint()
-        ..color = brightness == Brightness.dark
-            ? const Color(0xFF15181C)
-            : const Color(0xFFFAFAFA),
-    );
-    painter.paint(canvas, rect.topLeft + const Offset(4, 1.5));
   }
 
   @override
