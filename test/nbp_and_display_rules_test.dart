@@ -148,6 +148,47 @@ void main() {
     });
   });
 
+  group('the projector relay port', () {
+    test('every projector block names its own port', () {
+      // Absent, the processor falls back to RLY<n> for projector <n>. The
+      // template states it so the tech can see which relay a box is on
+      // without opening the rack, and the stated value has to BE that
+      // default or the template quietly re-wires every room built from it.
+      for (final key in template.keys
+          .where((k) => k.startsWith('PROJECTORDEVICE_'))) {
+        final n = key.split('_').last;
+        expect((template[key] as Map)['relay_port'], 'RLY$n', reason: key);
+      }
+    });
+
+    test('it is offered on projectors and nowhere else', () {
+      expect(schema.deviceSpecFor('PROJECTORDEVICE_1', 'relay_port'), isNotNull);
+      for (final section in const ['SCREENDEVICE_1', 'CAMERADEVICE_1']) {
+        expect(schema.deviceSpecFor(section, 'relay_port'), isNull,
+            reason: '$section has no relay_port; a screen names three of its '
+                'own (relay_port_up/_down/_stop)');
+      }
+    });
+
+    test('a new projector gets its own relay, not a copy of RLY1', () {
+      // setDeviceCount clones PROJECTORDEVICE_1, so without the trailing-index
+      // substitution all four blocks would name RLY1 and every projector on
+      // the panel would fire the first projector's relay.
+      final p = AppStateProvider(autoLoadSettings: false)..uiSchema = schema;
+      p.roomConfig['SYSTEM_SETUP'] = <String, dynamic>{'dev_projectors': '1'};
+      p.roomConfig['PROJECTORDEVICE_1'] =
+          Map<String, dynamic>.from(template['PROJECTORDEVICE_1'] as Map);
+      p.setDeviceCount('dev_projectors', 'PROJECTORDEVICE_', 4,
+          p.getDefaultDeviceBlock('PROJECTORDEVICE_'));
+
+      final ports = [
+        for (int i = 1; i <= 4; i++)
+          (p.roomConfig['PROJECTORDEVICE_$i'] as Map)['relay_port'],
+      ];
+      expect(ports, const ['RLY1', 'RLY2', 'RLY3', 'RLY4']);
+    });
+  });
+
   group('annex mute and the room-mode keys', () {
     test('the template states them all', () {
       final s = setup();

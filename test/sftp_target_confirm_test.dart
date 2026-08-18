@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -97,6 +98,44 @@ void main() {
     expect(provider.selectedProcessor?['roomName'], 'AJH 125B');
     expect(find.text('Use This Room'), findsNothing,
         reason: 'the confirmation step was removed');
+  });
+
+  testWidgets('Enter picks the highlighted room and fills its details',
+      (tester) async {
+    // Typing the room and reaching for the mouse to click the one entry the
+    // list is now showing is the slow way round. Enter takes the highlighted
+    // option — the top match, until the arrow keys move it — and that has to
+    // fill the IP exactly as a click does.
+    final provider = await pumpDialog(tester);
+
+    await tester.tap(search());
+    await tester.pumpAndSettle();
+    await tester.enterText(search(), 'ajh125b');
+    await tester.pumpAndSettle();
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(provider.selectedProcessor?['roomName'], 'AJH 125B');
+    expect(fieldText(tester, 'Processor IP / Hostname'), '10.248.125.8');
+  });
+
+  testWidgets('the arrow keys move which room Enter takes', (tester) async {
+    final provider = await pumpDialog(tester);
+
+    await tester.tap(search());
+    await tester.pumpAndSettle();
+    // Both rooms match, so the highlight starts on the first and Down moves
+    // it to the second.
+    await tester.enterText(search(), '10.248.1');
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(provider.selectedProcessor?['roomName'], 'AJH 125B');
   });
 
   testWidgets('typing in the search also clears, before any pick',

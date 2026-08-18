@@ -1,0 +1,480 @@
+[2026-08-18T13:37:19.332999] CONFIG LOADED: SFTP download from 10.248.133.14 -> C:\GitHub\ControlScript-Template\rooms\BSS112\code\upload_to_root\config.json
+  BACKUP SAVED: Original file preserved as 'BSS112_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 30 missing schema properties to match current template standards.
+  KEY MAPPING: Translated 406 legacy item(s) using C:\Users\dstanley\Desktop\room_config_builder\key_map.json
+  KEYMAP: renamed section 'CAMERA1DEVICE' -> 'CAMERADEVICE_1'
+  KEYMAP: renamed section 'CAMERA2DEVICE' -> 'CAMERADEVICE_2'
+  KEYMAP: renamed section 'DSPDEVICE' -> 'DSPDEVICE_1'
+  KEYMAP: renamed section 'MEDIAPORTDEVICE' -> 'MEDIAPORTDEVICE_1'
+  KEYMAP: renamed section 'POWERDEVICE' -> 'POWERDEVICE_1'
+  KEYMAP: renamed section 'PROJECTOR1DEVICE' -> 'PROJECTORDEVICE_1'
+  KEYMAP: renamed section 'PROJECTOR2DEVICE' -> 'PROJECTORDEVICE_2'
+  KEYMAP: renamed section 'PROJECTOR3DEVICE' -> 'PROJECTORDEVICE_3'
+  KEYMAP: renamed section 'PROJECTOR4DEVICE' -> 'PROJECTORDEVICE_4'
+  KEYMAP: renamed section 'RECORDERDEVICE' -> 'RECORDERDEVICE_1'
+  KEYMAP: renamed section 'SCREEN1DEVICE' -> 'SCREENDEVICE_1'
+  KEYMAP: renamed section 'SCREEN2DEVICE' -> 'SCREENDEVICE_2'
+  KEYMAP: renamed section 'SWITCHERDEVICE' -> 'SWITCHERDEVICE_1'
+  KEYMAP: renamed section 'SYSTEM' -> 'SYSTEM_SETUP'
+  KEYMAP: renamed section 'USBDEVICE' -> 'USBDEVICE_1'
+  KEYMAP: renamed section 'WIRELESSDEVICE' -> 'WIRELESSDEVICE_1'
+  KEYMAP: renamed 'CAMERADEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'CAMERADEVICE_1.DEVICEID' -> 'device_id'
+  KEYMAP: renamed 'CAMERADEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'CAMERADEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'CAMERADEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'CAMERADEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'CAMERADEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'CAMERADEVICE_1.SERVICEPORT' -> 'service_port'
+  KEYMAP: renamed 'CAMERADEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'CAMERADEVICE_2.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'CAMERADEVICE_2.DEVICEID' -> 'device_id'
+  KEYMAP: renamed 'CAMERADEVICE_2.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'CAMERADEVICE_2.MODEL' -> 'model'
+  KEYMAP: renamed 'CAMERADEVICE_2.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'CAMERADEVICE_2.PASSWORD' -> 'password'
+  KEYMAP: renamed 'CAMERADEVICE_2.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'CAMERADEVICE_2.SERVICEPORT' -> 'service_port'
+  KEYMAP: renamed 'CAMERADEVICE_2.USER' -> 'user'
+  KEYMAP: renamed 'DSPDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'DSPDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'DSPDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'DSPDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'DSPDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'DSPDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'DSPDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'MEDIAPORTDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'MEDIAPORTDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'MEDIAPORTDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'MEDIAPORTDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'MEDIAPORTDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'MEDIAPORTDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'MEDIAPORTDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'POWERDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'POWERDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'POWERDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'POWERDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'POWERDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'POWERDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'POWERDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.DEVICEID' -> 'device_id'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.SERVICEPORT' -> 'service_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.DEVICEID' -> 'device_id'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.MODEL' -> 'model'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.PASSWORD' -> 'password'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.SERVICEPORT' -> 'service_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_2.USER' -> 'user'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.DEVICEID' -> 'device_id'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.MODEL' -> 'model'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.PASSWORD' -> 'password'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.SERVICEPORT' -> 'service_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_3.USER' -> 'user'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.DEVICEID' -> 'device_id'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.MODEL' -> 'model'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.PASSWORD' -> 'password'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.SERVICEPORT' -> 'service_port'
+  KEYMAP: renamed 'PROJECTORDEVICE_4.USER' -> 'user'
+  KEYMAP: renamed 'RECORDERDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'RECORDERDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'RECORDERDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'RECORDERDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'RECORDERDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'RECORDERDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'RECORDERDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'SCREENDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'SCREENDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'SCREENDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'SCREENDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'SCREENDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'SCREENDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'SCREENDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'SCREENDEVICE_2.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'SCREENDEVICE_2.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'SCREENDEVICE_2.MODEL' -> 'model'
+  KEYMAP: renamed 'SCREENDEVICE_2.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'SCREENDEVICE_2.PASSWORD' -> 'password'
+  KEYMAP: renamed 'SCREENDEVICE_2.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'SCREENDEVICE_2.USER' -> 'user'
+  KEYMAP: renamed 'SWITCHERDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'SWITCHERDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'SWITCHERDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'SWITCHERDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'SWITCHERDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'SWITCHERDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'SWITCHERDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'SYSTEM_SETUP.Input_AudCam' -> 'input_aud_cam'
+  KEYMAP: renamed 'SYSTEM_SETUP.Input_BluRay' -> 'input_blu_ray'
+  KEYMAP: renamed 'SYSTEM_SETUP.Input_DocCam' -> 'input_doc_cam'
+  KEYMAP: renamed 'SYSTEM_SETUP.Input_InstCam' -> 'input_inst_cam'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet1' -> 'power1_outlet_1'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet2' -> 'power1_outlet_2'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet3' -> 'power1_outlet_3'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet4' -> 'power1_outlet_4'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet5' -> 'power1_outlet_5'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet6' -> 'power1_outlet_6'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet7' -> 'power1_outlet_7'
+  KEYMAP: renamed 'SYSTEM_SETUP.PowerOutlet8' -> 'power1_outlet_8'
+  KEYMAP: renamed 'SYSTEM_SETUP.dev_DSP' -> 'dev_dsps'
+  KEYMAP: renamed 'SYSTEM_SETUP.dev_MediaPort_Available' -> 'dev_media_ports'
+  KEYMAP: renamed 'SYSTEM_SETUP.dev_Power_Control' -> 'dev_power_controllers'
+  KEYMAP: renamed 'SYSTEM_SETUP.dev_Recorder_Installed' -> 'dev_recorders'
+  KEYMAP: renamed 'SYSTEM_SETUP.dev_USB_Switcher' -> 'dev_usb_switchers'
+  KEYMAP: renamed 'SYSTEM_SETUP.gui_CaptureSource_Available' -> 'gui_capture_source_available'
+  KEYMAP: renamed 'SYSTEM_SETUP.gui_TABTYPE' -> 'gui_tab_type'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Active_Notifications' -> 'active_notifications'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Conf_Display_1' -> 'conf_display_1'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Conf_Display_2' -> 'conf_display_2'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.GVE_BLDG' -> 'gve_bldg'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.GVE_ID_Processor' -> 'gve_id_processor'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.GVE_ID_Room_1' -> 'gve_id_room_1'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.GVE_ID_Room_2' -> 'gve_id_room_2'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.GVE_ID_TLP_1' -> 'gve_id_tlp_1'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.GVE_IP' -> 'gve_ip'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.GVE_ROOM' -> 'gve_room'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Input_DVD' -> 'input_dvd'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Input_HDMI' -> 'input_hdmi'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Input_PC' -> 'input_pc'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Input_USB' -> 'input_usb'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Input_Wireless' -> 'input_wireless'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.NTP_PRIMARY' -> 'ntp_primary'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.NTP_SECONDARY' -> 'ntp_secondary'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Output_Audio' -> 'output_audio'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Output_CC' -> 'output_cc'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Output_CC2' -> 'output_cc2'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Output_Proj1' -> 'output_proj_1'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Output_Proj2' -> 'output_proj_2'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Output_Proj3' -> 'output_proj_3'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.Output_Proj4' -> 'output_proj_4'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.PCMAC' -> 'pcmac'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.dev_Cameras' -> 'dev_cameras'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.dev_Projectors' -> 'dev_projectors'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.dev_Relay_Power' -> 'dev_relay_power'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.dev_Screen_Control' -> 'dev_screen_control'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.dev_Screens' -> 'dev_screens'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.dev_Wireless' -> 'dev_wireless'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Inputs' -> 'gui_inputs'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Mic_Mix' -> 'gui_mic_mix'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Aud_1' -> 'gui_preset_name_aud_1'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Aud_2' -> 'gui_preset_name_aud_2'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Aud_3' -> 'gui_preset_name_aud_3'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Aud_4' -> 'gui_preset_name_aud_4'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Inst_1' -> 'gui_preset_name_inst_1'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Inst_2' -> 'gui_preset_name_inst_2'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Inst_3' -> 'gui_preset_name_inst_3'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Preset_Name_Inst_4' -> 'gui_preset_name_inst_4'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Routing_Available' -> 'gui_routing_available'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Routing_Mode' -> 'gui_routing_mode'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_Tab' -> 'gui_tab'
+  KEYMAP: auto-normalized 'SYSTEM_SETUP.gui_USB_OR_VGA' -> 'gui_usb_or_vga'
+  KEYMAP: normalized 'SYSTEM_SETUP.active_notifications' value 'True' -> 'true'
+  KEYMAP: normalized 'SYSTEM_SETUP.dev_dsps' value 'Yes' -> '1'
+  KEYMAP: normalized 'SYSTEM_SETUP.dev_media_ports' value 'No' -> '0'
+  KEYMAP: normalized 'SYSTEM_SETUP.dev_power_controllers' value 'Yes' -> '1'
+  KEYMAP: normalized 'SYSTEM_SETUP.dev_recorders' value 'Yes' -> '1'
+  KEYMAP: normalized 'SYSTEM_SETUP.dev_usb_switchers' value 'Yes' -> '1'
+  KEYMAP: renamed 'USBDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'USBDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'USBDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'USBDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'USBDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'USBDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'USBDEVICE_1.USER' -> 'user'
+  KEYMAP: renamed 'WIRELESSDEVICE_1.COMTYPE' -> 'com_type'
+  KEYMAP: renamed 'WIRELESSDEVICE_1.IPADDRESS' -> 'ip_address'
+  KEYMAP: renamed 'WIRELESSDEVICE_1.MODEL' -> 'model'
+  KEYMAP: renamed 'WIRELESSDEVICE_1.NETPORT' -> 'net_port'
+  KEYMAP: renamed 'WIRELESSDEVICE_1.PASSWORD' -> 'password'
+  KEYMAP: renamed 'WIRELESSDEVICE_1.SERIALPORT' -> 'serial_port'
+  KEYMAP: renamed 'WIRELESSDEVICE_1.USER' -> 'user'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Camera_1' -> 'CAMERADEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Camera_2' -> 'CAMERADEVICE_2.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Projector_1' -> 'PROJECTORDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Projector_2' -> 'PROJECTORDEVICE_2.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Projector_3' -> 'PROJECTORDEVICE_3.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Projector_4' -> 'PROJECTORDEVICE_4.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Switcher_1' -> 'SWITCHERDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Screen_1' -> 'SCREENDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Screen_2' -> 'SCREENDEVICE_2.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_DSP_1' -> 'DSPDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_USB_1' -> 'USBDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Wireless_1' -> 'WIRELESSDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_MediaPort' -> 'MEDIAPORTDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Power' -> 'POWERDEVICE_1.gve_id'
+  KEYMAP: moved 'SYSTEM_SETUP.GVE_ID_Recorder' -> 'RECORDERDEVICE_1.gve_id'
+  KEYMAP: removed unused legacy device block 'PROJECTORDEVICE_3' (dev_projectors is '2').
+  KEYMAP: removed unused legacy device block 'PROJECTORDEVICE_4' (dev_projectors is '2').
+  KEYMAP: removed unused legacy device block 'MEDIAPORTDEVICE_1' (dev_media_ports is '0').
+  CONFLICT: 'CAMERADEVICE_1.serial_port' held 'COM6' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'CAMERADEVICE_2.serial_port' held 'COM1' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'DSPDEVICE_1.serial_port' held 'COM5' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'POWERDEVICE_1.serial_port' held 'COM3' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'PROJECTORDEVICE_1.serial_port' held 'COM2' but the device is SerialOverEthernet — removed, that property is only valid for a network connection.
+  CONFLICT: 'PROJECTORDEVICE_2.serial_port' held 'COM2' but the device is SerialOverEthernet — removed, that property is only valid for a network connection.
+  CONFLICT: 'RECORDERDEVICE_1.serial_port' held 'COM4' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'SCREENDEVICE_1.serial_port' held 'COM5' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'SCREENDEVICE_2.serial_port' held 'COM6' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'SWITCHERDEVICE_1.serial_port' held 'COM1' but the device is Network — removed, that property is only valid for a network connection.
+  CONFLICT: 'USBDEVICE_1.ip_address' held '192.168.254.1' but the device is Serial — removed, that property is only valid for a network connection.
+  CONFLICT: 'USBDEVICE_1.net_port' held '23' but the device is Serial — removed, that property is only valid for a network connection.
+  CONFLICT: 'USBDEVICE_1.password' held 'ATEC2008' but the device is Serial — removed, that property is only valid for a network connection.
+  CONFLICT: 'USBDEVICE_1.user' held 'admin' but the device is Serial — removed, that property is only valid for a network connection.
+  CONFLICT: 'WIRELESSDEVICE_1.serial_port' held 'COM5' but the device is Network — removed, that property is only valid for a network connection.
+  KEYMAP: removed 'SYSTEM_SETUP.api_proxy_server' (superseded by METRICS_CONFIG).
+  KEYMAP: removed 'SYSTEM_SETUP.ROOM' (room identity comes from gve_bldg + gve_room).
+  KEYMAP: removed 'SYSTEM_SETUP.pcmac' (unused - no template reads it).
+  KEYMAP: escaped carriage return(s) in 'SYSTEM_SETUP.power1_outlet_4' -> 'TLP\\rPoE' (as saved on disk)
+  KEYMAP: escaped carriage return(s) in 'SYSTEM_SETUP.power1_outlet_6' -> 'Doc\\rCam' (as saved on disk)
+  KEYMAP: escaped carriage return(s) in 'SYSTEM_SETUP.power1_outlet_8' -> 'USB\\rSwitch' (as saved on disk)
+  KEYMAP: escaped carriage return(s) in 'SYSTEM_SETUP.gui_preset_name_inst_3' -> 'Whiteboard\\rLeft' (as saved on disk)
+  KEYMAP: escaped carriage return(s) in 'SYSTEM_SETUP.gui_preset_name_inst_4' -> 'Whiteboard\\rRight' (as saved on disk)
+  KEYMAP: generated 'CAMERADEVICE_1.name' = 'Camera 1 - TR311HW'
+  KEYMAP: set 'CAMERADEVICE_1.btn_name' = 'Btn_Con_Cam1' (from template CAMERADEVICE_1)
+  KEYMAP: set 'CAMERADEVICE_1.lbl_name' = 'Lbl_InstCam_Model' (from template CAMERADEVICE_1)
+  KEYMAP: set 'CAMERADEVICE_1.module' = 'modules.device.avr_TR311' (model 'TR311HW' matched template CAMERADEVICE_1)
+  KEYMAP: set 'CAMERADEVICE_1.keep_alive_trigger' = 'null' (model 'TR311HW' matched template CAMERADEVICE_1)
+  KEYMAP: generated 'CAMERADEVICE_2.name' = 'Camera 2 - Cam570'
+  KEYMAP: set 'CAMERADEVICE_2.btn_name' = 'Btn_Con_Cam2' (from template CAMERADEVICE_2)
+  KEYMAP: set 'CAMERADEVICE_2.lbl_name' = 'Lbl_StdCam_Model' (from template CAMERADEVICE_2)
+  KEYMAP: set 'CAMERADEVICE_2.module' = 'modules.device.avr_camera_CAM570' (model 'Cam570' matched template CAMERADEVICE_2)
+  KEYMAP: set 'CAMERADEVICE_2.keep_alive_trigger' = 'null' (model 'Cam570' matched template CAMERADEVICE_2)
+  KEYMAP: generated 'DSPDEVICE_1.name' = 'DSP - DMP 64 Plus C AT'
+  KEYMAP: set 'DSPDEVICE_1.btn_name' = 'Btn_Con_DSP1' (from template DSPDEVICE_1)
+  KEYMAP: set 'DSPDEVICE_1.lbl_name' = 'Lbl_DSP_Name_Status' (from template DSPDEVICE_1)
+  KEYMAP: set 'DSPDEVICE_1.module' = '' (model 'DMP 64 Plus C AT' matched template DSPDEVICE_1)
+  KEYMAP: set 'DSPDEVICE_1.keep_alive_trigger' = 'null' (model 'DMP 64 Plus C AT' matched template DSPDEVICE_1)
+  KEYMAP: generated 'POWERDEVICE_1.name' = 'Power Controller - AP7921B'
+  KEYMAP: set 'POWERDEVICE_1.btn_name' = 'Btn_Con_Power1' (from template POWERDEVICE_1)
+  KEYMAP: set 'POWERDEVICE_1.lbl_name' = 'Lbl_Pwr_Connection' (from template POWERDEVICE_1)
+  KEYMAP: generated 'PROJECTORDEVICE_1.name' = 'Projector 1 - PowerLite L630U'
+  KEYMAP: set 'PROJECTORDEVICE_1.btn_name' = 'Btn_Con_Projector1' (from template PROJECTORDEVICE_1)
+  KEYMAP: set 'PROJECTORDEVICE_1.lbl_name' = 'Lbl_Proj_Model_Proj1' (from template PROJECTORDEVICE_1)
+  KEYMAP: generated 'PROJECTORDEVICE_2.name' = 'Projector 2 - PowerLite L630U'
+  KEYMAP: set 'PROJECTORDEVICE_2.btn_name' = 'Btn_Con_Projector2' (from template PROJECTORDEVICE_2)
+  KEYMAP: set 'PROJECTORDEVICE_2.lbl_name' = 'Lbl_Proj_Model_Proj2' (from template PROJECTORDEVICE_2)
+  KEYMAP: generated 'RECORDERDEVICE_1.name' = 'Recorder - AV Bridge'
+  KEYMAP: set 'RECORDERDEVICE_1.btn_name' = 'Btn_Con_Recorder1' (from template RECORDERDEVICE_1)
+  KEYMAP: set 'RECORDERDEVICE_1.lbl_name' = 'Lbl_Recorder_Model' (from template RECORDERDEVICE_1)
+  KEYMAP: generated 'SCREENDEVICE_1.name' = 'Screen 1 - Controller'
+  KEYMAP: set 'SCREENDEVICE_1.btn_name' = 'Btn_Con_Screen1' (from template SCREENDEVICE_1)
+  KEYMAP: set 'SCREENDEVICE_1.lbl_name' = 'Lbl_Screen1_Model' (from template SCREENDEVICE_1)
+  KEYMAP: set 'SCREENDEVICE_1.module' = '' (model 'Controller' matched template SCREENDEVICE_1)
+  KEYMAP: set 'SCREENDEVICE_1.keep_alive_trigger' = 'null' (model 'Controller' matched template SCREENDEVICE_1)
+  KEYMAP: generated 'SCREENDEVICE_2.name' = 'Screen 2 - Controller'
+  KEYMAP: set 'SCREENDEVICE_2.btn_name' = 'Btn_Con_Screen2' (from template SCREENDEVICE_2)
+  KEYMAP: set 'SCREENDEVICE_2.lbl_name' = 'Lbl_Screen2_Model' (from template SCREENDEVICE_2)
+  KEYMAP: set 'SCREENDEVICE_2.module' = '' (model 'Controller' matched template SCREENDEVICE_1)
+  KEYMAP: set 'SCREENDEVICE_2.keep_alive_trigger' = 'null' (model 'Controller' matched template SCREENDEVICE_1)
+  KEYMAP: generated 'SWITCHERDEVICE_1.name' = 'Switcher - DTP CrossPoint 84 4K IPCP MA 70'
+  KEYMAP: set 'SWITCHERDEVICE_1.btn_name' = 'Btn_Con_Switcher1' (from template SWITCHERDEVICE_1)
+  KEYMAP: set 'SWITCHERDEVICE_1.lbl_name' = 'Lbl_Switcher_Model' (from template SWITCHERDEVICE_1)
+  KEYMAP: generated 'USBDEVICE_1.name' = 'USB Switcher - Toggle'
+  KEYMAP: set 'USBDEVICE_1.btn_name' = 'Btn_Con_USB1' (from template USBDEVICE_1)
+  KEYMAP: set 'USBDEVICE_1.lbl_name' = 'Lbl_USB_Name_Status' (from template USBDEVICE_1)
+  KEYMAP: set 'USBDEVICE_1.module' = 'modules.device.igen_switcher_Toggle' (model 'Toggle' matched template USBDEVICE_1)
+  KEYMAP: set 'USBDEVICE_1.keep_alive_trigger' = 'null' (model 'Toggle' matched template USBDEVICE_1)
+  KEYMAP: generated 'WIRELESSDEVICE_1.name' = 'Wireless - Via Go'
+  KEYMAP: set 'WIRELESSDEVICE_1.btn_name' = 'Btn_Con_Wireless1' (from template WIRELESSDEVICE_1)
+  KEYMAP: set 'WIRELESSDEVICE_1.lbl_name' = 'Lbl_Wireless_Model' (from template WIRELESSDEVICE_1)
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_1_supports_reboot' = true (for 'power1_outlet_1')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_2_supports_reboot' = true (for 'power1_outlet_2')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_3_supports_reboot' = true (for 'power1_outlet_3')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_4_supports_reboot' = true (for 'power1_outlet_4')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_5_supports_reboot' = true (for 'power1_outlet_5')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_6_supports_reboot' = true (for 'power1_outlet_6')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_7_supports_reboot' = true (for 'power1_outlet_7')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_8_supports_reboot' = true (for 'power1_outlet_8')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_1_reboot_only' = false (for 'power1_outlet_1')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_2_reboot_only' = false (for 'power1_outlet_2')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_3_reboot_only' = false (for 'power1_outlet_3')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_4_reboot_only' = false (for 'power1_outlet_4')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_5_reboot_only' = false (for 'power1_outlet_5')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_6_reboot_only' = false (for 'power1_outlet_6')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_7_reboot_only' = false (for 'power1_outlet_7')
+  KEYMAP: added companion 'SYSTEM_SETUP.power1_outlet_8_reboot_only' = false (for 'power1_outlet_8')
+  KEYMAP: added missing 'CAMERADEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'CAMERADEVICE_1.keep_alive_command' (default: 'Power')
+  KEYMAP: added missing 'CAMERADEVICE_1.keep_alive_interval' (default: '10')
+  KEYMAP: added missing 'CAMERADEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'CAMERADEVICE_1.protocol' (default: 'UDP')
+  KEYMAP: added missing 'CAMERADEVICE_2.host' (default: 'processor1')
+  KEYMAP: added missing 'CAMERADEVICE_2.keep_alive_command' (default: 'Power')
+  KEYMAP: added missing 'CAMERADEVICE_2.keep_alive_interval' (default: '10')
+  KEYMAP: added missing 'CAMERADEVICE_2.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'CAMERADEVICE_2.protocol' (default: 'UDP')
+  KEYMAP: added missing 'DSPDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'DSPDEVICE_1.group_mic_ceiling_mute' (default: '4')
+  KEYMAP: added missing 'DSPDEVICE_1.group_mic_in_room_mute' (default: '2')
+  KEYMAP: added missing 'DSPDEVICE_1.group_mic_master_gain' (default: '10')
+  KEYMAP: added missing 'DSPDEVICE_1.group_mic_master_mute' (default: '6')
+  KEYMAP: added missing 'DSPDEVICE_1.group_pc_mic_input_gain' (default: '7')
+  KEYMAP: added missing 'DSPDEVICE_1.group_pc_output_gain' (default: '8')
+  KEYMAP: added missing 'DSPDEVICE_1.group_pc_output_mute' (default: '9')
+  KEYMAP: added missing 'DSPDEVICE_1.group_pc_record_mute' (default: '11')
+  KEYMAP: added missing 'DSPDEVICE_1.group_prog_gain' (default: '1')
+  KEYMAP: added missing 'DSPDEVICE_1.group_prog_mute' (default: '5')
+  KEYMAP: added missing 'DSPDEVICE_1.group_voice_lift_mute' (default: '3')
+  KEYMAP: added missing 'DSPDEVICE_1.keep_alive_command' (default: 'RefreshMatrix')
+  KEYMAP: added missing 'DSPDEVICE_1.keep_alive_interval' (default: '30')
+  KEYMAP: added missing 'DSPDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'DSPDEVICE_1.protocol' (default: 'TCP')
+  KEYMAP: added missing 'POWERDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'POWERDEVICE_1.keep_alive_command' (default: 'SerialNumber')
+  KEYMAP: added missing 'POWERDEVICE_1.keep_alive_interval' (default: '10')
+  KEYMAP: added missing 'POWERDEVICE_1.keep_alive_qualifier' (default: 'null')
+  KEYMAP: added missing 'POWERDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'POWERDEVICE_1.protocol' (default: 'TCP')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.relay_host' (default: 'processor1')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.input' (default: 'HDBaseT')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.keep_alive_command' (default: 'Power')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.keep_alive_interval' (default: '10')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.keep_alive_qualifier' (default: 'null')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.protocol' (default: 'TCP')
+  KEYMAP: added missing 'PROJECTORDEVICE_1.use_device_mute' (default: 'false')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.host' (default: 'processor1')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.relay_host' (default: 'processor1')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.input' (default: 'HDBaseT')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.keep_alive_command' (default: 'Power')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.keep_alive_interval' (default: '10')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.keep_alive_qualifier' (default: 'null')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.protocol' (default: 'TCP')
+  KEYMAP: added missing 'PROJECTORDEVICE_2.use_device_mute' (default: 'false')
+  KEYMAP: added missing 'RECORDERDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'RECORDERDEVICE_1.keep_alive_command' (default: 'null')
+  KEYMAP: added missing 'RECORDERDEVICE_1.keep_alive_interval' (default: '30')
+  KEYMAP: added missing 'RECORDERDEVICE_1.keep_alive_qualifier' (default: 'null')
+  KEYMAP: added missing 'RECORDERDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'RECORDERDEVICE_1.protocol' (default: 'TCP')
+  KEYMAP: added missing 'SCREENDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'SCREENDEVICE_1.relay_host' (default: 'processor1')
+  KEYMAP: added missing 'SCREENDEVICE_1.relay_port_up' (default: 'RLY1')
+  KEYMAP: added missing 'SCREENDEVICE_1.relay_port_down' (default: 'RLY2')
+  KEYMAP: added missing 'SCREENDEVICE_1.relay_port_stop' (default: 'RLY3')
+  KEYMAP: added missing 'SCREENDEVICE_1.keep_alive_command' (default: 'null')
+  KEYMAP: added missing 'SCREENDEVICE_1.keep_alive_interval' (default: '30')
+  KEYMAP: added missing 'SCREENDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'SCREENDEVICE_1.protocol' (default: 'TCP')
+  KEYMAP: added missing 'SCREENDEVICE_2.host' (default: 'processor1')
+  KEYMAP: added missing 'SCREENDEVICE_2.relay_host' (default: 'processor1')
+  KEYMAP: added missing 'SCREENDEVICE_2.relay_port_up' (default: 'RLY1')
+  KEYMAP: added missing 'SCREENDEVICE_2.relay_port_down' (default: 'RLY2')
+  KEYMAP: added missing 'SCREENDEVICE_2.relay_port_stop' (default: 'RLY3')
+  KEYMAP: added missing 'SCREENDEVICE_2.keep_alive_command' (default: 'null')
+  KEYMAP: added missing 'SCREENDEVICE_2.keep_alive_interval' (default: '30')
+  KEYMAP: added missing 'SCREENDEVICE_2.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'SCREENDEVICE_2.protocol' (default: 'TCP')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.group_ceil_mute' (default: '4')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.group_mic_gain' (default: '10')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.group_mic_mute' (default: '2')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.group_prog_gain' (default: '1')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.group_prog_mute' (default: '5')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.group_room_mute' (default: '3')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.group_voice_lift_mute' (default: '7')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.keep_alive_command' (default: 'RefreshMatrix')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.keep_alive_interval' (default: '30')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'SWITCHERDEVICE_1.protocol' (default: 'SSH')
+  KEYMAP: added missing 'USBDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'USBDEVICE_1.keep_alive_command' (default: 'Input')
+  KEYMAP: added missing 'USBDEVICE_1.keep_alive_interval' (default: '10')
+  KEYMAP: added missing 'USBDEVICE_1.keep_alive_qualifier' (default: 'null')
+  KEYMAP: added missing 'USBDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'WIRELESSDEVICE_1.auto_reconnect' (default: 'true')
+  KEYMAP: added missing 'WIRELESSDEVICE_1.host' (default: 'processor1')
+  KEYMAP: added missing 'WIRELESSDEVICE_1.keep_alive_command' (default: 'ConfirmationCode')
+  KEYMAP: added missing 'WIRELESSDEVICE_1.keep_alive_interval' (default: '10')
+  KEYMAP: added missing 'WIRELESSDEVICE_1.keep_alive_qualifier' (default: 'null')
+  KEYMAP: added missing 'WIRELESSDEVICE_1.manual_disconnect' (default: 'false')
+  KEYMAP: added missing 'WIRELESSDEVICE_1.protocol' (default: 'SSH')
+  --------------------------------------------------
+  -> Added missing property: 'active_debug_server' (Default: 'false')
+  -> Added missing property: 'active_event_space' (Default: 'false')
+  -> Added missing property: 'processor1' (Default: 'MainProcessor')
+  -> Added missing property: 'gui_full_room_name' (Default: 'Legacy Room Update')
+  -> Added missing property: 'use_qos' (Default: 'true')
+  -> Added missing property: 'disable_inactivity_timer' (Default: 'false')
+  -> Added missing property: 'active_reboot_listener' (Default: 'true')
+  -> Added missing property: 'reboot_listener_port' (Default: '3510')
+  -> Added missing property: 'reboot_listener_interface' (Default: 'LAN')
+  -> Added missing property: 'reboot_listener_token' (Default: '')
+  -> Added missing property: 'reboot_listener_client_password' (Default: '')
+  -> Added missing property: 'active_share_room' (Default: 'false')
+  -> Added missing property: 'share_room_type' (Default: 'display')
+  -> Added missing property: 'share_room_default_mode' (Default: 'combined')
+  -> Added missing property: 'gui_presenter_mode_available' (Default: 'No')
+  -> Added missing property: 'gui_annex_mute_available' (Default: 'No')
+  -> Added missing property: 'dev_source_control' (Default: 'Auto')
+  -> Added missing property: 'dev_volume_control' (Default: 'Auto')
+  -> Added missing property: 'sub_switch_sources' (Default: '')
+  -> Added missing property: 'input_sub_switcher' (Default: '')
+  -> Added missing property: 'sub_switch_switcher' (Default: '2')
+  COUNT RECOVERED: 'dev_switchers' was missing from the file — set to '1' from the SWITCHERDEVICE_* block(s) already present, so the hardware isn't dropped on export.
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  -> Added missing section: 'METRICS_CONFIG'
+  -> Added missing property: 'METRICS_CONFIG.enabled' (Default: 'true')
+  -> Added missing property: 'METRICS_CONFIG.keylogger' (Default: 'true')
+  -> Added missing property: 'METRICS_CONFIG.uri' (Default: 'http://cts-metrics1:41796/metrics')
+  -> Added missing property: 'METRICS_CONFIG.bearer' (Default: 'enn6vVXIM6TZVho3DOWvJk1uhLfDk9VH')
+  -> Added missing section: 'ENVIRONMENT'
+  -> Added missing property: 'ENVIRONMENT.controlscript_profile' (Default: 'pro')
+  -> Added missing device property: 'PROJECTORDEVICE_1.device_role' (Default: '')
+  -> Added missing device property: 'PROJECTORDEVICE_1.speaker_mute' (Default: 'true')
+  -> Added missing device property: 'PROJECTORDEVICE_1.speaker_mute_method' (Default: 'volume')
+  -> Added missing device property: 'PROJECTORDEVICE_1.speaker_unmute_volume' (Default: 'null')
+  -> Added missing device property: 'PROJECTORDEVICE_1.source_follow' (Default: 'true')
+  -> Added missing device property: 'PROJECTORDEVICE_1.source_fixed' (Default: 'null')
+  -> Added missing device property: 'PROJECTORDEVICE_1.source_overrides' (Default: '{}')
+  -> Added missing device property: 'PROJECTORDEVICE_1.presenter_follow' (Default: 'true')
+  -> Added missing device property: 'PROJECTORDEVICE_2.device_role' (Default: '')
+  -> Added missing device property: 'PROJECTORDEVICE_2.speaker_mute' (Default: 'true')
+  -> Added missing device property: 'PROJECTORDEVICE_2.speaker_mute_method' (Default: 'volume')
+  -> Added missing device property: 'PROJECTORDEVICE_2.speaker_unmute_volume' (Default: 'null')
+  -> Added missing device property: 'PROJECTORDEVICE_2.source_follow' (Default: 'true')
+  -> Added missing device property: 'PROJECTORDEVICE_2.source_fixed' (Default: 'null')
+  -> Added missing device property: 'PROJECTORDEVICE_2.source_overrides' (Default: '{}')
+  -> Added missing device property: 'PROJECTORDEVICE_2.presenter_follow' (Default: 'true')
+  -> Added missing device property: 'USBDEVICE_1.default_input' (Default: '1')
+  DEFAULTS: Added 17 missing device properties from ui_schema.json device_defaults.
+  MODULE: 'DSPDEVICE_1.module' set to 'modules.device.extr_dsp_DMP_64_Plus_Series_v1_4_1_0' from model 'DMP 64 Plus C AT'.
+  MODULE: 'POWERDEVICE_1.module' set to 'modules.device.apc_other_AP79xxB_Series' from model 'AP7921B'.
+  MODULE: 'PROJECTORDEVICE_1.module' set to 'modules.device.epsn_vp_Powerlite' from model 'PowerLite L630U'.
+  MODULE: 'PROJECTORDEVICE_2.module' set to 'modules.device.epsn_vp_Powerlite' from model 'PowerLite L630U'.
+  FLAGGED: 'RECORDERDEVICE_1.module' is empty and no python module claims model 'AV Bridge' — set it by hand.
+  MODULE: 'SCREENDEVICE_1.module' set to 'modules.device.dali_controller' from model 'Controller'.
+  MODULE: 'SCREENDEVICE_2.module' set to 'modules.device.dali_controller' from model 'Controller'.
+  MODULE: 'SWITCHERDEVICE_1.module' set to 'modules.device.extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1872' from model 'DTP CrossPoint 84 4K IPCP MA 70'.
+  MODULE: 'WIRELESSDEVICE_1.module' set to 'modules.device.krmr_VIA_GO' from model 'Via Go'.
+  MODULE: 'DSPDEVICE_1.keep_alive_command' 'RefreshMatrix' is not a command in 'modules.device.extr_dsp_DMP_64_Plus_Series_v1_4_1_0' — set to 'PartNumber' from that module.
+  MODULE: 'SCREENDEVICE_1.keep_alive_command' was empty — set to 'Query' from that module.
+  MODULE: 'SCREENDEVICE_2.keep_alive_command' was empty — set to 'Query' from that module.
+  MODULE: 'SWITCHERDEVICE_1.keep_alive_command' 'RefreshMatrix' is not a command in 'modules.device.extr_matrix_DTP_CrossPoint_82_84_4kSeriesv1872' — set to 'Temperature' from that module.
+  MODULE: 'WIRELESSDEVICE_1.keep_alive_command' 'ConfirmationCode' is not a command in 'modules.device.krmr_VIA_GO' — set to 'RoomCode' from that module.
+  AUTO-NAME: gui_full_room_name set to 'Behavioral And Social Science 112' (gve_bldg matched buildings.json).
+  FLAGGED: SYSTEM_SETUP property 'Input_Display_2' is not in the default config template.
+  TEMPLATE AUDIT: 1 item(s) in this config are not part of the default template.
+--------------------------------------------------

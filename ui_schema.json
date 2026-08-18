@@ -538,6 +538,14 @@
         "helperText": "Blank falls back to the processor's display-model list",
         "description": "Whether this slot is a flat panel or a lamp projector. The processor asks that question in three places — whether to read lamp hours, whether to build a box-power relay, and whether the panel says 'Display' or 'Projector' — and this key answers all three at once. Left blank it falls back to the processor's display-model list, which is demonstrably incomplete (the Sharp PN-C603D and PN-LE601 are panels and are not on it), so set it explicitly on anything the list gets wrong. An unrecognised value is logged and falls back to the list."
       },
+      "relay_port": {
+        "type": "text",
+        "label": "Relay Port (relay_port)",
+        "addIfMissing": true,
+        "helperText": "Blank means RLY1 for projector 1, RLY2 for projector 2, and so on",
+        "description": "Which port on the relay host switches this projector's box power. Leave it blank and projector <n> drives RLY<n> — the wiring every room had before this key existed. Name a port here for a room whose relay boxes are not landed in projector order, so the config says which one this projector is on instead of the box being re-wired to match. Only read when Relay Power Control (dev_relay_power) is on, and never for a slot that is a flat panel: a panel has no box to switch, so the processor builds it no relay at all.",
+        "__comment": "Free text rather than a dropdown: how many relay ports a room has is a property of the host box (the screen relays already reach RLY6), and the schema is not told which processor is in the rack."
+      },
       "__source_rules_note": {
         "__comment": [
           "PER-SCREEN SOURCE RULES. Every screen follows the room's source",

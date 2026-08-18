@@ -7185,7 +7185,15 @@ class AppStateProvider extends ChangeNotifier {
     // is that family's btn_name, naming the device in the GC project, and a
     // second panel copied from the first with Button_Panel_1 still in it
     // silently drives the first one.
-    for (final key in const ['btn_name', 'gve_id', 'alias']) {
+    //
+    // 'relay_port' is here for the same reason and reads the same way:
+    // projector <n>'s box power is on RLY<n>, so the template block's
+    // "RLY1" has to become "RLY2" on the second projector or all four
+    // blocks fire the first projector's relay. Only PROJECTORDEVICE
+    // carries the key -- the screens name their three ports separately
+    // (relay_port_up/_down/_stop, RLY1-3 then RLY4-6), and those must NOT
+    // be re-indexed: screen 2's up is RLY4, not RLY2.
+    for (final key in const ['btn_name', 'gve_id', 'alias', 'relay_port']) {
       final v = map[key];
       if (v != null && v.toString().isNotEmpty) {
         final raw = v.toString();

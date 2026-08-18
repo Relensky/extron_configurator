@@ -1483,6 +1483,15 @@ class ProcessorSearchField extends StatelessWidget {
             ),
             // Typing counts too, for anyone who tabs in or pastes.
             onChanged: (_) => onInteracted?.call(),
+            // ENTER PICKS THE HIGHLIGHTED ROOM. Autocomplete hands the
+            // field builder this callback and does nothing with the key
+            // itself, so a custom fieldViewBuilder that drops it - as this
+            // one did - leaves the list navigable by arrow key but only
+            // selectable by mouse. Wiring it through means Enter chooses
+            // the highlighted entry (the top match until the arrows move
+            // it) and fires onSelected, which is what fills the IP and
+            // password below.
+            onFieldSubmitted: (_) => onFieldSubmitted(),
           ),
         );
       },
