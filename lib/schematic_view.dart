@@ -1326,6 +1326,16 @@ class _SchematicViewState extends State<SchematicView> {
               choices: choices,
               avLan: false,
             ),
+          // Not behind Edit, and next to the other "take it off the config"
+          // action rather than next to Reset Layout: what it undoes is drift
+          // from the config, which is a thing somebody notices while reading
+          // the drawing, not while editing it.
+          OutlinedButton.icon(
+            key: const ValueKey('schematic_recreate'),
+            icon: const Icon(Icons.restart_alt, size: 18),
+            label: const Text('Recreate from config'),
+            onPressed: () => _recreateFromConfig(provider),
+          ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
             label: const Text('Fit to view'),
@@ -1389,6 +1399,53 @@ class _SchematicViewState extends State<SchematicView> {
         ],
       ),
     );
+  }
+
+  /// Throws the layout away and lets the drawing rebuild itself from the
+  /// config: every box back at its auto-layout spot, every generated line back
+  /// including any that were hidden, and the hand-added boxes gone.
+  ///
+  /// The diagram itself is DERIVED — [SchematicModel.build] reads the config
+  /// every time this page is drawn — so there is nothing to regenerate. What
+  /// accumulates on top of it is the layout: dragged positions, lines drawn by
+  /// hand, generated lines somebody deleted, boxes for equipment the config
+  /// does not know about. Starting over means dropping those.
+  ///
+  /// It asks first, and Undo puts the whole layout back.
+  Future<void> _recreateFromConfig(AppStateProvider provider) async {
+    final extras = provider.schematicExtraNodes.length;
+    final links = provider.schematicLinks.length;
+    final hidden = provider.schematicHiddenEdges.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recreate from config?'),
+        content: Text(
+          'The drawing goes back to what the config describes: every box at '
+          'its automatic spot, and every generated line drawn.\n\n'
+          'What goes: $extras box(es) added by hand, $links line(s) drawn by '
+          'hand, $hidden hidden line(s) restored, and every position anybody '
+          'has dragged.\n\n'
+          'Line colors are kept — they have their own Reset all on the Colors '
+          'dialog. Undo puts the layout back.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Recreate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    provider.recreateSchematicFromConfig();
+    _snack('Recreated from the config: the drawing is the one the config '
+        'describes.');
   }
 
   /// Recolors the connection categories for this room. Changing Network

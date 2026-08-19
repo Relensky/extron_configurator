@@ -78,9 +78,14 @@ void main() {
     await tester.tap(find.widgetWithText(FilterChip, 'Edit'));
     await tester.pumpAndSettle();
 
-    final before = tester.getTopLeft(find.byType(SchematicView));
-    final boxBefore =
-        tester.getTopLeft(find.text('Projector 1')) - before;
+    // Measured against the CANVAS, not the whole tab: the toolbar is a Wrap,
+    // and a label that grows during the drag ("Undo" -> "Undo: Move Projector
+    // 1") can push it onto another row, moving everything below it down. That
+    // is not the box moving.
+    Offset onCanvas() =>
+        tester.getTopLeft(find.text('Projector 1')) -
+        tester.getTopLeft(find.byType(InteractiveViewer));
+    final boxBefore = onCanvas();
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('Projector 1')),
@@ -93,8 +98,7 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    final boxAfter = tester.getTopLeft(find.text('Projector 1')) - before;
-    final moved = boxAfter - boxBefore;
+    final moved = onCanvas() - boxBefore;
 
     // Regression guard on the commit path: it captures the position at drag
     // start, because by release the view's model is the PREVIEW and reading

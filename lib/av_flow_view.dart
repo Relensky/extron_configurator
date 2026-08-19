@@ -466,9 +466,18 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// removals first. That distinction is the whole point of the two paths —
   /// a matrix deleted from the canvas used to be unreachable afterwards,
   /// because both the button and the palette skipped it.
-  void _seedFromConfig(AppStateProvider provider, {bool silent = false}) {
+  ///
+  /// [batch] is for a bigger operation that has already taken its own undo
+  /// snapshot and says its own piece afterwards — **Recreate from config**
+  /// places twenty boxes, and twenty presses of Undo to get back to before it
+  /// is not an undo anybody uses. Returns how many boxes were added.
+  int _seedFromConfig(
+    AppStateProvider provider, {
+    bool silent = false,
+    bool batch = false,
+  }) {
     final config = provider.roomConfig;
-    if (config.isEmpty) return;
+    if (config.isEmpty) return 0;
     if (!silent) provider.clearAvDismissedDevices();
     final keys = getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
     final existing = {for (final n in provider.avNodes) n.id};
@@ -510,18 +519,86 @@ class _AvFlowViewState extends State<AvFlowView> {
         btuPerHour: template.btuPerHour,
         powerSource: powerSourceForInput(template.powerInput),
       );
-      provider.addAvNode(node);
+      provider.addAvNode(node, recordUndo: !batch);
       columnY[col] = y + node.height + kAvAutoRowGap;
       added++;
     }
 
-    if (!silent) {
+    if (!silent && !batch) {
       _snack(
         added == 0
             ? 'Every config device is already on the canvas.'
             : 'Added $added device${added == 1 ? '' : 's'} from the config.',
       );
     }
+    return added;
+  }
+
+  /// Throws the drawing away and takes the room off the config again: every
+  /// active config device placed in its column, then every tie the config
+  /// describes drawn — the switcher I/O numbers, the expansion bus, the
+  /// standard USB chain and the power controller's outlets.
+  ///
+  /// The button exists because patching is not always the cheaper move. A
+  /// drawing that has drifted from the config — devices swapped, models
+  /// corrected, half the room re-numbered — takes longer to reconcile box by
+  /// box than to draw again, and "draw again" was previously delete-everything
+  /// by hand first.
+  ///
+  /// It ASKS first, and says what it will cost: hand-added boxes and
+  /// hand-drawn cables are part of what goes. One press of Undo puts the whole
+  /// thing back.
+  Future<void> _recreateFromConfig(AppStateProvider provider) async {
+    if (provider.roomConfig.isEmpty) {
+      _snack('No room config is open, so there is nothing to build from.',
+          error: true);
+      return;
+    }
+
+    final byHand = provider.avNodes.where((n) => !n.fromConfig).length;
+    final cables = provider.avCables.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recreate from config?'),
+        content: Text(
+          'Every box and every cable on this drawing is removed, and the room '
+          'is drawn again from the config: the devices it lists, and the ties '
+          'its input and output numbers describe.\n\n'
+          'This drawing has ${provider.avNodes.length} box(es)'
+          '${byHand == 0 ? '' : ' — $byHand added by hand'} and '
+          '$cables cable(s). Anything drawn by hand goes with the rest.\n\n'
+          'Rack rails are kept for the devices that come back. Undo puts the '
+          'whole drawing back.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Recreate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // One snapshot, covering the whole rebuild: the clear takes it, and every
+    // step after it is told not to take another.
+    provider.clearAvFlowDrawing();
+    final placed = _seedFromConfig(provider, batch: true);
+    final routed = autoDrawRoutingFromConfig(provider);
+    final unracked = provider.pruneAvRackSlots(recordUndo: false);
+
+    _snack(
+      'Recreated from the config: $placed device(s) placed, '
+      '${routed.cablesDrawn} cable(s) drawn'
+      '${routed.nodesAdded == 0 ? '' : ', ${routed.nodesAdded} box(es) the '
+          'runs needed added'}'
+      '${unracked == 0 ? '' : ', $unracked rack placement(s) dropped'}.',
+    );
   }
 
   /// Re-runs the column layout over everything currently placed, so a diagram
@@ -1642,6 +1719,17 @@ class _AvFlowViewState extends State<AvFlowView> {
                   icon: const Icon(Icons.route, size: 18),
                   label: const Text('Draw the routing from config'),
                   onPressed: () => showRoutingDialog(context, provider),
+                ),
+                const SizedBox(height: 8),
+                // The two above ADD to what is there. This one starts over:
+                // for a drawing that has drifted far enough from the config
+                // that reconciling it box by box costs more than drawing it
+                // again.
+                OutlinedButton.icon(
+                  key: const ValueKey('av_flow_recreate'),
+                  icon: const Icon(Icons.restart_alt, size: 18),
+                  label: const Text('Recreate from config'),
+                  onPressed: () => _recreateFromConfig(provider),
                 ),
                 const SizedBox(height: 8),
                 // A device copies the catalog's rack height and draw the day

@@ -1378,6 +1378,34 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Clears dragged positions (auto-layout takes over again). Custom lines
   /// are kept — they are removed individually from the edit panel.
+  /// Throws away everything the control schematic carries that the config did
+  /// not put there — dragged positions, hand-drawn lines, auto lines somebody
+  /// hid, and boxes added by hand — so the next build is the drawing the
+  /// config describes and nothing else.
+  ///
+  /// The line COLORS stay. They are a per-room choice with its own **Reset
+  /// all** on the Colors dialog, and a recolored legend does not contradict
+  /// the config. A landing choice ([schematicAvLanTarget],
+  /// [schematicPanelTarget]) stays too — where the room's drops actually go is
+  /// a fact somebody recorded, not drawing that has drifted — unless it points
+  /// at one of the hand-added boxes being removed, which would leave the drops
+  /// landing on nothing.
+  void recreateSchematicFromConfig() {
+    _pushSchematicUndo('Recreate from config');
+    schematicPositions.clear();
+    schematicLinks.clear();
+    schematicHiddenEdges.clear();
+    final removed = {for (final n in schematicExtraNodes) n['id'] ?? ''};
+    schematicExtraNodes.clear();
+    if (removed.contains(schematicAvLanTarget)) {
+      schematicAvLanTarget = kSchematicIdf;
+    }
+    if (removed.contains(schematicPanelTarget)) {
+      schematicPanelTarget = kSchematicIdf;
+    }
+    notifyListeners();
+  }
+
   void resetSchematicPositions() {
     _pushSchematicUndo('Reset layout');
     schematicPositions.clear();
@@ -3886,6 +3914,56 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Empties the signal-flow drawing so it can be built again from the config:
+  /// every box, every cable, and the record of which config devices were taken
+  /// off the canvas by hand.
+  ///
+  /// The destructive half of **Recreate from config**. A box added by hand and
+  /// a cable drawn by hand go with the rest — that is what makes the result
+  /// the drawing the config describes, rather than that drawing plus whatever
+  /// had accumulated on top of it. The tab asks first.
+  ///
+  /// The RAILS are left alone. A device that comes straight back under the
+  /// same config key keeps the U somebody put it on: re-reading the config is
+  /// not a reason to unrack the room. What does not come back leaves a slot
+  /// pointing at nothing — see [pruneAvRackSlots], which is why the snapshot
+  /// covers the Racks history too.
+  void clearAvFlowDrawing() {
+    _pushAvUndo('Recreate from config', const {
+      AvUndoScope.flow,
+      AvUndoScope.racks,
+    });
+    avNodes.clear();
+    avCables.clear();
+    avDismissedDevices.clear();
+    // The automatic routing pass keys off this. Cleared, it runs again over
+    // the room it has just been handed.
+    avRoutedFingerprint = '';
+    notifyListeners();
+  }
+
+  /// Drops rack placements whose occupant is not in the room any more, and
+  /// re-packs the rails they leave. Returns how many went.
+  ///
+  /// A slot naming something that no longer exists draws as a box with an id
+  /// for a name, occupying a rail nothing is in. [recordUndo] false is for a
+  /// batch that has already taken its own snapshot.
+  int pruneAvRackSlots({bool recordUndo = true}) {
+    final orphans = [
+      for (final id in avRackSlots.keys)
+        if (avNodeById(id) == null && avRackItemById(id) == null) id,
+    ];
+    if (orphans.isEmpty) return 0;
+    if (recordUndo) _pushAvUndo('Un-rack what is gone', _racksScope);
+    for (final id in orphans) {
+      final vacated = avRackSlots.remove(id);
+      if (vacated == null) continue;
+      avRepackRow(vacated.rackId, vacated.face, vacated.startU);
+    }
+    notifyListeners();
+    return orphans.length;
+  }
+
   /// Draws a cable. Returns the created cable, or null when the same pair of
   /// ports is already joined (drawing it twice is always a slip).
   AvCable? addAvCable({
@@ -5597,6 +5675,9 @@ class AppStateProvider extends ChangeNotifier {
         // save back to it directly.
         currentConfigPath = file.path;
 
+        // The room on screen is not the room the last target named.
+        clearDeploymentTarget();
+
         await _processLoadedConfig(
           originalContents: originalContents,
           parsedConfig: parsedConfig,
@@ -6158,6 +6239,11 @@ class AppStateProvider extends ChangeNotifier {
       // overwrite the previously opened file (or the template) by mistake.
       currentConfigPath = '';
 
+      // And no processor, for the same reason: a room built from the template
+      // has never been deployed anywhere, least of all to whichever room was
+      // selected before it.
+      clearDeploymentTarget();
+
       // Built from the template, not converted — every value is "written",
       // so there is nothing to color orange.
       _clearConversionProvenance();
@@ -6684,6 +6770,28 @@ class AppStateProvider extends ChangeNotifier {
   /// Sets the active room context
   void selectProcessor(Map<String, dynamic>? processor) { // <-- UPDATED: Allow null
     selectedProcessor = processor;
+    notifyListeners();
+  }
+
+  /// Forgets the Active Deployment Target, and says so in the log.
+  ///
+  /// Called whenever a DIFFERENT room is opened or created. The target is the
+  /// room the next upload talks to, and it belongs to the room that was open
+  /// when somebody picked it: opening BSS 103 with SSC 210 still selected and
+  /// pressing Upload sends this room's config to that room's processor, with
+  /// nothing on screen saying so. A target that has to be picked again is the
+  /// cheaper mistake.
+  ///
+  /// NOT called on an SFTP download — that config came off the target, so the
+  /// target is exactly right.
+  void clearDeploymentTarget() {
+    if (selectedProcessor == null) return;
+    final was = selectedProcessor?['roomName']?.toString() ?? '';
+    selectedProcessor = null;
+    AppLogger.logInfo(
+      'Active Deployment Target cleared'
+      '${was.isEmpty ? '' : ' (was $was)'} — a different config is open.',
+    );
     notifyListeners();
   }
 
