@@ -122,16 +122,39 @@ void main() {
       );
     });
 
-    test('the 108, whose last two outputs are DTP only', () async {
+    test('the 108, whose last four outputs carry the DTP connectors', () async {
       final node = await switcherNode('DTP CrossPoint 108 4K IPCP MA 70');
-      // 8 outputs, 4 DTP connectors -> those are outputs 5, 6, 7 and 8.
+      // 8 outputs, 10 connectors: 1-4 are HDMI only, 5 and 6 carry both an
+      // HDMI (A) and a DTP (B) socket, 7 and 8 are DTP only. The catalog
+      // entry used to number its connectors within each signal instead
+      // ('HDMI 1'..'HDMI 6', 'DTP OUT 1'..'DTP OUT 4'), which lost the
+      // correspondence to the output numbers the config states — and made
+      // '3B' resolve onto nothing while looking like an app bug rather than
+      // what it is: output 3 of a 108 has no DTP connector.
       expect(
         portForIoValue(node, '5B', wantOutput: true, declaredOutputs: 8)?.label,
-        'DTP OUT 1',
+        'DTP OUT 005B',
       );
       expect(
         portForIoValue(node, '8B', wantOutput: true, declaredOutputs: 8)?.label,
-        'DTP OUT 4',
+        'DTP OUT 008',
+      );
+      // The bare number of a DTP-only output names it too — there is no other
+      // connector on output 8 to mean.
+      expect(
+        portForIoValue(node, '8', wantOutput: true, declaredOutputs: 8)?.label,
+        'DTP OUT 008',
+      );
+      // And output 5's bare number is its HDMI socket, the way '5B' is its
+      // twisted-pair one.
+      expect(
+        portForIoValue(node, '5', wantOutput: true, declaredOutputs: 8)?.label,
+        'HDMI 005A',
+      );
+      // Output 3 has no DTP connector, and saying so is the right answer.
+      expect(
+        portForIoValue(node, '3B', wantOutput: true, declaredOutputs: 8),
+        isNull,
       );
     });
 

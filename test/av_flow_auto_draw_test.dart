@@ -311,6 +311,55 @@ void main() {
       expect(p.avNodeById(avAutoNodeId('output_proj_1_rx')), isNull);
     });
 
+    test('a display the catalog does not know still gets its receiver', () {
+      // Displays 3 and 4 of a room are flat panels, and a panel model the
+      // catalog has never heard of falls back to the generic PROJECTORDEVICE
+      // template — which hands every display an HDMI 1, an HDMI 2 and an
+      // HDBaseT socket. That last one is a guess, and it was enough to make
+      // the pass run twisted pair straight into a connector the panel does not
+      // have, with the receiver the room actually needs left off the drawing
+      // and off the quote.
+      //
+      // A socket nobody has confirmed does not settle the question: the
+      // receiver goes in, and the room-end lead lands on the input the config
+      // DOES name.
+      final p = room(
+        projectorInput: 'HDMI 1',
+        projectorModel: 'Some Panel The Catalog Has Never Seen 75',
+      );
+      autoDrawRoutingFromConfig(p);
+
+      final rx = p.avNodeById(avAutoNodeId('output_proj_1_rx'));
+      expect(rx, isNotNull);
+      expect(rx!.model, 'DTP HDMI 4K 230 Rx');
+      expect(
+        runsFrom(p, 'SWITCHERDEVICE_1'),
+        contains('DTP OUT 003B -> ${rx.label} (DTP IN)'),
+      );
+      expect(
+        runsFrom(p, rx.id),
+        contains('HDMI OUT -> Projector - PowerLite L630U (HDMI 1)'),
+      );
+    });
+
+    test('a config that names the HDBaseT socket is still taken at its word',
+        () {
+      // The other half of the same rule. An unknown model whose config says
+      // the lead goes into HDBaseT is a room somebody has looked at: the
+      // socket is named, so it exists, and no receiver is bought.
+      final p = room(
+        projectorInput: 'HDBaseT',
+        projectorModel: 'Some Panel The Catalog Has Never Seen 75',
+      );
+      autoDrawRoutingFromConfig(p);
+
+      expect(p.avNodeById(avAutoNodeId('output_proj_1_rx')), isNull);
+      expect(
+        runsFrom(p, 'SWITCHERDEVICE_1'),
+        contains('DTP OUT 003B -> Projector - PowerLite L630U (HDBaseT)'),
+      );
+    });
+
     test('a DTP output to a display on HDBaseT is one cable', () {
       final p = room(projectorInput: 'HDBaseT');
       autoDrawRoutingFromConfig(p);

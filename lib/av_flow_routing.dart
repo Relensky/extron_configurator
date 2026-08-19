@@ -421,6 +421,29 @@ AvPort? portForIoValue(
     }
   }
 
+  // 2b. The number with a letter, against a label that carries the number and
+  //     spells no letter after it.
+  //
+  //     The letter is a CONNECTOR TYPE — A is that output's HDMI socket, B its
+  //     twisted-pair one — so a label naming the socket by signal answers the
+  //     same question: 'DTP OUT 007' IS output 7's B connector, because output
+  //     7 has no other kind. Only when exactly one connector of that signal
+  //     carries the number, so an output that really does have both still has
+  //     to be asked for by letter.
+  if (want.number != null && want.letter.isNotEmpty) {
+    final wantSignal = _signalForLetter(want.letter);
+    if (wantSignal != null) {
+      final matches = [
+        for (final e in refs.entries)
+          if (e.value.number == want.number &&
+              e.value.letter.isEmpty &&
+              e.key.signal == wantSignal)
+            e.key,
+      ];
+      if (matches.length == 1) return matches.first;
+    }
+  }
+
   // 3. A letter on its own — the IN1608's A/B/C outputs.
   if (want.number == null && want.letter.isNotEmpty) {
     final matches = [
@@ -469,6 +492,20 @@ AvPort? portForIoValue(
   }
 
   if (want.letter.isEmpty) {
+    // A bare number is the output's PRIMARY connector. The letter suffix is
+    // what asks for the twisted-pair one — '3B' is output 3's B socket — so
+    // '3' is the HDMI socket of that output, including on a catalog entry
+    // that spells the DTP connector with no letter at all ('DTP OUT 1' beside
+    // 'HDMI 001A' on a CrossPoint 82). Without this the bare number picked
+    // the DTP socket, because it was the one that looked letterless, and a
+    // display on the HDMI connector was drawn onto twisted pair.
+    if (sameNumber.length > 1) {
+      final hdmi = [
+        for (final p in sameNumber)
+          if (p.signal == SignalType.hdmi) p,
+      ];
+      if (hdmi.length == 1) return hdmi.first;
+    }
     for (final p in sameNumber) {
       if (refs[p]!.letter.isEmpty) return p;
     }
@@ -479,6 +516,12 @@ AvPort? portForIoValue(
   // 6. The connector convention, for a catalog entry that counts connectors.
   final signal = _signalForLetter(want.letter);
   if (signal == null || declaredOutputs <= 0) return null;
+  // Only for the block at the END of the connector list. The convention says
+  // "this group of connectors is the last k outputs", which is true of the DTP
+  // block on every one of these boxes and false of the HDMI block: asking a
+  // DTP CrossPoint 86 for '5A' otherwise walked its four HDMI outputs and
+  // answered 'HDMI 3', a socket that has nothing to do with output 5.
+  if (refs.keys.last.signal != signal) return null;
   final ofSignal = [
     for (final e in refs.entries)
       if (e.key.signal == signal && e.value.number != null) e.key,
@@ -1274,12 +1317,25 @@ RoutingPlan planRoutingFromConfig(
       // DTP and whose display has a DTP socket is a room where the answer is
       // that socket. Drawing a receiver into it quotes a box the room does
       // not need and puts a join in a run that has none.
+      //
+      // But only a socket the box REALLY has. A display whose model the
+      // catalog does not carry falls back to the generic family template, and
+      // that template hands every PROJECTORDEVICE an HDMI 1, an HDMI 2 and an
+      // HDBaseT — sockets nobody has confirmed. Flat panels on outputs 3 and 4
+      // are the usual case: the matrix output is twisted pair, the panel has
+      // no DTP socket on the back of it, and the run was drawn straight into a
+      // connector that does not exist while the receiver it needs went
+      // unquoted. So a fallback template's HDBaseT only counts when the config
+      // itself names it; otherwise the receiver goes in and the room-end lead
+      // lands on the input the config DOES name.
       final native = dest.ports
           .where((p) =>
               p.signal == SignalType.hdbaset &&
               (p.isInput || p.direction == PortDirection.bidirectional))
           .firstOrNull;
-      if (native != null) {
+      final catalogued =
+          provider.avDeviceLibrary.templateForModel(dest.model) != null;
+      if (native != null && (catalogued || toPort?.id == native.id)) {
         draw(
           configKey: key,
           value: value,

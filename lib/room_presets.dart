@@ -793,7 +793,10 @@ RoomPreset _basicClassroom() {
       'input_wireless': '',
       'input_usb': '',
       'input_pc_extended': '',
-      'output_proj_1': '1',
+      // Output 1's DTP connector — the projector is on twisted pair, and on
+      // an 8x2 CrossPoint each output carries both an HDMI socket and a DTP
+      // one. A bare '1' is the HDMI socket of that output; the B says which.
+      'output_proj_1': '1B',
       'output_audio': '1',
       'output_monitor_1': '',
       // Output 2's HDMI connector, into the USB interface. It is a capture
@@ -1870,12 +1873,13 @@ RoomPreset _activeLearningSpace() {
       'input_aud_cam': '8',
       'input_usb': '',
       'input_pc_extended': '',
-      // Outputs 1 and 2 are the matrix's first two DTP connectors, straight
-      // into each projector's own HDBaseT socket.
-      'output_proj_1': '1',
-      'output_proj_2': '2',
-      // The capture feed, off HDMI 1 into the AV Bridge.
-      'output_cc': '3',
+      // Outputs 5 and 6 of a CrossPoint 108 carry both connectors, and it is
+      // the DTP one — the B — that runs to each projector's own HDBaseT
+      // socket. (Outputs 1-4 are HDMI only, 7 and 8 DTP only.)
+      'output_proj_1': '5B',
+      'output_proj_2': '6B',
+      // The capture feed, off output 1's HDMI connector into the AV Bridge.
+      'output_cc': '1',
       'output_cc2': '',
       // The confidence monitor hangs off the AV Bridge's loop-through, not
       // off the matrix, so there is no output for the processor to route.

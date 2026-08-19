@@ -159,7 +159,9 @@ void main() {
       // DTP IN 2 — input 8 on an 8x2: the camera crosses the room on a pair.
       expect(setup['input_inst_cam'], '8');
       expect(setup['input_hdmi'], '7');
-      expect(setup['output_proj_1'], '1');
+      // Output 1's DTP connector: each output of an 8x2 CrossPoint carries
+      // both an HDMI socket and a DTP one, and the projector is on the pair.
+      expect(setup['output_proj_1'], '1B');
       expect(setup['output_audio'], '1');
       // Output 2's HDMI connector, into the USB interface.
       expect(setup['output_cc'], '2');

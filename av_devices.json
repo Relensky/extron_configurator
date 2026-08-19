@@ -13072,49 +13072,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13128,7 +13128,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13142,7 +13142,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13156,7 +13156,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13496,49 +13496,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13552,7 +13552,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13566,7 +13566,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13580,7 +13580,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13922,49 +13922,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13978,7 +13978,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -13992,7 +13992,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14006,7 +14006,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14348,49 +14348,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14404,7 +14404,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14418,7 +14418,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14432,7 +14432,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14774,49 +14774,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14830,7 +14830,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14844,7 +14844,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -14858,7 +14858,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15200,49 +15200,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15256,7 +15256,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15270,7 +15270,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15284,7 +15284,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15624,49 +15624,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15680,7 +15680,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15694,7 +15694,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -15708,7 +15708,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -16048,49 +16048,49 @@
         },
         {
           "id": "hdmi_1",
-          "label": "HDMI 1",
+          "label": "HDMI 001",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_2",
-          "label": "HDMI 2",
+          "label": "HDMI 002",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_3",
-          "label": "HDMI 3",
+          "label": "HDMI 003",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_4",
-          "label": "HDMI 4",
+          "label": "HDMI 004",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_5",
-          "label": "HDMI 5",
+          "label": "HDMI 005A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "hdmi_6",
-          "label": "HDMI 6",
+          "label": "HDMI 006A",
           "signal": "hdmi",
           "direction": "output",
           "side": "right"
         },
         {
           "id": "dtp_out_1",
-          "label": "DTP OUT 1",
+          "label": "DTP OUT 005B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -16104,7 +16104,7 @@
         },
         {
           "id": "dtp_out_2",
-          "label": "DTP OUT 2",
+          "label": "DTP OUT 006B",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -16118,7 +16118,7 @@
         },
         {
           "id": "dtp_out_3",
-          "label": "DTP OUT 3",
+          "label": "DTP OUT 007",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"
@@ -16132,7 +16132,7 @@
         },
         {
           "id": "dtp_out_4",
-          "label": "DTP OUT 4",
+          "label": "DTP OUT 008",
           "signal": "hdbaset",
           "direction": "output",
           "side": "right"

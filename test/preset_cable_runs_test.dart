@@ -155,6 +155,61 @@ void main() {
         expect(second.unresolved, isEmpty);
       });
 
+      test('a display number names the socket its own lead leaves from', () {
+        // The tightest version of the question. It is not enough that the
+        // pass adds nothing — the number in SYSTEM_SETUP has to point at the
+        // connector the room type's own cable comes out of, or the System tab
+        // and the drawing are two documents describing different rooms. This
+        // is what caught `output_proj_1: 1` on a CrossPoint 108, where the
+        // projector's lead leaves output 5's DTP connector.
+        final preset = presets.firstWhere((p) => p.name == name);
+        final p = newRoomFrom(preset);
+        final switcher = p.avNodeById('SWITCHERDEVICE_1');
+        if (switcher == null) return; // the huddle room has no matrix
+        final setup = p.roomConfig['SYSTEM_SETUP'] as Map;
+        final size = AvDeviceLibrary.switcherSize(switcher.model);
+
+        for (final entry in const {
+          'output_proj_1': 'PROJECTORDEVICE_1',
+          'output_proj_2': 'PROJECTORDEVICE_2',
+          'output_proj_3': 'PROJECTORDEVICE_3',
+          'output_proj_4': 'PROJECTORDEVICE_4',
+        }.entries) {
+          final value = setup[entry.key]?.toString().trim() ?? '';
+          if (value.isEmpty || value.toLowerCase() == 'none') continue;
+          final display = p.avNodeById(entry.value);
+          if (display == null) continue;
+
+          final port = portForIoValue(
+            switcher,
+            value,
+            wantOutput: true,
+            declaredOutputs: size.$2,
+            declaredInputs: size.$1,
+          );
+          expect(port, isNotNull,
+              reason: '${entry.key} = $value names no connector on '
+                  '${switcher.model}');
+
+          // What the room type drew out of that socket, and where it lands.
+          final lead = p.avCables.where((c) =>
+              c.fromNodeId == switcher.id && c.fromPortId == port!.id);
+          expect(lead, isNotEmpty,
+              reason: '${entry.key} = $value resolves to ${port!.label}, '
+                  'which the drawing leaves empty');
+          final lands = lead.first.toNodeId;
+          expect(
+            lands == display.id ||
+                p.avCables.any((c) =>
+                    (c.fromNodeId == lands && c.toNodeId == display.id) ||
+                    (c.toNodeId == lands && c.fromNodeId == display.id)),
+            isTrue,
+            reason: '${entry.key} = $value leaves ${port.label} and does not '
+                'reach ${display.label}',
+          );
+        }
+      });
+
       test('the runs the room type drew are all still there', () {
         final preset = presets.firstWhere((p) => p.name == name);
         final p = newRoomFrom(preset);
