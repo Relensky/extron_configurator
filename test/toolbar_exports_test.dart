@@ -93,6 +93,37 @@ void main() {
     expect(find.textContaining('Cost estimate'), findsWidgets);
   });
 
+  testWidgets("every page's own report menu offers the clipboard too",
+      (tester) async {
+    // The toolbar's per-tab menu is the floor under every page, but the button
+    // people actually press is the one on the page — "Run schedule",
+    // "Location report", "Report". Each of those has to offer the same three
+    // answers, or "can I paste this into an email" depends on which page you
+    // are standing on all over again.
+    final p = room();
+    await pumpApp(tester, p);
+
+    for (final (tab, menu) in [
+      (AppTab.cabling, const ValueKey('cabling_schedule_menu')),
+      (AppTab.floorPlan, const ValueKey('plan_report_menu')),
+    ]) {
+      p.selectTab(tab.index);
+      await tester.pumpAndSettle();
+
+      // The button is behind an IgnorePointer so the menu takes the tap.
+      await tester.tap(find.byKey(menu), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Copy text to clipboard'),
+        findsOneWidget,
+        reason: '${tab.name} has no clipboard option',
+      );
+
+      await tester.tapAt(const Offset(20, 20)); // dismiss the menu
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('Raw JSON sits directly after System in the rail',
       (tester) async {
     expect(AppTab.values[AppTab.system.index + 1], AppTab.rawJson);

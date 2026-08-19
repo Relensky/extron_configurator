@@ -396,6 +396,7 @@ AvPort? portForIoValue(
   required bool wantOutput,
   Set<SignalType> signals = _videoSignals,
   int declaredOutputs = 0,
+  int declaredInputs = 0,
 }) {
   final want = parseIoValue(value);
   if (want.number == null && want.letter.isEmpty) return null;
@@ -435,6 +436,38 @@ AvPort? portForIoValue(
     for (final e in refs.entries)
       if (e.value.number == want.number) e.key,
   ];
+  // 5. The TRAILING BLOCK, for a catalog entry that numbers a group of
+  //    connectors from one.
+  //
+  //    A DTP CrossPoint 82 is eight inputs and two outputs, and its last two
+  //    inputs are the twisted-pair ones. The catalog spells them 'DTP IN 1'
+  //    and 'DTP IN 2' — what is printed on the connector — while the same two
+  //    sockets on its 84 sibling are spelled 'DTP IN 7' and 'DTP IN 8'. So
+  //    `input_hdmi: 7` resolved on one model and on nothing at all on the
+  //    other, and a room built on the 82 had no way to say which input its
+  //    wall plate was on.
+  //
+  //    The box says how many inputs it has, so the last group in connector
+  //    order numbered 1..k is inputs N-k+1..N. Only a clean 1..k counter
+  //    qualifies: anything else is already the real numbers, and pass 4 would
+  //    have matched it.
+  final declared = wantOutput ? declaredOutputs : declaredInputs;
+  if (want.letter.isEmpty && sameNumber.isEmpty && declared > 0) {
+    final lastSignal = refs.keys.last.signal;
+    final tail = [
+      for (final e in refs.entries)
+        if (e.key.signal == lastSignal && e.value.number != null) e.key,
+    ]..sort((a, b) => refs[a]!.number!.compareTo(refs[b]!.number!));
+    bool counter = tail.isNotEmpty;
+    for (int i = 0; i < tail.length; i++) {
+      if (refs[tail[i]]!.number != i + 1) counter = false;
+    }
+    if (counter && tail.length < declared) {
+      final index = want.number! - (declared - tail.length) - 1;
+      if (index >= 0 && index < tail.length) return tail[index];
+    }
+  }
+
   if (want.letter.isEmpty) {
     for (final p in sameNumber) {
       if (refs[p]!.letter.isEmpty) return p;
@@ -443,7 +476,7 @@ AvPort? portForIoValue(
     return null;
   }
 
-  // 5. The connector convention, for a catalog entry that counts connectors.
+  // 6. The connector convention, for a catalog entry that counts connectors.
   final signal = _signalForLetter(want.letter);
   if (signal == null || declaredOutputs <= 0) return null;
   final ofSignal = [
@@ -553,6 +586,19 @@ RoutingPlan planRoutingFromConfig(
   final nodesById = {for (final n in provider.avNodes) n.id: n};
   final switcher = nodesById['SWITCHERDEVICE_1'];
   if (switcher == null) {
+    // A room with no matrix AND no numbers is not a room with a problem. The
+    // huddle space is the case: the wireless comes in over a DTP pair, the bar
+    // and the PC go straight into the display's own HDMI sockets, and every
+    // switcher I/O key is blank on purpose. Complaining that it has no
+    // SWITCHERDEVICE_1 puts a red line on a room type that is drawn correctly.
+    final stated = setup.entries.where((e) {
+      final key = e.key.toString();
+      if (!key.startsWith('input_') && !key.startsWith('output_')) return false;
+      final value = e.value?.toString().trim() ?? '';
+      return value.isNotEmpty && value.toLowerCase() != 'none';
+    });
+    if (stated.isEmpty) return const RoutingPlan();
+
     return RoutingPlan(
       unresolved: [
         UnroutedTie(
@@ -580,8 +626,8 @@ RoutingPlan planRoutingFromConfig(
 
   // How many outputs the box HAS, which its connector labels do not always
   // say — see [portForIoValue] pass 5.
-  final declaredOutputs =
-      AvDeviceLibrary.switcherSize(switcher.model).$2;
+  final declaredInputs = AvDeviceLibrary.switcherSize(switcher.model).$1;
+  final declaredOutputs = AvDeviceLibrary.switcherSize(switcher.model).$2;
 
   // Somewhere to put a box that has to be created. Sources go down the left of
   // whatever is already drawn, destinations down the right.
@@ -721,6 +767,70 @@ RoutingPlan planRoutingFromConfig(
   bool joinedTo(AvNode node, AvPort port, String nodeId) =>
       feedsInto(node.id, port.id).any((f) => f.node == nodeId);
 
+  /// True when [nodeId] is already joined to the switcher — straight onto it,
+  /// or through one box between them.
+  ///
+  /// The one box is the whole point: a camera reaches the matrix through a
+  /// transmitter and a display through a receiver, and a drawing that shows
+  /// either of those is a drawing that has ALREADY made this connection. What
+  /// it does not tell you is which numbered socket it landed on, which is
+  /// exactly the thing the config states and the thing two people spell
+  /// differently — so a room whose drawing already says "this camera is on
+  /// the matrix" is not a room with a question to answer.
+  bool joinedToSwitcher(String nodeId) {
+    if (nodeId == switcher.id) return true;
+    for (final c in provider.avCables) {
+      String? other;
+      if (c.fromNodeId == nodeId) other = c.toNodeId;
+      if (c.toNodeId == nodeId) other = c.fromNodeId;
+      if (other == null) continue;
+      if (other == switcher.id) return true;
+      // One hop: the transmitter or receiver in the middle.
+      for (final c2 in provider.avCables) {
+        if ((c2.fromNodeId == other && c2.toNodeId == switcher.id) ||
+            (c2.toNodeId == other && c2.fromNodeId == switcher.id)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// True when [a] and [b] have a cable between them, either way round.
+  bool joined(String a, String b) => provider.avCables.any((c) =>
+      (c.fromNodeId == a && c.toNodeId == b) ||
+      (c.fromNodeId == b && c.toNodeId == a));
+
+  /// True when the switcher connector [value] names already has a lead on it.
+  ///
+  /// A socket takes one cable. If the drawing already shows something on
+  /// output 2, then `output_monitor_1: 2` is describing THAT lead — not asking
+  /// for a second one, and certainly not asking for a second confidence
+  /// monitor to hang it off. Checked before a box is placed, because the box
+  /// is the expensive half of the mistake: it lands on the canvas, on the
+  /// estimate and in the rack schedule.
+  ///
+  /// Unresolvable values are left alone — the normal path reports those with
+  /// a reason, and this is not the place to say it a second time.
+  bool switcherSocketTaken(
+    String value, {
+    required bool wantOutput,
+    Set<SignalType> signals = _videoSignals,
+  }) {
+    final port = portForIoValue(
+      switcher,
+      value,
+      wantOutput: wantOutput,
+      signals: signals,
+      declaredOutputs: declaredOutputs,
+      declaredInputs: declaredInputs,
+    );
+    if (port == null) return false;
+    return provider.avCables.any((c) =>
+        (c.fromNodeId == switcher.id && c.fromPortId == port.id) ||
+        (c.toNodeId == switcher.id && c.toPortId == port.id));
+  }
+
   // --- the sources -----------------------------------------------------------
   //  Every one of these is "this box is on switcher input N", so they all end
   //  the same way: find input N on the switcher, find the box's own output,
@@ -752,8 +862,12 @@ RoutingPlan planRoutingFromConfig(
   void routeSource(String key, AvNode source, {AvPort? fromPort}) {
     final value = setup[key]?.toString().trim() ?? '';
     if (value.isEmpty) return;
-    final switcherPort =
-        portForIoValue(switcher, value, wantOutput: false);
+    final switcherPort = portForIoValue(
+      switcher,
+      value,
+      wantOutput: false,
+      declaredInputs: declaredInputs,
+    );
     if (switcherPort == null) {
       unresolved.add(UnroutedTie(key, value,
           'No input on ${switcher.label} is labelled $value.'));
@@ -763,6 +877,39 @@ RoutingPlan planRoutingFromConfig(
     if (out == null) {
       unresolved.add(UnroutedTie(key, value,
           '${source.label} has no video output to run from.'));
+      return;
+    }
+    // The socket at the SOURCE end takes one lead as well. A camera whose
+    // HDMI OUT already runs to the recorder has nothing left to plug into the
+    // switcher with, and drawing it anyway is two cables out of one
+    // connector — the same mistake as two feeds into one display, at the
+    // other end of the run.
+    //
+    // Not counted: a far end that IS the switcher (this tie, already drawn)
+    // or a transmitter sitting on the switcher input this tie names, which is
+    // this pass recognising the box it put in on an earlier run.
+    final onThatSocket = feedsInto(source.id, out.id);
+    final servesThisTie = onThatSocket.any((f) =>
+        f.node == switcher.id || joinedTo(switcher, switcherPort, f.node));
+    if (onThatSocket.isNotEmpty && !servesThisTie) {
+      // Already on the matrix, by whatever route the drawing shows — straight
+      // in, or through the transmitter beside it. The number in the config
+      // says which input; the drawing says it is connected; they are the same
+      // fact and the drawing is the one with a cable in it.
+      if (joinedToSwitcher(source.id)) {
+        alreadyDrawn++;
+        return;
+      }
+      final far = onThatSocket
+          .map((f) => nodesById[f.node]?.label ?? f.node)
+          .toSet()
+          .join(', ');
+      unresolved.add(UnroutedTie(
+          key,
+          value,
+          '${source.label} already has ${out.label} running to $far, which is '
+          'not on ${switcher.label}, so it cannot also run to input $value. '
+          'The drawing is left as it is — check which of the two is right.'));
       return;
     }
     // The other half of what [_dtpReceiver] fixes, and the more common one:
@@ -1023,6 +1170,79 @@ RoutingPlan planRoutingFromConfig(
         return byRank != 0 ? byRank : a.index.compareTo(b.index);
       });
 
+    // A box that ALREADY has a feed of this kind does not get a second one.
+    //
+    // The config says which switcher output drives this display. A drawing
+    // that already shows it driven — off another output, through a receiver,
+    // or onto a socket this pass spells differently — has answered the same
+    // question, and two feeds into one display is the one answer that is
+    // certainly wrong. It is how a room stamped from a room type came out
+    // with every projector fed twice: the preset draws DTP OUT 1 into the
+    // projector's HDBaseT socket and `output_proj_1: 1` reads as HDMI 1, so a
+    // second lead landed on the free HDMI connector beside it.
+    //
+    // The DRAWING wins and the disagreement is reported: a lead somebody drew
+    // is a decision, and a number resolved through a table of connector names
+    // is a lookup. Only feeds that were already SAVED count — a tie drawn by
+    // this same pass is this pass's own work, and a box with two ties onto it
+    // (`output_cc` and `output_cc2` into an AV Bridge) still gets both.
+    final fedAlready = toPort == null && !candidates.any(ownedByThisTie)
+        ? candidates
+            .where((p) => provider.avCables.any((c) =>
+                (c.toNodeId == dest.id && c.toPortId == p.id) ||
+                (c.fromNodeId == dest.id && c.fromPortId == p.id)))
+            .toList()
+        : const <AvPort>[];
+    if (fedAlready.isNotEmpty) {
+      if (joinedToSwitcher(dest.id)) {
+        // Fed from THIS switcher already, on a socket spelled differently
+        // from the one the number resolves to: the same connection, not a
+        // second one, and not a disagreement anybody needs to read about. A
+        // room stamped from a room type is this case for every display it
+        // has — the preset draws DTP OUT 1 into the projector and
+        // `output_proj_1: 1` reads as HDMI 1.
+        //
+        // What says it is the SAME connection: the socket the number resolves
+        // to is spoken for too. When that socket is FREE the config really is
+        // asking for another lead into a box with nowhere to put it — two
+        // capture feeds into a recorder with one HDMI input — so this falls
+        // through to the landing check below, which says exactly that.
+        if (feedsInto(switcher.id, switcherPort.id).isNotEmpty) {
+          alreadyDrawn++;
+          return;
+        }
+      } else {
+        unresolved.add(UnroutedTie(
+            key,
+            value,
+            '${dest.label} is already cabled on '
+            '${fedAlready.map((p) => p.label).join(', ')} from something '
+            'other than ${switcher.label}, so $value would be a second feed '
+            'into the same box. The drawing is left as it is — check which of '
+            'the two is right.'));
+        return;
+      }
+    }
+
+    // The socket on the SWITCHER takes one lead too. A number pointing at an
+    // output that already runs somewhere else is a disagreement between the
+    // drawing and the config, and drawing the second lead is the one answer
+    // that is certainly wrong.
+    final onSwitcherSocket = feedsInto(switcher.id, switcherPort.id)
+        .where((f) => f.node != dest.id && !joined(f.node, dest.id))
+        .map((f) => nodesById[f.node]?.label ?? f.node)
+        .toSet();
+    if (onSwitcherSocket.isNotEmpty) {
+      unresolved.add(UnroutedTie(
+          key,
+          value,
+          '${switcherPort.label} on ${switcher.label} already runs to '
+          '${onSwitcherSocket.join(', ')}, so it cannot also feed '
+          '${dest.label}. The drawing is left as it is — check which of the '
+          'two is right.'));
+      return;
+    }
+
     final landing = toPort ??
         candidates.where(ownedByThisTie).firstOrNull ??
         free.firstOrNull?.port;
@@ -1173,15 +1393,22 @@ RoutingPlan planRoutingFromConfig(
         dismissed(entry.key)) {
       continue;
     }
+    final signals =
+        entry.key == 'output_audio_ald' ? _lineAudio : _videoSignals;
+    // Already cabled off that socket — see [switcherSocketTaken]. This is how
+    // a room stamped from a room type grew a SECOND confidence monitor: the
+    // preset draws one off HDMI OUT 2 and calls it what it likes, and the box
+    // this pass would place is recognised by model, so a monitor named
+    // differently was not found and another one was bought.
+    if (switcherSocketTaken(value, wantOutput: true, signals: signals)) {
+      alreadyDrawn++;
+      continue;
+    }
     final existing =
         _existingByModelOrLabel(provider, [entry.value.model], entry.key);
     final node = existing ??
         place(entry.value, avAutoNodeId(entry.key), onLeft: false);
-    routeDestination(
-      entry.key,
-      node,
-      signals: entry.key == 'output_audio_ald' ? _lineAudio : _videoSignals,
-    );
+    routeDestination(entry.key, node, signals: signals);
   }
 
   // PROGRAM AUDIO.
@@ -1199,15 +1426,22 @@ RoutingPlan planRoutingFromConfig(
   if (audioValue.isNotEmpty &&
       audioValue.toLowerCase() != 'none' &&
       nodesById['DSPDEVICE_1'] == null) {
-    final existing = _existingByModelOrLabel(
-        provider, const ['Ceiling Speakers'], 'output_audio');
-    final node = existing ??
-        place(
-            const _SourceSpec(
-                'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
-            avAutoNodeId('output_audio'),
-            onLeft: false);
-    routeDestination('output_audio', node, signals: _speakerAudio);
+    // The amplifier output already has a speaker run on it: a preset that
+    // ships an SM 28 pair is a room with speakers, whatever they are called.
+    if (!switcherSocketTaken(audioValue,
+        wantOutput: true, signals: _speakerAudio)) {
+      final existing = _existingByModelOrLabel(
+          provider, const ['Ceiling Speakers'], 'output_audio');
+      final node = existing ??
+          place(
+              const _SourceSpec(
+                  'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
+              avAutoNodeId('output_audio'),
+              onLeft: false);
+      routeDestination('output_audio', node, signals: _speakerAudio);
+    } else {
+      alreadyDrawn++;
+    }
   }
 
   // --- the expansion bus -----------------------------------------------------

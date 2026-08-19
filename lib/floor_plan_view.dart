@@ -527,6 +527,25 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     }
   }
 
+  /// The location report as plain text on the clipboard.
+  ///
+  /// The same tables the .txt file holds, without a file: what goes in an
+  /// email or a ticket. Every report in the app offers this, in the same place
+  /// on the menu.
+  Future<void> _copyReportText(AppStateProvider provider) async {
+    final model = buildAvFlowModel(provider);
+    final sections = locationSections(model);
+    if (sections.isEmpty) {
+      _snack('Nothing to report yet — no locations, runs or callouts.');
+      return;
+    }
+    final title = model.roomTitle.isEmpty ? 'Floor plan' : model.roomTitle;
+    await Clipboard.setData(
+      ClipboardData(text: renderTextReport(title, sections)),
+    );
+    _snack('Location report copied to the clipboard.');
+  }
+
   /// The location report, as a workbook or as plain text.
   ///
   /// The workbook is the one that gets sent: it carries the tables AND the
@@ -1397,13 +1416,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           PopupMenuButton<String>(
             key: const ValueKey('plan_report_menu'),
             tooltip: 'Export the location report',
-            onSelected: (v) => _exportReport(provider, asXlsx: v == 'xlsx'),
+            onSelected: (v) => v == 'copy'
+                ? _copyReportText(provider)
+                : _exportReport(provider, asXlsx: v == 'xlsx'),
             itemBuilder: (ctx) => const [
               PopupMenuItem(
                 value: 'xlsx',
                 child: Text('Workbook with the drawings (.xlsx)'),
               ),
               PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
+              PopupMenuItem(
+                value: 'copy',
+                child: Text('Copy text to clipboard'),
+              ),
             ],
             child: IgnorePointer(
               child: ElevatedButton.icon(
@@ -1451,6 +1476,29 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             icon: const Icon(Icons.image_outlined, size: 18),
             label: const Text('Import a floor plan'),
             onPressed: () => _importPlan(provider),
+          ),
+          const SizedBox(height: 10),
+          // No architect's export, or none yet. A blank sheet is a working
+          // drawing in its own right: the room laid out on plain paper with
+          // its locations, its runs and its notation on it, and a scan dropped
+          // in behind later if one ever turns up. Without this the page
+          // insisted on a file before it would show anything at all.
+          OutlinedButton.icon(
+            key: const ValueKey('plan_blank_sheet'),
+            icon: const Icon(Icons.note_add_outlined, size: 18),
+            label: const Text('Start a blank sheet'),
+            onPressed: () => provider.addFloorPlanSheet(name: 'Room layout'),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 480,
+            child: Text(
+              'A blank sheet is plain paper in whatever colour the sheet is '
+              'set to. Import a plan onto it later and everything already '
+              'placed stays where it is.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
         ],
       ),

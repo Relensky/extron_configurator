@@ -1692,6 +1692,165 @@ List<Offset> routeCable({
   return full([a, b]);
 }
 
+/// Every run drawn on its own line where two of them share a corridor.
+///
+/// The router works one cable at a time, and two cables with the same problem
+/// get the same answer: the lane over a block of boxes, the channel the
+/// pathfinder found, the leg into a port from directly above — all of them are
+/// the SAME coordinate for every run that needs them, so six cables come out
+/// drawn as one. On the page that is not a tidy diagram, it is a diagram that
+/// under-reports the job: five of the six leads are invisible, and the one you
+/// can see is whichever was drawn last.
+///
+/// The cabling sheet has always fanned runs sharing an edge onto their own
+/// lanes ([kCablingLaneStep]); this is the same idea applied to a router that
+/// produces polylines rather than straight edges. Legs that lie on top of each
+/// other are found, grouped, and slid apart — a horizontal leg in y, a
+/// vertical leg in x — leaving the ports they start and end on exactly where
+/// they are.
+///
+/// Only INTERIOR legs move. The first and last leg of a run is its stub off
+/// the port face: it is 18px long, it lands on a connector somebody has to be
+/// able to point at, and moving it would take the line off its own socket.
+///
+/// The spread is deliberately small — a few pixels either side, never more
+/// than [_kFanMaxSpread] in total. The router keeps its routes 10px clear of
+/// every box, so a nudge inside that margin cannot push a run into a device,
+/// and a fan wide enough to be obvious is a fan that no longer reads as one
+/// bundle going the same way.
+Map<String, List<Offset>> fanOverlappingRuns(
+  Map<String, List<Offset>> routes,
+) {
+  // Straightened first: a route arrives as its stub plus the shape the router
+  // chose, and the stub is often in line with the leg after it. Two points
+  // describing one straight leg would have the fan treat half of it as
+  // interior and the other half as the piece that lands on the port, and slide
+  // them apart from each other — a kink in the middle of a straight run.
+  final merged = {
+    for (final e in routes.entries) e.key: _mergeCollinear(e.value),
+  };
+
+  // Every interior leg on the page: which run it belongs to, where in that
+  // run's point list it is, and the line it lies on.
+  final legs = <_Leg>[];
+  merged.forEach((id, points) {
+    for (int i = 1; i < points.length - 2; i++) {
+      final a = points[i], b = points[i + 1];
+      final horizontal = (a.dy - b.dy).abs() < 0.5;
+      final vertical = (a.dx - b.dx).abs() < 0.5;
+      if (horizontal == vertical) continue; // diagonal, or a zero-length hop
+      // Both neighbours have to be square to this leg. Sliding a leg moves
+      // the two corners it shares, which only lengthens a perpendicular
+      // neighbour — but would tilt a parallel one, and a diagonal line on an
+      // orthogonal drawing reads as a mistake.
+      if (!_squareTo(points[i - 1], points[i], horizontal) ||
+          !_squareTo(points[i + 1], points[i + 2], horizontal)) {
+        continue;
+      }
+      legs.add(_Leg(
+        id: id,
+        index: i,
+        horizontal: horizontal,
+        at: horizontal ? a.dy : a.dx,
+        from: horizontal ? math.min(a.dx, b.dx) : math.min(a.dy, b.dy),
+        to: horizontal ? math.max(a.dx, b.dx) : math.max(a.dy, b.dy),
+      ));
+    }
+  });
+  if (legs.length < 2) return merged;
+
+  // Legs on the same line that actually overlap along it. Two runs crossing
+  // the same corridor at different heights are not on top of each other and
+  // are left alone.
+  final groups = <List<_Leg>>[];
+  final taken = List<bool>.filled(legs.length, false);
+  for (int i = 0; i < legs.length; i++) {
+    if (taken[i]) continue;
+    final group = [legs[i]];
+    taken[i] = true;
+    for (int j = i + 1; j < legs.length; j++) {
+      if (taken[j]) continue;
+      if (!legs[i].sharesLineWith(legs[j])) continue;
+      // Against the FIRST member, so a chain of legs each overlapping the
+      // next does not walk across the page one lane at a time.
+      if (!legs[i].overlaps(legs[j])) continue;
+      group.add(legs[j]);
+      taken[j] = true;
+    }
+    if (group.length > 1) groups.add(group);
+  }
+  if (groups.isEmpty) return merged;
+
+  final out = {for (final e in merged.entries) e.key: [...e.value]};
+  for (final group in groups) {
+    // Stable order, so a run does not swap lanes between repaints.
+    group.sort((a, b) => a.id.compareTo(b.id));
+    final step = math.min(
+      _kFanStep,
+      _kFanMaxSpread / math.max(1, group.length - 1),
+    );
+    for (int i = 0; i < group.length; i++) {
+      final shift = (i - (group.length - 1) / 2) * step;
+      if (shift == 0) continue;
+      final leg = group[i];
+      final points = out[leg.id]!;
+      // Moving both ends of the leg slides the leg itself; the legs either
+      // side of it are perpendicular, so the same move only makes them a few
+      // pixels longer or shorter. That is what keeps the run joined up.
+      for (final at in [leg.index, leg.index + 1]) {
+        points[at] = leg.horizontal
+            ? Offset(points[at].dx, points[at].dy + shift)
+            : Offset(points[at].dx + shift, points[at].dy);
+      }
+    }
+  }
+  return out;
+}
+
+/// How far apart runs sharing a corridor are fanned, and the widest the whole
+/// fan is allowed to open. Inside the 10px clearance the router keeps around
+/// every box, so a fanned run cannot end up drawn into a device.
+const double _kFanStep = 5;
+const double _kFanMaxSpread = 16;
+
+/// True when the leg [a] -> [b] runs square to a leg of the given direction.
+bool _squareTo(Offset a, Offset b, bool horizontal) =>
+    horizontal ? (a.dx - b.dx).abs() < 0.5 : (a.dy - b.dy).abs() < 0.5;
+
+/// One straight leg of a routed run, for [fanOverlappingRuns].
+class _Leg {
+  final String id;
+  final int index;
+  final bool horizontal;
+
+  /// The line it lies on: its y for a horizontal leg, its x for a vertical.
+  final double at;
+
+  /// Where it starts and ends along that line.
+  final double from;
+  final double to;
+
+  const _Leg({
+    required this.id,
+    required this.index,
+    required this.horizontal,
+    required this.at,
+    required this.from,
+    required this.to,
+  });
+
+  /// Same orientation, same line — within a hair, since two routes computed
+  /// separately land on the same coordinate to the pixel but not always to
+  /// the fraction.
+  bool sharesLineWith(_Leg other) =>
+      horizontal == other.horizontal && (at - other.at).abs() < 1.5;
+
+  /// And actually on top of each other rather than end to end. The margin
+  /// stops two legs that merely touch at a corner from being fanned.
+  bool overlaps(_Leg other) =>
+      math.min(to, other.to) - math.max(from, other.from) > 6;
+}
+
 /// How far sideways the router will slide a leg looking for a clear line,
 /// nearest first so a diagram that doesn't need detours never gets one.
 const List<double> _kDetourShifts = [

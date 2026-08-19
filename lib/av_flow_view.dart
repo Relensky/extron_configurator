@@ -1156,7 +1156,11 @@ class _AvFlowViewState extends State<AvFlowView> {
       model.canvasSize.width,
       model.canvasSize.height,
     );
-    _paths = {
+    // Fanned after routing, not during it: the router works one cable at a
+    // time and hands two cables with the same problem the same answer, so the
+    // only place six runs sharing a corridor can be told apart is once all six
+    // are known. Same idea as the cabling sheet's lanes.
+    _paths = fanOverlappingRuns({
       for (final c in model.cables)
         c.id: routeCable(
           fromNode: byId[c.fromNodeId]!,
@@ -1172,7 +1176,7 @@ class _AvFlowViewState extends State<AvFlowView> {
             ?titleObstacle,
           ],
         ),
-    };
+    });
 
     // The legend sits BELOW everything rather than floating over the
     // bottom-left corner, where it covered whatever device happened to be

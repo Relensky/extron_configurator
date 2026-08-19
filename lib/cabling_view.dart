@@ -517,13 +517,19 @@ class _CablingViewState extends State<CablingView> {
           PopupMenuButton<String>(
             key: const ValueKey('cabling_schedule_menu'),
             tooltip: 'Export the run schedule',
-            onSelected: (v) => _exportReport(provider, asXlsx: v == 'xlsx'),
+            onSelected: (v) => v == 'copy'
+                ? _copyReportText(provider)
+                : _exportReport(provider, asXlsx: v == 'xlsx'),
             itemBuilder: (ctx) => const [
               PopupMenuItem(
                 value: 'xlsx',
                 child: Text('Workbook with the drawings (.xlsx)'),
               ),
               PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
+              PopupMenuItem(
+                value: 'copy',
+                child: Text('Copy text to clipboard'),
+              ),
             ],
             child: IgnorePointer(
               child: OutlinedButton.icon(
@@ -1316,6 +1322,26 @@ class _CablingViewState extends State<CablingView> {
     } catch (e) {
       _snack('Failed to save the image: $e');
     }
+  }
+
+  /// The run schedule as plain text on the clipboard.
+  ///
+  /// The same tables the .txt file holds, without a file: what goes in an
+  /// email or a ticket, which is most of the times somebody wants the
+  /// schedule at all. Every report in the app offers this, in the same place
+  /// on the menu.
+  Future<void> _copyReportText(AppStateProvider provider) async {
+    final model = buildAvFlowModel(provider);
+    final sections = cablingSections(model);
+    if (sections.isEmpty) {
+      _snack('Nothing to report yet — the drawing is empty.');
+      return;
+    }
+    final title = model.roomTitle.isEmpty ? 'Cabling' : model.roomTitle;
+    await Clipboard.setData(
+      ClipboardData(text: renderTextReport(title, sections)),
+    );
+    _snack('Run schedule copied to the clipboard.');
   }
 
   /// The run schedule, as a workbook or as plain text.
