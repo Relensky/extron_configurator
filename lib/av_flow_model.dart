@@ -635,6 +635,29 @@ const double kAvPortRowHeight = 22;
 const double kAvNodeMinBodyHeight = 20;
 const double kAvNodePadBottom = 10;
 
+/// ---------------------------------------------------------------------------
+///  THE GRID THE AUTOMATIC PASSES LAY OUT ON
+/// ---------------------------------------------------------------------------
+/// Four passes place boxes without being asked — the first-visit seed, "Place
+/// all from config", Auto-arrange and the routing pass — and they all have to
+/// agree on the same grid or one drops a box on top of another's.
+///
+/// The pitch used to be 340 against a box allowed to be [kAvNodeMaxWidth]
+/// wide, which left a 40px corridor for EVERY run between two columns to
+/// share: eight cables a lane apart do not fit in 40px, so they came out drawn
+/// on top of each other and across the boxes. The pitch is now the widest box
+/// plus room for a dozen lanes and the labels riding on them.
+const double kAvAutoColumnPitch = 500;
+
+/// Vertical gap between two boxes stacked in one column. Wide enough that a
+/// run crossing the column has somewhere to pass BETWEEN them — at 30px it
+/// had to go through one or squeeze against the ports.
+const double kAvAutoRowGap = 70;
+
+/// Where the top-left box of an automatic layout goes.
+const double kAvAutoOriginX = 40;
+const double kAvAutoOriginY = 60;
+
 /// Radius of the round port handle drawn on the node edge.
 const double kAvPortHandleRadius = 5.5;
 
@@ -1110,6 +1133,27 @@ class AvCable {
       ],
     );
   }
+}
+
+/// What a run is called on the diagram when nobody has typed a cable ID for
+/// it: the box at each end, source first.
+///
+/// [AvCable.label] is the run's ID — 'AV-01', the number printed on the
+/// sleeve — and the cable schedule counts the runs that have none, so this is
+/// deliberately NOT written into that field. It is what the canvas draws in
+/// its place, because an unlabelled line on a page of forty is a line nobody
+/// can follow: the two ends are the one thing you want to read off it without
+/// tracing it back through the crossings.
+String defaultCableLabel(AvNode from, AvNode to) =>
+    '${shortNodeLabel(from.label)} → ${shortNodeLabel(to.label)}';
+
+/// A box's name cut to something that fits on a cable without covering the
+/// diagram. The long ones are all `<thing> — <what it feeds>`, and the head
+/// of that is the part that identifies it.
+String shortNodeLabel(String label) {
+  final flat = label.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (flat.length <= 24) return flat;
+  return '${flat.substring(0, 23).trimRight()}…';
 }
 
 /// Colors offered when recoloring a single run. The signal palette first —
@@ -2014,7 +2058,7 @@ Map<String, double> assignCableLanes(
   List<AvCable> cables,
   Map<String, AvNode> nodesById,
 ) {
-  const laneStep = 14.0;
+  const laneStep = 20.0;
   final groups = <int, List<String>>{};
   for (final c in cables) {
     final from = nodesById[c.fromNodeId];

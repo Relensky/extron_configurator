@@ -585,13 +585,15 @@ RoutingPlan planRoutingFromConfig(
 
   // Somewhere to put a box that has to be created. Sources go down the left of
   // whatever is already drawn, destinations down the right.
-  double leftY = 60, rightY = 60;
-  double rightX = 40;
+  double leftY = kAvAutoOriginY, rightY = kAvAutoOriginY;
+  double rightX = kAvAutoOriginX;
   for (final n in provider.avNodes) {
-    rightX = math.max(rightX, n.pos.dx + 340);
+    rightX = math.max(rightX, n.pos.dx + kAvAutoColumnPitch);
     // Below what is already in the left column, not on top of it. A second
     // pass that adds one transmitter used to drop it at y=60 over the PC.
-    if (n.pos.dx < 340) leftY = math.max(leftY, n.pos.dy + n.height + 30);
+    if (n.pos.dx < kAvAutoColumnPitch) {
+      leftY = math.max(leftY, n.pos.dy + n.height + kAvAutoRowGap);
+    }
   }
 
   final lectern = _locationFor(provider, RoomZone.lectern);
@@ -617,7 +619,7 @@ RoutingPlan planRoutingFromConfig(
       id: nodeId,
       label: label ?? spec.label,
       model: spec.model,
-      pos: at ?? Offset(onLeft ? 40 : rightX, y),
+      pos: at ?? Offset(onLeft ? kAvAutoOriginX : rightX, y),
       ports: withPowerInlet(template.ports, template.powerInput),
       // The config field put it here, so it is a config device: the report
       // says where it came from, and taking it off the canvas is remembered
@@ -637,9 +639,9 @@ RoutingPlan planRoutingFromConfig(
     // A box given its own position has not consumed a slot in either column.
     if (at == null) {
       if (onLeft) {
-        leftY = y + node.height + 30;
+        leftY = y + node.height + kAvAutoRowGap;
       } else {
-        rightY = y + node.height + 30;
+        rightY = y + node.height + kAvAutoRowGap;
       }
     }
     newNodes.add(node);
@@ -948,7 +950,10 @@ RoutingPlan planRoutingFromConfig(
           onLeft: false,
           // Immediately upstream of what it feeds, which is where it is in
           // the room: the receiver is on the wall behind the display.
-          at: Offset(math.max(40, dest.pos.dx - 340), dest.pos.dy),
+          at: Offset(
+            math.max(kAvAutoOriginX, dest.pos.dx - kAvAutoColumnPitch),
+            dest.pos.dy,
+          ),
           label: '${_dtpReceiver.label} — ${dest.label}',
         );
 

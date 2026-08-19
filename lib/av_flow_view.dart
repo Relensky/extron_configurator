@@ -475,8 +475,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     // Running y per column, starting below whatever is already placed there.
     final columnY = <int, double>{};
     for (final n in provider.avNodes) {
-      final col = (n.pos.dx / 340).round();
-      columnY[col] = math.max(columnY[col] ?? 60, n.pos.dy + n.height + 30);
+      final col = (n.pos.dx / kAvAutoColumnPitch).round();
+      columnY[col] = math.max(
+        columnY[col] ?? kAvAutoOriginY,
+        n.pos.dy + n.height + kAvAutoRowGap,
+      );
     }
 
     int added = 0;
@@ -492,13 +495,13 @@ class _AvFlowViewState extends State<AvFlowView> {
         model: model,
       );
       final col = _columnForDevice(key);
-      final y = columnY[col] ?? 60;
+      final y = columnY[col] ?? kAvAutoOriginY;
 
       final node = AvNode(
         id: key,
         label: dev['name']?.toString() ?? key,
         model: model,
-        pos: Offset(40 + col * 340.0, y),
+        pos: Offset(kAvAutoOriginX + col * kAvAutoColumnPitch, y),
         ports: withPowerInlet(template.ports, template.powerInput),
         fromConfig: true,
         rackUnits: template.rackUnits,
@@ -507,7 +510,7 @@ class _AvFlowViewState extends State<AvFlowView> {
         powerSource: powerSourceForInput(template.powerInput),
       );
       provider.addAvNode(node);
-      columnY[col] = y + node.height + 30;
+      columnY[col] = y + node.height + kAvAutoRowGap;
       added++;
     }
 
@@ -526,9 +529,11 @@ class _AvFlowViewState extends State<AvFlowView> {
     final columnY = <int, double>{};
     for (final node in List<AvNode>.from(provider.avNodes)) {
       final col = node.fromConfig ? _columnForDevice(node.id) : 0;
-      final y = columnY[col] ?? 60;
-      provider.updateAvNode(node.copyWith(pos: Offset(40 + col * 340.0, y)));
-      columnY[col] = y + node.height + 30;
+      final y = columnY[col] ?? kAvAutoOriginY;
+      provider.updateAvNode(node.copyWith(
+        pos: Offset(kAvAutoOriginX + col * kAvAutoColumnPitch, y),
+      ));
+      columnY[col] = y + node.height + kAvAutoRowGap;
     }
     _snack('Devices re-arranged into signal-flow columns.');
   }
@@ -1290,14 +1295,30 @@ class _AvFlowViewState extends State<AvFlowView> {
     ThemeData theme,
   ) {
     final widgets = <Widget>[];
+    // What is already written on the page, so two runs sharing a corridor
+    // don't write over each other. Only the ones still sitting where the
+    // route put them are moved: a label somebody dragged is where they want
+    // it, and shuffling it back would undo the drag on every repaint.
+    final placed = <Rect>[];
     for (final cable in model.cables) {
-      if (cable.label.isEmpty) continue;
+      final from = model.nodesById[cable.fromNodeId];
+      final to = model.nodesById[cable.toNodeId];
+      // No cable ID typed: say what the run JOINS instead of drawing nothing.
+      // See [defaultCableLabel] for why this is not written into the field.
+      final named = cable.label.isNotEmpty;
+      final text = named
+          ? cable.label
+          : (from == null || to == null ? '' : defaultCableLabel(from, to));
+      if (text.isEmpty) continue;
       final points = _paths[cable.id];
       if (points == null || points.length < 2) continue;
       final anchor = cableLabelAnchor(points);
       if (anchor == null) continue;
 
-      final at = anchor + cable.labelOffset;
+      final at = cable.labelOffset == Offset.zero
+          ? _freeLabelSpot(anchor, text, placed)
+          : anchor + cable.labelOffset;
+      placed.add(_labelRect(at, text));
       final selected = _selectedCableId == cable.id;
       final color = cable.colorFor(provider.avSignalColors);
       widgets.add(
@@ -1332,7 +1353,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               child: Tooltip(
                 message: _editMode
                     ? 'Drag to move • double-tap to edit the run'
-                    : cable.label,
+                    : text,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
@@ -1346,11 +1367,13 @@ class _AvFlowViewState extends State<AvFlowView> {
                         : null,
                   ),
                   child: Text(
-                    cable.label,
+                    text,
                     style: TextStyle(
                       fontSize: 10,
-                      color: color,
-                      fontWeight: FontWeight.w600,
+                      // A typed cable ID is the run's NAME and reads as one;
+                      // the endpoints are a description, so they sit back.
+                      color: named ? color : color.withValues(alpha: 0.75),
+                      fontWeight: named ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                 ),
@@ -4124,6 +4147,35 @@ Offset? cableLabelAnchor(List<Offset> points) {
   }
   if (bestLength < 30) return null;
   return (points[bestIndex] + points[bestIndex + 1]) / 2;
+}
+
+/// Roughly what a run's label covers, centred on [at]. Measured from the
+/// character count rather than laid out for real: this runs for every label on
+/// every repaint, and a few pixels either way only decides whether two labels
+/// are judged to be touching.
+Rect _labelRect(Offset at, String text) {
+  const height = 16.0;
+  final width = 10 + text.length * 5.8;
+  return Rect.fromCenter(center: at, width: width, height: height);
+}
+
+/// Somewhere near [anchor] that none of the labels in [taken] already covers.
+///
+/// Runs sharing a corridor land their labels within a few pixels of each
+/// other — the lane offsets separate the LINES, not the text on them — and
+/// two names stacked in the same spot are less use than one. Each is nudged
+/// off the anchor by the smallest step that clears what is already written,
+/// alternating up and down so the run keeps its label near its own line.
+Offset _freeLabelSpot(Offset anchor, String text, List<Rect> taken) {
+  const step = 15.0;
+  for (int i = 0; i < 12; i++) {
+    // 0, -15, +15, -30, +30 ...
+    final dy = i == 0 ? 0.0 : ((i + 1) ~/ 2) * step * (i.isOdd ? -1 : 1);
+    final at = anchor + Offset(0, dy);
+    final rect = _labelRect(at, text);
+    if (!taken.any(rect.overlaps)) return at;
+  }
+  return anchor;
 }
 
 class _CablePainter extends CustomPainter {
