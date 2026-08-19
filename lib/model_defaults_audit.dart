@@ -52,6 +52,32 @@ const Set<String> kConnectionDefaultKeys = {
   'auto_reconnect',
 };
 
+/// The keys whose zero is an ABSENCE rather than a value.
+///
+/// `service_port: 0` means "the processor assigns one" — the dictionary says
+/// so, and every DEVICE_INFO under device/ publishes exactly 0, because the
+/// port a response comes back on is not a fact about the model. So a driver
+/// offering 0 to a room that has a real port number is not making a
+/// recommendation; it is proposing to throw away the number whoever
+/// commissioned the room put there. Treated like the site-specific blanks —
+/// see [auditModelDefaults].
+const Set<String> kAutoAssignedZeroKeys = {'service_port'};
+
+/// True when [proposed] is a driver leaving [key] to the processor rather than
+/// naming a value for it.
+bool isAutoAssignedZero(String key, dynamic proposed) =>
+    kAutoAssignedZeroKeys.contains(key) &&
+    num.tryParse(proposed?.toString().trim() ?? '') == 0;
+
+/// True when the room already has something in the field that an auto-assign
+/// zero would overwrite. Blank is not something; neither is the same zero.
+/// Anything else — 3001, or a spelling the form allows — is.
+bool holdsAssignedValue(dynamic current) {
+  final text = current?.toString().trim() ?? '';
+  if (text.isEmpty) return false;
+  return num.tryParse(text) != 0;
+}
+
 /// One property a device disagrees with its driver about.
 class ModelDefaultDiff {
   final String key;
@@ -252,12 +278,15 @@ List<ModelDefaultMismatch> auditOriginalFile(
 /// net_port and a protocol it has no use for, and told nothing about its baud
 /// rate. Set it to look at another connection before committing to it.
 ///
-/// Two kinds of difference are deliberately NOT reported:
+/// Three kinds of difference are deliberately NOT reported:
 ///
 ///   * a driver value that is blank against a room value that is not. Every
 ///     DEVICE_INFO leaves ip_address, password and serial_port empty because
 ///     they are site-specific, and "apply the defaults" must never be a way to
 ///     wipe the address of a device that is already commissioned.
+///   * the numeric spelling of the same thing: a `service_port: 0` — which is
+///     every driver, and means "the processor assigns one" — against a room
+///     that already has a port number. See [kAutoAssignedZeroKeys].
 ///   * a key the schema hides for the block the change would produce — the
 ///     serial_port on a device the same driver puts on the network.
 List<ModelDefaultMismatch> auditModelDefaults(
@@ -306,6 +335,14 @@ List<ModelDefaultMismatch> auditModelDefaults(
           d.current != null && d.current.toString().isNotEmpty;
       if (blankProposal && hasCurrent) continue;
       if (blankProposal && !hasCurrent) continue; // nothing to change
+      // The same thing said with a number: a service_port of 0 is "let the
+      // processor pick", so against a room that HAS a port it is a way to
+      // lose the port, not a default worth ticking. Still offered to a block
+      // with nothing in the field — 0 is what a new one is born with.
+      if (isAutoAssignedZero(d.key, proposed) &&
+          holdsAssignedValue(d.current)) {
+        continue;
+      }
       diffs.add(ModelDefaultDiff(
         key: d.key,
         current: d.current,

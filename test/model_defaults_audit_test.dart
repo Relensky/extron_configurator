@@ -212,6 +212,54 @@ void main() {
       }
     });
 
+    test('a service port the site set is not proposed away by a driver 0',
+        () async {
+      // Every DEVICE_INFO in device/ publishes `service_port: 0`, and 0 means
+      // "the processor assigns one" — it is not a port the driver is asking
+      // for. Against a room that HAS a port, ticking it would replace a
+      // commissioned number with nothing, and it was ticked by default
+      // because service_port is a connection key.
+      final room = legacyRoom();
+      (room['DSPDEVICE_1'] as Map)['SERVICEPORT'] = '3001';
+      await convert(room);
+      expect(
+        (provider.roomConfig['DSPDEVICE_1'] as Map)['service_port'].toString(),
+        '3001',
+      );
+
+      final dsp = forSection(auditModelDefaults(provider), 'DSPDEVICE_1')!;
+      expect(dsp.diffs.map((d) => d.key), isNot(contains('service_port')));
+      expect(dsp.defaultSelection, isNot(contains('service_port')));
+
+      // The rest of the review is untouched — this is one key being left
+      // alone, not the DSP dropping out of the conversation.
+      expect(dsp.diffs.map((d) => d.key), contains('protocol'));
+
+      // And nothing writes the 0 when the ticked keys are applied.
+      provider.applyModelDefaultValues(dsp.sectionKey, {
+        for (final d in dsp.diffs)
+          if (dsp.defaultSelection.contains(d.key)) d.key: d.fromModule,
+      });
+      expect(
+        (provider.roomConfig['DSPDEVICE_1'] as Map)['service_port'].toString(),
+        '3001',
+      );
+    });
+
+    test('a block with no service port at all is still offered the 0',
+        () async {
+      // The rule is about not overwriting a number, not about hiding the key:
+      // 0 is what a block that has never had one is born with.
+      await convert(legacyRoom());
+      final dsp = provider.roomConfig['DSPDEVICE_1'] as Map;
+      dsp.remove('service_port');
+
+      final review = forSection(auditModelDefaults(provider), 'DSPDEVICE_1')!;
+      final byKey = {for (final d in review.diffs) d.key: d};
+      expect(byKey['service_port']?.fromModule, 0);
+      expect(byKey['service_port']?.isAddition, isTrue);
+    });
+
     test('applying only the ticked keys leaves the rest of the block', () async {
       await convert(legacyRoom());
       final via = forSection(

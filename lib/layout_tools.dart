@@ -72,6 +72,34 @@ Offset nonOverlappingPosition({
   return desired;
 }
 
+/// The grid a diagram's boxes line up on when "Snap to grid" is on.
+///
+/// A drawing is read by eye, and the eye picks up a box sitting four pixels
+/// below its neighbour long before anybody can say why the sheet looks wrong.
+/// Dragging with a mouse cannot land the same y twice, so the two ways to get
+/// a tidy drawing are a full auto-arrange — which throws away every deliberate
+/// placement — or a grid. 20 divides into the column pitch and the row gap the
+/// automatic layouts use, so a hand-placed box lands in line with the ones
+/// those passes put down.
+const double kDiagramGridStep = 20;
+
+/// [p] pulled onto the [step] grid, or returned untouched when [enabled] is
+/// false.
+///
+/// The flag is a parameter rather than the caller's `if` so that a page can
+/// route every placement through one line and the setting cannot be honoured
+/// in the drag preview but forgotten on the drop — which is the bug that makes
+/// a snap feel broken: the box jumps somewhere other than where it was shown.
+Offset snapToGrid(
+  Offset p, {
+  required bool enabled,
+  double step = kDiagramGridStep,
+}) {
+  if (!enabled || step <= 0) return p;
+  return Offset((p.dx / step).roundToDouble() * step,
+      (p.dy / step).roundToDouble() * step);
+}
+
 /// How close a dragged bend has to come to lining up with its neighbour
 /// before it is pulled square with it.
 ///

@@ -159,7 +159,7 @@ class _CablingViewState extends State<CablingView> {
       return const Center(child: Text('No configuration loaded.'));
     }
     final model = buildAvFlowModel(provider);
-    final drawing = _asDrawn(provider.cablingSchematic(model));
+    final drawing = _asDrawn(provider, provider.cablingSchematic(model));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,7 +210,8 @@ class _CablingViewState extends State<CablingView> {
   ///
   /// Its real position is written back on release, so the runs follow the box
   /// live without a provider write per pointer event.
-  CablingSchematic _asDrawn(CablingSchematic drawing) {
+  CablingSchematic _asDrawn(
+      AppStateProvider provider, CablingSchematic drawing) {
     final dragging = _dragId.isNotEmpty &&
         _dragOffset != Offset.zero &&
         _dragId != kCablingKeyId;
@@ -220,7 +221,8 @@ class _CablingViewState extends State<CablingView> {
       boxes: [
         for (final b in drawing.boxes)
           if (dragging && b.id == _dragId)
-            b.copyWith(pos: _clamped(b.pos + _dragOffset))
+            b.copyWith(
+                pos: _snapped(provider, _clamped(b.pos + _dragOffset)))
           else
             b,
       ],
@@ -238,6 +240,11 @@ class _CablingViewState extends State<CablingView> {
   /// origin where it would be clipped out of the export.
   static Offset _clamped(Offset p) =>
       Offset(p.dx < 0 ? 0 : p.dx, p.dy < 0 ? 0 : p.dy);
+
+  /// A dragged box's position, on the grid when the setting is on. The preview
+  /// and the drop both go through here, so the box lands where it was shown.
+  Offset _snapped(AppStateProvider provider, Offset p) =>
+      snapToGrid(p, enabled: provider.snapDiagramsToGrid);
 
   // --- the keyboard ---------------------------------------------------------
 
@@ -410,6 +417,15 @@ class _CablingViewState extends State<CablingView> {
           // with the PNG and it is what makes the colours mean anything. The
           // toggle is here for the rare sheet that carries its legend in the
           // title block instead.
+          // Shared with the AV Flow and Schematic drawings — see
+          // [AppStateProvider.snapDiagramsToGrid].
+          FilterChip(
+            key: const ValueKey('cabling_snap_to_grid'),
+            avatar: const Icon(Icons.grid_4x4, size: 18),
+            label: const Text('Snap to grid'),
+            selected: provider.snapDiagramsToGrid,
+            onSelected: (v) => provider.setSnapDiagramsToGrid(v),
+          ),
           FilterChip(
             key: const ValueKey('cabling_key_toggle'),
             avatar: const Icon(Icons.legend_toggle, size: 18),
@@ -1511,9 +1527,10 @@ class _CablingViewState extends State<CablingView> {
             kCablingKeyId,
             nonOverlappingPosition(
               // rect already carries the drag — see [_keyRect].
-              desired: rect.topLeft,
+              desired: _snapped(provider, rect.topLeft),
               size: rect.size,
               others: [for (final b in drawing.boxes) b.rect],
+              step: provider.snapDiagramsToGrid ? kDiagramGridStep : 16,
             ),
           );
         },
@@ -2160,12 +2177,15 @@ class _CablingViewState extends State<CablingView> {
     provider.setCablingBoxPosition(
       id,
       nonOverlappingPosition(
-        desired: _clamped(box.pos),
+        desired: _snapped(provider, _clamped(box.pos)),
         size: box.size,
         others: [
           for (final other in drawing.boxes)
             if (other.id != id) other.rect,
         ],
+        // Grid-sized rings, so a box that has to slide off a neighbor stays on
+        // the grid it was just snapped to.
+        step: provider.snapDiagramsToGrid ? kDiagramGridStep : 16,
       ),
     );
   }

@@ -807,7 +807,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = _withDragPreview(buildAvFlowModel(provider));
+    final model = _withDragPreview(provider, buildAvFlowModel(provider));
     final theme = Theme.of(context);
 
     // A backdrop imported (or removed) elsewhere in the session has to reach
@@ -912,6 +912,16 @@ class _AvFlowViewState extends State<AvFlowView> {
               label: const Text('Auto-arrange'),
               onPressed: () => _autoArrange(provider),
             ),
+          // Shared with the Schematic and Cabling drawings — see
+          // [AppStateProvider.snapDiagramsToGrid].
+          if (_editMode)
+            FilterChip(
+              key: const ValueKey('av_snap_to_grid'),
+              avatar: const Icon(Icons.grid_4x4, size: 18),
+              label: const Text('Snap to grid'),
+              selected: provider.snapDiagramsToGrid,
+              onSelected: (v) => provider.setSnapDiagramsToGrid(v),
+            ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
             label: const Text('Fit to view'),
@@ -1002,13 +1012,15 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// holds, except that a device being dragged is shown under the cursor. Its
   /// real position is only written back on release, so the cables follow the
   /// device live without a provider write per pointer event.
-  AvFlowModel _withDragPreview(AvFlowModel model) {
+  AvFlowModel _withDragPreview(AppStateProvider provider, AvFlowModel model) {
     final id = _dragNodeId;
     if (id == null || _dragOffset == Offset.zero) return model;
 
     final nodes = [
       for (final n in model.nodes)
-        n.id == id ? n.copyWith(pos: _clamped(n.pos + _dragOffset)) : n,
+        n.id == id
+            ? n.copyWith(pos: _snapped(provider, _clamped(n.pos + _dragOffset)))
+            : n,
     ];
     double maxX = 900, maxY = 560;
     for (final n in nodes) {
@@ -1034,6 +1046,11 @@ class _AvFlowViewState extends State<AvFlowView> {
   /// the origin where it would be clipped.
   static Offset _clamped(Offset p) =>
       Offset(math.max(0, p.dx), math.max(0, p.dy));
+
+  /// A dragged box's position, on the grid when the setting is on. Used by the
+  /// live preview AND by the drop, so the box lands where it was shown.
+  Offset _snapped(AppStateProvider provider, Offset p) =>
+      snapToGrid(p, enabled: provider.snapDiagramsToGrid);
 
   void _onNodeDragStart(String nodeId) {
     setState(() {
@@ -1063,12 +1080,16 @@ class _AvFlowViewState extends State<AvFlowView> {
     provider.setAvNodePosition(
       id,
       nonOverlappingPosition(
-        desired: _clamped(node.pos + offset),
+        desired: _snapped(provider, _clamped(node.pos + offset)),
         size: node.size,
         others: [
           for (final other in provider.avNodes)
             if (other.id != id) other.rect,
         ],
+        // Stepping the search by the grid keeps a box that has to slide off a
+        // neighbor ON the grid: every ring it tries is a whole number of
+        // squares from a square.
+        step: provider.snapDiagramsToGrid ? kDiagramGridStep : 16,
       ),
     );
   }
@@ -1098,6 +1119,20 @@ class _AvFlowViewState extends State<AvFlowView> {
     final endpointBoxes = {
       for (final n in model.nodes) n.id: n.rect.deflate(2),
     };
+
+    // The room title is drawn at the top-left and goes out with the PNG, so a
+    // run routed through it comes out on the issued sheet written across the
+    // room name. It is not a device, so until now nothing kept the router off
+    // it: the "over the top of everything" lane a run takes to get round a
+    // block of boxes ([_clearBand]) goes exactly there.
+    //
+    // Dropped when a device has been dragged over the title: the title is
+    // already covered, and an obstacle wrapped round that box's ports would
+    // only make the runs into it worse.
+    final titleText = avRoomTitleText(model.roomTitle);
+    final titleBox = avRoomTitleRect(titleText, _roomTitleStyle(theme));
+    final titleObstacle =
+        model.nodes.any((n) => n.rect.overlaps(titleBox)) ? null : titleBox;
     _paths = {
       for (final c in model.cables)
         c.id: routeCable(
@@ -1110,6 +1145,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               if (e.key != c.fromNodeId && e.key != c.toNodeId) e.value,
             endpointBoxes[c.fromNodeId]!,
             endpointBoxes[c.toNodeId]!,
+            ?titleObstacle,
           ],
         ),
     };
@@ -1203,16 +1239,14 @@ class _AvFlowViewState extends State<AvFlowView> {
               ),
             ),
           ),
-          // Room title (part of the PNG export).
+          // Room title (part of the PNG export). Its position and style are
+          // shared with [avRoomTitleRect], which is what keeps the cables off
+          // it — a title drawn somewhere other than where the router thinks it
+          // is would be routed through again.
           Positioned(
-            left: 24,
-            top: 16,
-            child: Text(
-              model.roomTitle.isEmpty ? 'AV Signal Flow' : model.roomTitle,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            left: kAvRoomTitleLeft,
+            top: kAvRoomTitleTop,
+            child: Text(titleText, style: _roomTitleStyle(theme)),
           ),
           // Devices. Each gets its own RepaintBoundary so dragging one does
           // not force the rest of the canvas to repaint with it.
@@ -1246,7 +1280,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           // Cable numbers, above the boxes so a run crossing behind one is
           // still readable — and draggable, the same way a floor-plan callout
           // and a cabling-schematic run label are moved.
-          ..._buildCableLabels(provider, model, theme),
+          ..._buildCableLabels(provider, model, theme, titleObstacle),
           // Route handles for the selected cable, above the boxes so they can
           // always be grabbed.
           if (_editMode && _selectedCableId != null)
@@ -1293,13 +1327,17 @@ class _AvFlowViewState extends State<AvFlowView> {
     AppStateProvider provider,
     AvFlowModel model,
     ThemeData theme,
+    Rect? titleBox,
   ) {
     final widgets = <Widget>[];
     // What is already written on the page, so two runs sharing a corridor
     // don't write over each other. Only the ones still sitting where the
     // route put them are moved: a label somebody dragged is where they want
     // it, and shuffling it back would undo the drag on every repaint.
-    final placed = <Rect>[];
+    // The room title counts as written-on already: a run's name landing on
+    // top of it is the same unreadable corner as two names on top of each
+    // other.
+    final placed = <Rect>[?titleBox];
     for (final cable in model.cables) {
       final from = model.nodesById[cable.fromNodeId];
       final to = model.nodesById[cable.toNodeId];
@@ -4128,6 +4166,42 @@ class _AvNodeBox extends StatelessWidget {
 // ---------------------------------------------------------------------------
 //  CABLE PAINTER
 // ---------------------------------------------------------------------------
+
+/// Where the room title is drawn on the canvas, and the style it is drawn in.
+///
+/// Shared between the widget that draws it and [avRoomTitleRect], which is
+/// what keeps the cables and the run labels off it: a title drawn somewhere
+/// other than where the router believes it is would be routed straight
+/// through again.
+const double kAvRoomTitleLeft = 24;
+const double kAvRoomTitleTop = 16;
+
+TextStyle? _roomTitleStyle(ThemeData theme) =>
+    theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold);
+
+/// The title a room shows on its diagram — its own, or the page's name for a
+/// room that has not been named yet.
+String avRoomTitleText(String roomTitle) =>
+    roomTitle.isEmpty ? 'AV Signal Flow' : roomTitle;
+
+/// The patch of canvas the room title covers, with a margin, for the router to
+/// treat as solid.
+///
+/// Measured rather than estimated: the title is a room name of any length in
+/// whatever text scale the user runs at, and a guess that comes in short is a
+/// cable through the last word of it.
+Rect avRoomTitleRect(String title, TextStyle? style) {
+  final painter = TextPainter(
+    text: TextSpan(text: title, style: style),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  return Rect.fromLTWH(
+    kAvRoomTitleLeft,
+    kAvRoomTitleTop,
+    painter.width,
+    painter.height,
+  ).inflate(12);
+}
 
 /// Where a run's label sits before anybody drags it: the midpoint of the
 /// longest leg, which is the stretch with the most room for text.

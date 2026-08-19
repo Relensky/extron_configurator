@@ -1112,7 +1112,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (provider.roomConfig.isEmpty) {
       return const Center(child: Text('No configuration loaded.'));
     }
-    final model = _withDragPreview(SchematicModel.build(provider));
+    final model = _withDragPreview(provider, SchematicModel.build(provider));
     final theme = Theme.of(context);
 
     return Column(
@@ -1248,6 +1248,16 @@ class _SchematicViewState extends State<SchematicView> {
           // system does not talk to it — the switch the processor lands on,
           // the room PC, a UPS. Without this the drawing could only show what
           // is driven, and the reader had to infer the rest.
+          // Shared with the AV Flow and Cabling drawings — see
+          // [AppStateProvider.snapDiagramsToGrid].
+          if (_editMode)
+            FilterChip(
+              key: const ValueKey('schematic_snap_to_grid'),
+              avatar: const Icon(Icons.grid_4x4, size: 18),
+              label: const Text('Snap to grid'),
+              selected: provider.snapDiagramsToGrid,
+              onSelected: (v) => provider.setSnapDiagramsToGrid(v),
+            ),
           if (_editMode)
             OutlinedButton.icon(
               key: const ValueKey('schematic_add_device'),
@@ -1570,16 +1580,24 @@ class _SchematicViewState extends State<SchematicView> {
   static Offset _clamped(Offset p) =>
       Offset(math.max(0, p.dx), math.max(0, p.dy));
 
+  /// A dragged box's position, on the grid when the setting is on. The preview
+  /// and the drop both go through here, so the box lands where it was shown.
+  Offset _snapped(AppStateProvider provider, Offset p) =>
+      snapToGrid(p, enabled: provider.snapDiagramsToGrid);
+
   /// The model as it should be drawn right now: the box under the cursor sits
   /// at its dragged spot, so it AND the lines attached to it follow live while
   /// the provider stays untouched until release.
-  SchematicModel _withDragPreview(SchematicModel model) {
+  SchematicModel _withDragPreview(
+      AppStateProvider provider, SchematicModel model) {
     final id = _dragNodeId;
     if (id == null || _dragOffset == Offset.zero) return model;
 
     final nodes = [
       for (final n in model.nodes)
-        n.id == id ? n.movedTo(_clamped(n.pos + _dragOffset)) : n,
+        n.id == id
+            ? n.movedTo(_snapped(provider, _clamped(n.pos + _dragOffset)))
+            : n,
     ];
     double maxX = model.canvasSize.width, maxY = model.canvasSize.height;
     for (final n in nodes) {
@@ -1623,13 +1641,16 @@ class _SchematicViewState extends State<SchematicView> {
     provider.setSchematicPosition(
       id,
       nonOverlappingPosition(
-        desired: _clamped(startPos + offset),
+        desired: _snapped(provider, _clamped(startPos + offset)),
         size: const Size(kNodeWidth, kNodeHeight),
         others: [
           for (final n in model.nodes)
             if (n.id != id)
               Rect.fromLTWH(n.pos.dx, n.pos.dy, kNodeWidth, kNodeHeight),
         ],
+        // Grid-sized rings, so a box that has to slide off a neighbor stays
+        // on the grid it was just snapped to.
+        step: provider.snapDiagramsToGrid ? kDiagramGridStep : 16,
       ),
     );
   }

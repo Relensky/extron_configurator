@@ -547,6 +547,7 @@ class AppStateProvider extends ChangeNotifier {
       'pricingTier': pricingTier.name,
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
+      'snapDiagramsToGrid': snapDiagramsToGrid,
     };
 
   /// Serializes every setting to app_config.json. Failures are logged but
@@ -782,6 +783,26 @@ class AppStateProvider extends ChangeNotifier {
 
   Future<void> setConfirmBeforeDelete(bool value) async {
     confirmBeforeDelete = value;
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  /// When true, a box dragged on the AV Flow, Control Schematic or Cabling
+  /// drawing lands on the [kDiagramGridStep] grid instead of exactly where the
+  /// mouse let go.
+  ///
+  /// One setting for all three pages rather than a toggle per tab: it is a way
+  /// of working, not a property of a drawing, and somebody who wants their
+  /// boxes lined up wants them lined up everywhere. Remembered in
+  /// app_config.json for the same reason — being asked again every launch is
+  /// how a preference becomes a nuisance.
+  ///
+  /// Off by default: it changes where a drop lands, and a drawing somebody has
+  /// already placed by hand should not start moving under them after an update.
+  bool snapDiagramsToGrid = false;
+
+  Future<void> setSnapDiagramsToGrid(bool value) async {
+    snapDiagramsToGrid = value;
     notifyListeners();
     await _persistSettings();
   }
@@ -5466,6 +5487,8 @@ class AppStateProvider extends ChangeNotifier {
       confirmBeforeDelete = saved['confirmBeforeDelete'] is bool
           ? saved['confirmBeforeDelete']
           : true;
+      snapDiagramsToGrid =
+          saved['snapDiagramsToGrid'] is bool ? saved['snapDiagramsToGrid'] : false;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
