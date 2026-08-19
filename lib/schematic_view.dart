@@ -9,6 +9,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
+import 'diagram_grid.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
@@ -1258,6 +1259,15 @@ class _SchematicViewState extends State<SchematicView> {
               selected: provider.snapDiagramsToGrid,
               onSelected: (v) => provider.setSnapDiagramsToGrid(v),
             ),
+          // Whether the paper has squares on it. Not gated on edit mode, and
+          // never exported.
+          FilterChip(
+            key: const ValueKey('schematic_show_grid'),
+            avatar: const Icon(Icons.grid_on, size: 18),
+            label: const Text('Grid'),
+            selected: provider.showDiagramGrid,
+            onSelected: (v) => provider.setShowDiagramGrid(v),
+          ),
           if (_editMode)
             OutlinedButton.icon(
               key: const ValueKey('schematic_add_device'),
@@ -1501,6 +1511,10 @@ class _SchematicViewState extends State<SchematicView> {
       color: surface,
       child: Stack(
         children: [
+          // The alignment grid, under the lines. On screen only — it takes
+          // itself off the page for an export.
+          if (provider.showDiagramGrid)
+            const Positioned.fill(child: DiagramGrid()),
           // Connection lines under everything.
           Positioned.fill(
             child: CustomPaint(

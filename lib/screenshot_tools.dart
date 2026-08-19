@@ -22,13 +22,34 @@ import 'app_state.dart';
 //                              image, with undo/clear and Save-as-PNG.
 // ============================================================================
 
+/// True while a drawing is being rendered to an image.
+///
+/// Some of what is on a diagram tab is there to WORK with rather than to
+/// issue — the alignment grid is drawn for somebody placing boxes, and has no
+/// business on a sheet that goes to a contractor. Those pieces listen here and
+/// take themselves off the page for the shot; see `diagram_grid.dart`.
+///
+/// One flag rather than a parameter threaded through every export: the
+/// workbook, the Save All folder and the per-tab PNG buttons all come through
+/// [captureBoundary], so covering it here covers every way a picture leaves
+/// the app, including the ones added later.
+final ValueNotifier<bool> capturingDiagram = ValueNotifier<bool>(false);
+
 /// Renders the RepaintBoundary identified by [boundaryKey] into PNG bytes.
 /// Returns null when the boundary isn't mounted or the capture fails.
 Future<Uint8List?> captureBoundary(GlobalKey boundaryKey,
     {double pixelRatio = 2.0}) async {
+  capturingDiagram.value = true;
   try {
+    // The flag has to reach the SCREEN before the photograph is taken: setting
+    // it marks the grid dirty, and the boundary is rendered from the last
+    // frame that was painted. The timeout is a safety line — a capture must
+    // never be the thing that hangs the app if no frame is coming.
+    await WidgetsBinding.instance.endOfFrame
+        .timeout(const Duration(seconds: 2), onTimeout: () {});
     final ctx = boundaryKey.currentContext;
-    if (ctx == null) return null;
+    // The frame we waited for could have taken the tab off screen.
+    if (ctx == null || !ctx.mounted) return null;
     final boundary = ctx.findRenderObject();
     if (boundary is! RenderRepaintBoundary) return null;
 
@@ -38,6 +59,8 @@ Future<Uint8List?> captureBoundary(GlobalKey boundaryKey,
     return byteData?.buffer.asUint8List();
   } catch (_) {
     return null;
+  } finally {
+    capturingDiagram.value = false;
   }
 }
 

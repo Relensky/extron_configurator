@@ -911,16 +911,14 @@ class FloorPlan {
   /// default is faint enough that the diagram still reads over it.
   final double opacity;
 
-  /// What the paper is. Null — the normal case — means "follow the theme",
-  /// which is [kPaperLight] on a light screen and [kPaperDark] on a dark one.
+  /// What the paper is. Null — the normal case — means [kPaperDefault].
   ///
   /// It matters most on a sheet with no image, because then the paper IS the
-  /// drawing: a blank sheet used to be a white rectangle whatever the app was
-  /// set to, which in a dark room is a lamp. A sheet WITH a drawing keeps
-  /// wanting something near-white behind it — an architect's export is black
-  /// ink on nothing, and it disappears on a dark mat — so the theme default
-  /// stays light-ish either way and this is the override for a room that
-  /// wants its own.
+  /// drawing. The default used to follow the app theme, which meant a white
+  /// rectangle on a light screen: the thing a room full of people is looking
+  /// at a projector next to, and the one part of this app that is a lamp. A
+  /// sheet that wants paper white — an architect's export is black ink on
+  /// nothing and needs a light mat under it — says so here, per sheet.
   final Color? paperColor;
 
   /// Plan pixels per foot, when somebody has calibrated it. 0 means uncalibrated
@@ -1069,16 +1067,25 @@ class FloorPlan {
   /// This sheet with [locationId] at [pos].
   /// The paper a sheet is drawn on when it has not chosen its own.
   ///
-  /// Not white on a dark screen. A blank sheet is mostly paper, and a full
-  /// white rectangle in a dark room is the thing people turn the lights on
-  /// for. Dark enough to stop being a lamp, light enough that black ink from
-  /// an architect's export still reads on it.
-  static const Color kPaperLight = Color(0xFFFFFFFF);
-  static const Color kPaperDark = Color(0xFFE3E5E8);
+  /// Black, and the same black whatever the app theme is doing. A drawing is a
+  /// drawing on either screen, and a sheet whose background changed with a
+  /// theme switch was a sheet whose exported PNG depended on how the person
+  /// exporting it liked their app.
+  ///
+  /// Everything printed ON the paper takes its ink from the paper rather than
+  /// from the theme — see [paperIsDark] — so a sheet set back to white gets
+  /// dark ink and this one gets light ink, without either being a special
+  /// case.
+  static const Color kPaperDefault = Color(0xFF000000);
 
-  /// What to paint the paper, given the screen's brightness.
-  Color paperFor({required bool dark}) =>
-      paperColor ?? (dark ? kPaperDark : kPaperLight);
+  /// What to paint the paper.
+  Color get paper => paperColor ?? kPaperDefault;
+
+  /// True when the paper is dark enough that what is drawn on it has to be
+  /// light. The threshold is below mid-grey on purpose: a paper somebody has
+  /// to squint at either way is a paper the swatches do not offer — see
+  /// `kPaperSwatches`.
+  bool get paperIsDark => paper.computeLuminance() < 0.45;
 
   FloorPlan withMarker(String locationId, Offset pos) =>
       copyWith(markers: {...markers, locationId: pos});

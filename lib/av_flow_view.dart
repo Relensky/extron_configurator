@@ -24,6 +24,7 @@ import 'device_recheck_dialog.dart';
 import 'diagram_capture.dart';
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'view_zoom.dart';
+import 'diagram_grid.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
@@ -922,6 +923,16 @@ class _AvFlowViewState extends State<AvFlowView> {
               selected: provider.snapDiagramsToGrid,
               onSelected: (v) => provider.setSnapDiagramsToGrid(v),
             ),
+          // Whether the paper has squares on it — a different question from
+          // where a box lands, and not gated on edit mode: the lines are for
+          // reading the drawing as well as for building it. Never exported.
+          FilterChip(
+            key: const ValueKey('av_show_grid'),
+            avatar: const Icon(Icons.grid_on, size: 18),
+            label: const Text('Grid'),
+            selected: provider.showDiagramGrid,
+            onSelected: (v) => provider.setShowDiagramGrid(v),
+          ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),
             label: const Text('Fit to view'),
@@ -1133,6 +1144,18 @@ class _AvFlowViewState extends State<AvFlowView> {
     final titleBox = avRoomTitleRect(titleText, _roomTitleStyle(theme));
     final titleObstacle =
         model.nodes.any((n) => n.rect.overlaps(titleBox)) ? null : titleBox;
+
+    // The page the runs have to stay on. The canvas starts at the origin and
+    // is sized from the boxes, so a detour lane worked out from a box near an
+    // edge — "just above the topmost one" — can land outside it, and a line
+    // drawn off the canvas is a line that is simply not there. Handed to the
+    // router so it picks a lane that IS on the page instead.
+    final page = Rect.fromLTWH(
+      0,
+      0,
+      model.canvasSize.width,
+      model.canvasSize.height,
+    );
     _paths = {
       for (final c in model.cables)
         c.id: routeCable(
@@ -1140,6 +1163,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           toNode: byId[c.toNodeId]!,
           cable: c,
           lane: lanes[c.id] ?? 0,
+          bounds: page,
           obstacles: [
             for (final e in boxes.entries)
               if (e.key != c.fromNodeId && e.key != c.toNodeId) e.value,
@@ -1186,6 +1210,9 @@ class _AvFlowViewState extends State<AvFlowView> {
       color: surface,
       child: Stack(
         children: [
+          // The alignment grid, under everything including the backdrop. On
+          // screen only — it takes itself off the page for an export.
+          if (provider.showDiagramGrid) const Positioned.fill(child: DiagramGrid()),
           // The backdrop, behind everything. Faint by default so the diagram
           // still reads over it — it is there to be referred to, not looked
           // at.

@@ -17,6 +17,7 @@ import 'color_wheel_picker.dart';
 import 'diagram_capture.dart';
 import 'cable_colors_dialog.dart';
 import 'export_tools.dart';
+import 'diagram_grid.dart';
 import 'layout_tools.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
@@ -425,6 +426,14 @@ class _CablingViewState extends State<CablingView> {
             label: const Text('Snap to grid'),
             selected: provider.snapDiagramsToGrid,
             onSelected: (v) => provider.setSnapDiagramsToGrid(v),
+          ),
+          // Whether the sheet has squares on it. Never exported.
+          FilterChip(
+            key: const ValueKey('cabling_show_grid'),
+            avatar: const Icon(Icons.grid_on, size: 18),
+            label: const Text('Grid'),
+            selected: provider.showDiagramGrid,
+            onSelected: (v) => provider.setShowDiagramGrid(v),
           ),
           FilterChip(
             key: const ValueKey('cabling_key_toggle'),
@@ -1688,6 +1697,9 @@ class _CablingViewState extends State<CablingView> {
                 ? const Color(0xFF14181C)
                 : Colors.white,
           ),
+          // The alignment grid, on the sheet but never on an export of it.
+          if (provider.showDiagramGrid)
+            const Positioned.fill(child: DiagramGrid()),
           // The runs go under the boxes so a bundle disappears behind the box
           // it lands on rather than crossing over the label.
           Positioned.fill(

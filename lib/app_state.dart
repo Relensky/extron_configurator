@@ -548,6 +548,7 @@ class AppStateProvider extends ChangeNotifier {
       'fillDeviceDefaultsOnLoad': fillDeviceDefaultsOnLoad,
       'confirmBeforeDelete': confirmBeforeDelete,
       'snapDiagramsToGrid': snapDiagramsToGrid,
+      'showDiagramGrid': showDiagramGrid,
     };
 
   /// Serializes every setting to app_config.json. Failures are logged but
@@ -803,6 +804,23 @@ class AppStateProvider extends ChangeNotifier {
 
   Future<void> setSnapDiagramsToGrid(bool value) async {
     snapDiagramsToGrid = value;
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  /// Whether the alignment grid is drawn behind the three diagrams.
+  ///
+  /// Separate from [snapDiagramsToGrid] because they answer different
+  /// questions: one is where a box lands, the other is whether the paper has
+  /// squares on it. Somebody laying out a busy sheet wants to see the lines
+  /// without having their placements moved; somebody who trusts the snap wants
+  /// the squares gone.
+  ///
+  /// On screen only — it is never in an export; see `diagram_grid.dart`.
+  bool showDiagramGrid = true;
+
+  Future<void> setShowDiagramGrid(bool value) async {
+    showDiagramGrid = value;
     notifyListeners();
     await _persistSettings();
   }
@@ -2103,8 +2121,8 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// What one sheet's paper is painted. Null puts it back to following the
-  /// theme — see [FloorPlan.paperFor].
+  /// What one sheet's paper is painted. Null puts it back to the default
+  /// black — see [FloorPlan.paper].
   void setAvPlanPaperColor(String planId, Color? color) {
     final sheet = planId.isEmpty ? activeFloorPlan : avFloorPlanById(planId);
     if (sheet == null) return;
@@ -5487,8 +5505,11 @@ class AppStateProvider extends ChangeNotifier {
       confirmBeforeDelete = saved['confirmBeforeDelete'] is bool
           ? saved['confirmBeforeDelete']
           : true;
-      snapDiagramsToGrid =
-          saved['snapDiagramsToGrid'] is bool ? saved['snapDiagramsToGrid'] : false;
+      snapDiagramsToGrid = saved['snapDiagramsToGrid'] is bool
+          ? saved['snapDiagramsToGrid']
+          : false;
+      showDiagramGrid =
+          saved['showDiagramGrid'] is bool ? saved['showDiagramGrid'] : true;
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.

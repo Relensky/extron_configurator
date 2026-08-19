@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_flow_view.dart';
+import 'package:extron_configurator/diagram_grid.dart';
 import 'package:extron_configurator/layout_tools.dart';
+import 'package:extron_configurator/screenshot_tools.dart';
 
 /// ============================================================================
 ///  THE TITLE IS PART OF THE DRAWING, AND THE GRID IS HOW IT STAYS TIDY
@@ -103,6 +105,126 @@ void main() {
       final avoided = route(avoidTitle: true);
       expect(polylineHitsAny(avoided, [title]), isFalse);
       expect(polylineHitsAny(avoided, [blocker]), isFalse);
+    });
+  });
+
+  group('staying on the page', () {
+    test('a detour lane off the top of the canvas is not used', () {
+      // The lane a run takes to get past a block of boxes is worked out from
+      // the boxes — "just above the topmost one" — and near the top of the
+      // sheet that is above the canvas itself, where nothing is drawn: the
+      // line leaves one port, vanishes, and reappears at the other.
+      final from = node('A', const Offset(20, 4));
+      final to = node('B', const Offset(700, 4));
+      const blocker = Rect.fromLTWH(300, 0, 200, 700);
+      const page = Rect.fromLTWH(0, 0, 960, 900);
+
+      List<Offset> route({required bool onPage}) => routeCable(
+            fromNode: from,
+            toNode: to,
+            cable: cable,
+            bounds: onPage ? page : null,
+            obstacles: [
+              blocker,
+              from.rect.deflate(2),
+              to.rect.deflate(2),
+            ],
+          );
+
+      double minY(List<Offset> r) =>
+          r.map((p) => p.dy).reduce((a, b) => a < b ? a : b);
+
+      // The case is real: unbounded, the run is drawn off the top edge.
+      expect(minY(route(onPage: false)), lessThan(0),
+          reason: 'the geometry no longer reproduces the overflow');
+
+      // Bounded, every bend is on the sheet — and it still gets past the
+      // blockage without cutting through it.
+      final bounded = route(onPage: true);
+      for (final p in bounded) {
+        expect(
+          p.dx >= page.left &&
+              p.dx <= page.right &&
+              p.dy >= page.top &&
+              p.dy <= page.bottom,
+          isTrue,
+          reason: '$p is off the canvas',
+        );
+      }
+      expect(polylineHitsAny(bounded, [blocker]), isFalse);
+    });
+
+    test('the pathfinder is kept on the page too', () {
+      // The lattice turns on channels just outside each box, and a box at the
+      // top of the sheet puts one of those above the canvas.
+      const page = Rect.fromLTWH(0, 0, 900, 700);
+      final route = latticeRoute(
+        const Offset(60, 300),
+        const Offset(840, 300),
+        [const Rect.fromLTWH(300, 10, 200, 620)],
+        bounds: page,
+      );
+      expect(route, isNotNull);
+      for (final p in route!) {
+        expect(p.dy, greaterThanOrEqualTo(page.top));
+        expect(p.dy, lessThanOrEqualTo(page.bottom));
+      }
+    });
+  });
+
+  group('the grid on the paper', () {
+    tearDown(() => capturingDiagram.value = false);
+
+    testWidgets('is drawn on screen', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: SizedBox(width: 200, height: 200, child: DiagramGrid()),
+      ));
+      expect(
+        find.descendant(
+          of: find.byType(DiagramGrid),
+          matching: find.byType(CustomPaint),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('takes itself off the page while a picture is taken',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: SizedBox(width: 200, height: 200, child: DiagramGrid()),
+      ));
+
+      // What every export goes through — see [captureBoundary].
+      capturingDiagram.value = true;
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: find.byType(DiagramGrid),
+          matching: find.byType(CustomPaint),
+        ),
+        findsNothing,
+      );
+
+      // And comes back the moment the shutter closes.
+      capturingDiagram.value = false;
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: find.byType(DiagramGrid),
+          matching: find.byType(CustomPaint),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    test('is shown by default, and remembered when it is turned off', () {
+      final p = AppStateProvider(autoLoadSettings: false);
+      expect(p.showDiagramGrid, isTrue);
+      p.setShowDiagramGrid(false);
+      expect(p.settingsAsJson()['showDiagramGrid'], isFalse);
+      // Independent of the snap: seeing the lines and being pulled onto them
+      // are two different questions.
+      expect(p.snapDiagramsToGrid, isFalse);
     });
   });
 

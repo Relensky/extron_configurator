@@ -82,15 +82,28 @@ List<FloorPlan> sheetsWorthDrawing(AppStateProvider provider) => provider
 /// Paper colours offered before the wheel. Papers, not paints: a sheet is
 /// something drawn on, and a saturated one makes every marker on it harder to
 /// read rather than easier.
+/// The colours a sheet can be painted, dark first.
+///
+/// Every one of them is DECISIVELY dark or decisively light — nothing in the
+/// middle. The ink a sheet prints in is chosen from the paper (see
+/// [FloorPlan.paperIsDark]), so a mid-grey is the one paper where neither the
+/// light ink nor the dark ink has a contrast ratio worth having: the old slate
+/// and grey entries were exactly that, and a name plate on them was a plate
+/// somebody had to lean in to read. Each of these clears 4.5:1 against the ink
+/// it gets, which is the WCAG figure for body text — see the paper test.
 const List<Color> kPaperSwatches = [
+  Color(0xFF000000), // black — the default
+  Color(0xFF10141A), // near-black
+  Color(0xFF13202B), // dark slate
+  Color(0xFF1B1B2E), // dark navy
+  Color(0xFF12251A), // dark green
+  Color(0xFF2B2B2B), // charcoal
   Color(0xFFFFFFFF), // white
   Color(0xFFF3F3F3), // near-white
-  Color(0xFFE3E5E8), // the dark-mode default
-  Color(0xFFCFD4DA), // grey
+  Color(0xFFE3E5E8), // cool white
   Color(0xFFF6F1E7), // buff
   Color(0xFFE8F0E8), // pale green
   Color(0xFFE7EEF6), // pale blue
-  Color(0xFF9AA3AC), // slate
 ];
 
 class FloorPlanView extends StatefulWidget {
@@ -1086,7 +1099,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     AppStateProvider provider,
     FloorPlan plan,
   ) async {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1102,12 +1114,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 children: [
                   Text(
                     sheet.hasImage
-                        ? 'What sits behind the drawing. Keep it near-white '
-                            'unless the export has its own background — black '
-                            'ink on a dark mat is ink nobody can read.'
+                        ? 'What sits behind the drawing. An architect export '
+                            'is black ink on nothing, so a scan that brings no '
+                            'background of its own wants one of the light '
+                            'papers under it.'
                         : 'This sheet has no drawing, so the colour IS the '
-                            'sheet. Following the theme keeps it off white in '
-                            'dark mode.',
+                            'sheet.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Everything printed on the sheet — run labels, the key — '
+                    'takes its ink from the paper, so every colour here reads '
+                    'either way.',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -1118,10 +1137,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                     children: [
                       ColorSwatchButton(
                         key: const ValueKey('paper_follow_theme'),
-                        color: sheet.paperFor(dark: dark),
+                        color: FloorPlan.kPaperDefault,
                         selected: sheet.paperColor == null,
                         badge: Icons.auto_awesome,
-                        tooltip: 'Follow the theme',
+                        tooltip: 'Default (black)',
                         onTap: () {
                           provider.setAvPlanPaperColor(sheet.id, null);
                           setLocal(() {});
@@ -1147,7 +1166,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           onPressed: () async {
                             final picked = await showColorWheelDialog(
                               ctx,
-                              initial: sheet.paperFor(dark: dark),
+                              initial: sheet.paper,
                               title: 'Colour for ${sheet.name}',
                             );
                             if (picked != null) {
@@ -1196,9 +1215,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                 width: 16,
                 height: 16,
                 decoration: BoxDecoration(
-                  color: plan.paperFor(
-                    dark: Theme.of(context).brightness == Brightness.dark,
-                  ),
+                  color: plan.paper,
                   border: Border.all(color: Theme.of(context).dividerColor),
                   borderRadius: BorderRadius.circular(3),
                 ),
@@ -1455,7 +1472,14 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     // left or top margin is added so nothing slides off the wall it was on.
     final size = _imageSize;
     final sheet = plan.sheetSize;
-    final theme = Theme.of(context);
+    // What the paper is for THIS frame, and therefore which way the ink goes.
+    //
+    // A sheet being drawn for print is ink on white whatever the paper is set
+    // to: a black background is a black page out of a printer, and the
+    // black-and-white export exists precisely so a sheet can be photocopied
+    // and marked up on a clipboard. See [printSkin].
+    final paper = _printMode ? const Color(0xFFFFFFFF) : plan.paper;
+    final darkPaper = _printMode ? false : plan.paperIsDark;
     // Worked out once and handed to both the router and the captions, so the
     // line you see and the label beside it are dodging the same things.
     final obstacles = _planObstacles(provider, plan);
@@ -1480,7 +1504,11 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         if (_labelDragKey.isNotEmpty)
           _labelDragKey: plan.labelOffsetFor(_labelDragKey) + _labelDrag,
       },
-      dark: theme.brightness == Brightness.dark,
+      // The ink follows the PAPER, not the app theme: what is printed on the
+      // sheet has to read against the sheet, and the sheet is black by default
+      // whichever way the app is set. A run label picked from the theme was
+      // black ink on black paper for anybody working in light mode.
+      dark: darkPaper,
       style: plan.styleFor(PlanTextKind.wiring),
       hiddenLabels: provider.avCabling.hiddenLabels,
     );
@@ -1520,7 +1548,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               // nothing but paper, and a full white rectangle in a dark room
               // is what people turn the lights on for. So the default follows
               // the theme, and a room that wants its own says so.
-              color: plan.paperFor(dark: theme.brightness == Brightness.dark),
+              color: paper,
             ),
             Positioned(
               left: plan.margins.left,
@@ -1555,7 +1583,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                       runs: runs,
                       captions: captions,
                       keepClear: keepClear,
-                      dark: theme.brightness == Brightness.dark,
+                      // Against the paper — see the captions above.
+                      dark: darkPaper,
                       style: plan.styleFor(PlanTextKind.wiring),
                     ),
                   ),
@@ -1632,8 +1661,10 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     FloorPlan plan,
     List<_PlanRun> runs,
   ) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
+    // The key is printed ON the sheet and exported with it, so it reads
+    // against the paper rather than against the app theme — and against white
+    // when the sheet is being drawn for print.
+    final dark = !_printMode && plan.paperIsDark;
 
     // Only the surfaces actually on this sheet: a legend listing all ten zones
     // when the drawing shows three is a legend people stop reading.
@@ -2223,7 +2254,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             required bool background,
           }) async {
             final style = sheet.styleFor(kind);
-            final fallback = _defaultLabelColors(kind, ctx);
+            final fallback = _defaultLabelColors(kind, onDarkPaper: sheet.paperIsDark);
             final picked = await showColorWheelDialog(
               ctx,
               initial: background
@@ -2250,7 +2281,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             required bool background,
           }) {
             final style = sheet.styleFor(kind);
-            final fallback = _defaultLabelColors(kind, ctx);
+            final fallback = _defaultLabelColors(kind, onDarkPaper: sheet.paperIsDark);
             final color = background
                 ? planLabelBackground(style, fallback.background)
                 : planLabelInk(style, fallback.ink);
@@ -2331,7 +2362,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                             decoration: BoxDecoration(
                               color: planLabelBackground(
                                 sheet.styleFor(kind),
-                                _defaultLabelColors(kind, ctx).background,
+                                _defaultLabelColors(kind, onDarkPaper: sheet.paperIsDark).background,
                               ),
                               borderRadius: BorderRadius.circular(3),
                               border: Border.all(color: theme.dividerColor),
@@ -2343,7 +2374,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                                 fontWeight: FontWeight.bold,
                                 color: planLabelInk(
                                   sheet.styleFor(kind),
-                                  _defaultLabelColors(kind, ctx).ink,
+                                  _defaultLabelColors(kind, onDarkPaper: sheet.paperIsDark).ink,
                                 ),
                               ),
                             ),
@@ -2395,10 +2426,12 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   /// What each kind of label is printed in when the sheet says nothing — the
   /// same figures the markers and the painter fall back to.
   ({Color background, Color ink}) _defaultLabelColors(
-    PlanTextKind kind,
-    BuildContext ctx,
-  ) {
-    final dark = Theme.of(ctx).brightness == Brightness.dark;
+    PlanTextKind kind, {
+    required bool onDarkPaper,
+  }) {
+    // Against the PAPER, not the app theme: this is what the sheet prints, and
+    // the sheet is the same colour in either theme.
+    final dark = onDarkPaper;
     return switch (kind) {
       PlanTextKind.location => (
         background: const Color(0xD9FFFFFF),

@@ -1589,6 +1589,7 @@ List<Offset> routeCable({
   required AvCable cable,
   double lane = 0,
   List<Rect> obstacles = const [],
+  Rect? bounds,
 }) {
   final start = fromNode.anchorOf(cable.fromPortId);
   final end = toNode.anchorOf(cable.toPortId);
@@ -1613,7 +1614,30 @@ List<Offset> routeCable({
   // out of the box face, but a neighbor parked right against that face can
   // still be in the way — checking only the middle is how runs kept ending
   // up drawn across a device.
-  bool clear(List<Offset> middle) => !polylineHitsAny(full(middle), obstacles);
+  // A route is only usable if it stays ON THE PAGE. The detour lanes are
+  // worked out from the boxes they are getting past — "just above the topmost
+  // one", "150px to the left" — and near the edges of the drawing that lands
+  // outside the canvas, where the run is simply not drawn: the line leaves one
+  // port, disappears, and comes back at the other. Every candidate is checked
+  // against the page as well as against the boxes.
+  bool onPage(List<Offset> points) {
+    final page = bounds;
+    if (page == null) return true;
+    for (final p in points) {
+      if (p.dx < page.left ||
+          p.dx > page.right ||
+          p.dy < page.top ||
+          p.dy > page.bottom) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool clear(List<Offset> middle) {
+    final points = full(middle);
+    return onPage(points) && !polylineHitsAny(points, obstacles);
+  }
 
   // --- the quick shapes, tried nearest-to-ideal first --------------------
   final candidates = <List<Offset>>[];
@@ -1625,7 +1649,7 @@ List<Offset> routeCable({
       final midX = ideal + shift;
       candidates.add([a, Offset(midX, a.dy), Offset(midX, b.dy), b]);
     }
-    final band = _clearBand(obstacles, a, b, horizontal: true);
+    final band = _clearBand(obstacles, a, b, horizontal: true, bounds: bounds);
     if (band != null) {
       candidates.add([a, Offset(a.dx, band), Offset(b.dx, band), b]);
     }
@@ -1636,7 +1660,8 @@ List<Offset> routeCable({
       final midY = ideal + shift;
       candidates.add([a, Offset(a.dx, midY), Offset(b.dx, midY), b]);
     }
-    final band = _clearBand(obstacles, a, b, horizontal: false);
+    final band =
+        _clearBand(obstacles, a, b, horizontal: false, bounds: bounds);
     if (band != null) {
       candidates.add([a, Offset(band, a.dy), Offset(band, b.dy), b]);
     }
@@ -1654,12 +1679,12 @@ List<Offset> routeCable({
   // --- nothing simple fits: find an actual way through -------------------
   // First keeping the tidy stubs, since a run that leaves its port squarely
   // reads far better than one that sets off at the first opportunity.
-  final viaStubs = latticeRoute(a, b, obstacles);
+  final viaStubs = latticeRoute(a, b, obstacles, bounds: bounds);
   if (viaStubs != null && clear(viaStubs)) return full(viaStubs);
 
   // The stub itself is fouled by something parked against the port, so let
   // the search start at the port instead of 18px out from it.
-  final direct = latticeRoute(start, end, obstacles);
+  final direct = latticeRoute(start, end, obstacles, bounds: bounds);
   if (direct != null && !polylineHitsAny(direct, obstacles)) return direct;
 
   // Genuinely nowhere to go (a port walled in on every side). Draw the
@@ -1681,6 +1706,7 @@ double? _clearBand(
   Offset a,
   Offset b, {
   required bool horizontal,
+  Rect? bounds,
 }) {
   if (obstacles.isEmpty) return null;
   const margin = 26.0;
@@ -1694,6 +1720,19 @@ double? _clearBand(
 
   final over = lo - margin;
   final under = hi + margin;
+  // A lane off the top (or off the left) of the page is no lane at all — the
+  // run drawn along it is invisible. The far side is tried instead, and when
+  // neither is on the page there is no band and the caller falls through to
+  // the pathfinder.
+  final low = horizontal ? bounds?.top : bounds?.left;
+  final high = horizontal ? bounds?.bottom : bounds?.right;
+  final overOk = (low == null || over >= low) && (high == null || over <= high);
+  final underOk =
+      (low == null || under >= low) && (high == null || under <= high);
+  if (!overOk && !underOk) return null;
+  if (!overOk) return under;
+  if (!underOk) return over;
+
   final from = horizontal ? a.dy : a.dx;
   final to = horizontal ? b.dy : b.dx;
   final mid = (from + to) / 2;
@@ -1720,7 +1759,12 @@ const int _kMaxExpansions = 60000;
 /// paying for a fine pixel grid. This is the backstop behind the quick shapes
 /// in [routeCable] — those handle the common cases, this one guarantees the
 /// result is never drawn through a device.
-List<Offset>? latticeRoute(Offset a, Offset b, List<Rect> allObstacles) {
+List<Offset>? latticeRoute(
+  Offset a,
+  Offset b,
+  List<Rect> allObstacles, {
+  Rect? bounds,
+}) {
   // A box that swallows one of the stub points can't be respected — there
   // would be no way out of it — so it is dropped for this run rather than
   // making the whole search fail and fall back to a straight line.
@@ -1736,11 +1780,20 @@ List<Offset>? latticeRoute(Offset a, Offset b, List<Rect> allObstacles) {
   // outside every box on all four sides.
   final xs = <double>{a.dx, b.dx};
   final ys = <double>{a.dy, b.dy};
+  // A channel outside the page is not a channel the run can use: it would be
+  // drawn where the canvas is not. The endpoints are always kept — they are
+  // ports on real boxes, and a route has to reach them wherever they are.
+  bool xOnPage(double v) =>
+      bounds == null || (v >= bounds.left && v <= bounds.right);
+  bool yOnPage(double v) =>
+      bounds == null || (v >= bounds.top && v <= bounds.bottom);
   for (final r in obstacles) {
-    xs.add(r.left - _kLatticeMargin);
-    xs.add(r.right + _kLatticeMargin);
-    ys.add(r.top - _kLatticeMargin);
-    ys.add(r.bottom + _kLatticeMargin);
+    for (final x in [r.left - _kLatticeMargin, r.right + _kLatticeMargin]) {
+      if (xOnPage(x)) xs.add(x);
+    }
+    for (final y in [r.top - _kLatticeMargin, r.bottom + _kLatticeMargin]) {
+      if (yOnPage(y)) ys.add(y);
+    }
   }
 
   final xList = xs.toList()..sort();
