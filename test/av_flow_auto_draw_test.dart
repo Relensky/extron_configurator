@@ -722,6 +722,121 @@ void main() {
     });
   });
 
+  group('the USB switcher', () {
+    /// The room, plus the two boxes that make its USB feed: the DSP with the
+    /// microphone mix on its USB output, and the AV Bridge with the room's
+    /// picture on its own.
+    AppStateProvider conferenceRoom() {
+      final p = room();
+      void add(String key, String name, String model) {
+        p.roomConfig[key] = <String, dynamic>{
+          'name': name,
+          'model': model,
+          'com_type': 'Network',
+        };
+        final template =
+            p.avDeviceLibrary.resolve(configKey: key, model: model);
+        p.addAvNode(AvNode(
+          id: key,
+          label: name,
+          model: model,
+          pos: Offset.zero,
+          ports: withPowerInlet(template.ports, template.powerInput),
+          fromConfig: true,
+        ));
+      }
+
+      add('DSPDEVICE_1', 'DSP - DMP 64 Plus C AT', 'DMP 64 Plus C AT');
+      add('RECORDERDEVICE_1', 'Recorder - AV Bridge 2x1', 'AV Bridge 2x1');
+      return p;
+    }
+
+    /// What is plugged into [label] on the Toggle.
+    String? devicePort(AppStateProvider p, String label) {
+      for (final c in p.avCables) {
+        if (c.toNodeId != 'USBDEVICE_1') continue;
+        if (p.avNodeById('USBDEVICE_1')?.portById(c.toPortId)?.label != label) {
+          continue;
+        }
+        return p.avNodeById(c.fromNodeId)?.label;
+      }
+      return null;
+    }
+
+    test('the peripherals land on the DEVICE ports in build order', () {
+      final p = conferenceRoom();
+      autoDrawRoutingFromConfig(p);
+
+      // Nothing in the config says any of this — there is no input_ number for
+      // a USB lead — so the drawing showed a Toggle with nothing in it. This
+      // is the order every one of these rooms is wired in.
+      expect(devicePort(p, 'USB DEVICE 1'), 'DSP - DMP 64 Plus C AT');
+      expect(devicePort(p, 'USB DEVICE 2'), 'Recorder - AV Bridge 2x1');
+      expect(devicePort(p, 'USB DEVICE 3'), 'Document camera');
+    });
+
+    test('HOST 1 is the room PC', () {
+      final p = conferenceRoom();
+      autoDrawRoutingFromConfig(p);
+
+      expect(runsFrom(p, 'USBDEVICE_1'),
+          contains('USB HOST 1 -> Room PC (USB)'));
+    });
+
+    test('a room with no doc cam leaves DEVICE 3 empty', () {
+      final p = conferenceRoom();
+      (p.roomConfig['SYSTEM_SETUP'] as Map)['input_doc_cam'] = '';
+      autoDrawRoutingFromConfig(p);
+
+      // Fixed positions, not a queue: the AV Bridge stays on DEVICE 2 rather
+      // than moving down onto the port the doc cam would have had.
+      expect(devicePort(p, 'USB DEVICE 2'), 'Recorder - AV Bridge 2x1');
+      expect(devicePort(p, 'USB DEVICE 3'), isNull);
+    });
+
+    test('a connector somebody has already used is left alone', () {
+      final p = conferenceRoom();
+      final bridge = p.avNodeById('RECORDERDEVICE_1')!;
+      final bridgeUsb = bridge.ports
+          .firstWhere((port) => port.signal == SignalType.usbData);
+      p.addAvCable(
+        fromNodeId: 'RECORDERDEVICE_1',
+        fromPortId: bridgeUsb.id,
+        toNodeId: 'USBDEVICE_1',
+        toPortId: 'in_usb_3',
+        signal: SignalType.usbData,
+      );
+
+      autoDrawRoutingFromConfig(p);
+
+      // The AV Bridge has one USB socket and it is already in DEVICE 3. It is
+      // not also drawn into DEVICE 2, and the doc cam does not land on top of
+      // it.
+      expect(devicePort(p, 'USB DEVICE 3'), 'Recorder - AV Bridge 2x1');
+      expect(devicePort(p, 'USB DEVICE 2'), isNull);
+      expect(
+        p.avCables
+            .where((c) =>
+                c.fromNodeId == 'RECORDERDEVICE_1' &&
+                c.fromPortId == bridgeUsb.id)
+            .length,
+        1,
+      );
+    });
+
+    test('running twice draws the leads once', () {
+      final p = conferenceRoom();
+      autoDrawRoutingFromConfig(p);
+      final drawn = p.avCables.length;
+
+      // The pass is allowed to run again — a config edit is what un-sticks it
+      // — and a second run must not double every USB lead.
+      p.avRoutedFingerprint = '';
+      autoDrawRoutingFromConfig(p);
+      expect(p.avCables.length, drawn);
+    });
+  });
+
   group('and the estimate counts them', () {
     CostEstimate estimateFor(AppStateProvider p) => computeRoomCost(
           model: buildAvFlowModel(p),

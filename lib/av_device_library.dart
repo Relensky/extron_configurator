@@ -1212,13 +1212,18 @@ class AvDeviceLibrary {
       );
     }
     if (configKey.startsWith('USBDEVICE_')) {
+      // The Toggle's shape, which is what goes in every build: the room's
+      // peripherals arrive on the DEVICE ports and the machines that can take
+      // them hang off the HOST ports. Named the other way round, this fallback
+      // contradicted both the catalog entry and the leads the routing draws —
+      // the doc cam ended up plugged into something called HOST 2.
       return AvDeviceTemplate(
         model: model,
         ports: [
-          for (int i = 1; i <= 2; i++)
+          for (int i = 1; i <= 3; i++)
             AvPort(
               id: 'in_usb_$i',
-              label: 'HOST $i',
+              label: 'USB DEVICE $i',
               signal: SignalType.usbData,
               direction: PortDirection.input,
               side: PortSide.left,
@@ -1226,7 +1231,7 @@ class AvDeviceLibrary {
           for (int i = 1; i <= 2; i++)
             AvPort(
               id: 'out_usb_$i',
-              label: 'DEVICE $i',
+              label: 'USB HOST $i',
               signal: SignalType.usbData,
               direction: PortDirection.output,
               side: PortSide.right,

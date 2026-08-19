@@ -586,6 +586,19 @@ SignalType? _signalForInputName(String flattened) {
   return null;
 }
 
+/// The box's USB data connector, in the direction asked for.
+///
+/// A bidirectional socket answers to both: the wireless plate's single USB
+/// connector is the same connector whichever way the lead is drawn.
+AvPort? _usbPort(AvNode node, {required bool wantOutput}) {
+  for (final p in node.ports) {
+    if (p.signal != SignalType.usbData) continue;
+    if (p.direction == PortDirection.bidirectional) return p;
+    if (wantOutput ? p.isOutput : p.isInput) return p;
+  }
+  return null;
+}
+
 /// The first video OUTPUT on a source box — the connector its lead leaves by.
 AvPort? _sourceOutputPort(AvNode node) {
   for (final p in node.ports) {
@@ -1557,6 +1570,123 @@ RoutingPlan planRoutingFromConfig(
       continue;
     }
     routeDestination(key, node);
+  }
+
+  // --- the USB switcher ------------------------------------------------------
+  //  The Toggle, and every box like it: the room's peripherals hang off its
+  //  DEVICE ports and the machines that can take them off its HOST ports, and
+  //  the button on the panel decides which machine has them at any moment.
+  //
+  //  None of that is in the config. `dev_usb_switchers` is a count, and the
+  //  block underneath it is control settings — there is no `input_` number for
+  //  a USB lead anywhere in the file — so the drawing showed a Toggle with
+  //  nothing plugged into it and the conferencing path stopped at the DSP.
+  //  The order is the same in every build this shop puts in, so it is drawn
+  //  from that rather than from a field nobody fills in:
+  //
+  //    DEVICE 1  the DSP's USB output — the microphone mix
+  //    DEVICE 2  the AV Bridge's USB output — the room's picture
+  //    DEVICE 3  the document camera's USB output
+  //    HOST 1    the room PC
+  //
+  //  Fixed positions, not a queue: a room with no doc cam leaves DEVICE 3
+  //  empty rather than moving the AV Bridge down onto it, because the port a
+  //  lead lands on is what the tech reads off the drawing. A peripheral the
+  //  room does not have, or one whose catalog entry has no USB connector, is
+  //  simply not drawn. A connector somebody has already plugged something
+  //  else into is left exactly as they left it.
+  final usbSwitcher = nodesById['USBDEVICE_1'];
+  if (usbSwitcher != null) {
+    AvNode? drawn(String id) =>
+        nodesById[id] ?? newNodes.where((n) => n.id == id).firstOrNull;
+
+    AvNode? firstWithUsbOut(String prefix) {
+      for (var n = 1; n <= 8; n++) {
+        final node = nodesById['$prefix$n'];
+        if (node != null && _usbPort(node, wantOutput: true) != null) {
+          return node;
+        }
+      }
+      return null;
+    }
+
+    // The doc cam is a passive source: placed above off `input_doc_cam`, or
+    // already on the canvas from an earlier pass.
+    final docCam = drawn(avAutoNodeId('input_doc_cam')) ??
+        _existingByModelOrLabel(
+            provider, const ['Document Camera'], 'input_doc_cam');
+
+    final peripherals = <AvNode?>[
+      firstWithUsbOut('DSPDEVICE_'),
+      // The capture box, whichever of the two this room builds with.
+      firstWithUsbOut('RECORDERDEVICE_') ?? firstWithUsbOut('MEDIAPORTDEVICE_'),
+      docCam,
+    ];
+
+    final devicePorts = [
+      for (final p in usbSwitcher.ports)
+        if (p.signal == SignalType.usbData && p.isInput) p,
+    ];
+    final hostPorts = [
+      for (final p in usbSwitcher.ports)
+        if (p.signal == SignalType.usbData && p.isOutput) p,
+    ];
+
+    /// True when this pass should stay off these two connectors, because one
+    /// of them already has a lead on it going somewhere else. A USB socket
+    /// takes one lead: a doc cam somebody has plugged into DEVICE 2 by hand is
+    /// not also plugged into DEVICE 3 by this. The exact tie already drawn is
+    /// not a clash — [draw] counts that one and moves on.
+    bool clashes(String aNode, String aPort, String bNode, String bPort) {
+      for (final c in provider.avCables) {
+        final atA = (c.fromNodeId == aNode && c.fromPortId == aPort) ||
+            (c.toNodeId == aNode && c.toPortId == aPort);
+        final atB = (c.fromNodeId == bNode && c.fromPortId == bPort) ||
+            (c.toNodeId == bNode && c.toPortId == bPort);
+        if (atA != atB) return true;
+      }
+      return false;
+    }
+
+    for (var i = 0; i < peripherals.length && i < devicePorts.length; i++) {
+      final source = peripherals[i];
+      if (source == null) continue;
+      final out = _usbPort(source, wantOutput: true);
+      if (out == null) continue;
+      final port = devicePorts[i];
+      if (clashes(source.id, out.id, usbSwitcher.id, port.id)) continue;
+      draw(
+        configKey: usbSwitcher.id,
+        value: port.label,
+        from: source,
+        fromPort: out,
+        to: usbSwitcher,
+        toPort: port,
+        signal: SignalType.usbData,
+      );
+    }
+
+    // HOST 1 is the room PC — the one this pass placed off `input_pc`, or the
+    // one already on the canvas in a room whose PC reaches the switcher some
+    // other way.
+    final host = pc ??
+        _existingByModelOrLabel(
+            provider, const ['PC', 'PC Micro'], 'input_pc');
+    final hostUsb = host == null ? null : _usbPort(host, wantOutput: false);
+    if (host != null && hostUsb != null && hostPorts.isNotEmpty) {
+      final port = hostPorts.first;
+      if (!clashes(usbSwitcher.id, port.id, host.id, hostUsb.id)) {
+        draw(
+          configKey: usbSwitcher.id,
+          value: port.label,
+          from: usbSwitcher,
+          fromPort: port,
+          to: host,
+          toPort: hostUsb,
+          signal: SignalType.usbData,
+        );
+      }
+    }
   }
 
   // --- the power controller --------------------------------------------------

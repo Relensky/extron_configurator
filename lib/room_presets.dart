@@ -1060,12 +1060,15 @@ RoomPreset _hyflexClassroom() {
       'USB Switcher - Toggle',
       _rackLocation.id,
       [
-        _p('in_usb_1', 'USB HOST 1', SignalType.usbData, PortDirection.input),
-        _p('in_usb_2', 'USB HOST 2', SignalType.usbData, PortDirection.input),
-        _p('in_usb_3', 'USB HOST 3', SignalType.usbData, PortDirection.input),
-        _p('out_usb_1', 'USB DEVICE 1', SignalType.usbData,
+        _p('in_usb_1', 'USB DEVICE 1', SignalType.usbData,
+            PortDirection.input),
+        _p('in_usb_2', 'USB DEVICE 2', SignalType.usbData,
+            PortDirection.input),
+        _p('in_usb_3', 'USB DEVICE 3', SignalType.usbData,
+            PortDirection.input),
+        _p('out_usb_1', 'USB HOST 1', SignalType.usbData,
             PortDirection.output),
-        _p('out_usb_2', 'USB DEVICE 2', SignalType.usbData,
+        _p('out_usb_2', 'USB HOST 2', SignalType.usbData,
             PortDirection.output),
         _p('in_ctrl_1', 'RS-232', SignalType.serial, PortDirection.input),
       ],
@@ -1202,15 +1205,17 @@ RoomPreset _hyflexClassroom() {
       // laptop can take the room's camera and mic for its own call.
       _cable('C9', 'SWITCHERDEVICE_1', 'hdmi_001', 'RECORDERDEVICE_1',
           'in_hdmi_1', SignalType.hdmi, label: 'AV-09'),
-      // What the room hands to whichever machine is driving the call: the
-      // DSP's microphone mix, the doc cam, and the AV Bridge's picture of the
-      // room. The Toggle picks which machine gets them.
+      // What the room hands to whichever machine is driving the call, in the
+      // order the Toggle's DEVICE ports are wired in every build: the DSP's
+      // microphone mix, the AV Bridge's picture of the room, then the doc
+      // cam. HOST 1 is the room PC, and the Toggle picks which machine has
+      // them.
       _cable('C10', 'DSPDEVICE_1', _dmpUsbOut, 'USBDEVICE_1', 'in_usb_1',
           SignalType.usbData, label: 'USB-01'),
-      _cable('C10B', 'AVNODE_2', _docCamUsbOut, 'USBDEVICE_1', 'in_usb_2',
-          SignalType.usbData, label: 'USB-02'),
-      _cable('C10C', 'RECORDERDEVICE_1', _avBridgeUsbOut, 'USBDEVICE_1',
-          'in_usb_3', SignalType.usbData, label: 'USB-03'),
+      _cable('C10B', 'RECORDERDEVICE_1', _avBridgeUsbOut, 'USBDEVICE_1',
+          'in_usb_2', SignalType.usbData, label: 'USB-02'),
+      _cable('C10C', 'AVNODE_2', _docCamUsbOut, 'USBDEVICE_1', 'in_usb_3',
+          SignalType.usbData, label: 'USB-03'),
       _cable('C11', 'USBDEVICE_1', 'out_usb_1', 'AVNODE_1', _pcUsbIn,
           SignalType.usbData, label: 'USB-04'),
       _cable('C11B', 'USBDEVICE_1', 'out_usb_2', 'AVNODE_3', 'in_usb_1',
@@ -1663,12 +1668,15 @@ RoomPreset _activeLearningSpace() {
       'USB Switcher - Toggle',
       _rackLocation.id,
       [
-        _p('in_usb_1', 'USB HOST 1', SignalType.usbData, PortDirection.input),
-        _p('in_usb_2', 'USB HOST 2', SignalType.usbData, PortDirection.input),
-        _p('in_usb_3', 'USB HOST 3', SignalType.usbData, PortDirection.input),
-        _p('out_usb_1', 'USB DEVICE 1', SignalType.usbData,
+        _p('in_usb_1', 'USB DEVICE 1', SignalType.usbData,
+            PortDirection.input),
+        _p('in_usb_2', 'USB DEVICE 2', SignalType.usbData,
+            PortDirection.input),
+        _p('in_usb_3', 'USB DEVICE 3', SignalType.usbData,
+            PortDirection.input),
+        _p('out_usb_1', 'USB HOST 1', SignalType.usbData,
             PortDirection.output),
-        _p('out_usb_2', 'USB DEVICE 2', SignalType.usbData,
+        _p('out_usb_2', 'USB HOST 2', SignalType.usbData,
             PortDirection.output),
         _p('in_ctrl_1', 'RS-232', SignalType.serial, PortDirection.input),
       ],
@@ -1937,10 +1945,10 @@ RoomPreset _activeLearningSpace() {
       // --- USB: the room's camera and mic, into the lectern laptop -------
       _cable('C11', 'DSPDEVICE_1', _dmpUsbOut, 'USBDEVICE_1', 'in_usb_1',
           SignalType.usbData, label: 'USB-01'),
-      _cable('C11B', 'AVNODE_2', _docCamUsbOut, 'USBDEVICE_1', 'in_usb_2',
-          SignalType.usbData, label: 'USB-02'),
-      _cable('C12', 'RECORDERDEVICE_1', _avBridgeUsbOut, 'USBDEVICE_1',
-          'in_usb_3', SignalType.usbData, label: 'USB-03'),
+      _cable('C11B', 'RECORDERDEVICE_1', _avBridgeUsbOut, 'USBDEVICE_1',
+          'in_usb_2', SignalType.usbData, label: 'USB-02'),
+      _cable('C12', 'AVNODE_2', _docCamUsbOut, 'USBDEVICE_1', 'in_usb_3',
+          SignalType.usbData, label: 'USB-03'),
       _cable('C13', 'USBDEVICE_1', 'out_usb_1', 'AVNODE_1', _pcUsbIn,
           SignalType.usbData, label: 'USB-04'),
       _cable('C13B', 'USBDEVICE_1', 'out_usb_2', 'AVNODE_3', 'in_usb_1',
