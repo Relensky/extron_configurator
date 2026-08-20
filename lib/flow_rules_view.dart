@@ -33,30 +33,30 @@ import 'side_pane.dart';
 /// The families, in the order the routing pass uses them.
 enum _RuleSection {
   sourceBoxes('Source boxes', Icons.input,
-      'An input_ key whose box has no config block: the room PC, the doc cam, '
-          'the laptop at a plate.'),
+      'Boxes the config mentions but never describes — the room PC, the doc '
+          'cam, the laptop at a plate. Each rule says what one of them is.'),
   sourceDevices('Source devices', Icons.videocam,
-      'An input_ key naming a device the config already describes — the box '
-          'is on the canvas, only the cable is missing.'),
+      'An input the config already has a device block for. The box is on the '
+          'canvas; only the cable is missing.'),
   destinationDevices('Display outputs', Icons.tv,
-      'An output_ key and the device block it feeds.'),
+      'Which display block an output key feeds.'),
   destinationBoxes('Destination boxes', Icons.speaker,
-      'An output_ key whose box has no config block: a confidence monitor, '
+      'The same idea at the other end of the matrix: a confidence monitor, '
           'the assisted-listening transmitter.'),
   captureDestinations('Capture', Icons.cameraswitch,
-      'Where the capture feed lands — whichever of several boxes this room '
-          'was built with.'),
+      'Where the capture feed lands — whichever of these boxes this room was '
+          'built with.'),
   extenders('Extenders', Icons.settings_ethernet,
-      'The box that goes between two ends that do not take the same cable: '
-          'a DTP output and an HDMI display.'),
+      'When the two ends of a run do not take the same cable, this is the box '
+          'that goes between them.'),
   usbSwitchers('USB switchers', Icons.usb,
-      'What lands on each DEVICE port of a USB switcher, and what each HOST '
-          'port feeds.'),
+      'What is plugged into each port of a USB switcher. Nothing in the '
+          'config says, so this does.'),
   expansion('Expansion bus', Icons.link,
-      'The words on a connector label that mean "expansion bus".'),
+      'Words on a connector label that mean "expansion bus".'),
   outletAliases('Outlet names', Icons.power,
-      'Outlet labels that name a device outright, whatever else answers to '
-          'the word.');
+      'Outlet labels that name a device outright, whatever else on the '
+          'drawing answers to the word.');
 
   final String label;
   final IconData icon;
@@ -108,10 +108,11 @@ class _FlowRulesViewState extends State<FlowRulesView> {
       builder: (ctx) => AlertDialog(
         title: const Text('Back to the built-in rules?'),
         content: const Text(
-          'Every rule goes back to what the app ships with — the tables that '
-          'used to be compiled into the routing pass. Anything added or '
-          'changed here is lost.\n\n'
-          'The file on disk is not touched until you press Save.',
+          'Every family goes back to the rules the app ships with, and '
+          'anything you have added or changed here is lost.\n\n'
+          'Nothing is written to disk until you press Save — so if this turns '
+          'out to be the wrong idea, Reload from file brings your own rules '
+          'back.',
         ),
         actions: [
           TextButton(
@@ -304,8 +305,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
           child: rows.isEmpty
               ? Center(
                   child: Text(
-                    'No rules in this family — the pass simply does nothing '
-                    'for it.',
+                    'Nothing here yet, so the drawing does nothing for this '
+                    'family. Press Add to write the first rule.',
                     style: theme.textTheme.bodySmall,
                   ),
                 )
@@ -373,10 +374,14 @@ class _FlowRulesViewState extends State<FlowRulesView> {
   /// catalog has never heard of it — which is not fatal (the family template
   /// stands in) but is nearly always a typo.
   String? _modelWarning(AppStateProvider provider, String model) {
-    if (model.trim().isEmpty) return 'No model — this box will have no ports.';
+    if (model.trim().isEmpty) {
+      return 'No model yet, so this box will be drawn with no connectors '
+          'on it.';
+    }
     if (provider.avDeviceLibrary.templateForModel(model) != null) return null;
-    return 'The device catalog has no "$model" — it will draw with the '
-        'family fallback and cost nothing.';
+    return 'The catalog does not carry "$model" yet. The box still draws, '
+        'using the generic connectors for its family, but it will not be '
+        'priced.';
   }
 
   Widget _boxTile(
@@ -540,11 +545,12 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _field(key, 'Config key',
-                      'The SYSTEM_SETUP key this box hangs off — input_pc, '
-                          'output_monitor_1.'),
+                      'The SYSTEM_SETUP key this box belongs to, like '
+                          'input_pc or output_monitor_1.'),
                   _field(label, 'Name on the drawing', ''),
                   _field(model, 'Catalog model',
-                      'Where its connectors, price and rack height come from.'),
+                      'The catalog entry to use — that is where its '
+                          'connectors, price and rack height come from.'),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: zone,
@@ -565,8 +571,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                       decoration: const InputDecoration(
                         labelText: 'Connectors the lead may land on',
                         helperText:
-                            'Assisted listening is line audio; everything '
-                            'else here is video.',
+                            'Assisted listening is line audio; most things '
+                            'here are video.',
                         border: OutlineInputBorder(),
                       ),
                       items: [
@@ -580,8 +586,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Not on the quote'),
                     subtitle: const Text(
-                        'For a box the room does not buy — the presenter’s '
-                        'own laptop.'),
+                        'Tick this for something the room is not buying, like '
+                        'the presenter’s own laptop.'),
                     value: excluded,
                     onChanged: (v) => setLocal(() => excluded = v),
                   ),
@@ -604,7 +610,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     );
     if (saved != true || !mounted) return;
     if (key.text.trim().isEmpty) {
-      _snack('A rule with no config key would never fire.', error: true);
+      _snack('Give the rule a config key — without one it never does '
+          'anything.', error: true);
       return;
     }
 
@@ -666,7 +673,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     );
     if (saved != true || !mounted) return;
     if (key.text.trim().isEmpty || target.text.trim().isEmpty) {
-      _snack('A device rule needs both a config key and a box.', error: true);
+      _snack('This one needs both halves: which config key, and which box it '
+          'means.', error: true);
       return;
     }
     final rule = FlowDeviceRule(
@@ -710,14 +718,14 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                   Text(
                     'When a run leaves the switcher on one kind of connector '
                     'and arrives at the far end on another, this is the box '
-                    'that goes between them — and the run becomes two cables '
-                    'and a box on the quote.',
+                    'that goes between them. The run becomes two cables and a '
+                    'box on the quote.',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
                   _field(id, 'Rule id',
-                      'Short and stable — the box it places is named after it '
-                          '(rx, tx).'),
+                      'Something short that will not change — the box this '
+                          'places is named after it (rx, tx).'),
                   _field(label, 'Name on the drawing', ''),
                   _field(model, 'Catalog model', ''),
                   const SizedBox(height: 8),
@@ -810,13 +818,14 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     );
     if (saved != true || !mounted) return;
     if (id.text.trim().isEmpty || model.text.trim().isEmpty) {
-      _snack('An extender rule needs an id and a model.', error: true);
+      _snack('An extender rule needs an id, and a model to place.',
+          error: true);
       return;
     }
     if (switcherSignal == farSignal) {
       _snack(
-        'Both ends take the same connector, so no box is needed between '
-        'them — this rule would never fire.',
+        'Both ends take the same kind of connector, so nothing needs to go '
+        'between them. This rule would never do anything.',
         error: true,
       );
       return;
@@ -859,10 +868,10 @@ class _FlowRulesViewState extends State<FlowRulesView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'One line per port, in port order. The first line is DEVICE '
-                  '1 (or HOST 1), the second is DEVICE 2, and so on — a blank '
-                  'line leaves that port empty rather than moving everything '
-                  'below it up.',
+                  'One line per port, in port order: the first line is '
+                  'DEVICE 1 (or HOST 1), the second is DEVICE 2, and so on. '
+                  'Leave a line blank to leave that port empty — the ports '
+                  'below it stay where they are.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -872,8 +881,8 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                         'doc cam.',
                     lines: 4),
                 _field(hosts, 'HOST ports — what they feed',
-                    'The machines that can take the room: the PC, a laptop '
-                        'plate.',
+                    'The machines that can take the room: the PC, or a laptop '
+                        'at a plate.',
                     lines: 3),
               ],
             ),
@@ -893,7 +902,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     );
     if (saved != true || !mounted) return;
     if (switcher.text.trim().isEmpty) {
-      _snack('Which USB switcher? The rule needs a box.', error: true);
+      _snack('Say which USB switcher this rule is about.', error: true);
       return;
     }
     List<String> lines(String raw) => [
@@ -961,10 +970,10 @@ class _FlowRulesViewState extends State<FlowRulesView> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _field(name, 'The whole outlet label',
-                  'Matched in full and case-insensitively: "Switch" decides '
-                      'that word and leaves "USB Switch" alone.'),
+                  'Matched in full, and case does not matter. "Switch" '
+                      'settles that word and leaves "USB Switch" alone.'),
               _field(target, 'The device it means',
-                  'A section prefix (SWITCHERDEVICE_) or one section.'),
+                  'A family prefix like SWITCHERDEVICE_, or one block.'),
             ],
           ),
         ),
@@ -1031,6 +1040,7 @@ enum _DeviceFamily { source, destination, capture }
 
 /// Explains the one syntax every "which box" field uses.
 const String kFlowTargetHelp =
-    'DSPDEVICE_ is the family (first block that fits), RECORDERDEVICE_1 is one '
-    'block, input_doc_cam is the box that key places, "AV Bridge 2x1" is a '
-    'catalog model. Separate alternatives with | to try them in order.';
+    'Write DSPDEVICE_ for the family (the first block of it that fits), '
+    'RECORDERDEVICE_1 for one block, input_doc_cam for the box that key '
+    'places, or "AV Bridge 2x1" for a catalog model. Separate alternatives '
+    'with | and they are tried in order.';

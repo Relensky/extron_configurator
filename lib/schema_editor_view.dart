@@ -47,21 +47,22 @@ import 'ui_schema.dart';
 
 enum _SchemaSection {
   coverage('Coverage', Icons.fact_check,
-      'Every key in the default config file, and the schema entry that '
-          'describes it.'),
+      'Every key in your default config file, and whether the schema '
+          'describes it yet.'),
   fields('Fields', Icons.label,
-      'How one config key is rendered, anywhere it appears.'),
+      'How a config key is drawn, wherever it turns up.'),
   deviceFields('Device fields', Icons.devices,
-      'The same, scoped to one device family or section.'),
+      'The same thing, but only for one device family or section.'),
   deviceTypes('Device families', Icons.category,
-      'The families the Setup Wizard manages: a dev_ count key, a section '
-          'prefix, and a label.'),
+      'The families the Setup Wizard manages — a dev_ count key, the section '
+          'prefix its blocks use, and a label.'),
   defaults('Defaults', Icons.playlist_add,
-      'What a loaded or newly created room is given when it has none.'),
+      'What a room is given when it is missing something.'),
   consistency('Consistency', Icons.rule,
-      'Keys that must agree, and what to say when they do not.'),
+      'Keys that have to agree, and what to say when they do not.'),
   raw('Raw JSON', Icons.data_object,
-      'The whole document. Validated before it is applied.');
+      'The whole document, for anything the forms do not cover. Checked '
+          'before it is applied.');
 
   final String label;
   final IconData icon;
@@ -136,8 +137,8 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
   void _loadTemplate(String filePath) {
     if (filePath.trim().isEmpty) {
       setState(() {
-        _templateError = 'No default config file is set — App Config > '
-            'Template file.';
+        _templateError = 'No default config file is set yet — pick one under '
+            'App Config > Template config.json.';
         _template = {};
         _templatePath = '';
       });
@@ -186,7 +187,8 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
       provider.applyUiSchemaDoc(doc);
       setState(() => _dirty = true);
     } on FormatException catch (e) {
-      _snack('That edit would make the schema unreadable: $e', error: true);
+      _snack('The app could not read the schema after that edit, so it was '
+          'left alone: $e', error: true);
     }
   }
 
@@ -195,7 +197,11 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
     if (provider.uiSchema.rawDoc.isEmpty) {
       // Nothing has been read and nothing edited: writing an empty document
       // would REPLACE a schema somebody has, with nothing.
-      _snack('Nothing to save yet — this is the built-in schema.', error: true);
+      _snack(
+          'There is nothing to save yet: this is the app’s built-in schema. '
+          'Point App Config at a ui_schema.json, or start one on the Raw JSON '
+          'page.',
+          error: true);
       return;
     }
     final saved = await provider.saveUiSchema();
@@ -376,7 +382,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
           child: Text(
             _templateError.isNotEmpty
                 ? _templateError
-                : 'Measured against $_templatePath',
+                : 'Checked against $_templatePath',
             style: theme.textTheme.bodySmall?.copyWith(
               color: _templateError.isEmpty
                   ? theme.disabledColor
@@ -459,11 +465,11 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         title: Text(key),
         subtitle: Text(
           spec == null
-              ? 'Not described — shown as a plain text box labelled "$key". '
-                  'In the file: ${_short(value)}'
+              ? 'Nothing describes this yet, so it shows up as a plain text '
+                  'box called "$key". This file has: ${_short(value)}'
               : '${spec.label ?? key} • ${spec.type}'
                   '${spec.key == key ? '' : ' (via ${spec.key})'} • '
-                  'in the file: ${_short(value)}',
+                  'this file has: ${_short(value)}',
         ),
         trailing: TextButton(
           child: Text(spec == null ? 'Describe' : 'Edit'),
@@ -528,9 +534,9 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
           child: keys.isEmpty
               ? Center(
                   child: Text(
-                    'This document describes no fields of its own yet. '
-                    'Coverage is the quickest way in: it lists the keys a real '
-                    'room has and which of them are still undescribed.',
+                    'This document does not describe any fields of its own '
+                    'yet. Coverage is the quickest way in — it lists the keys '
+                    'a real room has, and which of them nobody has described.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall,
                   ),
@@ -676,10 +682,10 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
-              'These are the built-in families. Editing any one of them writes '
-              'the whole list into the file — defining families at all '
-              'replaces the built-in list, so a half-list would silently drop '
-              'the rest.',
+              'These are the families the app ships with. Change any one of '
+              'them and the whole list is written into your file — a file '
+              'that lists families at all replaces the built-in list, so a '
+              'half-list would quietly drop the rest.',
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -763,19 +769,21 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _text(countKey, 'Count key',
-                    'The SYSTEM_SETUP key that says how many — dev_projectors.'),
+                    'The SYSTEM_SETUP key that says how many, like '
+                        'dev_projectors.'),
                 _text(prefix, 'Section prefix',
-                    'The config blocks, numbered from 1 — PROJECTORDEVICE_.'),
+                    'The config blocks this family uses, numbered from 1 — '
+                        'PROJECTORDEVICE_, for instance.'),
                 _text(label, 'Label', 'What the Setup Wizard calls it.'),
                 _text(max, 'Most the wizard offers', ''),
                 _text(systemKeys, 'SYSTEM_SETUP keys this family owns',
-                    'One pattern per line. Setting the count to 0 removes '
-                    'them — outlet names with no controller behind them are '
-                    'dead data.',
+                    'One pattern per line. Setting the count to 0 takes them '
+                    'out — outlet names with no power controller behind them '
+                    'are just something else to read past.',
                     lines: 3),
                 _text(keepAlive, 'Keep-alive commands, best first',
-                    'Comma separated. Tried in order when a new device picks '
-                        'one off its module.'),
+                    'Comma separated. Tried in this order when a new device '
+                        'picks one off its module.'),
               ],
             ),
           ),
@@ -827,11 +835,13 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
       builder: (ctx) => AlertDialog(
         title: Text('Remove ${family.label}?'),
         content: Text(
-          'The wizard stops offering ${family.countKey}, and ${family.prefix}n '
-          'blocks stop being treated as devices — they are not deleted from '
-          'any room.\n\n'
-          'Every other family is written into the file at the same time, '
-          'because defining families at all replaces the built-in list.',
+          'The Wizard stops offering ${family.countKey}, and ${family.prefix}n '
+          'blocks stop being treated as devices. Nothing is deleted from any '
+          'room — the blocks are still in the config, just no longer shown as '
+          'devices.\n\n'
+          'Every other family is written into your file at the same time, '
+          'because a file that lists families at all replaces the built-in '
+          'list.',
         ),
         actions: [
           TextButton(
@@ -1042,8 +1052,8 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
             maxLines: 16,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             decoration: const InputDecoration(
-              helperText: 'One "key = value" per line. Values are JSON: "text",'
-                  ' 3, true.',
+              helperText: 'One "key = value" per line. Values are written as '
+                  'JSON, so "text" keeps its quotes and 3 and true do not.',
               helperMaxLines: 2,
               border: OutlineInputBorder(),
             ),
@@ -1170,18 +1180,23 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'When the first condition holds, the second must too. A '
-                  'violation never blocks an edit — it paints the red mismatch '
-                  'outline on the fields it flags.',
+                  'When the first condition is true, the second one has to be '
+                  'true as well. Breaking a rule never blocks an edit — it '
+                  'paints the red mismatch outline on the fields you name '
+                  'below, with your message underneath them.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
-                _text(section, 'Section', "'*' wildcards allowed."),
-                _text(when, 'When', 'key=value, key!=value or key~text.'),
-                _text(expect, 'Expect', 'Same syntax.'),
+                _text(section, 'Section',
+                    'Which block to check. A * stands for anything.'),
+                _text(when, 'When',
+                    'key=value, key!=value, or key~text for "contains".'),
+                _text(expect, 'Expect', 'Written the same way.'),
                 _text(message, 'Message',
-                    '"{key}" is replaced with that key\'s live value.'),
-                _text(flag, 'Fields to flag', 'Comma separated.'),
+                    'What to say when they disagree. Put {some_key} in it and '
+                        'that key’s current value is filled in.'),
+                _text(flag, 'Fields to flag',
+                    'Comma separated — the fields that get the red outline.'),
               ],
             ),
           ),
@@ -1251,7 +1266,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                     _rawError = '';
                     _dirty = true;
                   });
-                  _snack('Applied. The rest of the app is following it now.');
+                  _snack('Applied — the rest of the app is using it now.');
                 } on FormatException catch (e) {
                   setState(() => _rawError = '$e');
                 }
@@ -1371,7 +1386,8 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _text(key, 'Config key',
-                      'A key, or a family with a * in it: power1_outlet_*.'),
+                      'One key, or a whole family with a star in it — '
+                          'power1_outlet_*.'),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     key: const ValueKey('schema_field_type'),
@@ -1390,18 +1406,21 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                   ),
                   _text(label, 'Label', 'What the field is called on the tab.'),
                   _text(description, 'Description',
-                      'Behind the info button. Falls back to the built-in '
-                          'config dictionary when blank.',
+                      'What people read behind the info button. Leave it '
+                          'blank to fall back to the app’s own description of '
+                          'the key.',
                       lines: 3),
-                  _text(helper, 'Helper line', 'Small grey text under the '
-                      'field.'),
+                  _text(helper, 'Helper line',
+                      'A short hint under the field.'),
                   if (type == 'dropdown' || type == 'combo')
                     _text(options, 'Options',
                         type == 'combo'
-                            ? 'One per line: value | label | v1, v2 — the '
-                                'values written to each key below, in order.'
-                            : 'One per line: value | label. The label is '
-                                'optional.',
+                            ? 'One per line: the label, then the values it '
+                                'writes to each key below, in order — '
+                                'separated by | characters.'
+                            : 'One per line. Just the value, or value | label '
+                                'when the stored value is not what people '
+                                'should read.',
                         lines: 6),
                   if (type == 'combo')
                     _text(writes, 'Keys this one field writes',
@@ -1409,21 +1428,24 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                             'above.'),
                   if (type == 'module_states')
                     _text(moduleCommand, 'Command in the module',
-                        'The entry in self.Commands whose states fill the '
-                            'dropdown.'),
+                        'The command in the device’s Python module whose '
+                            'states fill this dropdown.'),
                   _text(hideWhen, 'Hide when',
-                      'One condition per line. Any one holding and the key is '
-                          'not drawn, not added, and not offered.',
+                      'One condition per line, like com_type=Network. If any '
+                          'of them is true the field is hidden — and not '
+                          'added to new devices either.',
                       lines: 3),
                   _text(labelWhen, 'Label when',
-                      'One "condition = label" per line. First match wins.',
+                      'One "condition = label" per line, for a field that '
+                          'means something different in some rooms. The first '
+                          'match wins.',
                       lines: 3),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Show even when the block has no such '
-                        'key'),
+                    title: const Text('Show it even when the block does not '
+                        'have this key yet'),
                     subtitle: const Text(
-                        'The first edit writes it. This is how a new setting '
+                        'The first edit adds it. This is how a new setting '
                         'reaches rooms that were built before it existed.'),
                     value: addIfMissing,
                     onChanged: (v) => setLocal(() => addIfMissing = v),
@@ -1447,7 +1469,8 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
     );
     if (saved != true || !mounted) return;
     if (key.text.trim().isEmpty) {
-      _snack('A field with no key describes nothing.', error: true);
+      _snack('Which key is this describing? It needs one to attach to.',
+          error: true);
       return;
     }
 

@@ -1423,11 +1423,11 @@ class _SchematicViewState extends State<SchematicView> {
         content: Text(
           'The drawing goes back to what the config describes: every box at '
           'its automatic spot, and every generated line drawn.\n\n'
-          'What goes: $extras box(es) added by hand, $links line(s) drawn by '
-          'hand, $hidden hidden line(s) restored, and every position anybody '
-          'has dragged.\n\n'
-          'Line colors are kept — they have their own Reset all on the Colors '
-          'dialog. Undo puts the layout back.',
+          'That means letting go of $extras box(es) added by hand and $links '
+          'line(s) drawn by hand, putting $hidden hidden line(s) back, and '
+          'forgetting where anybody has dragged a box to.\n\n'
+          'Your line colours are kept — they have their own Reset all on the '
+          'Colors dialog — and Undo puts the layout back.',
         ),
         actions: [
           TextButton(
@@ -1444,8 +1444,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (confirmed != true || !mounted) return;
 
     provider.recreateSchematicFromConfig();
-    _snack('Recreated from the config: the drawing is the one the config '
-        'describes.');
+    _snack('Done — the drawing is the one the config describes again.');
   }
 
   /// Recolors the connection categories for this room. Changing Network

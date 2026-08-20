@@ -201,6 +201,22 @@ all**). Applying copies exactly what is ticked.
 **Export a copy...** hands your catalog to someone else without repointing
 your own saves at their folder.
 
+## The operation guide
+
+The long-form manual — what every tab is for, how a room goes from empty to
+uploaded, and how to use the Schema and Flow Rules builders — lives in
+`documentation/Room_Config_Builder_Guide.md` and is rendered to a PDF and a
+Word document by:
+
+```
+python tools/build_guide.py
+```
+
+That rewrites `documentation/Room_Config_Builder_Guide.pdf` and
+`Room_Config_Builder_Guide.docx` in place. Keeping the source in the repo means
+a change to the app and the change to its guide travel together, and anybody can
+see what moved.
+
 ## Schema Editor (the `Schema` tab)
 
 `ui_schema.json` decides what a config key looks like on the **Devices** and

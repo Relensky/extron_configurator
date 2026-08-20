@@ -562,14 +562,15 @@ class _AvFlowViewState extends State<AvFlowView> {
       builder: (ctx) => AlertDialog(
         title: const Text('Recreate from config?'),
         content: Text(
-          'Every box and every cable on this drawing is removed, and the room '
-          'is drawn again from the config: the devices it lists, and the ties '
-          'its input and output numbers describe.\n\n'
-          'This drawing has ${provider.avNodes.length} box(es)'
-          '${byHand == 0 ? '' : ' — $byHand added by hand'} and '
-          '$cables cable(s). Anything drawn by hand goes with the rest.\n\n'
-          'Rack rails are kept for the devices that come back. Undo puts the '
-          'whole drawing back.',
+          'This clears the drawing and builds it again from the config — the '
+          'devices it lists, and the leads its input and output numbers '
+          'describe.\n\n'
+          'You have ${provider.avNodes.length} box(es)'
+          '${byHand == 0 ? '' : ', $byHand of them added by hand,'} and '
+          '$cables cable(s) here now. Anything you drew by hand goes with the '
+          'rest.\n\n'
+          'Devices that come back keep their rack rails, and one press of '
+          'Undo puts the whole drawing back the way it was.',
         ),
         actions: [
           TextButton(
@@ -593,11 +594,12 @@ class _AvFlowViewState extends State<AvFlowView> {
     final unracked = provider.pruneAvRackSlots(recordUndo: false);
 
     _snack(
-      'Recreated from the config: $placed device(s) placed, '
-      '${routed.cablesDrawn} cable(s) drawn'
-      '${routed.nodesAdded == 0 ? '' : ', ${routed.nodesAdded} box(es) the '
-          'runs needed added'}'
-      '${unracked == 0 ? '' : ', $unracked rack placement(s) dropped'}.',
+      'Drawn again from the config: $placed device(s) placed and '
+      '${routed.cablesDrawn} cable(s) run'
+      '${routed.nodesAdded == 0 ? '' : ', plus ${routed.nodesAdded} box(es) '
+          'the runs needed'}'
+      '${unracked == 0 ? '' : '. $unracked rack placement(s) had nothing left '
+          'in them and were cleared'}.',
     );
   }
 

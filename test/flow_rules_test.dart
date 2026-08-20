@@ -398,7 +398,8 @@ void main() {
 
       // Not fatal — the family template stands in — but nearly always a typo,
       // and a box that costs nothing on the estimate is worth noticing.
-      expect(find.textContaining('has no "Beige Box 9000"'), findsOneWidget);
+      expect(find.textContaining('does not carry "Beige Box 9000"'),
+          findsOneWidget);
     });
   });
 

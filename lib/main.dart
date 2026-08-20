@@ -23,6 +23,7 @@ import 'device_start_wizard.dart';
 import 'cabling_view.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
+import 'nav_rail.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
 import 'dynamic_devices_view.dart';
@@ -768,19 +769,11 @@ class _MainDashboardState extends State<MainDashboard> {
       ),
       body: Row(
         children: [
-          // The rail is twelve destinations tall and a laptop window is not.
-          // NavigationRail is a Column, so on a short window the bottom tabs
-          // were simply cut off — App Config unreachable, and a layout
-          // exception on every launch before the window is maximized.
-          //
-          // This is the documented way to make one scroll: give it the
-          // viewport's height as a MINIMUM so the normal case still fills the
-          // side of the window, and let it scroll past that when it can't fit.
-          //
           // Inside a [SidePane] so the whole rail can be narrowed to icons or
           // folded away entirely: on a laptop, a drawing is worth more than a
           // column of labels, and the tab you are on is the only one you are
-          // reading.
+          // reading. The scrolling and the label sizing that make that
+          // survivable live in [AppNavRail].
           SidePane(
             side: PaneSide.left,
             title: 'Tabs',
@@ -788,40 +781,9 @@ class _MainDashboardState extends State<MainDashboard> {
             initialWidth: 108,
             minWidth: 72,
             maxWidth: 220,
-            child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: IntrinsicHeight(
-                  child: NavigationRail(
-                    selectedIndex: selectedIndex,
-                    onDestinationSelected: (int index) {
-                      provider.selectTab(index);
-                    },
-                    // Fills whatever the pane has been dragged to, so the
-                    // labels wrap instead of overflowing when it is narrowed.
-                    minWidth: constraints.maxWidth,
-                    labelType: NavigationRailLabelType.all,
-                    destinations: const [
-                      NavigationRailDestination(icon: Icon(Icons.auto_awesome), label: Text('Wizard')),
-                      NavigationRailDestination(icon: Icon(Icons.router), label: Text('Devices')),
-                      NavigationRailDestination(icon: Icon(Icons.settings), label: Text('System')),
-                      NavigationRailDestination(icon: Icon(Icons.data_object), label: Text('Raw JSON')),
-                      NavigationRailDestination(icon: Icon(Icons.account_tree), label: Text('Schematic')),
-                      NavigationRailDestination(icon: Icon(Icons.cable), label: Text('AV Flow')),
-                      NavigationRailDestination(icon: Icon(Icons.map), label: Text('Floor Plan')),
-                      NavigationRailDestination(icon: Icon(Icons.account_tree_outlined), label: Text('Cabling')),
-                      NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
-                      NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
-                      NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
-                      NavigationRailDestination(icon: Icon(Icons.schema), label: Text('Schema')),
-                      NavigationRailDestination(icon: Icon(Icons.rule_folder), label: Text('Flow Rules')),
-                      NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
-                    ],
-                  ),
-                  ),
-                ),
-              ),
+            child: AppNavRail(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: provider.selectTab,
             ),
           ),
           Expanded(
@@ -1521,8 +1483,15 @@ class AppSettingsView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(32.0),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // A Wrap rather than a Row: the heading and the button together are
+        // wider than a half-width window at 130% text, and a Row would run the
+        // button off the edge behind the overflow stripes. Here it drops onto
+        // its own line instead.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             Text('Application Configuration', style: Theme.of(context).textTheme.headlineMedium),
             // Re-opens the same dialog shown on the very first launch, for
