@@ -11,6 +11,7 @@ import 'av_flow_model.dart';
 import 'base_costs.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
+import 'flow_rules.dart';
 import 'cabling_schematic.dart';
 import 'cost_estimate.dart';
 import 'labor_rates.dart';
@@ -51,6 +52,11 @@ enum AppTab {
   racks('racks'),
   cost('cost'),
   deviceEditor('device_editor'),
+  // The two documents that describe how the app itself behaves, next to the
+  // catalog for the same reason it is there: they are about every room rather
+  // than about the room that happens to be open.
+  schemaEditor('schema_editor'),
+  flowRules('flow_rules'),
   appConfig('app_config');
 
   /// Token used in screenshot file names.
@@ -62,7 +68,10 @@ enum AppTab {
   /// list, not about a room, so the "No Configuration Loaded" screen must not
   /// stand in front of them.
   bool get worksWithoutConfig =>
-      this == AppTab.appConfig || this == AppTab.deviceEditor;
+      this == AppTab.appConfig ||
+      this == AppTab.deviceEditor ||
+      this == AppTab.schemaEditor ||
+      this == AppTab.flowRules;
 }
 
 /// How far along a room is.
@@ -234,6 +243,11 @@ class AppStateProvider extends ChangeNotifier {
   /// price list for the department, and a save merges another editor's
   /// changes rather than overwriting them (see [AvDeviceLibrary.save]).
   String avDevicesFilePath = '';
+  /// Optional path to av_flow_rules.json — how the AV Flow tab turns a config
+  /// into a drawing. Same reason to point it at a share as the catalog: the
+  /// rules are a description of how this shop builds rooms, not a per-machine
+  /// preference.
+  String flowRulesFilePath = '';
   String documentationPath = ''; // Folder of per-module PDF manuals (blank = <root>/documentation)
 
   // --- Processor connection settings (App Config > Processor Connection) ---
@@ -529,6 +543,7 @@ class AppStateProvider extends ChangeNotifier {
       'uiSchemaPath': uiSchemaPath,
       'keyMapPath': keyMapPath,
       'avDevicesFilePath': avDevicesFilePath,
+      'flowRulesFilePath': flowRulesFilePath,
       'documentationPath': documentationPath,
       'sftpUsername': sftpUsername,
       'sftpPort': sftpPort,
@@ -618,6 +633,7 @@ class AppStateProvider extends ChangeNotifier {
     await loadUiSchema();
     await loadKeyMap();
     await loadAvDeviceLibrary();
+    await loadFlowRules();
     await loadLaborRates();
     await loadBaseCosts();
     await loadBuildingsList();
@@ -647,6 +663,14 @@ class AppStateProvider extends ChangeNotifier {
   // device shows on the AV canvas come from here. Built-ins cover the common
   // models; av_devices.json in the Root Folder overrides and extends them.
   AvDeviceLibrary avDeviceLibrary = AvDeviceLibrary.builtIn();
+
+  // --- AV flow rules (how a room draws itself from its config) ---
+  // Which box each input_/output_ key means, what goes between two ends that
+  // do not take the same cable, and what hangs off a USB switcher. Built-in
+  // defaults reproduce what used to be constants in av_flow_routing.dart;
+  // av_flow_rules.json in the Root Folder overrides them, and the Flow Rules
+  // tab writes that file.
+  FlowRules flowRules = FlowRules.builtIn();
 
   // --- Labor rates (what an hour costs, per job type) ---
   // Shared across rooms so revising a rate re-costs every estimate that uses
@@ -5558,6 +5582,7 @@ class AppStateProvider extends ChangeNotifier {
       uiSchemaPath = str('uiSchemaPath', '');
       keyMapPath = str('keyMapPath', '');
       avDevicesFilePath = str('avDevicesFilePath', '');
+      flowRulesFilePath = str('flowRulesFilePath', '');
       documentationPath = str('documentationPath', '');
       sftpUsername = str('sftpUsername', 'admin');
       sftpPort = str('sftpPort', '22022');
@@ -5630,6 +5655,8 @@ class AppStateProvider extends ChangeNotifier {
       await loadKeyMap();
       // Load the AV connector library (built-ins when no file exists)
       await loadAvDeviceLibrary();
+      // Load the AV flow rule book (built-ins when no file exists)
+      await loadFlowRules();
       // Load the labor rate card (built-in roles when no file exists)
       await loadLaborRates();
       // Load the base cost card (every category unset when no file exists)
@@ -6381,6 +6408,8 @@ class AppStateProvider extends ChangeNotifier {
         // ignore: unawaited_futures
         loadAvDeviceLibrary();
         // ignore: unawaited_futures
+        loadFlowRules();
+        // ignore: unawaited_futures
         loadLaborRates();
         // ignore: unawaited_futures
         loadBaseCosts();
@@ -6420,6 +6449,11 @@ class AppStateProvider extends ChangeNotifier {
         avDevicesFilePath = value;
         // ignore: unawaited_futures
         loadAvDeviceLibrary(); // Re-read the catalog from the new location
+        break;
+      case 'flowRulesFilePath':
+        flowRulesFilePath = value;
+        // ignore: unawaited_futures
+        loadFlowRules(); // Re-read the rule book from the new location
         break;
       case 'documentationPath':
         documentationPath = value; // PDFs are resolved on demand — no reload
@@ -6491,6 +6525,47 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Swaps in an edited schema document (the Schema Editor's every change).
+  ///
+  /// Rebuilt from the built-ins with [doc] laid over them, rather than patched
+  /// in place: that is exactly what loading the file does, so what the editor
+  /// shows after an edit is what the next launch will show.
+  void applyUiSchemaDoc(Map<String, dynamic> doc) {
+    final source = uiSchema.source;
+    uiSchema = UiSchema.fromDoc(doc)..source = source;
+    notifyListeners();
+  }
+
+  /// Writes the schema document. Returns the file written, or '' on failure.
+  ///
+  /// The document is the one the editor has been changing — comments and all
+  /// — so a save is the file it was read from with the edits in it, not a
+  /// regenerated approximation of it.
+  Future<String> saveUiSchema() async {
+    // The file it was READ from wins over the root-folder default: a schema
+    // picked up from the working directory (which is where a dev build finds
+    // it) must be saved back there rather than copied into the root folder,
+    // leaving two files and no way to tell which one the app is using.
+    final target = uiSchemaPath.isNotEmpty
+        ? uiSchemaPath
+        : (uiSchema.source.startsWith('Built-in')
+            ? effectiveUiSchemaPath
+            : uiSchema.source);
+    try {
+      final file = File(target);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(
+          const JsonEncoder.withIndent('  ').convert(uiSchema.rawDoc));
+      uiSchema.source = target;
+      AppLogger.logInfo('UI schema saved to $target.');
+      notifyListeners();
+      return target;
+    } catch (e, stack) {
+      AppLogger.logError('Failed to save ui_schema.json', e, stack);
+      return '';
+    }
+  }
+
   /// (Re)loads av_devices.json, the connector sets the AV Flow tab draws ports
   /// from and the price list the cost estimate reads. Same contract as
   /// [loadUiSchema]: built-ins stay active on any failure and the error is
@@ -6521,6 +6596,45 @@ class AppStateProvider extends ChangeNotifier {
     final saved = await avDeviceLibrary.save(toPath: effectiveAvDevicesPath);
     notifyListeners();
     return saved;
+  }
+
+  /// av_flow_rules.json: the file it was read from when there is one, else
+  /// `<root>/av_flow_rules.json` — beside ui_schema.json and av_devices.json,
+  /// which is where the rest of the app's shared documents live.
+  String get effectiveFlowRulesPath =>
+      flowRulesFilePath.isNotEmpty
+          ? flowRulesFilePath
+          : (flowRules.source.startsWith('Built-in')
+              ? path.join(effectiveRootFolder, 'av_flow_rules.json')
+              : flowRules.source);
+
+  /// (Re)reads the rule book. A room with no rule file draws exactly as it
+  /// always did — the built-ins ARE the shipped behaviour.
+  Future<void> loadFlowRules() async {
+    flowRules = await FlowRules.load(
+        explicitPath:
+            _resolveOptionalFile(flowRulesFilePath, 'av_flow_rules.json'));
+    notifyListeners();
+  }
+
+  /// Writes the rule book. Returns the file written, or '' on failure.
+  Future<String> saveFlowRules() async {
+    final saved = await flowRules.save(effectiveFlowRulesPath);
+    notifyListeners();
+    return saved;
+  }
+
+  /// Replaces the rules in memory (the Flow Rules tab's every edit). Disk is
+  /// only touched by Save, so a half-typed rule is not everybody's problem
+  /// yet — but the drawing follows immediately, which is the point.
+  void applyFlowRules(FlowRules rules) {
+    flowRules = rules;
+    // The routing pass will not re-run over a room it has already drawn
+    // unless something it reads has changed, and the rules are something it
+    // reads. Clearing the fingerprint is what lets a rule edit reach the
+    // drawing that is already on screen.
+    avRoutedFingerprint = '';
+    notifyListeners();
   }
 
   /// labor_rates.json: explicit choice, else `<root>/labor_rates.json`.

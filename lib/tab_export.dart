@@ -46,7 +46,14 @@ const List<String> kTabExportFormats = ['xlsx', 'txt', 'copy'];
 /// True when [tab] has tables worth exporting at all. The Wizard and App
 /// Config are settings pages, not documents.
 bool tabCanExport(AppTab tab) => switch (tab) {
-  AppTab.wizard || AppTab.appConfig => false,
+  // The Wizard and App Config are settings pages, and the two rule documents
+  // are edited and saved as their own files — a spreadsheet of either would be
+  // a copy nobody can load back.
+  AppTab.wizard ||
+  AppTab.appConfig ||
+  AppTab.schemaEditor ||
+  AppTab.flowRules =>
+    false,
   _ => true,
 };
 
@@ -62,7 +69,11 @@ String tabExportLabel(AppTab tab) => switch (tab) {
   AppTab.racks => 'Rack elevations',
   AppTab.cost => 'Cost estimate',
   AppTab.deviceEditor => 'Catalog',
-  AppTab.wizard || AppTab.appConfig => 'This tab',
+  AppTab.wizard ||
+  AppTab.appConfig ||
+  AppTab.schemaEditor ||
+  AppTab.flowRules =>
+    'This tab',
 };
 
 /// The file-name stem, under the room's own name.
@@ -77,7 +88,11 @@ String _stem(AppTab tab) => switch (tab) {
   AppTab.racks => 'racks',
   AppTab.cost => 'cost_estimate',
   AppTab.deviceEditor => 'device_catalog',
-  AppTab.wizard || AppTab.appConfig => 'room',
+  AppTab.wizard ||
+  AppTab.appConfig ||
+  AppTab.schemaEditor ||
+  AppTab.flowRules =>
+    'room',
 };
 
 /// The tables [tab] is a view of.
@@ -136,6 +151,8 @@ List<ReportSection> tabReportSections(
       return _catalogSections(provider);
     case AppTab.wizard:
     case AppTab.appConfig:
+    case AppTab.schemaEditor:
+    case AppTab.flowRules:
       return const [];
   }
 }

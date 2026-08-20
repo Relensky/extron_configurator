@@ -751,6 +751,25 @@ class UiSchema {
   /// Where this schema came from, for display in App Config.
   String source = 'Built-in defaults';
 
+  /// The document this schema was read from, kept verbatim.
+  ///
+  /// The Schema Editor edits THIS and hands it back, rather than
+  /// reassembling a file out of the parsed structures. Two reasons, and both
+  /// of them are somebody's afternoon: a key this build does not understand
+  /// yet survives a round trip instead of being silently dropped, and so do
+  /// the "__comment" entries the file uses to explain itself. Empty when the
+  /// schema is the built-in one — nothing has been read.
+  Map<String, dynamic> rawDoc = {};
+
+  /// Builds a schema from a document in memory: the built-ins with the
+  /// document laid over them, which is exactly what [load] does with a file.
+  static UiSchema fromDoc(Map<String, dynamic> doc) {
+    final schema = UiSchema.builtIn();
+    schema.applyJsonMap(doc);
+    schema.rawDoc = jsonDecode(jsonEncode(doc)) as Map<String, dynamic>;
+    return schema;
+  }
+
   int get fieldCount =>
       _exact.length +
       _patterns.length +
@@ -1250,6 +1269,7 @@ class UiSchema {
           throw const FormatException('Root of ui_schema.json must be an object.');
         }
         schema.applyJsonMap(doc);
+        schema.rawDoc = jsonDecode(jsonEncode(doc)) as Map<String, dynamic>;
         schema.source = candidate;
         AppLogger.logInfo(
             'UI schema loaded from $candidate (${schema.fieldCount} field definitions).');

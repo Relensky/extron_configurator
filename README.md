@@ -201,6 +201,82 @@ all**). Applying copies exactly what is ticked.
 **Export a copy...** hands your catalog to someone else without repointing
 your own saves at their folder.
 
+## Schema Editor (the `Schema` tab)
+
+`ui_schema.json` decides what a config key looks like on the **Devices** and
+**System** tabs: its label, the description behind the info button, whether it
+is a switch or a dropdown and what the dropdown offers, which device families
+exist at all, and what a loaded or newly created room is given when it has
+none. It has always been editable — the file is read at startup and can say
+anything — but only by hand, in JSON, against a config file open in another
+window to see which keys were still undescribed.
+
+**Coverage** is that second window, built in. Pick a block of the default
+config file (or any other config, with *Another config file*) and every key in
+it is listed against the schema entry that describes it, with a count and a
+**Not described yet** filter. An undescribed key is one that shows up on the
+tab as a raw key with a plain text box; **Describe** opens the field editor
+with the key filled in and its type guessed from what the file holds.
+
+The other sections are the schema's own parts — global **Fields**, **Device
+fields** scoped to one family, the **Device families** themselves (a `dev_`
+count key, a section prefix, a label and the SYSTEM_SETUP keys the family
+owns), the **Defaults** a room is given, and the **Consistency** checks that
+paint the red mismatch outline. **Raw JSON** is the escape hatch: the whole
+document, validated before it is applied.
+
+Every edit lands in the app immediately — the Devices and System tabs follow it
+before anything is written — and **Save** writes the document that was *read*,
+with the edits in it. A key a later build understands and this one does not,
+and the `__comment` entries the file explains itself with, both survive the
+round trip.
+
+## Flow Rules (the `Flow Rules` tab)
+
+Drawing a room from its config takes two kinds of knowledge. One is mechanical:
+which socket the number `3B` names, whether a connector is already spoken for,
+how a run with two different ends is split in three. The other is a set of
+decisions this shop has made about how its rooms are built — `input_pc` is the
+room PC, a twisted-pair output reaching an HDMI display needs a DTP 230
+receiver between them, the Toggle's DEVICE ports carry the DSP, the AV Bridge
+and the doc cam in that order, and HOST 1 is the PC. Every one of those used to
+be a constant compiled into the routing pass, so a new box or a differently
+wired room meant a code change.
+
+They are now `av_flow_rules.json`, and this tab edits it:
+
+- **Source boxes** — an `input_` key whose box has no config block: the room
+  PC, the doc cam, the laptop at a plate. Name, catalog model, where it lives,
+  and whether the room is paying for it.
+- **Source devices** / **Display outputs** — a config key and the device block
+  it means.
+- **Destination boxes** — a confidence monitor, the assisted-listening
+  transmitter (which lands on line audio rather than video, because its rule
+  says so).
+- **Capture** — where `output_cc` lands, named as alternatives so the rule
+  finds whichever of a MediaPort, an AV Bridge or a USB switcher this room was
+  built with.
+- **Extenders** — "the switcher end carries X, the far end takes Y, and this is
+  the box that goes between them". The receiver at a display and the
+  transmitter at a camera are the same rule read in the two directions.
+- **USB switchers** — what feeds each DEVICE port and what each HOST port
+  feeds, one line per port, in port order. Fixed positions: a room with no doc
+  cam leaves DEVICE 3 empty rather than moving the AV Bridge onto it.
+- **Expansion bus** and **Outlet names** — the words that identify a `DMP EXP`
+  connector, and the outlet labels the trade has already settled ("Switch" is
+  the matrix, not a coin toss).
+
+Anywhere a rule has to point at a box, one syntax does it: `DSPDEVICE_` is the
+family (the first block of it that fits), `RECORDERDEVICE_1` is one block,
+`input_doc_cam` is the box that key places, `AV Bridge 2x1` is a catalog model,
+and `|` separates alternatives tried in order.
+
+An edit changes the rules in memory at once, so the next drawing follows it —
+press **Recreate from config** on the AV Flow tab to redraw a room that is
+already on screen. **Save** writes the file; **Reset to built-in** puts back
+exactly what the app ships with, which is what a room with no rule file draws
+with.
+
 ## Opening and converting
 
 Opening a file **opens the file**. When a legacy room needs migrating the

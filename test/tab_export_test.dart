@@ -36,11 +36,21 @@ void main() {
   };
 
   test('the settings pages have nothing to export and say so', () {
-    expect(tabCanExport(AppTab.wizard), isFalse);
-    expect(tabCanExport(AppTab.appConfig), isFalse);
+    // The Wizard and App Config are settings; the Schema and Flow Rules tabs
+    // edit documents that are saved as their own files, so a spreadsheet of
+    // either would be a copy nobody can load back.
+    const settingsPages = {
+      AppTab.wizard,
+      AppTab.appConfig,
+      AppTab.schemaEditor,
+      AppTab.flowRules,
+    };
+    for (final tab in settingsPages) {
+      expect(tabCanExport(tab), isFalse, reason: '${tab.name} exports');
+    }
     for (final tab in AppTab.values) {
-      if (tab == AppTab.wizard || tab == AppTab.appConfig) continue;
-      expect(tabCanExport(tab), isTrue, reason: '${tab.name} exports');
+      if (settingsPages.contains(tab)) continue;
+      expect(tabCanExport(tab), isTrue, reason: '${tab.name} does not export');
     }
   });
 

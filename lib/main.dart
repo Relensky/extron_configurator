@@ -17,6 +17,8 @@ import 'cost_estimate_view.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'device_editor_view.dart';
+import 'flow_rules_view.dart';
+import 'schema_editor_view.dart';
 import 'device_start_wizard.dart';
 import 'cabling_view.dart';
 import 'floor_plan_view.dart';
@@ -812,6 +814,8 @@ class _MainDashboardState extends State<MainDashboard> {
                       NavigationRailDestination(icon: Icon(Icons.view_day), label: Text('Racks')),
                       NavigationRailDestination(icon: Icon(Icons.request_quote), label: Text('Cost')),
                       NavigationRailDestination(icon: Icon(Icons.inventory_2), label: Text('Catalog')),
+                      NavigationRailDestination(icon: Icon(Icons.schema), label: Text('Schema')),
+                      NavigationRailDestination(icon: Icon(Icons.rule_folder), label: Text('Flow Rules')),
                       NavigationRailDestination(icon: Icon(Icons.build_circle), label: Text('App Config')),
                     ],
                   ),
@@ -964,6 +968,13 @@ class _MainDashboardState extends State<MainDashboard> {
         // didChangeDependencies, and remounting it mid-Apply would cut off its
         // own "applied/saved" feedback.
         return const JsonEditorView();
+      case AppTab.schemaEditor:
+        // Unkeyed, like the catalog: the schema is application data, and a
+        // half-finished field definition must not be thrown away because
+        // somebody opened a different room.
+        return const SchemaEditorView();
+      case AppTab.flowRules:
+        return const FlowRulesView();
       case AppTab.appConfig:
         return const AppSettingsView();
     }
@@ -2055,6 +2066,71 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // AV Flow Rules (av_flow_rules.json) Path
+        //
+        // Worth pointing at the same share as the catalog, and for the same
+        // reason: the rules are a description of how this shop builds rooms —
+        // which box a config key means, what goes between two ends that do not
+        // take the same cable, what hangs off the USB switcher — and two
+        // engineers drawing the same room should draw it the same way.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                key: ValueKey(
+                    'flowRulesFilePath_${provider.flowRulesFilePath}'),
+                decoration: InputDecoration(
+                  labelText: 'AV Flow Rules File Path (av_flow_rules.json)',
+                  hintText:
+                      'Blank = av_flow_rules.json in the Root Folder / next to '
+                      'the app',
+                  helperText:
+                      'Active rules: ${provider.flowRules.source}. Edited on '
+                      'the Flow Rules tab; with no file at all the app draws '
+                      'with its built-in rules.',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.file_open),
+                    tooltip: 'Select JSON File',
+                    onPressed: () async {
+                      FilePickerResult? result = await FilePicker.pickFiles(
+                        type: FileType.custom,
+                        allowedExtensions: ['json'],
+                      );
+                      if (result != null) {
+                        provider.updateSetting(
+                            'flowRulesFilePath', result.files.single.path!);
+                      }
+                    },
+                  ),
+                ),
+                initialValue: provider.flowRulesFilePath,
+                onChanged: (val) =>
+                    provider.updateSetting('flowRulesFilePath', val),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload Rules'),
+                onPressed: () async {
+                  await provider.loadFlowRules();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          'Flow rules reloaded: ${provider.flowRules.source}'),
+                    ));
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
         // Legacy Key Map (key_map.json) Path
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2656,6 +2732,8 @@ class FirstRunSetupDialog extends StatelessWidget {
     final bool buildingsExists = File(provider.effectiveBuildingsFilePath).existsSync();
     final bool schemaExists = File(provider.effectiveUiSchemaPath).existsSync();
     final bool keyMapExists = File(provider.effectiveKeyMapPath).existsSync();
+    final bool flowRulesExists =
+        File(provider.effectiveFlowRulesPath).existsSync();
     final bool avDevicesExists =
         File(provider.effectiveAvDevicesPath).existsSync();
     final bool modulesExists = Directory(provider.effectiveModulesPath).existsSync();
@@ -2747,6 +2825,12 @@ class FirstRunSetupDialog extends StatelessWidget {
                   value: provider.effectiveAvDevicesPath,
                   exists: avDevicesExists,
                   settingKey: 'avDevicesFilePath'),
+              _pathRow(context, provider,
+                  label: 'av_flow_rules.json (how a room draws itself — '
+                      'optional)',
+                  value: provider.effectiveFlowRulesPath,
+                  exists: flowRulesExists,
+                  settingKey: 'flowRulesFilePath'),
               _pathRow(context, provider,
                   label: 'Python modules folder (default: "devices" sub-folder)',
                   value: provider.effectiveModulesPath,
