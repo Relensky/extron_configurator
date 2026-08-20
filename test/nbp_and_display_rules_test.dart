@@ -142,9 +142,79 @@ void main() {
       }
     });
 
-    test('source_overrides is left to the raw editor, like the NBP maps', () {
-      expect(schema.specFor('source_overrides', sectionKey: 'PROJECTORDEVICE_1')
-          ?.type, 'hidden');
+    /// source_overrides WAS hidden, like the NBP maps: it is an object, and
+    /// the device tab renders scalars. It is the one screen rule a tech
+    /// actually reaches for, though, so it has an editor of its own rather
+    /// than braces typed on the Raw JSON tab — 'source_map', which draws one
+    /// row of two room-source dropdowns per substitution.
+    test('source_overrides has the map editor, not a text box', () {
+      final spec =
+          schema.specFor('source_overrides', sectionKey: 'PROJECTORDEVICE_1');
+      expect(spec?.type, 'source_map');
+      // Offered on a projector that predates the key, like its three siblings.
+      expect(spec?.addIfMissing, isTrue);
+      expect(schema.descriptionFor('source_overrides',
+              sectionKey: 'PROJECTORDEVICE_1'),
+          isNotNull);
+      // And nowhere else: a camera has no source to substitute.
+      expect(schema.deviceSpecFor('CAMERADEVICE_1', 'source_overrides'), isNull);
+    });
+  });
+
+  /// The processor mutes the room's microphones as it shuts down and unmutes
+  /// them at startup, unless these two keys say otherwise. Absent means ON, so
+  /// the only thing the config has to get right is that a room which states
+  /// them states the value the processor would have used anyway — otherwise
+  /// the baseline quietly changes what every new room does overnight.
+  group('the shutdown mic mutes', () {
+    const keys = ['shutdown_mute_ceiling_mics', 'shutdown_mute_mics'];
+
+    test('both audio blocks in the template state them, and state ON', () {
+      for (final section in const ['DSPDEVICE_1', 'SWITCHERDEVICE_1']) {
+        final block = Map<String, dynamic>.from(template[section] as Map);
+        for (final key in keys) {
+          expect(block[key], isTrue,
+              reason: '$section.$key must state the processor\'s own default');
+        }
+      }
+    });
+
+    test('they are scoped to the blocks that carry the mic groups', () {
+      for (final key in keys) {
+        for (final section in const ['DSPDEVICE_1', 'SWITCHERDEVICE_1']) {
+          final spec = schema.deviceSpecFor(section, key);
+          expect(spec, isNotNull, reason: '$key on $section');
+          expect(spec!.type, 'bool', reason: '$key on $section');
+          expect(spec.addIfMissing, isTrue, reason: '$key on $section');
+          expect(schema.descriptionFor(key, sectionKey: section), isNotNull,
+              reason: '$key on $section');
+        }
+        // A second switcher is a sub-switcher with no mic groups on it, and a
+        // projector has no microphones at all.
+        for (final section in const ['SWITCHERDEVICE_2', 'PROJECTORDEVICE_1']) {
+          expect(schema.deviceSpecFor(section, key), isNull,
+              reason: '$key means nothing on $section');
+        }
+      }
+    });
+
+    test('a new DSP or first switcher is created with them', () {
+      final p = AppStateProvider(autoLoadSettings: false)..uiSchema = schema;
+      p.roomConfig['SYSTEM_SETUP'] = <String, dynamic>{
+        'dev_dsps': '0',
+        'dev_switchers': '0',
+      };
+      p.setDeviceCount('dev_dsps', 'DSPDEVICE_', 1,
+          p.getDefaultDeviceBlock('DSPDEVICE_'));
+      p.setDeviceCount('dev_switchers', 'SWITCHERDEVICE_', 2,
+          p.getDefaultDeviceBlock('SWITCHERDEVICE_'));
+
+      for (final section in const ['DSPDEVICE_1', 'SWITCHERDEVICE_1']) {
+        final block = p.roomConfig[section] as Map;
+        for (final key in keys) {
+          expect(block[key], isTrue, reason: '$section.$key');
+        }
+      }
     });
   });
 

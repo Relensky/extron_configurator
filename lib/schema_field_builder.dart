@@ -71,6 +71,10 @@ class SchemaFieldBuilder {
         field = _buildRoomSources(
             context, provider, sectionKey, fieldKey, spec, label, value);
         break;
+      case 'source_map':
+        field = _buildSourceMap(
+            context, provider, sectionKey, fieldKey, spec, label, value);
+        break;
       case 'module_states':
         field = _buildModuleStates(
             context, provider, sectionKey, fieldKey, spec!, label, value);
@@ -163,6 +167,193 @@ class SchemaFieldBuilder {
       ],
       onChanged: (v) =>
           provider.updateDeviceValue(sectionKey, fieldKey, v ?? ''),
+    );
+  }
+
+  /// A source -> source MAP, drawn as one row of dropdowns per substitution.
+  ///
+  /// This is the projectors' `source_overrides`: while the room is on the
+  /// source on the left, this screen is routed the one on the right instead.
+  /// The key is an object, so it used to be hidden and left to the Raw JSON
+  /// tab — which meant the one screen rule a tech is most likely to want was
+  /// the one they had to hand-type braces for.
+  ///
+  /// Both sides are [roomSourceNames], the same list `source_fixed` offers, so
+  /// a substitution can only be written between sources this room actually
+  /// has. A name already in the file that is NOT one of them is still listed
+  /// and marked, exactly as the pinned-source dropdown does: it is a source
+  /// nobody has wired up yet or a typo, and both are things to see.
+  ///
+  /// Every edit writes the whole map back through the one provider write path
+  /// each field shares, so nothing is held in widget state — a row cannot go
+  /// missing when the device tab's lazy list scrolls it off screen.
+  static Widget _buildSourceMap(
+    BuildContext context,
+    AppStateProvider provider,
+    String sectionKey,
+    String fieldKey,
+    FieldSpec? spec,
+    String label,
+    dynamic value,
+  ) {
+    final sources = roomSourceNames(_sectionMap(provider, 'SYSTEM_SETUP'));
+
+    // Insertion order is kept: the rows stay where the tech put them rather
+    // than jumping around as sources are picked. A value that is not an
+    // object (null, or a string typed into the raw editor) reads as no rows;
+    // the first edit replaces it with a real map.
+    final Map<String, String> rows = {};
+    if (value is Map) {
+      value.forEach((k, v) => rows[k.toString()] = v?.toString() ?? '');
+    }
+
+    void write(Map<String, String> next) => provider.updateDeviceValue(
+        sectionKey, fieldKey, Map<String, dynamic>.from(next));
+
+    /// Rebuilds the map with [from] renamed to [to], in place, so changing
+    /// the left side of a row does not move it to the bottom.
+    void renameKey(String from, String to) {
+      final next = <String, String>{};
+      rows.forEach((k, v) => next[k == from ? to : k] = v);
+      write(next);
+    }
+
+    final available = [
+      for (final name in sources)
+        if (!rows.containsKey(name)) name,
+    ];
+
+    final labelColor = _originColor(context, provider, sectionKey, fieldKey);
+    // A row whose right side is still blank routes this screen to nothing, so
+    // it is flagged the same way an out-of-schema value is rather than left
+    // looking finished.
+    final bool incomplete = rows.values.any((v) => v.trim().isEmpty);
+
+    Widget sideDropdown({
+      required String? current,
+      required String hint,
+      required List<String> options,
+      required ValueChanged<String> onPicked,
+      bool markBlank = false,
+    }) {
+      final value = current ?? '';
+      final stray = value.isNotEmpty && !options.contains(value);
+      return DropdownButtonFormField<String>(
+        initialValue: value,
+        isExpanded: true,
+        isDense: true,
+        decoration: InputDecoration(
+          labelText: hint,
+          isDense: true,
+          border: const OutlineInputBorder(),
+          enabledBorder: markBlank && value.isEmpty
+              ? OutlineInputBorder(
+                  borderSide:
+                      BorderSide(color: Colors.red.shade400, width: 1.5))
+              : null,
+        ),
+        items: [
+          if (value.isEmpty || markBlank)
+            const DropdownMenuItem(value: '', child: Text('— pick a source —')),
+          for (final name in options)
+            DropdownMenuItem(value: name, child: Text(name)),
+          if (stray)
+            DropdownMenuItem(
+              value: value,
+              child: Text('$value  (not one of this room\'s sources)'),
+            ),
+        ],
+        onChanged: (v) => onPicked(v ?? ''),
+      );
+    }
+
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: labelColor == null ? null : TextStyle(color: labelColor),
+        floatingLabelStyle:
+            labelColor == null ? null : TextStyle(color: labelColor),
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        helperText: sources.isEmpty
+            ? 'This room has no sources filled in yet — set the input_ keys '
+                'on the System tab'
+            : incomplete
+                ? 'A substitution with no source on the right leaves this '
+                    'screen unrouted whenever the room selects the one on '
+                    'the left'
+                : spec?.helperText,
+        helperStyle:
+            incomplete ? TextStyle(color: Colors.red.shade400) : null,
+        helperMaxLines: 3,
+        border: const OutlineInputBorder(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'No substitutions — this screen shows whatever the room '
+                'selected.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          for (final entry in rows.entries)
+            Padding(
+              key: ValueKey('source_map_${sectionKey}_${entry.key}'),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: sideDropdown(
+                      current: entry.key,
+                      hint: 'When the room selects',
+                      // Its own name plus whatever is still unclaimed: two
+                      // rows keyed on the same source would collapse into one.
+                      options: [entry.key, ...available]..sort(),
+                      onPicked: (v) {
+                        if (v.isEmpty || v == entry.key) return;
+                        renameKey(entry.key, v);
+                      },
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.arrow_forward, size: 18),
+                  ),
+                  Expanded(
+                    child: sideDropdown(
+                      current: entry.value,
+                      hint: 'this screen shows',
+                      options: sources,
+                      markBlank: true,
+                      onPicked: (v) => write({...rows, entry.key: v}),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Remove this substitution',
+                    onPressed: () =>
+                        write({...rows}..remove(entry.key)),
+                  ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add substitution'),
+              // Nothing left to key a row on: every source this room has
+              // already substitutes, or it has none filled in at all.
+              onPressed: available.isEmpty
+                  ? null
+                  : () => write({...rows, available.first: ''}),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

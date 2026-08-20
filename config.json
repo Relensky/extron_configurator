@@ -74,6 +74,8 @@
         "password": "ATEC2007",
         "protocol": "TCP",
         "service_port": 0,
+        "shutdown_mute_ceiling_mics": true,
+        "shutdown_mute_mics": true,
         "user": "admin"
     },
     "MEDIAPORTDEVICE_1": {
@@ -420,6 +422,8 @@
         "password": "ATEC2007",
         "protocol": "SSH",
         "service_port": 0,
+        "shutdown_mute_ceiling_mics": true,
+        "shutdown_mute_mics": true,
         "user": "admin"
     },
     "SWITCHERDEVICE_2": {

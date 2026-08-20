@@ -13,8 +13,11 @@
     "               'VGA' when gui_usb_or_vga is VGA.",
     "  description: Text behind the (i) info button.",
     "  helperText:  Small grey hint line under the field.",
-    "  type:        auto | text | int | double | bool | dropdown | combo | hidden | module_states.",
+    "  type:        auto | text | int | double | bool | dropdown | combo | hidden |",
+    "               room_sources | module_states | source_map.",
     "               'auto' (default) infers from the JSON value type.",
+    "               'source_map' edits an OBJECT of source-name pairs (a display's",
+    "               source_overrides) as one dropdown row per substitution.",
     "  options:     For dropdown/combo. Plain strings, or objects with value/label.",
     "  writes:      For combo only - the list of config keys the one dropdown writes.",
     "               Combo options use 'values' (one entry per key in 'writes').",
@@ -409,7 +412,9 @@
       "group_pc_record_mute": "11",
       "group_prog_gain": "1",
       "group_prog_mute": "5",
-      "group_voice_lift_mute": "3"
+      "group_voice_lift_mute": "3",
+      "shutdown_mute_ceiling_mics": true,
+      "shutdown_mute_mics": true
     },
     "SWITCHERDEVICE_1": {
       "group_ceil_mute": "4",
@@ -418,7 +423,9 @@
       "group_prog_gain": "1",
       "group_prog_mute": "5",
       "group_room_mute": "3",
-      "group_voice_lift_mute": "7"
+      "group_voice_lift_mute": "7",
+      "shutdown_mute_ceiling_mics": true,
+      "shutdown_mute_mics": true
     },
     "USBDEVICE_*": {
       "default_input": "1"
@@ -572,9 +579,12 @@
         "description": "The one source this screen always shows, whatever the room has selected — the confidence monitor that stays on the PC, the overflow projector parked on the extended desktop. The list is this room's own sources, read off the input_ keys on the System tab. Only used when \"Follows the room's source buttons\" is off. Leave it blank to take the screen out of routing altogether rather than pin it to anything."
       },
       "source_overrides": {
-        "type": "hidden",
-        "description": "Source substitutions for this display, as {\"pc\": \"pc_extended\"} — while the room source is the key, route the value here instead. For the display that mirrors the extended desktop only when the PC is up, and follows normally for everything else. Names are matched lower-case on both sides. Edited on the Raw JSON tab: it is an object, and a text box would turn it into a string.",
-        "__comment": "Hidden because the device tab renders scalars; the description is here so the info button and the report still have it."
+        "type": "source_map",
+        "label": "Source Substitutions (source_overrides)",
+        "addIfMissing": true,
+        "helperText": "No rows: this screen shows whatever the room selected",
+        "description": "Source substitutions for this screen: while the room is on the source named on the left, route the one on the right here instead. The confidence monitor that mirrors the extended desktop whenever the PC is up and follows the room normally for everything else is one row — pc shows pc_extended — and nothing else about the screen changes. Both sides are this room's own sources, read off the input_ keys on the System tab, and the processor matches them lower-case. A screen with no rows follows the room's source buttons exactly as it always did. The pc row is read at startup too: it decides which input the screen comes up on, ahead of the old rule that put the extended desktop on screens 2 and 4 in Extended mode. Presenter Mode ignores every row here for as long as it is running.",
+        "__comment": "A map, not a scalar: 'source_map' draws one room-source -> room-source row per entry, so the object never has to be typed on the Raw JSON tab."
       },
       "presenter_follow": {
         "type": "bool",
@@ -628,6 +638,51 @@
         ],
         "helperText": "The input the room sits on. The morning restart toggles away from it and back",
         "description": "Which host the USB switcher hands the room's camera and microphone to when nobody has chosen. The processor drives this input once at startup, and the morning restart toggles to the OTHER input and back to force the USB devices to re-enumerate — so this is what the room comes up on every day. Only 1 and 2 are accepted: these are two-input switchers, and the processor logs a warning and falls back to 1 for anything else. Set it to 2 in a room wired with the laptop plate on the first port."
+      }
+    },
+    "__mic_shutdown_note": {
+      "__comment": [
+        "SHUTDOWN MIC MUTES. The processor mutes the microphones as the room",
+        "powers down unless these say otherwise, and unmutes the same ones at",
+        "startup. They are scoped to the two blocks that can carry a room's",
+        "mic groups - DSPDEVICE_* in a room with a DSP, SWITCHERDEVICE_1 in a",
+        "room whose mic audio lives on the switcher - so each toggle sits next",
+        "to the group ids it applies to. Absent from a config means ON, which",
+        "is what every room built before these keys existed already does.",
+        "VoiceLift is deliberately NOT one of them: it is always muted at",
+        "shutdown."
+      ]
+    },
+    "DSPDEVICE_*": {
+      "shutdown_mute_ceiling_mics": {
+        "type": "bool",
+        "label": "Mute Ceiling Mics at Shutdown (shutdown_mute_ceiling_mics)",
+        "addIfMissing": true,
+        "helperText": "Absent from a config the processor treats as ON — turn it off to leave the ceiling array as it was",
+        "description": "Whether shutting the room down mutes the ceiling microphone array. On (the processor's default when the key is absent) the array is closed as the room powers off, so nothing is left live overnight. It has a switch of its own because a room can want one and not the other — the ceiling array closed while the handhelds are left exactly as the instructor set them, or the reverse. Startup reads the same key, so an array this room does not mute at shutdown is not unmuted at startup either: the setting leaves it alone in both directions. Not to be confused with VoiceLift, which is always muted at shutdown and has no switch — an empty room amplifying itself is nothing any room wants."
+      },
+      "shutdown_mute_mics": {
+        "type": "bool",
+        "label": "Mute Microphones at Shutdown (shutdown_mute_mics)",
+        "addIfMissing": true,
+        "helperText": "Absent from a config the processor treats as ON — turn it off to leave the mics as the instructor set them",
+        "description": "Whether shutting the room down mutes the room's microphones — the master mic group, and the mic slider on the panel with it. On (the processor's default when the key is absent) every handheld and lav is closed as the room powers off. Turn it OFF for a room whose mic levels are set once and left where somebody put them, or one whose microphones are managed outside this system. Startup reads the same key, so a room that does not mute at shutdown is not unmuted at startup either. The ceiling array follows its own key next to this one."
+      }
+    },
+    "SWITCHERDEVICE_1": {
+      "shutdown_mute_ceiling_mics": {
+        "type": "bool",
+        "label": "Mute Ceiling Mics at Shutdown (shutdown_mute_ceiling_mics)",
+        "addIfMissing": true,
+        "helperText": "Only read in a room with no DSP — absent from a config the processor treats as ON",
+        "description": "Whether shutting the room down mutes the ceiling microphone array. On (the processor's default when the key is absent) the array is closed as the room powers off, so nothing is left live overnight. It has a switch of its own because a room can want one and not the other — the ceiling array closed while the handhelds are left exactly as the instructor set them, or the reverse. Startup reads the same key, so an array this room does not mute at shutdown is not unmuted at startup either: the setting leaves it alone in both directions. Not to be confused with VoiceLift, which is always muted at shutdown and has no switch — an empty room amplifying itself is nothing any room wants. Read off the switcher only in a room with NO DSP: the key lives on whichever device block carries this room's mic groups, and a room with a DSP answers from DSPDEVICE_1 instead."
+      },
+      "shutdown_mute_mics": {
+        "type": "bool",
+        "label": "Mute Microphones at Shutdown (shutdown_mute_mics)",
+        "addIfMissing": true,
+        "helperText": "Only read in a room with no DSP — absent from a config the processor treats as ON",
+        "description": "Whether shutting the room down mutes the room's microphones — the master mic group, and the mic slider on the panel with it. On (the processor's default when the key is absent) every handheld and lav is closed as the room powers off. Turn it OFF for a room whose mic levels are set once and left where somebody put them, or one whose microphones are managed outside this system. Startup reads the same key, so a room that does not mute at shutdown is not unmuted at startup either. The ceiling array follows its own key next to this one. Read off the switcher only in a room with NO DSP: the key lives on whichever device block carries this room's mic groups, and a room with a DSP answers from DSPDEVICE_1 instead."
       }
     }
   },

@@ -82,6 +82,7 @@ const List<String> kSchemaFieldTypes = [
   'hidden',
   'room_sources',
   'module_states',
+  'source_map',
 ];
 
 class SchemaEditorView extends StatefulWidget {

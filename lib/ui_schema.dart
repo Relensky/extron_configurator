@@ -35,6 +35,11 @@ import 'config_dictionary.dart';
 ///               command in the module's `self.Commands` dictionary
 ///               ("moduleCommand" names the command, e.g. "Input")
 ///
+///    "source_map" an OBJECT of source-name pairs, drawn as one row of two
+///               [roomSourceNames] dropdowns per entry (with add/remove) —
+///               a display's `source_overrides`. The only non-scalar editor
+///               here: every other structured key is left to the Raw JSON tab.
+///
 ///  Keys may contain a `*` wildcard (e.g. "power1_outlet_*") so one schema
 ///  entry covers a whole family of config keys. Exact matches always win
 ///  over wildcard matches.
