@@ -23,7 +23,18 @@ import 'av_device_library.dart' show PricingTier;
 ///    1. the room's own quoted price (typed on the Cost tab)
 ///    2. the catalog price for that model
 ///    3. the base cost for its category  <- this file
-///    4. nothing, and the estimate reports the line as unpriced
+///    4. the base cost for the category its config section makes it <- ditto
+///    5. nothing, and the estimate reports the line as unpriced
+///
+///  Rungs 3 and 4 are two rungs because they read two different vocabularies.
+///  This card is written in the app's words — Switcher, DSP, Screen — while a
+///  catalog entry imported from a manufacturer's site carries THEIR product
+///  family: a DTP CrossPoint is filed under "Matrix", a screen controller
+///  under "Architectural". [kCategoryAliases] translates the families that
+///  mean exactly one thing; the ones that don't (an "Audio" that is a DSP, an
+///  amplifier or a loudspeaker depending on the box) are left alone and caught
+///  by rung 4, which asks what the device DOES IN THIS ROOM rather than what
+///  aisle of the catalog it came from.
 ///
 ///  A base cost of 0 means "not set" and is skipped rather than costing a
 ///  camera at nothing — the same rule the rate card uses for an unfilled role.
@@ -151,6 +162,30 @@ class BaseCostBook {
 
   static String _key(String category) => category.trim().toLowerCase();
 
+  /// Extra catalog-category translations read from the file, on top of
+  /// [kCategoryAliases]. Keyed like everything else here — trimmed and
+  /// lower-cased — and pointing at a category name on this card.
+  ///
+  /// In the file rather than only in the code because the catalog's
+  /// vocabulary is whatever the last import wrote, and a site that imports a
+  /// second manufacturer should be able to teach the card its words without
+  /// waiting for an app build.
+  final Map<String, String> aliases = {};
+
+  /// The category on this card that [category] means, or [category] itself
+  /// when nothing translates it. File aliases win over the built-in table, so
+  /// a site can correct one.
+  String resolveCategory(String category) {
+    final needle = _key(category);
+    if (needle.isEmpty) return category;
+    if (byCategory(category) != null) return category; // it is one of ours
+    return aliases[needle] ?? kCategoryAliases[needle] ?? category;
+  }
+
+  /// Exact, case-insensitive. Aliases are deliberately NOT applied here: this
+  /// is what the Base Costs editor adds to, renames and deletes, and an
+  /// editor that quietly edited 'Switcher' when asked for 'Matrix' would be
+  /// unusable.
   BaseCost? byCategory(String category) {
     final needle = _key(category);
     if (needle.isEmpty) return null;
@@ -162,8 +197,11 @@ class BaseCostBook {
 
   /// The figure to price a [category] device at, at [tier], and whether it
   /// fell back to the other tier. 0 when the category has no figure at all.
+  ///
+  /// [category] may be spelled the catalog's way ('Matrix') as well as this
+  /// card's ('Switcher') — see [resolveCategory].
   ({double price, bool fallback}) priceFor(String category, PricingTier tier) =>
-      byCategory(category)?.priceForTier(tier) ??
+      byCategory(resolveCategory(category))?.priceForTier(tier) ??
       (price: 0.0, fallback: false);
 
   void upsert(BaseCost cost) {
@@ -188,8 +226,13 @@ class BaseCostBook {
         'has a switcher on the diagram but no model chosen yet. A model with a '
         'catalog price, or a price typed on the room, always wins over the '
         'figure here. 0 means "not set" and is reported as an unpriced line '
-        'rather than costed at nothing.',
+        'rather than costed at nothing. "aliases" translates a device '
+        'catalog\'s own category names onto the categories below — '
+        '"Matrix": "Switcher" — for families the app does not already know; '
+        'leave a family out when it holds more than one kind of device, and '
+        'the estimate will price it from the room\'s config section instead.',
     'costs': [for (final c in costs) c.toJson()],
+    if (aliases.isNotEmpty) 'aliases': Map<String, String>.of(aliases),
   };
 
   /// Reads [path], falling back to the built-in categories when it isn't
@@ -217,6 +260,14 @@ class BaseCostBook {
       // book saved last year still offers this year's families.
       for (final d in defaults) {
         if (book.byCategory(d.category) == null) book.costs.add(d);
+      }
+      final aliases = doc['aliases'];
+      if (aliases is Map) {
+        for (final entry in aliases.entries) {
+          final from = entry.key.toString().trim().toLowerCase();
+          final to = entry.value?.toString().trim() ?? '';
+          if (from.isNotEmpty && to.isNotEmpty) book.aliases[from] = to;
+        }
       }
       AppLogger.logInfo(
         'Base costs loaded from $path (${book.costs.length} categories, '
@@ -249,6 +300,32 @@ class BaseCostBook {
     }
   }
 }
+
+/// Catalog categories that mean exactly one thing on this card, lower-cased.
+///
+/// The test for being on this list is strict, because being wrong here is
+/// worse than being absent: EVERY entry filed under the catalog category has
+/// to be the kind of device the base cost describes. 'Matrix' passes — all
+/// thirty entries are DTP CrossPoint matrix switchers. 'Scalers Switchers'
+/// does not: it holds IN1608 presentation switchers next to a $200 EDID
+/// emulator, and quoting the emulator at a switcher's price would put four
+/// figures of nonsense in a budget with nothing on the line to say so.
+///
+/// The families deliberately left off — DTP Systems (transmitters AND
+/// matrices), XTP Systems, Audio (DSPs, amplifiers, loudspeakers), Control
+/// Systems (processors AND touch panels), Architectural (cable cubbies and
+/// AC outlets, not screens), Fox Systems, Streaming, Collaboration Systems —
+/// are priced instead off what the device is doing in the room, by
+/// [categoryForConfigKey]. A room's SCREENDEVICE_1 is a screen whatever aisle
+/// its controller was imported from.
+const Map<String, String> kCategoryAliases = {
+  'matrix': 'Switcher',
+  'presentation switcher': 'Switcher',
+  'usb': 'USB interface',
+  'audio processor': 'DSP',
+  'flat panel': 'Display',
+  'monitor': 'Display',
+};
 
 /// The category a config device belongs to when the catalog has nothing to say
 /// about its model — read off the section key, which is the one thing every

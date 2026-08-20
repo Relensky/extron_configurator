@@ -28,6 +28,7 @@ enum DeviceField {
   cableLength,
   powerWatts,
   price,
+  educationPrice,
   notes,
   ports,
 }
@@ -40,7 +41,8 @@ const Map<DeviceField, String> kDeviceFieldLabels = {
   DeviceField.clearance: 'Rack clearance (U above / below)',
   DeviceField.cableLength: 'Cable length (ft)',
   DeviceField.powerWatts: 'Power (W)',
-  DeviceField.price: 'Unit price',
+  DeviceField.price: 'Unit price (list)',
+  DeviceField.educationPrice: 'Unit price (education)',
   DeviceField.notes: 'Notes',
   DeviceField.ports: 'Connectors',
 };
@@ -53,6 +55,12 @@ class DeviceFieldDiff {
   final String mine;
   final String theirs;
 
+  /// True when my side has nothing here at all — a blank, a zero, no
+  /// connectors. Not a disagreement so much as a gap, and the duplicate merge
+  /// ticks these by default: taking a price for a field I left empty loses
+  /// nothing, while overwriting a figure I typed is a decision.
+  final bool mineIsBlank;
+
   /// Ticked = copy [theirs] into my catalog on apply.
   bool selected;
 
@@ -60,6 +68,7 @@ class DeviceFieldDiff {
     required this.field,
     required this.mine,
     required this.theirs,
+    this.mineIsBlank = false,
     this.selected = false,
   });
 
@@ -89,6 +98,8 @@ class DeviceFieldDiff {
         return base.copyWith(powerWatts: theirs.powerWatts);
       case DeviceField.price:
         return base.copyWith(price: theirs.price);
+      case DeviceField.educationPrice:
+        return base.copyWith(educationPrice: theirs.educationPrice);
       case DeviceField.notes:
         return base.copyWith(notes: theirs.notes);
       case DeviceField.ports:
@@ -181,7 +192,7 @@ List<DeviceDiff> diffCatalogs(AvDeviceLibrary mine, AvDeviceLibrary theirs) {
       continue;
     }
 
-    final fields = _fieldDiffs(myEntry, theirEntry);
+    final fields = fieldDiffs(myEntry, theirEntry);
     if (fields.isEmpty) continue;
     changed.add(
       DeviceDiff(
@@ -199,7 +210,7 @@ List<DeviceDiff> diffCatalogs(AvDeviceLibrary mine, AvDeviceLibrary theirs) {
 /// A blank on their side is not a difference worth offering: an empty
 /// manufacturer or a 0 price means "they never filled it in", and copying it
 /// over something I did fill in would be a loss, not a merge.
-List<DeviceFieldDiff> _fieldDiffs(
+List<DeviceFieldDiff> fieldDiffs(
   AvDeviceTemplate mine,
   AvDeviceTemplate theirs,
 ) {
@@ -212,6 +223,7 @@ List<DeviceFieldDiff> _fieldDiffs(
         field: field,
         mine: a.trim().isEmpty ? '—' : a.trim(),
         theirs: b.trim(),
+        mineIsBlank: a.trim().isEmpty,
       ),
     );
   }
@@ -221,7 +233,12 @@ List<DeviceFieldDiff> _fieldDiffs(
     String show(num v) =>
         v <= 0 ? '—' : (decimals == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(decimals));
     out.add(
-      DeviceFieldDiff(field: field, mine: show(a), theirs: show(b)),
+      DeviceFieldDiff(
+        field: field,
+        mine: show(a),
+        theirs: show(b),
+        mineIsBlank: a <= 0,
+      ),
     );
   }
 
@@ -240,11 +257,22 @@ List<DeviceFieldDiff> _fieldDiffs(
       field: DeviceField.clearance,
       mine: clearance(mine),
       theirs: clearance(theirs),
+      mineIsBlank: mine.clearanceAboveU == 0 && mine.clearanceBelowU == 0,
     ));
   }
   number(DeviceField.cableLength, mine.cableLengthFt, theirs.cableLengthFt);
   number(DeviceField.powerWatts, mine.powerWatts, theirs.powerWatts);
   number(DeviceField.price, mine.price, theirs.price, decimals: 2);
+  // The second published price is its own decision, and its own checkbox: a
+  // catalog merged without it used to arrive with list prices and no
+  // education prices, which reads as "not on education pricing" rather than
+  // as "nobody copied that column".
+  number(
+    DeviceField.educationPrice,
+    mine.educationPrice,
+    theirs.educationPrice,
+    decimals: 2,
+  );
   text(DeviceField.notes, mine.notes, theirs.notes);
 
   if (theirs.ports.isNotEmpty && !_samePorts(mine.ports, theirs.ports)) {
@@ -253,6 +281,7 @@ List<DeviceFieldDiff> _fieldDiffs(
         field: DeviceField.ports,
         mine: describePorts(mine.ports),
         theirs: describePorts(theirs.ports),
+        mineIsBlank: mine.ports.isEmpty,
       ),
     );
   }
@@ -282,6 +311,85 @@ String describePorts(List<AvPort> ports) {
   final ins = ports.where((p) => p.direction != PortDirection.output).length;
   final outs = ports.where((p) => p.direction != PortDirection.input).length;
   return '${ports.length} connectors ($ins in / $outs out)';
+}
+
+// ---------------------------------------------------------------------------
+//  FOLDING TWO ENTRIES FOR THE SAME BOX INTO ONE
+// ---------------------------------------------------------------------------
+//  Same machinery, pointed inwards. A duplicate part number means one product
+//  is in the catalog twice under two names, so the decision is the same one a
+//  file merge makes — which side of each field to keep — with one extra: the
+//  entries that lose are deleted rather than left beside the winner, because
+//  leaving them is what produced the problem.
+
+/// The decisions for folding [others] into [keeper]: one [DeviceDiff] per
+/// entry to be merged away, holding only the fields where it says something
+/// [keeper] does not already say.
+///
+/// Fields the keeper has nothing for arrive ticked, and fields where the two
+/// disagree arrive unticked. That is the difference between filling a gap and
+/// overwriting a figure somebody typed, and only the second one deserves a
+/// decision.
+List<DeviceDiff> duplicateDiffs(
+  AvDeviceTemplate keeper,
+  Iterable<AvDeviceTemplate> others,
+) => [
+  for (final other in others)
+    DeviceDiff(
+      model: other.model,
+      theirs: other,
+      mine: keeper,
+      fields: [
+        for (final f in fieldDiffs(keeper, other))
+          DeviceFieldDiff(
+            field: f.field,
+            mine: f.mine,
+            theirs: f.theirs,
+            mineIsBlank: f.mineIsBlank,
+            selected: f.mineIsBlank,
+          ),
+      ],
+    ),
+];
+
+/// [keeper] with every ticked value in [others] folded in, newest decision
+/// last — the single entry the group collapses to.
+AvDeviceTemplate mergedDuplicate(
+  AvDeviceTemplate keeper,
+  List<DeviceDiff> others,
+) {
+  var out = keeper;
+  for (final diff in others) {
+    for (final field in diff.fields) {
+      if (field.selected) out = field.applyTo(out, diff.theirs);
+    }
+  }
+  return out;
+}
+
+/// Writes the folded entry into [library] and drops the models it absorbed.
+/// Returns how many entries were removed.
+///
+/// The removed names are gone from the catalog, so a room that names one
+/// falls back to generic connectors and no price — which is why the dialog
+/// says which names are going before it does this, and why the keeper should
+/// be the name the rooms actually use.
+int applyDuplicateMerge(
+  AvDeviceLibrary library,
+  AvDeviceTemplate keeper,
+  List<DeviceDiff> others,
+) {
+  library.upsert(mergedDuplicate(keeper, others));
+  int removed = 0;
+  for (final diff in others) {
+    if (AvDeviceLibrary.normalizeModel(diff.model) ==
+        AvDeviceLibrary.normalizeModel(keeper.model)) {
+      continue; // never delete the entry being kept
+    }
+    library.remove(diff.model);
+    removed++;
+  }
+  return removed;
 }
 
 /// Copies every ticked difference into [mine]. Returns how many models

@@ -486,6 +486,21 @@ bool _samePorts(List<AvPort> a, List<AvPort> b) {
   return true;
 }
 
+/// One part number and every catalog entry wearing it.
+class DuplicatePartGroup {
+  /// As the first entry spells it — the comparison ignores case and spacing,
+  /// but the warning should read the way the catalog does.
+  final String partNumber;
+
+  /// Two or more entries, in catalog order.
+  final List<AvDeviceTemplate> entries;
+
+  const DuplicatePartGroup({required this.partNumber, required this.entries});
+
+  /// "IN1608, IN1608 xi" — the group in one line.
+  String get modelList => entries.map((t) => t.model).join(', ');
+}
+
 class AvDeviceLibrary {
   /// Model (normalized) -> template.
   final Map<String, AvDeviceTemplate> _byModel = {};
@@ -533,7 +548,14 @@ class AvDeviceLibrary {
   /// work nobody asked for.
   List<AvDeviceTemplate>? _sorted;
 
-  void _invalidate() => _sorted = null;
+  /// Cached for the same reason [_sorted] is: the Device Editor asks on every
+  /// keystroke of its search box, and this walks the whole catalog.
+  List<DuplicatePartGroup>? _duplicates;
+
+  void _invalidate() {
+    _sorted = null;
+    _duplicates = null;
+  }
 
   /// Every entry, ordered the way the catalog list reads: manufacturer, then
   /// model.
@@ -718,6 +740,78 @@ class AvDeviceLibrary {
       '${entry.category}',
     );
     return haystack.contains(needle);
+  }
+
+  // -------------------------------------------------------------------------
+  //  ONE PART NUMBER, ONE ENTRY
+  // -------------------------------------------------------------------------
+  //  The catalog is keyed by MODEL, and a model name is whatever the page it
+  //  was imported from called it. Two imports of the same box — "IN1608" from
+  //  the price list and "IN1608 xi" from the product site — are two entries,
+  //  each with half the facts, and the only thing that says they are one box
+  //  is the part number they share. Left alone they drift: a price typed onto
+  //  one, connectors drawn on the other, and a room quoted off whichever name
+  //  the engineer happened to pick.
+  //
+  //  So the catalog reports them, and the Device Editor offers to fold them
+  //  into one entry.
+
+  /// A part number for comparison: case and spacing are noise on a SKU.
+  static String normalizePartNumber(String partNumber) =>
+      partNumber.trim().toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Whether [partNumber] identifies a specific product, rather than standing
+  /// in for one that hasn't got a SKU.
+  ///
+  /// A real SKU has a digit in it. 'Custom' is on four Quantum Ultra frames
+  /// and means "quoted per job" — reporting those four as duplicates of each
+  /// other would be noise, and merging them would be wrong.
+  static bool isRealPartNumber(String partNumber) =>
+      partNumber.trim().isNotEmpty && partNumber.contains(RegExp(r'[0-9]'));
+
+  /// Every part number that is on more than one entry, most entries first.
+  /// Empty when the catalog is clean, which is what the Device Editor checks
+  /// before it says anything.
+  List<DuplicatePartGroup> get duplicateParts {
+    final cached = _duplicates;
+    if (cached != null) return cached;
+    final byPart = <String, List<AvDeviceTemplate>>{};
+    for (final t in all) {
+      if (!isRealPartNumber(t.partNumber)) continue;
+      byPart.putIfAbsent(normalizePartNumber(t.partNumber), () => []).add(t);
+    }
+    final groups = [
+      for (final entry in byPart.entries)
+        if (entry.value.length > 1)
+          DuplicatePartGroup(
+            partNumber: entry.value.first.partNumber.trim(),
+            entries: List.unmodifiable(entry.value),
+          ),
+    ];
+    groups.sort((a, b) {
+      final byCount = b.entries.length.compareTo(a.entries.length);
+      return byCount != 0
+          ? byCount
+          : a.partNumber.toLowerCase().compareTo(b.partNumber.toLowerCase());
+    });
+    return _duplicates = List.unmodifiable(groups);
+  }
+
+  /// The other entries carrying [partNumber] — what the part number field
+  /// warns about while somebody is typing one in.
+  List<AvDeviceTemplate> othersWithPartNumber(
+    String partNumber, {
+    String exceptModel = '',
+  }) {
+    if (!isRealPartNumber(partNumber)) return const [];
+    final needle = normalizePartNumber(partNumber);
+    final skip = _norm(exceptModel);
+    return [
+      for (final t in all)
+        if (normalizePartNumber(t.partNumber) == needle &&
+            _norm(t.model) != skip)
+          t,
+    ];
   }
 
   AvDeviceLibrary.builtIn() {

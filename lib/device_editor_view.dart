@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -191,6 +193,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
   Widget _buildToolbar(AppStateProvider provider, AvDeviceLibrary library) {
     final theme = Theme.of(context);
+    final duplicates = library.duplicateParts;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -232,6 +235,27 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 label: const Text('Merge from file...'),
                 onPressed: () => _startMerge(provider),
               ),
+              // ONE PART NUMBER, ONE ENTRY. Two imports of the same box under
+              // two model names are two half-filled entries that drift apart,
+              // and the part number is the only thing that says they are the
+              // same product. Shown only when there is something to fix, in
+              // the error colour, because a catalog that is clean should not
+              // carry a permanent warning about it.
+              if (duplicates.isNotEmpty)
+                OutlinedButton.icon(
+                  key: const ValueKey('catalog_duplicates'),
+                  icon: const Icon(Icons.copy_all, size: 18),
+                  label: Text(
+                    duplicates.length == 1
+                        ? '1 duplicate part number'
+                        : '${duplicates.length} duplicate part numbers',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
+                    side: BorderSide(color: theme.colorScheme.error),
+                  ),
+                  onPressed: () => _showDuplicates(provider),
+                ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.ios_share, size: 18),
                 label: const Text('Export a copy...'),
@@ -479,6 +503,12 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             ),
           ],
         ),
+        // Said at the moment it becomes true — as the number is typed, on the
+        // entry it was typed on — rather than only in the toolbar count. A
+        // part number already in the catalog means this box is in the catalog
+        // twice, and the offer to fix it belongs next to the field that
+        // caused it.
+        _duplicateWarning(provider, library, entry),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -1283,6 +1313,78 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     );
   }
 
+  // --- one part number, one entry -------------------------------------------
+
+  /// The line under the part number field when this entry's number is on
+  /// somebody else's entry too. Nothing at all when it isn't, which is the
+  /// normal case and should take no space.
+  Widget _duplicateWarning(
+    AppStateProvider provider,
+    AvDeviceLibrary library,
+    AvDeviceTemplate entry,
+  ) {
+    final theme = Theme.of(context);
+    final others = library.othersWithPartNumber(
+      entry.partNumber,
+      exceptModel: entry.model,
+    );
+    if (others.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Icon(Icons.copy_all, size: 16, color: theme.colorScheme.error),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Part ${entry.partNumber.trim()} is also on '
+              '${others.map((t) => t.model).join(', ')}. Two entries for one '
+              'box drift apart — one gets the price, the other the '
+              'connectors.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            key: const ValueKey('entry_duplicate_merge'),
+            onPressed: () => _showDuplicates(provider, partNumber: entry.partNumber),
+            child: const Text('Merge...'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The review: every part number on more than one entry, each foldable into
+  /// a single entry. [partNumber] opens straight onto one group, for the
+  /// button beside the field.
+  Future<void> _showDuplicates(
+    AppStateProvider provider, {
+    String partNumber = '',
+  }) async {
+    final merged = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _DuplicatePartsDialog(
+        library: provider.avDeviceLibrary,
+        openPartNumber: partNumber,
+      ),
+    );
+    if (merged == null || merged == 0 || !mounted) return;
+
+    setState(() {
+      _dirty = true;
+      // The entry that was open may be one of the ones just merged away.
+      if (_selected(provider.avDeviceLibrary) == null) _selectedKey = '';
+    });
+    provider.avDeviceLibraryChanged();
+    _snack(
+      'Merged $merged entr${merged == 1 ? 'y' : 'ies'} away — Save catalog to '
+      'write it to disk.',
+    );
+  }
+
   Future<void> _startMerge(AppStateProvider provider) async {
     final picked = await FilePicker.pickFiles(
       dialogTitle: 'Pick the device catalog to merge in',
@@ -1594,5 +1696,329 @@ class _MergeDialogState extends State<_MergeDialog> {
         ],
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  DUPLICATE PART NUMBERS
+// ---------------------------------------------------------------------------
+
+/// Every part number that is on more than one catalog entry, each foldable
+/// into a single entry.
+///
+/// The catalog is keyed by model NAME, and a name is whatever the page an
+/// entry was imported from called it: "IN1608" off the price list and
+/// "IN1608 xi" off the product site are one box in two entries, each holding
+/// half the facts. The part number is the only thing that says so.
+///
+/// Merging is deliberately not automatic. Which name survives decides what
+/// every existing room resolves against, and which side of a disagreement to
+/// keep is a judgement — the price on one entry may be the current one or the
+/// stale one, and only the person looking at it knows. So: pick the entry to
+/// keep, tick what to take from the others, and the others go.
+class _DuplicatePartsDialog extends StatefulWidget {
+  final AvDeviceLibrary library;
+
+  /// Opened from a specific entry's part number field: that group is shown
+  /// first and already open.
+  final String openPartNumber;
+
+  const _DuplicatePartsDialog({
+    required this.library,
+    this.openPartNumber = '',
+  });
+
+  @override
+  State<_DuplicatePartsDialog> createState() => _DuplicatePartsDialogState();
+}
+
+class _DuplicatePartsDialogState extends State<_DuplicatePartsDialog> {
+  /// Part number (normalized) -> the model being kept.
+  final Map<String, String> _keepers = {};
+
+  /// Part number (normalized) -> the decisions for the entries it absorbs.
+  final Map<String, List<DeviceDiff>> _diffs = {};
+
+  /// Which groups are open. One group opens itself; a catalog with eleven of
+  /// them opens none, because a wall of forty checkboxes is not a review.
+  final Set<String> _open = {};
+
+  int _merged = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final groups = widget.library.duplicateParts;
+    final wanted = AvDeviceLibrary.normalizePartNumber(widget.openPartNumber);
+    if (wanted.isNotEmpty) {
+      _open.add(wanted);
+    } else if (groups.length == 1) {
+      _open.add(AvDeviceLibrary.normalizePartNumber(groups.first.partNumber));
+    }
+  }
+
+  String _key(DuplicatePartGroup g) =>
+      AvDeviceLibrary.normalizePartNumber(g.partNumber);
+
+  /// The entry this group folds into — the first one that has a price, else
+  /// the first with connectors, else simply the first. A guess, and the radio
+  /// buttons are right there when it guesses wrong.
+  AvDeviceTemplate _keeper(DuplicatePartGroup group) {
+    final chosen = _keepers[_key(group)];
+    if (chosen != null) {
+      for (final t in group.entries) {
+        if (AvDeviceLibrary.normalizeModel(t.model) == chosen) return t;
+      }
+    }
+    return group.entries.firstWhere(
+      (t) => t.price > 0 || t.educationPrice > 0,
+      orElse: () => group.entries.firstWhere(
+        (t) => t.ports.isNotEmpty,
+        orElse: () => group.entries.first,
+      ),
+    );
+  }
+
+  List<DeviceDiff> _decisions(DuplicatePartGroup group) {
+    final keeper = _keeper(group);
+    return _diffs[_key(group)] ??= duplicateDiffs(
+      keeper,
+      group.entries.where(
+        (t) =>
+            AvDeviceLibrary.normalizeModel(t.model) !=
+            AvDeviceLibrary.normalizeModel(keeper.model),
+      ),
+    );
+  }
+
+  void _chooseKeeper(DuplicatePartGroup group, String model) {
+    setState(() {
+      _keepers[_key(group)] = AvDeviceLibrary.normalizeModel(model);
+      // The decisions were written against the old keeper and mean nothing
+      // against the new one.
+      _diffs.remove(_key(group));
+    });
+  }
+
+  void _merge(DuplicatePartGroup group) {
+    final keeper = _keeper(group);
+    final removed = applyDuplicateMerge(
+      widget.library,
+      keeper,
+      _decisions(group),
+    );
+    setState(() {
+      _merged += removed;
+      _keepers.remove(_key(group));
+      _diffs.remove(_key(group));
+      _open.remove(_key(group));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final groups = [...widget.library.duplicateParts];
+    final wanted = AvDeviceLibrary.normalizePartNumber(widget.openPartNumber);
+    if (wanted.isNotEmpty) {
+      groups.sort((a, b) {
+        final aWanted = _key(a) == wanted ? 0 : 1;
+        final bWanted = _key(b) == wanted ? 0 : 1;
+        return aWanted.compareTo(bWanted);
+      });
+    }
+
+    return AlertDialog(
+      title: const Text('Duplicate part numbers'),
+      content: SizedBox(
+        width: math.min(860, MediaQuery.of(context).size.width - 120),
+        height: math.min(620, MediaQuery.of(context).size.height - 180),
+        child: groups.isEmpty
+            ? Center(
+                child: Text(
+                  _merged == 0
+                      ? 'Every part number in the catalog is on one entry.'
+                      : 'All merged — every part number is on one entry now.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              )
+            : ListView(
+                children: [
+                  Text(
+                    'One product is in the catalog more than once, under more '
+                    'than one model name. Pick the entry to keep, tick '
+                    'anything worth taking from the others, and the others '
+                    'are removed.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  for (final group in groups) _groupCard(theme, group),
+                ],
+              ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('dup_close'),
+          onPressed: () => Navigator.of(context).pop(_merged),
+          child: Text(_merged == 0 ? 'Close' : 'Done'),
+        ),
+      ],
+    );
+  }
+
+  Widget _groupCard(ThemeData theme, DuplicatePartGroup group) {
+    final key = _key(group);
+    final open = _open.contains(key);
+    final keeper = _keeper(group);
+    final going = group.entries
+        .where(
+          (t) =>
+              AvDeviceLibrary.normalizeModel(t.model) !=
+              AvDeviceLibrary.normalizeModel(keeper.model),
+        )
+        .map((t) => t.model)
+        .toList();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: Icon(Icons.copy_all, color: theme.colorScheme.error),
+            title: Text(group.partNumber),
+            subtitle: Text(
+              '${group.entries.length} entries · ${group.modelList}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Icon(open ? Icons.expand_less : Icons.expand_more),
+            onTap: () => setState(
+              () => open ? _open.remove(key) : _open.add(key),
+            ),
+          ),
+          if (open) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Keep', style: theme.textTheme.labelLarge),
+                  RadioGroup<String>(
+                    groupValue: AvDeviceLibrary.normalizeModel(keeper.model),
+                    onChanged: (v) {
+                      if (v != null) _chooseKeeper(group, v);
+                    },
+                    child: Column(
+                      children: [
+                        for (final entry in group.entries)
+                          RadioListTile<String>(
+                            key: ValueKey('dup_keep_${key}_${entry.model}'),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            value: AvDeviceLibrary.normalizeModel(entry.model),
+                            title: Text(entry.model),
+                            subtitle: Text(_describe(entry)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._decisionTiles(theme, group),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          going.isEmpty
+                              ? ''
+                              : 'Removes ${going.join(', ')} from the '
+                                  'catalog. A room that names one of those '
+                                  'loses its connectors and its price, so '
+                                  'keep the name your rooms use.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        key: ValueKey('dup_merge_$key'),
+                        icon: const Icon(Icons.merge_type, size: 18),
+                        label: Text('Merge into ${keeper.model}'),
+                        onPressed: () => _merge(group),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The decisions for one group: every field an absorbed entry says
+  /// something about, with the keeper's value beside it.
+  List<Widget> _decisionTiles(ThemeData theme, DuplicatePartGroup group) {
+    final decisions = _decisions(group);
+    if (!decisions.any((d) => d.fields.isNotEmpty)) {
+      return [
+        Text(
+          'The other entries say nothing this one does not — merging just '
+          'removes them.',
+          style: theme.textTheme.bodySmall,
+        ),
+      ];
+    }
+    return [
+      Text('Take from the others', style: theme.textTheme.labelLarge),
+      for (final diff in decisions)
+        if (diff.fields.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 2),
+            child: Text(
+              'from ${diff.model}',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ),
+          for (final f in diff.fields)
+            CheckboxListTile(
+              key: ValueKey('dup_field_${diff.model}_${f.field.name}'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: f.selected,
+              onChanged: (v) => setState(() => f.selected = v ?? false),
+              title: Text(f.label, style: theme.textTheme.bodySmall),
+              subtitle: Text(
+                // Which way round the swap goes, in the order it happens.
+                '${f.mine}  ->  ${f.theirs}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color:
+                      f.selected ? theme.colorScheme.primary : theme.hintColor,
+                ),
+              ),
+            ),
+        ],
+    ];
+  }
+
+  /// What an entry brings to the merge, in one line, so the radio buttons can
+  /// be chosen between without opening each one.
+  String _describe(AvDeviceTemplate t) {
+    final bits = <String>[
+      if (t.category.trim().isNotEmpty) t.category.trim(),
+      if (t.price > 0) formatMoney(t.price),
+      if (t.educationPrice > 0) '${formatMoney(t.educationPrice)} edu',
+      if (t.ports.isNotEmpty) describePorts(t.ports),
+      if (t.rackUnits > 0) '${t.rackUnits}U',
+      if (t.custom) 'yours',
+    ];
+    return bits.isEmpty ? 'nothing recorded' : bits.join(' · ');
   }
 }

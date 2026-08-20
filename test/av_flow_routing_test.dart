@@ -205,20 +205,16 @@ void main() {
   //  THE WHOLE PASS, ON REAL ROOMS
   // -------------------------------------------------------------------------
 
-  /// A room loaded from a ControlScript config with its devices placed, which
-  /// is the state the AV flow tab is in after "Place all from config".
-  Future<AppStateProvider?> roomFrom(String path) async {
-    final file = File(path);
-    if (!file.existsSync()) return null;
-
+  /// A room with its devices placed, which is the state the AV flow tab is in
+  /// after "Place all from config".
+  Future<AppStateProvider> roomOf(Map<String, dynamic> config) async {
     final p = AppStateProvider(autoLoadSettings: false)
       ..uiSchema = await UiSchema.load(explicitPath: 'ui_schema.json')
       ..avDeviceLibrary =
           await AvDeviceLibrary.load(explicitPath: 'av_devices.json');
     p.roomConfig
       ..clear()
-      ..addAll(Map<String, dynamic>.from(
-          jsonDecode(file.readAsStringSync()) as Map));
+      ..addAll(config);
 
     for (final key
         in activeDeviceKeysIn(p.roomConfig, p.uiSchema.deviceCountMap)) {
@@ -237,6 +233,15 @@ void main() {
       ));
     }
     return p;
+  }
+
+  /// The same, read off a real ControlScript config. Null when the template
+  /// repo is not checked out beside this one.
+  Future<AppStateProvider?> roomFrom(String path) async {
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    return roomOf(Map<String, dynamic>.from(
+        jsonDecode(file.readAsStringSync()) as Map));
   }
 
   /// The cable a config key produced, as "port -> port".
@@ -317,21 +322,56 @@ void main() {
       isEmpty,
     );
 
-    // Two findings, and both are real facts about the config rather than a
-    // failure to resolve.
+    // One finding, and it is a real fact about the config rather than a
+    // failure to resolve: the recorder is the older one-input AV Bridge while
+    // the config asks for two capture feeds. output_cc takes the one HDMI
+    // input and output_cc2 has nowhere to go, which is worth saying rather
+    // than drawing a second lead onto a socket that already has one.
     //
-    // BSS 239 has one projector and still carries an output_proj_2, so
-    // nothing is drawn for it and the reason says why. And its recorder is
-    // the older one-input AV Bridge while the config asks for two capture
-    // feeds — output_cc takes the one HDMI input and output_cc2 has nowhere
-    // to go, which is worth saying rather than drawing a second lead onto a
-    // socket that already has one.
-    expect(plan.unresolved.map((u) => u.configKey),
-        ['output_proj_2', 'output_cc2']);
-    expect(plan.unresolved.first.reason, contains('1 display'));
-    expect(plan.unresolved.first.reason, contains('dev_projectors'));
-    expect(plan.unresolved.last.reason, contains('already fed'));
+    // This room also used to carry a leftover output_proj_2 with one
+    // projector on the drawing, which the pass reports rather than draws.
+    // The key was cleaned out of the template's config on 2026-08-19, so that
+    // case is pinned in 'a display output for a display the room has not got'
+    // below — on a config this test owns, where nobody can tidy it away.
+    expect(plan.unresolved.map((u) => u.configKey), ['output_cc2']);
+    expect(plan.unresolved.single.reason, contains('already fed'));
     expect(tie(plan, 'output_cc'), 'HDMI 001 -> HDMI IN');
+  });
+
+  /// Dead config left behind when a room shrank: the second projector is
+  /// gone, its output number is not, and to everyone reading the file it
+  /// still looks like a second projector. The pass says so instead of drawing
+  /// a cable to a box that is not there or silently dropping the key.
+  test('a display output for a display the room has not got', () async {
+    final p = await roomOf({
+      'SYSTEM_SETUP': {
+        'dev_projectors': '1',
+        'dev_switchers': '1',
+        'output_proj_1': '3B',
+        'output_proj_2': '4B',
+      },
+      'SWITCHERDEVICE_1': {
+        'model': 'DTP CrossPoint 84 4K IPCP MA 70',
+        'name': 'Switcher - DTP CrossPoint 84 4K IPCP MA 70',
+      },
+      'PROJECTORDEVICE_1': {
+        'model': 'PowerLite L630U',
+        'name': 'Projector 1 - PowerLite L630U',
+        'input': 'HDBaseT',
+      },
+    });
+    final plan = planRoutingFromConfig(p);
+
+    // The projector the room HAS is cabled normally.
+    expect(tie(plan, 'output_proj_1'), 'DTP OUT 003B -> HDBaseT');
+
+    final left = plan.unresolved.singleWhere(
+        (u) => u.configKey == 'output_proj_2');
+    expect(left.value, '4B');
+    expect(left.reason, contains('1 display'));
+    expect(left.reason, contains('dev_projectors'));
+    // Not drawn — that is the whole point of reporting it.
+    expect(tie(plan, 'output_proj_2'), isNull);
   });
 
   test('BSS 122 — the catalog counts connectors on this one', () async {

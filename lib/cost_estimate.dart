@@ -760,7 +760,23 @@ CostEstimate computeRoomCost({
     final category = (catalog?.category.trim().isNotEmpty ?? false)
         ? catalog!.category.trim()
         : categoryForConfigKey(group.first.id);
-    final basePrice = baseBook.priceFor(category, tier);
+
+    // TWO GOES AT THE BASE CARD, because a catalog category is not always one
+    // of ours. The card knows 'Switcher'; an entry imported from Extron says
+    // 'Matrix', and a screen controller imported from the same page says
+    // 'Architectural'. [BaseCostBook.priceFor] translates the families that
+    // mean one thing; for the rest, what the device does IN THIS ROOM is a
+    // better answer than the aisle it was catalogued under — and it is the
+    // answer this line would have got if the entry had carried no category at
+    // all. Without this, a model the catalog knows but cannot price came out
+    // WORSE than a model it has never heard of.
+    var basePrice = baseBook.priceFor(category, tier);
+    if (basePrice.price <= 0) {
+      final byRole = categoryForConfigKey(group.first.id);
+      if (byRole.isNotEmpty && byRole != category) {
+        basePrice = baseBook.priceFor(byRole, tier);
+      }
+    }
 
     final catalogPrice = catalog?.priceForTier(tier);
 
