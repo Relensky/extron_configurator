@@ -129,6 +129,32 @@ List<String> activeDeviceKeysIn(
 /// One device in the room whose control module has not been chosen yet.
 typedef UnmodularDevice = ({String key, String name, String model});
 
+/// Why a device's model and its python module do not go together — see
+/// [AppStateProvider.deviceModelModuleFault].
+///
+/// Two cases rather than one, because the sentence to print is different and
+/// so is the fix: one is a driver nobody has chosen, the other is a driver
+/// that is demonstrably for something else.
+enum ModelModuleFault {
+  /// A model is set and no module is. Where a swap onto a model no driver
+  /// claims leaves the block — see [AppStateProvider.setModelWithoutModule].
+  noModule,
+
+  /// A module is set, it says which models it covers, and this is not one of
+  /// them. The device the config describes and the device the processor would
+  /// talk to are two different products.
+  unclaimedModel,
+}
+
+/// A device whose model and module disagree, with everything the message
+/// needs: [claims] is what the module says it covers, empty for [noModule].
+typedef ModelModuleMismatch = ({
+  ModelModuleFault fault,
+  String model,
+  String module,
+  List<String> claims,
+});
+
 /// The connection styles a python driver may publish its own DEVICE_INFO
 /// defaults for, in the spelling [AppStateProvider.normalizeComTypeName]
 /// produces. These are the five the schema's com_type dropdown offers; a block
@@ -203,6 +229,54 @@ class AppStateProvider extends ChangeNotifier {
       ));
     }
     return out;
+  }
+
+  /// Whether [deviceKey]'s model and its python module disagree, and how —
+  /// null when they are fine, or when there is not enough to judge on.
+  ///
+  /// THE BANNER ON THE DEVICES TAB. A device block names a product and names
+  /// the driver that talks to it, and nothing kept the two together: a model
+  /// could be retyped, or swapped from the Cost tab, and the module underneath
+  /// went on naming a driver for the box that used to be there. That config
+  /// looks complete — every field filled in — which is exactly why it is the
+  /// one nobody re-checks, and it commissions a room as the wrong device.
+  ///
+  /// Deliberately quiet in the three cases where it cannot know:
+  ///
+  ///   * NO MODEL YET. An unfinished device is not a wrong one.
+  ///   * A MODULE THAT DECLARES NO MODELS. Plenty of drivers list none, and
+  ///     the modules path may not even have been read yet; "this module says
+  ///     nothing about models" is not evidence against the model.
+  ///   * A MODEL THE MODULE DOES LIST, however it is capitalized — the same
+  ///     forgiveness [modelEntryFor] gives, because people type 'tr311hw'.
+  ///
+  /// So a red banner here always means something a person can act on.
+  ModelModuleMismatch? deviceModelModuleFault(String deviceKey) {
+    final dev = roomConfig[deviceKey];
+    if (dev is! Map) return null;
+    final model = dev['model']?.toString().trim() ?? '';
+    if (model.isEmpty) return null;
+    final module = dev['module']?.toString().trim() ?? '';
+    if (module.isEmpty) {
+      return (
+        fault: ModelModuleFault.noModule,
+        model: model,
+        module: '',
+        claims: const <String>[],
+      );
+    }
+    final declared = moduleModels[moduleStem(module)];
+    if (declared == null || declared.isEmpty) return null;
+    final wanted = model.toLowerCase();
+    for (final m in declared) {
+      if (m.trim().toLowerCase() == wanted) return null;
+    }
+    return (
+      fault: ModelModuleFault.unclaimedModel,
+      model: model,
+      module: module,
+      claims: List<String>.unmodifiable(declared),
+    );
   }
 
   /// Devices drawn on the AV canvas that the room config knows nothing about.
@@ -7760,6 +7834,30 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logInfo(
           "Model '$model' set on $deviceKey (module $moduleImport); existing settings kept.");
     }
+    notifyListeners();
+  }
+
+  /// Sets 'model' and CLEARS 'module': the device is now a product no python
+  /// driver claims, and nothing in the room can drive it.
+  ///
+  /// Clearing rather than leaving the old value is the whole point. A block
+  /// that says `model: Display 86` over `module: modules.device.display_65`
+  /// reads as configured, and would be commissioned as a 65 — where an empty
+  /// module reads as what it is: a decision nobody has made yet. It is also
+  /// what puts the red banner on the Devices tab (see
+  /// [deviceModelModuleFault]), and it stays there until somebody picks a
+  /// module, which is the only thing that can actually resolve it.
+  void setModelWithoutModule(String deviceKey, String model) {
+    final dev = roomConfig[deviceKey];
+    if (dev is! Map) return;
+    dev['model'] = model;
+    _forgetConversionOrigin(deviceKey, 'model');
+    final had = dev['module']?.toString() ?? '';
+    dev['module'] = '';
+    _forgetConversionOrigin(deviceKey, 'module');
+    AppLogger.logInfo(
+        "Model '$model' set on $deviceKey; no python module claims it, so the "
+        "module${had.isEmpty ? '' : " ('$had')"} was cleared.");
     notifyListeners();
   }
 

@@ -36,7 +36,11 @@ void main() {
   });
 
   Future<void> pumpForm(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 900);
+    // Tall enough to build the whole form. This is a lazy ListView, so a
+    // field below the fold is not just off screen, it does not exist — and
+    // the model/module banner at the top of a device with no module (this one
+    // has none) costs the list a chunk of that budget.
+    tester.view.physicalSize = const Size(1200, 1400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(

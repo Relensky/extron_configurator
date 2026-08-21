@@ -211,6 +211,37 @@ Every path out writes keys sorted in natural order, so `PROJECTORDEVICE_2` comes
 before `PROJECTORDEVICE_10` and two exports of the same room diff cleanly.
 
 
+# Devices
+
+Each device gets a sub-tab: its model, how the processor reaches it, and the
+python module that drives it. *Check Defaults* tells you what a block is
+missing; *Check Module Defaults* tells you where it disagrees with the driver.
+
+## When the model and the driver don't match
+
+A device block names a product and names the driver that talks to it, and
+nothing used to keep the two together. Retype the model, or swap the box from
+the **Cost** tab, and the module underneath went on naming a driver for the
+product that used to be there — with every field filled in, so the block read as
+finished. That's the config nobody re-checks, and it commissions the room as a
+device the room doesn't contain.
+
+A red banner now sits at the top of the device, above the two fields that fix
+it, in two cases:
+
+- **no python module is set** for a model that has one — nothing can talk to the
+  device, so the room won't commission
+- **the module is set, says which models it covers, and this isn't one of them**
+  — the banner names what that driver actually drives
+
+Pick a module (or correct the model) and it clears. It's read from the config
+rather than remembered by the page, so it survives leaving the tab, saving, and
+reopening the room — and it's what a swap made on the Cost tab leaves behind.
+
+It stays quiet where it can't know: a device with no model yet, a driver that
+never declared which models it covers, and a model the driver does list under a
+different capitalisation.
+
 # The drawings
 
 ## Control Schematic
@@ -401,10 +432,10 @@ It goes through silently when there's nothing to decide. It stops to ask when
 there is:
 
 - **no module claims the new model.** You can still go ahead — a part often
-  arrives before its driver does — but the config block keeps the module it has
-  now, which no longer matches the model on it, so the warning says so. Set the
-  module by hand on the **Devices** tab, or rename the model to one a driver
-  claims.
+  arrives before its driver does — but the module is cleared off the config
+  block rather than left naming a driver for the old box, and the device shows
+  a red banner on the **Devices** tab until somebody picks one. See *When the
+  model and the driver don't match*.
 - **the module changes and this room's settings disagree with its defaults.**
   The same question the Devices tab asks when you pick a model there, with the
   same two answers: keep the room's settings (the IP address and port are facts

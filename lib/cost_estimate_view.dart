@@ -1902,7 +1902,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     provider.setAvCostPrice(line.key, null);
 
     for (final key in controlKeys) {
-      if (choice == _SwapControl.applyDefaults) {
+      if (module.isEmpty) {
+        // Nothing drives the new product. The model goes on the block and the
+        // module comes OFF it: a block naming the old box's driver under the
+        // new box's name reads as configured and commissions the room as the
+        // wrong device, where an empty module reads as the open question it
+        // is. The Devices tab shows it in red until somebody answers it.
+        provider.setModelWithoutModule(key, picked.model);
+      } else if (choice == _SwapControl.applyDefaults) {
         provider.applyModuleDefaults(key, picked.model);
       } else {
         // Model and module only. An IP address, a port and a control ID are
@@ -1940,8 +1947,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             '${controlKeys.length == 1 ? '' : 's'} moved to $module'
             '${choice == _SwapControl.applyDefaults ? ' with its defaults' : ''}',
       if (controlKeys.isNotEmpty && module.isEmpty)
-        'no module claims ${picked.model}, so the control side still needs '
-            'one — set it on the Devices tab',
+        'no module claims ${picked.model}, so the module was cleared — the '
+            'Devices tab is showing '
+            '${controlKeys.length == 1 ? 'it' : 'them'} in red until one is '
+            'picked',
       if (hadOverride) 'the room price typed on the old model was cleared',
     ].join('. ');
 
@@ -2080,12 +2089,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                           'Python driver under the modules '
                                           'path drives it — so nothing can '
                                           'control it until one does.'
-                                    : 'The block keeps whatever module it has '
-                                          'now, which no longer matches the '
-                                          'model on it. The room will not '
-                                          'commission until a driver claims '
-                                          '$toModel, or you set the module by '
-                                          'hand on the Devices tab.',
+                                    : 'The module on the block is cleared '
+                                          'rather than left naming a driver '
+                                          'for the old box, and the Devices '
+                                          'tab shows the device in red until '
+                                          'a module is picked for it. The '
+                                          'room will not commission before '
+                                          'then.',
                                 style: const TextStyle(fontSize: 12),
                               ),
                             ],

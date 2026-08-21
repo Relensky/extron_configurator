@@ -380,6 +380,82 @@ class DeviceConfigurationForm extends StatelessWidget {
     );
   }
 
+  /// THE MODEL/MODULE BANNER.
+  ///
+  /// A device block names a product and names the driver that talks to it, and
+  /// nothing kept the two together: retype the model, or swap the box from the
+  /// Cost tab, and the module underneath went on naming a driver for the
+  /// product that used to be there. Every field is filled in, so the block
+  /// reads as finished — and a room gets commissioned as a device it does not
+  /// contain.
+  ///
+  /// Red, at the top of the device, above the two fields that fix it. It is
+  /// derived from the config rather than from anything this page remembers, so
+  /// it survives leaving the tab, saving, and reopening the room — and it goes
+  /// away the moment a module is chosen, which is the only thing that actually
+  /// resolves it.
+  Widget? _modelModuleBanner(BuildContext context, AppStateProvider provider) {
+    final fault = provider.deviceModelModuleFault(deviceKey);
+    if (fault == null) return null;
+    final theme = Theme.of(context);
+    final noModule = fault.fault == ModelModuleFault.noModule;
+    return Container(
+      key: ValueKey('model_module_banner_$deviceKey'),
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer.withValues(alpha: 0.55),
+        border: Border.all(color: theme.colorScheme.error),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, color: theme.colorScheme.error, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  noModule
+                      ? 'No python module for model "${fault.model}"'
+                      : '"${fault.model}" is not a model '
+                            '${AppStateProvider.moduleStem(fault.module)} '
+                            'drives',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  noModule
+                      ? 'The processor has nothing to talk to this device '
+                            'with, so the room will not commission. Pick a '
+                            'module below — or set the model back to one a '
+                            'driver claims.'
+                      : 'That driver covers ${_claimList(fault.claims)}. The '
+                            'block would be commissioned as one of those, not '
+                            'as a ${fault.model}. Pick the right module below, '
+                            'or correct the model.',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The models a driver names, as prose — trimmed, because a family driver
+  /// can list a dozen and the point is made by three.
+  static String _claimList(List<String> claims) {
+    if (claims.length <= 3) return claims.join(', ');
+    return '${claims.take(3).join(', ')} and ${claims.length - 3} more';
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
@@ -516,6 +592,10 @@ class DeviceConfigurationForm extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
+
+        // Above the two fields that fix it, so the sentence and the
+        // answer are on screen together.
+        ?_modelModuleBanner(context, provider),
 
         // --- MODEL SELECTOR (aggregated from every module's model dict) ---
         // Picking a model switches 'module' to that model's default .py and

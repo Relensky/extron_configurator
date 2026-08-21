@@ -377,12 +377,18 @@ void main() {
       // its driver does, and the quote and the drawing should not wait.
       expect(p.avNodeById('PROJECTORDEVICE_1')!.model, 'Display 86');
       expect((p.roomConfig['PROJECTORDEVICE_1'] as Map)['model'], 'Display 86');
-      // The module is left alone rather than blanked or guessed at, which is
-      // what the Devices tab does with an unclaimed model — and exactly why
-      // the warning had to be read first.
-      expect((p.roomConfig['PROJECTORDEVICE_1'] as Map)['module'],
-          'modules.device.display_65');
+      // The module comes OFF rather than being left naming the old box's
+      // driver: a block that reads as configured is the one nobody re-checks,
+      // and it would commission the room as a 65.
+      expect((p.roomConfig['PROJECTORDEVICE_1'] as Map)['module'], '');
+      expect((p.roomConfig['PROJECTORDEVICE_2'] as Map)['module'], '');
       expect(find.textContaining('no module claims Display 86'), findsWidgets);
+      // Which is exactly what the Devices tab draws its red banner from, and
+      // it is a fact about the config rather than about that page — so it is
+      // still true here, on a different tab, after a rebuild.
+      final fault = p.deviceModelModuleFault('PROJECTORDEVICE_1');
+      expect(fault?.fault, ModelModuleFault.noModule);
+      expect(fault?.model, 'Display 86');
     });
   });
 
