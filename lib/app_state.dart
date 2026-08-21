@@ -297,7 +297,11 @@ class AppStateProvider extends ChangeNotifier {
     ).toSet();
     return [
       for (final n in avNodes)
-        if (!n.isJackField && !configured.contains(n.id))
+        // A box somebody has said the processor does not drive is not a gap
+        // in the config — see [AvNode.excludeFromControl].
+        if (!n.isJackField &&
+            !n.excludeFromControl &&
+            !configured.contains(n.id))
           (key: n.id, name: n.label, model: n.model),
     ];
   }

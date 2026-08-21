@@ -8,6 +8,7 @@ import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/av_flow_view.dart'
     show buildAvFlowModel;
 import 'package:extron_configurator/base_costs.dart';
+import 'package:extron_configurator/control_prefill.dart';
 import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/cost_estimate_view.dart';
 import 'package:extron_configurator/ui_schema.dart';
@@ -263,6 +264,86 @@ void main() {
         ),
       );
       expect(entry.enabled, isFalse);
+    });
+  });
+
+  group('a box the control system does not drive', () {
+    testWidgets('can be said so, and stops being flagged', (tester) async {
+      final p = room();
+      await pump(tester, p);
+
+      await tester.tap(flagFor('model:powerlite l630u'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not part of the room config'));
+      await tester.pumpAndSettle();
+
+      expect(p.avNodeById('AVNODE_1')!.excludeFromControl, isTrue);
+      expect(iconOf(tester, flagFor('model:powerlite l630u')), Icons.link_off);
+      expect(colorOf(tester, flagFor('model:powerlite l630u')),
+          isNot(Colors.orange.shade700));
+    });
+
+    testWidgets('stays on the diagram, selectable and priced', (tester) async {
+      final p = room();
+      await pump(tester, p);
+      await tester.tap(flagFor('model:powerlite l630u'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not part of the room config'));
+      await tester.pumpAndSettle();
+
+      // The whole point: it is still a box in the room. Nothing about the
+      // drawing, the cabling or the quote changes — only what the config-side
+      // lists say about it.
+      final node = p.avNodeById('AVNODE_1')!;
+      expect(node.model, 'PowerLite L630U');
+      expect(node.excludeFromCost, isFalse);
+      expect(p.avNodes, hasLength(1));
+      expect(find.text(r'$2,200.00'), findsWidgets);
+    });
+
+    testWidgets('drops off every "missing from the config" list',
+        (tester) async {
+      final p = room();
+      expect(p.avDevicesWithoutControl, hasLength(1));
+      expect(planControlSide(p).creatable, hasLength(1));
+
+      p.updateAvNode(
+        p.avNodeById('AVNODE_1')!.copyWith(excludeFromControl: true),
+      );
+
+      expect(p.avDevicesWithoutControl, isEmpty,
+          reason: 'the app stops asking for a block nobody will fill in');
+      expect(planControlSide(p).creatable, isEmpty,
+          reason: 'and the prefill stops offering to write one');
+    });
+
+    testWidgets('and can be put back', (tester) async {
+      final p = room();
+      await pump(tester, p);
+      await tester.tap(flagFor('model:powerlite l630u'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not part of the room config'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(flagFor('model:powerlite l630u'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Driven by this system after all'));
+      await tester.pumpAndSettle();
+
+      expect(p.avNodeById('AVNODE_1')!.excludeFromControl, isFalse);
+      expect(iconOf(tester, flagFor('model:powerlite l630u')), Icons.flag);
+    });
+
+    testWidgets('survives being written out and read back', (tester) async {
+      final node = const AvNode(
+        id: 'AVNODE_9',
+        label: 'House switch',
+        model: 'CAT-9300',
+        pos: Offset.zero,
+        ports: [],
+        excludeFromControl: true,
+      );
+      expect(AvNode.fromJson(node.toJson()).excludeFromControl, isTrue);
     });
   });
 

@@ -150,6 +150,10 @@ ControlPrefillPlan planControlSide(
 
   for (final node in provider.avNodes) {
     if (node.isJackField) continue;
+    // Deliberately not driven by this control system: the building's switch,
+    // somebody else's codec, a passive box. Offering to write a block for one
+    // is offering to write a block nobody will fill in.
+    if (node.excludeFromControl) continue;
     if (configured.contains(node.id)) {
       alreadyConfigured++;
       continue;

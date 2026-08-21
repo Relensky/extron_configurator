@@ -771,6 +771,24 @@ class AvNode {
   /// list are facts about the room, not about the invoice.
   final bool excludeFromCost;
 
+  /// Drawn, in the room, and deliberately NOT a device the control system
+  /// drives — so it should never have a config block.
+  ///
+  /// The other half of [excludeFromCost], and the same argument. Rooms are
+  /// full of boxes the processor has no business talking to: the building's
+  /// network switch, a codec another department manages, an owner-furnished
+  /// display, a passive splitter. They belong on the drawing because the
+  /// signal goes through them, and several belong on the quote because
+  /// somebody is buying them — but a config block for one is a block nobody
+  /// will ever fill in, and an app that keeps asking for it is an app whose
+  /// warnings get ignored.
+  ///
+  /// Saying so once takes the device off every "this is missing from the
+  /// config" list — the estimate's flag, the prefill, the missing-module
+  /// report — and changes nothing else. It is still drawn, still selectable,
+  /// still cabled, still racked, still priced.
+  final bool excludeFromControl;
+
   /// Which of the room's [RoomLocation]s this box physically sits in, or ''
   /// when nobody has said.
   ///
@@ -794,6 +812,7 @@ class AvNode {
     this.powerSource = PowerSource.unspecified,
     this.note = '',
     this.excludeFromCost = false,
+    this.excludeFromControl = false,
     this.locationId = kNoLocationId,
   });
 
@@ -833,6 +852,7 @@ class AvNode {
     powerSource: powerSource,
     note: note,
     excludeFromCost: excludeFromCost,
+    excludeFromControl: excludeFromControl,
     locationId: locationId,
   );
 
@@ -849,6 +869,7 @@ class AvNode {
     PowerSource? powerSource,
     String? note,
     bool? excludeFromCost,
+    bool? excludeFromControl,
     String? locationId,
   }) => AvNode(
     id: id,
@@ -864,6 +885,7 @@ class AvNode {
     powerSource: powerSource ?? this.powerSource,
     note: note ?? this.note,
     excludeFromCost: excludeFromCost ?? this.excludeFromCost,
+    excludeFromControl: excludeFromControl ?? this.excludeFromControl,
     locationId: locationId ?? this.locationId,
   );
 
@@ -991,6 +1013,7 @@ class AvNode {
     if (powerSource != PowerSource.unspecified) 'power': powerSource.name,
     if (note.isNotEmpty) 'note': note,
     if (excludeFromCost) 'excludeFromCost': true,
+    if (excludeFromControl) 'excludeFromControl': true,
     if (locationId.isNotEmpty) 'location': locationId,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
@@ -1011,6 +1034,7 @@ class AvNode {
     powerSource: powerSourceFromName(json['power']?.toString()),
     note: json['note']?.toString() ?? '',
     excludeFromCost: json['excludeFromCost'] == true,
+    excludeFromControl: json['excludeFromControl'] == true,
     locationId: json['location']?.toString() ?? kNoLocationId,
     ports: [
       for (final p in (json['ports'] as List? ?? []))

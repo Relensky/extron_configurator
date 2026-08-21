@@ -2594,6 +2594,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     final ports = List<AvPort>.from(node.ports);
     PowerSource powerSource = node.powerSource;
     bool excludeFromCost = node.excludeFromCost;
+    bool excludeFromControl = node.excludeFromControl;
     String locationId = node.locationId;
     // Where this box's cables move to when the model under it is swapped, as
     // old port id -> new port id. Empty until somebody does swap it; see
@@ -2789,6 +2790,56 @@ class _AvFlowViewState extends State<AvFlowView> {
                         ],
                         onChanged: (v) =>
                             setLocal(() => powerSource = v ?? powerSource),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // Drawn, and not driven. The other half of the checkbox below
+                // it: a room is full of boxes the processor has no business
+                // talking to, and an app that keeps asking for a config block
+                // for the building's network switch is an app whose warnings
+                // get ignored.
+                Row(
+                  children: [
+                    Checkbox(
+                      key: const ValueKey('node_exclude_control'),
+                      value: excludeFromControl,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) =>
+                          setLocal(() => excludeFromControl = v ?? false),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setLocal(
+                          () => excludeFromControl = !excludeFromControl,
+                        ),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                text: 'Not part of the room config',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              TextSpan(
+                                text: '  — the building network switch, a '
+                                    'codec another department manages, a '
+                                    'passive box. It stays drawn, cabled and '
+                                    'quoted; it stops being reported as '
+                                    'missing a device block.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(ctx).hintColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -3070,6 +3121,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       btuPerHour: double.tryParse(btuController.text.trim()) ?? 0,
       powerSource: powerSource,
       excludeFromCost: excludeFromCost,
+      excludeFromControl: excludeFromControl,
       locationId: locationId,
       ports: ports,
     );
@@ -4128,6 +4180,18 @@ class _AvNodeBox extends StatelessWidget {
                                 message: 'Not on the cost estimate',
                                 child: Icon(
                                   Icons.money_off,
+                                  size: 13,
+                                  color: theme.hintColor,
+                                ),
+                              ),
+                            ),
+                          if (node.excludeFromControl)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 2),
+                              child: Tooltip(
+                                message: 'Not part of the room config',
+                                child: Icon(
+                                  Icons.link_off,
                                   size: 13,
                                   color: theme.hintColor,
                                 ),

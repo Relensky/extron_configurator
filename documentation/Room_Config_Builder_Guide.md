@@ -427,10 +427,22 @@ So every equipment row carries a flag:
   has to exist before it can have a block — so the cost line is replaced by the
   drawn devices it was quoting.
 - **a tick** — it's in the config, and the tooltip names the block.
-- **a box icon** — marked as a **spare**: bought for the shelf on purpose, not
-  part of the room's system. It stays on the quote and stops being flagged.
-  Without this, half a quote is permanently flagged and the flag becomes
-  wallpaper.
+- **a box icon** — marked as a **spare**: bought for the shelf on purpose, never
+  installed here at all. It stays on the quote and stops being flagged.
+- **a broken-link icon** — marked **not part of the room config**: it *is* in
+  the room and on the diagram, and the processor has no business talking to it.
+  The building's network switch, a codec another department manages, an
+  owner-furnished display, a passive splitter. It stays exactly as it was —
+  drawn, selectable, cabled, racked and priced — and drops off every "missing
+  from the config" list: the flag here, the control-side prefill, and the
+  missing-module report. The same checkbox is on the box's own editor on
+  **Signal Flow**, next to *Not on the cost estimate*, and the box wears a small
+  broken-link badge on the diagram.
+
+Those last two are the escape hatches that keep the flag meaningful. Every room
+has boxes whose honest answer to "why is this not in the config" is "it never
+will be", and a warning nobody can clear is a warning everybody learns to
+ignore.
 
 A hand-typed line with no catalog part behind it can't go in — there's nothing
 to build a device from. Add it to the catalog first with the library button on

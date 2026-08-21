@@ -46,6 +46,7 @@ void main() {
     // two have to line up with each other and with the caption over them.
     p.addAvCostExtraEquipment(description: 'Owner display', qty: 2);
     p.addAvCostExtraHardware(description: 'Spare shelf', qty: 1);
+    p.addAvCostExtraCable(description: 'Cat6A spool', qty: 1);
     return p;
   }
 
@@ -154,7 +155,13 @@ void main() {
     final caption = rectOf(tester, find.text('Extended').first);
     final figure = rectOf(tester, find.text(r'$1,000.00').first);
     expect(caption.right, moreOrLessEquals(figure.right, epsilon: 0.5));
-    expect(caption.left, moreOrLessEquals(figure.left, epsilon: 0.5));
+    // The RIGHT edge is the whole of it. A caption cell shrink-wraps its text
+    // so that one line and two can share a bottom rule; the figure's cell is
+    // stretched to the column. Comparing their left edges compares two boxes
+    // rather than two pieces of text, and would fail for a column that is
+    // perfectly aligned.
+    expect(caption.left, greaterThanOrEqualTo(figure.left - 0.5),
+        reason: 'the caption still sits inside its own column');
   });
 
   testWidgets('a mixed column lines up caption, box and printed text', (
@@ -198,6 +205,89 @@ void main() {
     final box = rectOf(tester, textInside('hwqty_'));
     expect(rectOf(tester, caption.at(1)).right,
         moreOrLessEquals(box.right, epsilon: 0.5));
+  });
+
+  testWidgets('every caption on a row shares one bottom rule', (tester) async {
+    // A narrow column wraps its caption — "Unit price" over 130 pixels is two
+    // lines, "Qty" over 60 is one — and a Row centres what it is given, so the
+    // tall ones used to ride 8 pixels higher than the short ones and the whole
+    // caption row read as crooked. They sit in fixed-height cells now, text
+    // against the bottom, which is the rule the divider under them draws.
+    final p = room();
+    await pump(tester, p);
+
+    for (final table in const [
+      ['Device', 'Model', 'Qty', 'Unit price', 'Extended', 'Price from'],
+      ['Job type', 'Scope', 'Techs', 'Hours ea.', 'Rate/hr'],
+    ]) {
+      final bottoms = <double>[
+        for (final caption in table) rectOf(tester, find.text(caption).first).bottom,
+      ];
+      for (final bottom in bottoms) {
+        expect(bottom, moreOrLessEquals(bottoms.first, epsilon: 0.5),
+            reason: 'the captions of one table sit on one line: $table');
+      }
+    }
+  });
+
+  testWidgets('every table lays its rows out on its caption row', (
+    tester,
+  ) async {
+    // THE INVISIBLE GRID. Each table's caption row and its data rows are built
+    // from ONE list of columns, so this is really asking whether that held:
+    // every cell boundary on a data row falls where the caption row put it.
+    //
+    // Per table, because that is where it goes wrong — a column added to one
+    // and not the other is exactly the drift this replaced.
+    final p = room();
+    await pump(tester, p);
+
+    List<double> edgesAt(Finder rowFinder) {
+      expect(rowFinder, findsWidgets, reason: 'no row to measure');
+      final out = <double>[];
+      void visit(Element e) {
+        final render = e.renderObject;
+        if (render is RenderBox && e.widget is! Row) {
+          out.add(render.localToGlobal(Offset.zero).dx);
+          return;
+        }
+        e.visitChildren(visit);
+      }
+
+      rowFinder.evaluate().first.visitChildren(visit);
+      return out;
+    }
+
+    Finder rowsKeyed(String prefix) => find.byWidgetPredicate(
+      (w) =>
+          w is Row &&
+          w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith(prefix),
+    );
+
+    // A caption to find each header row by, and the data rows under it.
+    for (final table in const [
+      ('Device', 'gridrow_eqp_'),
+      ('Item', 'gridrow_hw_'),
+      ('Cable type', 'gridrow_cbl_'),
+      ('Scope', 'gridrow_labor_'),
+      ('Description', 'gridrow_item_'),
+    ]) {
+      final caption = table.$1;
+      final header = edgesAt(
+        find.ancestor(of: find.text(caption).first, matching: find.byType(Row))
+            .first,
+      );
+      final data = edgesAt(rowsKeyed(table.$2));
+      expect(header, isNotEmpty, reason: 'no caption row for $caption');
+      expect(data.length, header.length,
+          reason: '$caption: a data row has the columns its captions do');
+      for (var i = 0; i < header.length; i++) {
+        expect(data[i], moreOrLessEquals(header[i], epsilon: 0.5),
+            reason: '$caption: column $i starts in the same place on both '
+                'rows');
+      }
+    }
   });
 
   testWidgets('the inset the captions use is the one a field really has', (

@@ -58,6 +58,82 @@ enum _ExtraPart { equipment, cable, hardware, misc }
 /// the Devices tab offers when a model is picked there.
 enum _SwapControl { keepSettings, applyDefaults }
 
+/// The equipment table's columns. Declared once and read by both the caption
+/// row and every data row — see [_CostEstimateViewState._gridRow].
+const List<_Col> _kEquipmentCols = [
+  // MIXED COLUMNS. A device off the diagram prints its name and
+  // its count as plain text; a line added here has a box for
+  // both. Both cells carry the box's inset (see [_CellText]), so
+  // the caption sits over either kind and the two kinds of row
+  // line up with each other.
+  _Col.field('Device', flex: 3),
+  _Col('Model', flex: 2),
+  _Col.field('Qty', width: 60, numeric: true),
+  _Col.field('Unit price', gap: 12, width: 130, numeric: true),
+  _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+  _Col('Price from', gap: 12, width: 92),
+  // Four row buttons, 40 wide as they render.
+  _Col('', width: 160),
+];
+
+/// The rack-hardware table's columns — see [_kEquipmentCols].
+const List<_Col> _kHardwareCols = [
+  _Col('Item', flex: 3),
+  _Col('Kind', flex: 2),
+  // Mixed, like the equipment table's: placed hardware prints
+  // its count, a line added here has a box for it.
+  _Col.field('Qty', width: 60, numeric: true),
+  _Col.field('Unit price', gap: 12, width: 130, numeric: true),
+  _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+  _Col('Price from', gap: 12, width: 92),
+  // Two row buttons. They are constrained to 34 and render at
+  // 40, which is what the column actually takes.
+  _Col('', width: 80),
+];
+
+/// The cabling table's columns — see [_kEquipmentCols]. Both kinds of row
+/// read it: the runs counted off the diagram, and the miscellaneous cable
+/// quoted by hand.
+const List<_Col> _kCablingCols = [
+  _Col('Cable type', flex: 3),
+  _Col('Drawn', width: 66, align: TextAlign.right),
+  _Col.field('Spares', gap: 12, width: 80, numeric: true),
+  _Col('Total', gap: 12, width: 54, align: TextAlign.right),
+  _Col.field('Unit price', gap: 12, width: 130, numeric: true),
+  _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+  // Three row buttons. They are constrained to 34 and render at
+  // 40, which is what the column actually takes.
+  _Col('', width: 120),
+];
+
+/// The labor table's columns — see [_kEquipmentCols].
+const List<_Col> _kLaborCols = [
+  // The picker is a box on the page AND in the photograph, so
+  // its caption keeps the box's inset either way.
+  _Col.field('Job type', width: 182, keepsBox: true),
+  _Col.field('Scope', gap: 8, flex: 3),
+  _Col.field('Techs', gap: 8, width: 78, numeric: true),
+  _Col.field('Hours ea.', gap: 8, width: 86, numeric: true),
+  _Col.field('Rate/hr', gap: 8, width: 76, numeric: true),
+  _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+  _Col('Taxable', width: 92, align: TextAlign.center),
+  // One row button, 40 wide as it renders.
+  _Col('', width: 40),
+];
+
+/// The other-items table's columns — see [_kEquipmentCols].
+const List<_Col> _kItemsCols = [
+  _Col.field('Description', flex: 3),
+  _Col.field('Category', gap: 8, flex: 2),
+  _Col.field('Qty', gap: 8, width: 70, numeric: true),
+  _Col.field('Unit price', gap: 8, width: 130, numeric: true),
+  _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
+  _Col('Taxable', width: 92, align: TextAlign.center),
+  // Two row buttons. They are constrained to 34 and render at
+  // 40, which is what the column actually takes.
+  _Col('', width: 80),
+];
+
 class CostEstimateView extends StatefulWidget {
   /// The diagram to price. Null means "read it from the provider", which is
   /// what the tab does; the parameter is kept so a caller that has already
@@ -614,21 +690,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             const SizedBox(height: 8),
-            _headerRow(context, const [
-              // MIXED COLUMNS. A device off the diagram prints its name and
-              // its count as plain text; a line added here has a box for
-              // both. Both cells carry the box's inset (see [_CellText]), so
-              // the caption sits over either kind and the two kinds of row
-              // line up with each other.
-              _Col.field('Device', flex: 3),
-              _Col('Model', flex: 2),
-              _Col.field('Qty', width: 60, numeric: true),
-              _Col.field('Unit price', gap: 12, width: 130, numeric: true),
-              _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-              _Col('Price from', gap: 12, width: 92),
-              // Four row buttons, 40 wide as they render.
-              _Col('', width: 160),
-            ]),
+            _headerRow(context, _kEquipmentCols),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
               const Padding(
@@ -650,210 +712,202 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       .firstOrNull;
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: extra == null
-                              ? _CellText(line.description)
-                              : LiveTextField(
-                                  fieldId: 'eqpdesc_${extra.id}',
-                                  initial: extra.description,
-                                  hint: 'e.g. Owner-furnished display',
-                                  onChanged: (v) =>
-                                      provider.updateAvCostExtraEquipment(
-                                    extra.copyWith(description: v),
-                                  ),
+                    child: _gridRow(_kEquipmentCols, [
+                      // Device
+                      extra == null
+                          ? _CellText(line.description)
+                          : LiveTextField(
+                              fieldId: 'eqpdesc_${extra.id}',
+                              initial: extra.description,
+                              hint: 'e.g. Owner-furnished display',
+                              onChanged: (v) =>
+                                  provider.updateAvCostExtraEquipment(
+                                extra.copyWith(description: v),
+                              ),
+                            ),
+                      // Model
+                      Text(
+                        extra == null
+                            ? (line.model.isEmpty ? '—' : line.model)
+                            : [
+                                if (line.model.isNotEmpty) line.model,
+                                if (extra.spare)
+                                  'spare'
+                                else
+                                  'not on the diagram',
+                              ].join(' · '),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.disabledColor,
+                        ),
+                      ),
+                      // Qty
+                      extra == null
+                          ? _CellText(
+                              '×${line.qty.toStringAsFixed(0)}',
+                              numeric: true,
+                            )
+                          : LiveTextField(
+                              fieldId: 'eqpqty_${extra.id}',
+                              initial: trimNumber(extra.qty),
+                              numeric: true,
+                              onChanged: (v) =>
+                                  provider.updateAvCostExtraEquipment(
+                                extra.copyWith(
+                                  qty: double.tryParse(v) ?? 0,
                                 ),
+                              ),
+                            ),
+                      // Unit price. The box holds THIS ROOM'S price and
+                      // nothing else. Showing the catalog figure in it made
+                      // every line look like it had been quoted by hand, and
+                      // left the box disagreeing with the row when the catalog
+                      // or the base cost changed underneath it. Blank means
+                      // "use whatever the row resolved to" — which the hint
+                      // spells out.
+                      LiveTextField(
+                        fieldId: 'price_${line.key}',
+                        initial: _roomPriceText(provider, line),
+                        prefix: currency,
+                        numeric: true,
+                        hint: _resolvedPriceHint(line),
+                        onChanged: (v) {
+                          final parsed = double.tryParse(v);
+                          provider.setAvCostPrice(
+                            line.key,
+                            v.trim().isEmpty ? null : (parsed ?? 0),
+                          );
+                        },
+                      ),
+                      // Extended
+                      Text(
+                        formatMoney(line.total, currency),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            extra == null
-                                ? (line.model.isEmpty ? '—' : line.model)
-                                : [
-                                    if (line.model.isNotEmpty) line.model,
-                                    if (extra.spare)
-                                      'spare'
-                                    else
-                                      'not on the diagram',
-                                  ].join(' · '),
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.disabledColor,
+                      ),
+                      // Price from
+                      Text(
+                        kPriceSourceLabels[line.source] ?? '',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: line.source == PriceSource.none
+                              ? theme.colorScheme.error
+                              : theme.disabledColor,
+                        ),
+                      ),
+                      // The row's buttons, as ONE cell: the grid reserves the
+                      // column, and what goes in it is this row's business.
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _configFlag(
+                            context,
+                            provider,
+                            line,
+                            model,
+                            extra: extra,
+                          ),
+                          // WRONG BOX ON THE QUOTE. The commonest edit an
+                          // estimate gets and the one that had to be made
+                          // somewhere else: a display comes back at the wrong
+                          // size, a switcher is one input short, the customer
+                          // asks what the cheaper matrix costs. Swapping here
+                          // puts the new product under the drawn box — its
+                          // connectors, its rack height, its power and its
+                          // price — so the diagram, the rack and the total all
+                          // move together instead of the quote quietly
+                          // disagreeing with the drawing.
+                          KeyedSubtree(
+                            key: ValueKey('eqp_swap_${line.key}'),
+                            child: avRowIcon(
+                              Icons.find_replace,
+                              extra != null
+                                  ? 'Quote a different part on this line'
+                                  : line.qty > 1
+                                  ? 'Replace all '
+                                        '${line.qty.toStringAsFixed(0)} with '
+                                        'another model'
+                                  : 'Replace this with another model',
+                              () => _swapUnit(
+                                context,
+                                provider,
+                                line,
+                                model,
+                                extra: extra,
+                              ),
                             ),
                           ),
-                        ),
-                        SizedBox(
-                          width: 60,
-                          child: extra == null
-                              ? _CellText(
-                                  '×${line.qty.toStringAsFixed(0)}',
-                                  numeric: true,
-                                )
-                              : LiveTextField(
-                                  fieldId: 'eqpqty_${extra.id}',
-                                  initial: trimNumber(extra.qty),
-                                  numeric: true,
-                                  onChanged: (v) =>
-                                      provider.updateAvCostExtraEquipment(
-                                    extra.copyWith(
-                                      qty: double.tryParse(v) ?? 0,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 130,
-                          child: LiveTextField(
-                            fieldId: 'price_${line.key}',
-                            // The box holds THIS ROOM'S price and nothing
-                            // else. Showing the catalog figure in it made
-                            // every line look like it had been quoted by
-                            // hand, and left the box disagreeing with the row
-                            // when the catalog or the base cost changed
-                            // underneath it. Blank means "use whatever the row
-                            // resolved to" — which the hint spells out.
-                            initial: _roomPriceText(provider, line),
-                            prefix: currency,
-                            numeric: true,
-                            hint: _resolvedPriceHint(line),
-                            onChanged: (v) {
-                              final parsed = double.tryParse(v);
-                              provider.setAvCostPrice(
-                                line.key,
-                                v.trim().isEmpty ? null : (parsed ?? 0),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 110,
-                          child: Text(
-                            formatMoney(line.total, currency),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 92,
-                          child: Text(
-                            kPriceSourceLabels[line.source] ?? '',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: line.source == PriceSource.none
-                                  ? theme.colorScheme.error
-                                  : theme.disabledColor,
-                            ),
-                          ),
-                        ),
-                        _configFlag(
-                          context,
-                          provider,
-                          line,
-                          model,
-                          extra: extra,
-                        ),
-                        // WRONG BOX ON THE QUOTE. The commonest edit an
-                        // estimate gets and the one that had to be made
-                        // somewhere else: a display comes back at the wrong
-                        // size, a switcher is one input short, the customer
-                        // asks what the cheaper matrix costs. Swapping here
-                        // puts the new product under the drawn box — its
-                        // connectors, its rack height, its power and its
-                        // price — so the diagram, the rack and the total all
-                        // move together instead of the quote quietly
-                        // disagreeing with the drawing.
-                        KeyedSubtree(
-                          key: ValueKey('eqp_swap_${line.key}'),
-                          child: avRowIcon(
-                            Icons.find_replace,
-                            extra != null
-                                ? 'Quote a different part on this line'
-                                : line.qty > 1
-                                ? 'Replace all ${line.qty.toStringAsFixed(0)} '
-                                      'with another model'
-                                : 'Replace this with another model',
-                            () => _swapUnit(
-                              context,
-                              provider,
-                              line,
-                              model,
-                              extra: extra,
-                            ),
-                          ),
-                        ),
-                        // Anything on this row can become a catalog entry —
-                        // the box on the drawing as readily as the line
-                        // somebody typed. A row already priced FROM the
-                        // catalog is the one case with nothing to write.
-                        avRowIcon(
-                          Icons.library_add_outlined,
-                          extra != null && extra.catalogModel.isNotEmpty
-                              ? 'Already priced from the catalog '
-                                    '(${extra.catalogModel})'
-                              : isCatalogSource(line.source)
-                              ? 'Already in the catalog as ${line.model}'
-                              : 'Add this line to the device catalog',
-                          (extra != null && extra.catalogModel.isNotEmpty) ||
-                                  isCatalogSource(line.source)
-                              ? null
-                              : extra != null
-                              ? () => _addLineToCatalog(
-                                  context,
-                                  provider,
-                                  extra,
-                                  kind: _ExtraPart.equipment,
-                                )
-                              : () => _addToCatalog(
-                                  context,
-                                  provider,
-                                  suggestedModel: line.model.isNotEmpty
-                                      ? line.model
-                                      : line.description,
-                                  partNumber: line.partNumber,
-                                  category: line.category,
-                                  price:
-                                      provider.avCost
-                                              .priceOverrides[line.key] ??
-                                          line.unitPrice,
-                                  priceKey: line.key,
-                                  // A device with no model has nothing for the
-                                  // estimate to match the new entry against.
-                                  unlinkedNote: line.model.isEmpty
-                                      ? 'This device has no model, so the row '
-                                            'cannot pick the entry up on its '
-                                            'own — set the model on the '
-                                            'Devices tab to the name below and '
-                                            'it will.'
-                                      : null,
-                                ),
-                        ),
-                        if (extra == null)
+                          // Anything on this row can become a catalog entry —
+                          // the box on the drawing as readily as the line
+                          // somebody typed. A row already priced FROM the
+                          // catalog is the one case with nothing to write.
                           avRowIcon(
-                            Icons.restart_alt,
-                            'Back to the catalog price',
-                            line.source == PriceSource.override
-                                ? () => provider.setAvCostPrice(line.key, null)
-                                : null,
-                          )
-                        else
-                          avRowIcon(
-                            Icons.delete_outline,
-                            'Remove this line',
-                            () => provider
-                                .removeAvCostExtraEquipment(extra.id),
-                            danger: true,
+                            Icons.library_add_outlined,
+                            extra != null && extra.catalogModel.isNotEmpty
+                                ? 'Already priced from the catalog '
+                                      '(${extra.catalogModel})'
+                                : isCatalogSource(line.source)
+                                ? 'Already in the catalog as ${line.model}'
+                                : 'Add this line to the device catalog',
+                            (extra != null && extra.catalogModel.isNotEmpty) ||
+                                    isCatalogSource(line.source)
+                                ? null
+                                : extra != null
+                                ? () => _addLineToCatalog(
+                                    context,
+                                    provider,
+                                    extra,
+                                    kind: _ExtraPart.equipment,
+                                  )
+                                : () => _addToCatalog(
+                                    context,
+                                    provider,
+                                    suggestedModel: line.model.isNotEmpty
+                                        ? line.model
+                                        : line.description,
+                                    partNumber: line.partNumber,
+                                    category: line.category,
+                                    price:
+                                        provider.avCost
+                                                .priceOverrides[line.key] ??
+                                            line.unitPrice,
+                                    priceKey: line.key,
+                                    // A device with no model has nothing for
+                                    // the estimate to match the new entry
+                                    // against.
+                                    unlinkedNote: line.model.isEmpty
+                                        ? 'This device has no model, so the '
+                                              'row cannot pick the entry up on '
+                                              'its own — set the model on the '
+                                              'Devices tab to the name below '
+                                              'and it will.'
+                                        : null,
+                                  ),
                           ),
-                      ],
-                    ),
+                          if (extra == null)
+                            avRowIcon(
+                              Icons.restart_alt,
+                              'Back to the catalog price',
+                              line.source == PriceSource.override
+                                  ? () =>
+                                      provider.setAvCostPrice(line.key, null)
+                                  : null,
+                            )
+                          else
+                            avRowIcon(
+                              Icons.delete_outline,
+                              'Remove this line',
+                              () => provider
+                                  .removeAvCostExtraEquipment(extra.id),
+                              danger: true,
+                            ),
+                        ],
+                      ),
+                    ], rowKey: ValueKey('gridrow_eqp_${line.key}')),
                   );
                 },
               ),
@@ -914,19 +968,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               )
             else ...[
               const SizedBox(height: 8),
-              _headerRow(context, const [
-                _Col('Item', flex: 3),
-                _Col('Kind', flex: 2),
-                // Mixed, like the equipment table's: placed hardware prints
-                // its count, a line added here has a box for it.
-                _Col.field('Qty', width: 60, numeric: true),
-                _Col.field('Unit price', gap: 12, width: 130, numeric: true),
-                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-                _Col('Price from', gap: 12, width: 92),
-                // Two row buttons. They are constrained to 34 and render at
-                // 40, which is what the column actually takes.
-                _Col('', width: 80),
-              ]),
+              _headerRow(context, _kHardwareCols),
               const Divider(height: 12),
               for (final line in estimate.hardware)
                 Builder(
@@ -939,169 +981,158 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         .firstOrNull;
                     return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Row(
-                          children: [
-                            Icon(
-                              iconForRackItem(line.category),
-                              size: 15,
-                              color: theme.disabledColor,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                line.description,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          extra == null
-                              ? (line.category.isEmpty
-                                    ? '—'
-                                    : line.category)
-                              : '${line.category.isEmpty ? 'Hardware'
-                                    : line.category} · not racked',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
+                  child: _gridRow(_kHardwareCols, [
+                      // Item
+                      Row(
+                        children: [
+                          Icon(
+                            iconForRackItem(line.category),
+                            size: 15,
                             color: theme.disabledColor,
                           ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              line.description,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Kind
+                      Text(
+                        extra == null
+                            ? (line.category.isEmpty ? '—' : line.category)
+                            : '${line.category.isEmpty ? 'Hardware'
+                                  : line.category} · not racked',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.disabledColor,
                         ),
                       ),
-                      SizedBox(
-                        width: 60,
-                        child: extra == null
-                            ? _CellText(
-                                '×${line.qty.toStringAsFixed(0)}',
-                                numeric: true,
-                              )
-                            : LiveTextField(
-                                fieldId: 'hwqty_${extra.id}',
-                                initial: trimNumber(extra.qty),
-                                numeric: true,
-                                onChanged: (v) =>
-                                    provider.updateAvCostExtraHardware(
-                                  extra.copyWith(
-                                    qty: double.tryParse(v) ?? 0,
-                                  ),
+                      // Qty
+                      extra == null
+                          ? _CellText(
+                              '×${line.qty.toStringAsFixed(0)}',
+                              numeric: true,
+                            )
+                          : LiveTextField(
+                              fieldId: 'hwqty_${extra.id}',
+                              initial: trimNumber(extra.qty),
+                              numeric: true,
+                              onChanged: (v) =>
+                                  provider.updateAvCostExtraHardware(
+                                extra.copyWith(
+                                  qty: double.tryParse(v) ?? 0,
                                 ),
                               ),
+                            ),
+                      // Unit price
+                      LiveTextField(
+                        fieldId: 'price_${line.key}',
+                        initial: _roomPriceText(provider, line),
+                        prefix: currency,
+                        numeric: true,
+                        hint: _resolvedPriceHint(line),
+                        onChanged: (v) {
+                          final parsed = double.tryParse(v);
+                          provider.setAvCostPrice(
+                            line.key,
+                            v.trim().isEmpty ? null : (parsed ?? 0),
+                          );
+                        },
                       ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 130,
-                        child: LiveTextField(
-                          fieldId: 'price_${line.key}',
-                          initial: _roomPriceText(provider, line),
-                          prefix: currency,
-                          numeric: true,
-                          hint: _resolvedPriceHint(line),
-                          onChanged: (v) {
-                            final parsed = double.tryParse(v);
-                            provider.setAvCostPrice(
-                              line.key,
-                              v.trim().isEmpty ? null : (parsed ?? 0),
-                            );
-                          },
+                      // Extended
+                      Text(
+                        formatMoney(line.total, currency),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 110,
-                        child: Text(
-                          formatMoney(line.total, currency),
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      // Price from
+                      Text(
+                        kPriceSourceLabels[line.source] ?? '',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: line.source == PriceSource.none
+                              ? theme.colorScheme.error
+                              : theme.disabledColor,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 92,
-                        child: Text(
-                          kPriceSourceLabels[line.source] ?? '',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: line.source == PriceSource.none
-                                ? theme.colorScheme.error
-                                : theme.disabledColor,
-                          ),
-                        ),
-                      ),
-                      // Placed hardware is promoted the same way a typed line
-                      // is, and the items in the frames are stamped with the
-                      // new entry so the elevation and the quote agree.
-                      avRowIcon(
-                        Icons.library_add_outlined,
-                        extra != null && extra.catalogModel.isNotEmpty
-                            ? 'Already priced from the parts list '
-                                  '(${extra.catalogModel})'
-                            : isCatalogSource(line.source)
-                            ? 'Already on the parts list'
-                            : 'Add this line to the parts list',
-                        (extra != null && extra.catalogModel.isNotEmpty) ||
-                                isCatalogSource(line.source)
-                            ? null
-                            : extra != null
-                            ? () => _addLineToCatalog(
-                                context,
-                                provider,
-                                extra,
-                                kind: _ExtraPart.hardware,
-                              )
-                            : () => _addToCatalog(
-                                context,
-                                provider,
-                                suggestedModel: line.description,
-                                partNumber: line.partNumber,
-                                category: line.category.isEmpty
-                                    ? kCategoryRackHardware
-                                    : line.category,
-                                rackUnits: provider.avRackItems
-                                        .where((i) =>
-                                            i.label.trim().toLowerCase() ==
-                                            line.description
-                                                .trim()
-                                                .toLowerCase())
-                                        .firstOrNull
-                                        ?.rackUnits ??
-                                    1,
-                                price:
-                                    provider.avCost.priceOverrides[line.key] ??
+                      // The row's buttons, as one cell.
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Placed hardware is promoted the same way a typed
+                          // line is, and the items in the frames are stamped
+                          // with the new entry so the elevation and the quote
+                          // agree.
+                          avRowIcon(
+                            Icons.library_add_outlined,
+                            extra != null && extra.catalogModel.isNotEmpty
+                                ? 'Already priced from the parts list '
+                                      '(${extra.catalogModel})'
+                                : isCatalogSource(line.source)
+                                ? 'Already on the parts list'
+                                : 'Add this line to the parts list',
+                            (extra != null && extra.catalogModel.isNotEmpty) ||
+                                    isCatalogSource(line.source)
+                                ? null
+                                : extra != null
+                                ? () => _addLineToCatalog(
+                                    context,
+                                    provider,
+                                    extra,
+                                    kind: _ExtraPart.hardware,
+                                  )
+                                : () => _addToCatalog(
+                                    context,
+                                    provider,
+                                    suggestedModel: line.description,
+                                    partNumber: line.partNumber,
+                                    category: line.category.isEmpty
+                                        ? kCategoryRackHardware
+                                        : line.category,
+                                    rackUnits: provider.avRackItems
+                                            .where((i) =>
+                                                i.label.trim().toLowerCase() ==
+                                                line.description
+                                                    .trim()
+                                                    .toLowerCase())
+                                            .firstOrNull
+                                            ?.rackUnits ??
+                                        1,
+                                    price: provider.avCost
+                                            .priceOverrides[line.key] ??
                                         line.unitPrice,
-                                rackItemLabel: line.description,
-                                priceKey: line.key,
-                              ),
+                                    rackItemLabel: line.description,
+                                    priceKey: line.key,
+                                  ),
+                          ),
+                          if (extra == null)
+                            avRowIcon(
+                              Icons.restart_alt,
+                              'Back to the parts list price',
+                              line.source == PriceSource.override
+                                  ? () =>
+                                      provider.setAvCostPrice(line.key, null)
+                                  : null,
+                            )
+                          else
+                            avRowIcon(
+                              Icons.delete_outline,
+                              'Remove this line',
+                              () => provider
+                                  .removeAvCostExtraHardware(extra.id),
+                              danger: true,
+                            ),
+                        ],
                       ),
-                      if (extra == null)
-                        avRowIcon(
-                          Icons.restart_alt,
-                          'Back to the parts list price',
-                          line.source == PriceSource.override
-                              ? () => provider.setAvCostPrice(line.key, null)
-                              : null,
-                        )
-                      else
-                        avRowIcon(
-                          Icons.delete_outline,
-                          'Remove this line',
-                          () => provider
-                              .removeAvCostExtraHardware(extra.id),
-                          danger: true,
-                        ),
-                    ],
-                  ),
+                    ], rowKey: ValueKey('gridrow_hw_${line.key}')),
                 );
                   },
                 ),
@@ -1194,17 +1225,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               )
             else ...[
               const SizedBox(height: 8),
-              _headerRow(context, const [
-                _Col('Cable type', flex: 3),
-                _Col('Drawn', width: 66, align: TextAlign.right),
-                _Col.field('Spares', gap: 12, width: 80, numeric: true),
-                _Col('Total', gap: 12, width: 54, align: TextAlign.right),
-                _Col.field('Unit price', gap: 12, width: 130, numeric: true),
-                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-                // Three row buttons. They are constrained to 34 and render at
-                // 40, which is what the column actually takes.
-                _Col('', width: 120),
-              ]),
+              _headerRow(context, _kCablingCols),
               const Divider(height: 12),
               // ONE ROW PER LINE THE ESTIMATE MADE, not one per signal type.
               // A room whose HDMI is stocked at 3 ft, 6 ft and 25 ft buys
@@ -1229,150 +1250,138 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               library.cableForSignal(signal);
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      color: provider.avSignalColor(signal),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      line.description,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(
-                              width: 66,
-                              child: Text(
-                                trimNumber(runs),
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              width: 80,
-                              child: LiveTextField(
-                                fieldId: 'spare_${line.key}',
-                                initial:
-                                    spares == 0 ? '' : trimNumber(spares),
-                                numeric: true,
-                                hint: '0',
-                                onChanged: (v) => provider.setAvCableSpares(
-                                  line.key,
-                                  double.tryParse(v) ?? 0,
+                        child: _gridRow(_kCablingCols, [
+                          // Cable type
+                          Row(
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: provider.avSignalColor(signal),
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              width: 54,
-                              child: Text(
-                                trimNumber(line.qty),
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  line.description,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 13),
                                 ),
                               ),
+                            ],
+                          ),
+                          // Drawn
+                          Text(
+                            trimNumber(runs),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          // Spares
+                          LiveTextField(
+                            fieldId: 'spare_${line.key}',
+                            initial: spares == 0 ? '' : trimNumber(spares),
+                            numeric: true,
+                            hint: '0',
+                            onChanged: (v) => provider.setAvCableSpares(
+                              line.key,
+                              double.tryParse(v) ?? 0,
                             ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              width: 130,
-                              child: LiveTextField(
-                                fieldId: 'cableprice_${line.key}',
-                                initial: _roomPriceText(provider, line),
-                                prefix: currency,
-                                numeric: true,
-                                hint: _resolvedPriceHint(line),
-                                onChanged: (v) {
-                                  final parsed = double.tryParse(v);
-                                  provider.setAvCostPrice(
-                                    line.key,
-                                    v.trim().isEmpty ? null : (parsed ?? 0),
-                                  );
-                                },
+                          ),
+                          // Total
+                          Text(
+                            trimNumber(line.qty),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          // Unit price
+                          LiveTextField(
+                            fieldId: 'cableprice_${line.key}',
+                            initial: _roomPriceText(provider, line),
+                            prefix: currency,
+                            numeric: true,
+                            hint: _resolvedPriceHint(line),
+                            onChanged: (v) {
+                              final parsed = double.tryParse(v);
+                              provider.setAvCostPrice(
+                                line.key,
+                                v.trim().isEmpty ? null : (parsed ?? 0),
+                              );
+                            },
+                          ),
+                          // Extended
+                          Text(
+                            formatMoney(line.total, currency),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          // The row's buttons, as one cell.
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // A counted run is priced off the cable TYPE.
+                              // When that type has an entry there is nothing
+                              // to promote; when it has none, this is where
+                              // the room's cable finally gets one, tagged with
+                              // the signal so every future room's runs price
+                              // themselves off it.
+                              avRowIcon(
+                                Icons.library_add_outlined,
+                                catalog != null
+                                    ? 'Cable types are edited on the Catalog '
+                                          'tab'
+                                    : 'Add this cable type to the catalog',
+                                catalog != null
+                                    ? null
+                                    : () => _addToCatalog(
+                                          context,
+                                          provider,
+                                          suggestedModel:
+                                              '${kSignalLabels[signal] ?? signal.name} cable',
+                                          category: kCategoryCable,
+                                          cableSignal: signal,
+                                          price: provider.avCost
+                                                  .priceOverrides[line.key] ??
+                                              line.unitPrice,
+                                          priceKey: line.key,
+                                        ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              width: 110,
-                              child: Text(
-                                formatMoney(line.total, currency),
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                              // The shop's typical figure for a lead of this
+                              // type and length, on the shared card rather
+                              // than on this room — see [_setCableBaseCost].
+                              avRowIcon(
+                                Icons.price_change_outlined,
+                                line.source == PriceSource.baseCost
+                                    ? 'Priced off the base-cost card — edit '
+                                          'that figure'
+                                    : 'Set a base cost for this cable length',
+                                () => _setCableBaseCost(
+                                  context,
+                                  provider,
+                                  signal: signal,
+                                  lengthFt: (catalog?.cableLengthFt ?? 0) > 0
+                                      ? catalog!.cableLengthFt
+                                      : cableKeyParts(line.key).lengthFt,
                                 ),
                               ),
-                            ),
-                            // A counted run is priced off the cable TYPE. When
-                            // that type has an entry there is nothing to
-                            // promote; when it has none, this is where the
-                            // room's cable finally gets one, tagged with the
-                            // signal so every future room's runs price
-                            // themselves off it.
-                            avRowIcon(
-                              Icons.library_add_outlined,
-                              catalog != null
-                                  ? 'Cable types are edited on the Catalog tab'
-                                  : 'Add this cable type to the catalog',
-                              catalog != null
-                                  ? null
-                                  : () => _addToCatalog(
-                                        context,
-                                        provider,
-                                        suggestedModel:
-                                            '${kSignalLabels[signal] ?? signal.name} cable',
-                                        category: kCategoryCable,
-                                        cableSignal: signal,
-                                        price: provider.avCost
-                                                .priceOverrides[line.key] ??
-                                            line.unitPrice,
-                                        priceKey: line.key,
-                                      ),
-                            ),
-                            // The shop's typical figure for a lead of this
-                            // type and length, on the shared card rather than
-                            // on this room — see [_setCableBaseCost].
-                            avRowIcon(
-                              Icons.price_change_outlined,
-                              line.source == PriceSource.baseCost
-                                  ? 'Priced off the base-cost card — edit that '
-                                        'figure'
-                                  : 'Set a base cost for this cable length',
-                              () => _setCableBaseCost(
-                                context,
-                                provider,
-                                signal: signal,
-                                lengthFt: (catalog?.cableLengthFt ?? 0) > 0
-                                    ? catalog!.cableLengthFt
-                                    : cableKeyParts(line.key).lengthFt,
+                              avRowIcon(
+                                Icons.restart_alt,
+                                'Back to the catalog price',
+                                line.source == PriceSource.override
+                                    ? () =>
+                                        provider.setAvCostPrice(line.key, null)
+                                    : null,
                               ),
-                            ),
-                            avRowIcon(
-                              Icons.restart_alt,
-                              'Back to the catalog price',
-                              line.source == PriceSource.override
-                                  ? () =>
-                                      provider.setAvCostPrice(line.key, null)
-                                  : null,
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ], rowKey: ValueKey('gridrow_cbl_${line.key}')),
                       );
                     },
                   ),
@@ -1387,127 +1396,114 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         .firstOrNull;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Row(
-                              children: [
-                                Icon(Icons.shopping_bag_outlined,
-                                    size: 15, color: theme.disabledColor),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: LiveTextField(
-                                    fieldId: 'cbldesc_${item.id}',
-                                    initial: item.description,
-                                    hint: 'e.g. Cat6A spool, 1000 ft',
-                                    onChanged: (v) =>
-                                        provider.updateAvCostExtraCable(
-                                      item.copyWith(description: v),
-                                    ),
+                      child: _gridRow(_kCablingCols, [
+                          // Cable type
+                          Row(
+                            children: [
+                              Icon(Icons.shopping_bag_outlined,
+                                  size: 15, color: theme.disabledColor),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: LiveTextField(
+                                  fieldId: 'cbldesc_${item.id}',
+                                  initial: item.description,
+                                  hint: 'e.g. Cat6A spool, 1000 ft',
+                                  onChanged: (v) =>
+                                      provider.updateAvCostExtraCable(
+                                    item.copyWith(description: v),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            width: 66,
-                            child: Text(
-                              'misc',
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: theme.disabledColor,
                               ),
+                            ],
+                          ),
+                          // Drawn — none of it is, which is the point.
+                          Text(
+                            'misc',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.disabledColor,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 80,
-                            child: LiveTextField(
-                              fieldId: 'cblqty_${item.id}',
-                              initial: trimNumber(item.qty),
-                              numeric: true,
-                              onChanged: (v) =>
-                                  provider.updateAvCostExtraCable(
-                                item.copyWith(qty: double.tryParse(v) ?? 0),
+                          // Spares column: for a quoted line this IS the
+                          // quantity, and it is the only box on the row that
+                          // can hold one.
+                          LiveTextField(
+                            fieldId: 'cblqty_${item.id}',
+                            initial: trimNumber(item.qty),
+                            numeric: true,
+                            onChanged: (v) => provider.updateAvCostExtraCable(
+                              item.copyWith(qty: double.tryParse(v) ?? 0),
+                            ),
+                          ),
+                          // Total
+                          Text(
+                            trimNumber(item.qty),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          // Unit price
+                          LiveTextField(
+                            fieldId: 'cblprice_${item.id}',
+                            initial:
+                                line == null ? '' : _roomPriceText(provider, line),
+                            prefix: currency,
+                            numeric: true,
+                            hint: line == null || line.unitPrice <= 0
+                                ? 'unpriced'
+                                : trimNumber(line.unitPrice),
+                            onChanged: (v) {
+                              final parsed = double.tryParse(v);
+                              provider.setAvCostPrice(
+                                item.id,
+                                v.trim().isEmpty ? null : (parsed ?? 0),
+                              );
+                            },
+                          ),
+                          // Extended
+                          Text(
+                            formatMoney(line?.total ?? 0, currency),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          // The row's buttons. A miscellaneous line is not a
+                          // length of anything, so it has no base cost to set
+                          // — the empty slot keeps the column square.
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              avRowIcon(
+                                Icons.library_add_outlined,
+                                item.catalogModel.isNotEmpty
+                                    ? 'Already priced from the catalog '
+                                          '(${item.catalogModel})'
+                                    : 'Add this line to the device catalog',
+                                item.catalogModel.isNotEmpty
+                                    ? null
+                                    : () => _addLineToCatalog(
+                                          context,
+                                          provider,
+                                          item,
+                                          kind: _ExtraPart.cable,
+                                        ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 54,
-                            child: Text(
-                              trimNumber(item.qty),
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                              const SizedBox(width: kRowIconWidth),
+                              avRowIcon(
+                                Icons.delete_outline,
+                                'Remove this line',
+                                () =>
+                                    provider.removeAvCostExtraCable(item.id),
+                                danger: true,
                               ),
-                            ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 130,
-                            child: LiveTextField(
-                              fieldId: 'cblprice_${item.id}',
-                              initial: line == null
-                                  ? ''
-                                  : _roomPriceText(provider, line),
-                              prefix: currency,
-                              numeric: true,
-                              hint: line == null || line.unitPrice <= 0
-                                  ? 'unpriced'
-                                  : trimNumber(line.unitPrice),
-                              onChanged: (v) {
-                                final parsed = double.tryParse(v);
-                                provider.setAvCostPrice(
-                                  item.id,
-                                  v.trim().isEmpty ? null : (parsed ?? 0),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 110,
-                            child: Text(
-                              formatMoney(line?.total ?? 0, currency),
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          // A miscellaneous line is not a length of anything
-                          // — there is no base cost to set on it — but the
-                          // column still has to be as wide as the counted
-                          // rows', or every cell to its left drifts.
-                          const SizedBox(width: kRowIconWidth),
-                          avRowIcon(
-                            Icons.library_add_outlined,
-                            item.catalogModel.isNotEmpty
-                                ? 'Already priced from the catalog '
-                                      '(${item.catalogModel})'
-                                : 'Add this line to the device catalog',
-                            item.catalogModel.isNotEmpty
-                                ? null
-                                : () => _addLineToCatalog(
-                                    context,
-                                    provider,
-                                    item,
-                                    kind: _ExtraPart.cable,
-                                  ),
-                          ),
-                          avRowIcon(
-                            Icons.delete_outline,
-                            'Remove this line',
-                            () => provider.removeAvCostExtraCable(item.id),
-                            danger: true,
-                          ),
-                        ],
-                      ),
+                        ], rowKey: ValueKey('gridrow_cbl_${item.id}')),
                     );
                   },
                 ),
@@ -1807,12 +1803,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// Three states, one slot:
   ///
   ///   * IN THE CONFIG — a quiet tick naming the block. Nothing to do.
-  ///   * A SPARE — bought for the shelf, deliberately not part of the room's
-  ///     system, so no flag. This is the escape hatch that keeps the flag
-  ///     meaningful: without it the honest answer to "why is this not in the
-  ///     config" was "it never will be", and a warning nobody can clear is a
-  ///     warning everybody learns to ignore.
-  ///   * NEITHER — orange, with the button that fixes it.
+  ///   * A SPARE — bought for the shelf, never installed here at all.
+  ///   * NOT DRIVEN BY THIS SYSTEM — in the room and on the diagram, and the
+  ///     processor has no business talking to it: the building's network
+  ///     switch, somebody else's codec, an owner-furnished display, a passive
+  ///     splitter. It stays exactly as selectable, cabled and priced as it
+  ///     was; it just stops being reported as missing.
+  ///   * NONE OF THOSE — orange, with the button that fixes it.
+  ///
+  /// The last two are the escape hatches that keep the flag meaningful. Every
+  /// room has boxes whose honest answer to "why is this not in the config" is
+  /// "it never will be", and a warning nobody can clear is a warning everybody
+  /// learns to ignore.
   Widget _configFlag(
     BuildContext context,
     AppStateProvider provider,
@@ -1835,6 +1837,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final theme = Theme.of(context);
     final spare = extra?.spare ?? false;
     final configKey = extra != null ? '' : _configKeyFor(provider, line, model);
+    // Every box behind a drawn line, so the choice can be made once for a row
+    // of quantity three.
+    final nodes = extra != null
+        ? const <AvNode>[]
+        : (groupDevices(model).where((g) => g.key == line.key).firstOrNull
+                  ?.nodes ??
+              const <AvNode>[]);
+    final uncontrolled =
+        nodes.isNotEmpty && nodes.every((n) => n.excludeFromControl);
 
     if (configKey.isNotEmpty) {
       return KeyedSubtree(
@@ -1857,16 +1868,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       child: Tooltip(
       message: spare
           ? 'A spare — quoted, and deliberately not part of the room config'
+          : uncontrolled
+          ? 'In the room, and not driven by this control system'
           : 'Not in the room config. The processor has nothing to drive it.',
       child: PopupMenuButton<String>(
         icon: Icon(
-          spare ? Icons.inventory_2_outlined : Icons.flag,
+          spare
+              ? Icons.inventory_2_outlined
+              : uncontrolled
+              ? Icons.link_off
+              : Icons.flag,
           size: 18,
           // Orange rather than red: this is a thing to do, not a thing that is
           // broken. A quote written before the control side exists is the
           // normal case, and half these rows are legitimately flagged all the
           // way to the day somebody builds it.
-          color: spare ? theme.disabledColor : Colors.orange.shade700,
+          color: spare || uncontrolled
+              ? theme.disabledColor
+              : Colors.orange.shade700,
         ),
         padding: EdgeInsets.zero,
         // These size the MENU, not the button — the button is pinned by the
@@ -1884,6 +1903,34 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               subtitle: Text(
                 'Creates the device block for its family, with this room’s '
                 'defaults and the driver that claims the model.',
+              ),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'nocontrol',
+            enabled: nodes.isNotEmpty,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                uncontrolled ? Icons.link : Icons.link_off,
+                size: 18,
+              ),
+              title: Text(
+                uncontrolled
+                    ? 'Driven by this system after all'
+                    : 'Not part of the room config',
+              ),
+              subtitle: Text(
+                nodes.isEmpty
+                    ? 'For a box on the diagram. This line is not drawn yet.'
+                    : uncontrolled
+                    ? 'Put it back on the list of devices the config is '
+                          'missing.'
+                    : 'The building’s switch, somebody else’s codec, a '
+                          'passive box. It stays on the diagram, stays '
+                          'selectable and stays on the quote — it just stops '
+                          'being reported as missing.',
               ),
             ),
           ),
@@ -1913,6 +1960,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             provider.updateAvCostExtraEquipment(
               extra.copyWith(spare: !extra.spare),
             );
+            return;
+          }
+          if (choice == 'nocontrol') {
+            // Every box behind the row, and the first press records the undo
+            // snapshot the rest ride on — the same bargain the swap makes.
+            var first = true;
+            for (final node in nodes) {
+              provider.updateAvNode(
+                node.copyWith(excludeFromControl: !uncontrolled),
+                recordUndo: first,
+              );
+              first = false;
+            }
             return;
           }
           _addLineToConfig(context, provider, line, model, extra: extra);
@@ -3195,19 +3255,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
             if (lines.isNotEmpty) ...[
               const SizedBox(height: 4),
-              _headerRow(context, const [
-                // The picker is a box on the page AND in the photograph, so
-                // its caption keeps the box's inset either way.
-                _Col.field('Job type', width: 182, keepsBox: true),
-                _Col.field('Scope', gap: 8, flex: 3),
-                _Col.field('Techs', gap: 8, width: 78, numeric: true),
-                _Col.field('Hours ea.', gap: 8, width: 86, numeric: true),
-                _Col.field('Rate/hr', gap: 8, width: 76, numeric: true),
-                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-                _Col('Taxable', width: 92, align: TextAlign.center),
-                // One row button, 40 wide as it renders.
-                _Col('', width: 40),
-              ]),
+              _headerRow(context, _kLaborCols),
               const Divider(height: 12),
             ],
             for (final line in lines)
@@ -3218,113 +3266,90 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   );
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 182,
-                          child: _JobTypeField(
-                            book: book,
-                            rateId: line.rateId,
-                            currency: currency,
-                            onChanged: (v) => provider.updateAvCostLabor(
-                              line.copyWith(rateId: v),
-                            ),
+                    child: _gridRow(_kLaborCols, [
+                      // Job type
+                      _JobTypeField(
+                        book: book,
+                        rateId: line.rateId,
+                        currency: currency,
+                        onChanged: (v) => provider.updateAvCostLabor(
+                          line.copyWith(rateId: v),
+                        ),
+                      ),
+                      // Scope
+                      LiveTextField(
+                        fieldId: 'labor_desc_${line.id}',
+                        initial: line.description,
+                        hint: 'e.g. Rack build and termination',
+                        onChanged: (v) => provider.updateAvCostLabor(
+                          line.copyWith(description: v),
+                        ),
+                      ),
+                      // Techs
+                      LiveTextField(
+                        fieldId: 'labor_techs_${line.id}',
+                        initial: trimNumber(line.techs),
+                        numeric: true,
+                        onChanged: (v) => provider.updateAvCostLabor(
+                          line.copyWith(techs: double.tryParse(v) ?? 0),
+                        ),
+                      ),
+                      // Hours each
+                      LiveTextField(
+                        fieldId: 'labor_hours_${line.id}',
+                        initial:
+                            line.hours == 0 ? '' : trimNumber(line.hours),
+                        numeric: true,
+                        onChanged: (v) => provider.updateAvCostLabor(
+                          line.copyWith(hours: double.tryParse(v) ?? 0),
+                        ),
+                      ),
+                      // Rate. Blank follows the card; a figure here is what
+                      // THIS job pays, which is how overtime and a one-off
+                      // subcontract rate get recorded.
+                      LiveTextField(
+                        fieldId: 'labor_rate_${line.id}',
+                        initial: line.customRate == 0
+                            ? ''
+                            : trimNumber(line.customRate),
+                        hint: costed.unrated
+                            ? 'set'
+                            : trimNumber(costed.hourlyRate),
+                        numeric: true,
+                        onChanged: (v) => provider.updateAvCostLabor(
+                          line.copyWith(
+                            customRate: double.tryParse(v) ?? 0,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 3,
-                          child: LiveTextField(
-                            fieldId: 'labor_desc_${line.id}',
-                            initial: line.description,
-                            hint: 'e.g. Rack build and termination',
-                            onChanged: (v) => provider.updateAvCostLabor(
-                              line.copyWith(description: v),
-                            ),
-                          ),
+                      ),
+                      // Extended
+                      Text(
+                        costed.unrated
+                            ? 'no rate'
+                            : formatMoney(costed.total, currency),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color:
+                              costed.unrated ? theme.colorScheme.error : null,
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 78,
-                          child: LiveTextField(
-                            fieldId: 'labor_techs_${line.id}',
-                            initial: trimNumber(line.techs),
-                            numeric: true,
-                            onChanged: (v) => provider.updateAvCostLabor(
-                              line.copyWith(techs: double.tryParse(v) ?? 0),
-                            ),
-                          ),
+                      ),
+                      // Taxable
+                      PrintableCheckbox(
+                        value: line.taxable,
+                        onChanged: (v) => provider.updateAvCostLabor(
+                          line.copyWith(taxable: v ?? false),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 86,
-                          child: LiveTextField(
-                            fieldId: 'labor_hours_${line.id}',
-                            initial: line.hours == 0
-                                ? ''
-                                : trimNumber(line.hours),
-                            numeric: true,
-                            onChanged: (v) => provider.updateAvCostLabor(
-                              line.copyWith(hours: double.tryParse(v) ?? 0),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 76,
-                          child: LiveTextField(
-                            // Blank follows the card; a figure here is what
-                            // THIS job pays, which is how overtime and a
-                            // one-off subcontract rate get recorded.
-                            fieldId: 'labor_rate_${line.id}',
-                            initial: line.customRate == 0
-                                ? ''
-                                : trimNumber(line.customRate),
-                            hint: costed.unrated
-                                ? 'set'
-                                : trimNumber(costed.hourlyRate),
-                            numeric: true,
-                            onChanged: (v) => provider.updateAvCostLabor(
-                              line.copyWith(
-                                customRate: double.tryParse(v) ?? 0,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 110,
-                          child: Text(
-                            costed.unrated
-                                ? 'no rate'
-                                : formatMoney(costed.total, currency),
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: costed.unrated
-                                  ? theme.colorScheme.error
-                                  : null,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 92,
-                          child: PrintableCheckbox(
-                            value: line.taxable,
-                            onChanged: (v) => provider.updateAvCostLabor(
-                              line.copyWith(taxable: v ?? false),
-                            ),
-                          ),
-                        ),
-                        avRowIcon(
-                          Icons.delete_outline,
-                          'Remove crew',
-                          () => provider.removeAvCostLabor(line.id),
-                          danger: true,
-                        ),
-                      ],
-                    ),
+                      ),
+                      // The row's one button.
+                      avRowIcon(
+                        Icons.delete_outline,
+                        'Remove crew',
+                        () => provider.removeAvCostLabor(line.id),
+                        danger: true,
+                      ),
+                    ], rowKey: ValueKey('gridrow_labor_${line.id}')),
                   );
                 },
               ),
@@ -3374,118 +3399,96 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
             if (items.isNotEmpty) ...[
               const SizedBox(height: 4),
-              _headerRow(context, const [
-                _Col.field('Description', flex: 3),
-                _Col.field('Category', gap: 8, flex: 2),
-                _Col.field('Qty', gap: 8, width: 70, numeric: true),
-                _Col.field('Unit price', gap: 8, width: 130, numeric: true),
-                _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-                _Col('Taxable', width: 92, align: TextAlign.center),
-                // Two row buttons. They are constrained to 34 and render at
-                // 40, which is what the column actually takes.
-                _Col('', width: 80),
-              ]),
+              _headerRow(context, _kItemsCols),
               const Divider(height: 12),
             ],
             for (final item in items)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: LiveTextField(
-                        fieldId: 'desc_${item.id}',
-                        initial: item.description,
-                        hint: 'e.g. Installation labor',
-                        onChanged: (v) => provider.updateAvCostItem(
-                          item.copyWith(description: v),
-                        ),
+                child: _gridRow(_kItemsCols, [
+                    // Description
+                    LiveTextField(
+                      fieldId: 'desc_${item.id}',
+                      initial: item.description,
+                      hint: 'e.g. Installation labor',
+                      onChanged: (v) => provider.updateAvCostItem(
+                        item.copyWith(description: v),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 2,
-                      child: LiveTextField(
-                        fieldId: 'cat_${item.id}',
-                        initial: item.category,
-                        hint: 'Labor',
-                        onChanged: (v) => provider.updateAvCostItem(
-                          item.copyWith(category: v),
-                        ),
+                    // Category
+                    LiveTextField(
+                      fieldId: 'cat_${item.id}',
+                      initial: item.category,
+                      hint: 'Labor',
+                      onChanged: (v) => provider.updateAvCostItem(
+                        item.copyWith(category: v),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 70,
-                      child: LiveTextField(
-                        fieldId: 'qty_${item.id}',
-                        initial: trimNumber(item.qty),
-                        numeric: true,
-                        onChanged: (v) => provider.updateAvCostItem(
-                          item.copyWith(qty: double.tryParse(v) ?? 0),
-                        ),
+                    // Qty
+                    LiveTextField(
+                      fieldId: 'qty_${item.id}',
+                      initial: trimNumber(item.qty),
+                      numeric: true,
+                      onChanged: (v) => provider.updateAvCostItem(
+                        item.copyWith(qty: double.tryParse(v) ?? 0),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 130,
-                      child: LiveTextField(
-                        fieldId: 'unit_${item.id}',
-                        initial: item.unitPrice == 0
-                            ? ''
-                            : trimNumber(item.unitPrice),
-                        prefix: currency,
-                        numeric: true,
-                        onChanged: (v) => provider.updateAvCostItem(
-                          item.copyWith(unitPrice: double.tryParse(v) ?? 0),
-                        ),
+                    // Unit price
+                    LiveTextField(
+                      fieldId: 'unit_${item.id}',
+                      initial: item.unitPrice == 0
+                          ? ''
+                          : trimNumber(item.unitPrice),
+                      prefix: currency,
+                      numeric: true,
+                      onChanged: (v) => provider.updateAvCostItem(
+                        item.copyWith(unitPrice: double.tryParse(v) ?? 0),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 110,
-                      child: Text(
-                        formatMoney(item.total, currency),
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    // Extended
+                    Text(
+                      formatMoney(item.total, currency),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    SizedBox(
-                      width: 92,
-                      child: PrintableCheckbox(
-                        value: item.taxable,
-                        onChanged: (v) => provider.updateAvCostItem(
-                          item.copyWith(taxable: v ?? true),
-                        ),
+                    // Taxable
+                    PrintableCheckbox(
+                      value: item.taxable,
+                      onChanged: (v) => provider.updateAvCostItem(
+                        item.copyWith(taxable: v ?? true),
                       ),
                     ),
-                    avRowIcon(
-                      Icons.library_add_outlined,
-                      item.catalogModel.isNotEmpty
-                          ? 'Already priced from the catalog '
-                                '(${item.catalogModel})'
-                          : 'Add this item to the device catalog',
-                      item.catalogModel.isNotEmpty
-                          ? null
-                          : () => _addLineToCatalog(
-                              context,
-                              provider,
-                              item,
-                              kind: _ExtraPart.misc,
-                            ),
+                    // The row's buttons, as one cell.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        avRowIcon(
+                          Icons.library_add_outlined,
+                          item.catalogModel.isNotEmpty
+                              ? 'Already priced from the catalog '
+                                    '(${item.catalogModel})'
+                              : 'Add this item to the device catalog',
+                          item.catalogModel.isNotEmpty
+                              ? null
+                              : () => _addLineToCatalog(
+                                    context,
+                                    provider,
+                                    item,
+                                    kind: _ExtraPart.misc,
+                                  ),
+                        ),
+                        avRowIcon(
+                          Icons.delete_outline,
+                          'Remove item',
+                          () => provider.removeAvCostItem(item.id),
+                          danger: true,
+                        ),
+                      ],
                     ),
-                    avRowIcon(
-                      Icons.delete_outline,
-                      'Remove item',
-                      () => provider.removeAvCostItem(item.id),
-                      danger: true,
-                    ),
-                  ],
-                ),
+                  ], rowKey: ValueKey('gridrow_item_${item.id}')),
               ),
           ],
         ),
@@ -3765,22 +3768,74 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       builder: (ctx) {
         final style = Theme.of(ctx).textTheme.labelSmall;
         final printing = PrintMode.of(ctx);
-        Widget caption(_Col c) => Padding(
-          padding: c.padding(printing),
-          child: Text(c.text, style: style, textAlign: c.align),
+        // EVERY CAPTION THE SAME HEIGHT, sitting on the same bottom edge.
+        //
+        // Narrow columns wrap their caption — "Unit price" over a 130-pixel
+        // column is two lines, "Qty" over a 60-pixel one is not — and a Row
+        // centres what it is given, so the tall ones rode 8 pixels higher than
+        // the short ones and the whole caption row read as crooked. A fixed
+        // box with the text against the bottom of it puts one line and two on
+        // the same rule, which is the line the divider under them draws.
+        Widget caption(_Col c) => SizedBox(
+          height: kHeaderRowHeight,
+          child: Padding(
+            padding: c.padding(printing),
+            child: Align(
+              alignment: c.align == TextAlign.right
+                  ? Alignment.bottomRight
+                  : c.align == TextAlign.center
+                  ? Alignment.bottomCenter
+                  : Alignment.bottomLeft,
+              child: Text(c.text, style: style, textAlign: c.align),
+            ),
+          ),
         );
-        return Row(
-          children: [
-            for (final c in columns) ...[
-              if (c.gap > 0) SizedBox(width: c.gap),
-              if (c.flex > 0)
-                Expanded(flex: c.flex, child: caption(c))
-              else
-                SizedBox(width: c.width, child: caption(c)),
-            ],
-          ],
-        );
+        return _gridRow(columns, [for (final c in columns) caption(c)]);
       },
+    );
+  }
+
+  /// THE INVISIBLE GRID.
+  ///
+  /// Lays [cells] out on exactly the geometry [columns] describes — the gap in
+  /// front of each cell, then its fixed width or its flex — so a caption row
+  /// and the rows under it cannot disagree about where a column is. One cell
+  /// per column, in order.
+  ///
+  /// Every table on this page used to build its rows by hand, repeating the
+  /// same widths and `SizedBox(width: 12)` spacers that the caption row
+  /// declared separately. That is two descriptions of one table, and they
+  /// drifted every time a column was added: a button column declared 12
+  /// pixels narrower than the buttons render walks every caption on the row
+  /// out of place, and nothing says so until somebody looks hard at a
+  /// screenshot. Now there is one description, and the row is built from it.
+  static Widget _gridRow(
+    List<_Col> columns,
+    List<Widget> cells, {
+    CrossAxisAlignment align = CrossAxisAlignment.center,
+
+    /// Names the row for the alignment test, which measures a data row
+    /// against the caption row above it and has to be able to tell one from
+    /// the other. Cheap here, and the invariant is worth being able to check.
+    Key? rowKey,
+  }) {
+    assert(
+      cells.length == columns.length,
+      'the grid needs one cell per column: ${cells.length} for '
+      '${columns.length}',
+    );
+    return Row(
+      key: rowKey,
+      crossAxisAlignment: align,
+      children: [
+        for (int i = 0; i < columns.length; i++) ...[
+          if (columns[i].gap > 0) SizedBox(width: columns[i].gap),
+          if (columns[i].flex > 0)
+            Expanded(flex: columns[i].flex, child: cells[i])
+          else
+            SizedBox(width: columns[i].width, child: cells[i]),
+        ],
+      ],
     );
   }
 }
@@ -3888,6 +3943,14 @@ class _CellText extends StatelessWidget {
     );
   }
 }
+
+/// How tall a caption cell is, whether its text takes one line or two.
+///
+/// Two lines of [TextTheme.labelSmall] plus the space a single line would have
+/// been given anyway — measured, like [kFieldTextInset], because the caption
+/// row is laid out by hand and something has to say what "the same height"
+/// means. See `test/cost_header_alignment_test.dart`.
+const double kHeaderRowHeight = 32.0;
 
 /// How far a dense outlined text field holds its text off its own border.
 /// Measured rather than assumed — see `test/cost_header_alignment_test.dart`,
