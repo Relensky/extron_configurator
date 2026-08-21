@@ -49,6 +49,32 @@ void main() {
     await tester.pump();
   }
 
+  /// Pumps until [finder] matches, letting REAL async work run between frames.
+  ///
+  /// The two clocks are the whole problem in this file. A save is real file
+  /// I/O, which only runs inside [WidgetTester.runAsync]; the snackbar that
+  /// reports it is a widget, which only appears when a frame is pumped, and
+  /// pumping is not allowed inside runAsync. So neither waiting nor pumping
+  /// alone can see the end of a save — this alternates them.
+  ///
+  /// Returns false if it never turned up, so the caller can fail with its own
+  /// reason rather than a bare "0 widgets found".
+  Future<bool> pumpUntilFound(
+    WidgetTester tester,
+    Finder finder, {
+    Duration limit = const Duration(seconds: 20),
+  }) async {
+    final deadline = DateTime.now().add(limit);
+    while (DateTime.now().isBefore(deadline)) {
+      await tester.pump();
+      if (finder.evaluate().isNotEmpty) return true;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+    }
+    return false;
+  }
+
   /// The toolbar's save button — Icons.save also names the schematic's "Save
   /// Layout", so the finder is scoped to the AppBar.
   final saveButton = find.descendant(
@@ -86,34 +112,26 @@ void main() {
         reason: 'editing alone must not touch the file');
 
     // Real file I/O: testWidgets' fake async never lets the write complete, so
-    // the tap and the wait for it both run through runAsync.
-    //
-    // POLLED TIGHTLY, and that matters. Everything inside runAsync happens in
-    // REAL time, including the snackbar's own four-second life — so a loop
-    // that sleeps 20ms at a time can still be waiting when the message it is
-    // about to look for has already gone, and the failure lands on the
-    // snackbar assertion rather than on the slow write that caused it. Short
-    // sleeps and a two-second ceiling keep the wait inside the window.
-    await tester.runAsync(() async {
-      await tester.tap(saveButton);
-      // Waits for the NEW value specifically — the old file already contains
-      // the key, so anything looser would pass before the write landed.
-      for (var i = 0; i < 400; i++) {
-        if (File(configPath)
-            .readAsStringSync()
-            .contains('"speaker_mute": false')) {
-          break;
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 5));
-      }
-    });
-    await tester.pumpAndSettle(); // let the snackbar in
+    // the tap runs through runAsync.
+    await tester.runAsync(() async => tester.tap(saveButton));
+
+    // WAIT FOR THE SNACKBAR, not for the config file — the difference is the
+    // whole flake. Saving the config is not the end of the save: the AV flow,
+    // the estimate and the control schematic are written to their sidecars
+    // afterwards, and only then does the button report. A wait that stopped
+    // when the config file changed was letting go of the real clock three
+    // writes early, so whether the message had appeared by the time the test
+    // looked came down to how busy the machine was.
+    final reported = await pumpUntilFound(
+      tester,
+      find.textContaining('BSS103_config.json'),
+    );
+    expect(reported, isTrue,
+        reason: 'the snackbar names the file that was written');
 
     final saved = jsonDecode(File(configPath).readAsStringSync()) as Map;
     expect(saved['PROJECTORDEVICE_1']['speaker_mute'], isFalse,
         reason: 'the floppy button writes over the working file');
-    expect(find.textContaining('BSS103_config.json'), findsOneWidget,
-        reason: 'the snackbar names the file that was written');
 
     // The pre-save copy sits beside it, holding what the file used to say.
     final backup = File(provider.saveBackupPath);
