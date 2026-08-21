@@ -223,6 +223,7 @@ const Set<String> kPresetGuiKeys = {
   'gui_routing_mode',
   'gui_routing_available',
   'gui_capture_source_available',
+  'gui_huddle_space',
   'gui_mic_mix',
   'gui_usb_or_vga',
 };
@@ -807,6 +808,7 @@ RoomPreset _basicClassroom() {
       'gui_routing_mode': 'Normal',
       'gui_routing_available': 'No',
       'gui_capture_source_available': 'No',
+      'gui_huddle_space': 'No',
     },
     locations: const [_lectern, _frontWall, _ceiling, _rackLocation],
     nodes: nodes,
@@ -1164,6 +1166,7 @@ RoomPreset _hyflexClassroom() {
       'gui_tab_type': 'DOC_WL',
       'gui_routing_mode': 'Normal',
       'gui_capture_source_available': 'Yes',
+      'gui_huddle_space': 'No',
       'gui_mic_mix': 'Ceiling',
       // The DaLite controller is on the network, so the processor talks to it
       // rather than closing a pair of relays at it.
@@ -1318,6 +1321,7 @@ RoomPreset _huddleSpace() => RoomPreset(
     'gui_routing_mode': 'Normal',
     'gui_routing_available': 'No',
     'gui_capture_source_available': 'No',
+    'gui_huddle_space': 'Yes',
   },
   locations: const [_credenza, _frontWall, _ceiling],
   nodes: [
@@ -1901,6 +1905,7 @@ RoomPreset _activeLearningSpace() {
       // instructor picks a source for — both routing pages earn their place.
       'gui_routing_available': 'Yes',
       'gui_capture_source_available': 'Yes',
+      'gui_huddle_space': 'No',
       'gui_mic_mix': 'Ceiling',
       // Both screen controllers are on the network.
       'dev_screen_control': 'Network',

@@ -6538,11 +6538,21 @@ class AppStateProvider extends ChangeNotifier {
 
     // Check existing keys against the baseline
     baselineDefaults.forEach((key, defaultValue) {
-      if (!systemSetup.containsKey(key)) {
-        systemSetup[key] = defaultValue;
-        systemLogs.add("-> Added missing property: '$key' (Default: '$defaultValue')");
-        additions++;
+      if (systemSetup.containsKey(key)) return;
+      // A baseline the room has no use for is not a baseline. "hideWhen" is
+      // the question every other fill path already asks — the device pass, the
+      // module defaults, Check Defaults — and this one used to be the
+      // exception, which is why a mode-only key could never be a default at
+      // all. Read against SYSTEM_SETUP as it stands, so the room is judged on
+      // what its own file says: display_min_volume is a baseline for a room
+      // whose volume lands on the display and nothing at all in one whose
+      // volume goes to a DSP.
+      if (uiSchema.isHiddenFor(key, systemSetup, sectionKey: 'SYSTEM_SETUP')) {
+        return;
       }
+      systemSetup[key] = defaultValue;
+      systemLogs.add("-> Added missing property: '$key' (Default: '$defaultValue')");
+      additions++;
     });
 
     // --- DEVICE COUNTS ---
@@ -6716,10 +6726,14 @@ class AppStateProvider extends ChangeNotifier {
     final setup = roomConfig['SYSTEM_SETUP'];
     if (setup is Map) {
       uiSchema.systemDefaults.forEach((key, defaultValue) {
-        if (!setup.containsKey(key)) {
-          setup[key] = defaultValue;
-          added++;
-        }
+        if (setup.containsKey(key)) return;
+        // Same "hideWhen" gate the load path applies, rebuilt each time so a
+        // baseline written a moment ago is part of what the next one is
+        // judged against.
+        final live = setup.map((k, v) => MapEntry(k.toString(), v));
+        if (uiSchema.isHiddenFor(key, live, sectionKey: 'SYSTEM_SETUP')) return;
+        setup[key] = defaultValue;
+        added++;
       });
     }
 

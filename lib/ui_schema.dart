@@ -81,7 +81,8 @@ import 'config_dictionary.dart';
 ///  conditions under which the key means nothing for the block it sits in —
 ///  ["com_type=Network", "com_type=SerialOverEthernet"] on serial_port. Any
 ///  one holding and the key is not drawn, not written into a new device, not
-///  offered by Check Defaults, and not copied over by a module's DEVICE_INFO
+///  injected as a SYSTEM_SETUP baseline ("system_defaults"), not offered by
+///  Check Defaults, and not copied over by a module's DEVICE_INFO
 ///  defaults; changing the gating value removes the keys that just became
 ///  irrelevant. Same condition syntax as "labelWhen".
 ///

@@ -34,8 +34,9 @@
     "  hideWhen:    List of conditions (same 'key=value' / 'key~text' form as",
     "               labelWhen) that make the key IRRELEVANT to this block. Any one",
     "               matching and the field is not drawn, the key is not added to a",
-    "               new device, Check Defaults does not offer it, and applying a",
-    "               module's DEVICE_INFO defaults skips it - so serial_port and",
+    "               new device, it is not injected as a SYSTEM_SETUP baseline,",
+    "               Check Defaults does not offer it, and applying a module's",
+    "               DEVICE_INFO defaults skips it - so serial_port and",
     "               baud never reach a Network or SerialOverEthernet device, which",
     "               reaches its hardware by ip_address + net_port instead. Changing",
     "               the gating value (com_type) in the editor REMOVES the keys that",
@@ -252,7 +253,12 @@
   "system_defaults": {
     "__readme": [
       "SYSTEM_SETUP values injected on load when missing (shown in the",
-      "acknowledgement dialog). Edit values here and press Reload Schema."
+      "acknowledgement dialog). Edit values here and press Reload Schema.",
+      "A baseline whose 'fields' entry carries a \"hideWhen\" that holds for",
+      "the room is NOT injected - display_min_volume is a baseline for a room",
+      "whose volume lands on the display and means nothing in one whose volume",
+      "goes to a DSP. The gate is read against SYSTEM_SETUP as it stands, so a",
+      "value the file already states is what it is judged on."
     ],
     "active_debug_server": false,
   "active_event_space": false,
@@ -264,6 +270,7 @@
     "gui_routing_available": "No",
     "gui_routing_mode": "Normal",
     "gui_tab": "2_Cam_Dev",
+    "gui_huddle_space": "No",
     "gui_capture_source_available": "No",
     "gui_usb_or_vga": "USB",
     "use_qos": true,
@@ -280,6 +287,8 @@
     "gui_annex_mute_available": "No",
     "dev_source_control": "Auto",
     "dev_volume_control": "Auto",
+    "display_min_volume": 0,
+    "display_max_volume": 100,
     "sub_switch_sources": "",
     "input_sub_switcher": "",
     "sub_switch_switcher": "2"
@@ -1236,11 +1245,13 @@
     },
     "display_min_volume": {
       "type": "int",
+      "hideWhen": [ "dev_volume_control=DSP", "dev_volume_control=Switcher" ],
       "helperText": "Bottom of the slider in the DISPLAY's own scale (default 0)",
       "description": "The quietest the program slider can reach in a room whose volume lands on the display (dev_volume_control 'Display'). In the display's own volume scale — usually 0-100 — not dB, which is what switch_min_volume and the DSP use. Ignored in a room whose volume goes to a switcher or a DSP."
     },
     "display_max_volume": {
       "type": "int",
+      "hideWhen": [ "dev_volume_control=DSP", "dev_volume_control=Switcher" ],
       "helperText": "Top of the slider in the DISPLAY's own scale (default 100)",
       "description": "The loudest the program slider can reach in a room whose volume lands on the display. In the display's own volume scale, paired with display_min_volume; the switcher and DSP equivalents are switch_max_volume and the DSP's own groups."
     },
@@ -1405,6 +1416,16 @@
       "hideWhen": ["gui_routing_mode!=Conference"],
       "helperText": "An INPUT on the conference switcher (Switcher 3), not an output",
       "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 2' is pressed on the Conference routing page — the codec's second display feed. Read only while gui_routing_mode is Conference."
+    },
+    "gui_huddle_space": {
+      "type": "dropdown",
+      "label": "Huddle Space (gui_huddle_space)",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "helperText": "Yes for a small meeting room — one display, no rack, no matrix",
+      "description": "Whether this room is a huddle space: a small meeting room with one display and no rack, where the sources plug straight into the screen and a meeting bar handles the call. 'Yes' marks the room as one so the panel and the paperwork describe it as a huddle space rather than a classroom; the room still has to be wired that way by the other keys — dev_source_control 'Display' for a room with no switcher, and gui_routing_available 'No'."
     },
     "gui_routing_mode": {
       "type": "dropdown",

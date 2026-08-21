@@ -305,4 +305,44 @@ void main() {
       }
     });
   });
+
+  group('the display volume bounds', () {
+    // They are a baseline like any other, but only for a room the display
+    // actually carries the volume in: a DSP room ignores them, and a
+    // converted file that gained them there would be stating a range nothing
+    // reads. The gate is the "hideWhen" the schema already understands, which
+    // the SYSTEM_SETUP baseline pass now asks before injecting anything.
+    const bounds = ['display_min_volume', 'display_max_volume'];
+
+    bool hidden(String key, String mode) => schema.isHiddenFor(
+        key, {'dev_volume_control': mode}, sectionKey: 'SYSTEM_SETUP');
+
+    test('are baselines, at the range the description states', () {
+      expect(schema.systemDefaults['display_min_volume'], 0);
+      expect(schema.systemDefaults['display_max_volume'], 100);
+    });
+
+    test('reach a room whose volume can land on the display', () {
+      for (final key in bounds) {
+        expect(hidden(key, 'Display'), isFalse, reason: '$key on Display');
+        // Auto is what every converted room says, and it resolves to the
+        // display in a room with no DSP and no switcher — the huddle room
+        // these bounds exist for. Injecting there is the whole point.
+        expect(hidden(key, 'Auto'), isFalse, reason: '$key on Auto');
+        // A file that states nothing has not ruled the display out either.
+        expect(
+          schema.isHiddenFor(key, const {}, sectionKey: 'SYSTEM_SETUP'),
+          isFalse,
+          reason: '$key with no mode stated',
+        );
+      }
+    });
+
+    test('stay out of a room whose volume goes somewhere else', () {
+      for (final key in bounds) {
+        expect(hidden(key, 'DSP'), isTrue, reason: '$key on DSP');
+        expect(hidden(key, 'Switcher'), isTrue, reason: '$key on Switcher');
+      }
+    });
+  });
 }
