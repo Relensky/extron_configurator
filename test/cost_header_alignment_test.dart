@@ -41,6 +41,11 @@ void main() {
     );
     p.addAvCostItem();
     p.addAvCostLabor(rateId: 'cts3', techs: 1);
+    // The second kind of equipment row: a line typed on this page, whose name
+    // and quantity are BOXES where the drawn device's are printed text. The
+    // two have to line up with each other and with the caption over them.
+    p.addAvCostExtraEquipment(description: 'Owner display', qty: 2);
+    p.addAvCostExtraHardware(description: 'Spare shelf', qty: 1);
     return p;
   }
 
@@ -126,10 +131,11 @@ void main() {
       desc.left,
       moreOrLessEquals(rectOf(tester, textInside('desc_')).left, epsilon: 0.5),
     );
-    // 'Qty' appears on the equipment table as well; the items one is the box.
+    // 'Qty' captions the equipment and hardware tables as well; the items one
+    // is the last of them, in the order the cards are built.
     final qty = find.text('Qty');
-    expect(qty, findsNWidgets(2));
-    final itemsQty = rectOf(tester, qty.at(1));
+    expect(qty, findsNWidgets(3));
+    final itemsQty = rectOf(tester, qty.last);
     expect(
       itemsQty.right,
       moreOrLessEquals(rectOf(tester, textInside('qty_')).right, epsilon: 0.5),
@@ -149,6 +155,49 @@ void main() {
     final figure = rectOf(tester, find.text(r'$1,000.00').first);
     expect(caption.right, moreOrLessEquals(figure.right, epsilon: 0.5));
     expect(caption.left, moreOrLessEquals(figure.left, epsilon: 0.5));
+  });
+
+  testWidgets('a mixed column lines up caption, box and printed text', (
+    tester,
+  ) async {
+    // THE 16-PIXEL PROBLEM. Half these columns are a box on one row and a
+    // printed value on the next: a device off the diagram prints its name and
+    // "×3" where a line typed here has a field for both. A bare Text paints at
+    // the cell's edge and a box paints 16 in from it, so the two rows
+    // disagreed with each other and the caption could only sit over one of
+    // them.
+    final p = room();
+    await pump(tester, p);
+
+    for (final pair in const [
+      ('Device', 'eqpdesc_', false),
+      ('Qty', 'eqpqty_', true),
+    ]) {
+      final caption = rectOf(tester, find.text(pair.$1).first);
+      final box = rectOf(tester, textInside(pair.$2));
+      // The printed cell on the DRAWN row of the same column.
+      final printed = rectOf(
+        tester,
+        find.text(pair.$3 ? '×1' : 'Display'),
+      );
+      double edge(Rect r) => pair.$3 ? r.right : r.left;
+      expect(edge(caption), moreOrLessEquals(edge(box), epsilon: 0.5),
+          reason: '"${pair.$1}" must sit over the box in its column');
+      expect(edge(printed), moreOrLessEquals(edge(box), epsilon: 0.5),
+          reason: 'the printed cell must start where the box text does, or '
+              'the two kinds of row are ragged against each other');
+    }
+  });
+
+  testWidgets('the hardware quantity column is square too', (tester) async {
+    final p = room();
+    await pump(tester, p);
+
+    final caption = find.text('Qty');
+    // Equipment, hardware, other items — the hardware one is the second.
+    final box = rectOf(tester, textInside('hwqty_'));
+    expect(rectOf(tester, caption.at(1)).right,
+        moreOrLessEquals(box.right, epsilon: 0.5));
   });
 
   testWidgets('the inset the captions use is the one a field really has', (

@@ -221,6 +221,13 @@ class AvPortEditorRow extends StatelessWidget {
 
 /// Tight icon button for the editor rows — the stock 48px ones plus the
 /// fields no longer fit across the dialog.
+/// What one [avRowIcon] takes across a table row.
+///
+/// The button is CONSTRAINED to 34 and lays out at this — measured, because
+/// the caption row above it reserves the same figure by hand and the two have
+/// to agree. See `test/cost_header_alignment_test.dart`.
+const double kRowIconWidth = 40.0;
+
 Widget avRowIcon(
   IconData icon,
   String tooltip,
@@ -230,10 +237,16 @@ Widget avRowIcon(
   return Builder(
     builder: (context) {
       // Being photographed. The column still has to be there or every row
-      // above and below shifts left by 34 and the table stops lining up —
-      // it just has to be empty.
+      // above and below shifts left and the table stops lining up — it just
+      // has to be empty.
+      //
+      // [kRowIconWidth], not the 34 the button is CONSTRAINED to: an
+      // IconButton lays out wider than its constraints, and a placeholder at
+      // 34 made every captured table 6 pixels per icon narrower on the right
+      // than the caption row above it — which is the whole misalignment,
+      // spread across the flexible columns in the middle.
       if (PrintMode.of(context)) {
-        return const SizedBox(width: 34, height: 34);
+        return const SizedBox(width: kRowIconWidth, height: 34);
       }
       return IconButton(
         icon: Icon(icon, size: 18),

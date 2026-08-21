@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 
 import 'app_logger.dart';
 import 'av_flow_model.dart';
+import 'search_match.dart';
 
 /// ============================================================================
 ///  AV DEVICE LIBRARY
@@ -451,13 +452,21 @@ List<AvDeviceTemplate> searchCatalog(
       .where((e) => AvDeviceLibrary.matchesSearch(e, query))
       .toList();
   final needle = AvDeviceLibrary.normalizeModel(query);
+  final terms = searchTerms(query);
   if (needle.isNotEmpty) {
     int rank(AvDeviceTemplate e) {
       final model = AvDeviceLibrary.normalizeModel(e.model);
       if (model == needle) return 0;
       if (model.startsWith(needle)) return 1;
       if (model.contains(needle)) return 2;
-      return 3;
+      // A MULTI-WORD query almost never appears in a model name as one run of
+      // characters, so without this every hit landed on the same rung and the
+      // list came back alphabetical — "Epson PowerLite" putting an Epson
+      // document camera above every PowerLite. Rank on how much of what was
+      // typed the MODEL ITSELF carries: one word of the query is usually the
+      // maker, which is a column rather than part of the name, so a model with
+      // the other word in it is the thing being asked for.
+      return 3 + terms.where((t) => !model.contains(t)).length;
     }
 
     matched.sort((a, b) {
@@ -732,14 +741,21 @@ class AvDeviceLibrary {
   /// an exact-substring search finds nothing about half the time. Both sides
   /// are squashed to letters and digits before comparing, and the part number
   /// and manufacturer are searched too.
+  ///
+  /// EVERY WORD, ANYWHERE. A search is typed by somebody thinking about the
+  /// product, not about which column each half of the name lives in: "Epson
+  /// PowerLite" is a maker and a product line, and no single field holds them
+  /// in that order — the model says "PowerLite L630U" and the manufacturer
+  /// says "Epson". Squashing the whole query into one token asked for
+  /// "epsonpowerlite" as one run of characters and found nothing, on the most
+  /// natural way there is to look that projector up. Each WORD is required, so
+  /// adding words still narrows.
   static bool matchesSearch(AvDeviceTemplate entry, String query) {
-    final needle = _norm(query);
-    if (needle.isEmpty) return true;
-    final haystack = _norm(
+    return searchMatches(
       '${entry.model} ${entry.manufacturer} ${entry.partNumber} '
       '${entry.category}',
+      query,
     );
-    return haystack.contains(needle);
   }
 
   // -------------------------------------------------------------------------

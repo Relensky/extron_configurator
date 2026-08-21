@@ -419,3 +419,50 @@ ModelSwapResult applyModelSwap(
 
   return (carried: carried, dropped: orphaned.length);
 }
+
+/// Puts [model] on the drawn box for config device [deviceKey], if there is
+/// one — the Devices tab's half of a model change.
+///
+/// The estimate counts the BOXES ON THE DIAGRAM, so a model picked on the
+/// Devices tab that stopped at the config block left the room saying two
+/// things at once: the control side commissioning a PT-MZ682BU8 while the
+/// drawing, the rack elevation and the quote all still described the L630U it
+/// replaced. Whichever tab the change is made on, the room has to move
+/// together.
+///
+/// Two depths, because the two catalogs are not the same catalog:
+///
+///   * the AV catalog HAS this model — the full swap, with connectors, rack
+///     height, power, heat, and the runs already drawn carried across;
+///   * it does not — the model and the name are still corrected, and the
+///     connectors are left exactly as they are. A driver's model list is much
+///     longer than the AV catalog, and throwing away a box's ports because
+///     nobody has entered its connectors yet would be a poor trade.
+///
+/// Returns null when no box on the diagram belongs to that device.
+({bool full, int carried, int dropped, String label})? syncDrawnDeviceToModel(
+  AppStateProvider provider,
+  String deviceKey,
+  String model,
+) {
+  final node = provider.avNodeById(deviceKey);
+  if (node == null) return null;
+  if (node.model.trim().toLowerCase() == model.trim().toLowerCase()) {
+    return (full: false, carried: 0, dropped: 0, label: node.label);
+  }
+
+  final template = provider.avDeviceLibrary.templateForModel(model);
+  if (template != null) {
+    final result = applyModelSwap(provider, node, template);
+    return (
+      full: true,
+      carried: result.carried,
+      dropped: result.dropped,
+      label: provider.avNodeById(deviceKey)?.label ?? node.label,
+    );
+  }
+
+  final label = AppStateProvider.renamedForModel(node.label, node.model, model);
+  provider.updateAvNode(node.copyWith(model: model, label: label));
+  return (full: false, carried: 0, dropped: 0, label: label);
+}

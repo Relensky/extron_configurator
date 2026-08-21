@@ -17,11 +17,38 @@ library;
 String searchKey(String text) =>
     text.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
-/// True when [candidate] contains [query], ignoring case and every separator.
-/// A query of nothing but punctuation reduces to '' and matches everything,
-/// which is the same thing an empty query does.
-bool searchMatches(String candidate, String query) =>
-    searchKey(candidate).contains(searchKey(query));
+/// The words of [query], each reduced by [searchKey], with the empties gone.
+///
+/// Split on WHITESPACE only. A dash inside a word is a separator people get
+/// wrong ("PT-FW430U" / "PT FW430U"), and [searchKey] already forgives it; a
+/// space between words is the user naming two different things about the same
+/// item, and that is what [searchMatches] uses this for.
+List<String> searchTerms(String query) => [
+  for (final word in query.split(RegExp(r'\s+')))
+    if (searchKey(word).isNotEmpty) searchKey(word),
+];
+
+/// True when [candidate] contains EVERY word of [query], ignoring case and
+/// every separator. A query of nothing but punctuation and space reduces to no
+/// words at all and matches everything, which is what an empty query does.
+///
+/// Every word, anywhere, in any order — because the thing being searched is
+/// spread across several fields that the person searching does not think of as
+/// separate. "Epson PowerLite" is a maker and a product line, and nothing in
+/// the catalog holds those two next to each other in that order: the model
+/// says "PowerLite L630U" and the manufacturer column says "Epson". Squashing
+/// the whole query into one token — which is what this did — asks for
+/// "epsonpowerlite" as a single run of characters and finds nothing, on the
+/// most natural way there is to search for that projector.
+bool searchMatches(String candidate, String query) {
+  final terms = searchTerms(query);
+  if (terms.isEmpty) return true;
+  final haystack = searchKey(candidate);
+  for (final term in terms) {
+    if (!haystack.contains(term)) return false;
+  }
+  return true;
+}
 
 /// The entries of [candidates] that match [query] under [searchMatches],
 /// in their original order.

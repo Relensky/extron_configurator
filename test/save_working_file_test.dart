@@ -87,17 +87,24 @@ void main() {
 
     // Real file I/O: testWidgets' fake async never lets the write complete, so
     // the tap and the wait for it both run through runAsync.
+    //
+    // POLLED TIGHTLY, and that matters. Everything inside runAsync happens in
+    // REAL time, including the snackbar's own four-second life — so a loop
+    // that sleeps 20ms at a time can still be waiting when the message it is
+    // about to look for has already gone, and the failure lands on the
+    // snackbar assertion rather than on the slow write that caused it. Short
+    // sleeps and a two-second ceiling keep the wait inside the window.
     await tester.runAsync(() async {
       await tester.tap(saveButton);
       // Waits for the NEW value specifically — the old file already contains
       // the key, so anything looser would pass before the write landed.
-      for (var i = 0; i < 100; i++) {
+      for (var i = 0; i < 400; i++) {
         if (File(configPath)
             .readAsStringSync()
             .contains('"speaker_mute": false')) {
           break;
         }
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 5));
       }
     });
     await tester.pumpAndSettle(); // let the snackbar in

@@ -93,6 +93,17 @@ class CostLineItem {
   /// revision the same way a part on the diagram does.
   final String catalogModel;
 
+  /// Bought for the shelf, not for this room's system.
+  ///
+  /// Everything else on the estimate is a thing the room HAS, and the app says
+  /// so loudly: equipment with no control block behind it is flagged, because
+  /// a device the processor cannot drive is normally a mistake. A spare is the
+  /// case where it is not — the third projector lamp, the replacement panel in
+  /// the store, the switcher held for the next failure. It is real money on
+  /// the quote and it is not part of the room, so it is quoted and left off
+  /// every "this is missing from the config" list.
+  final bool spare;
+
   const CostLineItem({
     required this.id,
     required this.description,
@@ -101,6 +112,7 @@ class CostLineItem {
     this.unitPrice = 0,
     this.taxable = true,
     this.catalogModel = '',
+    this.spare = false,
   });
 
   double get total => qty * unitPrice;
@@ -112,6 +124,7 @@ class CostLineItem {
     double? unitPrice,
     bool? taxable,
     String? catalogModel,
+    bool? spare,
   }) => CostLineItem(
     id: id,
     description: description ?? this.description,
@@ -120,6 +133,7 @@ class CostLineItem {
     unitPrice: unitPrice ?? this.unitPrice,
     taxable: taxable ?? this.taxable,
     catalogModel: catalogModel ?? this.catalogModel,
+    spare: spare ?? this.spare,
   );
 
   Map<String, dynamic> toJson() => {
@@ -130,6 +144,7 @@ class CostLineItem {
     'unitPrice': unitPrice,
     'taxable': taxable,
     if (catalogModel.isNotEmpty) 'catalogModel': catalogModel,
+    if (spare) 'spare': true,
   };
 
   factory CostLineItem.fromJson(Map<String, dynamic> json) => CostLineItem(
@@ -140,6 +155,7 @@ class CostLineItem {
     unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
     taxable: json['taxable'] != false,
     catalogModel: json['catalogModel']?.toString() ?? '',
+    spare: json['spare'] == true,
   );
 }
 
@@ -550,6 +566,11 @@ class CostLine {
   final String description;
   final String model;
 
+  /// Bought for the shelf rather than for this room — see
+  /// [CostLineItem.spare]. Always false for a device counted off the diagram:
+  /// a box that is drawn is in the room.
+  final bool spare;
+
   /// The manufacturer's ordering code, off the catalog entry. Carried on the
   /// line rather than looked up when the report is written, so the number on
   /// the estimate is the one the price came from.
@@ -570,6 +591,7 @@ class CostLine {
     required this.unitPrice,
     this.taxable = true,
     this.source = PriceSource.none,
+    this.spare = false,
   });
 
   double get total => qty * unitPrice;
@@ -929,6 +951,7 @@ CostEstimate computeRoomCost({
       unitPrice: price,
       taxable: item.taxable,
       source: source,
+      spare: item.spare,
     );
   }
 
@@ -1110,8 +1133,20 @@ CostEstimate computeRoomCost({
         final override = settings.priceOverrides[key];
         final catalogPrice = catalog?.priceForTier(tier);
 
+        // THE LENGTH THIS LINE IS ABOUT: what the made-up lead is bought in,
+        // or the run length the group was split on.
+        final pricedLengthFt = (catalog?.cableLengthFt ?? 0) > 0
+            ? catalog!.cableLengthFt
+            : runLengthFt;
+        final baseCable = baseBook.priceForCable(
+          kSignalLabels[signal] ?? signal.name,
+          pricedLengthFt,
+          tier,
+        );
+
         final double price;
         final PriceSource source;
+        var otherTierCable = false;
         if (override != null) {
           price = override;
           source = PriceSource.override;
@@ -1120,6 +1155,13 @@ CostEstimate computeRoomCost({
           source = catalogPrice.fallback
               ? PriceSource.catalogOtherTier
               : PriceSource.catalog;
+        } else if (baseCable.price > 0) {
+          // The shop's own figure for a lead of this type and length. Same
+          // rung as a device's base cost, and counted the same way: a total
+          // built on these is a budget, and the page says so.
+          price = baseCable.price;
+          otherTierCable = baseCable.fallback;
+          source = PriceSource.baseCost;
         } else {
           price = 0;
           source = PriceSource.none;
@@ -1128,7 +1170,10 @@ CostEstimate computeRoomCost({
           unpricedLines++;
           unpricedDevices += qty.round();
         }
-        if (source == PriceSource.catalogOtherTier) otherTierLines++;
+        if (isEstimatedSource(source)) estimatedLines++;
+        if (source == PriceSource.catalogOtherTier || otherTierCable) {
+          otherTierLines++;
+        }
 
         // The runs behind this line, so it says what to order rather than
         // just how many. A group IS one length now, so this is that length

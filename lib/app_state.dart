@@ -6760,6 +6760,16 @@ class AppStateProvider extends ChangeNotifier {
 
   void baseCostsChanged() => notifyListeners();
 
+  /// Something outside this class rewrote the room config — the control-side
+  /// prefill is the one that does — so every page reading it repaints.
+  ///
+  /// A method rather than each caller reaching for [notifyListeners]: that one
+  /// is protected, and a caller that forgets leaves a page showing the room as
+  /// it was before the write. Which is exactly what the Cost tab's
+  /// add-to-config button did: the blocks were created and the row went on
+  /// flying its orange flag.
+  void roomConfigChanged() => notifyListeners();
+
   // --- labor lines on this room's estimate ---
 
   LaborLine addAvCostLabor({String rateId = '', double techs = 1}) {

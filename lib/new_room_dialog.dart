@@ -91,6 +91,28 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
         height: math.min(620, MediaQuery.of(context).size.height - 180),
         child: ListView(
           children: [
+            // FIRST, because it is how a room actually starts. Somebody
+            // walks a space and lists what goes in it; the control config is
+            // written weeks later. At the bottom of the dialog this read as an
+            // afterthought to two questions about the processor, which is the
+            // wrong way round for a new file — and it was missed, so the list
+            // got typed a second time on the Devices tab.
+            CheckboxListTile(
+              value: _startFromEstimator,
+              onChanged: (v) =>
+                  setState(() => _startFromEstimator = v ?? false),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Start from the cost estimator'),
+              subtitle: const Text(
+                'Pick the devices out of the catalog with quantities and a '
+                'running total first. They become the boxes on the signal '
+                'flow, the gear in the racks and the lines on the estimate — '
+                'one list, entered once. It still runs after the room type '
+                'below, so both can be used together.',
+              ),
+            ),
+            const Divider(height: 28),
             Text(
               'Will a control system be set up for this room?',
               style: theme.textTheme.titleSmall,
@@ -200,22 +222,6 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-            const Divider(height: 28),
-            CheckboxListTile(
-              value: _startFromEstimator,
-              onChanged: (v) =>
-                  setState(() => _startFromEstimator = v ?? false),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Start from the cost estimator'),
-              subtitle: const Text(
-                'Pick the devices out of the catalog with quantities and a '
-                'running total first. They become the boxes on the signal '
-                'flow, the gear in the racks and the lines on the estimate — '
-                'one list, entered once. Runs after the room type, so both '
-                'can be used together.',
-              ),
-            ),
           ],
         ),
       ),

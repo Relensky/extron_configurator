@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'app_state.dart';
+import 'av_flow_swap_dialogs.dart' show syncDrawnDeviceToModel;
 import 'config_dictionary.dart';
 import 'config_maintenance.dart';
 import 'model_defaults_dialog.dart';
@@ -175,16 +176,51 @@ class DeviceConfigurationForm extends StatelessWidget {
   /// acknowledged in a snackbar.
   Future<void> _applyModel(BuildContext context, AppStateProvider provider,
       String model, TextEditingController? moduleController) async {
+    // What the block says it is now — the needle for the rename below, read
+    // before anything writes over it.
+    final was =
+        (provider.roomConfig[deviceKey] as Map?)?['model']?.toString().trim() ??
+            '';
     final preview = provider.previewModelSelection(deviceKey, model);
+
+    /// The rest of the room. The estimate counts the boxes on the DIAGRAM and
+    /// the schematic draws them, so a model that stopped at the config block
+    /// left the room describing two different products at once. Returns the
+    /// sentence to add to the acknowledgement, or '' when there was nothing
+    /// drawn to move.
+    String syncTheRoom() {
+      // The name follows the product it names — "Projector 1 - PowerLite
+      // L630U" — on the block and on the box, and only the model part of it.
+      provider.renameDeviceForModel(deviceKey, was, model);
+      final drawn = syncDrawnDeviceToModel(provider, deviceKey, model);
+      if (drawn == null) return '';
+      return [
+        ' The box on the diagram is a $model now',
+        if (drawn.full && drawn.carried > 0)
+          ', with ${drawn.carried} cable'
+              '${drawn.carried == 1 ? '' : 's'} carried across',
+        if (drawn.full && drawn.dropped > 0)
+          '; ${drawn.dropped} cable${drawn.dropped == 1 ? '' : 's'} had no '
+              'matching connector and ${drawn.dropped == 1 ? 'was' : 'were'} '
+              'removed',
+        if (!drawn.full)
+          ' — its connectors are unchanged, because the AV catalog has no '
+              'entry for this model',
+        '.',
+      ].join();
+    }
 
     // Unknown model: no module claims it — just save the text.
     if (!preview.known) {
       provider.keepSettingsSwitchModule(deviceKey, model);
       moduleController?.text =
           provider.roomConfig[deviceKey]?['module']?.toString() ?? '';
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      final also = syncTheRoom();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              "Model saved — no module claims this model, so nothing else changed.")));
+              "Model saved — no module claims this model, so the control side "
+              "still needs one.$also")));
       return;
     }
 
@@ -192,9 +228,12 @@ class DeviceConfigurationForm extends StatelessWidget {
     if (!preview.moduleChanged) {
       provider.keepSettingsSwitchModule(deviceKey, model);
       moduleController?.text = preview.newModule;
+      final also = syncTheRoom();
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              "Model '$model' set — already using module ${preview.newModule}.")));
+              "Model '$model' set — already using module "
+              "${preview.newModule}.$also")));
       return;
     }
 
@@ -205,16 +244,22 @@ class DeviceConfigurationForm extends StatelessWidget {
     moduleController?.text = preview.newModule;
     if (applyDefaults) {
       final applied = provider.applyModuleDefaults(deviceKey, model);
+      final also = syncTheRoom();
+      if (!context.mounted) return;
       final msg = applied.isEmpty
-          ? "Model '$model' saved — module defaults already in place."
-          : "Model '$model': set ${applied.join(', ')}";
+          ? "Model '$model' saved — module defaults already in place.$also"
+          : "Model '$model': set ${applied.join(', ')}.$also";
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } else {
       provider.keepSettingsSwitchModule(deviceKey, model);
       final n = preview.diffs.length;
+      final also = syncTheRoom();
+      if (!context.mounted) return;
       final msg = n == 0
-          ? "Kept current settings — switched to module ${preview.newModule}."
-          : "Kept current settings — $n field${n == 1 ? '' : 's'} differ from ${preview.newModule} defaults.";
+          ? "Kept current settings — switched to module "
+              "${preview.newModule}.$also"
+          : "Kept current settings — $n field${n == 1 ? '' : 's'} differ from "
+              "${preview.newModule} defaults.$also";
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }

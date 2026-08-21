@@ -118,6 +118,26 @@ class BaseCost {
 /// The category rate card. Ships with the families this app already knows
 /// about — the ones the UI schema's device_types cover — all at 0, so the Cost
 /// tab shows them as "not set" rather than quoting a room at made-up numbers.
+/// The category a length of cable is priced under on the base-cost card —
+/// "Cable: HDMI 25ft", or "Cable: HDMI" for the type's any-length figure.
+///
+/// A NAME rather than a new kind of record, so a cable figure is edited,
+/// exported, saved and shared by everything that already handles this card.
+/// The estimate builds the same string from the line it is pricing, which is
+/// what makes a figure entered once reach every room.
+String cableBaseCategory(String signalName, double lengthFt) {
+  final label = signalName.trim().isEmpty ? 'cable' : signalName.trim();
+  if (lengthFt <= 0) return 'Cable: $label';
+  final feet = lengthFt == lengthFt.roundToDouble()
+      ? '${lengthFt.round()}ft'
+      : '${lengthFt.toStringAsFixed(1)}ft';
+  return 'Cable: $label $feet';
+}
+
+/// True when [category] is one of the cable figures rather than a device one.
+bool isCableBaseCategory(String category) =>
+    category.trim().toLowerCase().startsWith('cable:');
+
 class BaseCostBook {
   final List<BaseCost> costs;
 
@@ -203,6 +223,34 @@ class BaseCostBook {
   ({double price, bool fallback}) priceFor(String category, PricingTier tier) =>
       byCategory(resolveCategory(category))?.priceForTier(tier) ??
       (price: 0.0, fallback: false);
+
+  /// What a length of cable costs when the catalog does not price it.
+  ///
+  /// CABLE IS THE HOLE IN EVERY EARLY ESTIMATE. The runs are counted off the
+  /// diagram exactly, and then priced at nothing, because the catalog ships
+  /// with made-up leads for a handful of types and a room's real order is "a
+  /// 25 ft HDMI and a 50 ft HDMI". Before this, the only way to put a figure
+  /// on those was to type one on the room — which is a fact about the shop's
+  /// supplier, not about the room, so it got retyped for every job and drifted
+  /// between them.
+  ///
+  /// Filed as ordinary categories on this same card ([cableBaseCategory]), so
+  /// they are edited, saved and shared exactly like the device figures.
+  /// Longest-to-shortest match: the length asked for, then the type's own
+  /// figure for any length.
+  ({double price, bool fallback}) priceForCable(
+    String signalName,
+    double lengthFt,
+    PricingTier tier,
+  ) {
+    if (lengthFt > 0) {
+      final exact = byCategory(cableBaseCategory(signalName, lengthFt));
+      if (exact != null && exact.isSet) return exact.priceForTier(tier);
+    }
+    final any = byCategory(cableBaseCategory(signalName, 0));
+    if (any != null && any.isSet) return any.priceForTier(tier);
+    return (price: 0.0, fallback: false);
+  }
 
   void upsert(BaseCost cost) {
     final index = costs.indexWhere(

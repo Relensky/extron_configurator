@@ -14,9 +14,11 @@ import 'av_flow_report.dart' show driverGapSections;
 import 'av_flow_routing.dart';
 import 'av_flow_swap_dialogs.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
-import 'av_port_editor.dart' show avRowIcon;
+import 'av_port_editor.dart' show avRowIcon, kRowIconWidth;
 import 'av_rack_view.dart' show iconForRackItem;
+import 'base_costs.dart';
 import 'base_costs_dialog.dart';
+import 'control_prefill.dart';
 import 'control_prefill_dialog.dart';
 import 'cost_estimate.dart';
 import 'export_tools.dart';
@@ -613,16 +615,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
             const SizedBox(height: 8),
             _headerRow(context, const [
-              _Col('Device', flex: 3),
+              // MIXED COLUMNS. A device off the diagram prints its name and
+              // its count as plain text; a line added here has a box for
+              // both. Both cells carry the box's inset (see [_CellText]), so
+              // the caption sits over either kind and the two kinds of row
+              // line up with each other.
+              _Col.field('Device', flex: 3),
               _Col('Model', flex: 2),
-              // A device off the diagram prints its count as plain text; only
-              // a line added here is a box. The commoner cell wins.
-              _Col('Qty', width: 60, align: TextAlign.right),
+              _Col.field('Qty', width: 60, numeric: true),
               _Col.field('Unit price', gap: 12, width: 130, numeric: true),
               _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
               _Col('Price from', gap: 12, width: 92),
-              // Three row buttons, 40 wide as they render.
-              _Col('', width: 120),
+              // Four row buttons, 40 wide as they render.
+              _Col('', width: 160),
             ]),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
@@ -650,11 +655,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         Expanded(
                           flex: 3,
                           child: extra == null
-                              ? Text(
-                                  line.description,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13),
-                                )
+                              ? _CellText(line.description)
                               : LiveTextField(
                                   fieldId: 'eqpdesc_${extra.id}',
                                   initial: extra.description,
@@ -670,9 +671,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           child: Text(
                             extra == null
                                 ? (line.model.isEmpty ? '—' : line.model)
-                                : (line.model.isEmpty
-                                      ? 'not on the diagram'
-                                      : '${line.model} · not on the diagram'),
+                                : [
+                                    if (line.model.isNotEmpty) line.model,
+                                    if (extra.spare)
+                                      'spare'
+                                    else
+                                      'not on the diagram',
+                                  ].join(' · '),
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
@@ -683,10 +688,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         SizedBox(
                           width: 60,
                           child: extra == null
-                              ? Text(
+                              ? _CellText(
                                   '×${line.qty.toStringAsFixed(0)}',
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(fontSize: 13),
+                                  numeric: true,
                                 )
                               : LiveTextField(
                                   fieldId: 'eqpqty_${extra.id}',
@@ -749,6 +753,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                   : theme.disabledColor,
                             ),
                           ),
+                        ),
+                        _configFlag(
+                          context,
+                          provider,
+                          line,
+                          model,
+                          extra: extra,
                         ),
                         // WRONG BOX ON THE QUOTE. The commonest edit an
                         // estimate gets and the one that had to be made
@@ -906,7 +917,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               _headerRow(context, const [
                 _Col('Item', flex: 3),
                 _Col('Kind', flex: 2),
-                _Col('Qty', width: 60, align: TextAlign.right),
+                // Mixed, like the equipment table's: placed hardware prints
+                // its count, a line added here has a box for it.
+                _Col.field('Qty', width: 60, numeric: true),
                 _Col.field('Unit price', gap: 12, width: 130, numeric: true),
                 _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
                 _Col('Price from', gap: 12, width: 92),
@@ -967,10 +980,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       SizedBox(
                         width: 60,
                         child: extra == null
-                            ? Text(
+                            ? _CellText(
                                 '×${line.qty.toStringAsFixed(0)}',
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(fontSize: 13),
+                                numeric: true,
                               )
                             : LiveTextField(
                                 fieldId: 'hwqty_${extra.id}',
@@ -1189,9 +1201,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 _Col('Total', gap: 12, width: 54, align: TextAlign.right),
                 _Col.field('Unit price', gap: 12, width: 130, numeric: true),
                 _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-                // Two row buttons. They are constrained to 34 and render at
+                // Three row buttons. They are constrained to 34 and render at
                 // 40, which is what the column actually takes.
-                _Col('', width: 80),
+                _Col('', width: 120),
               ]),
               const Divider(height: 12),
               // ONE ROW PER LINE THE ESTIMATE MADE, not one per signal type.
@@ -1333,6 +1345,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                         priceKey: line.key,
                                       ),
                             ),
+                            // The shop's typical figure for a lead of this
+                            // type and length, on the shared card rather than
+                            // on this room — see [_setCableBaseCost].
+                            avRowIcon(
+                              Icons.price_change_outlined,
+                              line.source == PriceSource.baseCost
+                                  ? 'Priced off the base-cost card — edit that '
+                                        'figure'
+                                  : 'Set a base cost for this cable length',
+                              () => _setCableBaseCost(
+                                context,
+                                provider,
+                                signal: signal,
+                                lengthFt: (catalog?.cableLengthFt ?? 0) > 0
+                                    ? catalog!.cableLengthFt
+                                    : cableKeyParts(line.key).lengthFt,
+                              ),
+                            ),
                             avRowIcon(
                               Icons.restart_alt,
                               'Back to the catalog price',
@@ -1450,6 +1480,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               ),
                             ),
                           ),
+                          // A miscellaneous line is not a length of anything
+                          // — there is no base cost to set on it — but the
+                          // column still has to be as wide as the counted
+                          // rows', or every cell to its left drifts.
+                          const SizedBox(width: kRowIconWidth),
                           avRowIcon(
                             Icons.library_add_outlined,
                             item.catalogModel.isNotEmpty
@@ -1733,6 +1768,417 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           qty: qty,
         );
     }
+  }
+
+  // --- is this line in the room config? ------------------------------------
+
+  /// The control block behind an equipment line, or '' when there is none.
+  ///
+  /// A device drawn from the config carries the config's own section key as
+  /// its node id, so the two line up without anything being stored to link
+  /// them. A line typed on this page, and a box added to the canvas by hand,
+  /// have no block at all.
+  String _configKeyFor(
+    AppStateProvider provider,
+    CostLine line,
+    AvFlowModel model,
+  ) {
+    final group = groupDevices(model).where((g) => g.key == line.key).firstOrNull;
+    if (group == null) return '';
+    final configured = activeDeviceKeysIn(
+      provider.roomConfig,
+      provider.uiSchema.deviceCountMap,
+    ).toSet();
+    for (final node in group.nodes) {
+      if (configured.contains(node.id)) return node.id;
+    }
+    return '';
+  }
+
+  /// The orange flag: quoted, but the room config has never heard of it.
+  ///
+  /// THE GAP THIS CLOSES. The estimate is where a room gets specified — parts
+  /// are picked here with quantities and a total — and the control side is
+  /// built weeks later from whatever somebody remembers. A line that never
+  /// makes it into a device block is a box that gets ordered, delivered,
+  /// racked and then has nothing to drive it, and the first anybody knows is
+  /// at commissioning.
+  ///
+  /// Three states, one slot:
+  ///
+  ///   * IN THE CONFIG — a quiet tick naming the block. Nothing to do.
+  ///   * A SPARE — bought for the shelf, deliberately not part of the room's
+  ///     system, so no flag. This is the escape hatch that keeps the flag
+  ///     meaningful: without it the honest answer to "why is this not in the
+  ///     config" was "it never will be", and a warning nobody can clear is a
+  ///     warning everybody learns to ignore.
+  ///   * NEITHER — orange, with the button that fixes it.
+  Widget _configFlag(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line,
+    AvFlowModel model, {
+    CostLineItem? extra,
+  }) {
+    // The key is on the SLOT rather than on whatever is in it, so the state
+    // of this cell can be read whichever of the three it is showing.
+    final slot = ValueKey('cfgflag_${line.key}');
+
+    // In the capture it is an empty slot like every other row button — a
+    // photograph of a quote does not carry the app's to-do list.
+    if (PrintMode.of(context)) {
+      return KeyedSubtree(
+        key: slot,
+        child: const SizedBox(width: kRowIconWidth, height: 34),
+      );
+    }
+    final theme = Theme.of(context);
+    final spare = extra?.spare ?? false;
+    final configKey = extra != null ? '' : _configKeyFor(provider, line, model);
+
+    if (configKey.isNotEmpty) {
+      return KeyedSubtree(
+        key: slot,
+        child: avRowIcon(
+          Icons.check_circle_outline,
+          'In the room config as $configKey',
+          null,
+        ),
+      );
+    }
+
+    // Pinned to the width one row icon takes. A PopupMenuButton lays itself
+    // out at the 48-pixel minimum tap target whatever it is told, and the
+    // caption row reserves these by hand — eight pixels of disagreement here
+    // walked every caption on the row out of place.
+    return SizedBox(
+      key: slot,
+      width: kRowIconWidth,
+      child: Tooltip(
+      message: spare
+          ? 'A spare — quoted, and deliberately not part of the room config'
+          : 'Not in the room config. The processor has nothing to drive it.',
+      child: PopupMenuButton<String>(
+        icon: Icon(
+          spare ? Icons.inventory_2_outlined : Icons.flag,
+          size: 18,
+          // Orange rather than red: this is a thing to do, not a thing that is
+          // broken. A quote written before the control side exists is the
+          // normal case, and half these rows are legitimately flagged all the
+          // way to the day somebody builds it.
+          color: spare ? theme.disabledColor : Colors.orange.shade700,
+        ),
+        padding: EdgeInsets.zero,
+        // These size the MENU, not the button — the button is pinned by the
+        // SizedBox above. Wide enough for the two lines each choice needs to
+        // explain itself, and no wider than a dialog.
+        constraints: const BoxConstraints(minWidth: 320, maxWidth: 460),
+        itemBuilder: (ctx) => [
+          PopupMenuItem(
+            value: 'add',
+            child: const ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.playlist_add_check, size: 18),
+              title: Text('Add to the room config'),
+              subtitle: Text(
+                'Creates the device block for its family, with this room’s '
+                'defaults and the driver that claims the model.',
+              ),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'spare',
+            enabled: extra != null,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                spare ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                size: 18,
+              ),
+              title: Text(spare ? 'Not a spare' : 'Mark as a spare'),
+              subtitle: Text(
+                extra == null
+                    ? 'A box on the diagram is in the room, so it cannot be a '
+                          'shelf spare.'
+                    : 'Quoted for the shelf. It keeps its place on the '
+                          'estimate and stops being flagged.',
+              ),
+            ),
+          ),
+        ],
+        onSelected: (choice) {
+          if (choice == 'spare' && extra != null) {
+            provider.updateAvCostExtraEquipment(
+              extra.copyWith(spare: !extra.spare),
+            );
+            return;
+          }
+          _addLineToConfig(context, provider, line, model, extra: extra);
+        },
+      ),
+      ),
+    );
+  }
+
+  /// Gives one equipment line a device block on the control side.
+  ///
+  /// Two routes in, one destination, because the two kinds of line are at
+  /// different distances from being a device:
+  ///
+  ///   * A BOX ON THE DIAGRAM is already a device; it just has no block. The
+  ///     room's own prefill builds one — right family, this app's defaults for
+  ///     that family, the driver that claims the model — and re-keys the node
+  ///     onto it so the drawing and the config are one device rather than two
+  ///     records of it.
+  ///   * A LINE TYPED HERE is a price, not a device. It becomes boxes on the
+  ///     diagram first (one per unit, carrying any price typed on it), and
+  ///     those go through the same prefill. The cost line goes, because the
+  ///     diagram is priced and leaving both would quote the room twice.
+  ///
+  /// A hand-typed line with no catalog model cannot make the trip — there is
+  /// nothing to build a device out of — and says so instead of half-doing it.
+  Future<void> _addLineToConfig(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line,
+    AvFlowModel model, {
+    CostLineItem? extra,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final label = line.model.trim().isEmpty ? line.description : line.model;
+
+    var nodeIds = <String>[];
+    if (extra != null) {
+      if (extra.catalogModel.trim().isEmpty) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '"${line.description}" was typed by hand, so there is no part to '
+              'build a device from. Add it to the catalog first — the '
+              'library button on this row — and it can go in.',
+            ),
+            duration: const Duration(seconds: 7),
+          ),
+        );
+        return;
+      }
+      final added = provider.promoteAvCostEquipmentToDiagram(
+        extra.id,
+        at: const Offset(40, 60),
+      );
+      if (added.isEmpty) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Could not put $label on the diagram.'),
+          ),
+        );
+        return;
+      }
+      nodeIds = [for (final n in added) n.id];
+    } else {
+      final group =
+          groupDevices(model).where((g) => g.key == line.key).firstOrNull;
+      if (group == null) return;
+      nodeIds = [for (final n in group.nodes) n.id];
+    }
+
+    final plan = planControlSide(provider, nodeIds: nodeIds);
+    if (plan.creatable.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            plan.unplaceable.isEmpty
+                ? '$label is already in the room config.'
+                : 'No device family fits $label, so there is nowhere to put a '
+                      'block for it. The Wizard tab is where families are '
+                      'turned on.',
+          ),
+          duration: const Duration(seconds: 7),
+        ),
+      );
+      return;
+    }
+
+    final result = applyControlSide(provider, plan);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          [
+            '${result.created} device block'
+                '${result.created == 1 ? '' : 's'} created '
+                '(${result.sectionKeys.join(', ')})',
+            if (result.withoutModule > 0)
+              '${result.withoutModule} of them with no python module — the '
+                  'Devices tab shows those in red',
+            'fill in the address on the Devices tab',
+          ].join('. '),
+        ),
+        duration: const Duration(seconds: 7),
+      ),
+    );
+  }
+
+  // --- a shop price for a length of cable ----------------------------------
+
+  /// Types the shop's own figure for one length of one cable type onto the
+  /// base-cost card.
+  ///
+  /// CABLE IS THE HOLE IN EVERY EARLY ESTIMATE. The runs are counted off the
+  /// diagram exactly and then priced at nothing, because the catalog ships
+  /// made-up leads for a handful of types while a real order is "a 25 ft HDMI
+  /// and a 50 ft HDMI". The only answer before this was to type a price on the
+  /// row — but that is a fact about the shop's supplier, not about this room,
+  /// so it was retyped on every job and drifted between them.
+  ///
+  /// This writes it where a typical price belongs: `base_costs.json`, beside
+  /// the device figures, read by every room. The row's own price box still
+  /// wins for the job that was quoted something different.
+  Future<void> _setCableBaseCost(
+    BuildContext context,
+    AppStateProvider provider, {
+    required SignalType signal,
+    required double lengthFt,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final signalName = kSignalLabels[signal] ?? signal.name;
+    final category = cableBaseCategory(signalName, lengthFt);
+    final existing = provider.baseCosts.byCategory(category);
+    final msrp = TextEditingController(
+      text: existing == null || existing.price == 0
+          ? ''
+          : trimNumber(existing.price),
+    );
+    final edu = TextEditingController(
+      text: existing == null || existing.educationPrice == 0
+          ? ''
+          : trimNumber(existing.educationPrice),
+    );
+    final notes = TextEditingController(text: existing?.notes ?? '');
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Base cost for $category'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                lengthFt > 0
+                    ? 'What a ${formatCableLength(lengthFt)} $signalName lead '
+                          'typically costs. Saved to the base-cost card, so '
+                          'every room prices this length off it — not just '
+                          'this one.'
+                    : 'What a $signalName lead typically costs, for any '
+                          'length with no figure of its own. Saved to the '
+                          'base-cost card, so every room reads it.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('cable_base_msrp'),
+                      controller: msrp,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'List price (MSRP)',
+                        prefixText: provider.avCost.currency,
+                        isDense: true,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('cable_base_edu'),
+                      controller: edu,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Education price',
+                        prefixText: provider.avCost.currency,
+                        isDense: true,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: notes,
+                decoration: const InputDecoration(
+                  labelText: 'What this figure assumes',
+                  hintText: 'e.g. plenum, terminated both ends',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'A tier left blank falls back to the other one and the line '
+                'says so. Both blank removes the figure. A price typed on this '
+                'room still wins over it.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('cable_base_save'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Save to the card'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final list = double.tryParse(msrp.text.trim()) ?? 0;
+    final education = double.tryParse(edu.text.trim()) ?? 0;
+    if (list <= 0 && education <= 0) {
+      provider.baseCosts.remove(category);
+    } else {
+      provider.baseCosts.upsert(
+        BaseCost(
+          category: category,
+          price: list,
+          educationPrice: education,
+          notes: notes.text.trim(),
+        ),
+      );
+    }
+    provider.baseCostsChanged();
+    final saved = await provider.saveBaseCosts();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          saved.isEmpty
+              ? 'Could not write the base-cost file — the figure is in memory '
+                    'for this session only.'
+              : list <= 0 && education <= 0
+              ? '$category removed from the base-cost card.'
+              : '$category saved to the base-cost card. Every room prices '
+                    'this length off it until the catalog has an entry.',
+        ),
+      ),
+    );
   }
 
   // --- swapping the product on a line --------------------------------------
@@ -3401,6 +3847,45 @@ class _Col {
     return align == TextAlign.right
         ? EdgeInsets.only(right: gap)
         : EdgeInsets.only(left: gap);
+  }
+}
+
+/// A plain-text cell in a column that ALSO holds input boxes.
+///
+/// Half the columns on this page are a box on one row and a printed value on
+/// the next — a device off the diagram prints "×3" where a line typed here has
+/// a quantity box, and the same for the name beside it. A bare [Text] paints
+/// at the cell's own edge and a box paints [kFieldTextInset] in from it, so
+/// those two rows disagreed with each other by 16 pixels and the caption over
+/// them could only ever line up with one. This is the [Text] with the box's
+/// own inset on it, which lines up all three.
+///
+/// It follows the box into the capture, where a [LiveTextField] prints its
+/// value at [kPrintValueInset] instead — so the photograph is as square as the
+/// screen.
+class _CellText extends StatelessWidget {
+  final String text;
+
+  /// Right-aligned and inset from the right, the way a numeric field puts its
+  /// figure.
+  final bool numeric;
+
+  const _CellText(this.text, {this.numeric = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final inset = PrintMode.of(context) ? kPrintValueInset : kFieldTextInset;
+    return Padding(
+      padding: numeric
+          ? EdgeInsets.only(right: inset)
+          : EdgeInsets.only(left: inset),
+      child: Text(
+        text,
+        textAlign: numeric ? TextAlign.right : TextAlign.left,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 13),
+      ),
+    );
   }
 }
 

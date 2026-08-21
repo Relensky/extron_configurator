@@ -134,7 +134,10 @@ later.
 1. **Start the room.** *New Config* builds from your template with every device
    count at zero. *Open Existing Config* loads a file from disk. *Download from
    Processor* pulls `/config.json` over SFTP and asks where to keep the working
-   copy.
+   copy. The New Room dialog asks **Start from the cost estimator** first,
+   because that's how a room actually starts: pick the devices out of the
+   catalog with quantities and a running total, and they become the boxes on
+   the signal flow, the gear in the racks and the lines on the estimate.
 2. **Say what the room is.** On the **Wizard**, pick the building and type the
    room number, then set the device counts. Blocks and tabs appear and disappear
    as you change them.
@@ -408,6 +411,47 @@ Two things it will tell you rather than quietly getting wrong:
 - devices with no control module, so a room isn't quoted as finished when part
   of it can't be driven
 
+### Is it in the room config?
+
+The estimate is where a room gets specified — parts picked with quantities and
+a total — and the control side is usually built weeks later. A line that never
+becomes a device block is a box that gets ordered, delivered, racked, and then
+has nothing to drive it.
+
+So every equipment row carries a flag:
+
+- **orange flag** — quoted, and the room config has never heard of it. The flag
+  is also the button: *Add to the room config* creates the device block for its
+  family with this room's defaults and the driver that claims the model. A line
+  typed here becomes boxes on the diagram first (one per unit), because a device
+  has to exist before it can have a block — so the cost line is replaced by the
+  drawn devices it was quoting.
+- **a tick** — it's in the config, and the tooltip names the block.
+- **a box icon** — marked as a **spare**: bought for the shelf on purpose, not
+  part of the room's system. It stays on the quote and stops being flagged.
+  Without this, half a quote is permanently flagged and the flag becomes
+  wallpaper.
+
+A hand-typed line with no catalog part behind it can't go in — there's nothing
+to build a device from. Add it to the catalog first with the library button on
+the same row.
+
+### Base costs for cable
+
+Cable is the hole in every early estimate: the runs are counted off the diagram
+exactly, then priced at nothing, because the catalog ships made-up leads for a
+handful of types while a real order is "a 25 ft HDMI and a 50 ft HDMI".
+
+The **price tag** button on a cabling row puts the shop's typical figure for
+that type and length on the base-cost card — `base_costs.json`, the same file
+the device figures live in, read by every room. Enter it once and every estimate
+prices that length off it. A price typed on the room still wins, and a line
+costed this way is marked *Base cost* and counts towards the estimate being a
+budget rather than a quote.
+
+A figure entered against a type with no length ("Cable: HDMI") covers every
+length that hasn't got one of its own.
+
 ### Swapping a unit
 
 The wrong box usually gets noticed here — the total is what people look at — so
@@ -432,6 +476,11 @@ A line of quantity three swaps all three boxes and all three config blocks. Any
 price you had typed against the old model is cleared, because a figure
 negotiated for one product isn't the price of another.
 
+**It works in both directions.** Picking a model on the **Devices** tab moves
+the same room: the drawn box becomes that product — connectors and all, where
+the AV catalog knows the model — the name follows, and the estimate reprices,
+because the estimate counts the boxes on the diagram.
+
 It goes through silently when there's nothing to decide. It stops to ask when
 there is:
 
@@ -453,6 +502,13 @@ and the message says how many, so you can draw them again on **Signal Flow**.
 
 The catalog is the department's price list and connector reference: per model,
 what sockets it has, how many rack units, what it draws, what it costs.
+
+**Searching** ignores spaces, dashes and case on both sides, so "dtpcross108"
+finds "DTP CrossPoint 108". Type more than one word and every word has to land
+somewhere on the entry — the model, the maker, the part number or the category —
+in any order: "Epson PowerLite" finds the PowerLite projectors, even though no
+single field holds those two words next to each other. Adding words still
+narrows the list.
 
 The room config knows a device's IP address; it never knows that the box has
 four HDMI inputs, is 2U, draws 90 W and lists at $8,500. That's what the catalog

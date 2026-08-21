@@ -123,7 +123,16 @@ class ControlPrefillPlan {
 ///
 /// Jack fields and patch panels are skipped: they are passive, and a processor
 /// was never going to talk to one.
-ControlPrefillPlan planControlSide(AppStateProvider provider) {
+/// [nodeIds] limits the plan to those boxes — the Cost tab's per-row "add this
+/// one to the config" button, which is how a single line gets a control block
+/// without committing to the whole room. The numbering is still worked out
+/// against everything already in the config, so one device added on its own
+/// lands on the same section key it would have had in a full run.
+ControlPrefillPlan planControlSide(
+  AppStateProvider provider, {
+  Iterable<String>? nodeIds,
+}) {
+  final only = nodeIds?.toSet();
   final configured = activeDeviceKeysIn(
     provider.roomConfig,
     provider.uiSchema.deviceCountMap,
@@ -145,6 +154,7 @@ ControlPrefillPlan planControlSide(AppStateProvider provider) {
       alreadyConfigured++;
       continue;
     }
+    if (only != null && !only.contains(node.id)) continue;
 
     final family = familyForNode(provider, node);
     if (family == null) {
@@ -422,6 +432,11 @@ ControlPrefillResult applyControlSide(
     '$withoutModule without a module, ${plan.unplaceable.length} device(s) '
     'with no matching family.',
   );
+
+  // The config and the diagram both moved; every page reading either has to
+  // repaint. Here rather than in each caller, because a caller that forgets
+  // leaves the room on screen looking untouched.
+  provider.roomConfigChanged();
 
   return (
     created: created.length,
