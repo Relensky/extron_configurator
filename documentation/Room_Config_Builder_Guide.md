@@ -320,6 +320,25 @@ there:
 Every one of those is a rule you can change on the **Flow Rules** tab. Nothing
 in this list is compiled in.
 
+### A room with no switcher
+
+A huddle space has no matrix: one panel with a couple of things plugged into
+the back of it, which is what `dev_source_control: Display` says. There the
+`input_` keys are not matrix ties — they're sockets on the display — so the
+display stands in for the switcher and every source is drawn onto it.
+
+Write the value the way it's printed on the panel. `input_pc: "HDMI 1"`,
+`input_wireless: "HDMI 2"`, or just `"1"` and `"2"` — all of them resolve, and
+so does `"HDBaseT"`. The kind and the number both have to match: `HDMI 2` never
+lands on `HDMI 1`, and never on the DisplayPort socket beside it. A socket the
+panel doesn't have is reported rather than guessed at, and a socket that
+already has a lead on it — the meeting bar, usually — is left alone and the
+disagreement reported.
+
+The `output_` keys mean nothing in such a room: the run stops at the panel, so
+there's no output side to number. They're ignored rather than resolved against
+a box that can't answer them.
+
 ### The USB switcher
 
 Nothing in the config says what plugs into a USB switcher — `dev_usb_switchers`

@@ -36,6 +36,15 @@ import 'room_locations.dart';
 ///  Matching on the label's trailing number covers all three and every other
 ///  Extron front panel, without a table of models to keep up to date.
 ///
+///  A ROOM WITH NO MATRIX is the same idea with a different box in the middle.
+///  A huddle space has one panel and a couple of things plugged into the back
+///  of it, so `input_pc` is not a matrix tie — it is the socket on the
+///  display, written the way it is silkscreened there ("HDMI 2"). The display
+///  stands in for the switcher and every source is routed onto it exactly as
+///  it would be onto a matrix input; the `output_*` half has no meaning in
+///  such a room, because the run stops at the panel. See [_displayHub] and
+///  [portForDisplayInput].
+///
 ///  Outputs carry a letter as well ("3B" is output 3's B connector), and there
 ///  the labels stop agreeing: the MA 70 spells it "DTP OUT 003B" and the plain
 ///  84 4K calls the same socket "DTP OUT 1". An exact number+letter match gets
@@ -528,6 +537,65 @@ AvPort? portForDeviceInput(AvNode node, String inputValue) {
 String _flatten(String s) =>
     s.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
 
+/// The input on a DISPLAY that a source key names, in a room with no matrix.
+///
+/// A huddle space has no switcher: the PC and the meeting bar go straight into
+/// the back of the panel, so `input_pc` is not "switcher input 1" — it is the
+/// socket on the display, and people write it the way it is silkscreened
+/// there: `HDMI 2`, `HDBaseT`, sometimes just `2`.
+///
+/// So all three are read, in the order that a stated answer beats an inferred
+/// one:
+///
+///   1. a CONNECTOR KIND AND A NUMBER — 'HDMI 2' onto 'HDMI 2', 'HDMI IN 2'
+///      or 'HDMI 002', whichever way the catalog spells the panel. Both halves
+///      have to agree, so 'HDMI 2' never lands on 'HDMI 1' and never on the
+///      DisplayPort socket beside it. Naming a kind the panel does not have,
+///      or a number it does not go up to, resolves to nothing rather than to
+///      the nearest thing — the same rule the switcher numbers follow.
+///   2. a CONNECTOR KIND alone — 'HDBaseT' on a panel with one of those, which
+///      is [portForDeviceInput], the same reading the display's own `input`
+///      field gets.
+///   3. a BARE NUMBER — '2' onto the second video input, read exactly as a
+///      switcher input number is.
+AvPort? portForDisplayInput(AvNode display, String value) {
+  final want = value.trim();
+  if (want.isEmpty || want.toLowerCase() == 'none') return null;
+
+  // 1. The kind and the number, both.
+  final signal = _signalForInputName(_flatten(want));
+  final number = parsePortLabel(want).number;
+  if (signal != null && number != null) {
+    for (final p in display.ports) {
+      if (!p.isInput && p.direction != PortDirection.bidirectional) continue;
+      if (p.signal != signal) continue;
+      if (parsePortLabel(p.label).number == number) return p;
+    }
+    // 'HDMI 2' on a panel whose HDMI sockets carry no numbers at all, which is
+    // what a two-input display drawn from the generic template looks like:
+    // count them instead, in the order the catalog lists them.
+    final ofKind = [
+      for (final p in display.ports)
+        if (p.signal == signal &&
+            (p.isInput || p.direction == PortDirection.bidirectional))
+          p,
+    ];
+    if (ofKind.every((p) => parsePortLabel(p.label).number == null) &&
+        number >= 1 &&
+        number <= ofKind.length) {
+      return ofKind[number - 1];
+    }
+    return null;
+  }
+
+  // 2. The kind on its own.
+  final named = portForDeviceInput(display, want);
+  if (named != null) return named;
+
+  // 3. A bare number.
+  return portForIoValue(display, want, wantOutput: false);
+}
+
 SignalType? _signalForInputName(String flattened) {
   if (flattened.startsWith('hdbaset') || flattened.startsWith('dtp')) {
     return SignalType.hdbaset;
@@ -554,6 +622,30 @@ AvPort? _usbPort(AvNode node, {required bool wantOutput}) {
     if (p.signal != SignalType.usbData) continue;
     if (p.direction == PortDirection.bidirectional) return p;
     if (wantOutput ? p.isOutput : p.isInput) return p;
+  }
+  return null;
+}
+
+/// The video inputs on a box, by name — for telling somebody which sockets a
+/// value could have named.
+List<String> _videoInputLabels(AvNode node) => [
+      for (final p in node.ports)
+        if (_videoSignals.contains(p.signal) &&
+            (p.isInput || p.direction == PortDirection.bidirectional))
+          p.label,
+    ];
+
+/// The display a room with no matrix routes its sources onto, or null.
+///
+/// The lowest-numbered PROJECTORDEVICE on the canvas: `dev_projectors` counts
+/// projectors and flat panels as one family, and in a room built this way
+/// there is one of them. A room with several displays and no switcher has
+/// nothing routing between them, so the first is the one the sources land on
+/// and the rest are drawn by hand.
+AvNode? _displayHub(Map<String, AvNode> nodesById) {
+  for (int n = 1; n <= kFlowFamilyDepth; n++) {
+    final node = nodesById['PROJECTORDEVICE_$n'];
+    if (node != null) return node;
   }
   return null;
 }
@@ -600,7 +692,24 @@ RoutingPlan planRoutingFromConfig(
 
   final rules = provider.flowRules;
   final nodesById = {for (final n in provider.avNodes) n.id: n};
-  final switcher = nodesById['SWITCHERDEVICE_1'];
+  final matrix = nodesById['SWITCHERDEVICE_1'];
+
+  // THE ROOM WITH NO MATRIX. A huddle space is one display with a couple of
+  // things plugged into the back of it: no switcher, no rack, and the source
+  // buttons pick the DISPLAY's input rather than a matrix tie — which is what
+  // `dev_source_control: Display` says. The `input_*` keys still say where
+  // each source is wired; they are just numbers on the panel instead of
+  // numbers on a matrix ('HDMI 2', or plain '2').
+  //
+  // So the display stands in for the switcher: every source is routed onto it
+  // exactly as it would be routed onto a matrix input. Only when the config
+  // has no SWITCHERDEVICE_1 at all — a room whose switcher is simply not
+  // placed yet is a room to press "Place all from config" in, not a huddle
+  // space.
+  final displayHub = matrix == null && !config.containsKey('SWITCHERDEVICE_1')
+      ? _displayHub(nodesById)
+      : null;
+  final switcher = matrix ?? displayHub;
   if (switcher == null) {
     // A room with no matrix AND no numbers is not a room with a problem. The
     // huddle space is the case: the wireless comes in over a DTP pair, the bar
@@ -623,8 +732,9 @@ RoutingPlan planRoutingFromConfig(
           config.containsKey('SWITCHERDEVICE_1')
               ? 'The main switcher is not on the canvas yet — press "Place all '
                   'from config" first, then draw the routing.'
-              : 'This room has no SWITCHERDEVICE_1, and every input_ and '
-                  'output_ number is a number on that box.',
+              : 'This room has no SWITCHERDEVICE_1 and no display on the '
+                  'canvas, and every input_ and output_ number is a number on '
+                  'one of those.',
         ),
       ],
     );
@@ -641,9 +751,13 @@ RoutingPlan planRoutingFromConfig(
       provider.avDismissedDevices.contains(avAutoNodeId(key));
 
   // How many outputs the box HAS, which its connector labels do not always
-  // say — see [portForIoValue] pass 5.
-  final declaredInputs = AvDeviceLibrary.switcherSize(switcher.model).$1;
-  final declaredOutputs = AvDeviceLibrary.switcherSize(switcher.model).$2;
+  // say — see [portForIoValue] pass 5. Read off the MODEL, so it is only
+  // asked of a switcher: `switcherSize` answers "4 in, 1 out" for anything it
+  // does not recognise, and a display is not a four-input matrix.
+  final declaredInputs =
+      matrix == null ? 0 : AvDeviceLibrary.switcherSize(matrix.model).$1;
+  final declaredOutputs =
+      matrix == null ? 0 : AvDeviceLibrary.switcherSize(matrix.model).$2;
 
   // Somewhere to put a box that has to be created. Sources go down the left of
   // whatever is already drawn, destinations down the right.
@@ -822,31 +936,42 @@ RoutingPlan planRoutingFromConfig(
   bool joinedTo(AvNode node, AvPort port, String nodeId) =>
       feedsInto(node.id, port.id).any((f) => f.node == nodeId);
 
-  /// True when [nodeId] is already joined to the switcher — straight onto it,
-  /// or through one box between them.
+  /// How many cables a box may be from the switcher and still count as
+  /// already joined to it.
   ///
-  /// The one box is the whole point: a camera reaches the matrix through a
-  /// transmitter and a display through a receiver, and a drawing that shows
-  /// either of those is a drawing that has ALREADY made this connection. What
-  /// it does not tell you is which numbered socket it landed on, which is
-  /// exactly the thing the config states and the thing two people spell
-  /// differently — so a room whose drawing already says "this camera is on
-  /// the matrix" is not a room with a question to answer.
+  /// Two on a matrix — straight onto it, or through ONE box: a camera reaches
+  /// the matrix through a transmitter and a display through a receiver, and a
+  /// drawing that shows either of those is a drawing that has ALREADY made
+  /// this connection.
+  ///
+  /// Three when the display is standing in for the matrix, because there the
+  /// run has no matrix in the middle of it to be counted from: the huddle
+  /// space's wireless box goes transmitter, twisted pair, receiver and then
+  /// into the panel, which is three cables and two boxes.
+  final int hubReach = displayHub == null ? 2 : 3;
+
+  /// True when [nodeId] is already joined to the switcher, by any run of at
+  /// most [hubReach] cables.
+  ///
+  /// What such a drawing does not tell you is which numbered socket it landed
+  /// on, which is exactly the thing the config states and the thing two people
+  /// spell differently — so a room whose drawing already says "this camera is
+  /// on the matrix" is not a room with a question to answer.
   bool joinedToSwitcher(String nodeId) {
     if (nodeId == switcher.id) return true;
-    for (final c in provider.avCables) {
-      String? other;
-      if (c.fromNodeId == nodeId) other = c.toNodeId;
-      if (c.toNodeId == nodeId) other = c.fromNodeId;
-      if (other == null) continue;
-      if (other == switcher.id) return true;
-      // One hop: the transmitter or receiver in the middle.
-      for (final c2 in provider.avCables) {
-        if ((c2.fromNodeId == other && c2.toNodeId == switcher.id) ||
-            (c2.toNodeId == other && c2.fromNodeId == switcher.id)) {
-          return true;
-        }
+    final seen = {nodeId};
+    var edge = {nodeId};
+    for (int hop = 0; hop < hubReach && edge.isNotEmpty; hop++) {
+      final next = <String>{};
+      for (final c in provider.avCables) {
+        String? other;
+        if (edge.contains(c.fromNodeId)) other = c.toNodeId;
+        if (edge.contains(c.toNodeId)) other = c.fromNodeId;
+        if (other == null || !seen.add(other)) continue;
+        if (other == switcher.id) return true;
+        next.add(other);
       }
+      edge = next;
     }
     return false;
   }
@@ -921,15 +1046,26 @@ RoutingPlan planRoutingFromConfig(
   void routeSource(String key, AvNode source, {AvPort? fromPort}) {
     final value = setup[key]?.toString().trim() ?? '';
     if (value.isEmpty) return;
-    final switcherPort = portForIoValue(
-      switcher,
-      value,
-      wantOutput: false,
-      declaredInputs: declaredInputs,
-    );
+    // On a matrix the value is a number printed on the box; on a display
+    // standing in for one it is the socket's own name as well ('HDMI 2').
+    final switcherPort = displayHub == null
+        ? portForIoValue(
+            switcher,
+            value,
+            wantOutput: false,
+            declaredInputs: declaredInputs,
+          )
+        : portForDisplayInput(switcher, value);
     if (switcherPort == null) {
-      unresolved.add(UnroutedTie(key, value,
-          'No input on ${switcher.label} is labelled $value.'));
+      unresolved.add(UnroutedTie(
+          key,
+          value,
+          displayHub == null
+              ? 'No input on ${switcher.label} is labelled $value.'
+              : 'This room has no switcher, so $key is a socket on '
+                  '${switcher.label} — and it has no input called "$value". '
+                  'Its inputs are '
+                  '${_videoInputLabels(switcher).join(', ')}.'));
       return;
     }
     final out = fromPort ?? _sourceOutputPort(source);
@@ -970,6 +1106,30 @@ RoutingPlan planRoutingFromConfig(
           'not on ${switcher.label}, so it cannot also run to input $value. '
           'The drawing is left as it is — check which of the two is right.'));
       return;
+    }
+    // A SOCKET ON THE DISPLAY TAKES ONE LEAD. On a matrix the input the
+    // config names is the matrix's business — the drawing shows the run and
+    // the number says where it lands. On a display it is a socket on the back
+    // of a panel with two of them, and the meeting bar is usually already in
+    // one: `input_pc: HDMI 1` when the bar is on HDMI 1 is a disagreement
+    // between the config and the drawing, not a second cable into that
+    // socket. Anything already joined to this source is this same run, drawn
+    // before or drawn by this pass.
+    if (displayHub != null) {
+      final onHubSocket = feedsInto(switcher.id, switcherPort.id)
+          .where((f) => f.node != source.id && !joined(f.node, source.id))
+          .map((f) => nodesById[f.node]?.label ?? f.node)
+          .toSet();
+      if (onHubSocket.isNotEmpty) {
+        unresolved.add(UnroutedTie(
+            key,
+            value,
+            '${switcherPort.label} on ${switcher.label} already has '
+            '${onHubSocket.join(', ')} on it, so ${source.label} cannot go '
+            'there too. The drawing is left as it is — check which of the two '
+            'is right.'));
+        return;
+      }
     }
     // The other half of what the receiver rule fixes, and the more common:
     // the cameras land on DTP inputs and a camera has an HDMI socket. Twisted
@@ -1135,6 +1295,10 @@ RoutingPlan planRoutingFromConfig(
       routeSource('input_sub_switcher', sub);
     }
   }
+
+  // The program-audio number, read out here because the expansion bus below
+  // labels its link with it whether or not the destinations run.
+  final audioValue = setup['output_audio']?.toString().trim() ?? '';
 
   // --- the destinations ------------------------------------------------------
   //  The mirror image: find output N on the switcher, find the socket the far
@@ -1432,112 +1596,119 @@ RoutingPlan planRoutingFromConfig(
     );
   }
 
-  final projectorCount =
-      int.tryParse(setup['dev_projectors']?.toString().trim() ?? '') ?? 0;
+  // ONLY IN A ROOM WITH A MATRIX. The `output_*` keys are numbers on the
+  // switcher's OUTPUT side, and a display standing in for the switcher has no
+  // output side to number: the run stops at the panel. So a huddle space's
+  // destination keys are left alone rather than resolved against a box that
+  // cannot answer them — and no confidence monitor and no speaker pair is
+  // placed for a number that names nothing.
+  if (displayHub == null) {
+    final projectorCount =
+        int.tryParse(setup['dev_projectors']?.toString().trim() ?? '') ?? 0;
 
-  for (final rule in rules.destinationDevices) {
-    final value = setup[rule.configKey]?.toString().trim() ?? '';
-    if (value.isEmpty || value.toLowerCase() == 'none') continue;
-    final node = boxFor(rule.resolved);
-    if (node == null) {
-      // A display output for a display the room does not have. Worth saying
-      // out loud rather than reporting as a missing box: the number is dead
-      // config left behind when the room shrank, and it will go on looking
-      // like a second projector to everyone who reads the file.
-      final number = int.tryParse(
-              rule.target.substring(rule.target.lastIndexOf('_') + 1)) ??
-          0;
-      if (rule.target.startsWith('PROJECTORDEVICE_') &&
-          number > projectorCount &&
-          projectorCount > 0) {
-        unresolved.add(UnroutedTie(
-            rule.configKey,
-            value,
-            'This room has $projectorCount display'
-            '${projectorCount == 1 ? '' : 's'} (dev_projectors), so there is '
-            'no ${rule.target} for output $value to feed — the key is left '
-            'over and nothing is drawn for it.'));
-      } else {
-        unresolved.add(UnroutedTie(rule.configKey, value,
-            '${rule.target} is not on the canvas.'));
+    for (final rule in rules.destinationDevices) {
+      final value = setup[rule.configKey]?.toString().trim() ?? '';
+      if (value.isEmpty || value.toLowerCase() == 'none') continue;
+      final node = boxFor(rule.resolved);
+      if (node == null) {
+        // A display output for a display the room does not have. Worth saying
+        // out loud rather than reporting as a missing box: the number is dead
+        // config left behind when the room shrank, and it will go on looking
+        // like a second projector to everyone who reads the file.
+        final number = int.tryParse(
+                rule.target.substring(rule.target.lastIndexOf('_') + 1)) ??
+            0;
+        if (rule.target.startsWith('PROJECTORDEVICE_') &&
+            number > projectorCount &&
+            projectorCount > 0) {
+          unresolved.add(UnroutedTie(
+              rule.configKey,
+              value,
+              'This room has $projectorCount display'
+              '${projectorCount == 1 ? '' : 's'} (dev_projectors), so there is '
+              'no ${rule.target} for output $value to feed — the key is left '
+              'over and nothing is drawn for it.'));
+        } else {
+          unresolved.add(UnroutedTie(rule.configKey, value,
+              '${rule.target} is not on the canvas.'));
+        }
+        continue;
       }
-      continue;
+      // The display's OWN config says which socket the lead goes into. That is
+      // the fact this whole feature turns on: 'HDBaseT' on the projector block
+      // is not a preference, it is the connector somebody plugged into.
+      final block = config[node.id];
+      final declared =
+          (block is Map ? block['input']?.toString() : null)?.trim() ?? '';
+      AvPort? landing =
+          declared.isEmpty ? null : portForDeviceInput(node, declared);
+      if (declared.isNotEmpty && landing == null) {
+        unresolved.add(UnroutedTie(
+            '${node.id}.input',
+            declared,
+            '${node.label} has no connector called "$declared" — the cable is '
+            'drawn on its first video input instead.'));
+      }
+      routeDestination(rule.configKey, node, toPort: landing);
     }
-    // The display's OWN config says which socket the lead goes into. That is
-    // the fact this whole feature turns on: 'HDBaseT' on the projector block
-    // is not a preference, it is the connector somebody plugged into.
-    final block = config[node.id];
-    final declared =
-        (block is Map ? block['input']?.toString() : null)?.trim() ?? '';
-    AvPort? landing =
-        declared.isEmpty ? null : portForDeviceInput(node, declared);
-    if (declared.isNotEmpty && landing == null) {
-      unresolved.add(UnroutedTie(
-          '${node.id}.input',
-          declared,
-          '${node.label} has no connector called "$declared" — the cable is '
-          'drawn on its first video input instead.'));
-    }
-    routeDestination(rule.configKey, node, toPort: landing);
-  }
 
-  for (final rule in rules.destinationBoxes) {
-    final value = setup[rule.configKey]?.toString().trim() ?? '';
-    if (value.isEmpty ||
-        value.toLowerCase() == 'none' ||
-        dismissed(rule.configKey)) {
-      continue;
-    }
-    // Which connectors the tie may land on. The assisted-listening feed is
-    // line audio and everything else here is video, and a rule says which
-    // rather than the key being special-cased by name.
-    final signals = flowSignalsFromName(rule.signals);
-    // Already cabled off that socket — see [switcherSocketTaken]. This is how
-    // a room stamped from a room type grew a SECOND confidence monitor: the
-    // preset draws one off HDMI OUT 2 and calls it what it likes, and the box
-    // this pass would place is recognised by model, so a monitor named
-    // differently was not found and another one was bought.
-    if (switcherSocketTaken(value, wantOutput: true, signals: signals)) {
-      alreadyDrawn++;
-      continue;
-    }
-    final existing =
-        _existingByModelOrLabel(provider, [rule.model], rule.configKey);
-    final node = existing ??
-        place(_specOf(rule), avAutoNodeId(rule.configKey), onLeft: false);
-    routeDestination(rule.configKey, node, signals: signals);
-  }
-
-  // PROGRAM AUDIO.
-  //
-  // In a room with a DSP, `output_audio` is the LINK on the switcher side —
-  // the number of the tie that feeds the DSP over the expansion bus, not a
-  // discrete analog output somebody runs a lead from. So nothing is drawn
-  // from it here: the pair is joined by their DMP EXP connectors below, which
-  // is the one cable that actually exists between them.
-  //
-  // Without a DSP the same key means what it always did: the amplifier is
-  // inside the switcher (an SA or MA build) and the run is speaker level to
-  // the ceiling.
-  final audioValue = setup['output_audio']?.toString().trim() ?? '';
-  if (audioValue.isNotEmpty &&
-      audioValue.toLowerCase() != 'none' &&
-      nodesById['DSPDEVICE_1'] == null) {
-    // The amplifier output already has a speaker run on it: a preset that
-    // ships an SM 28 pair is a room with speakers, whatever they are called.
-    if (!switcherSocketTaken(audioValue,
-        wantOutput: true, signals: _speakerAudio)) {
-      final existing = _existingByModelOrLabel(
-          provider, const ['Ceiling Speakers'], 'output_audio');
+    for (final rule in rules.destinationBoxes) {
+      final value = setup[rule.configKey]?.toString().trim() ?? '';
+      if (value.isEmpty ||
+          value.toLowerCase() == 'none' ||
+          dismissed(rule.configKey)) {
+        continue;
+      }
+      // Which connectors the tie may land on. The assisted-listening feed is
+      // line audio and everything else here is video, and a rule says which
+      // rather than the key being special-cased by name.
+      final signals = flowSignalsFromName(rule.signals);
+      // Already cabled off that socket — see [switcherSocketTaken]. This is how
+      // a room stamped from a room type grew a SECOND confidence monitor: the
+      // preset draws one off HDMI OUT 2 and calls it what it likes, and the box
+      // this pass would place is recognised by model, so a monitor named
+      // differently was not found and another one was bought.
+      if (switcherSocketTaken(value, wantOutput: true, signals: signals)) {
+        alreadyDrawn++;
+        continue;
+      }
+      final existing =
+          _existingByModelOrLabel(provider, [rule.model], rule.configKey);
       final node = existing ??
-          place(
-              const _SourceSpec(
-                  'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
-              avAutoNodeId('output_audio'),
-              onLeft: false);
-      routeDestination('output_audio', node, signals: _speakerAudio);
-    } else {
-      alreadyDrawn++;
+          place(_specOf(rule), avAutoNodeId(rule.configKey), onLeft: false);
+      routeDestination(rule.configKey, node, signals: signals);
+    }
+
+    // PROGRAM AUDIO.
+    //
+    // In a room with a DSP, `output_audio` is the LINK on the switcher side —
+    // the number of the tie that feeds the DSP over the expansion bus, not a
+    // discrete analog output somebody runs a lead from. So nothing is drawn
+    // from it here: the pair is joined by their DMP EXP connectors below, which
+    // is the one cable that actually exists between them.
+    //
+    // Without a DSP the same key means what it always did: the amplifier is
+    // inside the switcher (an SA or MA build) and the run is speaker level to
+    // the ceiling.
+    if (audioValue.isNotEmpty &&
+        audioValue.toLowerCase() != 'none' &&
+        nodesById['DSPDEVICE_1'] == null) {
+      // The amplifier output already has a speaker run on it: a preset that
+      // ships an SM 28 pair is a room with speakers, whatever they are called.
+      if (!switcherSocketTaken(audioValue,
+          wantOutput: true, signals: _speakerAudio)) {
+        final existing = _existingByModelOrLabel(
+            provider, const ['Ceiling Speakers'], 'output_audio');
+        final node = existing ??
+            place(
+                const _SourceSpec(
+                    'Ceiling speakers', 'Ceiling Speakers', RoomZone.ceiling),
+                avAutoNodeId('output_audio'),
+                onLeft: false);
+        routeDestination('output_audio', node, signals: _speakerAudio);
+      } else {
+        alreadyDrawn++;
+      }
     }
   }
 
@@ -1586,20 +1757,23 @@ RoutingPlan planRoutingFromConfig(
 
   // Capture: whichever box this room makes its USB feed with. A MediaPort in
   // one build and an AV Bridge in another, so the rule names the alternatives
-  // in the order they should be looked for.
-  for (final rule in rules.captureDestinations) {
-    final value = setup[rule.configKey]?.toString().trim() ?? '';
-    if (value.isEmpty || value.toLowerCase() == 'none') continue;
-    final node = boxFor(rule.resolved);
-    if (node == null) {
-      unresolved.add(UnroutedTie(
-          rule.configKey,
-          value,
-          'This room has none of ${rule.resolved.alternatives.join(', ')} on '
-          'the canvas for the capture feed to land on.'));
-      continue;
+  // in the order they should be looked for. A switcher output like the rest,
+  // so a room with no switcher has none of it.
+  if (displayHub == null) {
+    for (final rule in rules.captureDestinations) {
+      final value = setup[rule.configKey]?.toString().trim() ?? '';
+      if (value.isEmpty || value.toLowerCase() == 'none') continue;
+      final node = boxFor(rule.resolved);
+      if (node == null) {
+        unresolved.add(UnroutedTie(
+            rule.configKey,
+            value,
+            'This room has none of ${rule.resolved.alternatives.join(', ')} on '
+            'the canvas for the capture feed to land on.'));
+        continue;
+      }
+      routeDestination(rule.configKey, node);
     }
-    routeDestination(rule.configKey, node);
   }
 
   // --- the USB switchers ------------------------------------------------------
@@ -2050,8 +2224,10 @@ const RoutingResult _noRouting =
 ///   * a box already on the canvas is recognised, not duplicated;
 ///   * a cable already drawn between the same two connectors is left alone;
 ///   * a box somebody deleted stays deleted;
-///   * a room with no switcher on the canvas yet is left completely alone —
-///     there is nothing for a cable to run to.
+///   * a room whose switcher is not on the canvas yet is left completely
+///     alone — there is nothing for a cable to run to;
+///   * a room with no switcher AT ALL routes its sources onto the display
+///     instead, which is how a huddle space is wired.
 ///
 /// What it does NOT do is report. A number that resolves onto no connector is
 /// counted and dropped here; **Draw the routing from config** is still the way
