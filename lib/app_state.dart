@@ -7837,6 +7837,62 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// [name] with a mention of [oldModel] rewritten to [newModel], or [name]
+  /// unchanged when it does not mention it.
+  ///
+  /// People name a device after what it is: "Projector 1 - PowerLite L630U",
+  /// "Rack DSP — DMP 128 Plus". Swap the product and that name is a lie that
+  /// nothing else in the room contradicts — it goes on the schematic, on the
+  /// pack list, on the touch panel, and it is the name somebody reads out on
+  /// site while looking at a different box.
+  ///
+  /// Only the model part moves. "Projector 1 - " is what this room calls the
+  /// position, and the position has not changed.
+  ///
+  /// Case-insensitive, because a name is typed by a person and the catalog
+  /// string is not ('powerlite l630u' is the same box). Bounded on both sides
+  /// by a non-alphanumeric character, so a model that is a PREFIX of the one
+  /// in the name cannot eat half of it: swapping a device recorded as "L630"
+  /// must not turn "L630U" into "PT-MZ682BU8U".
+  static String renamedForModel(String name, String oldModel, String newModel) {
+    final needle = oldModel.trim();
+    final replacement = newModel.trim();
+    if (name.isEmpty || needle.isEmpty || replacement.isEmpty) return name;
+    if (needle.toLowerCase() == replacement.toLowerCase()) return name;
+    final pattern = RegExp(
+      '(?<![A-Za-z0-9])${RegExp.escape(needle)}(?![A-Za-z0-9])',
+      caseSensitive: false,
+    );
+    return name.replaceAll(pattern, replacement);
+  }
+
+  /// Rewrites [deviceKey]'s `name` when it names [oldModel], so the block is
+  /// called after the product it now holds. Returns the new name, or '' when
+  /// nothing was written.
+  ///
+  /// Called AFTER the model is set, deliberately: a module's own DEVICE_INFO
+  /// default may have supplied a name of its own on the way past, and that
+  /// name — already carrying the new model — has nothing left for this to
+  /// match, so the driver's answer wins without either having to know about
+  /// the other.
+  String renameDeviceForModel(
+    String deviceKey,
+    String oldModel,
+    String newModel,
+  ) {
+    final dev = roomConfig[deviceKey];
+    if (dev is! Map) return '';
+    final current = dev['name']?.toString() ?? '';
+    final renamed = renamedForModel(current, oldModel, newModel);
+    if (renamed == current) return '';
+    dev['name'] = renamed;
+    _forgetConversionOrigin(deviceKey, 'name');
+    AppLogger.logInfo(
+        "$deviceKey renamed '$current' -> '$renamed' with the model swap.");
+    notifyListeners();
+    return renamed;
+  }
+
   /// Sets 'model' and CLEARS 'module': the device is now a product no python
   /// driver claims, and nothing in the room can drive it.
   ///

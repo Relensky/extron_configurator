@@ -325,10 +325,13 @@ typedef ModelSwapResult = ({int carried, int dropped});
 
 /// Replaces the model under [node] with [template], in one go.
 ///
-/// The box keeps its name, its position, its rack slot and its place in the
-/// config — everything that is a fact about THIS ROOM. What comes off the
-/// catalog entry is what the product is: its connectors, its rack height, its
-/// power draw and its heat.
+/// The box keeps its position, its rack slot and its place in the config —
+/// everything that is a fact about THIS ROOM. What comes off the catalog entry
+/// is what the product is: its connectors, its rack height, its power draw and
+/// its heat.
+///
+/// Its NAME is kept too, except for the part of it that was the old model's
+/// name: see [AppStateProvider.renamedForModel].
 ///
 /// Cables already drawn are moved onto the new box's counterpart connectors by
 /// [remapPorts]; a run whose connector has no counterpart is removed, because
@@ -362,6 +365,17 @@ ModelSwapResult applyModelSwap(
   provider.updateAvNode(
     node.copyWith(
       model: template.model,
+      // A box named after the product it is — "Projector 1 - PowerLite L630U"
+      // — is named after the wrong product the moment the product changes,
+      // and that name is what the schematic, the pack list and the person on
+      // site all read. Only the model part moves; "Projector 1 - " is what
+      // this room calls the position, and the position has not changed. A
+      // label that never mentioned the model comes back untouched.
+      label: AppStateProvider.renamedForModel(
+        node.label,
+        node.model,
+        template.model,
+      ),
       ports: swapped,
       rackUnits: template.rackUnits,
       powerWatts: template.powerWatts,

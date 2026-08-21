@@ -107,12 +107,16 @@ void main() {
           'gui_full_room_name': 'Test Room',
           'dev_projectors': 2,
         },
+        // One named after the product, one not. People do both, and only
+        // the first has anything for a swap to correct.
         'PROJECTORDEVICE_1': {
+          'name': 'Projector 1 - Display 65',
           'model': 'Display 65',
           'module': 'modules.device.display_65',
           'ip_address': '10.1.1.51',
         },
         'PROJECTORDEVICE_2': {
+          'name': 'Rear display',
           'model': 'Display 65',
           'module': 'modules.device.display_65',
           'ip_address': '10.1.1.52',
@@ -141,7 +145,7 @@ void main() {
       p.addAvNode(
         AvNode(
           id: id,
-          label: 'Display $id',
+          label: (p.roomConfig[id] as Map)['name'] as String,
           model: 'Display 65',
           pos: Offset.zero,
           powerWatts: 120,
@@ -244,8 +248,6 @@ void main() {
       for (final id in ['PROJECTORDEVICE_1', 'PROJECTORDEVICE_2']) {
         final node = p.avNodeById(id)!;
         expect(node.model, 'Display 86');
-        expect(node.label, 'Display $id',
-            reason: 'the name is a fact about the room, not the product');
         // The physical facts come off the new entry, which is what makes the
         // power and heat reports right after a swap.
         expect(node.powerWatts, 220);
@@ -333,6 +335,35 @@ void main() {
       expect(p.avCost.priceOverrides['model:display 86'], isNull,
           reason: r'$800 was the price of a 65, not of whatever replaced it');
     });
+
+    testWidgets('a name that names the old product is corrected',
+        (tester) async {
+      final p = room();
+      await pump(tester, p);
+
+      await pick(tester, 'model:display 65', 'Display 86');
+
+      // Only the model part moves: "Projector 1 - " is what this room calls
+      // the position, and the position has not changed.
+      expect((p.roomConfig['PROJECTORDEVICE_1'] as Map)['name'],
+          'Projector 1 - Display 86');
+      expect(p.avNodeById('PROJECTORDEVICE_1')!.label,
+          'Projector 1 - Display 86',
+          reason: 'the drawing carries the same name onto the same box');
+    });
+
+    testWidgets('a name that never mentioned it is left alone',
+        (tester) async {
+      final p = room();
+      await pump(tester, p);
+
+      await pick(tester, 'model:display 65', 'Display 86');
+
+      expect((p.roomConfig['PROJECTORDEVICE_2'] as Map)['name'],
+          'Rear display');
+      expect(p.avNodeById('PROJECTORDEVICE_2')!.label, 'Rear display');
+    });
+
   });
 
   group('a model no driver claims', () {

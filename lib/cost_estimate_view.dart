@@ -1902,6 +1902,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     provider.setAvCostPrice(line.key, null);
 
     for (final key in controlKeys) {
+      // The block's OWN record of what it is, read before the setter below
+      // rewrites it — that is the name to look for in the device's name, and
+      // it is not always the model the estimate grouped on.
+      final was =
+          (provider.roomConfig[key] as Map)['model']?.toString().trim() ?? '';
       if (module.isEmpty) {
         // Nothing drives the new product. The model goes on the block and the
         // module comes OFF it: a block naming the old box's driver under the
@@ -1917,6 +1922,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         // them is not a reason to throw them away.
         provider.keepSettingsSwitchModule(key, picked.model);
       }
+      // "Projector 1 - PowerLite L630U" is the name on the schematic, on the
+      // pack list and on the touch panel, and after a swap it names a box the
+      // room no longer has. Only the model part of it moves, and only when it
+      // is there at all. Last, so a name the new module supplied on the way
+      // past wins over this.
+      provider.renameDeviceForModel(key, was, picked.model);
     }
 
     // --- the drawing --------------------------------------------------------

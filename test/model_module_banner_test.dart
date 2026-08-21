@@ -170,6 +170,74 @@ void main() {
     });
   });
 
+  group('naming a device after the product it is', () {
+    String renamed(String name, String from, String to) =>
+        AppStateProvider.renamedForModel(name, from, to);
+
+    test('the model part of the name moves, and nothing else', () {
+      expect(
+        renamed('Projector 1 - PowerLite L630U', 'PowerLite L630U',
+            'PT-MZ682BU8'),
+        'Projector 1 - PT-MZ682BU8',
+      );
+    });
+
+    test('however the person typed it', () {
+      // A name is typed by a person; the catalog string is not.
+      expect(
+        renamed('Projector 1 - powerlite l630u', 'PowerLite L630U',
+            'PT-MZ682BU8'),
+        'Projector 1 - PT-MZ682BU8',
+      );
+    });
+
+    test('a name that never mentioned the model is untouched', () {
+      expect(renamed('Rear display', 'PowerLite L630U', 'PT-MZ682BU8'),
+          'Rear display');
+    });
+
+    test('a model that is only a PREFIX of the one named is not a match', () {
+      // The one that would quietly corrupt a name: "L630" inside "L630U".
+      expect(renamed('Projector 1 - L630U', 'L630', 'PT-MZ682BU8'),
+          'Projector 1 - L630U');
+    });
+
+    test('every mention of it moves', () {
+      expect(
+        renamed('DMP 128 Plus (rack) / DMP 128 Plus', 'DMP 128 Plus',
+            'DMP 128 FlexPlus'),
+        'DMP 128 FlexPlus (rack) / DMP 128 FlexPlus',
+      );
+    });
+
+    test('nothing to go on leaves the name alone', () {
+      expect(renamed('Projector 1', '', 'PT-MZ682BU8'), 'Projector 1');
+      expect(renamed('Projector 1 - L630U', 'L630U', ''), 'Projector 1 - L630U');
+      expect(renamed('', 'L630U', 'PT-MZ682BU8'), '');
+    });
+
+    test('renameDeviceForModel writes it, and says when it did not', () {
+      final p = room({
+        'name': 'Projector 1 - PowerLite L630U',
+        'model': 'PowerLite L630U',
+        'module': '',
+      });
+      expect(
+        p.renameDeviceForModel(
+            'PROJECTORDEVICE_1', 'PowerLite L630U', 'PT-MZ682BU8'),
+        'Projector 1 - PT-MZ682BU8',
+      );
+      expect((p.roomConfig['PROJECTORDEVICE_1'] as Map)['name'],
+          'Projector 1 - PT-MZ682BU8');
+      // Nothing left to rewrite the second time round.
+      expect(
+        p.renameDeviceForModel(
+            'PROJECTORDEVICE_1', 'PowerLite L630U', 'PT-MZ682BU8'),
+        '',
+      );
+    });
+  });
+
   group('the rule itself', () {
     test('reads the config, so it survives the page it is drawn on', () {
       final p = room({'model': 'Display 86', 'module': ''});

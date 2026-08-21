@@ -423,6 +423,10 @@ records the old one:
   from the flow rather than stored
 - **the control side** — the config block the box came from — gets the model
   and the Python module that claims it
+- **the name**, where the name was the product: "Projector 1 - PowerLite L630U"
+  becomes "Projector 1 - PT-MZ682BU8". Only the model part moves — "Projector 1
+  - " is what the room calls that position, and the position hasn't changed —
+  and a name that never mentioned the model is left alone
 
 A line of quantity three swaps all three boxes and all three config blocks. Any
 price you had typed against the old model is cleared, because a figure
