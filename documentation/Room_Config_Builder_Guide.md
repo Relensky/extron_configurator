@@ -377,6 +377,14 @@ Two things it will tell you rather than quietly getting wrong:
 - devices with no control module, so a room isn't quoted as finished when part
   of it can't be driven
 
+**Swapping a unit** is the button on the right of every equipment row. The
+wrong box usually gets noticed here — the total is what people look at — so the
+fix is here too: pick the replacement out of the catalog and the drawn box
+becomes that product, connectors and rack height and power with it, and the
+runs already drawn move onto the matching sockets. A line of quantity three
+swaps all three. Any price you had typed against the old model is cleared,
+because a figure negotiated for one product isn't the price of another.
+
 ## Catalog
 
 The catalog is the department's price list and connector reference: per model,

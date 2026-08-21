@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'av_flow_routing.dart' show withOutletNames;
 import 'search_match.dart';
 
 /// ============================================================================
@@ -201,10 +202,16 @@ Future<AvDeviceTemplate?> pickCatalogModel(
   required String actionLabel,
   String? currentModel,
   String? note,
+
+  /// The slice of the catalog to offer. Defaults to everything active — the
+  /// canvas can put any entry under a box. The estimate narrows it to the
+  /// boxes, because a quote line for a switcher is not going to become a
+  /// spool of Cat6.
+  List<AvDeviceTemplate>? only,
 }) {
   final searchController = TextEditingController();
   AvDeviceTemplate? selected;
-  final entries = provider.avDeviceLibrary.active;
+  final entries = only ?? provider.avDeviceLibrary.active;
 
   return showDialog<AvDeviceTemplate>(
     context: context,
@@ -306,4 +313,95 @@ Future<AvDeviceTemplate?> pickCatalogModel(
       },
     ),
   );
+}
+
+
+/// ============================================================================
+///  PUTTING A DIFFERENT PRODUCT UNDER A BOX
+/// ============================================================================
+
+/// What a swap did to the runs already drawn on the box.
+typedef ModelSwapResult = ({int carried, int dropped});
+
+/// Replaces the model under [node] with [template], in one go.
+///
+/// The box keeps its name, its position, its rack slot and its place in the
+/// config — everything that is a fact about THIS ROOM. What comes off the
+/// catalog entry is what the product is: its connectors, its rack height, its
+/// power draw and its heat.
+///
+/// Cables already drawn are moved onto the new box's counterpart connectors by
+/// [remapPorts]; a run whose connector has no counterpart is removed, because
+/// leaving it pointing at a socket that no longer exists is a run the canvas
+/// silently stops drawing. The count of both comes back so the caller can say
+/// what happened rather than making somebody notice.
+///
+/// The node editor on the Signal Flow tab does the same thing the long way
+/// round — it has to defer, because the connectors can be hand-edited in the
+/// same dialog before Save. Anywhere the swap is the whole edit, this is it.
+ModelSwapResult applyModelSwap(
+  AppStateProvider provider,
+  AvNode node,
+  AvDeviceTemplate template, {
+
+  /// False for the second and later boxes of a multi-unit swap, so the whole
+  /// swap is one press of Undo rather than one per box.
+  bool recordUndo = true,
+}) {
+  final swapped = withOutletNames(
+    withPowerInlet(template.ports, template.powerInput),
+    node.id,
+    provider.roomConfig,
+  );
+  final remap = remapPorts(node.ports, swapped);
+
+  // Only when the model DECIDES it — a mains box is plugged in wherever this
+  // room plugs it in, and that is not the catalog's business.
+  final implied = powerSourceForInput(template.powerInput);
+
+  provider.updateAvNode(
+    node.copyWith(
+      model: template.model,
+      ports: swapped,
+      rackUnits: template.rackUnits,
+      powerWatts: template.powerWatts,
+      btuPerHour: template.btuPerHour,
+      powerSource: implied == PowerSource.unspecified
+          ? node.powerSource
+          : implied,
+    ),
+    recordUndo: recordUndo,
+  );
+
+  var carried = 0;
+  for (final c in List<AvCable>.from(provider.avCables)) {
+    final fromMoved = c.fromNodeId == node.id ? remap[c.fromPortId] : null;
+    final toMoved = c.toNodeId == node.id ? remap[c.toPortId] : null;
+    if (fromMoved == null && toMoved == null) continue;
+    provider.updateAvCable(
+      c.copyWith(fromPortId: fromMoved, toPortId: toMoved),
+      recordUndo: false,
+    );
+    carried++;
+  }
+
+  // Whatever had nowhere to go. Removed rather than left behind: a cable
+  // pointing at a connector that is gone stops being drawn on the next build
+  // anyway, and a quiet disappearance is the thing worth avoiding.
+  final orphanedPorts = node.ports
+      .map((p) => p.id)
+      .where((id) => !remap.containsKey(id))
+      .toSet();
+  final orphaned = provider.avCables
+      .where(
+        (c) =>
+            (c.fromNodeId == node.id && orphanedPorts.contains(c.fromPortId)) ||
+            (c.toNodeId == node.id && orphanedPorts.contains(c.toPortId)),
+      )
+      .toList();
+  for (final c in orphaned) {
+    provider.removeAvCable(c.id);
+  }
+
+  return (carried: carried, dropped: orphaned.length);
 }

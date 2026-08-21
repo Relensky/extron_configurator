@@ -12,6 +12,7 @@ import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart' show driverGapSections;
 import 'av_flow_routing.dart';
+import 'av_flow_swap_dialogs.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'av_port_editor.dart' show avRowIcon;
 import 'av_rack_view.dart' show iconForRackItem;
@@ -219,7 +220,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final cards = <Widget>[
               _header(context, provider, estimate, model),
               const SizedBox(height: 12),
-              _equipmentCard(context, provider, estimate),
+              _equipmentCard(context, provider, estimate, model),
               const SizedBox(height: 12),
               _hardwareCard(context, provider, estimate),
               const SizedBox(height: 12),
@@ -558,6 +559,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     BuildContext context,
     AppStateProvider provider,
     CostEstimate estimate,
+    AvFlowModel model,
   ) {
     final theme = Theme.of(context);
     final currency = estimate.currency;
@@ -612,8 +614,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               _Col.field('Unit price', gap: 12, width: 130, numeric: true),
               _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
               _Col('Price from', gap: 12, width: 92),
-              // Two row buttons, 40 wide as they render.
-              _Col('', width: 80),
+              // Three row buttons, 40 wide as they render.
+              _Col('', width: 120),
             ]),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
@@ -738,6 +740,35 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               color: line.source == PriceSource.none
                                   ? theme.colorScheme.error
                                   : theme.disabledColor,
+                            ),
+                          ),
+                        ),
+                        // WRONG BOX ON THE QUOTE. The commonest edit an
+                        // estimate gets and the one that had to be made
+                        // somewhere else: a display comes back at the wrong
+                        // size, a switcher is one input short, the customer
+                        // asks what the cheaper matrix costs. Swapping here
+                        // puts the new product under the drawn box — its
+                        // connectors, its rack height, its power and its
+                        // price — so the diagram, the rack and the total all
+                        // move together instead of the quote quietly
+                        // disagreeing with the drawing.
+                        KeyedSubtree(
+                          key: ValueKey('eqp_swap_${line.key}'),
+                          child: avRowIcon(
+                            Icons.find_replace,
+                            extra != null
+                                ? 'Quote a different part on this line'
+                                : line.qty > 1
+                                ? 'Replace all ${line.qty.toStringAsFixed(0)} '
+                                      'with another model'
+                                : 'Replace this with another model',
+                            () => _swapUnit(
+                              context,
+                              provider,
+                              line,
+                              model,
+                              extra: extra,
                             ),
                           ),
                         ),
@@ -1695,6 +1726,142 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           qty: qty,
         );
     }
+  }
+
+  // --- swapping the product on a line --------------------------------------
+
+  /// Replaces the part quoted on one equipment line with another catalog
+  /// model.
+  ///
+  /// The estimate is where the wrong box usually gets noticed — the total is
+  /// what somebody looks at, and "that display is too dear" is a pricing
+  /// sentence. Until now the fix lived on the Signal Flow tab: find the box on
+  /// the canvas, open it, swap it, come back. So people retyped a price over
+  /// the row instead, and the quote said one product while the drawing,
+  /// the rack elevation and the cable schedule said another.
+  ///
+  /// Two kinds of line, one button:
+  ///
+  ///   * A DRAWN device (or several of the same model — the row is one line of
+  ///     quantity N) has the new product put under every box in the group, by
+  ///     [applyModelSwap]: new connectors with the runs carried across, new
+  ///     rack height, new power and heat.
+  ///   * A line quoted WITHOUT being drawn just re-points at a different
+  ///     catalog entry.
+  ///
+  /// Either way the room price typed on the old line goes. A figure negotiated
+  /// for a DTP CrossPoint 84 is not the price of a 108, and carrying it across
+  /// would leave the new product silently quoted at the old product's price —
+  /// the one mistake this button exists to stop.
+  Future<void> _swapUnit(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line,
+    AvFlowModel model, {
+    CostLineItem? extra,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    // The boxes on the drawing this row counts. Regrouped rather than carried
+    // on the line: the estimate reduces a group to a quantity, and a swap has
+    // to reach every device behind it.
+    final group = extra == null
+        ? groupDevices(model).where((g) => g.key == line.key).firstOrNull
+        : null;
+    if (extra == null && group == null) return;
+
+    final qty = group?.qty ?? 1;
+    final picked = await pickCatalogModel(
+      context,
+      provider,
+      title: 'Replace ${line.description}',
+      actionLabel: 'Replace',
+      currentModel: line.model,
+      only: provider.avDeviceLibrary.equipment,
+      note: extra != null
+          ? 'This line is quoted but not drawn, so only the line changes — '
+                'its name, its part number and its price.'
+          : qty > 1
+          ? 'All $qty of these are replaced. The connectors come with the new '
+                'model, and cables are carried over to the matching connector '
+                'wherever there is one.'
+          : 'The connectors come with it. Cables are carried over to the '
+                'matching connector on the new box wherever there is one.',
+    );
+    if (picked == null) return;
+    if (picked.model.trim().toLowerCase() == line.model.trim().toLowerCase()) {
+      return;
+    }
+
+    // The price typed on the old part, dropped either way — see above. Held
+    // on to only so the message can say it happened.
+    final hadOverride = provider.avCost.priceOverrides[line.key] != null;
+    provider.setAvCostPrice(line.key, null);
+
+    if (extra != null) {
+      provider.updateAvCostExtraEquipment(
+        extra.copyWith(
+          catalogModel: picked.model,
+          category: picked.category,
+          // The name follows the part unless somebody wrote their own on the
+          // line — "Owner-furnished display in 2201" is about the room, and
+          // survives the part under it changing.
+          description:
+              extra.description.trim().isEmpty ||
+                  extra.description.trim().toLowerCase() ==
+                      extra.catalogModel.trim().toLowerCase()
+              ? picked.model
+              : extra.description,
+          // A figure typed against the OLD part, in the line's own fallback
+          // slot. Same reasoning as the override.
+          unitPrice: 0,
+        ),
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Line now quotes ${picked.model}'
+            '${hadOverride ? ', at the catalog price — the price typed on '
+                      'the old part was for the old part' : ''}.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Every box behind the row. The first press records the undo snapshot and
+    // the rest ride on it, so the whole swap comes back in one Undo.
+    var carried = 0;
+    var dropped = 0;
+    var first = true;
+    for (final node in group!.nodes) {
+      final result = applyModelSwap(provider, node, picked, recordUndo: first);
+      first = false;
+      carried += result.carried;
+      dropped += result.dropped;
+    }
+
+    final said = [
+      qty > 1
+          ? '$qty × ${line.model.isEmpty ? line.description : line.model} '
+                'replaced with ${picked.model}'
+          : '${line.description} is now a ${picked.model}',
+      if (carried > 0)
+        '$carried cable${carried == 1 ? '' : 's'} carried across',
+      if (dropped > 0)
+        '$dropped cable${dropped == 1 ? '' : 's'} dropped — the new model has '
+            'no matching connector, so draw '
+            '${dropped == 1 ? 'it' : 'them'} again on the Signal Flow page',
+      if (hadOverride) 'the room price typed on the old model was cleared',
+    ].join('. ');
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$said.'),
+        duration: dropped > 0
+            ? const Duration(seconds: 8)
+            : const Duration(seconds: 4),
+      ),
+    );
   }
 
   // --- turning a typed line into a catalog entry ---------------------------
