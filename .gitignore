@@ -49,3 +49,15 @@ deployment_app_info_log.txt
 # Local application settings (machine-specific paths; auto-created on launch)
 app_config.json
 app_config.json.invalid
+
+# A Windows build copied into the repo root. `flutter build windows` writes its
+# bundle — the exe, the Flutter and plugin DLLs, and a data/ folder of assets —
+# and dropping that next to the source once put 30 MB of build output under
+# version control, where nothing said it was stale and every rebuild was a
+# binary diff. Root-anchored on purpose: the app's own data files live at the
+# root too (av_devices.json, ui_schema.json, base_costs.json...) and are not
+# this.
+/*.exe
+/*.dll
+/native_assets.json
+/data/

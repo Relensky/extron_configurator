@@ -377,13 +377,42 @@ Two things it will tell you rather than quietly getting wrong:
 - devices with no control module, so a room isn't quoted as finished when part
   of it can't be driven
 
-**Swapping a unit** is the button on the right of every equipment row. The
-wrong box usually gets noticed here — the total is what people look at — so the
-fix is here too: pick the replacement out of the catalog and the drawn box
-becomes that product, connectors and rack height and power with it, and the
-runs already drawn move onto the matching sockets. A line of quantity three
-swaps all three. Any price you had typed against the old model is cleared,
-because a figure negotiated for one product isn't the price of another.
+### Swapping a unit
+
+The wrong box usually gets noticed here — the total is what people look at — so
+the fix is here too. The **replace** button on the right of an equipment row
+picks the new product out of the catalog and puts it everywhere the room
+records the old one:
+
+- **the cost line** reprices off the new catalog entry
+- **the signal flow** gets the new product under every box the line counts —
+  connectors, rack height, power and heat — and the runs already drawn move
+  onto the matching connectors
+- **the cabling schematic and cable schedule** follow, because they're built
+  from the flow rather than stored
+- **the control side** — the config block the box came from — gets the model
+  and the Python module that claims it
+
+A line of quantity three swaps all three boxes and all three config blocks. Any
+price you had typed against the old model is cleared, because a figure
+negotiated for one product isn't the price of another.
+
+It goes through silently when there's nothing to decide. It stops to ask when
+there is:
+
+- **no module claims the new model.** You can still go ahead — a part often
+  arrives before its driver does — but the config block keeps the module it has
+  now, which no longer matches the model on it, so the warning says so. Set the
+  module by hand on the **Devices** tab, or rename the model to one a driver
+  claims.
+- **the module changes and this room's settings disagree with its defaults.**
+  The same question the Devices tab asks when you pick a model there, with the
+  same two answers: keep the room's settings (the IP address and port are facts
+  about the install) or apply the new module's defaults.
+
+Cancel means nothing happened — you're asked before the first write. A run the
+new model has no connector for is removed rather than left pointing at nothing,
+and the message says how many, so you can draw them again on **Signal Flow**.
 
 ## Catalog
 

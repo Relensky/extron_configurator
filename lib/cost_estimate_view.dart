@@ -49,6 +49,13 @@ import 'xlsx_writer.dart';
 /// the estimate the result lands on, and nothing else.
 enum _ExtraPart { equipment, cable, hardware, misc }
 
+/// What a swap does to the control block behind a drawn box, once the module
+/// under it changes: keep what this room has set (a conversion — the IP
+/// address and the port are facts about the install) or take the new module's
+/// DEVICE_INFO defaults (a device being specified fresh). The same two answers
+/// the Devices tab offers when a model is picked there.
+enum _SwapControl { keepSettings, applyDefaults }
+
 class CostEstimateView extends StatefulWidget {
   /// The diagram to price. Null means "read it from the provider", which is
   /// what the tab does; the parameter is kept so a caller that has already
@@ -1731,7 +1738,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   // --- swapping the product on a line --------------------------------------
 
   /// Replaces the part quoted on one equipment line with another catalog
-  /// model.
+  /// model, everywhere the room records it.
   ///
   /// The estimate is where the wrong box usually gets noticed — the total is
   /// what somebody looks at, and "that display is too dear" is a pricing
@@ -1740,14 +1747,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// the row instead, and the quote said one product while the drawing,
   /// the rack elevation and the cable schedule said another.
   ///
-  /// Two kinds of line, one button:
+  /// ONE SWAP, FOUR PLACES. A model is not a fact about the estimate, it is a
+  /// fact about the room, and every view of the room has to agree:
   ///
-  ///   * A DRAWN device (or several of the same model — the row is one line of
-  ///     quantity N) has the new product put under every box in the group, by
-  ///     [applyModelSwap]: new connectors with the runs carried across, new
-  ///     rack height, new power and heat.
-  ///   * A line quoted WITHOUT being drawn just re-points at a different
-  ///     catalog entry.
+  ///   * THE COST LINE reprices off the new entry.
+  ///   * THE SIGNAL FLOW gets the new product under every box the line counts
+  ///     — connectors, rack height, power and heat — with the runs already
+  ///     drawn carried onto the matching connectors ([applyModelSwap]).
+  ///   * THE CABLING SCHEMATIC follows, because it is built from the flow
+  ///     rather than stored: the runs it draws are the runs that survived.
+  ///   * THE CONTROL SIDE — the config block the box came from — gets the
+  ///     model, and the Python module that claims it. A drawing that says
+  ///     IN1804 over a config block still holding the SW4's driver is a room
+  ///     that gets built one way and commissioned another.
   ///
   /// Either way the room price typed on the old line goes. A figure negotiated
   /// for a DTP CrossPoint 84 is not the price of a 108, and carrying it across
@@ -1781,23 +1793,28 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           ? 'This line is quoted but not drawn, so only the line changes — '
                 'its name, its part number and its price.'
           : qty > 1
-          ? 'All $qty of these are replaced. The connectors come with the new '
-                'model, and cables are carried over to the matching connector '
+          ? 'All $qty of these are replaced, on the drawing and in the room '
+                'config. Cables are carried over to the matching connector '
                 'wherever there is one.'
-          : 'The connectors come with it. Cables are carried over to the '
-                'matching connector on the new box wherever there is one.',
+          : 'The connectors come with it, the room config follows, and cables '
+                'are carried over to the matching connector wherever there is '
+                'one.',
     );
     if (picked == null) return;
     if (picked.model.trim().toLowerCase() == line.model.trim().toLowerCase()) {
       return;
     }
 
+    // The Python driver that claims the new model, and '' when none does —
+    // the warning the confirmation below exists for.
+    final module = provider.moduleForModel(picked.model);
+
     // The price typed on the old part, dropped either way — see above. Held
     // on to only so the message can say it happened.
     final hadOverride = provider.avCost.priceOverrides[line.key] != null;
-    provider.setAvCostPrice(line.key, null);
 
     if (extra != null) {
+      provider.setAvCostPrice(line.key, null);
       provider.updateAvCostExtraEquipment(
         extra.copyWith(
           catalogModel: picked.model,
@@ -1816,24 +1833,92 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           unitPrice: 0,
         ),
       );
+      // No box and no config block, so nothing to drive and nothing to
+      // rewrite — but a quote for a model no driver claims is still worth
+      // hearing about before it turns into a purchase order.
+      final said = [
+        'Line now quotes ${picked.model}',
+        if (hadOverride) 'the price typed on the old part was for the old part',
+        if (module.isEmpty)
+          'no control module claims it — it can be quoted, but nothing can '
+              'drive it yet',
+      ].join('. ');
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            'Line now quotes ${picked.model}'
-            '${hadOverride ? ', at the catalog price — the price typed on '
-                      'the old part was for the old part' : ''}.',
-          ),
+          content: Text('$said.'),
+          duration: module.isEmpty
+              ? const Duration(seconds: 8)
+              : const Duration(seconds: 4),
         ),
       );
       return;
     }
 
-    // Every box behind the row. The first press records the undo snapshot and
-    // the rest ride on it, so the whole swap comes back in one Undo.
+    // --- the control side ---------------------------------------------------
+    //  Which of these boxes the control system actually knows about. A node
+    //  seeded from the config carries the config's own section key as its id,
+    //  so the two line up without anything having to be stored to link them.
+    final configured = activeDeviceKeysIn(
+      provider.roomConfig,
+      provider.uiSchema.deviceCountMap,
+    ).toSet();
+    final controlKeys = [
+      for (final node in group!.nodes)
+        if (configured.contains(node.id)) node.id,
+    ];
+    // What picking this model would do to the first of those blocks: which
+    // module it lands on, and which of its settings disagree with that
+    // module's defaults. The same question the Devices tab asks, asked here so
+    // the answer is the same one.
+    final preview = controlKeys.isEmpty
+        ? null
+        : provider.previewModelSelection(controlKeys.first, picked.model);
+
+    // Silent when there is nothing to decide and nothing to warn about. It
+    // opens when the answer matters: no driver claims the new model, or the
+    // device moves to a different module whose defaults disagree with what
+    // this room has set.
+    var choice = _SwapControl.keepSettings;
+    if (module.isEmpty ||
+        (preview != null &&
+            preview.moduleChanged &&
+            preview.diffs.isNotEmpty)) {
+      if (!context.mounted) return;
+      final answer = await _confirmSwapEffects(
+        context,
+        fromModel: line.model.isEmpty ? line.description : line.model,
+        toModel: picked.model,
+        boxes: qty,
+        controlKeys: controlKeys,
+        module: module,
+        preview: preview,
+      );
+      // Nothing has been written yet, so cancel really does mean nothing
+      // happened — the price override is cleared below, after this.
+      if (answer == null) return;
+      choice = answer;
+    }
+
+    provider.setAvCostPrice(line.key, null);
+
+    for (final key in controlKeys) {
+      if (choice == _SwapControl.applyDefaults) {
+        provider.applyModuleDefaults(key, picked.model);
+      } else {
+        // Model and module only. An IP address, a port and a control ID are
+        // facts about this room's install, and a swap of the box in front of
+        // them is not a reason to throw them away.
+        provider.keepSettingsSwitchModule(key, picked.model);
+      }
+    }
+
+    // --- the drawing --------------------------------------------------------
+    //  Every box behind the row. The first press records the undo snapshot and
+    //  the rest ride on it, so the whole swap comes back in one Undo.
     var carried = 0;
     var dropped = 0;
     var first = true;
-    for (final node in group!.nodes) {
+    for (final node in group.nodes) {
       final result = applyModelSwap(provider, node, picked, recordUndo: first);
       first = false;
       carried += result.carried;
@@ -1845,24 +1930,234 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           ? '$qty × ${line.model.isEmpty ? line.description : line.model} '
                 'replaced with ${picked.model}'
           : '${line.description} is now a ${picked.model}',
-      if (carried > 0)
-        '$carried cable${carried == 1 ? '' : 's'} carried across',
+      if (carried > 0) '$carried cable${carried == 1 ? '' : 's'} carried across',
       if (dropped > 0)
         '$dropped cable${dropped == 1 ? '' : 's'} dropped — the new model has '
             'no matching connector, so draw '
             '${dropped == 1 ? 'it' : 'them'} again on the Signal Flow page',
+      if (controlKeys.isNotEmpty && module.isNotEmpty)
+        '${controlKeys.length} control block'
+            '${controlKeys.length == 1 ? '' : 's'} moved to $module'
+            '${choice == _SwapControl.applyDefaults ? ' with its defaults' : ''}',
+      if (controlKeys.isNotEmpty && module.isEmpty)
+        'no module claims ${picked.model}, so the control side still needs '
+            'one — set it on the Devices tab',
       if (hadOverride) 'the room price typed on the old model was cleared',
     ].join('. ');
 
     messenger.showSnackBar(
       SnackBar(
         content: Text('$said.'),
-        duration: dropped > 0
+        duration: dropped > 0 || module.isEmpty
             ? const Duration(seconds: 8)
             : const Duration(seconds: 4),
       ),
     );
   }
+
+  /// Says what a swap is about to change, and asks the one question that has
+  /// an answer worth having.
+  ///
+  /// Two reasons it opens, and they are the two that cost money:
+  ///
+  ///   * NO MODULE CLAIMS THE NEW MODEL. The room can be quoted and drawn
+  ///     around a box the control system cannot drive, and it should be
+  ///     possible — a part often arrives before its driver does — but not by
+  ///     accident. Worse when the block already HAS a module: it keeps the old
+  ///     one, which now names a driver for a device that is no longer there,
+  ///     and a config that looks complete is the one nobody re-checks.
+  ///   * THE MODULE CHANGES AND THE SETTINGS DISAGREE WITH IT. Exactly the
+  ///     question the Devices tab asks when a model is picked there, asked the
+  ///     same way and answered by the same two provider calls, so a swap made
+  ///     here and a model picked there leave the config in the same state.
+  ///
+  /// Null means cancel, and cancel means nothing has happened yet — this is
+  /// asked before the first write.
+  Future<_SwapControl?> _confirmSwapEffects(
+    BuildContext context, {
+    required String fromModel,
+    required String toModel,
+    required int boxes,
+    required List<String> controlKeys,
+    required String module,
+    required ModelChangePreview? preview,
+  }) {
+    final theme = Theme.of(context);
+    final asking =
+        preview != null && preview.moduleChanged && preview.diffs.isNotEmpty;
+
+    Widget bullet(IconData icon, String text) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: theme.disabledColor),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+
+    return showDialog<_SwapControl>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Replace $fromModel with $toModel'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                bullet(
+                  Icons.developer_board,
+                  '$boxes box${boxes == 1 ? '' : 'es'} on the signal flow take '
+                      "$toModel's connectors, rack height, power and heat. "
+                      'Cables move to the matching connectors; any with no '
+                      'counterpart are removed.',
+                ),
+                bullet(
+                  Icons.cable,
+                  'The cabling schematic and the cable schedule are built from '
+                      'the flow, so they redraw from what is left.',
+                ),
+                if (controlKeys.isNotEmpty)
+                  bullet(
+                    Icons.settings_input_component,
+                    '${controlKeys.length} control block'
+                        '${controlKeys.length == 1 ? '' : 's'} '
+                        '(${controlKeys.join(', ')}) '
+                        '${controlKeys.length == 1 ? 'is' : 'are'} set to '
+                        '$toModel${module.isEmpty ? '' : ', on $module'}.',
+                  )
+                else
+                  bullet(
+                    Icons.settings_input_component,
+                    'Nothing on the control side: '
+                        '${boxes == 1 ? 'this box was' : 'these boxes were'} '
+                        'added to the drawing by hand rather than coming from '
+                        'the room config.',
+                  ),
+                if (module.isEmpty) ...[
+                  const SizedBox(height: 10),
+                  // THE WARNING. Its own panel rather than another bullet:
+                  // this is the one thing on the dialog somebody has to have
+                  // read before pressing the button.
+                  Container(
+                    key: const ValueKey('swap_no_module_warning'),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.errorContainer.withValues(
+                        alpha: 0.5,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 20,
+                          color: theme.colorScheme.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'No control module claims $toModel',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                controlKeys.isEmpty
+                                    ? 'It can be quoted and drawn, but no '
+                                          'Python driver under the modules '
+                                          'path drives it — so nothing can '
+                                          'control it until one does.'
+                                    : 'The block keeps whatever module it has '
+                                          'now, which no longer matches the '
+                                          'model on it. The room will not '
+                                          'commission until a driver claims '
+                                          '$toModel, or you set the module by '
+                                          'hand on the Devices tab.',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (asking) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    '${preview.diffs.length} setting'
+                    '${preview.diffs.length == 1 ? '' : 's'} on '
+                    '${controlKeys.first} differ from '
+                    "${preview.newModule}'s defaults"
+                    '${controlKeys.length > 1 ? ' — the same answer is applied to all ${controlKeys.length}' : ''}:',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final d in preview.diffs)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Text(
+                                '${d.key}:  ${_shownValue(d.current)}'
+                                '  →  ${_shownValue(d.moduleDefault)}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('swap_cancel'),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          if (asking)
+            TextButton(
+              key: const ValueKey('swap_keep_settings'),
+              onPressed: () => Navigator.of(ctx).pop(_SwapControl.keepSettings),
+              child: const Text('Keep room settings'),
+            ),
+          ElevatedButton(
+            key: const ValueKey('swap_apply'),
+            onPressed: () => Navigator.of(ctx).pop(
+              asking ? _SwapControl.applyDefaults : _SwapControl.keepSettings,
+            ),
+            child: Text(asking ? 'Apply module defaults' : 'Replace'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A config value as the swap dialog prints it, with the empty ones named
+  /// rather than left as a gap somebody has to interpret.
+  static String _shownValue(dynamic v) =>
+      (v == null || v == '') ? '(blank)' : v.toString();
 
   // --- turning a typed line into a catalog entry ---------------------------
 
