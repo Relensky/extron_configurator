@@ -61,17 +61,21 @@ enum _SwapControl { keepSettings, applyDefaults }
 /// The equipment table's columns. Declared once and read by both the caption
 /// row and every data row — see [_CostEstimateViewState._gridRow].
 const List<_Col> _kEquipmentCols = [
-  // MIXED COLUMNS. A device off the diagram prints its name and
-  // its count as plain text; a line added here has a box for
-  // both. Both cells carry the box's inset (see [_CellText]), so
-  // the caption sits over either kind and the two kinds of row
-  // line up with each other.
+  // MIXED COLUMNS. A device off the diagram prints its name and its count as
+  // plain text; a line added here has a box for both. Both cells carry the
+  // box's inset (see [_CellText]), so the caption sits over either kind and
+  // the two kinds of row line up with each other.
   _Col.field('Device', flex: 3),
   _Col('Model', flex: 2),
-  _Col.field('Qty', width: 60, numeric: true),
-  _Col.field('Unit price', gap: 12, width: 130, numeric: true),
-  _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-  _Col('Price from', gap: 12, width: 92),
+  // DRAWN, SPARES, TOTAL — the same three the cabling table has, for the same
+  // reason. The drawing says how many the room has; a job often buys one more
+  // than that, and the spare is real money no drawing will ever account for.
+  _Col.field('Qty', width: 56, numeric: true),
+  _Col.field('Spares', gap: 8, width: 66, numeric: true),
+  _Col('Total', gap: 8, width: 52, align: TextAlign.right),
+  _Col.field('Unit price', gap: 12, width: 120, numeric: true),
+  _Col('Extended', gap: 12, width: 106, align: TextAlign.right),
+  _Col('Price from', gap: 8, width: 88),
   // Four row buttons, 40 wide as they render.
   _Col('', width: 160),
 ];
@@ -710,6 +714,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   final extra = provider.avCost.extraEquipment
                       .where((i) => i.id == line.key)
                       .firstOrNull;
+                  // The catalog entry this row is priced from, or '' when it
+                  // is not priced from one — which is what decides whether
+                  // the library button adds a part or edits one.
+                  final catalogPart = extra != null
+                      ? extra.catalogModel.trim()
+                      : (isCatalogSource(line.source) ? line.model.trim() : '');
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: _gridRow(_kEquipmentCols, [
@@ -733,6 +743,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 if (line.model.isNotEmpty) line.model,
                                 if (extra.spare)
                                   'spare'
+                                else if (extra.noControl)
+                                  'not in the config'
                                 else
                                   'not on the diagram',
                               ].join(' · '),
@@ -742,10 +754,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           color: theme.disabledColor,
                         ),
                       ),
-                      // Qty
+                      // Qty: what the diagram counts, or the quantity typed
+                      // on a line that is not drawn.
                       extra == null
                           ? _CellText(
-                              '×${line.qty.toStringAsFixed(0)}',
+                              '×${trimNumber(line.drawnQty)}',
                               numeric: true,
                             )
                           : LiveTextField(
@@ -759,6 +772,33 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 ),
                               ),
                             ),
+                      // Spares. Only against a line the DIAGRAM counts: a
+                      // quoted line already has an editable quantity of its
+                      // own, and two boxes meaning the same thing on one row
+                      // is how a number gets typed into the wrong one.
+                      extra == null
+                          ? LiveTextField(
+                              fieldId: 'eqpspare_${line.key}',
+                              initial: line.spareQty == 0
+                                  ? ''
+                                  : trimNumber(line.spareQty),
+                              numeric: true,
+                              hint: '0',
+                              onChanged: (v) => provider.setAvEquipmentSpares(
+                                line.key,
+                                double.tryParse(v) ?? 0,
+                              ),
+                            )
+                          : const _CellText('—', numeric: true),
+                      // Total
+                      Text(
+                        trimNumber(line.qty),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       // Unit price. The box holds THIS ROOM'S price and
                       // nothing else. Showing the catalog figure in it made
                       // every line look like it had been quoted by hand, and
@@ -843,19 +883,25 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                           // Anything on this row can become a catalog entry —
                           // the box on the drawing as readily as the line
-                          // somebody typed. A row already priced FROM the
-                          // catalog is the one case with nothing to write.
+                          // somebody typed — and a row that already IS one
+                          // opens it for editing instead. A price rise, a part
+                          // number somebody finally found, a rack height that
+                          // was guessed: all of it gets noticed while looking
+                          // at a quote, and going to the Catalog tab to fix it
+                          // means losing your place.
                           avRowIcon(
-                            Icons.library_add_outlined,
-                            extra != null && extra.catalogModel.isNotEmpty
-                                ? 'Already priced from the catalog '
-                                      '(${extra.catalogModel})'
-                                : isCatalogSource(line.source)
-                                ? 'Already in the catalog as ${line.model}'
-                                : 'Add this line to the device catalog',
-                            (extra != null && extra.catalogModel.isNotEmpty) ||
-                                    isCatalogSource(line.source)
-                                ? null
+                            catalogPart.isEmpty
+                                ? Icons.library_add_outlined
+                                : Icons.edit_note,
+                            catalogPart.isEmpty
+                                ? 'Add this line to the device catalog'
+                                : 'Edit $catalogPart in the catalog',
+                            catalogPart.isNotEmpty
+                                ? () => _addToCatalog(
+                                    context,
+                                    provider,
+                                    suggestedModel: catalogPart,
+                                  )
                                 : extra != null
                                 ? () => _addLineToCatalog(
                                     context,
@@ -979,6 +1025,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     final extra = provider.avCost.extraHardware
                         .where((i) => i.id == line.key)
                         .firstOrNull;
+                    // The parts-list entry this row is priced from, or '' —
+                    // see the equipment table's row for what it decides.
+                    final catalogPart = extra != null
+                        ? extra.catalogModel.trim()
+                        : (isCatalogSource(line.source)
+                              ? (line.model.trim().isNotEmpty
+                                    ? line.model.trim()
+                                    : line.description.trim())
+                              : '');
                     return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: _gridRow(_kHardwareCols, [
@@ -1072,16 +1127,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           // with the new entry so the elevation and the quote
                           // agree.
                           avRowIcon(
-                            Icons.library_add_outlined,
-                            extra != null && extra.catalogModel.isNotEmpty
-                                ? 'Already priced from the parts list '
-                                      '(${extra.catalogModel})'
-                                : isCatalogSource(line.source)
-                                ? 'Already on the parts list'
-                                : 'Add this line to the parts list',
-                            (extra != null && extra.catalogModel.isNotEmpty) ||
-                                    isCatalogSource(line.source)
-                                ? null
+                            catalogPart.isEmpty
+                                ? Icons.library_add_outlined
+                                : Icons.edit_note,
+                            catalogPart.isEmpty
+                                ? 'Add this line to the parts list'
+                                : 'Edit $catalogPart in the parts list',
+                            catalogPart.isNotEmpty
+                                ? () => _addToCatalog(
+                                    context,
+                                    provider,
+                                    suggestedModel: catalogPart,
+                                  )
                                 : extra != null
                                 ? () => _addLineToCatalog(
                                     context,
@@ -1333,13 +1390,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               // the signal so every future room's runs price
                               // themselves off it.
                               avRowIcon(
-                                Icons.library_add_outlined,
+                                catalog == null
+                                    ? Icons.library_add_outlined
+                                    : Icons.edit_note,
+                                catalog == null
+                                    ? 'Add this cable type to the catalog'
+                                    : 'Edit ${catalog.model} in the catalog',
                                 catalog != null
-                                    ? 'Cable types are edited on the Catalog '
-                                          'tab'
-                                    : 'Add this cable type to the catalog',
-                                catalog != null
-                                    ? null
+                                    ? () => _addToCatalog(
+                                          context,
+                                          provider,
+                                          suggestedModel: catalog.model,
+                                        )
                                     : () => _addToCatalog(
                                           context,
                                           provider,
@@ -1479,13 +1541,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               avRowIcon(
-                                Icons.library_add_outlined,
+                                item.catalogModel.isEmpty
+                                    ? Icons.library_add_outlined
+                                    : Icons.edit_note,
+                                item.catalogModel.isEmpty
+                                    ? 'Add this line to the device catalog'
+                                    : 'Edit ${item.catalogModel} in the '
+                                          'catalog',
                                 item.catalogModel.isNotEmpty
-                                    ? 'Already priced from the catalog '
-                                          '(${item.catalogModel})'
-                                    : 'Add this line to the device catalog',
-                                item.catalogModel.isNotEmpty
-                                    ? null
+                                    ? () => _addToCatalog(
+                                          context,
+                                          provider,
+                                          suggestedModel: item.catalogModel,
+                                        )
                                     : () => _addLineToCatalog(
                                           context,
                                           provider,
@@ -1844,8 +1912,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         : (groupDevices(model).where((g) => g.key == line.key).firstOrNull
                   ?.nodes ??
               const <AvNode>[]);
-    final uncontrolled =
-        nodes.isNotEmpty && nodes.every((n) => n.excludeFromControl);
+    // Said about the boxes when the line is drawn, and about the line itself
+    // when it is not. A line quoted here can be a box the room has and this
+    // system does not drive just as easily as a drawn one can — an
+    // owner-furnished display is usually quoted before anybody draws it.
+    final uncontrolled = extra != null
+        ? extra.noControl
+        : nodes.isNotEmpty && nodes.every((n) => n.excludeFromControl);
 
     if (configKey.isNotEmpty) {
       return KeyedSubtree(
@@ -1908,7 +1981,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           ),
           PopupMenuItem(
             value: 'nocontrol',
-            enabled: nodes.isNotEmpty,
+            enabled: extra != null || nodes.isNotEmpty,
             child: ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -1922,15 +1995,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     : 'Not part of the room config',
               ),
               subtitle: Text(
-                nodes.isEmpty
-                    ? 'For a box on the diagram. This line is not drawn yet.'
-                    : uncontrolled
+                uncontrolled
                     ? 'Put it back on the list of devices the config is '
                           'missing.'
-                    : 'The building’s switch, somebody else’s codec, a '
-                          'passive box. It stays on the diagram, stays '
-                          'selectable and stays on the quote — it just stops '
-                          'being reported as missing.',
+                    : 'The building’s switch, somebody else’s codec, an '
+                          'owner-furnished display. It stays on the quote, and '
+                          'on the diagram if it is drawn — it just stops being '
+                          'reported as missing a device block.',
               ),
             ),
           ),
@@ -1959,6 +2030,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           if (choice == 'spare' && extra != null) {
             provider.updateAvCostExtraEquipment(
               extra.copyWith(spare: !extra.spare),
+            );
+            return;
+          }
+          if (choice == 'nocontrol' && extra != null) {
+            provider.updateAvCostExtraEquipment(
+              extra.copyWith(noControl: !extra.noControl),
             );
             return;
           }
@@ -2760,22 +2837,57 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final library = provider.avDeviceLibrary;
     final messenger = ScaffoldMessenger.of(context);
 
+    // EDITING, when the catalog already has this part.
+    //
+    // Two things come out of prefilling from it. The obvious one is the
+    // feature: a price rise, a part number somebody finally found, a rack
+    // height that was guessed — all of that gets noticed while looking at a
+    // quote, and going to the Catalog tab to fix it means losing your place.
+    //
+    // The other is a bug this closes. The save below UPSERTS, so opening this
+    // on a model the catalog already had and pressing Save wrote an entry with
+    // an empty maker, no education price and no notes over the top of one that
+    // had them. It kept the ports and the cable fields and silently dropped
+    // the rest.
+    final current = library.templateForModel(suggestedModel.trim());
+    final editing = current != null;
+
     final modelController =
         TextEditingController(text: suggestedModel.trim());
-    final makerController = TextEditingController();
-    final partController = TextEditingController(text: partNumber.trim());
-    final uController = TextEditingController(text: rackUnits.toString());
+    final makerController =
+        TextEditingController(text: current?.manufacturer ?? '');
+    final partController = TextEditingController(
+      text: partNumber.trim().isNotEmpty
+          ? partNumber.trim()
+          : (current?.partNumber ?? ''),
+    );
+    final uController = TextEditingController(
+      text: (rackUnits > 0 ? rackUnits : (current?.rackUnits ?? 0)).toString(),
+    );
     // Only asked about for a cable: the length it is bought in, which is what
     // makes "HDMI 6 ft" a different line on a quote from "HDMI 25 ft".
-    final lengthController = TextEditingController();
-    final priceController =
-        TextEditingController(text: price > 0 ? trimNumber(price) : '');
-    final eduController = TextEditingController();
-    final notesController = TextEditingController();
+    final lengthController = TextEditingController(
+      text: (current?.cableLengthFt ?? 0) > 0
+          ? trimNumber(current!.cableLengthFt)
+          : '',
+    );
+    final priceController = TextEditingController(
+      text: price > 0
+          ? trimNumber(price)
+          : ((current?.price ?? 0) > 0 ? trimNumber(current!.price) : ''),
+    );
+    final eduController = TextEditingController(
+      text: (current?.educationPrice ?? 0) > 0
+          ? trimNumber(current!.educationPrice)
+          : '',
+    );
+    final notesController = TextEditingController(text: current?.notes ?? '');
     // Reassigned rather than shadowed: everything below reads `category` as
     // the live value of the dropdown.
     category = category.trim().isNotEmpty
         ? category.trim()
+        : (current?.category.trim().isNotEmpty ?? false)
+        ? current!.category.trim()
         : switch (linkKind) {
             _ExtraPart.equipment => '',
             _ExtraPart.cable => kCategoryCable,
@@ -2802,7 +2914,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           }.toList()
             ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
           return AlertDialog(
-            title: const Text('Add this line to the catalog'),
+            title: Text(
+              editing
+                  ? 'Edit ${suggestedModel.trim()} in the catalog'
+                  : 'Add this line to the catalog',
+            ),
             content: SizedBox(
               width: 520,
               child: SingleChildScrollView(
@@ -2811,10 +2927,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Writes a catalog entry and points this line at it, so '
-                      'the price comes from the catalog from now on and every '
-                      'other room can quote the same part. The quantity stays '
-                      'on the line — it is about this job, not about the part.',
+                      editing
+                          ? 'Edits the catalog entry this line is priced from, '
+                                'and saves it back to the catalog file — so '
+                                'the correction reaches every room that quotes '
+                                'this part, not just this one. The connectors '
+                                'on the entry are left alone; they are edited '
+                                'on the Catalog tab.'
+                          : 'Writes a catalog entry and points this line at '
+                                'it, so the price comes from the catalog from '
+                                'now on and every other room can quote the '
+                                'same part. The quantity stays on the line — '
+                                'it is about this job, not about the part.',
                       style: Theme.of(ctx).textTheme.bodySmall,
                     ),
                     if (unlinkedNote != null) ...[
@@ -3010,7 +3134,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 onPressed: model.isEmpty
                     ? null
                     : () => Navigator.of(ctx).pop(true),
-                child: Text(existing == null ? 'Add to catalog' : 'Replace'),
+                // "Replace" is the honest word for a name TYPED over an
+                // entry that already existed. It is the wrong one when the
+                // dialog was opened on that entry to edit it.
+                child: Text(
+                  editing
+                      ? 'Save to catalog'
+                      : existing == null
+                      ? 'Add to catalog'
+                      : 'Replace',
+                ),
               ),
             ],
           );
@@ -3047,6 +3180,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       previousModel: existing?.model ?? '',
     );
     final file = await provider.saveAvDeviceLibrary();
+    // The catalog is a plain object rather than a listenable, so the page it
+    // is being edited from has to be told. Without this an edited price sat
+    // in the file and in memory while the row went on showing the old figure
+    // until something else happened to rebuild it.
+    provider.avDeviceLibraryChanged();
 
     // The line now points at the entry. The typed price and the room override
     // both go, or they would keep winning over the catalog figure and the
@@ -3466,13 +3604,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         avRowIcon(
-                          Icons.library_add_outlined,
+                          item.catalogModel.isEmpty
+                              ? Icons.library_add_outlined
+                              : Icons.edit_note,
+                          item.catalogModel.isEmpty
+                              ? 'Add this item to the device catalog'
+                              : 'Edit ${item.catalogModel} in the catalog',
                           item.catalogModel.isNotEmpty
-                              ? 'Already priced from the catalog '
-                                    '(${item.catalogModel})'
-                              : 'Add this item to the device catalog',
-                          item.catalogModel.isNotEmpty
-                              ? null
+                              ? () => _addToCatalog(
+                                    context,
+                                    provider,
+                                    suggestedModel: item.catalogModel,
+                                  )
                               : () => _addLineToCatalog(
                                     context,
                                     provider,

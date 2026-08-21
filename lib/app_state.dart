@@ -3907,6 +3907,20 @@ class AppStateProvider extends ChangeNotifier {
 
   double avCableSpares(String lineKey) => avCost.cableSpares[lineKey] ?? 0;
 
+  /// Units of one equipment line bought beyond the ones on the diagram — the
+  /// cable spares box, for the boxes. See [RoomCostSettings.equipmentSpares].
+  void setAvEquipmentSpares(String lineKey, double qty) {
+    if (qty <= 0) {
+      avCost.equipmentSpares.remove(lineKey);
+    } else {
+      avCost.equipmentSpares[lineKey] = qty;
+    }
+    notifyListeners();
+  }
+
+  double avEquipmentSpares(String lineKey) =>
+      avCost.equipmentSpares[lineKey] ?? 0;
+
   /// The color a signal type is drawn in for this room.
   Color avSignalColor(SignalType s) => signalColor(s, avSignalColors);
 

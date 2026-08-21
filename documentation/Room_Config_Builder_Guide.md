@@ -411,6 +411,33 @@ Two things it will tell you rather than quietly getting wrong:
 - devices with no control module, so a room isn't quoted as finished when part
   of it can't be driven
 
+### Spares
+
+Equipment rows read **Qty · Spares · Total**, the same three the cabling table
+has and for the same reason. The drawing says how many the room has; a job often
+buys one more than that, and the spare is real money no drawing will ever
+account for.
+
+Type it in the **Spares** box on the line itself rather than adding a second
+line. It's the same product at the same price, and splitting it out is how a
+quote ends up with two prices for one box — and how the spare gets left behind
+when somebody swaps the model. The reports print the split ("3 drawn + 1
+spare") so the count never reads as a mistake.
+
+A line you added on this page already has an editable quantity of its own, so it
+has no spares box — two boxes meaning the same thing on one row is how a number
+gets typed into the wrong one.
+
+### Editing a part without leaving the page
+
+A price rise, a part number somebody finally found, a rack height that was
+guessed — all of that gets noticed while looking at a quote. The **edit** button
+on a row that's priced from the catalog opens that entry, filled in, and saves
+it back to the catalog file, so the correction reaches every room that quotes the
+part rather than just this one. A row with no entry behind it still offers
+**add** instead. Connectors are left alone — those are edited on the **Catalog**
+tab.
+
 ### Is it in the room config?
 
 The estimate is where a room gets specified — parts picked with quantities and
@@ -430,7 +457,9 @@ So every equipment row carries a flag:
 - **a box icon** — marked as a **spare**: bought for the shelf on purpose, never
   installed here at all. It stays on the quote and stops being flagged.
 - **a broken-link icon** — marked **not part of the room config**: it *is* in
-  the room and on the diagram, and the processor has no business talking to it.
+  the room, and the processor has no business talking to it. Available on a
+  drawn box and on a line quoted here, because an owner-furnished display is
+  usually quoted before anybody draws it.
   The building's network switch, a codec another department manages, an
   owner-furnished display, a passive splitter. It stays exactly as it was —
   drawn, selectable, cabled, racked and priced — and drops off every "missing

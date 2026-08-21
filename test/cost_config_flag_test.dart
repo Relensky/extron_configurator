@@ -11,6 +11,7 @@ import 'package:extron_configurator/base_costs.dart';
 import 'package:extron_configurator/control_prefill.dart';
 import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/cost_estimate_view.dart';
+import 'package:extron_configurator/live_text_field.dart';
 import 'package:extron_configurator/ui_schema.dart';
 
 /// ============================================================================
@@ -344,6 +345,269 @@ void main() {
         excludeFromControl: true,
       );
       expect(AvNode.fromJson(node.toJson()).excludeFromControl, isTrue);
+    });
+  });
+
+  group('a spare of something the room already has', () {
+    /// The spares box on an equipment row, by the line it belongs to.
+    Finder spareBox(String lineKey) => find.byWidgetPredicate(
+      (w) => w is LiveTextField && w.fieldId == 'eqpspare_$lineKey',
+    );
+
+    testWidgets('is typed on the drawn line, not as a second line',
+        (tester) async {
+      final p = room();
+      await pump(tester, p);
+
+      await tester.enterText(spareBox('model:powerlite l630u'), '2');
+      await tester.pumpAndSettle();
+
+      // One line, three units: the same product at the same price, which is
+      // the whole reason it is not a line of its own.
+      expect(p.avEquipmentSpares('model:powerlite l630u'), 2);
+      expect(p.avCost.extraEquipment, isEmpty);
+      expect(find.text(r'$6,600.00'), findsWidgets,
+          reason: '1 drawn + 2 spare at 2200');
+    });
+
+    testWidgets('the drawn count stays what the drawing says', (tester) async {
+      final p = room();
+      p.setAvEquipmentSpares('model:powerlite l630u', 2);
+      await pump(tester, p);
+
+      // Drawn, spares and total, the way the cabling table reads.
+      expect(find.text('×1'), findsWidgets);
+      expect(find.text('3'), findsWidgets);
+      expect(p.avNodes, hasLength(1),
+          reason: 'a spare is bought, not drawn — nothing was added to the '
+              'diagram');
+    });
+
+    testWidgets('a line quoted here keeps its own quantity instead',
+        (tester) async {
+      final p = room();
+      final item = p.addAvCostExtraEquipment(
+        catalogModel: 'PT-MZ682BU8',
+        description: 'Second projector',
+        qty: 1,
+      );
+      await pump(tester, p);
+
+      // Two boxes meaning the same thing on one row is how a number gets
+      // typed into the wrong one.
+      expect(spareBox(item.id), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is LiveTextField && w.fieldId == 'eqpqty_${item.id}',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('survives being written out and read back', (tester) async {
+      final p = room();
+      p.setAvEquipmentSpares('model:powerlite l630u', 2);
+      final read = RoomCostSettings()..readJson(p.avCost.toJson());
+      expect(read.equipmentSpares['model:powerlite l630u'], 2);
+    });
+
+    testWidgets('clearing the box takes it off the quote', (tester) async {
+      final p = room();
+      p.setAvEquipmentSpares('model:powerlite l630u', 2);
+      await pump(tester, p);
+
+      await tester.enterText(spareBox('model:powerlite l630u'), '');
+      await tester.pumpAndSettle();
+
+      expect(p.avCost.equipmentSpares, isEmpty);
+      expect(find.text(r'$2,200.00'), findsWidgets);
+    });
+  });
+
+  group('editing a part from the estimate', () {
+    testWidgets('a row priced from the catalog opens it for editing',
+        (tester) async {
+      final p = room();
+      await pump(tester, p);
+
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) =>
+              w is IconButton &&
+              w.icon is Icon &&
+              (w.icon as Icon).icon == Icons.edit_note,
+        ).first,
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit PowerLite L630U in the catalog'), findsOneWidget);
+    });
+
+    testWidgets('the entry is filled in, so saving cannot wipe it',
+        (tester) async {
+      // The bug this closes: the dialog UPSERTS, so opening it on a model the
+      // catalog already had and pressing Save wrote an entry with an empty
+      // maker, no education price and no notes over one that had them.
+      final p = room();
+      p.avDeviceLibrary.upsert(
+        const AvDeviceTemplate(
+          model: 'PowerLite L630U',
+          manufacturer: 'Epson',
+          category: 'Projector',
+          partNumber: 'V11HA26020',
+          price: 2200,
+          educationPrice: 1950,
+          notes: 'laser, 6200 lumens',
+          ports: [],
+        ),
+      );
+      await pump(tester, p);
+
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) =>
+              w is IconButton &&
+              w.icon is Icon &&
+              (w.icon as Icon).icon == Icons.edit_note,
+        ).first,
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(TextField, 'Epson'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'V11HA26020'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '1950'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'laser, 6200 lumens'),
+          findsOneWidget);
+    });
+
+    testWidgets('a change is written back to the catalog', (tester) async {
+      final p = room();
+      await pump(tester, p);
+
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) =>
+              w is IconButton &&
+              w.icon is Icon &&
+              (w.icon as Icon).icon == Icons.edit_note,
+        ).first,
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (w) =>
+              w is TextField &&
+              (w.decoration?.labelText ?? '').startsWith('List price'),
+        ),
+        '2450',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save to catalog'));
+      await tester.pumpAndSettle();
+
+      // The catalog entry moved, so every room quoting this part moves with
+      // it — which is the point of editing it here rather than typing a room
+      // price over the row.
+      expect(p.avDeviceLibrary.templateForModel('PowerLite L630U')?.price,
+          2450);
+      // And the estimate reprices off it. Asserted through the computation
+      // rather than off the screen: writing the catalog FILE is real I/O,
+      // which a widget test's fake clock never lets finish, so the repaint
+      // that follows it cannot happen here.
+      final repriced = computeRoomCost(
+        model: buildAvFlowModel(p),
+        library: p.avDeviceLibrary,
+        settings: p.avCost,
+        rates: p.laborRates,
+        baseCosts: p.baseCosts,
+        tier: p.pricingTier,
+      );
+      expect(repriced.equipment.single.unitPrice, 2450);
+    });
+  });
+
+  group('a quoted line nothing drives', () {
+    testWidgets('can be marked not part of the config, like a drawn box can',
+        (tester) async {
+      // The report: a line ADDED on this page flew the orange flag with the
+      // one choice that fits it greyed out. An owner-furnished display is
+      // usually quoted before anybody draws it, and it is not a shelf spare.
+      final p = room();
+      final item = p.addAvCostExtraEquipment(
+        catalogModel: 'PT-MZ682BU8',
+        description: 'Owner-furnished projector',
+        qty: 1,
+      );
+      await pump(tester, p);
+      expect(iconOf(tester, flagFor(item.id)), Icons.flag);
+
+      await tester.tap(flagFor(item.id));
+      await tester.pumpAndSettle();
+      final entry = tester.widget<PopupMenuItem<String>>(
+        find.ancestor(
+          of: find.text('Not part of the room config'),
+          matching: find.byType(PopupMenuItem<String>),
+        ),
+      );
+      expect(entry.enabled, isTrue);
+
+      await tester.tap(find.text('Not part of the room config'));
+      await tester.pumpAndSettle();
+
+      expect(p.avCost.extraEquipment.single.noControl, isTrue);
+      expect(iconOf(tester, flagFor(item.id)), Icons.link_off);
+      expect(colorOf(tester, flagFor(item.id)), isNot(Colors.orange.shade700));
+    });
+
+    testWidgets('is still quoted, and says which kind of line it is',
+        (tester) async {
+      final p = room();
+      final item = p.addAvCostExtraEquipment(
+        catalogModel: 'PT-MZ682BU8',
+        description: 'Owner-furnished projector',
+        qty: 1,
+      );
+      p.updateAvCostExtraEquipment(item.copyWith(noControl: true));
+      await pump(tester, p);
+
+      expect(find.textContaining('not in the config'), findsWidgets);
+      expect(find.text(r'$2,600.00'), findsWidgets,
+          reason: 'somebody is still buying it');
+    });
+
+    testWidgets('and can be put back', (tester) async {
+      final p = room();
+      final item = p.addAvCostExtraEquipment(
+        catalogModel: 'PT-MZ682BU8',
+        description: 'Owner-furnished projector',
+        qty: 1,
+      );
+      p.updateAvCostExtraEquipment(item.copyWith(noControl: true));
+      await pump(tester, p);
+
+      await tester.tap(flagFor(item.id));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Driven by this system after all'));
+      await tester.pumpAndSettle();
+
+      expect(p.avCost.extraEquipment.single.noControl, isFalse);
+      expect(iconOf(tester, flagFor(item.id)), Icons.flag);
+    });
+
+    testWidgets('survives being written out and read back', (tester) async {
+      final p = room();
+      final item = p.addAvCostExtraEquipment(
+        catalogModel: 'PT-MZ682BU8',
+        description: 'Owner-furnished projector',
+        qty: 1,
+      );
+      p.updateAvCostExtraEquipment(item.copyWith(noControl: true));
+      final read = RoomCostSettings()..readJson(p.avCost.toJson());
+      expect(read.extraEquipment.single.noControl, isTrue);
     });
   });
 

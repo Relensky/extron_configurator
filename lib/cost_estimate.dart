@@ -104,6 +104,16 @@ class CostLineItem {
   /// every "this is missing from the config" list.
   final bool spare;
 
+  /// Quoted, in the room, and nothing here drives it.
+  ///
+  /// The line's version of [AvNode.excludeFromControl], and the case a spare
+  /// does not cover: an owner-furnished display, a codec another department
+  /// manages, the building's switch quoted on this job. It is part of the
+  /// room, so calling it a spare would be a lie — it simply has no business
+  /// having a device block, and saying so is what stops the estimate flagging
+  /// it forever.
+  final bool noControl;
+
   const CostLineItem({
     required this.id,
     required this.description,
@@ -113,6 +123,7 @@ class CostLineItem {
     this.taxable = true,
     this.catalogModel = '',
     this.spare = false,
+    this.noControl = false,
   });
 
   double get total => qty * unitPrice;
@@ -125,6 +136,7 @@ class CostLineItem {
     bool? taxable,
     String? catalogModel,
     bool? spare,
+    bool? noControl,
   }) => CostLineItem(
     id: id,
     description: description ?? this.description,
@@ -134,6 +146,7 @@ class CostLineItem {
     taxable: taxable ?? this.taxable,
     catalogModel: catalogModel ?? this.catalogModel,
     spare: spare ?? this.spare,
+    noControl: noControl ?? this.noControl,
   );
 
   Map<String, dynamic> toJson() => {
@@ -145,6 +158,7 @@ class CostLineItem {
     'taxable': taxable,
     if (catalogModel.isNotEmpty) 'catalogModel': catalogModel,
     if (spare) 'spare': true,
+    if (noControl) 'noControl': true,
   };
 
   factory CostLineItem.fromJson(Map<String, dynamic> json) => CostLineItem(
@@ -156,6 +170,7 @@ class CostLineItem {
     taxable: json['taxable'] != false,
     catalogModel: json['catalogModel']?.toString() ?? '',
     spare: json['spare'] == true,
+    noControl: json['noControl'] == true,
   );
 }
 
@@ -204,6 +219,20 @@ class RoomCostSettings {
   /// gets typed into "Other items" where the cable schedule can never see it.
   final List<CostLineItem> extraCables;
 
+  /// Equipment LINE KEY -> units to buy beyond the ones on the diagram.
+  ///
+  /// The same decision the cable spares box records, about the boxes instead
+  /// of the leads: a job that buys four displays for a room with three of them
+  /// drawn is buying a spare, and the fourth is real money that no drawing
+  /// will ever account for. Before this the only way to quote it was a second
+  /// line typed by hand, which read as a different product, priced itself
+  /// separately, and drifted from the model on the diagram the moment anybody
+  /// swapped it.
+  ///
+  /// Keyed per LINE, like [cableSpares], because that is what gets ordered:
+  /// a spare 86" display and a spare switcher are two decisions at two prices.
+  final Map<String, double> equipmentSpares;
+
   /// Cabling LINE KEY -> extra runs to buy beyond what the diagram shows.
   /// Spares are a decision, not a diagram fact, so they live here rather than
   /// being inferred: "three more HDMI leads because two always go missing" is
@@ -226,6 +255,7 @@ class RoomCostSettings {
     List<CostLineItem>? items,
     List<LaborLine>? labor,
     Map<String, double>? cableSpares,
+    Map<String, double>? equipmentSpares,
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
@@ -234,6 +264,7 @@ class RoomCostSettings {
        items = items ?? [],
        labor = labor ?? [],
        cableSpares = cableSpares ?? {},
+       equipmentSpares = equipmentSpares ?? {},
        extraEquipment = extraEquipment ?? [],
        extraHardware = extraHardware ?? [],
        extraCables = extraCables ?? [];
@@ -245,6 +276,7 @@ class RoomCostSettings {
       items.isEmpty &&
       labor.isEmpty &&
       cableSpares.isEmpty &&
+      equipmentSpares.isEmpty &&
       extraEquipment.isEmpty &&
       extraHardware.isEmpty &&
       extraCables.isEmpty;
@@ -259,6 +291,7 @@ class RoomCostSettings {
     items.clear();
     labor.clear();
     cableSpares.clear();
+    equipmentSpares.clear();
     extraEquipment.clear();
     extraHardware.clear();
     extraCables.clear();
@@ -279,6 +312,8 @@ class RoomCostSettings {
     'labor': [for (final l in labor) l.toJson()],
     if (cableSpares.isNotEmpty)
       'cableSpares': Map<String, double>.of(cableSpares),
+    if (equipmentSpares.isNotEmpty)
+      'equipmentSpares': Map<String, double>.of(equipmentSpares),
     if (extraEquipment.isNotEmpty)
       'extraEquipment': [for (final i in extraEquipment) i.toJson()],
     if (extraHardware.isNotEmpty)
@@ -331,6 +366,14 @@ class RoomCostSettings {
       if (i is Map) {
         extraCables.add(CostLineItem.fromJson(Map<String, dynamic>.from(i)));
       }
+    }
+    final equipSpares = json['equipmentSpares'];
+    if (equipSpares is Map) {
+      equipSpares.forEach((key, value) {
+        final qty = (value as num?)?.toDouble();
+        if (qty == null || qty <= 0) return;
+        equipmentSpares[key.toString()] = qty;
+      });
     }
     final spares = json['cableSpares'];
     if (spares is Map) {
@@ -571,6 +614,13 @@ class CostLine {
   /// a box that is drawn is in the room.
   final bool spare;
 
+  /// How many of [qty] are spares typed on this line rather than things the
+  /// diagram counts. 0 on every line but a device group with a spares figure.
+  final double spareQty;
+
+  /// What the diagram itself counts — [qty] less [spareQty].
+  double get drawnQty => qty - spareQty;
+
   /// The manufacturer's ordering code, off the catalog entry. Carried on the
   /// line rather than looked up when the report is written, so the number on
   /// the estimate is the one the price came from.
@@ -592,6 +642,7 @@ class CostLine {
     this.taxable = true,
     this.source = PriceSource.none,
     this.spare = false,
+    this.spareQty = 0,
   });
 
   double get total => qty * unitPrice;
@@ -826,9 +877,14 @@ CostEstimate computeRoomCost({
       price = 0;
       source = PriceSource.none;
     }
+    // SPARES ARE PART OF THE LINE, not a line of their own: a fourth display
+    // for a room with three drawn is the same product at the same price, and
+    // splitting it out is how a quote ends up with two prices for one box.
+    final spares = settings.equipmentSpares[group.key] ?? 0;
+    final qty = group.qty + (spares > 0 ? spares : 0.0);
     if (source == PriceSource.none) {
       unpricedLines++;
-      unpricedDevices += group.qty;
+      unpricedDevices += qty.round();
     }
     if (isEstimatedSource(source)) estimatedLines++;
     if (otherTier) otherTierLines++;
@@ -840,7 +896,8 @@ CostEstimate computeRoomCost({
         model: group.model,
         partNumber: catalog?.partNumber ?? '',
         category: category,
-        qty: group.qty.toDouble(),
+        qty: qty,
+        spareQty: spares > 0 ? spares : 0,
         unitPrice: price,
         source: source,
       ),
@@ -1422,7 +1479,14 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       rows: [
         for (final line in estimate.equipment)
           [
-            line.description,
+            // The split, where there is one: a quote for four displays in a
+            // room that draws three has to say which one nobody will find on
+            // the drawing, or the count reads as a mistake.
+            line.spareQty > 0
+                ? '${line.description} '
+                      '(${trimNumber(line.drawnQty)} drawn + '
+                      '${trimNumber(line.spareQty)} spare)'
+                : line.description,
             line.model,
             line.partNumber,
             line.qty,

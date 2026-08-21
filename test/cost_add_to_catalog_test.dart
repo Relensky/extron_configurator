@@ -53,6 +53,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// The edit-the-entry buttons: what a row priced from the catalog offers
+  /// where an unpriced one offers "add".
+  Finder editButtons() => find.byWidgetPredicate(
+    (w) => w is IconButton && w.icon is Icon &&
+        (w.icon as Icon).icon == Icons.edit_note,
+  );
+
   /// The add-to-catalog buttons on the page, in row order.
   Finder addButtons() => find.byWidgetPredicate(
     (w) => w is IconButton && w.icon is Icon &&
@@ -65,7 +72,7 @@ void main() {
     await pump(tester, p);
 
     // Two equipment rows: the priced Display and the unknown switch. The
-    // unknown one is the row with a live button.
+    // unknown one is the row with an ADD button, and it is live.
     final live = tester
         .widgetList<IconButton>(addButtons())
         .where((b) => b.onPressed != null)
@@ -73,13 +80,18 @@ void main() {
     expect(live, greaterThan(0),
         reason: 'the unpriced box on the drawing must be addable');
 
-    // The priced one has nothing to promote.
-    final dead = tester
-        .widgetList<IconButton>(addButtons())
-        .where((b) => b.onPressed == null)
+    // The priced one has nothing to ADD — it carries the edit button instead,
+    // which opens the entry it is already priced from. It used to be a dead
+    // add button, which said "there is nothing to do here" about the row most
+    // likely to need a price corrected.
+    expect(addButtons(), findsOneWidget,
+        reason: 'only the row with no entry offers to add one');
+    final edits = tester
+        .widgetList<IconButton>(editButtons())
+        .where((b) => b.onPressed != null)
         .length;
-    expect(dead, greaterThan(0),
-        reason: 'a row already priced from the catalog is not offered');
+    expect(edits, greaterThan(0),
+        reason: 'a row priced from the catalog can edit that entry');
   });
 
   testWidgets('the dialog opens with the model already filled in',
