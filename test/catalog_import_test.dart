@@ -156,13 +156,29 @@ void main() {
           reason: '${entry.model}: a six-figure list price is a parse error');
     }
 
-    // And the catalog is still overwhelmingly priced BY the importer rather
-    // than by hand — the check that would notice if a few hand-typed figures
-    // quietly became a few hundred.
-    final imported =
-        priced.where((e) => e.partNumber.trim().isNotEmpty).length;
-    expect(imported, greaterThan(priced.length - 20),
-        reason: 'nearly every price should have come off the price list');
+    // And the EXTRON half is still priced BY the importer rather than by hand.
+    //
+    // Scoped to Extron on purpose. This used to count the whole catalog and
+    // allow twenty hand-priced entries, which held only while third-party gear
+    // was a handful of PDUs; a manufacturer's own price list imported whole
+    // (Panasonic's Top of the Class list is 138 entries) is exactly the thing
+    // rule 1's carve-out above permits, and counting those made the guard fire
+    // on the legitimate case while saying nothing about the Extron importer it
+    // was written to watch.
+    final extron = priced
+        .where((e) => e.manufacturer.trim().toLowerCase() == 'extron')
+        .toList();
+    expect(extron, isNotEmpty);
+    expect(extron.where((e) => e.partNumber.trim().isEmpty), isEmpty,
+        reason: 'every Extron price should have come off the price list');
+
+    // A price the Extron importer did not set has to say whose gear it is, or
+    // there is no way back to the list it was read off.
+    for (final entry in priced.where((e) => e.partNumber.trim().isEmpty)) {
+      expect(entry.manufacturer.trim(), isNotEmpty,
+          reason: '${entry.model}: a hand-entered price with no manufacturer '
+              'cannot be traced to any price list');
+    }
 
     final unpriced = catalog.all.where((e) => e.price == 0).length;
     expect(unpriced, greaterThan(0),

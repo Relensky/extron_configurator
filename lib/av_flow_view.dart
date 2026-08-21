@@ -512,7 +512,14 @@ class _AvFlowViewState extends State<AvFlowView> {
         label: dev['name']?.toString() ?? key,
         model: model,
         pos: Offset(kAvAutoOriginX + col * kAvAutoColumnPitch, y),
-        ports: withPowerInlet(template.ports, template.powerInput),
+        // A power controller's outlets come out of the catalog as OUTLET 1..8
+        // and come onto the page as OUTLET 3 · Via: the room's config is the
+        // only thing that knows which outlet is which.
+        ports: withOutletNames(
+          withPowerInlet(template.ports, template.powerInput),
+          key,
+          config,
+        ),
         fromConfig: true,
         rackUnits: template.rackUnits,
         powerWatts: template.powerWatts,
@@ -1458,15 +1465,25 @@ class _AvFlowViewState extends State<AvFlowView> {
           ? cable.label
           : (from == null || to == null ? '' : defaultCableLabel(from, to));
       if (text.isEmpty) continue;
+      // A lead off the power controller says which outlet it comes out of, in
+      // the name the room gave it — the same name that is printed on the touch
+      // panel's power page. Beside the cable number rather than in it: the
+      // number is the run's own name and stays editable, and the outlet name
+      // follows the config, so renaming an outlet reaches a drawing already
+      // made.
+      final note = _outletNoteFor(provider, model, cable);
+      // Both halves are measured as one string, because both halves are what
+      // has to fit without landing on the run underneath.
+      final measured = note.isEmpty ? text : '$text$kPortNoteSeparator$note';
       final points = _paths[cable.id];
       if (points == null || points.length < 2) continue;
       final anchor = cableLabelAnchor(points);
       if (anchor == null) continue;
 
       final at = cable.labelOffset == Offset.zero
-          ? _freeLabelSpot(anchor, text, placed)
+          ? _freeLabelSpot(anchor, measured, placed)
           : anchor + cable.labelOffset;
-      placed.add(_labelRect(at, text));
+      placed.add(_labelRect(at, measured));
       final selected = _selectedCableId == cable.id;
       final color = cable.colorFor(provider.avSignalColors);
       widgets.add(
@@ -1501,7 +1518,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               child: Tooltip(
                 message: _editMode
                     ? 'Drag to move • double-tap to edit the run'
-                    : text,
+                    : measured,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
@@ -1514,15 +1531,34 @@ class _AvFlowViewState extends State<AvFlowView> {
                         ? Border.all(color: color, width: 1)
                         : null,
                   ),
-                  child: Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: 10,
-                      // A typed cable ID is the run's NAME and reads as one;
-                      // the endpoints are a description, so they sit back.
-                      color: named ? color : color.withValues(alpha: 0.75),
-                      fontWeight: named ? FontWeight.w600 : FontWeight.w500,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 10,
+                          // A typed cable ID is the run's NAME and reads as
+                          // one; the endpoints are a description, so they sit
+                          // back.
+                          color: named ? color : color.withValues(alpha: 0.75),
+                          fontWeight:
+                              named ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                      ),
+                      // The outlet name is what the run IS FOR, not what it is
+                      // called, so it sits back from the number the way the
+                      // endpoint description does.
+                      if (note.isNotEmpty)
+                        Text(
+                          '$kPortNoteSeparator$note',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: color.withValues(alpha: 0.75),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -1532,6 +1568,37 @@ class _AvFlowViewState extends State<AvFlowView> {
       );
     }
     return widgets;
+  }
+
+  /// What the room calls the controller outlet one end of [cable] is plugged
+  /// into, or '' for a run that touches no outlet.
+  ///
+  /// The config is asked first, so an outlet renamed on the System tab shows
+  /// its new name on a drawing that was made before the change. The port's own
+  /// note — written when the controller was put on the canvas — answers for
+  /// the cases where the config cannot: a controller placed by hand under an
+  /// id of its own, or a saved drawing being read beside a config that no
+  /// longer lists that outlet.
+  ///
+  /// Both ends are tried because the direction a power lead was drawn in is
+  /// nobody's convention: the automatic pass draws controller → device, and a
+  /// lead pulled by hand goes whichever way the hand went.
+  static String _outletNoteFor(
+    AppStateProvider provider,
+    AvFlowModel model,
+    AvCable cable,
+  ) {
+    for (final end in [
+      (cable.fromNodeId, cable.fromPortId),
+      (cable.toNodeId, cable.toPortId),
+    ]) {
+      if (powerOutletRef(end.$1, end.$2) == null) continue;
+      final live = powerOutletName(provider.roomConfig, end.$1, end.$2);
+      if (live.isNotEmpty) return live;
+      return portLabelNote(
+          model.nodesById[end.$1]?.portById(end.$2)?.label ?? '');
+    }
+    return '';
   }
 
   /// Draggable dots on the selected cable: one per existing waypoint (drag to
@@ -1777,7 +1844,11 @@ class _AvFlowViewState extends State<AvFlowView> {
         label: d.label,
         model: d.model,
         pos: Offset(40 + col * 340.0, y),
-        ports: withPowerInlet(template.ports, template.powerInput),
+        ports: withOutletNames(
+          withPowerInlet(template.ports, template.powerInput),
+          d.key,
+          provider.roomConfig,
+        ),
         fromConfig: true,
         rackUnits: template.rackUnits,
         powerWatts: template.powerWatts,
@@ -2581,9 +2652,13 @@ class _AvFlowViewState extends State<AvFlowView> {
                                     'is one.',
                               );
                               if (picked == null) return;
-                              final swapped = withPowerInlet(
-                                picked.ports,
-                                picked.powerInput,
+                              final swapped = withOutletNames(
+                                withPowerInlet(
+                                  picked.ports,
+                                  picked.powerInput,
+                                ),
+                                node.id,
+                                provider.roomConfig,
                               );
                               setLocal(() {
                                 portRemap = remapPorts(ports, swapped);
@@ -2784,9 +2859,13 @@ class _AvFlowViewState extends State<AvFlowView> {
                           ports
                             ..clear()
                             ..addAll(
-                              withPowerInlet(
-                                template.ports,
-                                template.powerInput,
+                              withOutletNames(
+                                withPowerInlet(
+                                  template.ports,
+                                  template.powerInput,
+                                ),
+                                node.id,
+                                provider.roomConfig,
                               ),
                             );
                           // The catalog's rack height and draw come back with

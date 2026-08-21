@@ -1054,3 +1054,129 @@ not json at all
 ^
 
 --------------------------------------------------
+[2026-08-20T15:59:32.559694] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_795fb779\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:00:04.896946] ERROR: Failed to read C:\Users\dstanley\AppData\Local\Temp\flow_rules_bad_d188cef5\av_flow_rules.json — using the built-in flow rules.
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.parse (dart:convert-patch/convert_patch.dart:885:48)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:35:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      FlowRules.load (package:extron_configurator/flow_rules.dart:745:21)
+<asynchronous suspension>
+#7      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/flow_rules_test.dart:175:21)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-20T16:00:24.329500] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_6a55e7a2\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:00:29.488651] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_1443dbc2\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:02:01.162595] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_cd8c9edf\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:02:32.727256] ERROR: Failed to read C:\Users\dstanley\AppData\Local\Temp\flow_rules_bad_cb9842f3\av_flow_rules.json — using the built-in flow rules.
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.parse (dart:convert-patch/convert_patch.dart:885:48)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:35:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      FlowRules.load (package:extron_configurator/flow_rules.dart:745:21)
+<asynchronous suspension>
+#7      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/flow_rules_test.dart:175:21)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-20T16:02:53.650093] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_dc5f5d9\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:02:58.786173] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_874bcd7a\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:21:10.369524] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_d195c0ca\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:21:38.256888] ERROR: Failed to read C:\Users\dstanley\AppData\Local\Temp\flow_rules_bad_82606c85\av_flow_rules.json — using the built-in flow rules.
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.parse (dart:convert-patch/convert_patch.dart:885:48)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:35:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      FlowRules.load (package:extron_configurator/flow_rules.dart:745:21)
+<asynchronous suspension>
+#7      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/flow_rules_test.dart:175:21)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-20T16:21:56.605818] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_23e96b77\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-20T16:22:01.406792] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_a5d6404\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------

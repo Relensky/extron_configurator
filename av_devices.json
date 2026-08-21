@@ -97322,6 +97322,6186 @@
           "side": "bottom"
         }
       ]
+    },
+    {
+      "model": "PT-CMZ50U",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 7999.0,
+      "educationPrice": 4100.0,
+      "notes": "5,200 Lumens, WUXGA, Ultra Short Throw, Laser, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-CMZ50BU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 7999.0,
+      "educationPrice": 4100.0,
+      "notes": "5,200 Lumens, WUXGA, Ultra Short Throw, Laser, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMQ85BU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 11199.0,
+      "educationPrice": 6327.0,
+      "notes": "8,000 lm WUXGA Laser LCD Projector / Digital Link / 4K / Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMQ85U",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 11199.0,
+      "educationPrice": 6327.0,
+      "notes": "8,000 lm WUXGA Laser LCD Projector / Digital Link / 4K / Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ82U8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 10999.0,
+      "educationPrice": 5176.0,
+      "notes": "8,000 lm WUXGA Laser LCD Projector / Digital Link / 4K Signal Input. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ82BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 10999.0,
+      "educationPrice": 5176.0,
+      "notes": "8,000 lm WUXGA Laser LCD Projector / Digital Link / 4K Signal Input, Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMQ75BU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 9199.0,
+      "educationPrice": 5208.0,
+      "notes": "7,300 lm WUXGA Laser LCD Projector / Digital Link / 4K / Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMQ75U",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 9199.0,
+      "educationPrice": 5208.0,
+      "notes": "7,300 lm WUXGA Laser LCD Projector / Digital Link / 4K / White Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ72U8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 8650.0,
+      "educationPrice": 4282.0,
+      "notes": "7,300 lm WUXGA Laser LCD Projector / Digital Link / 4K Signal Input. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ72BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 8650.0,
+      "educationPrice": 4282.0,
+      "notes": "7,300 lm WUXGA Laser LCD Projector / Digital Link / 4K Signal Input, Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ7STU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 10889.0,
+      "educationPrice": 5639.0,
+      "notes": "7,000 lm WUXGA Short Throw (0.8:1) Laser LCD Projector / Digital Link / 4K Signal Input, White Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ7STBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 10889.0,
+      "educationPrice": 5639.0,
+      "notes": "7,000 lm WUXGA Short Throw (0.8:1) Laser LCD Projector / Digital Link / 4K Signal Input, Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMQ65BU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 7499.0,
+      "educationPrice": 4244.0,
+      "notes": "6,500 lm WUXGA Laser LCD Projector / Digital Link / 4K / Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMQ65U",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 7499.0,
+      "educationPrice": 4244.0,
+      "notes": "6,500 lm WUXGA Laser LCD Projector / Digital Link / 4K / White Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ62U8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 7999.0,
+      "educationPrice": 3513.0,
+      "notes": "6,500 lm WUXGA Laser LCD Projector / Digital Link / 4K Signal Input. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ62BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 7999.0,
+      "educationPrice": 3513.0,
+      "notes": "6,500 lm WUXGA Laser LCD Projector / Digital Link / 4K Signal Input, Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ6STU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 9679.0,
+      "educationPrice": 4718.0,
+      "notes": "6,200 lm WUXGA Short Throw (0.797-1.01:1) Laser LCD Projector / Digital Link / 4K Signal Input, White Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ6STBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 9679.0,
+      "educationPrice": 4718.0,
+      "notes": "6,200 lm WUXGA Short Throw (0.797-1.01:1) Laser LCD Projector / Digital Link / 4K Signal Input, Black Cabinet. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ51U8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 5686.0,
+      "educationPrice": 2842.0,
+      "notes": "5,200 lm WUXGA Laser LCD Projector / Digital Link / 4K Signal Input. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-VMZ51SU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 5565.0,
+      "educationPrice": 2749.0,
+      "notes": "5,200 lm WUXGA Laser LCD Projector / No Digital Link / 4K Signal Input. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ15LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 60499.0,
+      "educationPrice": 26150.0,
+      "notes": "15,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ15LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 68969.0,
+      "educationPrice": 30111.0,
+      "notes": "15,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black, No NFC. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ12LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 54449.0,
+      "educationPrice": 22509.0,
+      "notes": "12,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black, TAA Compliant. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ12LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 47189.0,
+      "educationPrice": 20501.0,
+      "notes": "12,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ12LWU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 47189.0,
+      "educationPrice": 20501.0,
+      "notes": "12,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ10LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 48399.0,
+      "educationPrice": 20873.0,
+      "notes": "10,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black, TAA Compliant. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ10LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 41139.0,
+      "educationPrice": 18942.0,
+      "notes": "10,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ10LWU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 41139.0,
+      "educationPrice": 18942.0,
+      "notes": "10,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ80LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 38719.0,
+      "educationPrice": 16740.0,
+      "notes": "8,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black, TAA Compliant. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ80LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 35199.0,
+      "educationPrice": 15266.0,
+      "notes": "8,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REQ80LWU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 35089.0,
+      "educationPrice": 15266.0,
+      "notes": "8,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ20KLBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 53239.0,
+      "educationPrice": 24846.0,
+      "notes": "20,000 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ20KLWU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 53239.0,
+      "educationPrice": 24846.0,
+      "notes": "20,000 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ17KLBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 37509.0,
+      "educationPrice": 17945.0,
+      "notes": "16,500 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ17KLWU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 37509.0,
+      "educationPrice": 17945.0,
+      "notes": "16,500 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ14KLBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 32669.0,
+      "educationPrice": 13443.0,
+      "notes": "14,000 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ14KLWU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 32669.0,
+      "educationPrice": 13443.0,
+      "notes": "14,000 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ11KLBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 24199.0,
+      "educationPrice": 10866.0,
+      "notes": "11,000 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ11KLWU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 24199.0,
+      "educationPrice": 10866.0,
+      "notes": "11,000 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), Laser, 4K Signal Input, Information Monitor, No Lens, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ15LBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 45979.0,
+      "educationPrice": 21464.0,
+      "notes": "15,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), Filter-Free, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ15LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 55659.0,
+      "educationPrice": 24204.0,
+      "notes": "15,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), Filter-Free, Lens Not Included, Black, No NFC. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ12LBU7",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 36299.0,
+      "educationPrice": 17236.0,
+      "notes": "12,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ12LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 42349.0,
+      "educationPrice": 18792.0,
+      "notes": "12,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, Black, TAA Compliant. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ12LWU7",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 36299.0,
+      "educationPrice": 17236.0,
+      "notes": "12,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ10LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 37509.0,
+      "educationPrice": 16562.0,
+      "notes": "10,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, Black, TAA Compliant. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ10LBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 33879.0,
+      "educationPrice": 14660.0,
+      "notes": "10,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ10LWU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 33879.0,
+      "educationPrice": 14660.0,
+      "notes": "10,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ80LBUG",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 35089.0,
+      "educationPrice": 14953.0,
+      "notes": "8,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, Black, TAA Compliant. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ80LBU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 26619.0,
+      "educationPrice": 12479.0,
+      "notes": "8,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-REZ80LWU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 26619.0,
+      "educationPrice": 12479.0,
+      "notes": "8,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), DLP Projector, Lens Not Included, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ882BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 16939.0,
+      "educationPrice": 7749.0,
+      "notes": "8,200 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, Laser Projector, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ882WU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 16939.0,
+      "educationPrice": 7749.0,
+      "notes": "8,200 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, Laser Projector, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RQ7LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 22989.0,
+      "educationPrice": 10640.0,
+      "notes": "7,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RZ7LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 20569.0,
+      "educationPrice": 9298.0,
+      "notes": "7,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, 1DLP Projector, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RZ7LWU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 20569.0,
+      "educationPrice": 9298.0,
+      "notes": "7,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, 1DLP Projector, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ782BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 12946.0,
+      "educationPrice": 6023.0,
+      "notes": "7,500 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, Laser Projector, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ782WU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 12946.0,
+      "educationPrice": 6023.0,
+      "notes": "7,500 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, Laser Projector, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RQ6LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 18149.0,
+      "educationPrice": 8476.0,
+      "notes": "6,000 Lumens, Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RZ6LBU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 15729.0,
+      "educationPrice": 7416.0,
+      "notes": "6,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, 1DLP Projector, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RZ6LWU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 15729.0,
+      "educationPrice": 7416.0,
+      "notes": "6,000 Lumens, Laser, WUXGA Resolution (1,920 x 1,200), 4K Signal Input, 1DLP Projector, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ682BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 11615.0,
+      "educationPrice": 5390.0,
+      "notes": "6,500 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), 4K input, Laser Projector, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-MZ682WU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 11615.0,
+      "educationPrice": 5390.0,
+      "notes": "6,500 Lumens, LCD, WUXGA Resolution (1,920 x 1,200), 4K input, Laser Projector, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-FRQ60BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 11999.0,
+      "educationPrice": 6349.0,
+      "notes": "6,000 Lumens, 1DLP, 4K (3840 x 2160 pixels) (With Quad Pixel Drive) laser projector, CEC compatibility, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-FRQ60WU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 11999.0,
+      "educationPrice": 6349.0,
+      "notes": "6,000 Lumens, 1DLP, 4K (3840 x 2160 pixels) (With Quad Pixel Drive) laser projector, CEC compatibility, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-FRQ50BU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 9999.0,
+      "educationPrice": 5082.0,
+      "notes": "5,200 Lumens, 1DLP, 4K (3840 x 2160 pixels) (With Quad Pixel Drive) laser projector, CEC compatibility, Black. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-FRQ50WU8",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 9999.0,
+      "educationPrice": 5082.0,
+      "notes": "5,200 Lumens, 1DLP, 4K (3840 x 2160 pixels) (With Quad Pixel Drive) laser projector, CEC compatibility, White. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. Eligible for the TOC 5-year warranty extension when the extension SKU is on the same purchase order. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RQ50KU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 387199.0,
+      "notes": "51,000 Lumens (center), 3DLP Laser, Native 4K (4096 x 2160) Resolution, Lens Not Included. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. End-user price is quoted by an authorized reseller; only the SRP is published. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RQ45KU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 172499.0,
+      "notes": "42,000 Lumens, 3DLP Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. End-user price is quoted by an authorized reseller; only the SRP is published. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RQ35KU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 165769.0,
+      "notes": "31,000 Lumens (center), 3DLP Laser, 4K (3840 x 2400) Resolution with Quad Pixel Drive, Filter-Free, Lens Not Included. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. End-user price is quoted by an authorized reseller; only the SRP is published. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "PT-RZ14KU",
+      "manufacturer": "Panasonic",
+      "category": "Projector",
+      "rackUnits": 0,
+      "price": 71389.0,
+      "notes": "14,000 Lumens (center), 3DLP Laser, WUXGA (1,920 x 1,200) Resolution, Filter-Free, Lens Not Included. Connectors follow this catalog's Panasonic projector family set; the price list does not state them. End-user price is quoted by an authorized reseller; only the SRP is published. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, PT-RQ50KU",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVC3DLP50K5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 15499.99,
+      "educationPrice": 15499.99,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-RQ50KU. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, PT-RQ35KU / PT-RZ34KU",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVC3DLP30K5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 7399.99,
+      "educationPrice": 7399.99,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-RQ35KU, PT-RZ34KU. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, PT-RQ25KU / RZ24KU / RQ18KU / RZ17KU / RZ14KU",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVC3DLP5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 5499.0,
+      "educationPrice": 5499.0,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-RQ25KU, PT- RZ24KU,PT-RQ18KU, PT-RZ17KU, PT-RZ14KU. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, PT-MZ 10K+ Lumen Series",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVCMZ10K5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 2899.99,
+      "educationPrice": 2899.99,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-MZ20KLBU7, PT-MZ20KLWU7, PT-MZ17KLBU7, PT-MZ17KLWU7, PT-MZ14KLBU7, PT-MZ14KLWU7, PT- MZ11KLBU7, PT-MZ11KLWU7. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, 1DLP Interchangeable Lens Series",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVC1DLPINT5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 1999.99,
+      "educationPrice": 1999.99,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-REQ15/L, PT-REQ12/L, PT-REQ10/L, PT-REQ80/L, PT-REZ15/L, PT-REZ12/L, PT-REZ10/L, PT-REZ80/L, PT-RZ790/L, PT-RZ690/L, PT-RQ7L, PT-RQ6L, PT-RZ7L, PT-RZ6L. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, PT-MZ882 / MZ782 / MZ682",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVCMZ5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 899.0,
+      "educationPrice": 899.0,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-MZ882B/WU7, PT-MZ782B/WU7, PT-MZ682B/WU7. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, 1DLP Fixed Lens Series",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVC1DLPFIX5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 599.99,
+      "educationPrice": 599.99,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-FRQ60, PT- FRQ50, PT-FRZ60, PT-FRZ50, PT-FRZ55. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Projector Loaner, PT-CMZ / VMZ / VMW / LMZ / TMZ Series",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVCVMZ5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 319.99,
+      "educationPrice": 319.99,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years; Adds Projector Loaner service for same term. Additonal terms and conditions apply. Eligible models: PT-CMZ50, PT-VMZ82B/U7, PT-VMZ72B/U7, PT-VMZ7STB/U7, PT-VMZ62B/U7, PT-VMZ6STB/U7, PT- VMW61U7, PT-VMZ51U/SU7, PT-VMW51U7, PT-LMZ460U, PT-LMW420U, PT-TMZ400U, PT-TMW380U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Advanced Replacement, PT-MZ Series LCD 10K+ Lumen",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVCMZ10KHS5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 2950.0,
+      "educationPrice": 2950.0,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years of Warranty coverage; Adds Projector Advanced Replacement for same term. Additonal terms and conditions apply. Eligible models: PT-MZ Series LCD 10K+ Lumen. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Advanced Replacement, 1DLP Interchangeable Lens",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVC1DLPINTHS5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 2800.0,
+      "educationPrice": 2800.0,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years of Warranty coverage; Adds Projector Advanced Replacement for same term. Additonal terms and conditions apply. Eligible models: 1 DLP Interchangable Lens. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Advanced Replacement, PT-MZ Series LCD Below 10K Lumen",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVCMZHS5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 900.0,
+      "educationPrice": 900.0,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years of Warranty coverage; Adds Projector Advanced Replacement for same term. Additonal terms and conditions apply. Eligible models: PT-MZ Series LCD Below 10K Lumen. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Advanced Replacement, 1DLP Fixed Lens",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVC1DLPFIXHS5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 400.0,
+      "educationPrice": 400.0,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years of Warranty coverage; Adds Projector Advanced Replacement for same term. Additonal terms and conditions apply. Eligible models: 1 DLP Fixed Lens. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "5-Year Service Support with Advanced Replacement, PT-VMZ / TMZ / LMW Series",
+      "manufacturer": "Panasonic",
+      "partNumber": "PT-SVCVMZHS5Y",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 120.0,
+      "educationPrice": 120.0,
+      "notes": "5Yr Service Support - Extends terms of Standard Warranty to Five Years of Warranty coverage; Adds Projector Advanced Replacement for same term. Additonal terms and conditions apply. Eligible models: PT-VMZ Series, TMZ Series, LMW Series. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "TH-98CQE2U",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 12749.0,
+      "educationPrice": 9546.0,
+      "notes": "98 inch class 4H UHD LED Professional Display with Tuner. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-86CQE2U",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 5649.0,
+      "educationPrice": 4230.0,
+      "notes": "86 inch class 4K UHD LED Professional Display with Tuner. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-75CQE2U",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 2909.0,
+      "educationPrice": 2178.0,
+      "notes": "75 inch class 4K UHD LED Professional Display with Tuner. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-65CQE2U",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 1789.0,
+      "educationPrice": 1338.0,
+      "notes": "65 inch class 4K UHD LED Professional Display with Tuner. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-55CQE2U",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 1379.0,
+      "educationPrice": 1032.0,
+      "notes": "55 inch class 4K UHD LED Professional Display with Tuner. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-50CQE2U",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 1219.0,
+      "educationPrice": 913.0,
+      "notes": "50 inch class 4K UHD LED Professional Display with Tuner. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-43CQE2U",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 1049.0,
+      "educationPrice": 782.0,
+      "notes": "43 inch class 4K UHD LED Professional Display with Tuner. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-98SQE2W",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 15279.0,
+      "educationPrice": 11670.0,
+      "notes": "98\" Class 4K UHD LED 24/7 500 cd/m2 Professional Display with SDM. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-86SQE2W",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 7699.0,
+      "educationPrice": 5877.0,
+      "notes": "86\" Class 4K UHD LED 24/7 500 cd/m2 Professional Display with SDM. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-75SQE2W",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 4909.0,
+      "educationPrice": 3755.0,
+      "notes": "75\" Class 4K UHD LED 24/7 500 cd/m2 Professional Display with SDM. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-65SQE2W",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 2699.0,
+      "educationPrice": 2061.0,
+      "notes": "65\" Class 4K UHD LED 24/7 500 cd/m2 Professional Display with SDM. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-55SQE2W",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 2279.0,
+      "educationPrice": 1745.0,
+      "notes": "55\" Class 4K UHD LED 24/7 500 cd/m2 Professional Display with SDM. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-50SQE2W",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 1629.0,
+      "educationPrice": 1246.0,
+      "notes": "50\" Class 4K UHD LED 24/7 500 cd/m2 Professional Display with SDM. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TH-43SQE2W",
+      "manufacturer": "Panasonic",
+      "category": "Display",
+      "rackUnits": 0,
+      "price": 1189.0,
+      "educationPrice": 914.0,
+      "notes": "43\" Class 4K UHD LED 24/7 500 cd/m2 Professional Display with SDM. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TY-CSP1",
+      "manufacturer": "Panasonic",
+      "category": "Camera",
+      "rackUnits": 0,
+      "price": 1499.0,
+      "educationPrice": 1140.0,
+      "notes": "PressIT360 360° Camera Speaker Microphone. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": [
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-43CQE2U",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW43CQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 75.0,
+      "educationPrice": 75.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-43CQE2U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-43EQ2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW43EQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 81.0,
+      "educationPrice": 81.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-43EQ2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-43SQE2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW43SQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 101.0,
+      "educationPrice": 101.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-43SQE2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-50CQE2U",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW49CQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 85.0,
+      "educationPrice": 85.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-50CQE2U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-50SQ2HW",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW49SQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 184.0,
+      "educationPrice": 184.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-50SQ2HW. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-50SQE2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW49SQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 125.0,
+      "educationPrice": 125.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-50SQE2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-50EQ2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW50EQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 83.0,
+      "educationPrice": 83.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-50EQ2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-55CQE2U",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW55CQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 92.0,
+      "educationPrice": 92.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-55CQE2U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-55EQ2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW55EQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 117.0,
+      "educationPrice": 117.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-55EQ2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-55SQ2HW",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW55SQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 217.0,
+      "educationPrice": 217.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-55SQ2HW. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-55SQE2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW55SQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 192.0,
+      "educationPrice": 192.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-55SQE2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-65CQE2U",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW65CQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 127.0,
+      "educationPrice": 127.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-65CQE2U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-65EQ2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW65EQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 180.0,
+      "educationPrice": 180.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-65EQ2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-65SQ2HW",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW65SQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 345.0,
+      "educationPrice": 345.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-65SQ2HW. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-65SQE2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW65SQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 165.0,
+      "educationPrice": 165.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-65SQE2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-75CQE2U",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW75CQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 231.0,
+      "educationPrice": 231.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-75CQE2U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-75EQ2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW75EQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 315.0,
+      "educationPrice": 315.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-75EQ2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-75SQ2HW",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW75SQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 471.0,
+      "educationPrice": 471.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-75SQ2HW. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-75SQE2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW75SQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 427.0,
+      "educationPrice": 427.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-75SQE2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-86CQE2U",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW86CQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 453.0,
+      "educationPrice": 453.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-86CQE2U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-86EQ2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW86EQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 565.0,
+      "educationPrice": 565.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-86EQ2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-86SQ2HW",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW86SQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 672.0,
+      "educationPrice": 672.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-86SQ2HW. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-86SQE2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW86SQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 624.0,
+      "educationPrice": 624.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-86SQE2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-98CQE2U",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW98CQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 985.0,
+      "educationPrice": 985.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-98CQE2U. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-98SQ2HW",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW98SQY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 1339.0,
+      "educationPrice": 1339.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-98SQ2HW. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Year 4 & 5 Extended Warranty with Advance Swap, TH-98SQE2W",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCXW98SQEY45",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 1280.0,
+      "educationPrice": 1280.0,
+      "notes": "Year 4 & 5 Ext Warr W/ADV Swap for TH-98SQE2W. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Onsite Display Swap, 1 Technician (Small Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCOSDISPSWAP1",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 265.0,
+      "educationPrice": 265.0,
+      "notes": "Onsite (1) technician for small size display to remove and rehang under warranty period. Must be purchased with extended warranty and reside in a metropolitian area. Model/SN#/End User info needed to purchase. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Onsite Display Swap, 2 Technicians (Medium Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCOSDISPSWAP2",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 330.0,
+      "educationPrice": 330.0,
+      "notes": "Onsite (2) technician for medium size display to remove and rehang under warranty period. Must be purchased with extended warranty and reside in a metropolitian area. Model/SN#/End User info needed to purchase. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Onsite Display Swap, 3 Technicians (Extra-Large Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCOSDISPSWAP3",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 440.0,
+      "educationPrice": 440.0,
+      "notes": "Onsite (3) technician for xlarge size display to remove and rehang under warranty period. Must be purchased with extended warranty and reside in a metropolitian area. Model/SN#/End User info needed to purchase. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Sales Engineer Labor, Full Day (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SALESRENGFD",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 2699.0,
+      "educationPrice": 2699.0,
+      "notes": "Full Day - Sales Engineer Labor - (Display) - Must purchase Travel SKU seperately. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Sales Engineer Labor, Half Day (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SALESRENGHD",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 1349.0,
+      "educationPrice": 1349.0,
+      "notes": "Half Day - Sales Engineer Labor - (Display) - Must purchase Travel SKU seperately. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Sales Engineer Travel, Airfare + 1 Night Hotel (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-ENGTRVLAF",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 1350.0,
+      "educationPrice": 1350.0,
+      "notes": "SALES ENGINEER Trav - Airfare + 1 Night Hotel (Display). Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Sales Engineer Travel, Daily Trip Charge (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-ENGTRVLDAY",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 205.0,
+      "educationPrice": 205.0,
+      "notes": "SALES ENGINEER Trav - Daily Trip Charge (Display). Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Service Engineer Labor, Full Day Onsite (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCENGFDOS",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 2299.0,
+      "educationPrice": 2299.0,
+      "notes": "FULL DAY SERVICE ENGINEER LABOR- (Display) - Must purchase Travel SKU seperately. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Service Engineer Labor, Half Day Onsite (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCENGHDOS",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 1149.0,
+      "educationPrice": 1149.0,
+      "notes": "HALF DAY SERVICE ENGINEER LABOR- (Display) - Must purchase Travel SKU seperately. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Service Engineer Travel, Airfare + 1 Night Hotel (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCTRVLAF",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 1350.0,
+      "educationPrice": 1350.0,
+      "notes": "SERVICE ENGINEER Trav - Airfare + 1 Night Hotel (Display). Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Service Engineer Travel, Daily Trip Charge (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCTRVLDAY",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 205.0,
+      "educationPrice": 205.0,
+      "notes": "SERVICE ENGINEER Trav - Daily Trip Charge (Display). Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Remote Support, 2 Hours (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCREMSUPP2H",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 270.0,
+      "educationPrice": 270.0,
+      "notes": "2 HOURS - REMOTE SUPPORT - DISPLAY. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Remote Support, 4 Hours (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCREMSUPP4H",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 505.0,
+      "educationPrice": 505.0,
+      "notes": "4 HOURS - REMOTE SUPPORT - DISPLAY. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
+    },
+    {
+      "model": "Remote Support, 8 Hours (Display)",
+      "manufacturer": "Panasonic",
+      "partNumber": "TH-SVCREMSUPP8H",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "price": 940.0,
+      "educationPrice": 940.0,
+      "notes": "8 HOURS - REMOTE SUPPORT - DISPLAY. Panasonic Top of the Class end-user price list, effective July 1 - September 30, 2026.",
+      "ports": []
     }
   ]
 }

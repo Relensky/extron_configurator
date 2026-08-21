@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
+import 'package:extron_configurator/av_flow_report.dart';
 import 'package:extron_configurator/av_flow_routing.dart';
 import 'package:extron_configurator/av_flow_view.dart';
 import 'package:extron_configurator/cost_estimate.dart';
@@ -199,11 +200,17 @@ void main() {
 
   group('the power controller', () {
     /// The box an outlet's mains lead lands on.
+    ///
+    /// Matched on the CONNECTOR's own name: the drawn outlet also carries the
+    /// name this room gives it ('OUTLET 1 · PC'), and which box a lead reaches
+    /// is not a question about what the outlet is called.
     String? outlet(AppStateProvider p, String label) {
       for (final c in p.avCables) {
         if (c.fromNodeId != 'POWERDEVICE_1') continue;
         final from = p.avNodeById(c.fromNodeId);
-        if (from?.portById(c.fromPortId)?.label != label) continue;
+        if (basePortLabel(from?.portById(c.fromPortId)?.label ?? '') != label) {
+          continue;
+        }
         return p.avNodeById(c.toNodeId)?.label;
       }
       return null;
@@ -278,6 +285,77 @@ void main() {
           isNot(contains('power1_outlet_7')));
       expect(plan.unresolved.map((u) => u.configKey),
           isNot(contains('power1_outlet_7')));
+    });
+
+    /// The outlet names are the room's wiring list read the other way — the
+    /// box called PC is plugged into outlet 1 — and they are also what is
+    /// printed on the touch panel's power page. The catalog knows a controller
+    /// has eight outlets and nothing about which is which, so the drawing said
+    /// 'OUTLET 3' and left the tech to go and look the name up.
+    group('the outlet names', () {
+      test('come onto the page with the controller', () {
+        final p = room();
+        autoDrawRoutingFromConfig(p);
+        final apc = p.avNodeById('POWERDEVICE_1')!;
+
+        expect(apc.portById('out_pwr_1')?.label, 'OUTLET 1 · PC');
+        // The \\r in 'Doc\\rCam' breaks the touch panel button over two lines.
+        // It is not part of what the outlet is called.
+        expect(apc.portById('out_pwr_6')?.label, 'OUTLET 6 · Doc Cam');
+        // An outlet the room never named keeps the catalog's own name rather
+        // than growing an empty note.
+        expect(apc.portById('out_pwr_3')?.label, 'OUTLET 3');
+      });
+
+      test('never change which socket a lead resolves to', () {
+        // Every port lookup reads the connector's number off its label. A
+        // named outlet that stopped parsing would quietly unplug the room.
+        expect(parsePortLabel('OUTLET 3 · Via').number, 3);
+        expect(parsePortLabel('OUTLET 3 · Via').letter, '');
+        expect(basePortLabel('OUTLET 3 · Via'), 'OUTLET 3');
+        expect(portLabelNote('OUTLET 3 · Via'), 'Via');
+        expect(portLabelNote('OUTLET 3'), '');
+      });
+
+      test('follow the config onto a drawing already made', () {
+        final p = room();
+        autoDrawRoutingFromConfig(p);
+        (p.roomConfig['SYSTEM_SETUP'] as Map)['power1_outlet_1'] = 'Room\\rPC';
+        autoDrawRoutingFromConfig(p);
+
+        expect(p.avNodeById('POWERDEVICE_1')!.portById('out_pwr_1')?.label,
+            'OUTLET 1 · Room PC');
+      });
+
+      test('a spare outlet is spare, not called None', () {
+        final p = room();
+        (p.roomConfig['SYSTEM_SETUP'] as Map)['power1_outlet_4'] = 'None';
+        autoDrawRoutingFromConfig(p);
+
+        expect(p.avNodeById('POWERDEVICE_1')!.portById('out_pwr_4')?.label,
+            'OUTLET 4');
+      });
+
+      test('reach the power schedule, which is where the tech reads them', () {
+        final p = room();
+        autoDrawRoutingFromConfig(p);
+
+        final schedule = powerSections(buildAvFlowModel(p))
+            .firstWhere((s) => s.title == 'Power Schedule');
+        final pc = schedule.rows
+            .firstWhere((r) => r.first.toString() == 'Room PC');
+        expect(pc.last.toString(), 'OUTLET 1 · PC');
+      });
+
+      test('are left alone on anything that is not a controller', () {
+        final p = room();
+        final switcher = p.avNodeById('SWITCHERDEVICE_1')!;
+        expect(
+          withOutletNames(switcher.ports, switcher.id, p.roomConfig)
+              .map((x) => x.label),
+          switcher.ports.map((x) => x.label),
+        );
+      });
     });
 
     test('a name two boxes answer to is refused, with both named', () {

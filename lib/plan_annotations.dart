@@ -24,6 +24,31 @@ const double kAnnotationHitSlop = 8;
 /// The square grab handles on a selected shape.
 const double kAnnotationHandleSize = 9;
 
+/// How long an arrow's head is, in plan pixels.
+///
+/// The screenshot tool's own annotation arrow, to the number: three times the
+/// stroke, held between 10 and 40 so a hairline arrow still has a head that
+/// can be seen and a heavy one does not grow a head the length of the shaft.
+double arrowHeadLength(PlanAnnotation note) =>
+    (note.strokeWidth * 3).clamp(10.0, 40.0);
+
+/// The two barb tips of an arrow's head — the far ends of the strokes that run
+/// back from the point.
+///
+/// Half a head-length out either side of a base one head-length back, which
+/// puts each barb about 27° off the shaft. Public because the file's whole
+/// reason for existing is that the shape maths can be checked without pumping
+/// a frame.
+(Offset, Offset) arrowHeadBarbs(PlanAnnotation note) {
+  final direction = note.end - note.start;
+  if (direction.distance <= 1) return (note.end, note.end);
+  final unit = direction / direction.distance;
+  final normal = Offset(-unit.dy, unit.dx);
+  final len = arrowHeadLength(note);
+  final base = note.end - unit * len;
+  return (base + normal * (len / 2), base - normal * (len / 2));
+}
+
 /// Which part of a selected annotation a drag has taken hold of.
 enum AnnotationGrip { none, start, end, body }
 
@@ -124,7 +149,7 @@ class PlanAnnotationPainter extends CustomPainter {
     switch (note.shape) {
       case PlanShape.arrow:
         canvas.drawLine(note.start, note.end, stroke);
-        _paintArrowHead(canvas, note, color);
+        _paintArrowHead(canvas, note, stroke);
       case PlanShape.line:
         canvas.drawLine(note.start, note.end, stroke);
       case PlanShape.rectangle:
@@ -139,26 +164,18 @@ class PlanAnnotationPainter extends CustomPainter {
     if (selected) _paintSelection(canvas, note);
   }
 
-  void _paintArrowHead(Canvas canvas, PlanAnnotation note, Color color) {
-    final v = note.end - note.start;
-    if (v.distance < 0.5) return;
-    final angle = math.atan2(v.dy, v.dx);
-    // Scaled off the stroke so a heavy arrow gets a head to match rather than
-    // a thick shaft with a pinhead on the end of it.
-    final len = math.max(12.0, note.strokeWidth * 4);
-    const spread = 0.42;
-    final path = Path()
-      ..moveTo(note.end.dx, note.end.dy)
-      ..lineTo(
-        note.end.dx - len * math.cos(angle - spread),
-        note.end.dy - len * math.sin(angle - spread),
-      )
-      ..lineTo(
-        note.end.dx - len * math.cos(angle + spread),
-        note.end.dy - len * math.sin(angle + spread),
-      )
-      ..close();
-    canvas.drawPath(path, Paint()..color = color);
+  /// The head: two strokes back from the point, in the same weight and with
+  /// the same round cap as the shaft — the screenshot tool's arrow.
+  ///
+  /// It used to be a filled triangle, and a filled triangle is what looked
+  /// wrong wound up large: the fill has no stroke weight of its own, so the
+  /// head stopped matching the shaft it was on the end of, and its back edge
+  /// read as a solid blade rather than as a point.
+  void _paintArrowHead(Canvas canvas, PlanAnnotation note, Paint stroke) {
+    if ((note.end - note.start).distance <= 1) return;
+    final (left, right) = arrowHeadBarbs(note);
+    canvas.drawLine(note.end, left, stroke);
+    canvas.drawLine(note.end, right, stroke);
   }
 
   void _paintText(Canvas canvas, PlanAnnotation note, Color color) {

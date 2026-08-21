@@ -255,8 +255,12 @@ ConnectorRef parseIoValue(String raw) {
 /// A trailing letter only counts when it stands alone or follows the digits —
 /// otherwise every label ending in a word ('HDMI') would read as a connector
 /// letter.
+///
+/// The room's own note on the label is stripped first: `OUTLET 3 · Via` is
+/// outlet 3, not an unreadable label, and naming an outlet must never change
+/// which socket a lead resolves to.
 ConnectorRef parsePortLabel(String label) {
-  final trimmed = label.trim();
+  final trimmed = basePortLabel(label);
   final both = RegExp(r'(\d+)\s*([A-Za-z])?\s*$').firstMatch(trimmed);
   if (both != null) {
     return (
@@ -678,7 +682,11 @@ RoutingPlan planRoutingFromConfig(
       label: label ?? spec.label,
       model: spec.model,
       pos: at ?? Offset(onLeft ? kAvAutoOriginX : rightX, y),
-      ports: withPowerInlet(template.ports, template.powerInput),
+      ports: withOutletNames(
+        withPowerInlet(template.ports, template.powerInput),
+        nodeId,
+        provider.roomConfig,
+      ),
       // The config field put it here, so it is a config device: the report
       // says where it came from, and taking it off the canvas is remembered
       // rather than undone by the next automatic pass.
@@ -1812,6 +1820,79 @@ List<String> outletNameTokens(String raw) => raw
     .where((t) => t.isNotEmpty)
     .toList();
 
+/// An outlet name as it should READ, rather than as it is tokenized.
+///
+/// Same `\r` problem as [outletNameTokens] — `Doc\rCam` is a two-line touch
+/// panel button — but here the words are kept whole and in their original
+/// case, because this is what gets printed on the drawing.
+String outletDisplayName(String raw) => raw
+    .replaceAll(r'\r', ' ')
+    .replaceAll(r'\n', ' ')
+    .replaceAll('\r', ' ')
+    .replaceAll('\n', ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+/// Which controller and outlet a flow port is, or null when it is neither.
+///
+/// The node id is the config section (`POWERDEVICE_1`) and the port id the
+/// catalog's outlet (`out_pwr_3`), so between them they name exactly one
+/// `power1_outlet_3` key.
+({int controller, int outlet})? powerOutletRef(String nodeId, String portId) {
+  final device = RegExp(r'^POWERDEVICE_(\d+)$').firstMatch(nodeId);
+  final port = RegExp(r'^out_pwr_(\d+)$').firstMatch(portId);
+  if (device == null || port == null) return null;
+  return (
+    controller: int.parse(device.group(1)!),
+    outlet: int.parse(port.group(1)!),
+  );
+}
+
+/// What this room calls the outlet [portId] on [nodeId], or '' when it has no
+/// name — an outlet nobody filled in, or a port that is not an outlet at all.
+///
+/// Read live from the config rather than off the port label, so renaming an
+/// outlet on the System tab reaches a drawing that is already made.
+String powerOutletName(
+  Map<String, dynamic> config,
+  String nodeId,
+  String portId,
+) {
+  final ref = powerOutletRef(nodeId, portId);
+  if (ref == null) return '';
+  final setup = config['SYSTEM_SETUP'];
+  if (setup is! Map) return '';
+  final raw = setup['power${ref.controller}_outlet_${ref.outlet}'];
+  final name = outletDisplayName(raw?.toString() ?? '');
+  // 'None' is how a config says an outlet is spare; it is not what the outlet
+  // is called.
+  return name.toLowerCase() == 'none' ? '' : name;
+}
+
+/// [ports] with a power controller's outlets carrying the names this room
+/// gives them — `OUTLET 3` becomes `OUTLET 3 · Via`.
+///
+/// Applied wherever a box gets its connectors from the catalog, because the
+/// catalog knows a controller has eight outlets and nothing about which is
+/// which. Anything that is not a power controller comes back untouched, and so
+/// does an outlet the room has not named.
+List<AvPort> withOutletNames(
+  List<AvPort> ports,
+  String configKey,
+  Map<String, dynamic> config,
+) {
+  if (!configKey.startsWith('POWERDEVICE_')) return ports;
+  return [
+    for (final port in ports)
+      port.copyWith(
+        label: portLabelWithNote(
+          port.label,
+          powerOutletName(config, configKey, port.id),
+        ),
+      ),
+  ];
+}
+
 /// How well [wanted] describes [node]: 2 a word, 1 a word it starts, 0 when
 /// any word is missing entirely.
 ///
@@ -2045,6 +2126,23 @@ RoutingResult applyRoutingFromConfig(
 }) {
   for (final node in plan.newNodes) {
     provider.addAvNode(node, recordUndo: false);
+  }
+
+  // The controller's outlets, named the way the room names them. Refreshed
+  // here rather than only when the box is placed, because an outlet renamed on
+  // the System tab is part of what this pass is triggered by (see
+  // [routingFingerprint]) — without this, a controller drawn last month would
+  // keep printing the name the outlet used to have.
+  for (final node in [...provider.avNodes]) {
+    if (!node.id.startsWith('POWERDEVICE_')) continue;
+    final named = withOutletNames(node.ports, node.id, provider.roomConfig);
+    if (named.length != node.ports.length) continue;
+    var changed = false;
+    for (var i = 0; i < named.length; i++) {
+      if (named[i].label != node.ports[i].label) changed = true;
+    }
+    if (!changed) continue;
+    provider.updateAvNode(node.copyWith(ports: named), recordUndo: false);
   }
 
   // What the diagram now says out loud: these are on a controller outlet.

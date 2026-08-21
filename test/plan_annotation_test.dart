@@ -32,6 +32,56 @@ void main() {
       expect(annotationHit(a, const Offset(400, 100)), isFalse);
     });
 
+    /// The head used to be a filled triangle, which looked wrong the moment
+    /// somebody wound the stroke up to make the arrow noticeable: a fill has
+    /// no weight of its own, so it stopped matching the shaft it was on. It is
+    /// now the screenshot tool's arrow — two strokes back from the point, same
+    /// weight, same round cap — so the two places this app draws an arrow draw
+    /// the same arrow.
+    group('the arrow head', () {
+      test('is the screenshot tool geometry, to the number', () {
+        // (strokeWidth * 3), held between 10 and 40.
+        expect(arrowHeadLength(note().copyWith(strokeWidth: 1)), 10.0);
+        expect(arrowHeadLength(note().copyWith(strokeWidth: 5)), 15.0);
+        expect(arrowHeadLength(note().copyWith(strokeWidth: 10)), 30.0);
+      });
+
+      test('the barbs sit back from the point, half a head either side', () {
+        // Pointing right (100,100) -> (200,100), stroke 10, so a 30px head.
+        final a = note().copyWith(strokeWidth: 10);
+        final (left, right) = arrowHeadBarbs(a);
+
+        // Both a head-length back along the shaft...
+        expect(left.dx, closeTo(170, 0.01));
+        expect(right.dx, closeTo(170, 0.01));
+        // ...and half of one out either side of it.
+        expect([left.dy, right.dy]..sort(), [closeTo(85, 0.01), closeTo(115, 0.01)]);
+      });
+
+      test('the barbs follow the direction the arrow points', () {
+        // Straight down: the spread is now across the x axis.
+        final down = note(
+          start: const Offset(100, 100),
+          end: const Offset(100, 200),
+        ).copyWith(strokeWidth: 10);
+        final (left, right) = arrowHeadBarbs(down);
+
+        expect(left.dy, closeTo(170, 0.01));
+        expect(right.dy, closeTo(170, 0.01));
+        expect((left.dx - right.dx).abs(), closeTo(30, 0.01));
+      });
+
+      test('an arrow with no length has no head to point anywhere', () {
+        final stub = note(
+          start: const Offset(100, 100),
+          end: const Offset(100, 100),
+        );
+        final (left, right) = arrowHeadBarbs(stub);
+        expect(left, stub.end);
+        expect(right, stub.end);
+      });
+    });
+
     test('a box is grabbed by its edge, not its middle', () {
       // Filled hit areas would make the markers a box was drawn AROUND
       // unclickable, which defeats the point of drawing it.

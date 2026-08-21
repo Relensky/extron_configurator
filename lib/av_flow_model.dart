@@ -421,6 +421,40 @@ PortSide sideFromName(String? name, PortDirection direction) {
   return direction == PortDirection.output ? PortSide.right : PortSide.left;
 }
 
+/// What separates a connector's catalog name from what THIS room has on it —
+/// `OUTLET 3 · Via`.
+///
+/// The catalog knows a power controller has eight outlets and nothing about
+/// which is which; the room's config knows outlet 3 is called Via, because
+/// that name is printed on the touch panel's power page. A port label carries
+/// both, so the drawing, the tooltip and the power schedule all say which
+/// outlet a lead comes out of AND what the room calls it.
+const String kPortNoteSeparator = ' · ';
+
+/// A port label with any room note taken off — `OUTLET 3 · Via` is `OUTLET 3`.
+///
+/// Everything that reads a label for what the CONNECTOR is (its number, its
+/// bus) goes through this, so adding a note to one can never change which
+/// socket it resolves to.
+String basePortLabel(String label) {
+  final at = label.indexOf(kPortNoteSeparator);
+  return at < 0 ? label.trim() : label.substring(0, at).trim();
+}
+
+/// The room note on a port label, or '' — `OUTLET 3 · Via` is `Via`.
+String portLabelNote(String label) {
+  final at = label.indexOf(kPortNoteSeparator);
+  return at < 0 ? '' : label.substring(at + kPortNoteSeparator.length).trim();
+}
+
+/// [label] carrying [note], with whatever note it had replaced. An empty
+/// [note] strips one, which is what an outlet the room has since un-named
+/// wants.
+String portLabelWithNote(String label, String note) {
+  final base = basePortLabel(label);
+  return note.trim().isEmpty ? base : '$base$kPortNoteSeparator${note.trim()}';
+}
+
 /// One connector on a device.
 class AvPort {
   /// Stable within its device ('in_hdmi_1'). Cables reference this, so
