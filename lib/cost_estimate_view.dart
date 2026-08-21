@@ -70,8 +70,23 @@ const List<_Col> _kEquipmentCols = [
   // DRAWN, SPARES, TOTAL — the same three the cabling table has, for the same
   // reason. The drawing says how many the room has; a job often buys one more
   // than that, and the spare is real money no drawing will ever account for.
-  _Col.field('Qty', width: 56, numeric: true),
-  _Col.field('Spares', gap: 8, width: 66, numeric: true),
+  // Wide enough for the box AND the two nudge buttons beside it — see
+  // [_CostEstimateViewState._qtyStepper]. Exactly one of these two cells is a
+  // stepper on any given row (a drawn line buys spares, a typed line has its
+  // own quantity), but the column has to hold one either way.
+  _Col.field(
+    'Qty',
+    width: 56 + 2 * kStepButtonWidth,
+    numeric: true,
+    stepper: true,
+  ),
+  _Col.field(
+    'Spares',
+    gap: 8,
+    width: 66 + 2 * kStepButtonWidth,
+    numeric: true,
+    stepper: true,
+  ),
   _Col('Total', gap: 8, width: 52, align: TextAlign.right),
   _Col.field('Unit price', gap: 12, width: 120, numeric: true),
   _Col('Extended', gap: 12, width: 106, align: TextAlign.right),
@@ -90,9 +105,9 @@ const List<_Col> _kHardwareCols = [
   _Col.field('Unit price', gap: 12, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
   _Col('Price from', gap: 12, width: 92),
-  // Two row buttons. They are constrained to 34 and render at
+  // Three row buttons. They are constrained to 34 and render at
   // 40, which is what the column actually takes.
-  _Col('', width: 80),
+  _Col('', width: 120),
 ];
 
 /// The cabling table's columns — see [_kEquipmentCols]. Both kinds of row
@@ -105,9 +120,9 @@ const List<_Col> _kCablingCols = [
   _Col('Total', gap: 12, width: 54, align: TextAlign.right),
   _Col.field('Unit price', gap: 12, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-  // Three row buttons. They are constrained to 34 and render at
+  // Four row buttons. They are constrained to 34 and render at
   // 40, which is what the column actually takes.
-  _Col('', width: 120),
+  _Col('', width: 160),
 ];
 
 /// The labor table's columns — see [_kEquipmentCols].
@@ -643,6 +658,69 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
   }
 
+  /// What the equipment table is sorted by, and the four words it takes to
+  /// change it. A menu rather than a row of chips because it sits in a card
+  /// heading that already wraps on a laptop.
+  Widget _sortMenu(BuildContext context, AppStateProvider provider) {
+    final theme = Theme.of(context);
+    final current = provider.avCost.equipmentSort;
+    return PopupMenuButton<CostEquipmentSort>(
+      tooltip: 'What order the equipment is listed in',
+      initialValue: current,
+      onSelected: provider.setAvCostEquipmentSort,
+      itemBuilder: (_) => [
+        for (final sort in CostEquipmentSort.values)
+          PopupMenuItem(
+            value: sort,
+            child: Text(kCostEquipmentSortLabels[sort] ?? sort.name),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.sort, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              'Sort: ${kCostEquipmentSortLabels[current] ?? current.name}',
+              style: theme.textTheme.labelLarge,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Who makes what is on a line, for the headings the maker sort draws.
+  /// A line off a catalog entry nobody has filled the maker in on says so,
+  /// rather than joining whoever sorts next to it.
+  static String _makerOf(CostLine line) {
+    final maker = line.manufacturer.trim();
+    return maker.isEmpty ? 'No manufacturer on the catalog entry' : maker;
+  }
+
+  /// The rule and the name over one vendor's block of the equipment table.
+  Widget _makerHeading(BuildContext context, String maker) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 2),
+      child: Row(
+        children: [
+          Text(
+            maker,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Divider(height: 1, color: theme.dividerColor)),
+        ],
+      ),
+    );
+  }
+
   // --- equipment -----------------------------------------------------------
   Widget _equipmentCard(
     BuildContext context,
@@ -652,30 +730,29 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   ) {
     final theme = Theme.of(context);
     final currency = estimate.currency;
+    final byMaker =
+        provider.avCost.equipmentSort == CostEquipmentSort.manufacturer;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Equipment (${estimate.equipment.length} line'
+            // A HEADING THAT WRAPS, like every other card's. It was a Row
+            // with an Expanded sentence in it, which held while the card had
+            // two buttons on it; the sort picker was the third, and on a
+            // laptop the row went over the edge of the card.
+            _CardHeading(
+              title: 'Equipment (${estimate.equipment.length} line'
                   '${estimate.equipment.length == 1 ? '' : 's'})',
-                  style: theme.textTheme.titleSmall,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'counted off the signal flow diagram, plus anything added '
-                    'here that is quoted without being drawn',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.disabledColor,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+              subtitle: 'counted off the signal flow diagram, plus anything '
+                  'added here that is quoted without being drawn',
+              actions: [
+                // WHAT ORDER THE QUOTE IS IN. Kept with the estimate, not
+                // with the window: an order is placed one vendor at a time,
+                // and the person who sorted the quote that way wants the
+                // screenshot and the workbook to agree with the screen.
+                PrintHide(child: _sortMenu(context, provider)),
                 // Two ways on, the same pair the "Other items" card offers:
                 // off the catalog, so the price follows a revision; or a plain
                 // line for the box that has no catalog entry and a figure
@@ -705,9 +782,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   'something being quoted that nobody has drawn.',
                 ),
               ),
-            for (final line in estimate.equipment)
+            for (int i = 0; i < estimate.equipment.length; i++) ...[
+              // ONE HEADING PER MAKER, while the table is sorted by one. The
+              // Model column names the product, never who makes it, so a list
+              // silently grouped by vendor would look like a list in no order
+              // at all.
+              if (byMaker &&
+                  (i == 0 ||
+                      _makerOf(estimate.equipment[i - 1]) !=
+                          _makerOf(estimate.equipment[i])))
+                _makerHeading(context, _makerOf(estimate.equipment[i])),
               Builder(
                 builder: (context) {
+                  final line = estimate.equipment[i];
                   // Lines added here keep an editable name and quantity and a
                   // way out; a device on the diagram takes both from the
                   // drawing, which is the whole point of counting them there.
@@ -755,20 +842,33 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         ),
                       ),
                       // Qty: what the diagram counts, or the quantity typed
-                      // on a line that is not drawn.
+                      // on a line that is not drawn. Only the typed one can be
+                      // nudged — the drawn count is the drawing's to say, and
+                      // the row buys more of it through Spares.
                       extra == null
                           ? _CellText(
                               '×${trimNumber(line.drawnQty)}',
                               numeric: true,
+                              stepper: true,
                             )
-                          : LiveTextField(
-                              fieldId: 'eqpqty_${extra.id}',
-                              initial: trimNumber(extra.qty),
-                              numeric: true,
-                              onChanged: (v) =>
+                          : _qtyStepper(
+                              value: extra.qty,
+                              what: extra.description.trim().isEmpty
+                                  ? 'this line'
+                                  : extra.description.trim(),
+                              onChanged: (qty) =>
                                   provider.updateAvCostExtraEquipment(
-                                extra.copyWith(
-                                  qty: double.tryParse(v) ?? 0,
+                                extra.copyWith(qty: qty),
+                              ),
+                              field: LiveTextField(
+                                fieldId: 'eqpqty_${extra.id}',
+                                initial: trimNumber(extra.qty),
+                                numeric: true,
+                                onChanged: (v) =>
+                                    provider.updateAvCostExtraEquipment(
+                                  extra.copyWith(
+                                    qty: double.tryParse(v) ?? 0,
+                                  ),
                                 ),
                               ),
                             ),
@@ -776,20 +876,38 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       // quoted line already has an editable quantity of its
                       // own, and two boxes meaning the same thing on one row
                       // is how a number gets typed into the wrong one.
+                      //
+                      // The + and − beside it are how the quantity on a DRAWN
+                      // line moves: the drawing says the room has three, and
+                      // buying a fourth is a decision about the order rather
+                      // than an edit to the room, so it lands here and the
+                      // Total beside it follows.
                       extra == null
-                          ? LiveTextField(
-                              fieldId: 'eqpspare_${line.key}',
-                              initial: line.spareQty == 0
-                                  ? ''
-                                  : trimNumber(line.spareQty),
-                              numeric: true,
-                              hint: '0',
-                              onChanged: (v) => provider.setAvEquipmentSpares(
-                                line.key,
-                                double.tryParse(v) ?? 0,
+                          ? _qtyStepper(
+                              value: line.spareQty,
+                              what: line.description.trim().isEmpty
+                                  ? 'this line'
+                                  : line.description.trim(),
+                              onChanged: (qty) =>
+                                  provider.setAvEquipmentSpares(line.key, qty),
+                              field: LiveTextField(
+                                fieldId: 'eqpspare_${line.key}',
+                                initial: line.spareQty == 0
+                                    ? ''
+                                    : trimNumber(line.spareQty),
+                                numeric: true,
+                                hint: '0',
+                                onChanged: (v) => provider.setAvEquipmentSpares(
+                                  line.key,
+                                  double.tryParse(v) ?? 0,
+                                ),
                               ),
                             )
-                          : const _CellText('—', numeric: true),
+                          : const _CellText(
+                              '—',
+                              numeric: true,
+                              stepper: true,
+                            ),
                       // Total
                       Text(
                         trimNumber(line.qty),
@@ -957,6 +1075,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   );
                 },
               ),
+            ],
           ],
         ),
       ),
@@ -1122,6 +1241,31 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // THE WRONG PLATE. A vent where a blank should be, a
+                          // 1U shelf that has to be 2U, a plate from the maker
+                          // the customer will not have: the same edit the
+                          // equipment table has, made where the money is. It
+                          // reaches every item in the frames the row counts,
+                          // so the elevation and the quote move together.
+                          KeyedSubtree(
+                            key: ValueKey('hw_swap_${line.key}'),
+                            child: avRowIcon(
+                              Icons.find_replace,
+                              extra != null
+                                  ? 'Quote a different part on this line'
+                                  : line.qty > 1
+                                  ? 'Replace all '
+                                        '${line.qty.toStringAsFixed(0)} in the '
+                                        'racks with another part'
+                                  : 'Replace this with another part',
+                              () => _swapHardware(
+                                context,
+                                provider,
+                                line,
+                                extra: extra,
+                              ),
+                            ),
+                          ),
                           // Placed hardware is promoted the same way a typed
                           // line is, and the items in the frames are stamped
                           // with the new entry so the elevation and the quote
@@ -1383,6 +1527,27 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // WHICH LEAD THIS LENGTH IS BOUGHT AS. The
+                              // estimate picks the shortest stock lead that
+                              // reaches the run, which is right until the job
+                              // is plenum, or the customer takes one brand
+                              // only. The runs and the spares stay counted off
+                              // the drawing — only the product changes.
+                              KeyedSubtree(
+                                key: ValueKey('cbl_swap_${line.key}'),
+                                child: avRowIcon(
+                                  Icons.find_replace,
+                                  catalog == null
+                                      ? 'Buy this run as a catalog cable'
+                                      : 'Buy this run as a different cable',
+                                  () => _swapCable(
+                                    context,
+                                    provider,
+                                    line,
+                                    signal: signal,
+                                  ),
+                                ),
+                              ),
                               // A counted run is priced off the cable TYPE.
                               // When that type has an entry there is nothing
                               // to promote; when it has none, this is where
@@ -1560,6 +1725,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                           item,
                                           kind: _ExtraPart.cable,
                                         ),
+                              ),
+                              KeyedSubtree(
+                                key: ValueKey('cbl_swap_${item.id}'),
+                                child: avRowIcon(
+                                  Icons.find_replace,
+                                  'Quote a different cable on this line',
+                                  () => _swapExtraLine(
+                                    context,
+                                    provider,
+                                    item,
+                                    kind: _ExtraPart.cable,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: kRowIconWidth),
                               avRowIcon(
@@ -1917,8 +2095,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     // system does not drive just as easily as a drawn one can — an
     // owner-furnished display is usually quoted before anybody draws it.
     final uncontrolled = extra != null
-        ? extra.noControl
-        : nodes.isNotEmpty && nodes.every((n) => n.excludeFromControl);
+        ? (extra.noControl ||
+              provider.avModelNeverControlled(extra.catalogModel))
+        : (nodes.isNotEmpty &&
+              nodes.every((n) => provider.avNodeIsUncontrolled(n)));
 
     if (configKey.isNotEmpty) {
       return KeyedSubtree(
@@ -2484,34 +2664,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
     provider.setAvCostPrice(line.key, null);
 
-    for (final key in controlKeys) {
-      // The block's OWN record of what it is, read before the setter below
-      // rewrites it — that is the name to look for in the device's name, and
-      // it is not always the model the estimate grouped on.
-      final was =
-          (provider.roomConfig[key] as Map)['model']?.toString().trim() ?? '';
-      if (module.isEmpty) {
-        // Nothing drives the new product. The model goes on the block and the
-        // module comes OFF it: a block naming the old box's driver under the
-        // new box's name reads as configured and commissions the room as the
-        // wrong device, where an empty module reads as the open question it
-        // is. The Devices tab shows it in red until somebody answers it.
-        provider.setModelWithoutModule(key, picked.model);
-      } else if (choice == _SwapControl.applyDefaults) {
-        provider.applyModuleDefaults(key, picked.model);
-      } else {
-        // Model and module only. An IP address, a port and a control ID are
-        // facts about this room's install, and a swap of the box in front of
-        // them is not a reason to throw them away.
-        provider.keepSettingsSwitchModule(key, picked.model);
-      }
-      // "Projector 1 - PowerLite L630U" is the name on the schematic, on the
-      // pack list and on the touch panel, and after a swap it names a box the
-      // room no longer has. Only the model part of it moves, and only when it
-      // is there at all. Last, so a name the new module supplied on the way
-      // past wins over this.
-      provider.renameDeviceForModel(key, was, picked.model);
-    }
+    // The control side, by the same rules wherever a swap is made — the Racks
+    // tab's replace goes through this too.
+    applyControlSwap(
+      provider,
+      controlKeys,
+      picked.model,
+      applyDefaults: choice == _SwapControl.applyDefaults,
+    );
 
     // --- the drawing --------------------------------------------------------
     //  Every box behind the row. The first press records the undo snapshot and
@@ -2554,6 +2714,230 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         duration: dropped > 0 || module.isEmpty
             ? const Duration(seconds: 8)
             : const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  /// Quotes a different part on a line that was TYPED here rather than drawn.
+  ///
+  /// Nothing but the line changes — there is no box on the diagram and no item
+  /// in a frame behind it — so this is the whole edit for a hand-added line,
+  /// whichever card it sits on.
+  Future<void> _swapExtraLine(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLineItem item, {
+    required _ExtraPart kind,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final library = provider.avDeviceLibrary;
+    final name = item.description.trim().isEmpty
+        ? (item.catalogModel.trim().isEmpty ? 'this line' : item.catalogModel)
+        : item.description.trim();
+    final picked = await pickCatalogModel(
+      context,
+      provider,
+      title: 'Replace $name',
+      actionLabel: 'Replace',
+      currentModel: item.catalogModel,
+      only: switch (kind) {
+        _ExtraPart.equipment => library.equipment,
+        _ExtraPart.cable => library.cables,
+        _ExtraPart.hardware => library.rackHardware,
+        _ExtraPart.misc => library.miscItems,
+      },
+      note: 'This line is quoted but not drawn, so only the line changes — '
+          'its name, its part number and its price.',
+    );
+    if (picked == null) return;
+
+    // A price typed against the OLD part, in both the places one can be: the
+    // room override and the line's own fallback figure. Same rule the device
+    // swap follows — the figure was for the part that is being replaced.
+    provider.setAvCostPrice(item.id, null);
+    final swapped = item.copyWith(
+      catalogModel: picked.model,
+      category: picked.category.trim().isEmpty
+          ? item.category
+          : picked.category.trim(),
+      // The name follows the part unless somebody wrote their own on the line
+      // — "patch leads for the credenza" is about the job, and survives the
+      // part under it changing.
+      description:
+          item.description.trim().isEmpty ||
+              item.description.trim().toLowerCase() ==
+                  item.catalogModel.trim().toLowerCase()
+          ? picked.model
+          : item.description,
+      unitPrice: 0,
+    );
+    switch (kind) {
+      case _ExtraPart.equipment:
+        provider.updateAvCostExtraEquipment(swapped);
+      case _ExtraPart.cable:
+        provider.updateAvCostExtraCable(swapped);
+      case _ExtraPart.hardware:
+        provider.updateAvCostExtraHardware(swapped);
+      case _ExtraPart.misc:
+        provider.updateAvCostItem(swapped);
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('Line now quotes ${picked.model}.')),
+    );
+  }
+
+  /// Puts a different part under a rack-hardware row.
+  ///
+  /// The row is a GROUP of identical items in the frames, so the swap has to
+  /// reach every one of them or the elevation and the quote stop agreeing
+  /// about what the same plate is. An item whose new height no longer fits
+  /// where it was comes off its rail rather than overlapping its neighbour —
+  /// [AppStateProvider.swapAvRackItem] decides which, and the message says how
+  /// many so nobody has to go looking for them.
+  Future<void> _swapHardware(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line, {
+    CostLineItem? extra,
+  }) async {
+    if (extra != null) {
+      return _swapExtraLine(
+        context,
+        provider,
+        extra,
+        kind: _ExtraPart.hardware,
+      );
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final items = provider.avRackItems
+        .where((i) => rackItemKey(i) == line.key)
+        .toList();
+    if (items.isEmpty) return;
+
+    final was = line.model.isEmpty ? line.description : line.model;
+    final picked = await pickCatalogModel(
+      context,
+      provider,
+      title: 'Replace ${line.description}',
+      actionLabel: 'Replace',
+      currentModel: was,
+      only: provider.avDeviceLibrary.rackHardware,
+      note: items.length > 1
+          ? 'All ${items.length} of these in the racks become the new part — '
+                'its name, its category, its rack height and its price. Each '
+                'one keeps its rail if the new part still fits on it.'
+          : 'It keeps its rail if the new part still fits on it, and comes '
+                'off it if it does not.',
+    );
+    if (picked == null) return;
+    if (picked.model.trim().toLowerCase() == was.trim().toLowerCase()) return;
+
+    final hadOverride = provider.avCost.priceOverrides[line.key] != null;
+    provider.setAvCostPrice(line.key, null);
+    var unracked = 0;
+    for (final item in items) {
+      if (!provider.swapAvRackItem(item, picked)) unracked++;
+    }
+
+    final said = [
+      items.length > 1
+          ? '${items.length} × ${line.description} replaced with '
+                '${picked.model}'
+          : '${line.description} is now a ${picked.model}',
+      if (unracked > 0)
+        '$unracked came off '
+            '${unracked == 1 ? 'its rail' : 'their rails'} — the new part does '
+            'not fit where the old one was, so place '
+            '${unracked == 1 ? 'it' : 'them'} on the Racks tab',
+      if (hadOverride) 'the room price typed on the old part was cleared',
+    ].join('. ');
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$said.'),
+        duration: unracked > 0
+            ? const Duration(seconds: 8)
+            : const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  /// Buys one counted cabling line as a different catalog lead.
+  ///
+  /// The DRAWING still says how many runs there are and how long they are —
+  /// that is the whole point of counting them there — so only the product
+  /// changes: this length of this signal is bought as the picked entry from
+  /// now on, in this room.
+  ///
+  /// The line key is built out of the entry, so it moves when the entry does.
+  /// The estimate is rebuilt here to find where the row went, and the room's
+  /// spares are carried over to it: "two spare 25 ft leads" is a decision
+  /// about the order, and it survives a change of which lead is ordered.
+  Future<void> _swapCable(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line, {
+    required SignalType signal,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final library = provider.avDeviceLibrary;
+    final lengthFt = cableKeyParts(line.key).lengthFt;
+    final forSignal = library.cablesForSignal(signal);
+    final picked = await pickCatalogModel(
+      context,
+      provider,
+      title: 'Replace ${line.description}',
+      actionLabel: 'Use this lead',
+      currentModel: line.model,
+      // This signal's leads first, then every other cable in the catalog: an
+      // entry nobody has tagged with a signal yet is still the lead somebody
+      // means to buy, and refusing to offer it would send them to the Catalog
+      // tab in the middle of pricing a room.
+      only: [
+        ...forSignal,
+        ...library.cables.where((t) => !forSignal.contains(t)),
+      ],
+      note: lengthFt > 0
+          ? 'Every ${formatCableLength(lengthFt)} run of this signal is quoted '
+                'as this lead from now on, in this room. The runs and the '
+                'spares stay as they are — they are counted off the drawing.'
+          : 'Runs of this signal with no length on them are quoted as this '
+                'lead from now on, in this room. The runs and the spares stay '
+                'as they are — they are counted off the drawing.',
+    );
+    if (picked == null) return;
+    if (picked.model.trim().toLowerCase() == line.model.trim().toLowerCase()) {
+      return;
+    }
+
+    provider.setAvCableEntry(signal, lengthFt, picked.model);
+
+    // WHERE THE ROW WENT. Rebuilt rather than guessed: the key is assembled
+    // from the entry and the length by the estimate itself, and a second copy
+    // of that rule here would be one more thing to keep in step.
+    final after = computeRoomCost(
+      model: widget.model ?? buildAvFlowModel(provider),
+      library: library,
+      settings: provider.avCost,
+      rates: provider.laborRates,
+      baseCosts: provider.baseCosts,
+      tier: provider.pricingTier,
+    );
+    final moved = after.cabling
+        .where(
+          (l) =>
+              cableSignalOfKey(l.key) == signal &&
+              cableKeyParts(l.key).lengthFt == lengthFt,
+        )
+        .firstOrNull;
+    provider.moveAvCableLine(from: line.key, to: moved?.key ?? line.key);
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '${lengthFt > 0 ? '${formatCableLength(lengthFt)} runs' : 'Runs'} of '
+          '${kSignalLabels[signal] ?? signal.name} are now quoted as '
+          '${picked.model}.',
+        ),
       ),
     );
   }
@@ -2896,11 +3280,25 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             null => cableSignal != null ? kCategoryCable : '',
           };
 
+    // RENAMING, not just editing. Typing a new name over an entry that is open
+    // for editing is the commonest way a part gets renamed — "1RU vent plate"
+    // turns out to be a fan panel while somebody is looking at the quote — and
+    // it used to leave BOTH entries in the catalog and every rack item, box and
+    // line still naming the old one. Ticked by default because the other
+    // reading ("add a second, similar part") is the rarer one, and because the
+    // untidy half of it is invisible until a price goes missing.
+    var replaceEverywhere = true;
+
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
           final model = modelController.text.trim();
+          // The entry this dialog was opened on, being given a different name.
+          final renaming = editing &&
+              model.isNotEmpty &&
+              AvDeviceLibrary.normalizeModel(model) !=
+                  AvDeviceLibrary.normalizeModel(current.model);
           // Typing the name of something already in the catalog is nearly
           // always "I did not know it was there" rather than "replace it", so
           // it is said out loud before the button is pressed rather than
@@ -2970,6 +3368,27 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                               color: Theme.of(ctx).colorScheme.error,
                             ),
+                      ),
+                    ],
+                    if (renaming) ...[
+                      const SizedBox(height: 4),
+                      CheckboxListTile(
+                        key: const ValueKey('catalog_replace_everywhere'),
+                        value: replaceEverywhere,
+                        onChanged: (v) =>
+                            setLocal(() => replaceEverywhere = v ?? false),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text('Replace "${current.model}" with this'),
+                        subtitle: Text(
+                          '"${current.model}" comes out of the catalog, and '
+                          'everything in this room that uses it — this quote, '
+                          'the racks, the diagram and the config — becomes '
+                          'the new part. Untick to leave "${current.model}" '
+                          'alone and add this as a second entry.',
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
                       ),
                     ],
                     const SizedBox(height: 12),
@@ -3155,7 +3574,22 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final model = modelController.text.trim();
     if (model.isEmpty) return;
 
+    // Renaming the entry this was opened on, rather than writing a new one.
+    // Both halves of it are the checkbox's: the OLD ENTRY GOES (upsert is told
+    // what it is replacing) and the room follows it (below).
+    final renamedFrom =
+        current != null &&
+            replaceEverywhere &&
+            AvDeviceLibrary.normalizeModel(model) !=
+                AvDeviceLibrary.normalizeModel(current.model)
+        ? current.model
+        : '';
+
     final existing = library.templateForModel(model);
+    // What the connectors and the cable facts come off when the name changed:
+    // the entry being renamed, since nothing is stored under the new name yet.
+    // Without this a rename dropped the port list it never showed.
+    final keepFrom = existing ?? (renamedFrom.isEmpty ? null : current);
     library.upsert(
       AvDeviceTemplate(
         model: model,
@@ -3168,24 +3602,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         notes: notesController.text.trim(),
         // What signal a CABLE entry carries, so the counted runs of that type
         // find it. Kept from the old entry when one is being replaced.
-        cableSignal: cableSignal ?? existing?.cableSignal,
+        cableSignal: cableSignal ?? keepFrom?.cableSignal,
         cableLengthFt: double.tryParse(lengthController.text.trim()) ??
-            existing?.cableLengthFt ??
+            keepFrom?.cableLengthFt ??
             0,
         // Replacing keeps whatever connectors the old entry had: this dialog
         // knows about money, not about ports, and dropping a port list it
         // never showed would be a silent edit.
-        ports: existing?.ports ?? const [],
+        ports: keepFrom?.ports ?? const [],
       ),
-      previousModel: existing?.model ?? '',
+      previousModel: renamedFrom.isNotEmpty
+          ? renamedFrom
+          : (existing?.model ?? ''),
     );
-    final file = await provider.saveAvDeviceLibrary();
-    // The catalog is a plain object rather than a listenable, so the page it
-    // is being edited from has to be told. Without this an edited price sat
-    // in the file and in memory while the row went on showing the old figure
-    // until something else happened to rebuild it.
-    provider.avDeviceLibraryChanged();
-
+    // THE ROOM FIRST, THE FILE AFTER. Everything below is a change to what is
+    // open in front of somebody; the write is a trip to a network share that
+    // can be slow and can fail, and a room left half-repointed while it is in
+    // flight is a room whose quote and racks disagree.
+    //
     // The line now points at the entry. The typed price and the room override
     // both go, or they would keep winning over the catalog figure and the
     // promotion would look like it had done nothing.
@@ -3202,9 +3636,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           provider.updateAvCostItem(linked);
       }
     }
+    // THE ROOM FOLLOWS THE RENAME. Everything that records a model does it by
+    // NAME — the boxes on the diagram, the items in the racks, the lines typed
+    // on the quote, the blocks in the config — so without this the entry moves
+    // and every one of them is left naming a part the catalog no longer has.
+    final moved = renamedFrom.isEmpty
+        ? (nodes: 0, rackItems: 0, costLines: 0, blocks: 0)
+        : provider.renameAvCatalogModel(renamedFrom, model);
+
     // Hardware already in a frame is stamped with the model instead: the item
     // in the rack and the line on the quote are the same part, and only the
-    // rack knows how many of them there are.
+    // rack knows how many of them there are. A rename has already been through
+    // them by name, so this is only for the ones it did not cover.
     final stamped = rackItemLabel == null
         ? 0
         : provider.linkAvRackItemsToCatalog(
@@ -3214,18 +3657,43 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final key = priceKey ?? link?.id;
     if (key != null) provider.setAvCostPrice(key, null);
 
+    final file = await provider.saveAvDeviceLibrary();
+    // The catalog is a plain object rather than a listenable, so the page it
+    // is being edited from has to be told. Without this an edited price sat
+    // in the file and in memory while the row went on showing the old figure
+    // until something else happened to rebuild it.
+    provider.avDeviceLibraryChanged();
+
+    final followed = [
+      if (moved.rackItems > 0)
+        '${moved.rackItems} in the racks'
+      else if (stamped > 1)
+        'all $stamped of them in the racks',
+      if (moved.nodes > 0)
+        '${moved.nodes} on the diagram',
+      if (moved.blocks > 0)
+        '${moved.blocks} config block${moved.blocks == 1 ? '' : 's'}',
+      if (moved.costLines > 0)
+        '${moved.costLines} quote line${moved.costLines == 1 ? '' : 's'}',
+    ];
+
     messenger.showSnackBar(
       SnackBar(
         content: Text(
           file.isEmpty
-              ? '"$model" added to the catalog in memory, but the catalog file '
+              ? '"$model" saved to the catalog in memory, but the catalog file '
                     'could not be written — check the Device Editor tab.'
-              : stamped > 1
-              ? '"$model" added to the catalog ($file). All $stamped of them '
-                    'in the racks now take their price from it.'
-              : '"$model" added to the catalog ($file). This line now takes '
+              : renamedFrom.isNotEmpty
+              ? '"$renamedFrom" is now "$model" ($file)'
+                    '${followed.isEmpty ? ' — nothing in this room was using '
+                        'it yet' : ', and so ${followed.join(', ')}'}.'
+              : followed.isNotEmpty
+              ? '"$model" saved to the catalog ($file). ${followed.join(', ')} '
+                    'now take their price from it.'
+              : '"$model" saved to the catalog ($file). This line now takes '
                     'its price from it.',
         ),
+        duration: const Duration(seconds: 6),
       ),
     );
   }
@@ -3938,6 +4406,36 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     );
   }
 
+  /// A quantity cell that can be NUDGED as well as typed in.
+  ///
+  /// "Make that two" is the commonest edit an estimate gets, and typing it
+  /// meant clicking into a box, selecting a digit and replacing it — three
+  /// motions for one more display. The box stays: a line that buys eleven is
+  /// still typed, not clicked eleven times.
+  ///
+  /// [value] is what the row currently buys and [onChanged] takes the new
+  /// figure, so this works the same against a typed line's own quantity and
+  /// against the spares beside a count the diagram owns. Never below zero — a
+  /// quote cannot buy minus one of anything.
+  static Widget _qtyStepper({
+    required Widget field,
+    required double value,
+    required String what,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Row(
+      children: [
+        _stepButton(
+          Icons.remove,
+          'One fewer $what',
+          value <= 0 ? null : () => onChanged(value - 1 < 0 ? 0 : value - 1),
+        ),
+        Expanded(child: field),
+        _stepButton(Icons.add, 'One more $what', () => onChanged(value + 1)),
+      ],
+    );
+  }
+
   /// THE INVISIBLE GRID.
   ///
   /// Lays [cells] out on exactly the geometry [columns] describes — the gap in
@@ -4014,6 +4512,12 @@ class _Col {
   /// closer to the edge; the job-type picker keeps its box either way.
   final bool keepsBox;
 
+  /// True when the box in this column has a + button beside it — see
+  /// [_CostEstimateViewState._qtyStepper]. The button is part of the COLUMN
+  /// but not part of the value, so the caption has to clear it as well as the
+  /// box's own inset or it sits a stepper-width right of the figure it names.
+  final bool stepper;
+
   /// A caption over a plain cell — a figure, a name, a checkbox.
   const _Col(
     this.text, {
@@ -4022,7 +4526,8 @@ class _Col {
     this.flex = 0,
     this.align = TextAlign.left,
   }) : inset = 0,
-       keepsBox = false;
+       keepsBox = false,
+       stepper = false;
 
   /// A caption over an input box. [numeric] right-aligns it, because that is
   /// where a numeric field puts its figure.
@@ -4033,14 +4538,18 @@ class _Col {
     this.flex = 0,
     bool numeric = false,
     this.keepsBox = false,
+    this.stepper = false,
   }) : align = numeric ? TextAlign.right : TextAlign.left,
        inset = kFieldTextInset;
 
   /// The inset as padding on whichever side the caption is drawn against.
   EdgeInsets padding(bool printing) {
-    final gap = inset == 0
+    var gap = inset == 0
         ? 0.0
         : (printing && !keepsBox ? kPrintValueInset : inset);
+    // The nudge button keeps its width in the photograph too, so this is the
+    // same either way.
+    if (stepper) gap += kStepButtonWidth;
     if (gap == 0) return EdgeInsets.zero;
     return align == TextAlign.right
         ? EdgeInsets.only(right: gap)
@@ -4068,11 +4577,18 @@ class _CellText extends StatelessWidget {
   /// figure.
   final bool numeric;
 
-  const _CellText(this.text, {this.numeric = false});
+  /// True in a column whose boxes have a + beside them — see [_Col.stepper].
+  /// The printed row has no buttons of its own, so it has to stand off the
+  /// cell edge by the width of the one on the row above.
+  final bool stepper;
+
+  const _CellText(this.text, {this.numeric = false, this.stepper = false});
 
   @override
   Widget build(BuildContext context) {
-    final inset = PrintMode.of(context) ? kPrintValueInset : kFieldTextInset;
+    final inset =
+        (PrintMode.of(context) ? kPrintValueInset : kFieldTextInset) +
+        (stepper ? kStepButtonWidth : 0);
     return Padding(
       padding: numeric
           ? EdgeInsets.only(right: inset)
@@ -4085,6 +4601,42 @@ class _CellText extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What one nudge button beside a quantity box takes across a row.
+///
+/// Deliberately tighter than [kRowIconWidth]: these come in pairs and there
+/// are two quantity columns on the equipment table, so the stock row icon
+/// would have cost the device and model names 160 pixels between them.
+const double kStepButtonWidth = 24.0;
+
+/// The − or + beside a quantity. Null [onPressed] greys it out — which is what
+/// − does at zero, since a quote cannot buy minus one of anything.
+///
+/// Gone from the photographed estimate, like every other control: the column
+/// keeps its width, so the number under the caption stays where it was.
+Widget _stepButton(IconData icon, String tooltip, VoidCallback? onPressed) {
+  return Builder(
+    builder: (context) {
+      if (PrintMode.of(context)) {
+        return const SizedBox(width: kStepButtonWidth, height: 34);
+      }
+      return SizedBox(
+        width: kStepButtonWidth,
+        child: IconButton(
+          icon: Icon(icon, size: 16),
+          onPressed: onPressed,
+          tooltip: tooltip,
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(
+            width: kStepButtonWidth,
+            height: 32,
+          ),
+        ),
+      );
+    },
+  );
 }
 
 /// How tall a caption cell is, whether its text takes one line or two.

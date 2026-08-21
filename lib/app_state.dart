@@ -297,14 +297,31 @@ class AppStateProvider extends ChangeNotifier {
     ).toSet();
     return [
       for (final n in avNodes)
-        // A box somebody has said the processor does not drive is not a gap
-        // in the config — see [AvNode.excludeFromControl].
+        // A box nothing was ever going to drive is not a gap in the config —
+        // see [avNodeIsUncontrolled].
         if (!n.isJackField &&
-            !n.excludeFromControl &&
+            !avNodeIsUncontrolled(n) &&
             !configured.contains(n.id))
           (key: n.id, name: n.label, model: n.model),
     ];
   }
+
+  /// True when nothing in the room will ever talk to this box, from either of
+  /// the two directions that can say so: THIS box was excluded by hand on the
+  /// diagram ([AvNode.excludeFromControl]), or the PRODUCT is uncontrollable
+  /// wherever it turns up ([AvDeviceTemplate.neverControlled]).
+  ///
+  /// One question, asked in one place, because four things ask it — the
+  /// control-gap report, the config prefill, the estimate's per-row flag and
+  /// the count on the estimate's header — and three answers to it would be
+  /// three lists of "missing" devices that disagree.
+  bool avNodeIsUncontrolled(AvNode node) =>
+      node.excludeFromControl || avModelNeverControlled(node.model);
+
+  /// True when the catalog says this model has no control interface at all.
+  bool avModelNeverControlled(String model) =>
+      model.trim().isNotEmpty &&
+      (avDeviceLibrary.templateForModel(model)?.neverControlled ?? false);
 
   // --- Application Paths & Settings ---
   String modulesPath = '';
@@ -2163,6 +2180,218 @@ class AppStateProvider extends ChangeNotifier {
     return matched.length;
   }
 
+  /// Puts a different product under one placed piece of rack hardware.
+  ///
+  /// The frame keeps the item — its id, its rail and its notes are facts about
+  /// this room — and what the CATALOG says it is comes off [template]: the
+  /// name, the category, the part number, how many rails it takes and what it
+  /// costs. The same trade the device swap makes on the diagram.
+  ///
+  /// Returns false when it had to come off its rail: a 1U blank replaced by a
+  /// 3U shelf may not fit where the blank was, and a taller box silently
+  /// overlapping its neighbour is a rack elevation that lies. It stays in the
+  /// room, un-racked, for somebody to place.
+  bool swapAvRackItem(RackItem item, AvDeviceTemplate template) {
+    final was = item.catalogModel.trim().isNotEmpty
+        ? item.catalogModel
+        : item.label;
+    final heightU = math.max(1, template.rackUnits);
+    updateAvRackItem(
+      item.copyWith(
+        catalogModel: template.model,
+        // Only the part of the name that WAS the old product — "Vent plate,
+        // above the amp" keeps where it is while what it is changes.
+        label: renamedForModel(item.label, was, template.model),
+        category: template.category.trim().isEmpty
+            ? item.category
+            : template.category,
+        partNumber: template.partNumber,
+        rackUnits: heightU,
+        // The copy on the placed item is only the fallback for when the entry
+        // is gone, but it has to be the NEW part's fallback.
+        price: template.price,
+      ),
+    );
+    final slot = avRackSlots[item.id];
+    if (slot == null) return true;
+    if (avRackSpanIsFree(
+      rackId: slot.rackId,
+      face: slot.face,
+      startU: slot.startU,
+      heightU: heightU,
+      slice: slot.slice,
+      ignoreNodeId: item.id,
+    )) {
+      return true;
+    }
+    setAvRackSlot(item.id, null);
+    return false;
+  }
+
+  /// Points everything in THIS ROOM that names [oldModel] at [newModel], and
+  /// says how much it reached.
+  ///
+  /// THE HALF A CATALOG RENAME ALWAYS MISSED. Renaming an entry moves the
+  /// entry; it does not move the vent plate in rack 2, the box on the diagram,
+  /// the line on the quote or the block in the config, all of which record the
+  /// model by NAME. Before this, editing "Vent plate" into "1RU fan panel"
+  /// left every one of them still saying "Vent plate" and quietly unpriced,
+  /// because the entry they named was gone.
+  ///
+  /// Names as well as models: a rack item IS its label, and a device called
+  /// "Rack DSP — DMP 128" is named after the product — see [renamedForModel]
+  /// for why only the model part of a name moves.
+  ///
+  /// Room prices follow too. An override is filed under a line key built out
+  /// of the model, so leaving it behind would drop the price somebody typed
+  /// the moment the part was renamed.
+  ({int nodes, int rackItems, int costLines, int blocks}) renameAvCatalogModel(
+    String oldModel,
+    String newModel,
+  ) => _walkModelUses(oldModel, newModel);
+
+  /// What a rename of [model] WOULD reach, without touching any of it.
+  ///
+  /// Asked before the question is put: a rename that moves nothing needs no
+  /// dialog, and one that moves eleven things should say eleven.
+  ///
+  /// The same walk that does the work, so the count and the change cannot
+  /// disagree — which is the whole reason this is not a second loop.
+  ({int nodes, int rackItems, int costLines, int blocks}) avUsesOfModel(
+    String model,
+  ) => _walkModelUses(model, '');
+
+  /// Counts everything in this room that names [oldModel], and — when
+  /// [newModel] is given — points it at that instead. See
+  /// [renameAvCatalogModel] for why any of this is necessary.
+  ({int nodes, int rackItems, int costLines, int blocks}) _walkModelUses(
+    String oldModel,
+    String newModel,
+  ) {
+    final was = oldModel.trim();
+    final now = newModel.trim();
+    // Counting, not renaming: the walk is the same and nothing is written.
+    final apply = now.isNotEmpty;
+    if (was.isEmpty ||
+        (apply &&
+            AvDeviceLibrary.normalizeModel(was) ==
+                AvDeviceLibrary.normalizeModel(now))) {
+      return (nodes: 0, rackItems: 0, costLines: 0, blocks: 0);
+    }
+    bool isOld(String model) =>
+        model.trim().isNotEmpty &&
+        AvDeviceLibrary.normalizeModel(model) ==
+            AvDeviceLibrary.normalizeModel(was);
+    String renamed(String name) => renamedForModel(name, was, now);
+
+    if (apply) {
+      _pushAvUndo('Rename $was', {AvUndoScope.flow, AvUndoScope.racks});
+    }
+
+    var nodes = 0;
+    for (var i = 0; i < avNodes.length; i++) {
+      if (!isOld(avNodes[i].model)) continue;
+      if (apply) {
+        avNodes[i] = avNodes[i].copyWith(
+          model: now,
+          label: renamed(avNodes[i].label),
+        );
+      }
+      nodes++;
+    }
+
+    var rackItems = 0;
+    for (var i = 0; i < avRackItems.length; i++) {
+      final item = avRackItems[i];
+      // Either it names the entry, or it is a one-off that was typed in under
+      // the entry's own name — the vent plate somebody placed before anybody
+      // catalogued it. Both are the same part to everyone who reads the rack.
+      if (!isOld(item.catalogModel) &&
+          !(item.catalogModel.trim().isEmpty && isOld(item.label))) {
+        continue;
+      }
+      if (apply) {
+        avRackItems[i] = item.copyWith(
+          catalogModel: now,
+          label: renamed(item.label),
+        );
+      }
+      rackItems++;
+    }
+
+    var costLines = 0;
+    for (final list in [
+      avCost.extraEquipment,
+      avCost.extraHardware,
+      avCost.extraCables,
+      avCost.items,
+    ]) {
+      for (var i = 0; i < list.length; i++) {
+        if (!isOld(list[i].catalogModel)) continue;
+        if (apply) {
+          list[i] = list[i].copyWith(
+            catalogModel: now,
+            description: renamed(list[i].description),
+          );
+        }
+        costLines++;
+      }
+    }
+
+    // The price keys the estimate builds out of a model — the device group's
+    // and the rack group's. Moved rather than dropped: the figure was typed
+    // against this part, and the part is the one that has been renamed.
+    if (apply) {
+      for (final entry in {
+        'model:${was.toLowerCase()}': 'model:${now.toLowerCase()}',
+        'rackitem:model:${was.toLowerCase()}': 'rackitem:model:'
+            '${now.toLowerCase()}',
+      }.entries) {
+        final price = avCost.priceOverrides.remove(entry.key);
+        if (price != null) avCost.priceOverrides[entry.value] = price;
+      }
+    }
+
+    // The control side. A block records the model it was specified as, and
+    // the name people read is usually built out of it.
+    var blocks = 0;
+    for (final key in roomConfig.keys.toList()) {
+      final dev = roomConfig[key];
+      if (dev is! Map || !isOld(dev['model']?.toString() ?? '')) continue;
+      if (apply) {
+        dev['model'] = now;
+        _forgetConversionOrigin(key, 'model');
+        final name = dev['name']?.toString() ?? '';
+        final after = renamed(name);
+        if (after != name) {
+          dev['name'] = after;
+          _forgetConversionOrigin(key, 'name');
+        }
+      }
+      blocks++;
+    }
+
+    if (!apply) {
+      return (
+        nodes: nodes,
+        rackItems: rackItems,
+        costLines: costLines,
+        blocks: blocks,
+      );
+    }
+    AppLogger.logInfo(
+      'Renamed "$was" to "$now": $nodes box(es), $rackItems rack item(s), '
+      '$costLines quote line(s), $blocks config block(s).',
+    );
+    notifyListeners();
+    return (
+      nodes: nodes,
+      rackItems: rackItems,
+      costLines: costLines,
+      blocks: blocks,
+    );
+  }
+
   void removeAvRackItem(String itemId) {
     final item = avRackItemById(itemId);
     if (item == null) return;
@@ -3883,6 +4112,51 @@ class AppStateProvider extends ChangeNotifier {
   // --- cabling: counted off the diagram, topped up by hand ------------------
 
   /// Whether the runs drawn on the AV flow are priced into the estimate.
+  /// What order the equipment table lists its lines in. Kept with the estimate
+  /// rather than with the window, so the screenshot, the workbook and the tab
+  /// export all list the quote the way it was left.
+  void setAvCostEquipmentSort(CostEquipmentSort value) {
+    if (avCost.equipmentSort == value) return;
+    avCost.equipmentSort = value;
+    notifyListeners();
+  }
+
+  /// Buys every run of [signal] at [lengthFt] as [model] instead of whatever
+  /// the catalog would have chosen. Empty [model] hands the choice back.
+  ///
+  /// Filed by length rather than by line key — see
+  /// [RoomCostSettings.cableEntries] — because the line key is built out of
+  /// the entry and moves when this changes.
+  void setAvCableEntry(SignalType signal, double lengthFt, String model) {
+    final key = cableEntryKey(signal, lengthFt);
+    if (model.trim().isEmpty) {
+      avCost.cableEntries.remove(key);
+    } else {
+      avCost.cableEntries[key] = model.trim();
+    }
+    notifyListeners();
+  }
+
+  /// Moves what this room typed against one cabling line onto another, for
+  /// when a swap has renamed the line under it.
+  ///
+  /// Spares MOVE: "two spare 25 ft leads" is a decision about the order, and
+  /// it survives a change of which lead is being ordered. The price does NOT —
+  /// a figure typed against the old part was for the old part, which is the
+  /// same rule the device swap follows.
+  void moveAvCableLine({required String from, required String to}) {
+    avCost.priceOverrides.remove(from);
+    if (from == to) {
+      notifyListeners();
+      return;
+    }
+    final spares = avCost.cableSpares.remove(from);
+    if (spares != null && spares > 0) {
+      avCost.cableSpares[to] = (avCost.cableSpares[to] ?? 0) + spares;
+    }
+    notifyListeners();
+  }
+
   void setAvCostIncludeCabling(bool value) {
     if (avCost.includeCabling == value) return;
     avCost.includeCabling = value;

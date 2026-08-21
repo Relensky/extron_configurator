@@ -58,14 +58,34 @@ class _LiveTextFieldState extends State<LiveTextField> {
     text: widget.initial,
   );
 
+  /// Owned here so the box can tell "somebody is typing in me" from "somebody
+  /// changed this value from outside" — see [didUpdateWidget].
+  final FocusNode _focus = FocusNode();
+
   @override
   void didUpdateWidget(covariant LiveTextField old) {
     super.didUpdateWidget(old);
-    if (old.fieldId != widget.fieldId) _controller.text = widget.initial;
+    if (old.fieldId != widget.fieldId) {
+      _controller.text = widget.initial;
+      return;
+    }
+    // THE VALUE CHANGED UNDER AN IDLE BOX. A quantity nudged by the + and −
+    // buttons beside it is still this field's value, and a box that kept
+    // showing the old number would be the one thing on the row disagreeing
+    // with the total. Only while the box is NOT being typed in: re-reading a
+    // focused field is what this class exists to avoid, since the provider
+    // normalizes what it is given ("3." comes back "3") and would eat the
+    // keystroke.
+    if (!_focus.hasFocus &&
+        widget.initial != old.initial &&
+        widget.initial != _controller.text) {
+      _controller.text = widget.initial;
+    }
   }
 
   @override
   void dispose() {
+    _focus.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -97,6 +117,7 @@ class _LiveTextFieldState extends State<LiveTextField> {
 
   Widget _field() => TextField(
     controller: _controller,
+    focusNode: _focus,
     autofocus: widget.autofocus,
     maxLines: widget.maxLines,
     style: const TextStyle(fontSize: 13),

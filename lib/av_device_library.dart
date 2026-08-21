@@ -226,6 +226,21 @@ class AvDeviceTemplate {
   /// from every room that already used it.
   final bool retired;
 
+  /// NOTHING WILL EVER DRIVE THIS. A USB capture stick, a passive splitter, a
+  /// wall plate: real equipment, on the drawing and on the quote, with no
+  /// control interface of any kind.
+  ///
+  /// On the ENTRY rather than on each box placed from it, because it is a fact
+  /// about the product — the AverMedia interface is uncontrollable in every
+  /// room anybody puts one in — and ticking the same box on every drawing is
+  /// how the reports fill up with gaps somebody has to re-decide about.
+  ///
+  /// What reads it: the control-gap report, the estimate's config flag and the
+  /// prefill that writes config blocks for drawn boxes. See
+  /// [AppStateProvider.avNodeIsUncontrolled], which is where the per-box
+  /// [AvNode.excludeFromControl] and this meet.
+  final bool neverControlled;
+
   /// For a [kCategoryCable] entry: which signal type this cable carries, so
   /// the estimate can count the runs of that type on the AV flow and price
   /// them. Null on everything else.
@@ -273,6 +288,7 @@ class AvDeviceTemplate {
     this.price = 0,
     this.educationPrice = 0,
     this.retired = false,
+    this.neverControlled = false,
     this.cableSignal,
     this.cableLengthFt = 0,
     this.url = '',
@@ -340,6 +356,7 @@ class AvDeviceTemplate {
     double? price,
     double? educationPrice,
     bool? retired,
+    bool? neverControlled,
     SignalType? cableSignal,
     double? cableLengthFt,
     bool clearCableSignal = false,
@@ -361,6 +378,7 @@ class AvDeviceTemplate {
     price: price ?? this.price,
     educationPrice: educationPrice ?? this.educationPrice,
     retired: retired ?? this.retired,
+    neverControlled: neverControlled ?? this.neverControlled,
     cableSignal: clearCableSignal ? null : (cableSignal ?? this.cableSignal),
     cableLengthFt: cableLengthFt ?? this.cableLengthFt,
     url: url ?? this.url,
@@ -383,6 +401,7 @@ class AvDeviceTemplate {
     if (price > 0) 'price': price,
     if (educationPrice > 0) 'educationPrice': educationPrice,
     if (retired) 'retired': true,
+    if (neverControlled) 'neverControlled': true,
     if (cableSignal != null) 'cableSignal': cableSignal!.name,
     if (cableLengthFt > 0) 'cableLengthFt': cableLengthFt,
     if (url.isNotEmpty) 'url': url,
@@ -421,6 +440,7 @@ class AvDeviceTemplate {
         (json['eduPrice'] as num?)?.toDouble() ??
         0,
     retired: json['retired'] == true,
+    neverControlled: json['neverControlled'] == true,
     cableSignal: json['cableSignal'] == null
         ? null
         : signalFromName(json['cableSignal'].toString()),

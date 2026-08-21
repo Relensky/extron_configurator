@@ -316,6 +316,53 @@ Future<AvDeviceTemplate?> pickCatalogModel(
 }
 
 
+/// Points the control blocks named by [deviceKeys] at [model].
+///
+/// The other half of [applyModelSwap]: the drawing knows what the box IS, the
+/// config knows how the room talks to it, and a swap that moved one without
+/// the other left a room commissioning the wrong device off a drawing of the
+/// right one.
+///
+/// Three cases, in the order they matter:
+///
+///   * NO MODULE CLAIMS THE NEW MODEL — the model goes on the block and the
+///     module comes OFF it. A block naming the old box's driver under the new
+///     box's name reads as configured and commissions the room as the wrong
+///     device; an empty module reads as the open question it is, and the
+///     Devices tab shows it in red until somebody answers it.
+///   * [applyDefaults] — the new module's DEVICE_INFO defaults, for a device
+///     being specified fresh.
+///   * otherwise the room keeps what it has set. An IP address, a port and a
+///     control ID are facts about this install, and the box in front of them
+///     changing is not a reason to throw them away.
+///
+/// The block's name follows last, so a name the new module supplied on the way
+/// past wins over the rename — see [AppStateProvider.renameDeviceForModel].
+void applyControlSwap(
+  AppStateProvider provider,
+  Iterable<String> deviceKeys,
+  String model, {
+  bool applyDefaults = false,
+}) {
+  final module = provider.moduleForModel(model);
+  for (final key in deviceKeys) {
+    final block = provider.roomConfig[key];
+    if (block is! Map) continue;
+    // The block's OWN record of what it is, read before the setter below
+    // rewrites it — that is the name to look for in the device's name, and it
+    // is not always the model the drawing or the estimate grouped on.
+    final was = block['model']?.toString().trim() ?? '';
+    if (module.isEmpty) {
+      provider.setModelWithoutModule(key, model);
+    } else if (applyDefaults) {
+      provider.applyModuleDefaults(key, model);
+    } else {
+      provider.keepSettingsSwitchModule(key, model);
+    }
+    provider.renameDeviceForModel(key, was, model);
+  }
+}
+
 /// ============================================================================
 ///  PUTTING A DIFFERENT PRODUCT UNDER A BOX
 /// ============================================================================

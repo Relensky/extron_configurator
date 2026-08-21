@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'av_flow_swap_dialogs.dart'
+    show applyControlSwap, applyModelSwap, pickCatalogModel;
 import 'av_flow_view.dart' show iconForAvNode;
 import 'cost_estimate.dart' show formatMoney, trimNumber;
 import 'device_recheck_dialog.dart';
@@ -817,7 +819,8 @@ class _AvRackViewState extends State<AvRackView> {
             '${shared ? ' · ${slice.label} of the rail' : ''}'
             '${fouled.isEmpty ? '' : '\n⚠ ${fouled.join('\n⚠ ')}'}'
             '${widget.editMode ? '\nDrag to move • click to pick up • '
-                      'double-click to type a U • right-click to un-rack' : ''}',
+                      'double-click to type a U • right-click for replace, '
+                      'edit and un-rack' : ''}',
         // A placed device covers the rail's drop target, so it has to accept
         // drops itself and pass them to the same sharing placer — otherwise a
         // second box could never be dropped onto an occupied rail.
@@ -847,8 +850,17 @@ class _AvRackViewState extends State<AvRackView> {
                         ? _showHardwareEditDialog(provider, item)
                         : _showPlacementDialog(provider, entry.key)
                   : null,
-              onSecondaryTap: widget.editMode
-                  ? () => provider.setAvRackSlot(entry.key, null)
+              // RIGHT-CLICK USED TO UN-RACK, full stop. It still can, from
+              // the menu — which is also where "this is the wrong part"
+              // finally lives: the rack elevation is where a vent plate turns
+              // out to be a fan panel, and until now the only way to say so
+              // was to delete it, add the right one and place it again.
+              onSecondaryTapDown: widget.editMode
+                  ? (d) => _showRackBlockMenu(
+                      provider,
+                      entry.key,
+                      d.globalPosition,
+                    )
                   : null,
               child: Container(
                 margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
@@ -1864,6 +1876,164 @@ class _AvRackViewState extends State<AvRackView> {
   /// Edits or removes one placed piece of hardware. The price is editable
   /// here because a plate bought for this job at a different price is a fact
   /// about this job, and should not rewrite the parts list.
+  /// The menu on a block in a frame: replace the part, open its editor, or
+  /// take it off the rail.
+  ///
+  /// A menu rather than three gestures, because two of these had nowhere to be
+  /// discovered — the un-rack was a right-click nobody was told about, and
+  /// replacing a part could only be done from the Cost tab.
+  Future<void> _showRackBlockMenu(
+    AppStateProvider provider,
+    String id,
+    Offset at,
+  ) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+    final item = provider.avRackItemById(id);
+    final node = item == null ? provider.avNodeById(id) : null;
+    if (item == null && node == null) return;
+
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        at & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'replace',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.find_replace, size: 18),
+            title: const Text('Replace with...'),
+            subtitle: Text(
+              item != null
+                  ? 'Another part from the catalog'
+                  : 'Another model — connectors, rack height and cables move '
+                        'with it',
+            ),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'edit',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.edit_note, size: 18),
+            title: Text('Edit...'),
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'unrack',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.eject_outlined, size: 18),
+            title: Text('Un-rack'),
+            subtitle: Text('Stays in the room, off the rail'),
+          ),
+        ),
+      ],
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'replace':
+        await _replaceRacked(provider, id);
+      case 'edit':
+        if (item != null) {
+          await _showHardwareEditDialog(provider, item);
+        } else {
+          await _showPlacementDialog(provider, id);
+        }
+      case 'unrack':
+        provider.setAvRackSlot(id, null);
+    }
+  }
+
+  /// Puts a different product under one block in a frame.
+  ///
+  /// Two kinds of block and two catalogs: a piece of rack hardware takes the
+  /// parts list, a device takes the equipment list and brings its connectors,
+  /// its power and the runs already drawn on it across — the same swap the
+  /// quote makes, made where the elevation is being read.
+  Future<void> _replaceRacked(AppStateProvider provider, String id) async {
+    final item = provider.avRackItemById(id);
+    final node = item == null ? provider.avNodeById(id) : null;
+    final library = provider.avDeviceLibrary;
+    final picked = await pickCatalogModel(
+      context,
+      provider,
+      title: 'Replace ${item?.label ?? node?.label ?? ''}',
+      actionLabel: 'Replace',
+      currentModel: item != null ? item.catalogModel : (node?.model ?? ''),
+      only: item != null ? library.rackHardware : library.equipment,
+      note: item != null
+          ? 'It keeps its rail if the new part still fits on it, and comes off '
+                'it if it does not.'
+          : 'The connectors come with it, the room config follows, and cables '
+                'are carried over to the matching connector wherever there is '
+                'one. This room\'s own settings — the address, the port — are '
+                'kept.',
+    );
+    if (!mounted || picked == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (item != null) {
+      final kept = provider.swapAvRackItem(item, picked);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '${item.label} is now a ${picked.model}'
+            '${kept ? '' : ' — it does not fit where it was, so it has come '
+                  'off its rail'}.',
+          ),
+          duration: kept
+              ? const Duration(seconds: 4)
+              : const Duration(seconds: 8),
+        ),
+      );
+      return;
+    }
+
+    final was = node!.model;
+    final result = applyModelSwap(provider, node, picked);
+    // A box seeded from the config carries the config's own section key as its
+    // id, so the block behind it is found without anything having to be stored
+    // to link them. Nothing to do when the drawing is all there is.
+    final configured = provider.roomConfig[node.id] is Map;
+    if (configured) applyControlSwap(provider, [node.id], picked.model);
+    final module = provider.moduleForModel(picked.model);
+
+    final said = [
+      '${node.label} is now a ${picked.model}',
+      if (was.trim().isEmpty) 'it had no model before',
+      if (result.carried > 0)
+        '${result.carried} cable${result.carried == 1 ? '' : 's'} carried '
+            'across',
+      if (result.dropped > 0)
+        '${result.dropped} cable${result.dropped == 1 ? '' : 's'} dropped — '
+            'the new model has no matching connector, so draw '
+            '${result.dropped == 1 ? 'it' : 'them'} again on the Signal Flow '
+            'page',
+      if (configured && module.isEmpty)
+        'no control module claims it, so the module was cleared — the Devices '
+            'tab is showing it in red until one is picked',
+      if (configured && module.isNotEmpty)
+        'the config block moved to $module with this room\'s settings kept',
+    ].join('. ');
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$said.'),
+        duration: result.dropped > 0 || (configured && module.isEmpty)
+            ? const Duration(seconds: 8)
+            : const Duration(seconds: 4),
+      ),
+    );
+  }
+
   Future<void> _showHardwareEditDialog(
     AppStateProvider provider,
     RackItem item,

@@ -39,6 +39,23 @@ import 'side_pane.dart';
 ///  with its own checkbox — take one field, one device, or all of it.
 /// ============================================================================
 
+/// What order the model list comes back in.
+///
+/// [bestMatch] is the list's own order — by maker, then by model, which is how
+/// [AvDeviceLibrary.all] hands it over — except while something is typed in
+/// the search box, where relevance wins: "dtpcross108" has to put the DTP
+/// CrossPoint 108 first no matter who makes it. The other three are the
+/// question somebody is answering when they pick them, and they answer it
+/// whether the search box is empty or not.
+enum _CatalogSort { bestMatch, manufacturer, model, price }
+
+const Map<_CatalogSort, String> _kCatalogSortLabels = {
+  _CatalogSort.bestMatch: 'Best match',
+  _CatalogSort.manufacturer: 'Manufacturer',
+  _CatalogSort.model: 'Model',
+  _CatalogSort.price: 'Price, high to low',
+};
+
 class DeviceEditorView extends StatefulWidget {
   const DeviceEditorView({super.key});
 
@@ -54,6 +71,9 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   String _categoryFilter = '';
   bool _customOnly = false;
 
+  /// What the list is ordered by — see [_CatalogSort].
+  _CatalogSort _sort = _CatalogSort.bestMatch;
+
   /// Retired models are hidden by default. They are still IN the catalog —
   /// rooms that already use one keep resolving its ports and price — but a
   /// list of a thousand parts is hard enough to search without the
@@ -62,6 +82,18 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
   /// True when the catalog has been edited since the last write to disk.
   bool _dirty = false;
+
+  /// Bumped to put the model box back to what the entry is actually called.
+  ///
+  /// The box commits on Enter or focus loss and owns its own text, so a name
+  /// the rename REFUSED — it clashes, or the question about the open room was
+  /// cancelled — sat in the field looking applied while the entry kept its old
+  /// name. Changing the field's id is what makes it re-read the entry.
+  int _modelFieldRevision = 0;
+
+  /// Puts the model box back, after a rename that did not happen.
+  void _revertModelField() =>
+      setState(() => _modelFieldRevision++);
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
@@ -188,7 +220,41 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     }).toList();
     // Same matching as the AV tab's model picker: spaces, dashes and case are
     // ignored, so "dtpcross108" finds "DTP CrossPoint 108".
-    return searchCatalog(narrowed, _search, limit: narrowed.length);
+    final matched = searchCatalog(narrowed, _search, limit: narrowed.length);
+    if (_sort == _CatalogSort.bestMatch) return matched;
+
+    // A CHOSEN ORDER OUTRANKS RELEVANCE, because it was chosen while the
+    // search box had something in it: "every Extron switcher, by maker" is a
+    // list you scroll, not a list you take the top of.
+    final sorted = List<AvDeviceTemplate>.of(matched);
+    int byModel(AvDeviceTemplate a, AvDeviceTemplate b) =>
+        a.model.toLowerCase().compareTo(b.model.toLowerCase());
+    switch (_sort) {
+      case _CatalogSort.manufacturer:
+        sorted.sort((a, b) {
+          final makerA = a.manufacturer.trim();
+          final makerB = b.manufacturer.trim();
+          // Unattributed entries last: an empty string sorts above every
+          // letter, which would open a maker-sorted catalog on the parts
+          // nobody has said who makes.
+          if (makerA.isEmpty != makerB.isEmpty) return makerA.isEmpty ? 1 : -1;
+          final byMaker = makerA.toLowerCase().compareTo(makerB.toLowerCase());
+          return byMaker != 0 ? byMaker : byModel(a, b);
+        });
+      case _CatalogSort.model:
+        sorted.sort(byModel);
+      case _CatalogSort.price:
+        // Highest first: the reason to sort a catalog by price is to find what
+        // is carrying the money, or to spot the entry with a decimal point in
+        // the wrong place.
+        sorted.sort((a, b) {
+          final byPrice = b.price.compareTo(a.price);
+          return byPrice != 0 ? byPrice : byModel(a, b);
+        });
+      case _CatalogSort.bestMatch:
+        break;
+    }
+    return sorted;
   }
 
   Widget _buildToolbar(AppStateProvider provider, AvDeviceLibrary library) {
@@ -274,7 +340,14 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          // A WRAP, for the same reason the toolbar above it is one: search,
+          // two pickers and two chips are wider than a laptop window with the
+          // side pane open, and a Row of that shape paints its last control
+          // off the edge of the page under a yellow-and-black bar.
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
                 width: 260,
@@ -285,7 +358,6 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   onChanged: (v) => setState(() => _search = v),
                 ),
               ),
-              const SizedBox(width: 12),
               SizedBox(
                 width: 200,
                 child: DropdownButtonFormField<String>(
@@ -304,13 +376,33 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   onChanged: (v) => setState(() => _categoryFilter = v ?? ''),
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(
+                width: 190,
+                child: DropdownButtonFormField<_CatalogSort>(
+                  key: const ValueKey('catalog_sort'),
+                  initialValue: _sort,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    labelText: 'Sort by',
+                  ),
+                  items: [
+                    for (final sort in _CatalogSort.values)
+                      DropdownMenuItem(
+                        value: sort,
+                        child: Text(_kCatalogSortLabels[sort] ?? sort.name),
+                      ),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _sort = v ?? _CatalogSort.bestMatch),
+                ),
+              ),
               FilterChip(
                 label: const Text('My entries only'),
                 selected: _customOnly,
                 onSelected: (v) => setState(() => _customOnly = v),
               ),
-              const SizedBox(width: 8),
               FilterChip(
                 avatar: const Icon(Icons.history_toggle_off, size: 18),
                 label: Text(
@@ -321,8 +413,11 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 selected: _showRetired,
                 onSelected: (v) => setState(() => _showRetired = v),
               ),
-              const SizedBox(width: 16),
-              Expanded(
+              // Bounded rather than Expanded: a Wrap gives a child whatever
+              // width it asks for, and a long share path would ask for the
+              // page. This asks for at most a column of it and ellipsizes.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
                 child: Text(
                   '${library.modelCount} models '
                   '(${library.customCount} yours) · '
@@ -474,7 +569,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 // Enter or focus loss rather than per keystroke — renaming
                 // letter by letter would walk over every entry whose name is
                 // a prefix of the new one.
-                fieldId: 'model_$key',
+                fieldId: 'model_${key}_$_modelFieldRevision',
                 initial: entry.model,
                 label: 'Model (identifies the entry)',
                 onChanged: (_) {},
@@ -717,6 +812,29 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           ),
         ],
         const SizedBox(height: 8),
+        // A FACT ABOUT THE PRODUCT, not about one room's drawing. A USB
+        // capture stick or a passive splitter has no control interface
+        // anywhere, and without this every room that draws one carries it
+        // forever in the "devices without a control module" list — a warning
+        // about something that can never be fixed is a warning people learn
+        // to scroll past.
+        CheckboxListTile(
+          key: const ValueKey('catalog_never_controlled'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: entry.neverControlled,
+          onChanged: (v) => setState(
+            () => _apply(entry.copyWith(neverControlled: v ?? false)),
+          ),
+          title: const Text('Never in the room config'),
+          subtitle: const Text(
+            'Nothing can drive it — a USB interface, a passive splitter, a '
+            'plate. It is still drawn, racked and quoted; it just stops being '
+            'reported as a device waiting for a control module, and the '
+            'config prefill leaves it alone.',
+          ),
+        ),
         // Retiring a part keeps everything it knows — ports, prices, rack
         // height — for the rooms that already have one, and takes it out of
         // the pickers that specify new work.
@@ -1013,11 +1131,24 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   /// Renames an entry, refusing to land on a model that already exists —
   /// upsert would silently replace it, and the entry it swallowed would only
   /// be missed weeks later.
-  void _rename(
+  ///
+  /// THE ROOM THAT IS OPEN GETS ASKED ABOUT. Everything outside the catalog
+  /// records a model by NAME — the boxes on the diagram, the items in the
+  /// frames, the lines on the quote, the blocks in the config — so a rename
+  /// that stopped at the entry left every one of them naming a part the
+  /// catalog no longer had, and quietly unpriced with it. Asked rather than
+  /// assumed: renaming an entry to correct a typo and renaming it because the
+  /// part is now something else are the same keystrokes, and only the person
+  /// typing knows which one this is.
+  ///
+  /// Silent when the open room does not use the part at all, which is most
+  /// renames — the catalog is edited far more often than the room it is being
+  /// edited beside.
+  Future<void> _rename(
     AvDeviceLibrary library,
     AvDeviceTemplate entry,
     String proposed,
-  ) {
+  ) async {
     final name = proposed.trim();
     if (name.isEmpty || name == entry.model) return;
     final clash = library.templateForModel(name);
@@ -1029,10 +1160,122 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         'first.',
         error: true,
       );
+      _revertModelField();
       return;
     }
+
+    final provider = context.read<AppStateProvider>();
+    final uses = provider.avUsesOfModel(entry.model);
+    final total =
+        uses.nodes + uses.rackItems + uses.costLines + uses.blocks;
+    var follow = true;
+    if (total > 0) {
+      final answer = await _confirmRename(entry.model, name, uses);
+      if (!mounted) return;
+      if (answer == null) {
+        _revertModelField();
+        return;
+      }
+      follow = answer;
+    }
+
     setState(
       () => _apply(entry.copyWith(model: name), previousModel: entry.model),
+    );
+    if (!follow) return;
+    final moved = provider.renameAvCatalogModel(entry.model, name);
+    final said = [
+      if (moved.rackItems > 0) '${moved.rackItems} in the racks',
+      if (moved.nodes > 0) '${moved.nodes} on the diagram',
+      if (moved.blocks > 0)
+        '${moved.blocks} config block${moved.blocks == 1 ? '' : 's'}',
+      if (moved.costLines > 0)
+        '${moved.costLines} quote line${moved.costLines == 1 ? '' : 's'}',
+    ];
+    if (said.isNotEmpty) {
+      _snack('"${entry.model}" is now "$name", and so ${said.join(', ')}.');
+    }
+  }
+
+  /// Asks whether the open room should follow a catalog rename. Null is
+  /// cancel, and cancel means the entry is not renamed either — nothing has
+  /// been written when this is asked.
+  Future<bool?> _confirmRename(
+    String from,
+    String to,
+    ({int nodes, int rackItems, int costLines, int blocks}) uses,
+  ) {
+    var follow = true;
+    final using = [
+      if (uses.rackItems > 0)
+        '${uses.rackItems} item${uses.rackItems == 1 ? '' : 's'} in the racks',
+      if (uses.nodes > 0)
+        '${uses.nodes} box${uses.nodes == 1 ? '' : 'es'} on the diagram',
+      if (uses.blocks > 0)
+        '${uses.blocks} config block${uses.blocks == 1 ? '' : 's'}',
+      if (uses.costLines > 0)
+        '${uses.costLines} line${uses.costLines == 1 ? '' : 's'} on the quote',
+    ].join(', ');
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text('Rename "$from" to "$to"?'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'The room that is open uses this part: $using.',
+                  style: Theme.of(ctx).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  key: const ValueKey('catalog_rename_follow'),
+                  value: follow,
+                  onChanged: (v) => setLocal(() => follow = v ?? false),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Rename them too'),
+                  subtitle: Text(
+                    follow
+                        ? 'They become "$to", keeping their prices and their '
+                              'places. Only the part of a name that WAS the '
+                              'old model moves.'
+                        : 'They keep the name "$from" — which nothing in the '
+                              'catalog answers to any more, so they lose their '
+                              'connectors and their price until somebody '
+                              'repoints them.',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: follow ? null : Theme.of(ctx).colorScheme.error,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Other rooms are not touched either way — they are not open, '
+                  'and each keeps its own record of what it was specified as.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(follow),
+              child: const Text('Rename'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -174,6 +174,28 @@ class CostLineItem {
   );
 }
 
+/// What order the equipment table lists its lines in.
+///
+/// A choice about the QUOTE rather than about the screen, so it is kept with
+/// the estimate and every export reads it: a quote read on paper, in the
+/// workbook and in the tab export lists its equipment the same way the person
+/// who wrote it left it.
+enum CostEquipmentSort {
+  /// Devices off the diagram in name order, then anything racked, then the
+  /// lines added by hand — how the estimate has always been built.
+  standard,
+
+  /// By manufacturer, then by name within each maker. What an order gets
+  /// split into: one purchase order per vendor.
+  manufacturer,
+}
+
+/// The stored name of each sort, and what the picker calls it.
+const Map<CostEquipmentSort, String> kCostEquipmentSortLabels = {
+  CostEquipmentSort.standard: 'Device name',
+  CostEquipmentSort.manufacturer: 'Manufacturer',
+};
+
 /// The room's estimate settings. Lives in `<config>_av_flow.json` beside the
 /// diagram it prices, because a negotiated price is a fact about this job,
 /// not about the model.
@@ -191,6 +213,12 @@ class RoomCostSettings {
 
   /// The crews on this job: which rate, how many techs, how many hours.
   final List<LaborLine> labor;
+
+  /// What order [CostEstimate.equipment] comes back in — see
+  /// [CostEquipmentSort]. Sorted where the estimate is BUILT rather than
+  /// where it is drawn, so the screen, the screenshot, the workbook and the
+  /// tab export cannot disagree about the order of a quote.
+  CostEquipmentSort equipmentSort;
 
   /// Whether the cable runs drawn on the AV flow are priced into the estimate.
   /// On by default: a room's cabling is a real cost, and the diagram already
@@ -233,6 +261,19 @@ class RoomCostSettings {
   /// a spare 86" display and a spare switcher are two decisions at two prices.
   final Map<String, double> equipmentSpares;
 
+  /// SIGNAL AND LENGTH -> the catalog entry that length is bought as, when
+  /// somebody has said which one rather than letting the catalog decide. See
+  /// [cableEntryKey].
+  ///
+  /// The estimate picks the shortest stock lead that reaches each run, which
+  /// is right until it isn't: a room that is being cabled in plenum, or in the
+  /// one brand a customer will accept, buys a different lead for the same run
+  /// and no length in the catalog says so. Keyed on the length rather than on
+  /// the LINE key, because the line key is built out of the entry — it moves
+  /// when this changes, and a decision that forgets itself the moment it is
+  /// acted on is worse than no decision at all.
+  final Map<String, String> cableEntries;
+
   /// Cabling LINE KEY -> extra runs to buy beyond what the diagram shows.
   /// Spares are a decision, not a diagram fact, so they live here rather than
   /// being inferred: "three more HDMI leads because two always go missing" is
@@ -250,11 +291,13 @@ class RoomCostSettings {
     this.taxLabel = 'Sales tax',
     this.taxPercent = 0,
     this.includeCabling = true,
+    this.equipmentSort = CostEquipmentSort.standard,
     List<CostFee>? fees,
     Map<String, double>? priceOverrides,
     List<CostLineItem>? items,
     List<LaborLine>? labor,
     Map<String, double>? cableSpares,
+    Map<String, String>? cableEntries,
     Map<String, double>? equipmentSpares,
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
@@ -264,6 +307,7 @@ class RoomCostSettings {
        items = items ?? [],
        labor = labor ?? [],
        cableSpares = cableSpares ?? {},
+       cableEntries = cableEntries ?? {},
        equipmentSpares = equipmentSpares ?? {},
        extraEquipment = extraEquipment ?? [],
        extraHardware = extraHardware ?? [],
@@ -271,11 +315,13 @@ class RoomCostSettings {
 
   bool get isEmpty =>
       taxPercent == 0 &&
+      equipmentSort == CostEquipmentSort.standard &&
       fees.isEmpty &&
       priceOverrides.isEmpty &&
       items.isEmpty &&
       labor.isEmpty &&
       cableSpares.isEmpty &&
+      cableEntries.isEmpty &&
       equipmentSpares.isEmpty &&
       extraEquipment.isEmpty &&
       extraHardware.isEmpty &&
@@ -286,11 +332,13 @@ class RoomCostSettings {
     taxLabel = 'Sales tax';
     taxPercent = 0;
     includeCabling = true;
+    equipmentSort = CostEquipmentSort.standard;
     fees.clear();
     priceOverrides.clear();
     items.clear();
     labor.clear();
     cableSpares.clear();
+    cableEntries.clear();
     equipmentSpares.clear();
     extraEquipment.clear();
     extraHardware.clear();
@@ -302,6 +350,8 @@ class RoomCostSettings {
     'taxLabel': taxLabel,
     'taxPercent': taxPercent,
     'includeCabling': includeCabling,
+    if (equipmentSort != CostEquipmentSort.standard)
+      'equipmentSort': equipmentSort.name,
     'fees': [for (final f in fees) f.toJson()],
     // Copied, not handed out live: the undo history snapshots the room by
     // calling this and empties the estimate before reading a snapshot back,
@@ -312,6 +362,8 @@ class RoomCostSettings {
     'labor': [for (final l in labor) l.toJson()],
     if (cableSpares.isNotEmpty)
       'cableSpares': Map<String, double>.of(cableSpares),
+    if (cableEntries.isNotEmpty)
+      'cableEntries': Map<String, String>.of(cableEntries),
     if (equipmentSpares.isNotEmpty)
       'equipmentSpares': Map<String, double>.of(equipmentSpares),
     if (extraEquipment.isNotEmpty)
@@ -332,6 +384,13 @@ class RoomCostSettings {
     // a cabling section that says what it needs and reports it as not yet
     // priced, rather than one that quietly adds money nobody entered.
     includeCabling = json['includeCabling'] != false;
+    // An unknown name reads as the standard order rather than throwing: this
+    // file is hand-editable, and a typo in it must not cost somebody a room.
+    final sortName = json['equipmentSort']?.toString();
+    equipmentSort = CostEquipmentSort.values.firstWhere(
+      (s) => s.name == sortName,
+      orElse: () => CostEquipmentSort.standard,
+    );
     for (final f in (json['fees'] as List? ?? [])) {
       if (f is Map) fees.add(CostFee.fromJson(Map<String, dynamic>.from(f)));
     }
@@ -373,6 +432,14 @@ class RoomCostSettings {
         final qty = (value as num?)?.toDouble();
         if (qty == null || qty <= 0) return;
         equipmentSpares[key.toString()] = qty;
+      });
+    }
+    final entries = json['cableEntries'];
+    if (entries is Map) {
+      entries.forEach((key, value) {
+        final model = value?.toString().trim() ?? '';
+        if (model.isEmpty) return;
+        cableEntries[key.toString()] = model;
       });
     }
     final spares = json['cableSpares'];
@@ -484,13 +551,19 @@ class RackItemGroup {
 /// Groups placed rack hardware for ordering. Items from the same catalog entry
 /// merge; a one-off typed in by hand merges on its name, so "Blank plate" typed
 /// twice is still one line of two.
+/// Which quote line a placed piece of rack hardware belongs to.
+///
+/// Named rather than inlined because the estimate is read backwards as often
+/// as forwards: a row on the quote is "replace this" or "reprice this", and
+/// both have to find the items in the frames the row was built from.
+String rackItemKey(RackItem item) => item.catalogModel.trim().isNotEmpty
+    ? 'rackitem:model:${item.catalogModel.trim().toLowerCase()}'
+    : 'rackitem:label:${item.label.trim().toLowerCase()}|${item.rackUnits}';
+
 List<RackItemGroup> groupRackItems(List<RackItem> items) {
   final grouped = <String, List<RackItem>>{};
   for (final item in items) {
-    final key = item.catalogModel.trim().isNotEmpty
-        ? 'rackitem:model:${item.catalogModel.trim().toLowerCase()}'
-        : 'rackitem:label:${item.label.trim().toLowerCase()}|${item.rackUnits}';
-    grouped.putIfAbsent(key, () => []).add(item);
+    grouped.putIfAbsent(rackItemKey(item), () => []).add(item);
   }
   final out = [
     for (final e in grouped.entries)
@@ -595,6 +668,14 @@ SignalType? cableSignalOfKey(String key) {
   return (model: parts.join('@'), lengthFt: lengthFt);
 }
 
+/// How [RoomCostSettings.cableEntries] files "buy this length as that lead".
+///
+/// Signal and length, never the line key: the line key carries the entry's own
+/// name, so it changes the moment this decision is made — and a preference
+/// that unfiles itself when it is acted on is worse than none.
+String cableEntryKey(SignalType signal, double lengthFt) =>
+    '${signal.name}@${formatCableLength(lengthFt)}';
+
 /// True when the line is costed at a category average rather than a real
 /// price. The estimate counts these separately: a budget built on base costs is
 /// a budget, and should not be read as a quote.
@@ -603,6 +684,22 @@ bool isEstimatedSource(PriceSource s) => s == PriceSource.baseCost;
 /// True when the figure came from the catalog at all, either tier.
 bool isCatalogSource(PriceSource s) =>
     s == PriceSource.catalog || s == PriceSource.catalogOtherTier;
+
+/// Orders two lines by who makes them, then by name — the comparator behind
+/// [CostEquipmentSort.manufacturer]. The key is the last tiebreak because
+/// Dart's sort is not stable, and a quote whose rows swap places on every
+/// rebuild is one nobody can read.
+int compareByManufacturer(CostLine a, CostLine b) {
+  final makerA = a.manufacturer.trim();
+  final makerB = b.manufacturer.trim();
+  if (makerA.isEmpty != makerB.isEmpty) return makerA.isEmpty ? 1 : -1;
+  final byMaker = makerA.toLowerCase().compareTo(makerB.toLowerCase());
+  if (byMaker != 0) return byMaker;
+  final byName = a.description.toLowerCase().compareTo(
+    b.description.toLowerCase(),
+  );
+  return byName != 0 ? byName : a.key.compareTo(b.key);
+}
 
 class CostLine {
   final String key;
@@ -625,6 +722,13 @@ class CostLine {
   /// line rather than looked up when the report is written, so the number on
   /// the estimate is the one the price came from.
   final String partNumber;
+
+  /// Who makes it, off the catalog entry. Carried on the line for the same
+  /// reason [partNumber] is — the estimate is sorted and split by vendor, and
+  /// looking the maker up again when the report is written would let a
+  /// catalog edit change a quote that was already written.
+  final String manufacturer;
+
   final String category;
   final double qty;
   final double unitPrice;
@@ -636,6 +740,7 @@ class CostLine {
     required this.description,
     this.model = '',
     this.partNumber = '',
+    this.manufacturer = '',
     this.category = '',
     required this.qty,
     required this.unitPrice,
@@ -895,6 +1000,7 @@ CostEstimate computeRoomCost({
         description: group.label,
         model: group.model,
         partNumber: catalog?.partNumber ?? '',
+        manufacturer: catalog?.manufacturer ?? '',
         category: category,
         qty: qty,
         spareQty: spares > 0 ? spares : 0,
@@ -949,6 +1055,7 @@ CostEstimate computeRoomCost({
       partNumber: catalog?.partNumber.isNotEmpty == true
           ? catalog!.partNumber
           : line.partNumber,
+      manufacturer: catalog?.manufacturer ?? '',
       category: line.category,
       qty: line.qty,
       unitPrice: price,
@@ -1001,6 +1108,7 @@ CostEstimate computeRoomCost({
           : item.description,
       model: item.catalogModel,
       partNumber: catalog?.partNumber ?? '',
+      manufacturer: catalog?.manufacturer ?? '',
       category: item.category.trim().isEmpty
           ? fallbackCategory
           : item.category,
@@ -1021,6 +1129,17 @@ CostEstimate computeRoomCost({
 
   for (final item in settings.extraHardware) {
     hardware.add(extraLine(item, kCategoryRackHardware));
+  }
+
+  // ONE PURCHASE ORDER PER VENDOR. Every line is on the list by now — drawn,
+  // racked and typed — so the whole table reorders together rather than the
+  // hand-typed Extron line sitting under the drawn ones.
+  //
+  // A line with no maker sorts LAST rather than first: an empty string sorts
+  // above every letter, which would have put the boxes nobody has catalogued
+  // yet at the top of a quote sorted by who makes them.
+  if (settings.equipmentSort == CostEquipmentSort.manufacturer) {
+    equipment.sort(compareByManufacturer);
   }
 
   // --- cabling: one line per lead the room buys, plus spares ---------------
@@ -1079,6 +1198,19 @@ CostEstimate computeRoomCost({
       final defaultEntry =
           splitByLength ? options.first : library.cableForSignal(signal);
 
+      /// Which lead a run of this length is bought as: whatever the room was
+      /// told to buy it as, or the catalog's own answer. An override naming an
+      /// entry that has since gone falls back rather than unpricing the line.
+      AvDeviceTemplate? leadFor(double lengthFt) {
+        final wanted = settings.cableEntries[cableEntryKey(signal, lengthFt)];
+        final chosen =
+            wanted == null ? null : library.templateForModel(wanted);
+        if (chosen != null) return chosen;
+        return splitByLength
+            ? library.cableForRun(signal, lengthFt)
+            : defaultEntry;
+      }
+
       // Only the runs the canvas would actually draw, so these quantities add
       // up to the "drawn" figure instead of counting a cable whose ends have
       // been deleted.
@@ -1088,16 +1220,12 @@ CostEstimate computeRoomCost({
               AvFlowModel.cableIsResolvable(c, nodesById))
           .toList();
       for (final c in runs) {
-        add(
-          splitByLength ? library.cableForRun(signal, c.lengthFt) : defaultEntry,
-          c.lengthFt,
-          1,
-        );
+        add(leadFor(c.lengthFt), c.lengthFt, 1);
       }
       // Runs the diagram counts that are not cables on it go on the type's
       // default lead with no length, which is where the spares land too.
       final loose = drawn - runs.length.toDouble();
-      if (loose > 0) add(defaultEntry, 0, loose);
+      if (loose > 0) add(leadFor(0), 0, loose);
 
       // THE TYPE'S MAIN LINE: the one keyed `cable:<signal>`, which carries
       // any price typed against the type before anybody measured a run. It is

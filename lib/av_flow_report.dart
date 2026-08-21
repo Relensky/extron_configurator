@@ -925,9 +925,10 @@ List<ReportSection> driverGapSections(
   for (final group in groupDevices(model)) {
     final node = group.first;
     if (node.isJackField) continue;
-    // Nothing was ever going to drive it — see [AvNode.excludeFromControl].
+    // Nothing was ever going to drive it — either this box was excluded by
+    // hand or the catalog says the product has no control interface at all.
     // Listing these is what turns this table into one people skim past.
-    if (node.excludeFromControl) continue;
+    if (provider.avNodeIsUncontrolled(node)) continue;
 
     // Devices seeded from the config carry the config's verdict. A generic
     // box added by hand — a projector, a power controller, a screen — has no
