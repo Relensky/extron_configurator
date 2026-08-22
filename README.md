@@ -893,19 +893,43 @@ A session with everything saved closes as immediately as it always did.
 
 ## The application icon
 
-`windows/runner/resources/app_icon.ico` holds seven sizes — 16, 24, 32, 48, 64,
-128 and 256 — so the title bar, Alt-Tab, the taskbar and Explorer's tiles each
-get a version drawn at the right scale. The 16px one is the one that matters:
-left to be resampled from the 256, it turns to mush, and the title bar is where
-the icon is seen most.
-
-The source artwork lives in `design/` (`icon.ai`, and the `icon.png` the
-current icon was built from). To change it, export a square PNG
-(1024x1024, transparent) into that folder and run:
+The source artwork lives in `design/` (`icon.ai`, and the `icon.png` every icon
+in the build is generated from). To change it, export a square PNG (1024x1024,
+transparent) over `design/icon.png` and run:
 
 ```
 python tools/make_app_icon.py design/icon.png
 ```
+
+That writes all 33 icons the app ships, on every platform, from the one source:
+
+| Target | What it is |
+| --- | --- |
+| `windows/runner/resources/app_icon.ico` | the .exe's icon **and** the window's, at 16, 24, 32, 48, 64, 128 and 256 |
+| `web/favicon.png` | the browser tab |
+| `web/icons/Icon-192.png`, `Icon-512.png` | the installed web app |
+| `web/icons/Icon-maskable-{192,512}.png` | the same art inset to the 80% maskable safe zone |
+| `android/app/src/main/res/mipmap-*/ic_launcher.png` | the five density buckets, 48 to 192 |
+| `macos/…/AppIcon.appiconset/*.png` | every size its `Contents.json` lists, 16 to 1024 |
+| `ios/…/AppIcon.appiconset/*.png` | likewise, 20 to 1024 — **flattened onto white** |
+
+iOS is the one that is not simply a resize. An iOS app icon may not carry an
+alpha channel, and a transparent one is not rejected at build time — it is
+rejected at submission, months later — so the artwork is composited onto an
+opaque ground (`IOS_BACKDROP` in the script) and saved without alpha. Android
+and macOS keep their transparency, which is what both platforms expect.
+
+The two Apple sets are driven from their own `Contents.json` rather than from a
+list of sizes written out in the script, so a Flutter template that adds or
+renames a slot is followed rather than silently half-filled.
+
+The seven sizes in the `.ico` are not decoration. The 16px one is the one that
+matters: left to be shrunk from the 256 it turns to mush, and the title bar is
+where the icon is looked at most. `win32_window.cpp` registers the window class
+with **`WNDCLASSEX`** so it can set `hIconSm` as well as `hIcon` — a plain
+`WNDCLASS` has only the large slot, and Windows then derives the small icon by
+shrinking it, which is what makes a title-bar icon look softer than the crisp
+one Explorer shows for the same file.
 
 The script also takes a PDF. It does NOT take `.ai` or `.eps`: Illustrator's
 EPS is PostScript, and rasterising PostScript needs Ghostscript, which is not
@@ -913,6 +937,9 @@ part of this project's toolchain. Artwork that is not square is centred on a
 transparent square rather than stretched — a logo drawn 4% taller than it is
 wide is a logo somebody drew that way, and the squash shows at 16 pixels while
 the margin does not.
+
+**If a replaced .exe still shows the old icon in Explorer**, that is Windows'
+icon cache rather than the build: `ie4uinit.exe -show` clears it.
 
 ## Save All
 

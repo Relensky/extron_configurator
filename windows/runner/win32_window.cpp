@@ -88,19 +88,37 @@ WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
-    WNDCLASS window_class{};
+    // WNDCLASSEX rather than WNDCLASS, for one field: hIconSm.
+    //
+    // A plain WNDCLASS has only hIcon, so Windows produces the small icon —
+    // the one in the title bar and in Alt-Tab — by SHRINKING the large one.
+    // app_icon.ico carries a hand-sized 16x16 image precisely so that does not
+    // have to happen, and a 32x32 squeezed down to 16 is visibly softer than
+    // the crisp one Explorer shows for the same .exe. That mismatch is what
+    // "the exe icon isn't the app icon" looks like.
+    //
+    // LoadImage at the system's own metrics rather than LoadIcon, which
+    // always returns the large size and leaves the choosing to the scaler.
+    WNDCLASSEX window_class{};
+    window_class.cbSize = sizeof(WNDCLASSEX);
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClassName;
     window_class.style = CS_HREDRAW | CS_VREDRAW;
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon =
-        LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
+    window_class.hIcon = static_cast<HICON>(
+        LoadImage(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON),
+                  IMAGE_ICON, GetSystemMetrics(SM_CXICON),
+                  GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR));
+    window_class.hIconSm = static_cast<HICON>(
+        LoadImage(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON),
+                  IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+                  GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
-    RegisterClass(&window_class);
+    RegisterClassEx(&window_class);
     class_registered_ = true;
   }
   return kWindowClassName;

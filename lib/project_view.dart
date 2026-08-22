@@ -484,26 +484,58 @@ class _TotalChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    // THE PROJECT TOTAL IS PAINTED ON THE USER'S ACCENT, so its ink cannot be
+    // the page's ink.
+    //
+    // The emphasis chip fills with primaryContainer — which in the Classic
+    // theme is derived from a colour somebody picks out of a wheel. The label
+    // and the figure were being drawn in the text theme's default colour,
+    // which is chosen for the PAGE behind them, not for this fill: pick a dark
+    // accent and the one number the tab exists for went dark-on-dark. Measured
+    // against the fill it is actually going on, so a dark accent gets white
+    // and a light one gets black, with the scheme's own pairing preferred
+    // whenever it genuinely reads.
+    final fill = emphasis
+        ? scheme.primaryContainer
+        : scheme.surfaceContainerHighest;
+    final ink = readableOn(
+      fill,
+      prefer: [
+        emphasis ? scheme.onPrimaryContainer : scheme.onSurface,
+        scheme.onSurface,
+      ],
+    );
+    // The label is the quiet half, so it is allowed to be dimmer — but only as
+    // far as its own contrast holds. Faded to 70% and re-measured rather than
+    // assumed: 70% of an ink that only just cleared the threshold does not.
+    final labelInk = readableOn(
+      fill,
+      prefer: [Color.alphaBlend(ink.withValues(alpha: 0.75), fill), ink],
+      minRatio: kContrastLarge,
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: emphasis
-            ? theme.colorScheme.primaryContainer
-            : theme.colorScheme.surfaceContainerHighest,
+        color: fill,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: theme.textTheme.labelSmall),
+          Text(label, style: theme.textTheme.labelSmall?.copyWith(
+            color: labelInk,
+          )),
           Text(
             value,
             style:
                 (emphasis
                         ? theme.textTheme.titleLarge
                         : theme.textTheme.titleMedium)
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                    ?.copyWith(fontWeight: FontWeight.bold, color: ink),
           ),
         ],
       ),

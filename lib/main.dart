@@ -13,6 +13,7 @@ import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_only_notice.dart';
 import 'av_flow_view.dart';
+import 'contrast.dart';
 import 'control_prefill.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
@@ -1182,12 +1183,18 @@ class TopLevelBar extends StatelessWidget {
     final onProject = selectedIndex == AppTab.project.index;
     final onConfig = selectedIndex == AppTab.appConfig.index;
 
+    final bannerFill = theme.colorScheme.surfaceContainerHighest;
+
     return Material(
-      color: theme.colorScheme.surfaceContainerHighest,
+      color: bannerFill,
       // Tight on purpose. Every pixel this takes is a pixel off the drawing
       // below it, and on a laptop the drawing is what somebody is here for.
+      //
+      // No padding on the right at all: the gear belongs in the corner, and an
+      // IconButton already carries its own margin, so twelve more pixels only
+      // left it floating short of the edge.
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        padding: const EdgeInsets.fromLTRB(12, 4, 0, 4),
         child: Row(
           children: [
             // Pushed out rather than flat: this is the way up and out of the
@@ -1207,6 +1214,12 @@ class TopLevelBar extends StatelessWidget {
             const SizedBox(width: 12),
             // Which job, and whether it is on disk. Flexible so a long job name
             // ellipsises instead of pushing the gear off the end.
+            //
+            // Measured against the banner's own fill rather than taking the
+            // page's ink: this strip is a container colour, and in the Classic
+            // theme container colours are tinted from an accent somebody picks
+            // out of a wheel. The "unsaved" red gets the same check — the error
+            // colour is the one that fails first on a dark accent.
             Flexible(
               child: Text(
                 provider.projectDirty
@@ -1215,8 +1228,15 @@ class TopLevelBar extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: provider.projectDirty
-                      ? theme.colorScheme.error
-                      : theme.textTheme.bodySmall?.color,
+                      ? errorOn(theme.colorScheme, bannerFill)
+                      : readableOn(
+                          bannerFill,
+                          prefer: [
+                            theme.textTheme.bodySmall?.color ??
+                                theme.colorScheme.onSurfaceVariant,
+                            theme.colorScheme.onSurface,
+                          ],
+                        ),
                 ),
               ),
             ),
@@ -1224,10 +1244,28 @@ class TopLevelBar extends StatelessWidget {
             IconButton(
               key: const ValueKey('banner_app_config'),
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.settings),
+              icon: Icon(
+                Icons.settings,
+                color: readableOn(
+                  bannerFill,
+                  prefer: [theme.colorScheme.onSurfaceVariant,
+                      theme.colorScheme.onSurface],
+                  minRatio: kContrastLarge,
+                ),
+              ),
               isSelected: onConfig,
-              selectedIcon: Icon(Icons.settings,
-                  color: theme.colorScheme.primary),
+              // An icon that carries meaning, so the large-text threshold —
+              // and the accent only gets to be the selected colour when it is
+              // actually legible on this strip.
+              selectedIcon: Icon(
+                Icons.settings,
+                color: readableOn(
+                  bannerFill,
+                  prefer: [theme.colorScheme.primary,
+                      theme.colorScheme.onSurface],
+                  minRatio: kContrastLarge,
+                ),
+              ),
               tooltip: 'App Config — file locations, theme, pricing, autosave',
               onPressed: () => onSelect(AppTab.appConfig.index),
             ),

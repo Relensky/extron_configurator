@@ -1,3 +1,4 @@
+import 'package:auris/auris.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -148,12 +149,65 @@ void main() {
 
       test('the rail\'s selected row — ${t.name}', () {
         // What nav_rail.dart computes for the band behind the current tab.
-        final bg = s.secondaryContainer;
+        //
+        // The band comes from a DIFFERENT role in the two families, because
+        // they put the accent in different places: Classic derives its
+        // secondary from the accent, Auris never recolors its slate. The same
+        // split has to be here, or this measures a pairing the app does not
+        // paint.
+        final auris = t.theme.extension<AurisScheme>() != null;
+        final bg = auris ? s.primaryContainer : s.secondaryContainer;
         final ink = readableOn(
           bg,
-          prefer: [s.onSecondaryContainer, s.onSurface],
+          prefer: [
+            auris ? s.onPrimaryContainer : s.onSecondaryContainer,
+            s.onSurface,
+          ],
         );
         expectReadable('rail label', ink, bg, t.name);
+      });
+
+      test('the project total, painted on the accent — ${t.name}', () {
+        // _TotalChip's emphasis fill IS primaryContainer, so on the Classic
+        // theme it is whatever colour somebody picked out of a wheel. The
+        // figure used to be drawn in the page's ink, which went dark-on-dark
+        // the moment that colour was a dark one.
+        final bg = s.primaryContainer;
+        final ink = readableOn(bg, prefer: [s.onPrimaryContainer, s.onSurface]);
+        expectReadable('project total', ink, bg, t.name);
+
+        // The label is faded, then re-measured — 75% of an ink that only just
+        // cleared the threshold does not clear it.
+        final label = readableOn(
+          bg,
+          prefer: [Color.alphaBlend(ink.withValues(alpha: 0.75), bg), ink],
+          minRatio: kContrastLarge,
+        );
+        expectReadable('project total label', label, bg, t.name,
+            min: kContrastLarge);
+      });
+
+      test('the top-level banner — ${t.name}', () {
+        final bg = s.surfaceContainerHighest;
+        expectReadable(
+          'job name',
+          readableOn(bg, prefer: [
+            t.theme.textTheme.bodySmall?.color ?? s.onSurfaceVariant,
+            s.onSurface,
+          ]),
+          bg,
+          t.name,
+        );
+        expectReadable('unsaved marker', errorOn(s, bg), bg, t.name);
+        expectReadable(
+          'the gear',
+          readableOn(bg,
+              prefer: [s.onSurfaceVariant, s.onSurface],
+              minRatio: kContrastLarge),
+          bg,
+          t.name,
+          min: kContrastLarge,
+        );
       });
 
       test('a failure snack bar — ${t.name}', () {
