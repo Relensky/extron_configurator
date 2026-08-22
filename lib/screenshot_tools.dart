@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
+import 'contrast.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 
@@ -360,8 +361,18 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
             ),
             child: Icon(icon,
                 size: 20,
+                // The selected tool's chip is filled with the accent, so its
+                // icon is measured against that fill — an icon that carries
+                // meaning, so the large-text threshold.
                 color: selected
-                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                    ? readableOn(
+                        Theme.of(context).colorScheme.primaryContainer,
+                        prefer: [
+                          Theme.of(context).colorScheme.onPrimaryContainer,
+                          Theme.of(context).colorScheme.onSurface,
+                        ],
+                        minRatio: kContrastLarge,
+                      )
                     : null),
           ),
         ),

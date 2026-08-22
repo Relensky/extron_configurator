@@ -570,6 +570,7 @@ class _MainDashboardState extends State<MainDashboard> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
     final hasConfig = provider.roomConfig.isNotEmpty;
     // Selected tab lives in the provider so it survives the remount that a
     // theme-family change (Auris <-> Classic) forces via the MaterialApp key.
@@ -617,6 +618,121 @@ class _MainDashboardState extends State<MainDashboard> {
           ? AppTab.values[selectedIndex]
           : AppTab.wizard,
     );
+
+    // THE DOCUMENT'S OWN BUTTONS — everything that opens, converts, moves or
+    // writes the room in front of you.
+    //
+    // Built here because they need this State's methods, but they are NOT in
+    // the title bar any more: they belong on the banner, beside the job, where
+    // the rest of "which document am I working on" lives. What stays in the
+    // title bar is the handful of controls that are about the APPLICATION
+    // rather than about the document — the exports, the screenshot, the theme
+    // and the gear.
+    final documentActions = <Widget>[
+      IconButton(
+        icon: const Icon(Icons.note_add),
+        tooltip: 'New Config (from template)',
+        onPressed: () => _createNewConfig(context, provider),
+      ),
+      // CONVERT: the migration a legacy file needs, on demand. The load
+      // already ran the conversion in memory — this is where it gets
+      // reviewed, accepted or thrown away. Grayed out when the loaded
+      // file had nothing to migrate, so its state is also the answer to
+      // "does this room need converting?".
+      IconButton(
+        icon: Badge(
+          // Keyed because the toolbar now carries a second badge — the dot
+          // on the Save button — and "the badge" is no longer a thing a
+          // test can find by type.
+          key: const ValueKey('conversion_badge'),
+          // The count is "there is something here to deal with", not "this
+          // file was once converted". Once the log has been acknowledged
+          // or the preview applied it comes down, and the next load of a
+          // file that needs converting puts it back.
+          isLabelVisible: provider.conversionNeedsAttention,
+          label: Text('${provider.conversionChanges.length}'),
+          child: const Icon(Icons.compare_arrows),
+        ),
+        // The button itself stays live for the whole session: the log is
+        // worth being able to reread, and greying it out the moment it was
+        // acknowledged would take that away to hide a number.
+        tooltip: switch ((
+          provider.lastLoadHadChanges,
+          provider.conversionAcknowledged,
+        )) {
+          (false, _) => 'Nothing to convert in this file',
+          (true, false) => 'Convert — review the changes this file needs',
+          (true, true) => 'Conversion reviewed — open the log again',
+        },
+        onPressed: provider.lastLoadHadChanges
+            ? () => _showMigrationLogDialog(context, provider.systemLogs)
+            : null,
+      ),
+      IconButton(
+        icon: const Icon(Icons.folder_open),
+        tooltip: 'Open Existing Config',
+        onPressed: () => _openExistingConfig(context, provider),
+      ),
+      IconButton(
+        icon: const Icon(Icons.cloud_download),
+        tooltip: 'Download config.json from Processor (SFTP)',
+        onPressed: () async {
+          final result = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const ProcessorSftpDialog(isUpload: false),
+          );
+          if (result != true || !context.mounted) return;
+          // Working copy on disk now — pick up any schematic beside it.
+          await _syncDiagramsAfterLoad(context, provider);
+          // Same as a local open: the download lands, and Convert offers
+          // the migration when the user is ready for it.
+          if (provider.lastLoadHadChanges && context.mounted) {
+            _announceConversionAvailable(context);
+          }
+        },
+      ),
+      IconButton(
+        icon: const Icon(Icons.cloud_upload),
+        tooltip: 'Upload to Processor (SFTP)',
+        onPressed: () {
+          showDialog(
+            context: context,
+            barrierDismissible: false, 
+            builder: (context) => const ProcessorSftpDialog(isUpload: true),
+          );
+        },
+      ),
+      // UNDO THE LAST SAVE: put back the '<name>_previous.json' copy the
+      // save took of the file beforehand. Enabled only while that backup
+      // belongs to the file currently loaded — see canUndoLastSave.
+      IconButton(
+        icon: const Icon(Icons.undo),
+        tooltip: provider.canUndoLastSave
+            ? 'Undo Last Save — restore the config from '
+                '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
+            : 'Undo Last Save — nothing has been saved over a local file yet',
+        onPressed: provider.canUndoLastSave
+            ? () => _undoLastSave(context, provider)
+            : null,
+      ),
+      // SAVE, AND EVERY OTHER WAY OF SAVING. One button that writes
+      // whatever document the tab on screen belongs to — the room on the
+      // room tabs, the job on the Project tab, the catalog on the Catalog
+      // tab — with a dot on it when that document is behind its file, and
+      // a menu beside it holding Save As, the other document, Save All to
+      // a room folder, and an on-demand backup. See save_actions.dart for
+      // why the three buttons that used to be here were not enough.
+      const SaveToolbar(),
+    ];
+
+    // The bar the app-level buttons are painted on, so their ink can be
+    // measured against it rather than assumed. On the Classic theme the app
+    // bar is the accent, which is a colour somebody picks out of a wheel.
+    final appBarFill =
+        theme.appBarTheme.backgroundColor ?? theme.colorScheme.primary;
+    final appBarInk =
+        theme.appBarTheme.foregroundColor ?? theme.colorScheme.onPrimary;
 
     final page = Scaffold(
       appBar: AppBar(
@@ -700,101 +816,31 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'Toggle Theme',
             onPressed: () => provider.toggleTheme(),
           ),
+          // App Config, at the end of the row that is about the app itself.
           IconButton(
-            icon: const Icon(Icons.note_add),
-            tooltip: 'New Config (from template)',
-            onPressed: () => _createNewConfig(context, provider),
-          ),
-          // CONVERT: the migration a legacy file needs, on demand. The load
-          // already ran the conversion in memory — this is where it gets
-          // reviewed, accepted or thrown away. Grayed out when the loaded
-          // file had nothing to migrate, so its state is also the answer to
-          // "does this room need converting?".
-          IconButton(
-            icon: Badge(
-              // Keyed because the toolbar now carries a second badge — the dot
-              // on the Save button — and "the badge" is no longer a thing a
-              // test can find by type.
-              key: const ValueKey('conversion_badge'),
-              // The count is "there is something here to deal with", not "this
-              // file was once converted". Once the log has been acknowledged
-              // or the preview applied it comes down, and the next load of a
-              // file that needs converting puts it back.
-              isLabelVisible: provider.conversionNeedsAttention,
-              label: Text('${provider.conversionChanges.length}'),
-              child: const Icon(Icons.compare_arrows),
+            key: const ValueKey('banner_app_config'),
+            icon: Icon(
+              Icons.settings,
+              color: readableOn(
+                appBarFill,
+                prefer: [appBarInk, theme.colorScheme.onSurface],
+                minRatio: kContrastLarge,
+              ),
             ),
-            // The button itself stays live for the whole session: the log is
-            // worth being able to reread, and greying it out the moment it was
-            // acknowledged would take that away to hide a number.
-            tooltip: switch ((
-              provider.lastLoadHadChanges,
-              provider.conversionAcknowledged,
-            )) {
-              (false, _) => 'Nothing to convert in this file',
-              (true, false) => 'Convert — review the changes this file needs',
-              (true, true) => 'Conversion reviewed — open the log again',
-            },
-            onPressed: provider.lastLoadHadChanges
-                ? () => _showMigrationLogDialog(context, provider.systemLogs)
-                : null,
+            isSelected: selectedIndex == AppTab.appConfig.index,
+            selectedIcon: Icon(
+              Icons.settings,
+              color: readableOn(
+                appBarFill,
+                // The accent only gets to be the selected colour when it is
+                // actually legible on the bar it is painted on.
+                prefer: [theme.colorScheme.primary, appBarInk],
+                minRatio: kContrastLarge,
+              ),
+            ),
+            tooltip: 'App Config — file locations, theme, pricing, autosave',
+            onPressed: () => provider.selectTab(AppTab.appConfig.index),
           ),
-          IconButton(
-            icon: const Icon(Icons.folder_open),
-            tooltip: 'Open Existing Config',
-            onPressed: () => _openExistingConfig(context, provider),
-          ),
-          IconButton(
-            icon: const Icon(Icons.cloud_download),
-            tooltip: 'Download config.json from Processor (SFTP)',
-            onPressed: () async {
-              final result = await showDialog<bool>(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => const ProcessorSftpDialog(isUpload: false),
-              );
-              if (result != true || !context.mounted) return;
-              // Working copy on disk now — pick up any schematic beside it.
-              await _syncDiagramsAfterLoad(context, provider);
-              // Same as a local open: the download lands, and Convert offers
-              // the migration when the user is ready for it.
-              if (provider.lastLoadHadChanges && context.mounted) {
-                _announceConversionAvailable(context);
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.cloud_upload),
-            tooltip: 'Upload to Processor (SFTP)',
-            onPressed: () {
-              showDialog(
-                context: context,
-                barrierDismissible: false, 
-                builder: (context) => const ProcessorSftpDialog(isUpload: true),
-              );
-            },
-          ),
-          // UNDO THE LAST SAVE: put back the '<name>_previous.json' copy the
-          // save took of the file beforehand. Enabled only while that backup
-          // belongs to the file currently loaded — see canUndoLastSave.
-          IconButton(
-            icon: const Icon(Icons.undo),
-            tooltip: provider.canUndoLastSave
-                ? 'Undo Last Save — restore the config from '
-                    '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
-                : 'Undo Last Save — nothing has been saved over a local file yet',
-            onPressed: provider.canUndoLastSave
-                ? () => _undoLastSave(context, provider)
-                : null,
-          ),
-          // SAVE, AND EVERY OTHER WAY OF SAVING. One button that writes
-          // whatever document the tab on screen belongs to — the room on the
-          // room tabs, the job on the Project tab, the catalog on the Catalog
-          // tab — with a dot on it when that document is behind its file, and
-          // a menu beside it holding Save As, the other document, Save All to
-          // a room folder, and an on-demand backup. See save_actions.dart for
-          // why the three buttons that used to be here were not enough.
-          const SaveToolbar(),
         ],
       ),
       body: Column(
@@ -803,6 +849,7 @@ class _MainDashboardState extends State<MainDashboard> {
           TopLevelBar(
             selectedIndex: selectedIndex,
             onSelect: provider.selectTab,
+            actions: documentActions,
           ),
           Expanded(
             child: Row(
@@ -907,6 +954,10 @@ class _MainDashboardState extends State<MainDashboard> {
   /// by side are taller than a laptop screen.
   Widget _buildLandingScreen(BuildContext context, AppStateProvider provider) {
     final theme = Theme.of(context);
+    // A project counts as open once it has a file or any rooms on it — the two
+    // ways somebody ends up with a job in front of them.
+    final projectOpen = provider.currentProjectPath.isNotEmpty ||
+        provider.project.rooms.isNotEmpty;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -920,7 +971,10 @@ class _MainDashboardState extends State<MainDashboard> {
                 textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(
-              'Start with the job, or go straight to a room.',
+              projectOpen
+                  ? '${provider.projectDisplayName} is open. Pick one of its '
+                      'rooms from the Project tab, or start a new file here.'
+                  : 'Start with the job, or go straight to a room.',
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: theme.disabledColor),
               textAlign: TextAlign.center,
@@ -931,23 +985,28 @@ class _MainDashboardState extends State<MainDashboard> {
               spacing: 24,
               runSpacing: 24,
               children: [
-                _StartCard(
-                  icon: Icons.account_tree,
-                  title: 'Project',
-                  blurb: 'A building and the rooms in it, with the vendor '
-                      'split and the totals across the whole job.',
-                  primaryLabel: 'Start a New Project',
-                  primaryIcon: Icons.create_new_folder,
-                  onPrimary: () => startNewProject(context, provider),
-                  secondaryLabel: 'Open a Project',
-                  secondaryIcon: Icons.folder_open,
-                  onSecondary: () => openProjectFromFile(context, provider),
-                  subtitle: provider.currentProjectPath.isEmpty
-                      ? (provider.project.rooms.isEmpty
-                          ? 'No project open'
-                          : '${provider.projectDisplayName} — not saved yet')
-                      : provider.projectDisplayName,
-                ),
+                // THE PROJECT HALF ONLY WHEN THERE IS NO PROJECT.
+                //
+                // Somebody with a job already open is not looking for a way to
+                // start one — they are here because the room slot is empty,
+                // and "Start a New Project" next to that is an invitation to
+                // throw away the job they just opened. The Project button in
+                // the banner is still one click away; what this screen owes
+                // them is the room.
+                if (!projectOpen)
+                  _StartCard(
+                    icon: Icons.account_tree,
+                    title: 'Project',
+                    blurb: 'A building and the rooms in it, with the vendor '
+                        'split and the totals across the whole job.',
+                    primaryLabel: 'Start a New Project',
+                    primaryIcon: Icons.create_new_folder,
+                    onPrimary: () => startNewProject(context, provider),
+                    secondaryLabel: 'Open a Project',
+                    secondaryIcon: Icons.folder_open,
+                    onSecondary: () => openProjectFromFile(context, provider),
+                    subtitle: 'No project open',
+                  ),
                 _StartCard(
                   icon: Icons.description,
                   title: 'Room file',
@@ -1170,10 +1229,17 @@ class TopLevelBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
 
+  /// The document's own buttons — new, convert, open, the two SFTP transfers,
+  /// undo and save. Handed in rather than built here because they need the
+  /// dashboard's own methods, and they live on THIS row because they are about
+  /// the document the job is made of, not about the application.
+  final List<Widget> actions;
+
   const TopLevelBar({
     super.key,
     required this.selectedIndex,
     required this.onSelect,
+    this.actions = const [],
   });
 
   @override
@@ -1181,7 +1247,6 @@ class TopLevelBar extends StatelessWidget {
     final theme = Theme.of(context);
     final provider = context.watch<AppStateProvider>();
     final onProject = selectedIndex == AppTab.project.index;
-    final onConfig = selectedIndex == AppTab.appConfig.index;
 
     final bannerFill = theme.colorScheme.surfaceContainerHighest;
 
@@ -1190,7 +1255,7 @@ class TopLevelBar extends StatelessWidget {
       // Tight on purpose. Every pixel this takes is a pixel off the drawing
       // below it, and on a laptop the drawing is what somebody is here for.
       //
-      // No padding on the right at all: the gear belongs in the corner, and an
+      // No padding on the right: the last button belongs in the corner, and an
       // IconButton already carries its own margin, so twelve more pixels only
       // left it floating short of the edge.
       child: Padding(
@@ -1247,34 +1312,7 @@ class TopLevelBar extends StatelessWidget {
                 ),
               ),
             ),
-            IconButton(
-              key: const ValueKey('banner_app_config'),
-              visualDensity: VisualDensity.compact,
-              icon: Icon(
-                Icons.settings,
-                color: readableOn(
-                  bannerFill,
-                  prefer: [theme.colorScheme.onSurfaceVariant,
-                      theme.colorScheme.onSurface],
-                  minRatio: kContrastLarge,
-                ),
-              ),
-              isSelected: onConfig,
-              // An icon that carries meaning, so the large-text threshold —
-              // and the accent only gets to be the selected colour when it is
-              // actually legible on this strip.
-              selectedIcon: Icon(
-                Icons.settings,
-                color: readableOn(
-                  bannerFill,
-                  prefer: [theme.colorScheme.primary,
-                      theme.colorScheme.onSurface],
-                  minRatio: kContrastLarge,
-                ),
-              ),
-              tooltip: 'App Config — file locations, theme, pricing, autosave',
-              onPressed: () => onSelect(AppTab.appConfig.index),
-            ),
+            ...actions,
           ],
         ),
       ),

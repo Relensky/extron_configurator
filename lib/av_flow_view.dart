@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
+import 'contrast.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
@@ -3973,6 +3974,11 @@ class _JackClashBanner extends StatelessWidget {
     // dialog that grows past the window to list forty of them cannot be
     // dismissed.
     final shown = clashes.take(5).toList();
+    // Measured against the fill rather than taken from the scheme:
+    // onErrorContainer on errorContainer fails WCAG on 45 of the 180
+    // theme/accent combinations this app can be set to.
+    final bannerInk =
+        foregroundOn(theme.colorScheme, theme.colorScheme.errorContainer);
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -3987,7 +3993,7 @@ class _JackClashBanner extends StatelessWidget {
               Icon(
                 Icons.error_outline,
                 size: 18,
-                color: theme.colorScheme.onErrorContainer,
+                color: bannerInk,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -3995,7 +4001,7 @@ class _JackClashBanner extends StatelessWidget {
                   '${clashes.length} jack number'
                   '${clashes.length == 1 ? ' is' : 's are'} already in use',
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.onErrorContainer,
+                    color: bannerInk,
                   ),
                 ),
               ),
@@ -4009,16 +4015,12 @@ class _JackClashBanner extends StatelessWidget {
           for (final clash in shown)
             Text(
               '${clash.label} — ${clash.usedBy}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: bannerInk),
             ),
           if (clashes.length > shown.length)
             Text(
               '…and ${clashes.length - shown.length} more',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: bannerInk),
             ),
         ],
       ),

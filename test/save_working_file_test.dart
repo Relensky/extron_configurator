@@ -76,14 +76,18 @@ void main() {
   }
 
   /// The toolbar's save button — Icons.save also names the schematic's "Save
-  /// Layout", so the finder is scoped to the AppBar.
+  /// Layout", so the finder is scoped to the bar it lives on.
+  ///
+  /// That bar is the BANNER now, not the title bar: the buttons that act on
+  /// the open document sit beside the job, and the title bar keeps the ones
+  /// that are about the application.
   final saveButton = find.descendant(
-    of: find.byType(AppBar),
+    of: find.byType(TopLevelBar),
     matching: find.widgetWithIcon(IconButton, Icons.save),
   );
 
   final undoButton = find.descendant(
-    of: find.byType(AppBar),
+    of: find.byType(TopLevelBar),
     matching: find.widgetWithIcon(IconButton, Icons.undo),
   );
 

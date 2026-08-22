@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'contrast.dart';
 import 'app_state.dart';
 import 'control_prefill.dart';
 
@@ -120,7 +121,8 @@ class _ControlPrefillDialog extends StatelessWidget {
                 theme,
                 Icons.extension_off_outlined,
                 theme.colorScheme.errorContainer,
-                theme.colorScheme.onErrorContainer,
+                foregroundOn(theme.colorScheme,
+                    theme.colorScheme.errorContainer),
                 '${plan.withoutModule.length} device'
                     '${plan.withoutModule.length == 1 ? '' : 's'} have no '
                     'python module',

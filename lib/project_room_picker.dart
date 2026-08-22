@@ -52,13 +52,22 @@ class ProjectRoomPicker extends StatelessWidget {
           const SizedBox(width: 6),
           // The job's name, small: it is context, not the subject. The room is
           // the subject and it is the thing in the button.
+          //
+          // Flexible, and the only flexible thing in this Row, so it is the
+          // first to give way. The title slot is a few hundred pixels wide and
+          // this row can carry a stepper, a room menu AND a Save room button
+          // once the open room is behind its file — which is exactly when the
+          // job's name is the least of what somebody needs to read.
           if (provider.projectDisplayName.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Text(
-                provider.projectDisplayName,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: onBar.withValues(alpha: 0.7),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  provider.projectDisplayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: onBar.withValues(alpha: 0.7),
+                  ),
                 ),
               ),
             ),
@@ -83,7 +92,11 @@ class ProjectRoomPicker extends StatelessWidget {
                   key: const ValueKey('room_picker_save'),
                   onPressed: () => saveOpenRoom(context, provider),
                   icon: Icon(Icons.save, size: 16, color: onBar),
-                  label: Text('Save room', style: TextStyle(color: onBar)),
+                  label: Text(
+                    'Save room',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: onBar),
+                  ),
                 ),
               ),
             ),

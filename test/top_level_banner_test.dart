@@ -60,12 +60,33 @@ void main() {
     expect(find.text('Create a New File'), findsOneWidget);
   });
 
-  testWidgets('the banner carries the job and the gear', (tester) async {
+  testWidgets('the two rows carry the two kinds of thing', (tester) async {
     final p = fresh();
     await pump(tester, p);
 
+    // The banner: the job, and the buttons that act on the open document.
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
-    expect(find.byKey(const ValueKey('banner_app_config')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(TopLevelBar),
+        matching: find.byKey(const ValueKey('save_context')),
+      ),
+      findsOneWidget,
+      reason: 'Save acts on the document, so it belongs beside the job',
+    );
+
+    // The title bar: the things that are about the application.
+    for (final key in ['export_workbook', 'export_tab_menu',
+        'banner_app_config']) {
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byKey(ValueKey(key)),
+        ),
+        findsOneWidget,
+        reason: '$key is about the app, so it belongs in the title bar',
+      );
+    }
 
     await tester.tap(find.byKey(const ValueKey('banner_project')));
     await tester.pumpAndSettle();
@@ -99,7 +120,7 @@ void main() {
     expect(inBanner('Bessey Hall — unsaved'), findsOneWidget);
   });
 
-  testWidgets('the gear sits in the corner, not in the middle',
+  testWidgets('the banner runs to the corner, not to the middle',
       (tester) async {
     final p = fresh();
     p.newProject(name: 'Bessey Hall');
@@ -108,15 +129,20 @@ void main() {
     // MEASURED, not eyeballed. The first attempt at this bar used a Flexible
     // for the job name AND a Spacer, both flex:1 — so they split the free
     // width between them and the half the short name did not use was left
-    // over to the RIGHT of the gear, parking a corner button 600 pixels from
-    // the corner.
-    final gear = tester.getRect(find.byKey(const ValueKey('banner_app_config')));
-    final window = tester.getRect(find.byType(TopLevelBar));
-    expect(gear.right, closeTo(window.right, 1),
-        reason: 'the gear is flush with the right edge of the banner');
+    // over to the RIGHT of the buttons, parking the corner control 600 pixels
+    // from the corner.
+    final banner = tester.getRect(find.byType(TopLevelBar));
+    final saveMenu = tester.getRect(
+      find.descendant(
+        of: find.byType(TopLevelBar),
+        matching: find.byKey(const ValueKey('save_menu')),
+      ),
+    );
+    expect(saveMenu.right, closeTo(banner.right, 1),
+        reason: 'the last button on the banner is flush with its right edge');
   });
 
-  testWidgets('a long job name pushes nothing off the end', (tester) async {
+  testWidgets('a long job name pushes nothing off either row', (tester) async {
     final p = fresh();
     p.newProject(
       name: 'Bessey Hall Phase Two Instructional Technology Refresh, '
@@ -124,11 +150,18 @@ void main() {
     );
     await pump(tester, p);
 
-    expect(tester.takeException(), isNull);
-    final gear = tester.getRect(find.byKey(const ValueKey('banner_app_config')));
-    final window = tester.getRect(find.byType(TopLevelBar));
-    expect(gear.right, closeTo(window.right, 1));
-    expect(window.contains(gear.centerLeft), isTrue);
+    expect(tester.takeException(), isNull,
+        reason: 'a long name ellipsises rather than overflowing');
+
+    final banner = tester.getRect(find.byType(TopLevelBar));
+    final saveMenu = tester.getRect(
+      find.descendant(
+        of: find.byType(TopLevelBar),
+        matching: find.byKey(const ValueKey('save_menu')),
+      ),
+    );
+    expect(saveMenu.right, closeTo(banner.right, 1));
+    expect(banner.contains(saveMenu.centerLeft), isTrue);
   });
 
   testWidgets('the banner survives the rail being folded away',
@@ -143,6 +176,30 @@ void main() {
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget,
         reason: 'the way back to the job must not fold away with the rail');
     expect(find.byKey(const ValueKey('banner_app_config')), findsOneWidget);
+  });
+
+  testWidgets('a job already open means only the file half is offered',
+      (tester) async {
+    // Somebody with a job open is not looking for a way to start one — they
+    // are here because the ROOM slot is empty, and "Start a New Project" next
+    // to that is an invitation to throw away the job they just opened.
+    final p = fresh();
+    p.newProject(name: 'Bessey Hall');
+    // A real file: addRoomToProject checks, and a project with no rooms and
+    // no file of its own is not an open project.
+    final roomPath = path.join(dir.path, 'a_config.json');
+    File(roomPath).writeAsStringSync(jsonEncode({
+      'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '101'},
+    }));
+    expect(p.addRoomToProject(roomPath), isEmpty);
+    await pump(tester, p);
+
+    expect(find.text('Create a New File'), findsOneWidget);
+    expect(find.text('Open a File'), findsOneWidget);
+    expect(find.text('Start a New Project'), findsNothing);
+    expect(find.text('Open a Project'), findsNothing);
+    // ...and it says which job is open rather than leaving them wondering.
+    expect(find.textContaining('Bessey Hall is open'), findsOneWidget);
   });
 
   test('the rail and the banner between them cover every tab, once', () {

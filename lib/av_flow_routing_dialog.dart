@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'contrast.dart';
 import 'app_state.dart';
 import 'av_flow_routing.dart';
 
@@ -131,7 +132,11 @@ class _RoutingDialog extends StatelessWidget {
                 theme,
                 Icons.report_problem_outlined,
                 theme.colorScheme.errorContainer,
-                theme.colorScheme.onErrorContainer,
+                // Measured, not assumed: onErrorContainer on errorContainer
+                // fails WCAG on 45 of this app's 180 theme/accent
+                // combinations.
+                foregroundOn(theme.colorScheme,
+                    theme.colorScheme.errorContainer),
                 '${plan.unresolved.length} tie'
                     '${plan.unresolved.length == 1 ? '' : 's'} could not be '
                     'placed',

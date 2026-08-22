@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'contrast.dart';
 import 'app_state.dart';
 import 'control_prefill_dialog.dart';
 
@@ -149,7 +150,10 @@ class MissingModulesBanner extends StatelessWidget {
     }
 
     final theme = Theme.of(context);
-    final onError = theme.colorScheme.onErrorContainer;
+    // Measured against the fill it is painted on rather than taken from the
+    // scheme, which only PREFERS this pairing and does not guarantee it.
+    final onError =
+        foregroundOn(theme.colorScheme, theme.colorScheme.errorContainer);
     final total = missing.length + uncontrolled.length;
 
     Widget chips(List<UnmodularDevice> devices) {

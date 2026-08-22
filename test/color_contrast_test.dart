@@ -35,6 +35,39 @@ void main() {
     }
   }
 
+  /// A far wider sweep than the named accents above: every hue at five
+  /// lightnesses, plus black, white and mid grey.
+  ///
+  /// Five hand-picked accents were not enough. An audit over this grid found
+  /// the scheme's OWN pairings failing on a third to a half of it — 45 of 180
+  /// for onErrorContainer on errorContainer, 43 for onPrimaryContainer, 36 for
+  /// onSecondaryContainer, 35 for onPrimary — which is why nothing in this app
+  /// may paint one of those pairs directly, and why the guarantee below is
+  /// about the HELPERS rather than about the scheme.
+  Iterable<({String name, ThemeData theme})> everyAccent() sync* {
+    final accents = <String>[
+      '000000', 'FFFFFF', '808080',
+      for (final hue in [0, 30, 60, 120, 180, 210, 270, 300])
+        for (final light in [0.15, 0.30, 0.50, 0.70, 0.90])
+          HSLColor.fromAHSL(1, hue.toDouble(), 0.75, light)
+              .toColor()
+              .toARGB32()
+              .toRadixString(16)
+              .substring(2)
+              .toUpperCase(),
+    ];
+    for (final style in ['classic', 'auris']) {
+      for (final dark in [false, true]) {
+        for (final accent in accents) {
+          yield (
+            name: '$style ${dark ? 'dark' : 'light'} #$accent',
+            theme: RoomConfigApp.themeFor(style, dark, accent, accent, ''),
+          );
+        }
+      }
+    }
+  }
+
   void expectReadable(
     String what,
     Color fg,
@@ -116,6 +149,62 @@ void main() {
         expectReadable('error', s.error, s.surface, t.name);
       });
     }
+  });
+
+  group('the helpers hold on EVERY accent, not just the likely ones', () {
+    // One test rather than 180, because 180 named tests for one guarantee is a
+    // test report nobody reads. The failure message names the combination.
+    test('every fill the app paints on has a readable foreground', () {
+      final failures = <String>[];
+      for (final t in everyAccent()) {
+        final s = t.theme.colorScheme;
+        for (final entry in {
+          'primary': s.primary,
+          'primaryContainer': s.primaryContainer,
+          'secondaryContainer': s.secondaryContainer,
+          'errorContainer': s.errorContainer,
+          'surface': s.surface,
+          'surfaceContainerLow': s.surfaceContainerLow,
+          'surfaceContainerHigh': s.surfaceContainerHigh,
+          'surfaceContainerHighest': s.surfaceContainerHighest,
+        }.entries) {
+          for (final pick in {
+            'foregroundOn': foregroundOn(s, entry.value),
+            'errorOn': errorOn(s, entry.value),
+            'readableOn': readableOn(entry.value),
+          }.entries) {
+            final r = contrastRatio(pick.value, entry.value);
+            if (r < kContrastBody) {
+              failures.add(
+                '${pick.key} on ${entry.key} — ${t.name} — '
+                '${r.toStringAsFixed(2)}:1',
+              );
+            }
+          }
+        }
+      }
+      expect(failures, isEmpty,
+          reason: 'text this app paints is unreadable on '
+              '${failures.length} fill/theme combinations');
+    });
+
+    test('the schemes own pairings are NOT safe — which is why the helpers '
+        'exist', () {
+      // Not a complaint about Material: a scheme's on-colours are generated
+      // for its own generated palette, and this app hands it a colour a user
+      // picked. This test is here so that anybody tempted to write
+      // `colorScheme.onPrimaryContainer` can see the number first.
+      var bad = 0;
+      for (final t in everyAccent()) {
+        final s = t.theme.colorScheme;
+        if (contrastRatio(s.onPrimaryContainer, s.primaryContainer) <
+            kContrastBody) {
+          bad++;
+        }
+      }
+      expect(bad, greaterThan(0),
+          reason: 'if this ever reaches zero the helpers could be retired');
+    });
   });
 
   group('the pairings this app actually paints', () {

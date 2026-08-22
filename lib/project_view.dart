@@ -13,6 +13,7 @@ import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'project_estimate.dart';
+import 'project_room_picker.dart';
 import 'project_swap.dart';
 import 'project_workbook.dart';
 import 'save_actions.dart';
@@ -672,7 +673,7 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
   ];
 }
 
-class _RoomRow extends StatelessWidget {
+class _RoomRow extends StatefulWidget {
   final ProjectRoomCost room;
   final String currency;
   final bool isFirst;
@@ -686,8 +687,50 @@ class _RoomRow extends StatelessWidget {
   });
 
   @override
+  State<_RoomRow> createState() => _RoomRowState();
+}
+
+class _RoomRowState extends State<_RoomRow> {
+  /// Whether the pointer is over the room's name.
+  ///
+  /// Stateful for one underline. A name that opens the room when you click it
+  /// has to LOOK like it does — the whole reason this had to be asked for is
+  /// that a row of plain text says nothing about being a way in — and a hover
+  /// underline is the one affordance that costs no space on a row already
+  /// carrying a checkbox, three figures and four buttons.
+  bool _hoveringName = false;
+
+  /// Makes this the room the editor is working on.
+  ///
+  /// Goes through the SAME prompt the picker in the title bar does: switching
+  /// rooms reads the next room off disk, so anything unsaved in the one being
+  /// left goes with it. Two doors into one action must not have two different
+  /// answers to that question.
+  Future<void> _open(AppStateProvider provider) async {
+    if (!await confirmLeavingRoom(context, provider)) return;
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await provider.openProjectRoomRef(widget.room.ref);
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        content: Text(
+          error.isEmpty
+              ? '${widget.room.name} is now the open room.'
+              : error,
+        ),
+        backgroundColor: error.isEmpty ? null : snackErrorFillOn(messenger),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final provider = context.read<AppStateProvider>();
+    final room = widget.room;
+    final currency = widget.currency;
+    final provider = context.watch<AppStateProvider>();
     final theme = Theme.of(context);
     final e = room.estimate;
     final dimmed = !room.ref.included;
@@ -735,14 +778,31 @@ class _RoomRow extends StatelessWidget {
             ),
             Expanded(
               flex: 3,
-              child: Column(
+              child: _NameTarget(
+                enabled: !isOpen,
+                hovering: _hoveringName,
+                onHover: (v) => setState(() => _hoveringName = v),
+                onTap: () => _open(provider),
+                tooltip: isOpen
+                    ? 'This is the room the editor is working on'
+                    : 'Open ${room.name} in the editor',
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     room.name,
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: ink,
-                      decoration: dimmed ? TextDecoration.lineThrough : null,
+                      // Struck through when the room is off the total, and
+                      // underlined while the pointer is over it — the two
+                      // never coincide, because the open room is not a way in
+                      // to itself.
+                      decoration: dimmed
+                          ? TextDecoration.lineThrough
+                          : (_hoveringName && !isOpen
+                              ? TextDecoration.underline
+                              : null),
+                      decorationColor: ink,
                     ),
                   ),
                   Text(
@@ -762,19 +822,27 @@ class _RoomRow extends StatelessWidget {
                       children: [
                         Icon(Icons.edit_note, size: 13, color: ink),
                         const SizedBox(width: 4),
-                        Text(
-                          unsaved
-                              ? 'Open in the editor — counted with its unsaved '
-                                    'changes'
-                              : 'Open in the editor',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: unsaved ? alarm : ink,
-                            fontWeight: unsaved ? FontWeight.w600 : null,
+                        // Expanded, because the unsaved wording is half a
+                        // sentence longer than the plain one and the column it
+                        // sits in is whatever the figures beside it leave over.
+                        Expanded(
+                          child: Text(
+                            unsaved
+                                ? 'Open in the editor — counted with its '
+                                      'unsaved changes'
+                                : 'Open in the editor',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: unsaved ? alarm : ink,
+                              fontWeight: unsaved ? FontWeight.w600 : null,
+                            ),
                           ),
                         ),
                       ],
                     ),
                 ],
+              ),
               ),
             ),
             if (e != null) ...[
@@ -782,12 +850,22 @@ class _RoomRow extends StatelessWidget {
                 context,
                 'Equipment',
                 formatMoney(e.equipmentTotal, currency),
+                ink: ink,
+                quiet: quiet,
               ),
-              _cell(context, 'Labor', formatMoney(e.laborTotal, currency)),
+              _cell(
+                context,
+                'Labor',
+                formatMoney(e.laborTotal, currency),
+                ink: ink,
+                quiet: quiet,
+              ),
               _cell(
                 context,
                 'Room total',
                 formatMoney(e.grandTotal, currency),
+                ink: ink,
+                quiet: quiet,
                 bold: true,
               ),
             ] else
@@ -800,14 +878,14 @@ class _RoomRow extends StatelessWidget {
             IconButton(
               tooltip: 'Move up',
               icon: const Icon(Icons.arrow_upward, size: 18),
-              onPressed: isFirst
+              onPressed: widget.isFirst
                   ? null
                   : () => provider.moveProjectRoom(room.ref.id, -1),
             ),
             IconButton(
               tooltip: 'Move down',
               icon: const Icon(Icons.arrow_downward, size: 18),
-              onPressed: isLast
+              onPressed: widget.isLast
                   ? null
                   : () => provider.moveProjectRoom(room.ref.id, 1),
             ),
@@ -842,10 +920,21 @@ class _RoomRow extends StatelessWidget {
     ];
   }
 
+  /// One figure on the row, with the ink the ROW measured for its own fill.
+  ///
+  /// The colours are passed in rather than read off the theme because this
+  /// cell is painted on four different backgrounds — the page, a dimmed
+  /// surface, the accent when the room is open, and the error fill when it
+  /// could not be read. Taking the text theme's default meant the open room's
+  /// figures were drawn in a colour chosen for the PAGE: on a dark accent,
+  /// dark on dark, and the numbers on the row somebody is working in were the
+  /// ones that disappeared.
   Widget _cell(
     BuildContext context,
     String label,
     String value, {
+    required Color ink,
+    required Color quiet,
     bool bold = false,
   }) {
     final theme = Theme.of(context);
@@ -853,14 +942,64 @@ class _RoomRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(label, style: theme.textTheme.labelSmall),
+          Text(label, style: theme.textTheme.labelSmall?.copyWith(color: quiet)),
           Text(
             value,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: bold ? FontWeight.bold : null,
+              color: ink,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The room's name and path, as the way into that room.
+///
+/// Its own widget so the row above stays readable, and so the "is this even
+/// clickable" question has exactly one answer: when [enabled], the pointer
+/// turns into a hand, the region takes a hover highlight and a ripple, and the
+/// name underlines. When it is not — because this is already the open room —
+/// none of that happens and the tooltip says why rather than leaving somebody
+/// clicking at a row that does nothing.
+class _NameTarget extends StatelessWidget {
+  final bool enabled;
+  final bool hovering;
+  final ValueChanged<bool> onHover;
+  final VoidCallback onTap;
+  final String tooltip;
+  final Widget child;
+
+  const _NameTarget({
+    required this.enabled,
+    required this.hovering,
+    required this.onHover,
+    required this.onTap,
+    required this.tooltip,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Padded on the right so the ripple does not run under the figures beside
+    // it, and given a radius so it reads as its own target rather than as the
+    // whole card lighting up.
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+      child: child,
+    );
+    if (!enabled) {
+      return Tooltip(message: tooltip, child: body);
+    }
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        onHover: onHover,
+        child: body,
       ),
     );
   }
@@ -999,7 +1138,12 @@ List<Widget> partsSlivers(
           // default, which is picked for the surface the chip normally sits
           // on and is not readable on an error fill.
           style: warn
-              ? TextStyle(color: theme.colorScheme.onErrorContainer)
+              ? TextStyle(
+                  color: foregroundOn(
+                    theme.colorScheme,
+                    theme.colorScheme.errorContainer,
+                  ),
+                )
               : null,
         ),
         selected: vendorFilter == value,
@@ -1753,6 +1897,11 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
   final theme = Theme.of(context);
   final vendors = estimate.project.vendors;
   final conflicts = estimate.project.vendorConflicts;
+  // Against the card's own error fill. The theme's title colour is chosen for
+  // a surface, and onErrorContainer is only the scheme's PREFERENCE — it fails
+  // WCAG on 45 of this app's 180 theme/accent combinations.
+  final conflictInk =
+      foregroundOn(theme.colorScheme, theme.colorScheme.errorContainer);
 
   return [
     SliverToBoxAdapter(
@@ -1799,7 +1948,7 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
                     // chosen for a surface, and on an error container it is
                     // the wrong side of readable.
                     style: theme.textTheme.titleSmall?.copyWith(
-                      color: theme.colorScheme.onErrorContainer,
+                      color: conflictInk,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1809,7 +1958,7 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
                       '${c.vendors.map((v) => v.name).join(' and ')}. '
                       '${c.vendors.first.name} wins.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onErrorContainer,
+                        color: conflictInk,
                       ),
                     ),
                 ],

@@ -10,6 +10,7 @@ import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/project_estimate.dart';
+import 'package:extron_configurator/main.dart';
 import 'package:extron_configurator/project_room_picker.dart';
 
 /// Working a job the way it is actually worked: open the project, pick a room,
@@ -333,6 +334,106 @@ void main() {
       await pump(tester, p);
 
       expect(find.byKey(const ValueKey('room_picker_save')), findsNothing);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE ROOM LIST ON THE PROJECT TAB
+  // -------------------------------------------------------------------------
+  //  The list already said which room was open. It had no way to CHANGE which
+  //  one was — the only door was the picker up in the title bar — so somebody
+  //  reading a building's rooms had to look away from the list to act on it.
+  //  The name is that door now, and it goes through the same "save first?"
+  //  prompt the picker does.
+  // -------------------------------------------------------------------------
+
+  group('clicking a room on the Project tab', () {
+    Future<void> pumpTab(WidgetTester tester, AppStateProvider p) async {
+      tester.view.physicalSize = const Size(1600, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      p.settingsLoaded = true;
+      p.firstRunSetupNeeded = false;
+      p.selectTab(AppTab.project.index);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const RoomConfigApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    /// [name] as it appears IN THE ROOM LIST.
+    ///
+    /// Scoped to the list's own cards because the picker in the title bar
+    /// names the open room as well, and an unscoped find.text would match
+    /// both and fail on the room that matters most — the open one.
+    Finder inList(String name) =>
+        find.descendant(of: find.byType(Card), matching: find.text(name));
+
+    testWidgets('the name opens that room', (tester) async {
+      final p = withProject();
+      await pumpTab(tester, p);
+      expect(p.openProjectRoom, isNull, reason: 'nothing open to start with');
+
+      await tester.runAsync(() async => tester.tap(inList('Room B')));
+      for (var i = 0; i < 40 && p.currentConfigPath.isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+
+      expect(p.currentConfigPath, roomB());
+      expect(p.openProjectRoom?.id, p.project.rooms.last.id);
+      // The whole room, not just the config — the same as every other way in.
+      expect(p.avNodes.single.model, 'Camera Y');
+    });
+
+    testWidgets('the open room is not a way into itself', (tester) async {
+      final p = withProject();
+      await tester.runAsync(
+        () => p.openProjectRoomRef(p.project.rooms.first),
+      );
+      await pumpTab(tester, p);
+
+      // Its name is inside a plain Tooltip rather than an InkWell, and the
+      // tooltip says why instead of leaving somebody clicking at a row that
+      // does nothing.
+      final nameA = inList('Room A');
+      expect(nameA, findsOneWidget);
+      expect(
+        find.ancestor(of: nameA, matching: find.byType(InkWell)),
+        findsNothing,
+      );
+      final tip = tester.widget<Tooltip>(
+        find.ancestor(of: nameA, matching: find.byType(Tooltip)).first,
+      );
+      expect(tip.message, contains('working on'));
+    });
+
+    testWidgets('an unsaved room is offered a save before the switch',
+        (tester) async {
+      final p = withProject();
+      await tester.runAsync(
+        () => p.openProjectRoomRef(p.project.rooms.first),
+      );
+      p.setAvCostTax(percent: 10); // Room A is now behind its file.
+      await pumpTab(tester, p);
+
+      await tester.tap(inList('Room B'));
+      await tester.pumpAndSettle();
+
+      // The picker's prompt, reached from the list — one question with one
+      // answer, however you got to it.
+      expect(find.text('Save this room first?'), findsOneWidget);
+
+      await tester.tap(find.text('Stay here'));
+      await tester.pumpAndSettle();
+      expect(p.currentConfigPath, roomA(),
+          reason: 'backing out of the prompt leaves the room where it was');
+      expect(p.avCost.taxPercent, 10, reason: 'and keeps the unsaved edit');
     });
   });
 }
