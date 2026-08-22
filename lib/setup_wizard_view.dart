@@ -34,7 +34,7 @@ class SetupWizardView extends StatelessWidget {
             if (provider.isAvOnlyRoom)
               ActionChip(
                 avatar: const Icon(Icons.videocam_outlined, size: 18),
-                label: const Text('AV only — no control system'),
+                label: const Text('AV only - no control system'),
                 tooltip: 'Click to set up the control system for this room',
                 onPressed: () => provider.setRoomMode(RoomMode.full),
               ),
@@ -43,7 +43,7 @@ class SetupWizardView extends StatelessWidget {
         const SizedBox(height: 10),
         Text(provider.isAvOnlyRoom
             ? "Set the building and room number, then the hardware counts. "
-                "That is everything an AV-only room needs — the schematic, "
+                "That is everything an AV-only room needs - the schematic, "
                 "signal flow, racks and costs all build from it."
             : "Set your core room identifiers and hardware counts here. "
                 "Generating these will reset the specific device tabs."),
@@ -79,7 +79,7 @@ class SetupWizardView extends StatelessWidget {
 
                   // 3. Determine initial value text.
                   // gve_bldg holds the building CODE (new style, e.g. 'BSS')
-                  // or a legacy ALL CAPS full name — display both correctly.
+                  // or a legacy ALL CAPS full name - display both correctly.
                   String currentBldg = systemSetup['gve_bldg'] ?? '';
                   String initialText = currentBldg;
                   if (provider.buildings.containsKey(currentBldg)) {
@@ -99,7 +99,7 @@ class SetupWizardView extends StatelessWidget {
                           formattedBuildings, textEditingValue.text);
                     },
                     onSelected: (String selection) {
-                      // Store the building CODE from buildings.json — e.g.
+                      // Store the building CODE from buildings.json - e.g.
                       // 'BEHAVIORAL AND SOCIAL SCIENCE (BSS)' -> gve_bldg 'BSS'.
                       // gui_full_room_name is generated from the FULL name by
                       // updateFullRoomName (Title Case + room number).
@@ -159,7 +159,7 @@ class SetupWizardView extends StatelessWidget {
                 filled: isKnown,
                 helperText: isKnown
                     ? 'Auto-generated: Title Case building name + room number'
-                    : 'Building not found in buildings.json — enter the full room name yourself',
+                    : 'Building not found in buildings.json - enter the full room name yourself',
               ),
               readOnly: isKnown, // Auto for known buildings, editable otherwise
               onChanged: (val) {
@@ -180,7 +180,7 @@ class SetupWizardView extends StatelessWidget {
 
         // SCHEMA-DRIVEN: one count dropdown per family in the UI schema's
         // "device_types" (file order). Adding a new dev_ key + section
-        // prefix in ui_schema.json adds a wizard row — no recompile.
+        // prefix in ui_schema.json adds a wizard row - no recompile.
         ...provider.uiSchema.deviceTypes.map((t) => _buildCountDropdown(
             context, provider, t.label, t.countKey, t.prefix, t.maxCount)),
 

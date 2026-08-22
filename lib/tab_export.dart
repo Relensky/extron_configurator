@@ -54,6 +54,11 @@ bool tabCanExport(AppTab tab) => switch (tab) {
   AppTab.schemaEditor ||
   AppTab.flowRules =>
     false,
+  // The Project tab exports two documents that are nothing like a tab dump —
+  // a whole workbook and a file per vendor — and offers both itself. A third
+  // button producing a flattened text version of a building would be a
+  // document nobody asked for and nobody could use.
+  AppTab.project => false,
   _ => true,
 };
 
@@ -72,6 +77,7 @@ String tabExportLabel(AppTab tab) => switch (tab) {
   AppTab.wizard ||
   AppTab.appConfig ||
   AppTab.schemaEditor ||
+  AppTab.project ||
   AppTab.flowRules =>
     'This tab',
 };
@@ -91,6 +97,7 @@ String _stem(AppTab tab) => switch (tab) {
   AppTab.wizard ||
   AppTab.appConfig ||
   AppTab.schemaEditor ||
+  AppTab.project ||
   AppTab.flowRules =>
     'room',
 };
@@ -153,6 +160,10 @@ List<ReportSection> tabReportSections(
     case AppTab.appConfig:
     case AppTab.schemaEditor:
     case AppTab.flowRules:
+    // A project is not a view of the open room, so there is nothing for a
+    // room-scoped export to render. Its own tab writes the project workbook
+    // and the per-vendor quote requests.
+    case AppTab.project:
       return const [];
   }
 }

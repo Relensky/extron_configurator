@@ -1,0 +1,632 @@
+import 'dart:typed_data';
+
+import 'building_project.dart';
+import 'control_gaps.dart';
+import 'cost_estimate.dart';
+import 'project_estimate.dart';
+import 'report_tools.dart';
+import 'xlsx_writer.dart';
+
+/// ============================================================================
+///  THE PROJECT WORKBOOK, AND THE QUOTE REQUESTS THAT COME OUT OF IT
+/// ============================================================================
+///  Two documents, built from the same rollup so they cannot disagree:
+///
+///  THE PROJECT WORKBOOK — everything, for the file and for the customer:
+///
+///    Summary       — what the building costs, and the same figure broken back
+///                    down to one row per room
+///    Master Parts  — every part once, quantities merged across rooms, with the
+///                    vendor it is tagged to and which rooms it is for
+///    <Vendor>      — one tab per vendor: exactly what that company is being
+///                    asked to quote
+///    <Room>        — one tab per room, its own estimate in full
+///
+///  THE VENDOR RFQ — one .xlsx per vendor, holding only that vendor's parts.
+///  This is the file that gets emailed, which is why it is a separate document
+///  rather than "the workbook, tell them to look at tab six": sending the whole
+///  book sends every other vendor's pricing to a competitor, and sends the
+///  customer's labor rates and margins to a supplier. A quote request contains
+///  what is being asked for and nothing else.
+///
+///  Both are dealt from [ProjectEstimate], and the room tabs from the SAME
+///  [costReportSections] the room's own Cost tab and room workbook use — so a
+///  room's numbers are identical in the room's book and in the building's.
+/// ============================================================================
+
+/// The fixed sheets, in workbook order. Vendor and room tabs follow.
+const List<String> kProjectWorkbookSheets = ['Summary', 'Master Parts'];
+
+/// The building-wide control-gap sheet, added only when there is something on
+/// it. Named here so the tests and the tab-order check can agree on it.
+const String kProjectControlSheet = 'Control Gaps';
+
+// ---------------------------------------------------------------------------
+//  SECTIONS
+// ---------------------------------------------------------------------------
+
+/// What the building costs, and every room's share of it.
+List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+
+  final project = estimate.project;
+
+  final sections = <ReportSection>[
+    (
+      title: 'Project',
+      header: const ['', ''],
+      rows: [
+        if (project.name.trim().isNotEmpty) ['Project', project.name],
+        if (project.building.trim().isNotEmpty) ['Building', project.building],
+        if (project.jobNumber.trim().isNotEmpty)
+          ['Job number', project.jobNumber],
+        if (project.client.trim().isNotEmpty) ['Client', project.client],
+        ['Rooms quoted', estimate.costedRooms.length],
+        if (project.rooms.length != estimate.costedRooms.length)
+          [
+            'Rooms not counted',
+            '${project.rooms.length - estimate.costedRooms.length} '
+                '(excluded or unreadable — see Rooms below)',
+          ],
+        if (project.notes.trim().isNotEmpty) ['Notes', project.notes],
+      ],
+    ),
+    (
+      title: 'Rooms',
+      header: const [
+        'Room',
+        'Equipment',
+        'Rack hardware',
+        'Cabling',
+        'Other items',
+        'Labor hrs',
+        'Labor',
+        'Fees',
+        'Tax',
+        'Room total',
+        'Status',
+      ],
+      rows: [
+        for (final room in estimate.rooms)
+          if (room.ok)
+            [
+              room.name,
+              cash(room.estimate!.equipmentTotal),
+              cash(room.estimate!.hardwareTotal),
+              cash(room.estimate!.cablingTotal),
+              cash(room.estimate!.extrasTotal),
+              trimNumber(room.estimate!.laborHours),
+              cash(room.estimate!.laborTotal),
+              cash(room.estimate!.feeTotal),
+              cash(room.estimate!.tax),
+              cash(room.estimate!.grandTotal),
+              _roomStatus(room),
+            ]
+          else
+            // A room that could not be read still gets a row. A building whose
+            // total is short by one room must say which one, in the same table
+            // the total is in — a warning somewhere else gets skimmed past.
+            [
+              room.name,
+              '', '', '', '', '', '', '', '',
+              '',
+              'NOT COUNTED — ${room.room.error}',
+            ],
+      ],
+    ),
+    (
+      title: 'Building total',
+      header: const ['', ''],
+      rows: [
+        ['Equipment', cash(estimate.equipmentTotal)],
+        ['Rack hardware', cash(estimate.hardwareTotal)],
+        ['Cabling', cash(estimate.cablingTotal)],
+        ['Other items', cash(estimate.extrasTotal)],
+        ['Parts subtotal', cash(estimate.partsTotal)],
+        [
+          'Labor (${trimNumber(estimate.laborHours)} hrs)',
+          cash(estimate.laborTotal),
+        ],
+        ['Fees', cash(estimate.feeTotal)],
+        ['Tax', cash(estimate.taxTotal)],
+        ['PROJECT TOTAL', cash(estimate.grandTotal)],
+      ],
+    ),
+  ];
+
+  // Vendors get a summary block here as well as their own tabs: "who are we
+  // buying from and for how much" is a question asked long before anybody
+  // opens a per-vendor sheet, and it is the number that decides whether the
+  // split is worth making at all.
+  if (estimate.vendors.isNotEmpty) {
+    sections.add((
+      title: 'By vendor',
+      header: const ['Vendor', 'Lines', 'Units', 'Parts total', 'Contact'],
+      rows: [
+        for (final p in estimate.vendors)
+          [
+            p.isUntagged ? 'UNTAGGED — no vendor rule matched' : p.name,
+            p.lines.length,
+            trimNumber(p.qty),
+            cash(p.total),
+            p.vendor?.contact ?? '',
+          ],
+        [
+          'All parts',
+          estimate.master.length,
+          trimNumber(
+            estimate.master.fold(0.0, (s, l) => s + l.qty),
+          ),
+          cash(estimate.partsTotal),
+          '',
+        ],
+      ],
+    ));
+  }
+
+  final warnings = _projectWarnings(estimate);
+  if (warnings.isNotEmpty) {
+    sections.add((
+      title: 'Check before this goes out',
+      header: const ['Issue'],
+      rows: [for (final w in warnings) [w]],
+    ));
+  }
+
+  return sections;
+}
+
+/// Why a room's figure might not be what somebody expects. Blank when there is
+/// nothing to say — a status column of "OK" on every row is noise.
+String _roomStatus(ProjectRoomCost room) {
+  final e = room.estimate!;
+  final notes = <String>[
+    if (!room.ref.included) 'EXCLUDED from the project total',
+    if (room.room.isEmpty) 'nothing drawn yet',
+    if (e.unpricedLines > 0)
+      '${e.unpricedLines} line${e.unpricedLines == 1 ? '' : 's'} unpriced',
+    if (e.unratedLabor > 0) '${e.unratedLabor} labor line at no rate',
+    if (e.estimatedLines > 0) '${e.estimatedLines} at base cost (budgetary)',
+    if (e.otherTierLines > 0) '${e.otherTierLines} priced at the other tier',
+    if (e.excludedLines > 0) '${e.excludedLines} drawn but not bought',
+    if (room.controlGaps.isNotEmpty)
+      '${room.controlGaps.fold(0, (s, g) => s + g.qty)} device(s) with no '
+          'control module',
+    if (room.ref.notes.trim().isNotEmpty) room.ref.notes.trim(),
+  ];
+  return notes.join('; ');
+}
+
+/// The things that should stop a quote going out, in the order they matter.
+List<String> _projectWarnings(ProjectEstimate estimate) => [
+  if (estimate.failedRooms > 0)
+    '${estimate.failedRooms} room${estimate.failedRooms == 1 ? '' : 's'} '
+        'could not be read, so the project total is short by whatever '
+        'they cost. See the Rooms table.',
+  if (estimate.mixedCurrency)
+    'Rooms in this project are quoted in different currencies. The totals '
+        'add them as though they were the same one — fix the room currencies '
+        'before relying on any figure here.',
+  if (estimate.unpricedParts > 0)
+    '${estimate.unpricedParts} part${estimate.unpricedParts == 1 ? '' : 's'} '
+        'on the master list has no price anywhere. The total is short by '
+        'whatever they cost.',
+  if (estimate.untaggedParts > 0)
+    '${estimate.untaggedParts} part'
+        '${estimate.untaggedParts == 1 ? ' is' : 's are'} not tagged to any '
+        'vendor, so '
+        '${estimate.untaggedParts == 1 ? 'it is' : 'they are'} on no quote '
+        'request. See the Untagged rows on Master Parts.',
+  // Not a pricing problem, and on the pricing sheet anyway. A building quoted
+  // without anybody noticing that six of its boxes have no driver is a
+  // building that arrives on site and cannot be commissioned, and the quote is
+  // the document that actually gets read before that happens.
+  if (estimate.undrivenDevices > 0)
+    '${estimate.undrivenDevices} device'
+        '${estimate.undrivenDevices == 1 ? '' : 's'} across '
+        '${estimate.controlGaps.map((g) => g.room.ref.id).toSet().length} '
+        'room(s) have no control module. They are quoted and they will not '
+        'commission as they stand — see the $kProjectControlSheet sheet.',
+  for (final c in estimate.project.vendorConflicts)
+    '${c.kind} rule "${c.rule}" is claimed by '
+        '${c.vendors.map((v) => v.name).join(' and ')}. '
+        '${c.vendors.first.name} wins; the others never see those parts.',
+];
+
+/// Every part on the job, once, with the rooms it is for.
+///
+/// [roomNames] maps room id to the name shown in the breakdown column. Passed
+/// in rather than looked up so the same names appear here, on the Summary and
+/// on the room tabs.
+List<ReportSection> masterPartsSections(
+  ProjectEstimate estimate, {
+  bool includeVendorColumn = true,
+}) {
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+  final roomNames = {
+    for (final r in estimate.rooms) r.ref.id: r.name,
+  };
+
+  /// "Bessey 101 ×2, Bessey 103 ×4" — which rooms the units are for.
+  ///
+  /// This is the column that makes a merged list checkable. Eighteen switchers
+  /// is a number a vendor can quote; it is not a number a project manager can
+  /// verify against a delivery, or split across two phases, without knowing
+  /// where they go.
+  String rooms(MasterPartLine line) => [
+    for (final id in line.roomIdsByQty())
+      '${roomNames[id] ?? id} ×${trimNumber(line.qtyByRoom[id] ?? 0)}',
+  ].join(', ');
+
+  String unit(MasterPartLine line) {
+    if (line.unpriced) return 'not priced';
+    if (!line.priceVaries) return formatMoney(line.unitPrice, currency);
+    // Two rooms bought the same part at different prices — a negotiated
+    // override in one of them. Printing either figure alone would look like
+    // the answer, so it prints as the range it is.
+    return '${formatMoney(line.unitPrice, currency)}'
+        '–${formatMoney(line.maxUnitPrice, currency)}';
+  }
+
+  final sections = <ReportSection>[];
+
+  for (final kind in MasterPartKind.values) {
+    final lines = [for (final l in estimate.master) if (l.kind == kind) l];
+    if (lines.isEmpty) continue;
+    sections.add((
+      title: kMasterPartKindLabels[kind]!,
+      header: [
+        'Part',
+        'Manufacturer',
+        'Model',
+        'Part number',
+        'Qty',
+        'Unit price',
+        'Extended',
+        if (includeVendorColumn) 'Vendor',
+        if (includeVendorColumn) 'Tagged',
+        // Blank on everything that is driven, and on everything that was never
+        // going to be. A column of "OK" would be a column nobody reads.
+        if (includeVendorColumn) 'Control',
+        'Rooms',
+      ],
+      rows: [
+        for (final l in lines)
+          [
+            l.description,
+            l.manufacturer,
+            l.model,
+            l.partNumber,
+            l.qty,
+            unit(l),
+            cash(l.total),
+            if (includeVendorColumn) l.vendor?.name ?? 'UNTAGGED',
+            if (includeVendorColumn)
+              kVendorTagSourceLabels[l.tagSource] ?? '',
+            if (includeVendorColumn) _controlNote(l, roomNames),
+            rooms(l),
+          ],
+      ],
+    ));
+  }
+
+  if (sections.isEmpty) return const [];
+
+  sections.add((
+    title: 'Parts total',
+    header: const ['', ''],
+    rows: [
+      for (final kind in MasterPartKind.values)
+        if (estimate.master.any((l) => l.kind == kind))
+          [
+            kMasterPartKindLabels[kind]!,
+            cash(estimate.master
+                .where((l) => l.kind == kind)
+                .fold(0.0, (s, l) => s + l.total)),
+          ],
+      ['ALL PARTS', cash(estimate.partsTotal)],
+    ],
+  ));
+
+  return sections;
+}
+
+/// What the master list's Control column says for one part: nothing when every
+/// one of them has a driver, otherwise how many do not and where.
+///
+/// The rooms are named rather than counted. "3 undriven" is a number somebody
+/// has to go and investigate; "no module: Bessey 101 ×2, Bessey 105 ×1" is a
+/// list they can work through.
+String _controlNote(MasterPartLine line, Map<String, String> roomNames) {
+  if (!line.hasControlGap) return '';
+  final where = line.undrivenByRoom.entries.toList()
+    ..sort((a, b) {
+      final byQty = b.value.compareTo(a.value);
+      return byQty != 0 ? byQty : a.key.compareTo(b.key);
+    });
+  return 'no module: ${[
+    for (final e in where) '${roomNames[e.key] ?? e.key} ×${e.value}',
+  ].join(', ')}';
+}
+
+/// Every device on the job that no control module will drive, room by room.
+///
+/// The building's version of the sheet a room's own AV and Cost exports carry,
+/// built from the same rule (control_gaps.dart) so the two cannot disagree
+/// about which devices are undriven.
+///
+/// Room first in the sort, because this list is worked THROUGH: somebody opens
+/// one room, fixes everything on it, and moves to the next. Sorted by device it
+/// would be a list that sends them back and forth across the building.
+List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
+  if (estimate.controlGaps.isEmpty) return const [];
+
+  final byKind = <ControlGapKind, int>{};
+  for (final entry in estimate.controlGaps) {
+    byKind[entry.gap.kind] = (byKind[entry.gap.kind] ?? 0) + entry.gap.qty;
+  }
+
+  return [
+    (
+      title: 'Devices Without a Control Module',
+      header: const ['Room', 'Device', 'Model', 'Qty', 'From', 'Note'],
+      rows: [
+        for (final entry in estimate.controlGaps)
+          [
+            entry.room.name,
+            entry.gap.device,
+            entry.gap.model.isEmpty ? '(no model set)' : entry.gap.model,
+            entry.gap.qty,
+            entry.gap.sourceLabel,
+            entry.gap.note,
+          ],
+      ],
+    ),
+    (
+      title: 'What needs doing',
+      header: const ['', ''],
+      rows: [
+        if ((byKind[ControlGapKind.moduleUnset] ?? 0) > 0)
+          [
+            'Pick the module',
+            '${byKind[ControlGapKind.moduleUnset]} device(s) — a module '
+                'already claims the model; the field is just empty.',
+          ],
+        if ((byKind[ControlGapKind.noModuleClaims] ?? 0) > 0)
+          [
+            'No driver exists',
+            '${byKind[ControlGapKind.noModuleClaims]} device(s) — write or '
+                'import a module, or mark the product as never controlled on '
+                'the Catalog tab if it genuinely has no interface.',
+          ],
+        if ((byKind[ControlGapKind.noModel] ?? 0) > 0)
+          [
+            'Choose a model',
+            '${byKind[ControlGapKind.noModel]} device(s) have no model, so '
+                'nothing can be matched to them.',
+          ],
+        if ((byKind[ControlGapKind.notDrawn] ?? 0) > 0)
+          [
+            'In the config, not on the drawing',
+            '${byKind[ControlGapKind.notDrawn]} device(s) — undriven and not '
+                'on the signal flow either.',
+          ],
+        ['Total', '${estimate.undrivenDevices} device(s)'],
+      ],
+    ),
+  ];
+}
+
+/// One vendor's quote request: what they are being asked to price, and where
+/// it goes.
+///
+/// Deliberately NOT a copy of the master list filtered down. It carries no
+/// labor, no fees, no tax, no other vendor's parts and no project total —
+/// those are the customer's numbers, and a quote request that leaks them is
+/// a negotiating position handed to a supplier.
+List<ReportSection> vendorPackageSections(
+  ProjectEstimate estimate,
+  VendorPackage package,
+) {
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+  final project = estimate.project;
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
+
+  String rooms(MasterPartLine line) => [
+    for (final id in line.roomIdsByQty())
+      '${roomNames[id] ?? id} ×${trimNumber(line.qtyByRoom[id] ?? 0)}',
+  ].join(', ');
+
+  final sections = <ReportSection>[
+    (
+      title: 'Quote request',
+      header: const ['', ''],
+      rows: [
+        ['Vendor', package.name],
+        if ((package.vendor?.contact ?? '').isNotEmpty)
+          ['Contact', package.vendor!.contact],
+        if (project.name.trim().isNotEmpty) ['Project', project.name],
+        if (project.building.trim().isNotEmpty) ['Building', project.building],
+        if (project.jobNumber.trim().isNotEmpty)
+          ['Job number', project.jobNumber],
+        ['Line items', package.lines.length],
+        ['Total units', trimNumber(package.qty)],
+        if ((package.vendor?.notes ?? '').isNotEmpty)
+          ['Notes', package.vendor!.notes],
+      ],
+    ),
+  ];
+
+  for (final kind in MasterPartKind.values) {
+    final lines = [for (final l in package.lines) if (l.kind == kind) l];
+    if (lines.isEmpty) continue;
+    sections.add((
+      title: kMasterPartKindLabels[kind]!,
+      header: const [
+        'Item',
+        'Manufacturer',
+        'Model',
+        'Part number',
+        'Qty',
+        // The prices we HOLD, so a returned quote can be compared against
+        // them line by line. A blank column would make the sheet unreadable
+        // on the way back in, which is the half of an RFQ that matters.
+        'Our estimate (unit)',
+        'Our estimate (ext)',
+        // Left empty on purpose: this is where the vendor writes.
+        'Your unit price',
+        'Your extended',
+        'Lead time',
+        'Rooms',
+      ],
+      rows: [
+        for (final l in lines)
+          [
+            l.description,
+            l.manufacturer,
+            l.model,
+            l.partNumber,
+            l.qty,
+            l.unpriced ? '' : cash(l.unitPrice),
+            l.unpriced ? '' : cash(l.total),
+            '',
+            '',
+            '',
+            rooms(l),
+          ],
+      ],
+    ));
+  }
+
+  return sections;
+}
+
+// ---------------------------------------------------------------------------
+//  THE BOOKS
+// ---------------------------------------------------------------------------
+
+/// The whole project: summary, master list, a tab per vendor, a tab per room.
+Uint8List buildProjectWorkbookBytes({
+  required ProjectEstimate estimate,
+  DateTime? generated,
+}) {
+  final stamp = generated ?? DateTime.now();
+  final title = _projectTitle(estimate.project);
+
+  // Vendor and room names become tab names, and both are free text the user
+  // typed. Excel refuses a book with two sheets of one name and refuses one
+  // whose names run past 31 characters — and "Behavioral and Social Science
+  // 101" and "...102" clip to the same thing — so every name goes through the
+  // same settling the location report's per-drawing tabs use.
+  final taken = <String>{};
+  String tab(String proposed) => uniqueXlsxSheetName(proposed, taken);
+
+  final sheets = <XlsxSheet>[
+    buildStackedReportSheet(
+      sheetName: tab(kProjectWorkbookSheets[0]),
+      title: title,
+      sections: projectSummarySections(estimate),
+      generated: stamp,
+    ),
+  ];
+
+  final master = masterPartsSections(estimate);
+  if (master.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectWorkbookSheets[1]),
+      title: '$title — master parts list',
+      sections: master,
+      generated: stamp,
+    ));
+  }
+
+  final gaps = projectControlGapSections(estimate);
+  if (gaps.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectControlSheet),
+      title: '$title — devices without a control module',
+      sections: gaps,
+      generated: stamp,
+    ));
+  }
+
+  for (final package in estimate.vendors) {
+    sheets.add(buildStackedReportSheet(
+      // The vendor's name is the tab, so the book is navigable by the thing
+      // somebody is looking for.
+      sheetName: tab(package.isUntagged ? 'Untagged' : package.name),
+      title: '$title — ${package.name}',
+      sections: vendorPackageSections(estimate, package),
+      generated: stamp,
+    ));
+  }
+
+  // Every room that priced, including the excluded ones: an alternate that is
+  // out of the total is still work somebody did and still gets read.
+  for (final room in estimate.rooms) {
+    if (!room.ok) continue;
+    final sections = costReportSections(room.estimate!);
+    if (sections.isEmpty) continue;
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(room.name),
+      title: room.ref.included
+          ? room.name
+          : '${room.name} — EXCLUDED from the project total',
+      sections: sections,
+      generated: stamp,
+    ));
+  }
+
+  return buildXlsx(sheets);
+}
+
+/// One vendor's quote request, as its own file.
+Uint8List buildVendorRfqBytes({
+  required ProjectEstimate estimate,
+  required VendorPackage package,
+  DateTime? generated,
+}) => buildXlsx([
+  buildStackedReportSheet(
+    sheetName: xlsxSheetName(
+      package.isUntagged ? 'Untagged' : package.name,
+    ),
+    title: '${_projectTitle(estimate.project)} — quote request',
+    sections: vendorPackageSections(estimate, package),
+    generated: generated ?? DateTime.now(),
+  ),
+]);
+
+/// What the documents are headed with: the project name, the building, or
+/// failing both something that is at least not blank.
+String _projectTitle(BuildingProject project) {
+  final name = project.name.trim();
+  final building = project.building.trim();
+  if (name.isNotEmpty && building.isNotEmpty && name != building) {
+    return '$name — $building';
+  }
+  if (name.isNotEmpty) return name;
+  if (building.isNotEmpty) return building;
+  return 'Project';
+}
+
+/// A file name stem for one vendor's RFQ, safe on every platform: the project
+/// and the vendor, so a folder of them can be read without opening any.
+String vendorRfqFileStem(BuildingProject project, VendorPackage package) {
+  String clean(String s) => s
+      .trim()
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+      .replaceAll(RegExp(r'\s+'), '_');
+  final job = clean(
+    project.name.trim().isNotEmpty ? project.name : project.building,
+  );
+  final vendor = clean(package.name);
+  final stem = [
+    if (job.isNotEmpty) job,
+    if (vendor.isNotEmpty) vendor,
+    'RFQ',
+  ].join('_');
+  return stem.isEmpty ? 'RFQ' : stem;
+}

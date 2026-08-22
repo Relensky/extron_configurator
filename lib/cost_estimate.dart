@@ -1398,6 +1398,10 @@ CostEstimate computeRoomCost({
             ].join(' '),
             model: catalog?.model ?? '',
             partNumber: catalog?.partNumber ?? '',
+            // Carried for the same reason the equipment lines carry it: a
+            // cable order is split by who sells it like everything else, and
+            // a line with no maker on it can only ever be tagged by hand.
+            manufacturer: catalog?.manufacturer ?? '',
             category: kCategoryCable,
             qty: qty,
             unitPrice: price,

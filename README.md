@@ -380,6 +380,172 @@ Saved with the diagram in `<config>_av_flow.json` — and **every config save
 writes that sidecar**, so saving the project saves the estimate. It is not a
 separate button to forget.
 
+## Building projects (the `Project` tab)
+
+A room is one config. A **job** is usually a building — eight classrooms, two
+conference rooms and a lecture hall, quoted together, ordered together and
+installed by the same crew. The Project tab is that job.
+
+A project is a thin file (`<name>_project.json`) holding job details, a list of
+room config paths, and the vendor split. It does **not** own the rooms: they
+stay ordinary configs, openable and editable on their own, and a room can be in
+two projects at once. Room paths are stored relative to the project file when
+the room sits under the same folder, so the whole building moves to a laptop or
+a backup without breaking.
+
+Rooms are **read off disk, not opened**. `computeRoomCost` is a pure function of
+the diagram and the estimate settings, so nine rooms cost nine file reads —
+nothing prompts, nothing migrates, and the room you have open is left alone.
+Fix a price on that room's own Cost tab and press **Refresh**. A room whose file
+is missing or unreadable is flagged on its own row; the other eight still price.
+
+Three panes, with the building total always in the header:
+
+- **Rooms** — what each room costs, broken out into equipment, labor, fees and
+  tax, and the building total they add to. Untick a room to keep it on the job
+  but out of the total: an alternate that is priced and not chosen is a real
+  thing on a real bid, and deleting it loses the work.
+- **Master parts** — every part **once**, quantities merged across rooms. Parts
+  merge on part number first, then model, then maker-and-description — the
+  order a purchasing department would use them in. Each line carries which
+  rooms its units are for, so a merged figure stays checkable against a
+  delivery.
+- **Vendors** — the companies and the rules that tag parts to them.
+
+Fees and tax are **each room's own**, applied at that room's rates and then
+added. The project total is the sum of the room totals, never a building-wide
+percentage — a building where two rooms are taxed differently is ordinary, and
+it must not quietly average.
+
+### Tagging parts to vendors
+
+Which company quotes a part is a fact about the **job**, not about the product,
+so the tags live in the project rather than in the catalog. Two ways:
+
+- **By rule.** A vendor lists the manufacturers it quotes and/or the categories
+  it sells. Manufacturer rules are checked first, then category rules — so
+  "buy Extron direct" beats "the reseller does screens" for an Extron screen,
+  regardless of which vendor was created first. Category rules match finer
+  categories on a word boundary: `Camera` claims `Camera - PTZ` but not
+  `Cameraman kit`. Within a tier, the first matching vendor wins, and
+  overlapping rules of the same kind are reported rather than silently
+  resolved.
+- **By hand.** Any master-list line can be pinned to a vendor, overriding the
+  rules. Pins are filed under the **part**, so re-drawing a room or moving a
+  part between rooms does not undo a purchasing decision. Choosing the vendor
+  the rules already picked clears the pin instead of freezing it — otherwise a
+  few confirming clicks would quietly opt half the list out of every future
+  rule change. A pin to a deleted vendor falls back to the rules.
+
+Parts nothing claims land in an **Untagged** package. That is the project's
+to-do list, not a vendor: a building is not ready to go out for quotes while it
+has one, and the workbook says so.
+
+A new project starts with the usual split already set up — Extron Direct by
+manufacturer, and an AV Reseller by category for cameras, screens, mounts and
+USB — so the first room added is already tagged.
+
+### Swapping a product across every room
+
+The projector everybody specified is discontinued and nine rooms have one. The
+swap icon on an equipment line does that swap in every room on the project at
+once, using the same arithmetic the single-room swap uses (model_swap.dart), so
+a box swapped from here and one swapped on the Signal Flow tab cannot come out
+differently.
+
+It changes both halves of each room, because a room that moved one without the
+other says two things at once — commissioning the old device off a drawing of
+the new one:
+
+- **The drawing.** The box takes the new model, connectors, rack units, power
+  and heat. It keeps its id, position and rack slot — those are facts about the
+  room, not the product. Only the model-shaped part of its label is rewritten,
+  so "Projector 1 - L630U" becomes "Projector 1 - PT-MZ682BU8" and a label that
+  never mentioned the model is untouched.
+- **The control block.** Model and name follow. If a Python module claims the
+  new model the block moves to it and keeps the IP address, port and control id.
+  If **nothing** claims it, the module is **cleared** rather than left naming the
+  old device's driver — which is what puts the device on the control-module list
+  below, where a newly specified product belongs until somebody writes its
+  driver.
+
+Runs already drawn are carried onto the new product's matching connectors; a run
+whose connector has no counterpart is **removed**, because a cable pointing at a
+connector that is gone stops being drawn anyway and a quiet disappearance is the
+thing worth avoiding.
+
+**It is planned before it is applied.** Picking the replacement produces a
+preview: how many boxes in how many rooms, how many runs carry, how many get
+dropped, whether the module is about to be cleared, whether the rack height
+changed, and which rooms could not be read. Nothing is written until that is
+confirmed. There is **no project-wide undo** — a room's own Undo covers only the
+room open in the editor — and the dialog says so.
+
+Three things make the write safe enough to offer at all:
+
+1. **It is surgical.** It does not open each room through the app's loader and
+   save it back, which would re-run every migration, auto-fill and
+   default-filler on files nobody asked to touch. It replaces the `nodes` and
+   `cables` keys and the device blocks that changed, and writes the rest back as
+   found — including into the pre-rename `_avflow.json` name if that is what the
+   room has.
+2. **It re-reads before writing.** The plan may be minutes old; the write reads
+   each room as it is now, so a box added in between is swapped rather than
+   erased by a stale copy of the diagram.
+3. **The open room is never written behind the app's back.** If the room in the
+   editor is on the project, writing its files would put the swap on disk and
+   leave the old model in memory for the next Save to undo. It is skipped and
+   applied through the provider instead, landing as one undo entry.
+
+A room that fails to write is named and the rest still go: a share that drops
+out halfway through a nine-room swap leaves eight rooms done and one reported,
+not nine in an unknown state.
+
+### Devices without a control module
+
+The rule the room's own AV and Cost reports carry — devices the processor cannot
+touch — runs across the building too. It lives in `control_gaps.dart` as data
+rather than as a table, and `driverGapSections` renders it for the room while
+the project rolls it up; two disagreeing lists of "missing" devices would be
+worse than none.
+
+It shows up in three places:
+
+- **On the master parts list.** A line whose product is undriven somewhere says
+  so and names the rooms — "no module: Bessey 101 ×2, Bessey 105 ×1" — because
+  which rooms still need the work is the question, and a tick could not answer
+  it. There is a filter chip for just those lines. Cable and rack hardware are
+  never flagged: they have no control module and never wanted one.
+- **In the project workbook**, as a `Control Gaps` sheet: every undriven device
+  with its room, sorted room-first because the list is worked *through*, plus a
+  "what needs doing" block splitting them by fix — pick the module, write the
+  driver, choose a model, or draw the device.
+- **In the header's "N to check" chip and the Summary sheet's warnings**,
+  alongside unreadable rooms and unpriced parts.
+
+It is never a blocker. Specifying a device before its driver exists is ordinary,
+and the swap goes through onto a model nothing drives — it just tells you, which
+is the point.
+
+### What comes out
+
+**Workbook** writes one `.xlsx`: a Summary (building total, a row per room, a
+vendor breakdown, and the list of things to check before it goes out), a Master
+Parts sheet, a tab per vendor, and a tab per room carrying that room's estimate
+in full. The room tabs are dealt from the same `costReportSections` the room's
+own Cost tab uses, so a room's numbers are identical in both books.
+
+**Quote requests** writes one `.xlsx` **per vendor** into a folder — the file
+you actually email out. It carries that vendor's parts, the rooms they are for,
+your held estimate for comparison, and blank columns for their unit price,
+extended price and lead time. It carries **no** labor, no fees, no tax, no
+project total and no other vendor's parts: sending the whole workbook would
+send a competitor's pricing to a supplier and your margins to both.
+
+Sheet names come from vendor and room names, which are free text — they are
+clipped to 31 characters and numbered when two collide, because Excel refuses
+to open a workbook with two sheets of one name.
+
 ## Save All
 
 The toolbar's **Save All** writes the whole job into `<folder>/<room name>/`,

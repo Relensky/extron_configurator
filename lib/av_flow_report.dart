@@ -1,6 +1,7 @@
 import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'cabling_schematic.dart';
+import 'control_gaps.dart';
 import 'cost_estimate.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
@@ -906,90 +907,28 @@ List<ReportSection> driverGapSections(
   AppStateProvider provider,
   AvFlowModel model,
 ) {
-  final rows = <List<dynamic>>[];
-
-  // A config block whose `module` field is blank is the sharper version of the
-  // same problem: the device HAS a place for a driver and nobody has chosen
-  // one, so it will not commission. Collected first so the config's own answer
-  // wins over the catalog lookup for the same device.
-  final assigned = <String, String>{};
-  for (final key in activeDeviceKeysIn(
-    provider.roomConfig,
-    provider.uiSchema.deviceCountMap,
-  )) {
-    final dev = provider.roomConfig[key];
-    if (dev is! Map) continue;
-    assigned[key] = dev['module']?.toString().trim() ?? '';
-  }
-
-  for (final group in groupDevices(model)) {
-    final node = group.first;
-    if (node.isJackField) continue;
-    // Nothing was ever going to drive it — either this box was excluded by
-    // hand or the catalog says the product has no control interface at all.
-    // Listing these is what turns this table into one people skim past.
-    if (provider.avNodeIsUncontrolled(node)) continue;
-
-    // Devices seeded from the config carry the config's verdict. A generic
-    // box added by hand — a projector, a power controller, a screen — has no
-    // config block, so the catalog lookup is the only answer available and it
-    // is reported the same way rather than being left off.
-    final configModule = assigned[node.id];
-    if (configModule != null && configModule.isNotEmpty) continue;
-
-    if (node.model.trim().isEmpty) {
-      rows.add([
-        group.label,
-        '(no model set)',
-        group.qty,
-        configModule == null ? 'Added by hand' : 'Room config',
-        'No model recorded, so no module can be matched',
-      ]);
-      continue;
-    }
-    final claimed = provider.moduleForModel(node.model);
-    if (claimed.isNotEmpty && configModule == null) continue;
-    if (claimed.isNotEmpty && configModule != null && configModule.isEmpty) {
-      rows.add([
-        group.label,
-        node.model,
-        group.qty,
-        'Room config',
-        'No module set on the device — $claimed matches this model',
-      ]);
-      continue;
-    }
-    rows.add([
-      group.label,
-      node.model,
-      group.qty,
-      configModule == null ? 'Added by hand' : 'Room config',
-      'No Python module claims this model',
-    ]);
-  }
-
-  // Config devices with no module that never made it onto the diagram. They
-  // are still in the room and still undriven, and a list that only covers what
-  // somebody remembered to draw is a list that misses exactly the devices
-  // nobody has got to yet.
-  final drawn = {for (final n in model.nodes) n.id};
-  for (final device in provider.devicesMissingModules) {
-    if (drawn.contains(device.key)) continue;
-    rows.add([
-      device.name,
-      device.model.isEmpty ? '(no model set)' : device.model,
-      1,
-      'Room config',
-      'No module set on the device; not on the signal flow either',
-    ]);
-  }
-
-  if (rows.isEmpty) return const [];
+  final gaps = controlGapsForRoom(
+    config: provider.roomConfig,
+    model: model,
+    deviceCountMap: provider.uiSchema.deviceCountMap,
+    library: provider.avDeviceLibrary,
+    moduleForModel: provider.moduleForModel,
+  );
+  if (gaps.isEmpty) return const [];
   return [
     (
       title: 'Devices Without a Control Module',
-      header: ['Device', 'Model', 'Qty', 'From', 'Note'],
-      rows: rows,
+      header: const ['Device', 'Model', 'Qty', 'From', 'Note'],
+      rows: [
+        for (final gap in gaps)
+          [
+            gap.device,
+            gap.model.isEmpty ? '(no model set)' : gap.model,
+            gap.qty,
+            gap.sourceLabel,
+            gap.note,
+          ],
+      ],
     ),
   ];
 }

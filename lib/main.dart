@@ -24,6 +24,7 @@ import 'cabling_view.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
 import 'nav_rail.dart';
+import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
 import 'dynamic_devices_view.dart';
@@ -918,6 +919,10 @@ class _MainDashboardState extends State<MainDashboard> {
         return RackTabView(key: key);
       case AppTab.cost:
         return CostEstimateView(key: key);
+      case AppTab.project:
+        // Unkeyed, like the catalog: a project spans rooms, so opening a
+        // different room must not throw away the job somebody is quoting.
+        return const ProjectView();
       case AppTab.deviceEditor:
         // Unkeyed: the catalog is application data, not room data, so it must
         // not be thrown away and rebuilt when a different room is opened.

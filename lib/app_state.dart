@@ -13,8 +13,13 @@ import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
 import 'flow_rules.dart';
 import 'cabling_schematic.dart';
+import 'building_project.dart';
 import 'cost_estimate.dart';
 import 'labor_rates.dart';
+import 'model_swap.dart' as swap;
+import 'av_flow_swap_dialogs.dart' show applyModelSwap, applyControlSwap;
+import 'project_estimate.dart';
+import 'project_swap.dart';
 import 'layout_tools.dart';
 import 'room_locations.dart';
 import 'room_presets.dart';
@@ -51,6 +56,10 @@ enum AppTab {
   cabling('cabling'),
   racks('racks'),
   cost('cost'),
+  // After Cost because it is the same question asked one level up: Cost is
+  // what this room comes to, Project is what the building comes to. Before the
+  // catalog, because it is about a job rather than about the app.
+  project('project'),
   deviceEditor('device_editor'),
   // The two documents that describe how the app itself behaves, next to the
   // catalog for the same reason it is there: they are about every room rather
@@ -71,7 +80,12 @@ enum AppTab {
       this == AppTab.appConfig ||
       this == AppTab.deviceEditor ||
       this == AppTab.schemaEditor ||
-      this == AppTab.flowRules;
+      this == AppTab.flowRules ||
+      // A project is a list of room FILES. It prices them off disk and needs
+      // no room open — and the case for opening it with none is the strongest
+      // one there is: reviewing a building's quote is a thing somebody does
+      // without wanting to edit any room in it.
+      this == AppTab.project;
 }
 
 /// How far along a room is.
@@ -8170,17 +8184,12 @@ class AppStateProvider extends ChangeNotifier {
   /// by a non-alphanumeric character, so a model that is a PREFIX of the one
   /// in the name cannot eat half of it: swapping a device recorded as "L630"
   /// must not turn "L630U" into "PT-MZ682BU8U".
-  static String renamedForModel(String name, String oldModel, String newModel) {
-    final needle = oldModel.trim();
-    final replacement = newModel.trim();
-    if (name.isEmpty || needle.isEmpty || replacement.isEmpty) return name;
-    if (needle.toLowerCase() == replacement.toLowerCase()) return name;
-    final pattern = RegExp(
-      '(?<![A-Za-z0-9])${RegExp.escape(needle)}(?![A-Za-z0-9])',
-      caseSensitive: false,
-    );
-    return name.replaceAll(pattern, replacement);
-  }
+  ///
+  /// The implementation lives in model_swap.dart so the headless project swap
+  /// can use it too; this stays as the name every existing caller already
+  /// knows. One rule, two doors.
+  static String renamedForModel(String name, String oldModel, String newModel) =>
+      swap.renamedForModel(name, oldModel, newModel);
 
   /// Rewrites [deviceKey]'s `name` when it names [oldModel], so the block is
   /// called after the product it now holds. Returns the new name, or '' when
@@ -9516,6 +9525,414 @@ class AppStateProvider extends ChangeNotifier {
       }
     });
     return data;
+  }
+
+  // ==========================================================================
+  //  THE BUILDING PROJECT
+  // ==========================================================================
+  //  A job is usually a building, not a room. The project is a thin list of
+  //  room config paths plus the vendor split (building_project.dart), and the
+  //  rollup that prices it reads those rooms straight off disk
+  //  (project_estimate.dart) rather than opening them.
+  //
+  //  That last point is the design, and it is why this section is so small.
+  //  The project does not own rooms, cache their contents as its own state, or
+  //  keep them in sync — the room the user has open is edited and saved by
+  //  exactly the machinery it always was, and the project sees the change on
+  //  the next re-price. There is one document open at a time, as before; the
+  //  project is a lens over the folder, not a second editor.
+  // ==========================================================================
+
+  /// The open project. Never null — an app with no project open holds an empty
+  /// one, so the Project tab has something to render and something to start
+  /// typing into rather than a null check on every field.
+  BuildingProject project = BuildingProject();
+
+  /// Where it is saved, '' when it has never been saved.
+  String currentProjectPath = '';
+
+  /// Edited since the last save. The room's own dirty flag is separate and
+  /// stays separate: saving a room must not silently save the project, and
+  /// closing a project must not prompt about the room.
+  bool projectDirty = false;
+
+  /// Rooms as last read off disk, by room id.
+  ///
+  /// A cache, and only a cache. Re-pricing on every vendor edit — which is
+  /// what makes tagging feel immediate — would otherwise re-read every room's
+  /// four files on every keystroke. [refreshProjectRooms] drops it whenever
+  /// the answer could have changed on disk.
+  final Map<String, LoadedRoom> _projectRooms = {};
+
+  String get projectDisplayName {
+    final name = project.name.trim();
+    if (name.isNotEmpty) return name;
+    if (currentProjectPath.isNotEmpty) {
+      return path.basenameWithoutExtension(currentProjectPath);
+    }
+    return 'Untitled project';
+  }
+
+  void _projectChanged() {
+    projectDirty = true;
+    notifyListeners();
+  }
+
+  // --- the file ------------------------------------------------------------
+
+  /// Starts a new project, pre-loaded with the usual vendor split so the first
+  /// room added is already tagged instead of landing in the untagged pile.
+  void newProject({String name = '', String building = ''}) {
+    project = BuildingProject(
+      name: name,
+      building: building,
+      currency: currencySymbol,
+    );
+    project.vendors.addAll(starterVendors(project));
+    currentProjectPath = '';
+    projectDirty = false;
+    _projectRooms.clear();
+    AppLogger.logInfo('New project started.');
+    notifyListeners();
+  }
+
+  /// Opens a project file. Returns the error to show, or '' on success.
+  Future<String> openProject(String file) async {
+    try {
+      project = await BuildingProject.load(file);
+      currentProjectPath = file;
+      projectDirty = false;
+      _projectRooms.clear();
+      AppLogger.logInfo(
+        'Project "${project.name}" opened from $file '
+        '(${project.rooms.length} rooms, ${project.vendors.length} vendors).',
+      );
+      notifyListeners();
+      return '';
+    } catch (e, stack) {
+      AppLogger.logError('Failed to open the project $file', e, stack);
+      return '$e';
+    }
+  }
+
+  /// Writes the project. Returns the error to show, or '' on success.
+  ///
+  /// [to] re-homes it — and re-homing a project REWRITES ITS ROOM PATHS,
+  /// because they are stored relative to wherever the file lives. Saving a
+  /// project into a different folder without this would produce a file whose
+  /// rooms all point at nothing.
+  Future<String> saveProject({String to = ''}) async {
+    final target = to.isNotEmpty ? to : currentProjectPath;
+    if (target.isEmpty) return 'The project has no file to save to yet.';
+
+    if (to.isNotEmpty && to != currentProjectPath) {
+      for (int i = 0; i < project.rooms.length; i++) {
+        final room = project.rooms[i];
+        final absolute = BuildingProject.resolvePath(
+          room.configPath,
+          currentProjectPath,
+        );
+        project.rooms[i] = room.copyWith(
+          configPath: BuildingProject.storePath(absolute, to),
+        );
+      }
+    }
+
+    try {
+      await project.save(target);
+      currentProjectPath = target;
+      projectDirty = false;
+      AppLogger.logInfo('Project saved to $target.');
+      notifyListeners();
+      return '';
+    } catch (e, stack) {
+      AppLogger.logError('Failed to save the project to $target', e, stack);
+      return '$e';
+    }
+  }
+
+  // --- job details ---------------------------------------------------------
+
+  void setProjectField({
+    String? name,
+    String? building,
+    String? jobNumber,
+    String? client,
+    String? notes,
+    String? currency,
+  }) {
+    if (name != null) project.name = name;
+    if (building != null) project.building = building;
+    if (jobNumber != null) project.jobNumber = jobNumber;
+    if (client != null) project.client = client;
+    if (notes != null) project.notes = notes;
+    if (currency != null && currency.isNotEmpty) project.currency = currency;
+    _projectChanged();
+  }
+
+  // --- rooms ---------------------------------------------------------------
+
+  /// Adds a room config to the project. Returns the message to show — '' when
+  /// it went in.
+  ///
+  /// A config already on the job is refused rather than added twice: a room
+  /// listed twice doubles its cost in the building total and doubles every one
+  /// of its parts on the master list, which is a wrong number that looks
+  /// entirely plausible.
+  String addRoomToProject(String configPath, {String label = ''}) {
+    if (configPath.isEmpty) return 'No file chosen.';
+    final absolute = path.normalize(configPath);
+    if (!File(absolute).existsSync()) {
+      return 'There is no file at $absolute.';
+    }
+
+    for (final existing in project.rooms) {
+      final have = BuildingProject.resolvePath(
+        existing.configPath,
+        currentProjectPath,
+      );
+      if (path.equals(have, absolute)) {
+        return '${path.basename(absolute)} is already on this project.';
+      }
+    }
+
+    // The first room onto an UNTOUCHED project brings the usual vendor split
+    // with it, so the master list is tagged the moment there is something on
+    // it. Pressing New does this too; this covers the other way in — landing
+    // on the tab and adding the open room — where a project with no vendors
+    // would otherwise put every part in the untagged pile and make the
+    // feature look broken.
+    //
+    // Only when there are no rooms AND no vendors: somebody who deleted the
+    // starters on purpose is not offered them again on the next room.
+    if (project.rooms.isEmpty && project.vendors.isEmpty) {
+      project.vendors.addAll(starterVendors(project));
+      AppLogger.logInfo(
+        'Seeded the default vendor split on the first room of a new project.',
+      );
+    }
+
+    project.rooms.add(ProjectRoomRef(
+      id: project.nextRoomId(),
+      configPath: BuildingProject.storePath(absolute, currentProjectPath),
+      label: label,
+    ));
+    AppLogger.logInfo('Room $absolute added to the project.');
+    _projectChanged();
+    return '';
+  }
+
+  /// Adds the room that is open right now — the common case, and the one that
+  /// needs no file picker.
+  String addCurrentRoomToProject() {
+    if (currentConfigPath.isEmpty) {
+      return 'Save the room first — a project points at files, so a room that '
+          'has never been saved has nothing to point at.';
+    }
+    return addRoomToProject(currentConfigPath);
+  }
+
+  void removeRoomFromProject(String roomId) {
+    project.rooms.removeWhere((r) => r.id == roomId);
+    _projectRooms.remove(roomId);
+    _projectChanged();
+  }
+
+  void updateProjectRoom(
+    String roomId, {
+    String? label,
+    bool? included,
+    String? notes,
+  }) {
+    final index = project.rooms.indexWhere((r) => r.id == roomId);
+    if (index < 0) return;
+    project.rooms[index] = project.rooms[index].copyWith(
+      label: label,
+      included: included,
+      notes: notes,
+    );
+    _projectChanged();
+  }
+
+  /// Moves a room up or down the list — the order the quote reads in.
+  void moveProjectRoom(String roomId, int delta) {
+    final from = project.rooms.indexWhere((r) => r.id == roomId);
+    if (from < 0) return;
+    final to = from + delta;
+    if (to < 0 || to >= project.rooms.length) return;
+    final room = project.rooms.removeAt(from);
+    project.rooms.insert(to, room);
+    _projectChanged();
+  }
+
+  // --- vendors -------------------------------------------------------------
+
+  ProjectVendor addProjectVendor({String name = 'New vendor'}) {
+    final vendor = ProjectVendor(id: project.nextVendorId(), name: name);
+    project.vendors.add(vendor);
+    _projectChanged();
+    return vendor;
+  }
+
+  void updateProjectVendor(ProjectVendor vendor) {
+    final index = project.vendors.indexWhere((v) => v.id == vendor.id);
+    if (index < 0) return;
+    project.vendors[index] = vendor;
+    _projectChanged();
+  }
+
+  void removeProjectVendor(String vendorId) {
+    project.removeVendor(vendorId);
+    _projectChanged();
+  }
+
+  /// Moves a vendor up or down. Order is not cosmetic: it decides which vendor
+  /// wins when two claim the same manufacturer or category — see
+  /// [BuildingProject.vendorForPart].
+  void moveProjectVendor(String vendorId, int delta) {
+    final from = project.vendors.indexWhere((v) => v.id == vendorId);
+    if (from < 0) return;
+    final to = from + delta;
+    if (to < 0 || to >= project.vendors.length) return;
+    final vendor = project.vendors.removeAt(from);
+    project.vendors.insert(to, vendor);
+    _projectChanged();
+  }
+
+  /// Pins one master-list part to a vendor, or clears the pin (blank id) so it
+  /// falls back to the rules.
+  void pinProjectPart(String partKey, String vendorId) {
+    project.pinPart(partKey, vendorId);
+    _projectChanged();
+  }
+
+  // --- pricing -------------------------------------------------------------
+
+  /// Forgets the cached room reads, so the next estimate re-reads every file.
+  /// Called when the project's rooms change and by the Refresh button — a room
+  /// saved in another window is a change this app cannot be told about.
+  void refreshProjectRooms() {
+    _projectRooms.clear();
+    notifyListeners();
+  }
+
+  /// Prices the project.
+  ///
+  /// [fresh] re-reads every room from disk; otherwise rooms already read this
+  /// session are reused. The default is the cached read because this is called
+  /// on every rebuild of the Project tab — tagging a part re-prices, and
+  /// re-reading forty files to answer "which column does this row go in" would
+  /// make the tab feel broken.
+  ProjectEstimate priceProject({bool fresh = false}) {
+    if (fresh) _projectRooms.clear();
+
+    for (final ref in project.rooms) {
+      if (_projectRooms.containsKey(ref.id)) continue;
+      _projectRooms[ref.id] = readRoomFromDisk(
+        BuildingProject.resolvePath(ref.configPath, currentProjectPath),
+      );
+    }
+    // Rooms that have left the project should not keep their files cached.
+    _projectRooms.removeWhere(
+      (id, _) => !project.rooms.any((r) => r.id == id),
+    );
+
+    return computeProjectEstimate(
+      project: project,
+      projectPath: currentProjectPath,
+      library: avDeviceLibrary,
+      rates: laborRates,
+      baseCosts: baseCosts,
+      tier: pricingTier,
+      rooms: _projectRooms,
+      // The control-module rule needs application data the rollup has no way
+      // to reach on its own: which config sections a family's count makes
+      // live, and which python module claims a model.
+      deviceCountMap: uiSchema.deviceCountMap,
+      moduleForModel: moduleForModel,
+    );
+  }
+
+  // --- swapping a product across the building ------------------------------
+
+  /// Works out what swapping [fromModel] to [template] would do to every room
+  /// on the project. Writes nothing — see [applyProjectModelSwap].
+  ProjectSwapPlan planProjectModelSwap(
+    String fromModel,
+    AvDeviceTemplate template,
+  ) {
+    // Deliberately a FRESH read. A plan is shown to somebody who is about to
+    // authorise writing to nine files, and showing it off a cache that could
+    // be minutes old would be showing them a picture of a building that no
+    // longer exists.
+    _projectRooms.clear();
+    return planProjectSwap(
+      project: project,
+      projectPath: currentProjectPath,
+      fromModel: fromModel,
+      template: template,
+      moduleForModel: moduleForModel,
+      deviceCountMap: uiSchema.deviceCountMap,
+      openConfigPath: currentConfigPath,
+    );
+  }
+
+  /// Carries out [plan].
+  ///
+  /// Every room but the open one is written on disk. The OPEN one is applied
+  /// through the normal in-memory path instead, so it lands on the undo stack
+  /// like any other swap and the editor and the file cannot disagree — writing
+  /// its files here would put the swap on disk and leave the old model in
+  /// memory, ready for the next Save to quietly undo it.
+  ({ProjectSwapResult disk, int openRoomBoxes, bool openRoomDirty})
+  applyProjectModelSwap(ProjectSwapPlan plan) {
+    final disk = applyProjectSwap(
+      plan: plan,
+      moduleForModel: moduleForModel,
+      deviceCountMap: uiSchema.deviceCountMap,
+    );
+
+    var openBoxes = 0;
+    for (final room in plan.affectedRooms) {
+      if (!room.isOpenRoom) continue;
+      for (final id in room.nodeIds) {
+        final node = avNodeById(id);
+        if (node == null) continue;
+        // One undo entry for the whole swap, not one per box.
+        applyModelSwap(this, node, plan.to, recordUndo: openBoxes == 0);
+        openBoxes++;
+      }
+      applyControlSwap(this, room.nodeIds, plan.to.model);
+    }
+
+    // Whatever was just written is not what the cache holds.
+    _projectRooms.clear();
+    notifyListeners();
+    return (
+      disk: disk,
+      openRoomBoxes: openBoxes,
+      openRoomDirty: openBoxes > 0,
+    );
+  }
+
+  /// Every manufacturer and category the catalog knows, for the vendor rule
+  /// pickers. Sorted and de-duplicated; the catalog is the only place these
+  /// strings are authoritative, and typing them by hand is how a rule ends up
+  /// matching nothing.
+  ({List<String> manufacturers, List<String> categories}) get catalogFacets {
+    final makers = <String>{};
+    final categories = <String>{};
+    for (final entry in avDeviceLibrary.all) {
+      final m = entry.manufacturer.trim();
+      if (m.isNotEmpty) makers.add(m);
+      final c = entry.category.trim();
+      if (c.isNotEmpty) categories.add(c);
+    }
+    final makerList = makers.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final categoryList = categories.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return (manufacturers: makerList, categories: categoryList);
   }
 }
 

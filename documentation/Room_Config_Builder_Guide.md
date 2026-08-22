@@ -69,13 +69,16 @@ They run down the left-hand rail in roughly the order you use them.
 | **Cabling** | Low-voltage runs that aren't signal — screen triggers, shades, and a run schedule. |
 | **Racks** | Rack elevations, front and rear, with clearances and a parts list. |
 | **Cost** | The estimate: equipment, cable, labor, tax and fees. |
+| **Project** | A whole building: several rooms quoted together, one master parts list, split into a quote request per vendor. |
 | **Catalog** | The device catalog every drawing and every price is built from. |
 | **Schema** | What the Devices and System tabs look like — labels, types, descriptions, device families. |
 | **Flow Rules** | How the AV Flow decides what to draw. |
 | **App Config** | Where the files live, the theme, the SFTP settings and the active deployment target. |
 
 The **Catalog**, **Schema** and **Flow Rules** tabs work with no room open at
-all — they're about the app, not about one room.
+all — they're about the app, not about one room. So does **Project**, for a
+different reason: it points at room *files* and prices them off disk, so
+reviewing a building's quote never means opening a room.
 
 # Setting up, once
 
@@ -557,6 +560,125 @@ there is:
 Cancel means nothing happened — you're asked before the first write. A run the
 new model has no connector for is removed rather than left pointing at nothing,
 and the message says how many, so you can draw them again on **Signal Flow**.
+
+## Project
+
+The Cost tab prices one room. The Project tab prices a **building**.
+
+A project is a list of rooms plus the vendors you buy from. It doesn't copy the
+rooms or take them over — they stay ordinary config files you open and edit
+exactly as before, and the same room can sit on two projects. Press **Refresh**
+after fixing a price in a room and the building total catches up.
+
+### Getting rooms onto it
+
+**New** starts a project; **Add rooms…** picks config files (several at once);
+**Add the open room** adds whatever you're working on. The tick beside a room
+decides whether it counts toward the total — untick it to price an alternate
+without double-counting the building. Rooms can't be added twice, because a
+room listed twice doubles its cost and every one of its parts.
+
+If a room's file has moved or been renamed, its row says so and the other rooms
+still price. The total is short, and the tab and the workbook both say by how
+many rooms.
+
+### The master parts list
+
+This is the reason the tab exists. Nine rooms with two transmitters each is
+eighteen transmitters — **one line**, not nine — and a vendor asked to quote one
+line quotes better than one asked to quote nine rooms.
+
+Parts merge on part number where there is one, then on model, then on maker and
+description. Each line still says which rooms its units are for, so you can
+check a delivery or split a phase without unpicking the merge.
+
+Where two rooms hold different prices for the same part — one of them has a
+negotiated price typed on it — the line shows the **range** rather than picking
+one, and the extended total is what the rooms actually pay added up, not the
+quantity times either price.
+
+### Vendors
+
+Who sells you a part is a fact about the job, not about the part, so the tags
+live on the project.
+
+Give each vendor the **manufacturers** it quotes, the **categories** it sells,
+or both. A new project already has the usual split — everything Extron on the
+direct account, and cameras, screens, mounts and USB from a reseller — so most
+of the list tags itself the moment you add a room.
+
+Manufacturer rules win over category rules. That's what stops an Extron display
+going to the reseller who does screens. If you want a specific part to go
+somewhere else, pick the vendor on that line: it's pinned, it beats the rules,
+and it stays pinned even if the room is re-drawn. Pick the vendor the rules
+already chose and the pin is simply removed.
+
+Anything nothing claims goes to **Untagged** — treat that as a to-do list. A
+building isn't ready to go out for quotes while parts are sitting in it.
+
+### Swapping a product everywhere at once
+
+The projector everyone specified is discontinued, and nine rooms have one. Press
+the swap arrow on that line and pick the replacement: every one of those boxes,
+in every room on the project, becomes the new product.
+
+You get a preview first. It tells you how many boxes in how many rooms, how many
+of the cables already drawn will carry across, how many have nowhere to go on
+the new box and will be **removed**, and whether the control blocks are about to
+lose their module. Nothing is written until you say so.
+
+Each room moves as a whole — the drawing and the control config together, so a
+room never ends up commissioning the old device off a drawing of the new one.
+The box keeps its position, its rack slot and everything about it that belongs
+to the room; what changes is what the product is. Names follow: "Projector 1 -
+L630U" becomes "Projector 1 - PT-MZ682BU8", and a name that never mentioned the
+model is left alone. IP addresses, ports and control ids are kept.
+
+Two things worth knowing before you press it:
+
+- **There is no undo across the project.** The room you have open is undoable
+  the usual way; the others are written straight to their files. The preview is
+  the safety net, so read it.
+- **The room you have open is not written.** It's changed in memory instead, so
+  the editor and the file can't disagree — save that room afterwards to keep it.
+
+If a room's file has moved or can't be read, it's named in the preview and left
+on the old product rather than silently skipped.
+
+### Devices that nothing can drive
+
+The same check the AV and Cost reports do for one room runs across the building.
+If no Python module claims a device's model, it says so — and swapping onto a
+product whose driver doesn't exist yet is the most common way to create one,
+which is why the two live next to each other.
+
+It never blocks anything. Specifying a device before its driver is written is
+normal. It just makes sure nobody finds out on site.
+
+You'll see it in three places:
+
+- on the master parts list, on the line itself, naming the rooms that still need
+  doing — with a filter chip to show only those lines
+- in the project workbook, as a **Control Gaps** sheet listing every one of them
+  by room, with a short "what needs doing" summary that splits them into pick the
+  module / write the driver / choose a model / draw the device
+- in the warning count at the top of the tab and in the workbook's "check before
+  this goes out" block
+
+Cable and rack hardware are never flagged — they were never going to have a
+driver. Neither is anything you've marked as never controlled on the Catalog tab.
+
+### Getting it out
+
+**Workbook** writes one spreadsheet with everything: what the building costs,
+each room's share, the master parts list, a tab per vendor and a tab per room.
+
+**Quote requests** writes one spreadsheet **per vendor** into a folder you pick.
+That's the file you email. It has that vendor's parts, the rooms they're for,
+your own estimate to compare a returned quote against, and empty columns for
+their price and lead time — and nothing else. No labor, no tax, no project
+total, no other vendor's parts. Send the whole workbook instead and you've sent
+a supplier your margins and a competitor's pricing.
 
 ## Catalog
 

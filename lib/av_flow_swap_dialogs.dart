@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
-import 'av_flow_routing.dart' show withOutletNames;
+import 'model_swap.dart';
 import 'search_match.dart';
 
 /// ============================================================================
@@ -398,73 +398,28 @@ ModelSwapResult applyModelSwap(
   /// swap is one press of Undo rather than one per box.
   bool recordUndo = true,
 }) {
-  final swapped = withOutletNames(
-    withPowerInlet(template.ports, template.powerInput),
-    node.id,
-    provider.roomConfig,
-  );
-  final remap = remapPorts(node.ports, swapped);
-
-  // Only when the model DECIDES it — a mains box is plugged in wherever this
-  // room plugs it in, and that is not the catalog's business.
-  final implied = powerSourceForInput(template.powerInput);
-
-  provider.updateAvNode(
-    node.copyWith(
-      model: template.model,
-      // A box named after the product it is — "Projector 1 - PowerLite L630U"
-      // — is named after the wrong product the moment the product changes,
-      // and that name is what the schematic, the pack list and the person on
-      // site all read. Only the model part moves; "Projector 1 - " is what
-      // this room calls the position, and the position has not changed. A
-      // label that never mentioned the model comes back untouched.
-      label: AppStateProvider.renamedForModel(
-        node.label,
-        node.model,
-        template.model,
-      ),
-      ports: swapped,
-      rackUnits: template.rackUnits,
-      powerWatts: template.powerWatts,
-      btuPerHour: template.btuPerHour,
-      powerSource: implied == PowerSource.unspecified
-          ? node.powerSource
-          : implied,
-    ),
-    recordUndo: recordUndo,
+  // The arithmetic is in model_swap.dart, shared with the project's
+  // swap-across-every-room. This half is only the writing: through the
+  // provider, so the room on screen gets its undo entry and its repaint.
+  final plan = planModelSwap(
+    node: node,
+    cables: provider.avCables,
+    template: template,
+    config: provider.roomConfig,
   );
 
-  var carried = 0;
-  for (final c in List<AvCable>.from(provider.avCables)) {
-    final fromMoved = c.fromNodeId == node.id ? remap[c.fromPortId] : null;
-    final toMoved = c.toNodeId == node.id ? remap[c.toPortId] : null;
-    if (fromMoved == null && toMoved == null) continue;
-    provider.updateAvCable(
-      c.copyWith(fromPortId: fromMoved, toPortId: toMoved),
-      recordUndo: false,
-    );
-    carried++;
+  provider.updateAvNode(plan.node, recordUndo: recordUndo);
+
+  final byId = {for (final c in provider.avCables) c.id: c};
+  for (final entry in plan.moved.entries) {
+    if (!byId.containsKey(entry.key)) continue;
+    provider.updateAvCable(entry.value, recordUndo: false);
+  }
+  for (final id in plan.dropped) {
+    provider.removeAvCable(id);
   }
 
-  // Whatever had nowhere to go. Removed rather than left behind: a cable
-  // pointing at a connector that is gone stops being drawn on the next build
-  // anyway, and a quiet disappearance is the thing worth avoiding.
-  final orphanedPorts = node.ports
-      .map((p) => p.id)
-      .where((id) => !remap.containsKey(id))
-      .toSet();
-  final orphaned = provider.avCables
-      .where(
-        (c) =>
-            (c.fromNodeId == node.id && orphanedPorts.contains(c.fromPortId)) ||
-            (c.toNodeId == node.id && orphanedPorts.contains(c.toPortId)),
-      )
-      .toList();
-  for (final c in orphaned) {
-    provider.removeAvCable(c.id);
-  }
-
-  return (carried: carried, dropped: orphaned.length);
+  return (carried: plan.carried, dropped: plan.dropped.length);
 }
 
 /// Puts [model] on the drawn box for config device [deviceKey], if there is

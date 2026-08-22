@@ -43,6 +43,7 @@ const List<NavTab> kNavTabs = [
   NavTab(Icons.account_tree_outlined, 'Cabling'),
   NavTab(Icons.view_day, 'Racks'),
   NavTab(Icons.request_quote, 'Cost'),
+  NavTab(Icons.apartment, 'Project'),
   NavTab(Icons.inventory_2, 'Catalog'),
   NavTab(Icons.schema, 'Schema'),
   NavTab(Icons.rule_folder, 'Flow Rules'),

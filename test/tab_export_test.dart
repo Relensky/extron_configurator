@@ -39,17 +39,23 @@ void main() {
     // The Wizard and App Config are settings; the Schema and Flow Rules tabs
     // edit documents that are saved as their own files, so a spreadsheet of
     // either would be a copy nobody can load back.
-    const settingsPages = {
+    //
+    // The Project tab is the other kind of exception: it has plenty to export,
+    // but nothing the ROOM-scoped exporter can produce — a project spans rooms,
+    // and its two documents (the workbook and the per-vendor quote requests)
+    // are written by its own buttons.
+    const noTabExport = {
       AppTab.wizard,
       AppTab.appConfig,
       AppTab.schemaEditor,
       AppTab.flowRules,
+      AppTab.project,
     };
-    for (final tab in settingsPages) {
+    for (final tab in noTabExport) {
       expect(tabCanExport(tab), isFalse, reason: '${tab.name} exports');
     }
     for (final tab in AppTab.values) {
-      if (settingsPages.contains(tab)) continue;
+      if (noTabExport.contains(tab)) continue;
       expect(tabCanExport(tab), isTrue, reason: '${tab.name} does not export');
     }
   });
