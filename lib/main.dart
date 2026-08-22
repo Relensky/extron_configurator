@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:auris/auris.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -14,8 +16,6 @@ import 'av_flow_view.dart';
 import 'control_prefill.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
-import 'diagram_capture.dart';
-import 'export_tools.dart';
 import 'device_editor_view.dart';
 import 'flow_rules_view.dart';
 import 'schema_editor_view.dart';
@@ -28,6 +28,7 @@ import 'project_room_picker.dart';
 import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
+import 'save_actions.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
@@ -176,6 +177,54 @@ class _MainDashboardState extends State<MainDashboard> {
   /// Wraps the main content area so it can be captured to an image for the
   /// screenshot annotator.
   final GlobalKey _captureKey = GlobalKey();
+
+  /// THE WINDOW'S X BUTTON, INTERCEPTED.
+  ///
+  /// Flutter's desktop embedders ask the app before the window closes, and
+  /// [AppLifecycleListener.onExitRequested] is where that question arrives.
+  /// Answering [ui.AppExitResponse.cancel] keeps the window open, which is
+  /// what makes an "are you sure" possible at all — without it the config,
+  /// four drawings and an estimate go with the window, and the first anybody
+  /// knows about it is the next morning.
+  ///
+  /// Only ever asks when there is something to lose: a session with everything
+  /// saved closes as immediately as it always did.
+  AppLifecycleListener? _lifecycle;
+
+  /// Guards against the second question. A user who takes ten seconds over the
+  /// dialog can press the X again behind it, and two stacked copies of the
+  /// same prompt is how somebody ends up answering "close without saving" to a
+  /// dialog they thought they had already dismissed.
+  bool _exitPromptOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
+  }
+
+  Future<ui.AppExitResponse> _onExitRequested() async {
+    if (!mounted) return ui.AppExitResponse.exit;
+    final provider = context.read<AppStateProvider>();
+    if (!provider.hasUnsavedWork) return ui.AppExitResponse.exit;
+    // A second X while the first prompt is still up must not stack another
+    // dialog on top of it.
+    if (_exitPromptOpen) return ui.AppExitResponse.cancel;
+
+    _exitPromptOpen = true;
+    try {
+      final mayClose = await confirmCloseWithUnsavedWork(context, provider);
+      return mayClose ? ui.AppExitResponse.exit : ui.AppExitResponse.cancel;
+    } finally {
+      _exitPromptOpen = false;
+    }
+  }
 
   /// Captures the current content area and opens the annotation editor. The
   /// default file name embeds the active tab + date.
@@ -531,7 +580,21 @@ class _MainDashboardState extends State<MainDashboard> {
       });
     }
 
-    return Scaffold(
+    // CTRL+S, WHEREVER YOU ARE STANDING.
+    //
+    // Wrapped around the whole page rather than hung off the toolbar button: a
+    // shortcut is dispatched up from whatever has focus, so from here it
+    // reaches a field on the wizard, a box on a drawing and a cell on the
+    // estimate alike. What it saves is the tab's own scope — the same answer
+    // the toolbar's Save gives, so the key and the button can never mean two
+    // different files.
+    final saveScope = saveScopeForTab(
+      (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+          ? AppTab.values[selectedIndex]
+          : AppTab.wizard,
+    );
+
+    final page = Scaffold(
       appBar: AppBar(
         // The app's name, and — once a project is open — which of its rooms
         // you are looking at. Beside the title rather than out in the actions
@@ -625,6 +688,10 @@ class _MainDashboardState extends State<MainDashboard> {
           // "does this room need converting?".
           IconButton(
             icon: Badge(
+              // Keyed because the toolbar now carries a second badge — the dot
+              // on the Save button — and "the badge" is no longer a thing a
+              // test can find by type.
+              key: const ValueKey('conversion_badge'),
               // The count is "there is something here to deal with", not "this
               // file was once converted". Once the log has been acknowledged
               // or the preview applied it comes down, and the next load of a
@@ -651,19 +718,7 @@ class _MainDashboardState extends State<MainDashboard> {
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: 'Open Existing Config',
-            onPressed: () async {
-              bool loaded = await provider.loadExistingConfig();
-              if (!loaded || !context.mounted) return;
-              // The schematic saved next to the config comes back with it.
-              await _syncDiagramsAfterLoad(context, provider);
-              // The conversion is NOT shown here. Opening a file should open
-              // the file; a migration dialog in front of it makes every load
-              // of a legacy room a dialog to dismiss before any work starts.
-              // The Convert button in the toolbar lights up instead.
-              if (provider.lastLoadHadChanges && context.mounted) {
-                _announceConversionAvailable(context);
-              }
-            },
+            onPressed: () => _openExistingConfig(context, provider),
           ),
           IconButton(
             icon: const Icon(Icons.cloud_download),
@@ -708,82 +763,14 @@ class _MainDashboardState extends State<MainDashboard> {
                 ? () => _undoLastSave(context, provider)
                 : null,
           ),
-          // SAVE OVER THE WORKING FILE: the file this session was opened
-          // from (or the working copy an SFTP download wrote), with no save
-          // dialog — the same "Apply = save" the Raw JSON tab performs, so a
-          // tech editing an existing room isn't forced through Export and a
-          // filename prompt for every change. Writes the FULL un-pruned
-          // config like every other working-file save; Export/upload are
-          // still what produce the pruned file. Disabled until the session
-          // has a local file, since there is nothing to write over then.
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: hasConfig && provider.currentConfigPath.isNotEmpty
-                ? 'Save & Apply Changes to Local Config\n'
-                    '(${provider.currentConfigPath})'
-                : 'Save & Apply Changes to Local Config — no local file yet, '
-                    'use Export Config Locally first',
-            onPressed: (!hasConfig || provider.currentConfigPath.isEmpty)
-                ? null
-                : () async {
-                    String message;
-                    bool failed = false;
-                    try {
-                      final String? saved =
-                          await provider.saveCurrentConfigToFile();
-                      failed = saved == null;
-                      // canUndoLastSave is the honest report of whether the
-                      // pre-save copy actually landed — it is best-effort.
-                      final String backupNote = provider.canUndoLastSave
-                          ? ' — previous version kept as '
-                              '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
-                          : '';
-                      message = saved == null
-                          ? 'No local file for this config — use Export Config Locally.'
-                          : 'Changes applied and saved to '
-                              '${saved.split(Platform.pathSeparator).last}'
-                              '$backupNote';
-                    } catch (e) {
-                      failed = true;
-                      message = 'Could not write the local config file: $e';
-                    }
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(message),
-                      backgroundColor:
-                          failed ? Colors.orange.shade800 : Colors.green,
-                    ));
-                  },
-          ),
-          // SAVE ALL: the whole job into one folder named for the room —
-          // config, diagrams, reports, workbook, images, and a copy of the
-          // catalog entries and rate card the prices came from.
-          IconButton(
-            icon: const Icon(Icons.drive_folder_upload),
-            tooltip: hasConfig
-                ? 'Save All — write the whole project to a room folder'
-                : 'Save All — nothing loaded yet',
-            onPressed: hasConfig
-                ? () => _saveAllProject(context, provider)
-                : null,
-          ),
-          IconButton(
-            icon: const Icon(Icons.save_alt),
-            tooltip: 'Export Config Locally',
-            onPressed: () async {
-              bool saved = await provider.exportRoomConfig();
-              if (saved && context.mounted) {
-                // Exporting adopts the file as the working config, so the
-                // path to offer is the one the session is now tied to.
-                showSavedFileSnack(
-                  context,
-                  provider,
-                  'Config',
-                  provider.currentConfigPath,
-                );
-              }
-            },
-          )
+          // SAVE, AND EVERY OTHER WAY OF SAVING. One button that writes
+          // whatever document the tab on screen belongs to — the room on the
+          // room tabs, the job on the Project tab, the catalog on the Catalog
+          // tab — with a dot on it when that document is behind its file, and
+          // a menu beside it holding Save As, the other document, Save All to
+          // a room folder, and an on-demand backup. See save_actions.dart for
+          // why the three buttons that used to be here were not enough.
+          const SaveToolbar(),
         ],
       ),
       body: Row(
@@ -820,6 +807,29 @@ class _MainDashboardState extends State<MainDashboard> {
         ],
       ),
     );
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
+          // runSave already opens the "where should this go" dialog for a
+          // document that has no file yet, so there is one branch here, not
+          // two.
+          if (saveBlockedReason(provider, saveScope).isEmpty) {
+            runSave(context, provider, saveScope);
+          }
+        },
+        const SingleActivator(LogicalKeyboardKey.keyS,
+            control: true, shift: true): () {
+          if (saveScopeSupportsSaveAs(saveScope)) {
+            runSave(context, provider, saveScope, saveAs: true);
+          }
+        },
+        const SingleActivator(LogicalKeyboardKey.keyS,
+                control: true, alt: true):
+            () => saveEverything(context, provider),
+      },
+      child: page,
+    );
   }
 
   /// The three helpers behind the per-tab export button, each guarding the
@@ -848,57 +858,106 @@ class _MainDashboardState extends State<MainDashboard> {
       index < AppTab.values.length &&
       AppTab.values[index].worksWithoutConfig;
 
+  /// THE START SCREEN — the two questions a session actually begins with.
+  ///
+  /// A job is a building, and a building is a list of rooms. So the project
+  /// comes first and the room file second, each as a card that offers both of
+  /// the only two things anybody ever does with one: start a new one, or open
+  /// one that exists. The old screen offered only the room half, which is why
+  /// people who had a project on disk started by opening a room from it and
+  /// then went looking for where the job itself lived.
+  ///
+  /// The cards are in a [Wrap], so on a narrow window they stack instead of
+  /// being clipped, and the whole thing scrolls — at 150% text two cards side
+  /// by side are taller than a laptop screen.
   Widget _buildLandingScreen(BuildContext context, AppStateProvider provider) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.account_tree, size: 80, color: Theme.of(context).disabledColor),
-          const SizedBox(height: 24),
-          Text("No Configuration Loaded", style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 40),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                height: 60,
-                width: 250,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.add_box),
-                  label: const Text("Create New Config\n(From template)", textAlign: TextAlign.center),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
-                    foregroundColor: Colors.white, // Forces readable text in light mode
-                  ),
-                  onPressed: () => _createNewConfig(context, provider),
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.account_tree, size: 64, color: theme.disabledColor),
+            const SizedBox(height: 16),
+            Text('Room Config Builder',
+                style: theme.textTheme.headlineMedium,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(
+              'Start with the job, or go straight to a room.',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.disabledColor),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 24,
+              runSpacing: 24,
+              children: [
+                _StartCard(
+                  icon: Icons.account_tree,
+                  title: 'Project',
+                  blurb: 'A building and the rooms in it, with the vendor '
+                      'split and the totals across the whole job.',
+                  primaryLabel: 'Start a New Project',
+                  primaryIcon: Icons.create_new_folder,
+                  onPrimary: () => startNewProject(context, provider),
+                  secondaryLabel: 'Open a Project',
+                  secondaryIcon: Icons.folder_open,
+                  onSecondary: () => openProjectFromFile(context, provider),
+                  subtitle: provider.currentProjectPath.isEmpty
+                      ? (provider.project.rooms.isEmpty
+                          ? 'No project open'
+                          : '${provider.projectDisplayName} — not saved yet')
+                      : provider.projectDisplayName,
                 ),
-              ),
-              const SizedBox(width: 20),
-              SizedBox(
-                height: 60,
-                width: 250,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.folder_open),
-                  label: const Text("Open Existing Config"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade700,
-                    foregroundColor: Colors.white, // Forces readable text in light mode
-                  ),
-                  onPressed: () async {
-                    bool loaded = await provider.loadExistingConfig();
-                    if (!loaded || !context.mounted) return;
-                    await _syncDiagramsAfterLoad(context, provider);
-                    if (provider.lastLoadHadChanges && context.mounted) {
-                      _announceConversionAvailable(context);
-                    }
-                  },
+                _StartCard(
+                  icon: Icons.description,
+                  title: 'Room file',
+                  blurb: 'One room: its config, its drawings, its rack and '
+                      'its estimate.',
+                  primaryLabel: 'Create a New File',
+                  primaryIcon: Icons.note_add,
+                  onPrimary: () => _createNewConfig(context, provider),
+                  secondaryLabel: 'Open a File',
+                  secondaryIcon: Icons.folder_open,
+                  onSecondary: () => _openExistingConfig(context, provider),
+                  subtitle: 'New files start from the template in App Config',
                 ),
-              ),
-            ],
-          )
-        ],
+              ],
+            ),
+            const SizedBox(height: 28),
+            // The recovery copies, mentioned exactly where somebody who has
+            // just lost a session would look for them.
+            Text(
+              autosaveStatusLine(provider),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.disabledColor),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  /// Opening a room file, from the start screen and from the toolbar — the
+  /// same load, the same sidecar sync, the same conversion notice, so which
+  /// button was pressed cannot change what a room comes back as.
+  Future<void> _openExistingConfig(
+      BuildContext context, AppStateProvider provider) async {
+    final bool loaded = await provider.loadExistingConfig();
+    if (!loaded || !context.mounted) return;
+    await _syncDiagramsAfterLoad(context, provider);
+    // The conversion is NOT shown here. Opening a file should open the file; a
+    // migration dialog in front of it makes every load of a legacy room a
+    // dialog to dismiss before any work starts. The Convert button in the
+    // toolbar lights up instead.
+    if (provider.lastLoadHadChanges && context.mounted) {
+      _announceConversionAvailable(context);
+    }
   }
 
   /// The active tab's view. [configRevision] identifies the loaded room: the
@@ -966,109 +1025,93 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 }
 
-/// SAVE ALL — everything this room has produced, into one folder.
+/// One half of the start screen: a document, what it holds, and the only two
+/// things anybody ever does with one.
 ///
-/// The diagram images can only be rendered from a widget that is on screen, so
-/// [captureDiagramTabs] walks the diagram tabs, capturing each in turn, and
-/// puts the user back where they started. Anything that could not be captured
-/// is reported in the result rather than quietly missing from the folder.
-Future<void> _saveAllProject(
-    BuildContext context, AppStateProvider provider) async {
-  final parent = await FilePicker.getDirectoryPath(
-    dialogTitle: 'Where should the room folder go?',
-  );
-  if (parent == null || !context.mounted) return;
+/// Both actions are full-width buttons rather than a button and a link,
+/// because "open the one I already have" is not the lesser of the two — for
+/// everybody past their first week it is the commoner one. The new-document
+/// button is filled and the open button outlined only so the pair can be told
+/// apart at a glance.
+class _StartCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String blurb;
+  final String subtitle;
+  final IconData primaryIcon;
+  final String primaryLabel;
+  final VoidCallback onPrimary;
+  final IconData secondaryIcon;
+  final String secondaryLabel;
+  final VoidCallback onSecondary;
 
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(const SnackBar(
-    duration: Duration(seconds: 2),
-    content: Text('Capturing the diagrams...'),
-  ));
+  const _StartCard({
+    required this.icon,
+    required this.title,
+    required this.blurb,
+    required this.subtitle,
+    required this.primaryIcon,
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.secondaryIcon,
+    required this.secondaryLabel,
+    required this.onSecondary,
+  });
 
-  final shots = await captureDiagramTabs(provider, pixelRatio: 2.0);
-
-  ProjectExport result;
-  try {
-    result = await saveProjectFolder(
-      provider: provider,
-      parentFolder: parent,
-      schematicPng: shots.schematic,
-      avFlowPng: shots.avFlow,
-      rackPng: shots.racks,
-      floorPlanSheets: shots.floorPlanSheets,
-      cablingPng: shots.cabling,
-    );
-  } catch (e) {
-    messenger.showSnackBar(SnackBar(
-      content: Text('Save All failed: $e'),
-      backgroundColor: snackErrorFillOn(messenger),
-    ));
-    return;
-  }
-
-  if (!context.mounted) return;
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Project saved'),
-      content: SizedBox(
-        width: 620,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SelectableText(result.folder,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Text('${result.written.length} files written',
-                style: Theme.of(ctx).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final name in result.written)
-                      Text('  $name',
-                          style: const TextStyle(
-                              fontFamily: 'monospace', fontSize: 12)),
-                    if (result.skipped.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text('Not included',
-                          style: Theme.of(ctx).textTheme.titleSmall),
-                      const SizedBox(height: 4),
-                      for (final note in result.skipped)
-                        Text('  $note',
-                            style: TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 12,
-                                color: Theme.of(ctx).disabledColor)),
-                    ],
-                  ],
-                ),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: 340,
+      child: Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 28, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(title, style: theme.textTheme.titleLarge),
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Text(blurb, style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                icon: Icon(primaryIcon),
+                label: Text(primaryLabel, textAlign: TextAlign.center),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: onPrimary,
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                icon: Icon(secondaryIcon),
+                label: Text(secondaryLabel, textAlign: TextAlign.center),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: onSecondary,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.disabledColor),
+              ),
+            ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () async {
-            final error = await provider.revealInFileManager(result.folder);
-            if (error != null && ctx.mounted) {
-              ScaffoldMessenger.of(ctx)
-                  .showSnackBar(SnackBar(content: Text(error)));
-            }
-          },
-          child: const Text('OPEN FOLDER'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Done'),
-        ),
-      ],
-    ),
-  );
+    );
+  }
 }
 
 /// A quiet nudge that the file needed migrating, pointing at the Convert
@@ -1787,6 +1830,109 @@ class AppSettingsView extends StatelessWidget {
               '"Check Defaults" can re-add anything removed by mistake.'),
           value: provider.confirmBeforeDelete,
           onChanged: (val) => provider.setConfirmBeforeDelete(val),
+        ),
+        const SizedBox(height: 20),
+
+        // --- AUTOSAVE ---
+        // Recovery copies on a timer. Read the header comment on
+        // AppStateProvider.writeAutosaveSnapshot for why this never writes
+        // over the user's own files: an autosave that saved would make "close
+        // without saving" impossible to honour, and would make the warning on
+        // exit a lie.
+        Text('Autosave', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          key: const ValueKey('autosave_enabled'),
+          title: const Text('Back up the open job automatically'),
+          subtitle: const Text(
+              'Copies the room (config, drawings, racks, plans and estimate) '
+              'and the project into a timestamped folder. Your own files are '
+              'never written to — this is a recovery copy, not a save, so '
+              '"close without saving" still means what it says.'),
+          value: provider.autosaveEnabled,
+          onChanged: (val) => provider.setAutosaveEnabled(val),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 240,
+              child: DropdownButtonFormField<int>(
+                key: const ValueKey('autosave_interval'),
+                initialValue:
+                    AppStateProvider.kAutosaveIntervals
+                            .contains(provider.autosaveMinutes)
+                        ? provider.autosaveMinutes
+                        : null,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'How often',
+                  helperText: 'Only writes when something has changed',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final m in AppStateProvider.kAutosaveIntervals)
+                    DropdownMenuItem(
+                      value: m,
+                      child: Text('Every $m minute${m == 1 ? '' : 's'}'),
+                    ),
+                ],
+                onChanged: provider.autosaveEnabled
+                    ? (val) {
+                        if (val != null) provider.setAutosaveMinutes(val);
+                      }
+                    : null,
+              ),
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.backup_outlined),
+              label: const Text('Back up now'),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final folder =
+                    await provider.writeAutosaveSnapshot(force: true);
+                showTimedSnackBar(
+                  messenger,
+                  SnackBar(
+                    duration: const Duration(seconds: 6),
+                    content: Text(folder.isEmpty
+                        ? (provider.lastAutosaveError.isEmpty
+                            ? 'Nothing open to back up yet.'
+                            : 'The backup failed: '
+                                '${provider.lastAutosaveError}')
+                        : 'Backed up to $folder'),
+                    backgroundColor: provider.lastAutosaveError.isEmpty
+                        ? null
+                        : snackErrorFillOn(messenger),
+                  ),
+                );
+              },
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.folder_open),
+              label: const Text('Open backup folder'),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final error = await provider.openAutosaveFolder();
+                if (error != null) {
+                  showTimedSnackBar(
+                    messenger,
+                    SnackBar(content: Text(error)),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '${autosaveStatusLine(provider)}\n'
+          'Backups live in ${provider.autosaveFolder} — the last '
+          '${AppStateProvider.kAutosaveGenerations} are kept.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 20),
 

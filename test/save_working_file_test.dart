@@ -160,16 +160,27 @@ void main() {
         reason: 'a session that has saved nothing has nothing to put back');
   });
 
-  testWidgets('stays disabled while the session has no local file',
+  testWidgets('offers to give an unsaved room a file rather than going dead',
       (WidgetTester tester) async {
     // A "Create New" config that has never been exported: nothing on disk.
+    // The button used to be disabled here, which sent people hunting for the
+    // command then called "Export Config Locally". It now opens the Save As
+    // dialog, and says so before it is pressed.
     final provider = AppStateProvider(autoLoadSettings: false)
       ..roomConfig = baseConfig();
 
     await pumpApp(tester, provider);
 
-    expect(tester.widget<IconButton>(saveButton).onPressed, isNull,
-        reason: 'there is no working file to write over yet');
+    final button = tester.widget<IconButton>(saveButton);
+    expect(button.onPressed, isNotNull);
+    expect(button.tooltip, contains('asks where to put it'));
+  });
+
+  testWidgets('is disabled only when there is no room at all',
+      (WidgetTester tester) async {
+    final provider = AppStateProvider(autoLoadSettings: false);
+    await pumpApp(tester, provider);
+    expect(tester.widget<IconButton>(saveButton).onPressed, isNull);
   });
 
   // --- The provider side, without the widget tree ---------------------------

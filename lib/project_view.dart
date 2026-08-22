@@ -15,6 +15,7 @@ import 'live_text_field.dart';
 import 'project_estimate.dart';
 import 'project_swap.dart';
 import 'project_workbook.dart';
+import 'save_actions.dart';
 
 /// ============================================================================
 ///  THE PROJECT TAB
@@ -108,94 +109,22 @@ class _ProjectViewState extends State<ProjectView> {
   //  FILE ACTIONS
   // -------------------------------------------------------------------------
 
-  Future<void> _newProject(AppStateProvider provider) async {
-    if (!await _confirmDiscard(provider)) return;
-    final setup = provider.roomConfig['SYSTEM_SETUP'];
-    provider.newProject(
-      building: (setup is Map ? setup['gve_bldg']?.toString() : '') ?? '',
-    );
-    _snack('New project started. Add the rooms it covers.');
-  }
+  // New / Open / Save all live in save_actions.dart, because the start screen
+  // and the toolbar offer the same three actions and a project opened from one
+  // of them must be a project opened exactly like the other — same prompt about
+  // unsaved edits, same file dialog, same message afterwards.
+  Future<void> _newProject(AppStateProvider provider) =>
+      startNewProject(context, provider);
 
-  /// Offers to save a project with unsaved edits before it is replaced.
-  /// Returns false when the user backs out entirely.
-  Future<bool> _confirmDiscard(AppStateProvider provider) async {
-    if (!provider.projectDirty) return true;
-    final answer = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('This project has unsaved changes'),
-        content: Text(
-          '"${provider.projectDisplayName}" has edits that are not on disk. '
-          'The rooms themselves are untouched either way — only the room '
-          'list, the vendors and the tags are at stake.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'cancel'),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'discard'),
-            child: const Text('Discard'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, 'save'),
-            child: const Text('Save first'),
-          ),
-        ],
-      ),
-    );
-    if (answer == 'save') return _saveProject(provider);
-    return answer == 'discard';
-  }
-
-  Future<void> _openProject(AppStateProvider provider) async {
-    if (!await _confirmDiscard(provider)) return;
-    final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Open a project',
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-    );
-    final file = picked?.files.single.path;
-    if (file == null) return;
-    final error = await provider.openProject(file);
-    if (error.isEmpty) {
-      _snack('Opened ${provider.projectDisplayName}.');
-    } else {
-      _snack(error, error: true);
-    }
-  }
+  Future<void> _openProject(AppStateProvider provider) =>
+      openProjectFromFile(context, provider);
 
   /// Returns true when the project ended up on disk.
   Future<bool> _saveProject(
     AppStateProvider provider, {
     bool as = false,
-  }) async {
-    var target = provider.currentProjectPath;
-    if (as || target.isEmpty) {
-      final suggested = _fileStem(provider.project);
-      final picked = await FilePicker.saveFile(
-        dialogTitle: 'Save the project',
-        fileName: '$suggested$kProjectFileSuffix',
-        type: FileType.custom,
-        allowedExtensions: const ['json'],
-      );
-      if (picked == null) return false;
-      // The dialog hands back exactly what was typed, so a name entered
-      // without an extension would land as a file nothing can open.
-      target = picked.toLowerCase().endsWith('.json') ? picked : '$picked.json';
-    }
-    final error = await provider.saveProject(to: target);
-    if (error.isNotEmpty) {
-      _snack(error, error: true);
-      return false;
-    }
-    if (mounted) {
-      showSavedFileSnack(context, provider, 'The project', target);
-    }
-    return true;
-  }
+  }) =>
+      runSave(context, provider, SaveScope.project, saveAs: as);
 
   String _fileStem(BuildingProject project) {
     final raw = project.name.trim().isNotEmpty

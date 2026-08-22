@@ -128,7 +128,10 @@ void main() {
     ) async {
       final provider = await pumpShell(tester);
 
-      final badge = find.byType(Badge);
+      // Keyed, not by type: the toolbar's Save button carries a badge of its
+      // own now (the unsaved-changes dot), and this test is about the
+      // conversion count.
+      final badge = find.byKey(const ValueKey('conversion_badge'));
       expect(badge, findsOneWidget);
       expect(tester.widget<Badge>(badge).isLabelVisible, isTrue);
 
@@ -142,7 +145,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Repainted on the spot — no reopening the file.
-      expect(tester.widget<Badge>(find.byType(Badge)).isLabelVisible, isFalse);
+      expect(tester.widget<Badge>(badge).isLabelVisible, isFalse);
       expect(provider.conversionNeedsAttention, isFalse);
 
       // And the log is still one click away.

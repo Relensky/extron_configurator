@@ -733,9 +733,106 @@ view — but it is the rare case now rather than the normal one, and the tests
 assert which is which so a regression that quietly brings the scrollbar back on
 a laptop fails instead of passing.
 
+## Starting a session
+
+The start screen offers the two documents a session actually begins with, side
+by side:
+
+- **Project** — *Start a New Project* / *Open a Project*. A building and the
+  rooms in it, with the vendor split and the totals across the whole job.
+- **Room file** — *Create a New File* / *Open a File*. One room: its config,
+  its drawings, its rack and its estimate.
+
+It used to offer only the room half, which is why somebody with a project on
+disk began by opening a room out of it and then went looking for where the job
+itself lived. Both halves go through exactly the same code the tabs do — the
+same prompt about unsaved edits, the same file dialog — so a project opened
+from the start screen is not a differently opened project.
+
+The line under the cards says when the last automatic backup was taken, because
+that is the screen somebody is looking at when they need to know.
+
+## Saving
+
+**Save writes the document the tab you are on belongs to.** The app edits five
+documents, and Save means a different file for each:
+
+| Tab | Save writes |
+| --- | --- |
+| Wizard, Devices, System, Raw JSON, the four drawings, Racks, Cost | the **room** — its config plus the sidecars beside it |
+| Project | the **project** — the room list, the vendors, the tags |
+| Catalog | `av_devices.json` |
+| Schema Editor | `ui_schema.json` |
+| Flow Rules | `av_flow_rules.json` |
+
+There used to be three separate save controls in the toolbar and none of them
+changed with the tab, so pressing the only button that looked like Save while
+standing on the Project tab saved the *room*, and the job somebody had just
+spent ten minutes tagging was still only in memory.
+
+The button carries a **dot when that document is behind its file**, which is
+the app's answer to "did I save that?" without pressing anything. The arrow
+beside it opens the rest:
+
+- **Save As…** — room and project only. The catalog, the schema and the rule
+  book have one configured home each (App Config says where), and a second copy
+  of one is a file nothing ever reads again.
+- **Save Room** / **Save Project** — the *other* document, so it is never more
+  than one menu away from wherever you are standing.
+- **Save Everything** — every open document that is behind its file.
+- **Save All to a room folder…** — the export described below.
+- **Back up now** — an immediate recovery snapshot.
+
+Keyboard: `Ctrl+S` saves the tab's document, `Ctrl+Shift+S` is Save As, and
+`Ctrl+Alt+S` is Save Everything. `Ctrl+S` on a room that has never been saved
+opens the Save As dialog rather than doing nothing, because that is the only
+way such a room *can* be saved.
+
+Saving the room takes the same pre-save backup it always did
+(`<name>_previous.json`, what the toolbar's Undo restores) and writes the
+sidecars with it. That is now one implementation rather than two: the room
+picker's *Save room* and the toolbar's Save used to write different content and
+only one of them could be undone, which is a difference nobody could see and
+nobody chose.
+
+## Autosave — recovery copies, not silent saves
+
+App Config > **Autosave** copies the whole open job — the room's config, all
+five sidecars, the control schematic and the project file — into a timestamped
+folder under the app's own settings directory, every few minutes. The last
+twelve are kept, and a snapshot is only written when something has actually
+changed, so an idle afternoon does not fill the folder with identical copies.
+
+**It never writes over your files.** That is the design, not a limitation. An
+autosave that saved would make "close without saving" impossible to honour,
+would quietly commit every experiment somebody was in the middle of backing out
+of, and would make the warning below a lie. A copy beside the app costs nothing
+and answers the only question autosave is ever actually asked: the power went
+out, where is my afternoon.
+
+Each snapshot carries an `autosave_manifest.json` naming the files it came
+from and whether they were behind their originals at the time, so a recovery
+three weeks later is a copy of the folder rather than a guessing game. The
+files inside are named exactly as they are beside a real config, so nothing has
+to be renamed on the way back.
+
+**Back up now** and **Open backup folder** are on the same panel, and *Back up
+now* is in the toolbar's save menu too.
+
+## Closing the app
+
+The window's X asks before it takes the work with it. The prompt lists what is
+loose — one line per document, naming the file — says when the last automatic
+backup was taken, and offers three answers: *Save and close*, *Close without
+saving*, and *Keep working*. A save that fails, or a Save As that is cancelled,
+does **not** close the app: that would lose exactly the work the user just
+asked to keep.
+
+A session with everything saved closes as immediately as it always did.
+
 ## Save All
 
-The toolbar's **Save All** writes the whole job into `<folder>/<room name>/`,
+**Save All**, in the toolbar's save menu, writes the whole job into `<folder>/<room name>/`,
 the room name coming from the wizard. It contains the config, the AV sidecar
 (diagram + estimate), the four-sheet workbook, plain-text device / AV / cost
 reports, PNGs of the control schematic, signal flow and rack elevation, and a

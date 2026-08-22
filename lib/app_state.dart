@@ -678,6 +678,8 @@ class AppStateProvider extends ChangeNotifier {
       'confirmBeforeDelete': confirmBeforeDelete,
       'snapDiagramsToGrid': snapDiagramsToGrid,
       'showDiagramGrid': showDiagramGrid,
+      'autosaveEnabled': autosaveEnabled,
+      'autosaveMinutes': autosaveMinutes,
     };
 
   /// Serializes every setting to app_config.json. Failures are logged but
@@ -959,6 +961,33 @@ class AppStateProvider extends ChangeNotifier {
 
   Future<void> setShowDiagramGrid(bool value) async {
     showDiagramGrid = value;
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  // --- Autosave ------------------------------------------------------------
+
+  /// Whether the recovery snapshots run on a timer. On by default: the work
+  /// this app holds — a room's config, four drawings, an estimate and the
+  /// project around them — is hours of it, and the cost of a snapshot nobody
+  /// ever reads is a few files in a folder nobody ever opens.
+  bool autosaveEnabled = true;
+
+  /// How often a snapshot is taken, in minutes. See [kAutosaveIntervals] for
+  /// what the App Config dropdown offers.
+  int autosaveMinutes = 5;
+
+  Future<void> setAutosaveEnabled(bool value) async {
+    autosaveEnabled = value;
+    _restartAutosaveTimer();
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  Future<void> setAutosaveMinutes(int value) async {
+    if (value <= 0) return;
+    autosaveMinutes = value;
+    _restartAutosaveTimer();
     notifyListeners();
     await _persistSettings();
   }
@@ -1733,21 +1762,17 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Writes the layout sidecar. Returns the saved path, or '' when there is
-  /// no working config file to sit next to (or the write failed).
-  Future<String> saveSchematicLayout() async {
-    final sidecar = schematicSidecarPath;
-    if (sidecar.isEmpty) return '';
-    try {
-      const encoder = JsonEncoder.withIndent('  ');
-      await File(sidecar).writeAsString(encoder.convert({
+  /// The control schematic as it goes to disk. Its own getter so the autosave
+  /// can write the same document to a recovery folder without a second,
+  /// drifting copy of the field list — see [writeAutosaveSnapshot].
+  Map<String, dynamic> schematicLayoutAsJson() => {
         '__readme': 'Control Schematic tab layout for the Room Config '
             'Builder: dragged node positions, user-drawn connection lines, '
             'and boxes added by hand for equipment the control system does '
             'not talk to. (Before the tab was renamed this file was called '
             '<config>_schematic.json.)',
-        'positions': schematicPositions
-            .map((id, p) => MapEntry(id, [p.dx, p.dy])),
+        'positions':
+            schematicPositions.map((id, p) => MapEntry(id, [p.dx, p.dy])),
         'links': schematicLinks,
         'hiddenEdges': schematicHiddenEdges.toList(),
         'extraNodes': schematicExtraNodes,
@@ -1759,7 +1784,18 @@ class AppStateProvider extends ChangeNotifier {
                 .toRadixString(16)
                 .padLeft(6, '0'),
         },
-      }));
+      };
+
+  /// Writes the layout sidecar. Returns the saved path, or '' when there is
+  /// no working config file to sit next to (or the write failed).
+  Future<String> saveSchematicLayout() async {
+    final sidecar = schematicSidecarPath;
+    if (sidecar.isEmpty) return '';
+    try {
+      const encoder = JsonEncoder.withIndent('  ');
+      await File(sidecar).writeAsString(
+        encoder.convert(schematicLayoutAsJson()),
+      );
 
       // The write succeeded, so the pre-rename file is now a stale duplicate
       // that would quietly diverge from this one. Retire it — but only ever
@@ -6007,6 +6043,9 @@ class AppStateProvider extends ChangeNotifier {
           : false;
       showDiagramGrid =
           saved['showDiagramGrid'] is bool ? saved['showDiagramGrid'] : true;
+      autosaveEnabled =
+          saved['autosaveEnabled'] is bool ? saved['autosaveEnabled'] : true;
+      autosaveMinutes = _sanitizeAutosaveMinutes(saved['autosaveMinutes']);
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
@@ -6075,6 +6114,9 @@ class AppStateProvider extends ChangeNotifier {
     } finally {
       // Update the UI once all heavy lifting is done
       settingsLoaded = true; // Safe for the UI to show (or skip) first-run setup
+      // The interval is a setting, so the clock can only start once the
+      // settings have been read.
+      _restartAutosaveTimer();
       notifyListeners(); 
     }
   }
@@ -8679,6 +8721,14 @@ class AppStateProvider extends ChangeNotifier {
       // sidecars beside this file. Leaving them to their own buttons meant a
       // careful save could still lose an afternoon of pricing.
       await saveProjectSidecars();
+      // The room now matches its files, so the unsaved-work check — the dot on
+      // the Save button, the prompt when a room is switched, and the warning
+      // when the app is closed — has a fresh baseline. Without this the
+      // toolbar's own Save left the room reporting itself as behind its file
+      // for the rest of the session.
+      markRoomSaved();
+      // The project's cached read of this room is now the stale one.
+      _projectRooms.clear();
       notifyListeners(); // The Undo button becomes available
       return currentConfigPath;
     } catch (e, stack) {
@@ -9974,24 +10024,26 @@ class AppStateProvider extends ChangeNotifier {
   /// and wrong for the thing somebody does forty times an afternoon while
   /// moving between the rooms of a job. Returns the file written, or a message
   /// beginning with 'Error' — the caller shows either.
+  ///
+  /// ONE implementation, shared with the toolbar's Save button. It used to be
+  /// a second one: this wrote the PRUNED config and took no backup, while
+  /// [saveCurrentConfigToFile] wrote the full one and left a `_previous.json`
+  /// to undo from. Which of the two you got depended on whether you had
+  /// pressed Save in the title bar or Save in the room picker, and only one of
+  /// them could be undone — a difference nobody could see and nobody chose.
   Future<String> saveRoomInPlace() async {
-    pendingRawEditorCommit?.call(); // raw-editor typing goes out with it
     if (currentConfigPath.isEmpty) {
       return 'Error: this room has never been saved, so there is no file to '
-          'save it back to. Use Export Config once to give it one.';
+          'save it back to. Use Save Room As once to give it one.';
     }
     if (roomConfig.isEmpty) return 'Error: there is nothing to save.';
     try {
-      const encoder = JsonEncoder.withIndent('    ');
-      await File(currentConfigPath)
-          .writeAsString(encoder.convert(_sortJson(_pruneConfig(roomConfig))));
-      await saveProjectSidecars();
-      markRoomSaved();
-      // The project's cached read of this room is now the stale one.
-      _projectRooms.clear();
-      AppLogger.logInfo('Room saved in place to $currentConfigPath.');
-      notifyListeners();
-      return currentConfigPath;
+      final written = await saveCurrentConfigToFile();
+      if (written == null) {
+        return 'Error: this room has no working file to save back to.';
+      }
+      AppLogger.logInfo('Room saved in place to $written.');
+      return written;
     } catch (e, stack) {
       AppLogger.logError('Failed to save the room to $currentConfigPath', e,
           stack);
@@ -10271,6 +10323,294 @@ class AppStateProvider extends ChangeNotifier {
     final categoryList = categories.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return (manufacturers: makerList, categories: categoryList);
+  }
+
+  // ==========================================================================
+  //  WHAT IS NOT ON DISK
+  // ==========================================================================
+  //  Three documents can be behind their files at once — the room, the project
+  //  that lists it, and the room that has no file at all. Every "are you sure"
+  //  in the app asks the same question, so the answer is written once, as
+  //  SENTENCES rather than as a bool: a prompt that says "there are unsaved
+  //  changes" and a prompt that says "BSS103_config.json has edits and the
+  //  project has two new rooms" are the same dialog doing very different
+  //  amounts of good.
+  // ==========================================================================
+
+  /// True when the room on screen has never been written anywhere.
+  ///
+  /// Distinct from [roomHasUnsavedChanges], which compares against a file and
+  /// so is false for a room that has none. Both are unsaved work; only this
+  /// one cannot be answered by writing over something.
+  bool get roomNeverSaved => roomConfig.isNotEmpty && currentConfigPath.isEmpty;
+
+  /// One line per document that is behind its file, in the order somebody
+  /// would deal with them. Empty when everything is saved.
+  List<String> get unsavedWorkSummary {
+    final out = <String>[];
+    if (roomNeverSaved) {
+      out.add('This room has never been saved — it has no file yet.');
+    } else if (roomHasUnsavedChanges) {
+      out.add('${path.basename(currentConfigPath)} has edits that are not in '
+          'the file — a field, a box on a drawing, a price, or all three.');
+    }
+    if (projectDirty) {
+      out.add('The project "$projectDisplayName" has edits that are not on '
+          'disk — the room list, the vendors or the tags.');
+    }
+    return out;
+  }
+
+  /// True when anything at all would be lost by quitting now.
+  bool get hasUnsavedWork => unsavedWorkSummary.isNotEmpty;
+
+  // ==========================================================================
+  //  AUTOSAVE — RECOVERY SNAPSHOTS, NOT SILENT SAVES
+  // ==========================================================================
+  //  The timer never writes over the user's files. It copies the whole open
+  //  job — the room's config, its five sidecars, the control schematic and the
+  //  project file — into a timestamped folder under the app's own settings
+  //  directory, and keeps the last [kAutosaveGenerations] of them.
+  //
+  //  That distinction is the design. Writing to the real files would make
+  //  "close without saving" impossible to honour, would quietly commit every
+  //  experiment somebody was in the middle of backing out of, and would make
+  //  the unsaved-changes warning on exit a lie. A snapshot beside the app
+  //  costs nothing and answers the only question autosave is ever actually
+  //  asked: the power went out, where is my afternoon.
+  // ==========================================================================
+
+  /// How many snapshot folders are kept before the oldest is removed.
+  static const int kAutosaveGenerations = 12;
+
+  /// The intervals the App Config dropdown offers, in minutes.
+  static const List<int> kAutosaveIntervals = [1, 2, 5, 10, 15, 30];
+
+  static int _sanitizeAutosaveMinutes(dynamic raw) {
+    final n = raw is int ? raw : (int.tryParse(raw?.toString() ?? '') ?? 5);
+    return n < 1 ? 1 : (n > 240 ? 240 : n);
+  }
+
+  Timer? _autosaveTimer;
+
+  /// When the last snapshot was written; null until one has been.
+  DateTime? lastAutosaveAt;
+
+  /// The folder the last snapshot went into ('' until one has been written).
+  String lastAutosaveFolder = '';
+
+  /// Why the last snapshot failed, '' when it did not.
+  String lastAutosaveError = '';
+
+  /// The fingerprint the last snapshot was taken of, so an idle hour does not
+  /// fill the folder with twelve identical copies.
+  String _lastAutosaveFingerprint = '';
+
+  /// Where the snapshots live: `<settings folder>/autosave`.
+  ///
+  /// Beside app_config.json rather than beside the room, because a recovery
+  /// copy that lands in the customer's project folder is a file somebody
+  /// emails to the customer by mistake.
+  String get autosaveFolder =>
+      _autosaveFolderOverride ?? path.join(_userSettingsDir(), 'autosave');
+
+  /// Redirects the snapshots into a temp folder for a test. Also what makes
+  /// [writeAutosaveSnapshot] willing to write at all on a test-constructed
+  /// provider — without it, a test that took a snapshot would drop folders
+  /// into the developer's own %APPDATA%.
+  String? _autosaveFolderOverride;
+
+  @visibleForTesting
+  set autosaveFolderForTest(String folder) => _autosaveFolderOverride = folder;
+
+  /// (Re)starts the timer from the current settings. Safe to call repeatedly.
+  void _restartAutosaveTimer() {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    // Test-constructed providers never touch the filesystem, and a timer left
+    // running past the end of a test fails it.
+    if (!_persistenceEnabled || !autosaveEnabled) return;
+    _autosaveTimer = Timer.periodic(
+      Duration(minutes: autosaveMinutes),
+      (_) => writeAutosaveSnapshot(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    super.dispose();
+  }
+
+  /// The stem every file in a snapshot is named from — the working file's own
+  /// name when there is one, else the building and room, else 'untitled_room'.
+  String get autosaveStem {
+    if (currentConfigPath.isNotEmpty) {
+      return path.basenameWithoutExtension(currentConfigPath);
+    }
+    final setup = roomConfig['SYSTEM_SETUP'];
+    final bldg = (setup is Map ? setup['gve_bldg']?.toString() : '') ?? '';
+    final room = (setup is Map ? setup['gve_room']?.toString() : '') ?? '';
+    final stem = '${bldg.trim()}_${room.trim()}'
+        .replaceAll(RegExp('[\\\\/:*?"<>|\\s]+'), '_')
+        .replaceAll(RegExp('^_+|_+\$'), '');
+    return stem.isEmpty ? 'untitled_room' : '${stem}_config';
+  }
+
+  /// What the snapshot is a snapshot OF.
+  String _autosaveFingerprint() {
+    try {
+      return '$currentConfigPath|$currentProjectPath|'
+          '${_roomFingerprint()}|${jsonEncode(project.toJson())}';
+    } catch (_) {
+      return DateTime.now().microsecondsSinceEpoch.toString();
+    }
+  }
+
+  /// Copies the whole open job into a fresh snapshot folder.
+  ///
+  /// Returns the folder written, or '' when there was nothing to write (no
+  /// room and no project), nothing had changed since the last snapshot, or the
+  /// write failed — [lastAutosaveError] carries the reason in that last case.
+  ///
+  /// [force] takes the snapshot even when nothing has changed, which is what
+  /// the "Back up now" button in App Config does.
+  Future<String> writeAutosaveSnapshot({bool force = false}) async {
+    // A test provider writes only where a test has told it to.
+    if (!_persistenceEnabled && _autosaveFolderOverride == null) return '';
+
+    final bool hasRoom = roomConfig.isNotEmpty;
+    final bool hasProject =
+        project.rooms.isNotEmpty || currentProjectPath.isNotEmpty;
+    if (!hasRoom && !hasProject) return '';
+
+    final fingerprint = _autosaveFingerprint();
+    if (!force && fingerprint == _lastAutosaveFingerprint) return '';
+
+    // Whatever the raw editor is holding goes into the snapshot too — it is
+    // the one place edits sit outside roomConfig.
+    pendingRawEditorCommit?.call();
+
+    final folder = path.join(autosaveFolder, autosaveStampNow());
+
+    try {
+      await Directory(folder).create(recursive: true);
+      const encoder = JsonEncoder.withIndent('  ');
+      final written = <String>[];
+
+      if (hasRoom) {
+        final configName = '$autosaveStem.json';
+        await File(path.join(folder, configName)).writeAsString(
+          encoder.convert(_sortJson(_pruneConfig(roomConfig))),
+        );
+        written.add(configName);
+
+        // The sidecars, under exactly the names they carry beside a real
+        // config — a recovery is then a copy of the folder rather than a
+        // renaming exercise performed by somebody having a bad day.
+        final parts = splitRoomSidecar(avFlowAsJson());
+        for (final part in RoomSidecarPart.values) {
+          final name = path.basename(
+            roomSidecarPath(path.join(folder, configName), part),
+          );
+          await File(path.join(folder, name))
+              .writeAsString(encoder.convert(parts[part]));
+          written.add(name);
+        }
+
+        if (hasSchematicLayout) {
+          final name = '${autosaveStem}_control_schematic.json';
+          await File(path.join(folder, name))
+              .writeAsString(encoder.convert(schematicLayoutAsJson()));
+          written.add(name);
+        }
+      }
+
+      if (hasProject) {
+        final name = currentProjectPath.isNotEmpty
+            ? path.basename(currentProjectPath)
+            : 'project.json';
+        await File(path.join(folder, name))
+            .writeAsString(encoder.convert(project.toJson()));
+        written.add(name);
+      }
+
+      // Where each file came from, so a recovery knows what it is looking at
+      // three weeks later.
+      await File(path.join(folder, 'autosave_manifest.json')).writeAsString(
+        encoder.convert({
+          '__readme': 'Automatic recovery snapshot written by the Room Config '
+              'Builder. Nothing here is put back automatically — copy the '
+              'files you want over the originals named below.',
+          'takenAt': DateTime.now().toLocal().toIso8601String(),
+          'roomFile': currentConfigPath,
+          'projectFile': currentProjectPath,
+          'roomHadUnsavedChanges': roomNeverSaved || roomHasUnsavedChanges,
+          'projectHadUnsavedChanges': projectDirty,
+          'files': written,
+        }),
+      );
+
+      _lastAutosaveFingerprint = fingerprint;
+      lastAutosaveAt = DateTime.now();
+      lastAutosaveFolder = folder;
+      lastAutosaveError = '';
+      await _pruneAutosaves();
+      AppLogger.logInfo(
+          'Autosave snapshot written to $folder (${written.length} files).');
+      notifyListeners();
+      return folder;
+    } catch (e, stack) {
+      lastAutosaveError = '$e';
+      AppLogger.logError('Autosave snapshot to $folder failed', e, stack);
+      notifyListeners();
+      return '';
+    }
+  }
+
+  /// Folder name for a snapshot taken now: sortable, and legible at a glance
+  /// in a file manager.
+  @visibleForTesting
+  static String autosaveStampNow() {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${now.year}-${two(now.month)}-${two(now.day)}_'
+        '${two(now.hour)}-${two(now.minute)}-${two(now.second)}';
+  }
+
+  /// Opens the backup folder in the file manager, creating it first when no
+  /// snapshot has been taken yet.
+  ///
+  /// Its own method rather than [revealInFileManager], which expects a FILE and
+  /// would open the parent of a folder handed to it — here that would be the
+  /// settings directory, one level away from what the button says.
+  Future<String?> openAutosaveFolder() async {
+    try {
+      await Directory(autosaveFolder).create(recursive: true);
+    } catch (e, stack) {
+      AppLogger.logError('Could not create $autosaveFolder', e, stack);
+      return 'Could not create $autosaveFolder';
+    }
+    return openInDesktop(autosaveFolder);
+  }
+
+  /// Drops the oldest snapshots past [kAutosaveGenerations]. Failures are
+  /// logged and swallowed: a folder that will not delete must never stop the
+  /// next backup from being taken.
+  Future<void> _pruneAutosaves() async {
+    try {
+      final root = Directory(autosaveFolder);
+      if (!root.existsSync()) return;
+      final folders = root.listSync().whereType<Directory>().toList()
+        ..sort(
+            (a, b) => path.basename(a.path).compareTo(path.basename(b.path)));
+      for (int i = 0; i < folders.length - kAutosaveGenerations; i++) {
+        await folders[i].delete(recursive: true);
+      }
+    } catch (e) {
+      AppLogger.logError('Could not prune the autosave folder', e);
+    }
   }
 }
 
