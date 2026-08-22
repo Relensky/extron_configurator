@@ -137,9 +137,19 @@ void main() {
         row.tab.label,
     ];
     expect(labels.indexOf('Raw JSON'), labels.indexOf('System') + 1);
-    // The rail order and the enum order have to agree, or every tab shows the
-    // page of its neighbour.
-    expect(labels.length, AppTab.values.length);
+    // Every tab is reachable: the rail plus the two in the banner above it
+    // (Project and App Config) have to account for the whole enum, with no
+    // tab in both lists and none in neither.
+    final reached = {
+      for (final row in tester.widgetList<NavRailRow>(find.byType(NavRailRow)))
+        row.tab.tab,
+      ...kBannerTabs,
+    };
+    expect(reached, AppTab.values.toSet());
+    expect(labels.length, AppTab.values.length - kBannerTabs.length);
+    // ...and the two that moved are NOT still in the rail.
+    expect(labels, isNot(contains('Project')));
+    expect(labels, isNot(contains('App Config')));
   });
 
   testWidgets('the rail folds away and comes back', (tester) async {

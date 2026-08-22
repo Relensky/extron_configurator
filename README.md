@@ -733,6 +733,26 @@ view — but it is the rare case now rather than the normal one, and the tests
 assert which is which so a regression that quietly brings the scrollbar back on
 a laptop fails instead of passing.
 
+## Where the top-level things live
+
+Two of the app's pages are not views of a room, and they no longer sit in the
+left rail as though they were:
+
+- **Project** is a button in the banner across the top of the page. A job is
+  what the room belongs to — one level up from every tab in the rail — and the
+  banner names the open job beside it, marked *unsaved* when the project has
+  edits that are not on disk.
+- **App Config** is the **gear** at the right of the same banner.
+
+The banner sits outside the collapsible pane, so folding the rail away to give
+a drawing the width does not take the way back to the job with it. The rail
+below is thirteen rows of "ways of looking at a room", and a test keeps the two
+lists between them covering every tab exactly once.
+
+The app also **starts on Cost**, not on Project. The Project tab works with no
+room open — that is the point of it — so starting there opened the app on an
+empty job list and the start screen below was never seen by anybody.
+
 ## Starting a session
 
 The start screen offers the two documents a session actually begins with, side
@@ -749,8 +769,8 @@ itself lived. Both halves go through exactly the same code the tabs do — the
 same prompt about unsaved edits, the same file dialog — so a project opened
 from the start screen is not a differently opened project.
 
-The line under the cards says when the last automatic backup was taken, because
-that is the screen somebody is looking at when they need to know.
+The line under the cards says whether any unsaved work is currently being kept,
+because that is the screen somebody is looking at when they need to know.
 
 ## Saving
 
@@ -781,7 +801,7 @@ beside it opens the rest:
   than one menu away from wherever you are standing.
 - **Save Everything** — every open document that is behind its file.
 - **Save All to a room folder…** — the export described below.
-- **Back up now** — an immediate recovery snapshot.
+- **Copy unsaved work now** — writes the recovery copy immediately.
 
 Keyboard: `Ctrl+S` saves the tab's document, `Ctrl+Shift+S` is Save As, and
 `Ctrl+Alt+S` is Save Everything. `Ctrl+S` on a room that has never been saved
@@ -795,40 +815,104 @@ picker's *Save room* and the toolbar's Save used to write different content and
 only one of them could be undone, which is a difference nobody could see and
 nobody chose.
 
-## Autosave — recovery copies, not silent saves
+## Autosave — a live working copy you can get back
 
-App Config > **Autosave** copies the whole open job — the room's config, all
-five sidecars, the control schematic and the project file — into a timestamped
-folder under the app's own settings directory, every few minutes. The last
-twelve are kept, and a snapshot is only written when something has actually
-changed, so an idle afternoon does not fill the folder with identical copies.
+While a room or project has unsaved changes, the app keeps a **recovery copy**
+of it: the config, all five sidecars and the control schematic, written as
+ordinary files into a folder of the app's own under the settings directory,
+every few minutes (App Config > Autosave sets the interval).
 
-**It never writes over your files.** That is the design, not a limitation. An
-autosave that saved would make "close without saving" impossible to honour,
-would quietly commit every experiment somebody was in the middle of backing out
-of, and would make the warning below a lie. A copy beside the app costs nothing
-and answers the only question autosave is ever actually asked: the power went
-out, where is my afternoon.
+**It never writes over your files.** Saving is what does that — and a save
+*deletes* the recovery copy, because a copy of work that is already in its file
+is a copy that can only ever mislead somebody. So the copy exists exactly while
+there is unsaved work, and there are three ways it stops existing:
 
-Each snapshot carries an `autosave_manifest.json` naming the files it came
-from and whether they were behind their originals at the time, so a recovery
-three weeks later is a copy of the folder rather than a guessing game. The
-files inside are named exactly as they are beside a real config, so nothing has
-to be renamed on the way back.
+- the document is saved;
+- you close the app and choose *Close without saving* — you said discard, and
+  being asked again on Monday is not helping;
+- you discard it at the recovery prompt below.
 
-**Back up now** and **Open backup folder** are on the same panel, and *Back up
-now* is in the toolbar's save menu too.
+**A crash is none of those.** Nothing deletes the copy, so it is still there
+the next time that file is opened.
+
+### The prompt on the way back in
+
+Opening a room (or a project) the app compares it against any recovery copy
+sitting in that file's slot. If they differ, you get the difference — the same
+way the conversion log offers a migration, and for the same reason: *"restore
+your unsaved work?"* with a Yes and a No is not enough information to answer
+with. The two candidates are somebody's afternoon and somebody else's last
+known-good file, and which is which is the whole question.
+
+So the dialog lists **every property that would change**, in the file's own
+language:
+
+```
+PROJECTORDEVICE_1.speaker_mute — true would become false
+SYSTEM_SETUP.gve_room — "103" would become "104"
+Signal flow.nodes — [12 items] would become [13 items]
+Cost estimate.cost — {6 properties} would become {7 properties}
+```
+
+The config is compared property by property; the room's other document — the
+drawings, racks, plans, cabling and estimate — is compared at its top level,
+because "nodes: 12 items would become 13" is the honest summary of a drawing
+and walking into every box to list the ones that moved would produce a page
+nobody reads.
+
+Three answers, and **none of them writes to your file**:
+
+- **Restore the unsaved work** loads the copy into the editor. The file is
+  untouched, the Save button lights its unsaved dot, and the next Save is a
+  deliberate one — so the answer to this dialog is never irreversible.
+- **Keep the file** throws the copy away for good.
+- **Not now** leaves both alone; the copy is offered again next time.
+
+A copy that turns out to *agree* with the file is retired without a word — that
+is a copy of work that got saved before the crash, and a dialog about it would
+be a dialog with nothing behind it.
+
+Each slot is keyed by the document's own path (its name plus a hash of the full
+path), so the check on reopen is a lookup rather than a search, and two
+buildings that both keep a plain `config.json` cannot overwrite each other's
+recovery. A room that has never been saved has no path to key a slot on, so its
+copy goes to `recovery/rooms/untitled_<building>_<room>` — nothing can offer it
+back automatically, but a session that crashed before its first save is the one
+whose work is worth the most, and **Open recovery folder** in App Config is how
+it is found.
 
 ## Closing the app
 
 The window's X asks before it takes the work with it. The prompt lists what is
-loose — one line per document, naming the file — says when the last automatic
-backup was taken, and offers three answers: *Save and close*, *Close without
-saving*, and *Keep working*. A save that fails, or a Save As that is cancelled,
-does **not** close the app: that would lose exactly the work the user just
-asked to keep.
+loose — one line per document, naming the file — says what the recovery copy is
+holding, and offers three answers: *Save and close*, *Close without saving*, and
+*Keep working*. A save that fails, or a Save As that is cancelled, does **not**
+close the app: that would lose exactly the work the user just asked to keep.
 
 A session with everything saved closes as immediately as it always did.
+
+## The application icon
+
+`windows/runner/resources/app_icon.ico` holds seven sizes — 16, 24, 32, 48, 64,
+128 and 256 — so the title bar, Alt-Tab, the taskbar and Explorer's tiles each
+get a version drawn at the right scale. The 16px one is the one that matters:
+left to be resampled from the 256, it turns to mush, and the title bar is where
+the icon is seen most.
+
+The source artwork lives in `design/` (`icon.ai`, and the `icon.png` the
+current icon was built from). To change it, export a square PNG
+(1024x1024, transparent) into that folder and run:
+
+```
+python tools/make_app_icon.py design/icon.png
+```
+
+The script also takes a PDF. It does NOT take `.ai` or `.eps`: Illustrator's
+EPS is PostScript, and rasterising PostScript needs Ghostscript, which is not
+part of this project's toolchain. Artwork that is not square is centred on a
+transparent square rather than stretched — a logo drawn 4% taller than it is
+wide is a logo somebody drew that way, and the squash shows at 16 pixels while
+the margin does not.
 
 ## Save All
 

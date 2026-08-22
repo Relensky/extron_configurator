@@ -117,7 +117,7 @@ void main() {
     // short for words, and the bottom tab has to stay reachable either way.
     await tester.tap(find.byType(NavRailRow).last);
     await tester.pumpAndSettle();
-    expect(p.selectedTabIndex, AppTab.appConfig.index);
+    expect(p.selectedTabIndex, kNavTabs.last.tab.index);
   });
 
   testWidgets('a window with no room for words keeps every tab, as icons',
@@ -145,6 +145,8 @@ void main() {
   group('the window too short for even the minimum row', () {
     // 250 px of rail cannot hold fifteen legible tabs by any arithmetic, so
     // this is where scrolling still earns its place.
+    // Short enough that the rail cannot fit its rows even at the minimum row
+    // height, which is the whole point of this group.
     const tiny = Size(1200, 250);
 
     testWidgets('scrolls, both ways', (tester) async {
@@ -168,11 +170,18 @@ void main() {
 
       // Nothing to do with the rail: the wizard hands over to another tab, a
       // report jumps to Cabling. The rail still has to show where you are.
-      p.selectTab(AppTab.appConfig.index);
+      // Its own last and first rows, not the last and first AppTab — Project
+      // and App Config are in the banner above the rail now, and a tab that
+      // has no row has no row to scroll to.
+      // Far enough down the rail to be off the bottom of a window this short,
+      // and a page that is a canvas: the Flow Rules editor at the very bottom
+      // of the rail cannot lay itself out in 250 pixels at all, and this test
+      // is about the rail rather than about that.
+      p.selectTab(AppTab.cabling.index);
       await tester.pumpAndSettle();
       expect(pos.pixels, greaterThan(0));
 
-      p.selectTab(AppTab.project.index);
+      p.selectTab(kNavTabs.first.tab.index);
       await tester.pumpAndSettle();
       expect(pos.pixels, 0);
     });
@@ -229,5 +238,106 @@ void main() {
     expectNothingClipped(tester, 'in the narrowed pane at 1.5 x text');
     // Narrow AND tall-text is the worst case for fitting, and it still must.
     expectEveryTabOnScreen(tester, 'in the narrowed pane at 1.5 x text');
+  });
+
+  // ---------------------------------------------------------------------------
+  //  THE ACCENT REACHES THE ONE CONTROL PEOPLE LOOK AT MOST
+  // ---------------------------------------------------------------------------
+  //  The selected row's band used to come from secondaryContainer in every
+  //  theme. Classic derives its secondary from the accent, so that looked
+  //  right. Auris does not — its slate is semantic and fixed whatever accent
+  //  is chosen — so picking teal or magenta recoloured the whole app EXCEPT
+  //  the rail, which is the control somebody is looking at while they pick.
+  // ---------------------------------------------------------------------------
+
+  group('the selected row wears the accent', () {
+    /// The band actually painted behind the selected row.
+    ///
+    /// Read off the [Ink] decoration rather than off the theme, so the test is
+    /// checking what lands on the screen rather than restating the arithmetic
+    /// that produced it.
+    Color? bandOf(WidgetTester tester, AppTab tab) {
+      final row = find.byWidgetPredicate(
+        (w) => w is NavRailRow && w.tab.tab == tab,
+      );
+      final ink = tester.widget<Ink>(
+        find.descendant(of: row, matching: find.byType(Ink)),
+      );
+      return (ink.decoration as BoxDecoration).color;
+    }
+
+    Future<Color?> bandFor(
+      WidgetTester tester, {
+      required String style,
+      required String aurisColor,
+      String classicColor = '2196F3',
+    }) async {
+      final p = room()
+        ..themeStyle = style
+        ..aurisColor = aurisColor
+        ..classicColor = classicColor;
+      p.selectTab(AppTab.devices.index);
+      await pumpApp(tester, p);
+      return bandOf(tester, AppTab.devices);
+    }
+
+    testWidgets('Auris: a different accent paints a different band',
+        (tester) async {
+      final amber = await bandFor(
+        tester,
+        style: 'auris',
+        aurisColor: 'F0A500',
+      );
+      final magenta = await bandFor(
+        tester,
+        style: 'auris',
+        aurisColor: 'E0409A',
+      );
+
+      expect(amber, isNotNull);
+      expect(magenta, isNotNull);
+      expect(magenta, isNot(amber),
+          reason: 'the rail followed the fixed slate secondary, so every '
+              'Auris accent gave the same band');
+    });
+
+    testWidgets('Auris: the band is the accent ramp, not the slate',
+        (tester) async {
+      final p = room()
+        ..themeStyle = 'auris'
+        ..aurisColor = '35E0C0'; // teal
+      p.selectTab(AppTab.devices.index);
+      await pumpApp(tester, p);
+
+      final scheme = Theme.of(
+        tester.element(find.byType(NavRailRow).first),
+      ).colorScheme;
+
+      expect(bandOf(tester, AppTab.devices), scheme.primaryContainer);
+      expect(bandOf(tester, AppTab.devices), isNot(scheme.secondaryContainer));
+    });
+
+    testWidgets('Classic still follows the Secondary element color',
+        (tester) async {
+      // App Config's secondary picker says "colors the navigation highlight"
+      // on the tin, and it has to keep meaning that.
+      final p = room()
+        ..themeStyle = 'classic'
+        ..classicSecondary = 'E91E63';
+      p.selectTab(AppTab.devices.index);
+      await pumpApp(tester, p);
+
+      final scheme = Theme.of(
+        tester.element(find.byType(NavRailRow).first),
+      ).colorScheme;
+      expect(bandOf(tester, AppTab.devices), scheme.secondaryContainer);
+    });
+
+    testWidgets('an unselected row paints no band at all', (tester) async {
+      final p = room()..themeStyle = 'auris';
+      p.selectTab(AppTab.devices.index);
+      await pumpApp(tester, p);
+      expect(bandOf(tester, AppTab.racks), isNull);
+    });
   });
 }

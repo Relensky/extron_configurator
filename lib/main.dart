@@ -28,6 +28,7 @@ import 'project_room_picker.dart';
 import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
+import 'recovery_dialog.dart';
 import 'save_actions.dart';
 import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
@@ -196,6 +197,16 @@ class _MainDashboardState extends State<MainDashboard> {
   /// same prompt is how somebody ends up answering "close without saving" to a
   /// dialog they thought they had already dismissed.
   bool _exitPromptOpen = false;
+
+  /// The recovery copy this session has already asked about.
+  ///
+  /// The prompt is raised from [build] rather than from each of the four
+  /// places a room can be opened from — by hand, from the start screen, from
+  /// the project's room picker, off a processor — because a check that has to
+  /// be added to a new open path is a check that will one day be missing from
+  /// one. Keyed on the slot's folder so the NEXT room's recovery copy still
+  /// gets its own prompt.
+  String _recoveryAsked = '';
 
   @override
   void initState() {
@@ -563,6 +574,18 @@ class _MainDashboardState extends State<MainDashboard> {
     // theme-family change (Auris <-> Classic) forces via the MaterialApp key.
     final int selectedIndex = provider.selectedTabIndex;
 
+    // A recovery copy that outlived the session that wrote it — see
+    // recovery_dialog.dart. Post-frame, like the first-run dialog below it,
+    // because this runs during a build.
+    final recovery = provider.pendingRecovery;
+    if (recovery != null && _recoveryAsked != recovery.folder) {
+      _recoveryAsked = recovery.folder;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showRecoveryDialog(context, context.read<AppStateProvider>());
+      });
+    }
+
     // FIRST-RUN CHECK: once the saved settings have been read, show the
     // one-time setup dialog asking where each file is located. When setup
     // was completed on an earlier launch this is bypassed entirely.
@@ -773,7 +796,15 @@ class _MainDashboardState extends State<MainDashboard> {
           const SaveToolbar(),
         ],
       ),
-      body: Row(
+      body: Column(
+        children: [
+          // The job and the gear, above every tab rather than among them.
+          TopLevelBar(
+            selectedIndex: selectedIndex,
+            onSelect: provider.selectTab,
+          ),
+          Expanded(
+            child: Row(
         children: [
           // Inside a [SidePane] so the whole rail can be narrowed to icons or
           // folded away entirely: on a laptop, a drawing is worth more than a
@@ -804,6 +835,9 @@ class _MainDashboardState extends State<MainDashboard> {
                     ),
             ),
           )
+        ],
+      ),
+          ),
         ],
       ),
     );
@@ -1114,7 +1148,97 @@ class _StartCard extends StatelessWidget {
   }
 }
 
-/// A quiet nudge that the file needed migrating, pointing at the Convert
+//// THE TWO THINGS THAT ARE NOT VIEWS OF A ROOM.
+///
+/// A banner across the top of the page, under the title, holding the job and
+/// the gear. Both used to be rows in the left rail, in among Racks, Cabling
+/// and Flow Rules — which said they were fifteenth and fourteenth of the same
+/// kind of thing, and they are not the same kind of thing at all:
+///
+///   * THE PROJECT is what the room belongs to. It is one level up from every
+///     tab in the rail, so it sits above them rather than among them, and it
+///     carries the job's name so "which building am I in" is answered without
+///     opening anything.
+///   * APP CONFIG is not a place in the work either. It is settings, and
+///     settings are a gear, in the corner, where every other application on
+///     the machine keeps them.
+///
+/// Outside the [SidePane] on purpose: the rail folds away to give a drawing
+/// the width, and the way back to the job must not fold away with it.
+class TopLevelBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+
+  const TopLevelBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.watch<AppStateProvider>();
+    final onProject = selectedIndex == AppTab.project.index;
+    final onConfig = selectedIndex == AppTab.appConfig.index;
+
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      // Tight on purpose. Every pixel this takes is a pixel off the drawing
+      // below it, and on a laptop the drawing is what somebody is here for.
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        child: Row(
+          children: [
+            // Pushed out rather than flat: this is the way up and out of the
+            // room, and it should read as a different kind of control from the
+            // tabs below it.
+            (onProject ? FilledButton.icon : FilledButton.tonalIcon)(
+              key: const ValueKey('banner_project'),
+              icon: const Icon(Icons.apartment, size: 18),
+              label: const Text('Project'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                minimumSize: const Size(0, 34),
+                visualDensity: VisualDensity.compact,
+              ),
+              onPressed: () => onSelect(AppTab.project.index),
+            ),
+            const SizedBox(width: 12),
+            // Which job, and whether it is on disk. Flexible so a long job name
+            // ellipsises instead of pushing the gear off the end.
+            Flexible(
+              child: Text(
+                provider.projectDirty
+                    ? '${provider.projectDisplayName} — unsaved'
+                    : provider.projectDisplayName,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: provider.projectDirty
+                      ? theme.colorScheme.error
+                      : theme.textTheme.bodySmall?.color,
+                ),
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              key: const ValueKey('banner_app_config'),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.settings),
+              isSelected: onConfig,
+              selectedIcon: Icon(Icons.settings,
+                  color: theme.colorScheme.primary),
+              tooltip: 'App Config — file locations, theme, pricing, autosave',
+              onPressed: () => onSelect(AppTab.appConfig.index),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// A quiet nudge that the file needed migrating, pointing at the Convert
 /// button rather than opening it. The whole point of the change is that the
 /// user decides when to deal with the conversion.
 void _announceConversionAvailable(BuildContext context) {
@@ -1843,12 +1967,14 @@ class AppSettingsView extends StatelessWidget {
         const SizedBox(height: 12),
         SwitchListTile(
           key: const ValueKey('autosave_enabled'),
-          title: const Text('Back up the open job automatically'),
+          title: const Text('Keep a recovery copy of unsaved work'),
           subtitle: const Text(
-              'Copies the room (config, drawings, racks, plans and estimate) '
-              'and the project into a timestamped folder. Your own files are '
-              'never written to — this is a recovery copy, not a save, so '
-              '"close without saving" still means what it says.'),
+              'While a room or project has unsaved changes, the app keeps a '
+              'working copy of it — config, drawings, racks, plans and '
+              'estimate — in its own folder. Your files are never written to; '
+              'saving is what does that, and a save deletes the copy. If the '
+              'app closes without saving, the copy is offered back the next '
+              'time that file is opened, with a list of every difference.'),
           value: provider.autosaveEnabled,
           onChanged: (val) => provider.setAutosaveEnabled(val),
         ),
@@ -1870,7 +1996,7 @@ class AppSettingsView extends StatelessWidget {
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'How often',
-                  helperText: 'Only writes when something has changed',
+                  helperText: 'Only writes when there is unsaved work',
                   border: OutlineInputBorder(),
                 ),
                 items: [
@@ -1889,7 +2015,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             OutlinedButton.icon(
               icon: const Icon(Icons.backup_outlined),
-              label: const Text('Back up now'),
+              label: const Text('Copy unsaved work now'),
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 final folder =
@@ -1900,10 +2026,11 @@ class AppSettingsView extends StatelessWidget {
                     duration: const Duration(seconds: 6),
                     content: Text(folder.isEmpty
                         ? (provider.lastAutosaveError.isEmpty
-                            ? 'Nothing open to back up yet.'
-                            : 'The backup failed: '
+                            ? 'Everything is saved — there is nothing a '
+                                'recovery copy would hold.'
+                            : 'The recovery copy failed: '
                                 '${provider.lastAutosaveError}')
-                        : 'Backed up to $folder'),
+                        : 'Recovery copy written to $folder'),
                     backgroundColor: provider.lastAutosaveError.isEmpty
                         ? null
                         : snackErrorFillOn(messenger),
@@ -1913,7 +2040,7 @@ class AppSettingsView extends StatelessWidget {
             ),
             OutlinedButton.icon(
               icon: const Icon(Icons.folder_open),
-              label: const Text('Open backup folder'),
+              label: const Text('Open recovery folder'),
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 final error = await provider.openAutosaveFolder();
@@ -1930,8 +2057,8 @@ class AppSettingsView extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           '${autosaveStatusLine(provider)}\n'
-          'Backups live in ${provider.autosaveFolder} — the last '
-          '${AppStateProvider.kAutosaveGenerations} are kept.',
+          'Recovery copies live in ${provider.autosaveFolder}, one folder '
+          'per file, and each is deleted as soon as its document is saved.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 20),

@@ -1249,7 +1249,15 @@ class AppStateProvider extends ChangeNotifier {
   /// Lives in the provider — above the MaterialApp — so it survives the full
   /// remount that switching between the Auris and Classic theme families
   /// forces (see the MaterialApp key in main.dart). Session-only by design.
-  int selectedTabIndex = 0;
+  ///
+  /// COST, NOT PROJECT, on a cold start. The Project tab works with no room
+  /// open — that is the point of it — so starting there meant the app opened
+  /// on an empty job list, and the start screen with "start a new project" and
+  /// "open a file" on it never appeared at all. Landing on a tab that DOES
+  /// need a room is what puts those four buttons in front of somebody who has
+  /// just double-clicked the icon. The Project button in the banner is one
+  /// click away for anybody who wants the job list instead.
+  int selectedTabIndex = AppTab.cost.index;
 
   void selectTab(int index) {
     selectedTabIndex = index;
@@ -1691,6 +1699,27 @@ class AppStateProvider extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      _readSchematicJson(Map<String, dynamic>.from(doc));
+      AppLogger.logInfo(
+          'Control schematic loaded from $sidecar '
+          '(${schematicPositions.length} positions, '
+          '${schematicLinks.length} lines)'
+          '${sidecar == legacySchematicSidecarPath ? ' — pre-rename file; it '
+              'moves to ${path.basename(schematicSidecarPath)} on the next '
+              'Save Layout.' : '.'}');
+    } catch (e) {
+      AppLogger.logError(
+          'Failed to load the control schematic from $sidecar', e);
+    }
+    notifyListeners();
+  }
+
+  /// Reads one control-schematic document into the live state.
+  ///
+  /// Split out of the file load so a RECOVERED document can be applied through
+  /// exactly the same parser — see [applyRecoveredRoom]. The caller has already
+  /// emptied the state, the same bargain [_readAvFlowJson] makes.
+  void _readSchematicJson(Map<String, dynamic> doc) {
       final positions = doc['positions'];
       if (positions is Map) {
         positions.forEach((id, xy) {
@@ -1748,18 +1777,6 @@ class AppStateProvider extends ChangeNotifier {
           }
         });
       }
-      AppLogger.logInfo(
-          'Control schematic loaded from $sidecar '
-          '(${schematicPositions.length} positions, '
-          '${schematicLinks.length} lines)'
-          '${sidecar == legacySchematicSidecarPath ? ' — pre-rename file; it '
-              'moves to ${path.basename(schematicSidecarPath)} on the next '
-              'Save Layout.' : '.'}');
-    } catch (e) {
-      AppLogger.logError(
-          'Failed to load the control schematic from $sidecar', e);
-    }
-    notifyListeners();
   }
 
   /// The control schematic as it goes to disk. Its own getter so the autosave
@@ -4905,6 +4922,7 @@ class AppStateProvider extends ChangeNotifier {
       // No sidecars is still a state that matches the files — an AV-only room
       // nobody has drawn yet is not an unsaved one.
       markRoomSaved();
+      checkForRoomRecovery();
       notifyListeners();
       return;
     }
@@ -4922,6 +4940,11 @@ class AppStateProvider extends ChangeNotifier {
     // this does, and a baseline captured with no diagram in it would report
     // every freshly opened room as unsaved.
     markRoomSaved();
+
+    // ...which is also the moment the recovery copy can be compared against
+    // something. Anything a crash left behind is picked up here, for every way
+    // a room can be opened — by hand, from the project, off a processor.
+    checkForRoomRecovery();
 
     AppLogger.logInfo(
         'Room document loaded from ${found.join(', ')} beside '
@@ -6165,6 +6188,9 @@ class AppStateProvider extends ChangeNotifier {
       // The room now matches the file it came from, so the unsaved-work
       // check has a baseline to compare against.
       markRoomSaved();
+      // The config half of the recovery check. The sidecars are not in yet, so
+      // this pass only reports and never retires — see checkForRoomRecovery.
+      checkForRoomRecovery(sidecarsLoaded: false);
       AppLogger.logInfo("Loaded existing config from ${f.path}");
       return true;
     } catch (e, stack) {
@@ -8727,6 +8753,9 @@ class AppStateProvider extends ChangeNotifier {
       // toolbar's own Save left the room reporting itself as behind its file
       // for the rest of the session.
       markRoomSaved();
+      // The work is in its file, so the recovery copy is a copy of nothing —
+      // and a copy of nothing is what would be offered back on the next open.
+      clearRoomRecovery();
       // The project's cached read of this room is now the stale one.
       _projectRooms.clear();
       notifyListeners(); // The Undo button becomes available
@@ -8924,6 +8953,11 @@ class AppStateProvider extends ChangeNotifier {
 
       await targetFile.writeAsString(encoder.convert(_sortJson(exportData)));
       AppLogger.logInfo("Config successfully saved to ${targetFile.path}");
+
+      // The recovery copy belongs to the file this room is about to stop
+      // being; retired before the path moves, or it would be orphaned under a
+      // key nothing looks up any more.
+      clearRoomRecovery();
 
       // ADOPT AS WORKING FILE: exporting ties the saved file to the session
       // (a wizard-built config starts with no path at all), so later saves —
@@ -9778,6 +9812,9 @@ class AppStateProvider extends ChangeNotifier {
         'Project "${project.name}" opened from $file '
         '(${project.rooms.length} rooms, ${project.vendors.length} vendors).',
       );
+      // Anything a crash left behind for THIS project, offered back the same
+      // way a room's is.
+      checkForProjectRecovery();
       notifyListeners();
       return '';
     } catch (e, stack) {
@@ -9813,6 +9850,7 @@ class AppStateProvider extends ChangeNotifier {
       await project.save(target);
       currentProjectPath = target;
       projectDirty = false;
+      clearProjectRecovery();
       AppLogger.logInfo('Project saved to $target.');
       notifyListeners();
       return '';
@@ -10365,26 +10403,38 @@ class AppStateProvider extends ChangeNotifier {
   bool get hasUnsavedWork => unsavedWorkSummary.isNotEmpty;
 
   // ==========================================================================
-  //  AUTOSAVE — RECOVERY SNAPSHOTS, NOT SILENT SAVES
+  //  AUTOSAVE — A LIVE WORKING COPY YOU CAN GET BACK
   // ==========================================================================
-  //  The timer never writes over the user's files. It copies the whole open
-  //  job — the room's config, its five sidecars, the control schematic and the
-  //  project file — into a timestamped folder under the app's own settings
-  //  directory, and keeps the last [kAutosaveGenerations] of them.
+  //  The timer writes the open job into a RECOVERY COPY: a small folder of
+  //  ordinary files, one per document, in the app's own settings directory.
+  //  It never touches the user's files. Saving is what does that — and a save
+  //  deletes the recovery copy afterwards, because a copy of work that is
+  //  already in its file is a copy that can only ever mislead somebody.
   //
-  //  That distinction is the design. Writing to the real files would make
-  //  "close without saving" impossible to honour, would quietly commit every
-  //  experiment somebody was in the middle of backing out of, and would make
-  //  the unsaved-changes warning on exit a lie. A snapshot beside the app
-  //  costs nothing and answers the only question autosave is ever actually
-  //  asked: the power went out, where is my afternoon.
+  //  So the copy exists exactly while there is unsaved work, and its existence
+  //  is the signal. There are three ways it stops existing:
+  //
+  //    * the document is saved — the file now holds it;
+  //    * the user closes the app and chooses "close without saving" — they
+  //      said discard, and being asked again on Monday is not helping;
+  //    * the user discards it at the recovery prompt described below.
+  //
+  //  A CRASH IS NONE OF THOSE. Nothing deletes the copy, so it is still there
+  //  the next time that file is opened — and [pendingRecovery] catches it,
+  //  compares it to what was just loaded, and offers the difference the same
+  //  way the conversion log offers a migration: a list of every property that
+  //  would change, before anything changes.
+  //
+  //  The slot is keyed by the document's own path, so the check on reopen is a
+  //  lookup rather than a search, and two rooms both called config.json in
+  //  different folders cannot collide.
   // ==========================================================================
-
-  /// How many snapshot folders are kept before the oldest is removed.
-  static const int kAutosaveGenerations = 12;
 
   /// The intervals the App Config dropdown offers, in minutes.
   static const List<int> kAutosaveIntervals = [1, 2, 5, 10, 15, 30];
+
+  /// The manifest written into every recovery slot.
+  static const String kRecoveryManifest = 'recovery.json';
 
   static int _sanitizeAutosaveMinutes(dynamic raw) {
     final n = raw is int ? raw : (int.tryParse(raw?.toString() ?? '') ?? 5);
@@ -10393,31 +10443,33 @@ class AppStateProvider extends ChangeNotifier {
 
   Timer? _autosaveTimer;
 
-  /// When the last snapshot was written; null until one has been.
+  /// When the last recovery copy was written; null until one has been.
   DateTime? lastAutosaveAt;
 
-  /// The folder the last snapshot went into ('' until one has been written).
+  /// The folder the last recovery copy went into ('' until one has been
+  /// written, and cleared again when a save retires it).
   String lastAutosaveFolder = '';
 
-  /// Why the last snapshot failed, '' when it did not.
+  /// Why the last recovery copy failed, '' when it did not.
   String lastAutosaveError = '';
 
-  /// The fingerprint the last snapshot was taken of, so an idle hour does not
-  /// fill the folder with twelve identical copies.
+  /// The fingerprint the last copy was taken of, so an idle hour does not
+  /// rewrite the same four files two hundred times.
   String _lastAutosaveFingerprint = '';
 
-  /// Where the snapshots live: `<settings folder>/autosave`.
+  /// Where the recovery copies live: `<settings folder>/recovery`.
   ///
-  /// Beside app_config.json rather than beside the room, because a recovery
+  /// Beside app_config.json rather than beside the room, because a working
   /// copy that lands in the customer's project folder is a file somebody
-  /// emails to the customer by mistake.
+  /// emails to the customer by mistake — and because a folder the app owns is
+  /// one it can still find after the room has been moved or renamed.
   String get autosaveFolder =>
-      _autosaveFolderOverride ?? path.join(_userSettingsDir(), 'autosave');
+      _autosaveFolderOverride ?? path.join(_userSettingsDir(), 'recovery');
 
-  /// Redirects the snapshots into a temp folder for a test. Also what makes
-  /// [writeAutosaveSnapshot] willing to write at all on a test-constructed
-  /// provider — without it, a test that took a snapshot would drop folders
-  /// into the developer's own %APPDATA%.
+  /// Redirects the recovery copies into a temp folder for a test. Also what
+  /// makes [writeAutosaveSnapshot] willing to write at all on a
+  /// test-constructed provider — without it, a test that took a copy would
+  /// drop folders into the developer's own %APPDATA%.
   String? _autosaveFolderOverride;
 
   @visibleForTesting
@@ -10443,22 +10495,70 @@ class AppStateProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  /// The stem every file in a snapshot is named from — the working file's own
-  /// name when there is one, else the building and room, else 'untitled_room'.
-  String get autosaveStem {
-    if (currentConfigPath.isNotEmpty) {
-      return path.basenameWithoutExtension(currentConfigPath);
+  // --- where a document's recovery copy lives ------------------------------
+
+  /// A short, stable tag for [originPath] — its own name plus a hash of the
+  /// full path.
+  ///
+  /// The name is there so somebody looking in the folder can see which room is
+  /// which; the hash is there because two buildings both holding a plain
+  /// `config.json` are the normal case, not the exotic one, and a slot named
+  /// after the file alone would have them overwriting each other's recovery.
+  /// Hashed case-insensitively, since Windows treats the two spellings of a
+  /// path as the same file.
+  static String recoverySlotName(String originPath) {
+    final stem = path.basenameWithoutExtension(originPath);
+    final safe = stem.replaceAll(RegExp('[^A-Za-z0-9_.-]+'), '_');
+    // FNV-1a, 32-bit. Not a security hash — just a short, stable spreading of
+    // the path across the folder.
+    int hash = 0x811c9dc5;
+    for (final unit in originPath.toLowerCase().codeUnits) {
+      hash = (hash ^ unit) & 0xFFFFFFFF;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
     }
+    return '${safe.isEmpty ? 'untitled' : safe}_'
+        '${hash.toRadixString(16).padLeft(8, '0')}';
+  }
+
+  /// The room's recovery slot, or '' when the room has never been saved and so
+  /// has no path to key one on.
+  String get roomRecoveryFolder => currentConfigPath.isEmpty
+      ? ''
+      : path.join(
+          autosaveFolder, 'rooms', recoverySlotName(currentConfigPath));
+
+  /// The project's recovery slot, or '' when the project has no file yet.
+  String get projectRecoveryFolder => currentProjectPath.isEmpty
+      ? ''
+      : path.join(
+          autosaveFolder, 'projects', recoverySlotName(currentProjectPath));
+
+  /// Where a room with no file of its own keeps its copy.
+  ///
+  /// Nothing can offer it back automatically — there is no file to open and
+  /// compare it against — but a session that crashed before its first save is
+  /// exactly the session whose work is worth the most, so it is written
+  /// anyway, and App Config's "Open backup folder" is how it is found.
+  String get _untitledRecoveryFolder => path.join(
+      autosaveFolder, 'rooms', 'untitled_${_untitledStem()}');
+
+  String _untitledStem() {
     final setup = roomConfig['SYSTEM_SETUP'];
     final bldg = (setup is Map ? setup['gve_bldg']?.toString() : '') ?? '';
     final room = (setup is Map ? setup['gve_room']?.toString() : '') ?? '';
     final stem = '${bldg.trim()}_${room.trim()}'
-        .replaceAll(RegExp('[\\\\/:*?"<>|\\s]+'), '_')
+        .replaceAll(RegExp('[^A-Za-z0-9_.-]+'), '_')
         .replaceAll(RegExp('^_+|_+\$'), '');
-    return stem.isEmpty ? 'untitled_room' : '${stem}_config';
+    return stem.isEmpty ? 'room' : stem;
   }
 
-  /// What the snapshot is a snapshot OF.
+  /// The stem every file in the room's copy is named from — the working file's
+  /// own name when there is one, else the building and room.
+  String get autosaveStem => currentConfigPath.isEmpty
+      ? '${_untitledStem()}_config'
+      : path.basenameWithoutExtension(currentConfigPath);
+
+  /// What the copy is a copy OF.
   String _autosaveFingerprint() {
     try {
       return '$currentConfigPath|$currentProjectPath|'
@@ -10468,119 +10568,418 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Copies the whole open job into a fresh snapshot folder.
+  // --- writing it ----------------------------------------------------------
+
+  /// Writes the recovery copy of everything that is behind its file.
   ///
-  /// Returns the folder written, or '' when there was nothing to write (no
-  /// room and no project), nothing had changed since the last snapshot, or the
-  /// write failed — [lastAutosaveError] carries the reason in that last case.
+  /// Returns the room's slot (or the project's, when only the project is
+  /// behind), or '' when there was nothing to copy, nothing had changed since
+  /// the last copy, or the write failed — [lastAutosaveError] carries the
+  /// reason in that last case.
   ///
-  /// [force] takes the snapshot even when nothing has changed, which is what
-  /// the "Back up now" button in App Config does.
+  /// [force] copies even when nothing has changed, which is what "Back up now"
+  /// in App Config does.
   Future<String> writeAutosaveSnapshot({bool force = false}) async {
     // A test provider writes only where a test has told it to.
     if (!_persistenceEnabled && _autosaveFolderOverride == null) return '';
 
-    final bool hasRoom = roomConfig.isNotEmpty;
-    final bool hasProject =
-        project.rooms.isNotEmpty || currentProjectPath.isNotEmpty;
-    if (!hasRoom && !hasProject) return '';
+    // ONLY UNSAVED WORK IS COPIED. A recovery copy of a document that matches
+    // its file would be offered back on the next open as "these two differ" —
+    // and they would not.
+    final bool roomLoose = roomNeverSaved || roomHasUnsavedChanges;
+    if (!roomLoose && !projectDirty) return '';
 
     final fingerprint = _autosaveFingerprint();
     if (!force && fingerprint == _lastAutosaveFingerprint) return '';
 
-    // Whatever the raw editor is holding goes into the snapshot too — it is
+    // Whatever is half-typed in the raw editor belongs in the copy too — it is
     // the one place edits sit outside roomConfig.
     pendingRawEditorCommit?.call();
 
-    final folder = path.join(autosaveFolder, autosaveStampNow());
-
+    String written = '';
     try {
-      await Directory(folder).create(recursive: true);
-      const encoder = JsonEncoder.withIndent('  ');
-      final written = <String>[];
-
-      if (hasRoom) {
-        final configName = '$autosaveStem.json';
-        await File(path.join(folder, configName)).writeAsString(
-          encoder.convert(_sortJson(_pruneConfig(roomConfig))),
-        );
-        written.add(configName);
-
-        // The sidecars, under exactly the names they carry beside a real
-        // config — a recovery is then a copy of the folder rather than a
-        // renaming exercise performed by somebody having a bad day.
-        final parts = splitRoomSidecar(avFlowAsJson());
-        for (final part in RoomSidecarPart.values) {
-          final name = path.basename(
-            roomSidecarPath(path.join(folder, configName), part),
-          );
-          await File(path.join(folder, name))
-              .writeAsString(encoder.convert(parts[part]));
-          written.add(name);
-        }
-
-        if (hasSchematicLayout) {
-          final name = '${autosaveStem}_control_schematic.json';
-          await File(path.join(folder, name))
-              .writeAsString(encoder.convert(schematicLayoutAsJson()));
-          written.add(name);
-        }
+      if (roomLoose) {
+        written = await _writeRoomRecovery();
       }
-
-      if (hasProject) {
-        final name = currentProjectPath.isNotEmpty
-            ? path.basename(currentProjectPath)
-            : 'project.json';
-        await File(path.join(folder, name))
-            .writeAsString(encoder.convert(project.toJson()));
-        written.add(name);
+      if (projectDirty) {
+        final projectSlot = await _writeProjectRecovery();
+        if (written.isEmpty) written = projectSlot;
       }
-
-      // Where each file came from, so a recovery knows what it is looking at
-      // three weeks later.
-      await File(path.join(folder, 'autosave_manifest.json')).writeAsString(
-        encoder.convert({
-          '__readme': 'Automatic recovery snapshot written by the Room Config '
-              'Builder. Nothing here is put back automatically — copy the '
-              'files you want over the originals named below.',
-          'takenAt': DateTime.now().toLocal().toIso8601String(),
-          'roomFile': currentConfigPath,
-          'projectFile': currentProjectPath,
-          'roomHadUnsavedChanges': roomNeverSaved || roomHasUnsavedChanges,
-          'projectHadUnsavedChanges': projectDirty,
-          'files': written,
-        }),
-      );
-
       _lastAutosaveFingerprint = fingerprint;
       lastAutosaveAt = DateTime.now();
-      lastAutosaveFolder = folder;
+      lastAutosaveFolder = written;
       lastAutosaveError = '';
-      await _pruneAutosaves();
-      AppLogger.logInfo(
-          'Autosave snapshot written to $folder (${written.length} files).');
       notifyListeners();
-      return folder;
+      return written;
     } catch (e, stack) {
       lastAutosaveError = '$e';
-      AppLogger.logError('Autosave snapshot to $folder failed', e, stack);
+      AppLogger.logError('Could not write the recovery copy', e, stack);
       notifyListeners();
       return '';
     }
   }
 
-  /// Folder name for a snapshot taken now: sortable, and legible at a glance
-  /// in a file manager.
-  @visibleForTesting
-  static String autosaveStampNow() {
-    final now = DateTime.now();
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${now.year}-${two(now.month)}-${two(now.day)}_'
-        '${two(now.hour)}-${two(now.minute)}-${two(now.second)}';
+  Future<String> _writeRoomRecovery() async {
+    final folder = currentConfigPath.isEmpty
+        ? _untitledRecoveryFolder
+        : roomRecoveryFolder;
+    await Directory(folder).create(recursive: true);
+    const encoder = JsonEncoder.withIndent('  ');
+    final written = <String>[];
+
+    // The files carry exactly the names they would beside a real config, so a
+    // recovery by hand is a copy of the folder rather than a renaming exercise
+    // performed by somebody having a bad day.
+    final configName = '$autosaveStem.json';
+    await File(path.join(folder, configName)).writeAsString(
+      encoder.convert(_sortJson(_pruneConfig(roomConfig))),
+    );
+    written.add(configName);
+
+    final parts = splitRoomSidecar(avFlowAsJson());
+    for (final part in RoomSidecarPart.values) {
+      final name = path.basename(
+        roomSidecarPath(path.join(folder, configName), part),
+      );
+      await File(path.join(folder, name))
+          .writeAsString(encoder.convert(parts[part]));
+      written.add(name);
+    }
+
+    if (hasSchematicLayout) {
+      final name = '${autosaveStem}_control_schematic.json';
+      await File(path.join(folder, name))
+          .writeAsString(encoder.convert(schematicLayoutAsJson()));
+      written.add(name);
+    }
+
+    await File(path.join(folder, kRecoveryManifest)).writeAsString(
+      encoder.convert({
+        '__readme': 'Recovery copy written by the Room Config Builder while '
+            'this room had unsaved changes. It is offered back the next time '
+            'the room below is opened; nothing here is applied automatically.',
+        'kind': 'room',
+        'origin': currentConfigPath,
+        'takenAt': DateTime.now().toLocal().toIso8601String(),
+        'configFile': configName,
+        'files': written,
+      }),
+    );
+    AppLogger.logInfo(
+        'Recovery copy of the room written to $folder (${written.length} '
+        'files).');
+    return folder;
   }
 
-  /// Opens the backup folder in the file manager, creating it first when no
-  /// snapshot has been taken yet.
+  Future<String> _writeProjectRecovery() async {
+    if (currentProjectPath.isEmpty) return '';
+    final folder = projectRecoveryFolder;
+    await Directory(folder).create(recursive: true);
+    const encoder = JsonEncoder.withIndent('  ');
+    final name = path.basename(currentProjectPath);
+    await File(path.join(folder, name))
+        .writeAsString(encoder.convert(project.toJson()));
+    await File(path.join(folder, kRecoveryManifest)).writeAsString(
+      encoder.convert({
+        '__readme': 'Recovery copy of a Room Config Builder project with '
+            'unsaved changes. Offered back the next time the project below is '
+            'opened.',
+        'kind': 'project',
+        'origin': currentProjectPath,
+        'takenAt': DateTime.now().toLocal().toIso8601String(),
+        'projectFile': name,
+        'files': [name],
+      }),
+    );
+    AppLogger.logInfo('Recovery copy of the project written to $folder.');
+    return folder;
+  }
+
+  // --- retiring it ---------------------------------------------------------
+
+  /// Deletes a recovery slot. Failures are logged and swallowed — a folder
+  /// that will not delete must never break a save.
+  ///
+  /// Synchronous, and deliberately so. Every caller is at a moment where the
+  /// answer matters immediately — a load deciding whether to prompt, a save
+  /// deciding the copy is spent — and a handful of small files is not worth an
+  /// unawaited future that can still be in flight when the next question is
+  /// asked about the same folder.
+  void _clearRecoveryFolder(String folder) {
+    if (folder.isEmpty) return;
+    try {
+      final dir = Directory(folder);
+      if (dir.existsSync()) {
+        dir.deleteSync(recursive: true);
+        AppLogger.logInfo('Retired the recovery copy at $folder.');
+      }
+      if (lastAutosaveFolder == folder) lastAutosaveFolder = '';
+      // The next tick must be free to write a fresh copy rather than deciding
+      // nothing has changed since the one just deleted.
+      _lastAutosaveFingerprint = '';
+    } catch (e) {
+      AppLogger.logError('Could not remove the recovery copy at $folder', e);
+    }
+  }
+
+  /// Called after the room reaches its file. The copy has done its job.
+  void clearRoomRecovery() => _clearRecoveryFolder(roomRecoveryFolder);
+
+  /// Called after the project reaches its file.
+  void clearProjectRecovery() => _clearRecoveryFolder(projectRecoveryFolder);
+
+  /// All of them, for "close without saving": the user said discard, and a
+  /// prompt about it on Monday is second-guessing them.
+  void clearAllRecovery() {
+    clearRoomRecovery();
+    clearProjectRecovery();
+    _clearRecoveryFolder(_untitledRecoveryFolder);
+  }
+
+  // --- finding it again ----------------------------------------------------
+
+  /// A recovery copy that outlived the session that wrote it, waiting to be
+  /// offered back. Null whenever there is nothing to offer.
+  RecoveryFind? pendingRecovery;
+
+  /// Drops the pending offer without touching the files — "not now".
+  void dismissPendingRecovery() {
+    pendingRecovery = null;
+    notifyListeners();
+  }
+
+  /// Throws the pending recovery copy away for good.
+  void discardPendingRecovery() {
+    final folder = pendingRecovery?.folder ?? '';
+    pendingRecovery = null;
+    _clearRecoveryFolder(folder);
+    notifyListeners();
+  }
+
+  /// Reads the recovery slot for [originPath], or null when there is none.
+  ///
+  /// Whole-folder read rather than file-by-file on demand: the caller is about
+  /// to diff every part of it, and a half-read recovery copy is worse than
+  /// none — it would report the missing halves as deletions.
+  RecoveryFind? readRecoverySlot(String folder, String kind) {
+    if (folder.isEmpty) return null;
+    final manifestFile = File(path.join(folder, kRecoveryManifest));
+    if (!manifestFile.existsSync()) return null;
+    try {
+      final manifest = jsonDecode(manifestFile.readAsStringSync());
+      if (manifest is! Map || manifest['kind'] != kind) return null;
+
+      Map<String, dynamic>? read(String name) {
+        if (name.isEmpty) return null;
+        final f = File(path.join(folder, name));
+        if (!f.existsSync()) return null;
+        final doc = jsonDecode(f.readAsStringSync());
+        return doc is Map ? Map<String, dynamic>.from(doc) : null;
+      }
+
+      final takenAt =
+          DateTime.tryParse(manifest['takenAt']?.toString() ?? '') ??
+              manifestFile.lastModifiedSync();
+
+      if (kind == 'project') {
+        final doc = read(manifest['projectFile']?.toString() ?? '');
+        if (doc == null) return null;
+        return RecoveryFind(
+          kind: 'project',
+          folder: folder,
+          origin: manifest['origin']?.toString() ?? '',
+          takenAt: takenAt,
+          document: doc,
+        );
+      }
+
+      final configName = manifest['configFile']?.toString() ?? '';
+      final config = read(configName);
+      if (config == null) return null;
+
+      // The sidecars come back merged into the one document the app reads, so
+      // the comparison and the restore both work on the shape the rest of the
+      // app already speaks.
+      final stem = path.basenameWithoutExtension(configName);
+      final parts = <RoomSidecarPart, Map<String, dynamic>?>{
+        for (final part in RoomSidecarPart.values)
+          part: read('${stem}_${kRoomSidecarSuffix[part]}.json'),
+      };
+      return RecoveryFind(
+        kind: 'room',
+        folder: folder,
+        origin: manifest['origin']?.toString() ?? '',
+        takenAt: takenAt,
+        document: config,
+        flow: parts.values.any((p) => p != null)
+            ? mergeRoomSidecar(parts)
+            : <String, dynamic>{},
+        schematic: read('${stem}_control_schematic.json') ?? const {},
+      );
+    } catch (e) {
+      AppLogger.logError('Could not read the recovery copy at $folder', e);
+      return null;
+    }
+  }
+
+  /// Looks for a recovery copy of the room that was just opened, and holds it
+  /// in [pendingRecovery] when it says something different from the file.
+  ///
+  /// Called TWICE on every open, and the reason is the two halves of a room.
+  /// The config arrives first ([openConfigAtPath]) and the drawings, racks,
+  /// plans and estimate arrive with the sidecars a moment later
+  /// ([loadAvFlowForCurrentConfig]) — and either half can be the one a crash
+  /// left behind. So the first pass compares what it has and never throws
+  /// anything away; only the pass with the whole room in hand
+  /// ([sidecarsLoaded]) is entitled to decide that a copy is redundant and
+  /// retire it. A single check at either point would either miss a lost
+  /// drawing or delete the copy of one.
+  void checkForRoomRecovery({bool sidecarsLoaded = true}) {
+    pendingRecovery = null;
+    if (currentConfigPath.isEmpty) return;
+    final found = readRecoverySlot(roomRecoveryFolder, 'room');
+    if (found == null) return;
+
+    final deltas = recoveryDeltas(
+      currentConfig: _sortJson(_pruneConfig(roomConfig)),
+      currentFlow: sidecarsLoaded ? avFlowAsJson() : found.flow,
+      found: found,
+    );
+    if (deltas.isEmpty) {
+      // Saved before the crash after all — retire it quietly, but only once
+      // the whole room has been read: a config that matches says nothing yet
+      // about the drawing beside it.
+      if (sidecarsLoaded) _clearRecoveryFolder(found.folder);
+      return;
+    }
+    pendingRecovery = found.withDeltas(deltas);
+    AppLogger.logInfo(
+        'A recovery copy of $currentConfigPath from ${found.takenAt} differs '
+        'from the file in ${deltas.length} place'
+        '${deltas.length == 1 ? '' : 's'}.');
+    notifyListeners();
+  }
+
+  /// The project's counterpart, called at the end of [openProject].
+  void checkForProjectRecovery() {
+    pendingRecovery = null;
+    if (currentProjectPath.isEmpty) return;
+    final found = readRecoverySlot(projectRecoveryFolder, 'project');
+    if (found == null) return;
+
+    final deltas = diffConfigs(
+      _asDiffable(project.toJson()),
+      _asDiffable(found.document),
+    );
+    if (deltas.isEmpty) {
+      _clearRecoveryFolder(found.folder);
+      return;
+    }
+    pendingRecovery = found.withDeltas(deltas);
+    notifyListeners();
+  }
+
+  /// [diffConfigs] compares a map of BLOCKS. A project's JSON is a flat mix of
+  /// scalars and lists, so each top-level value is wrapped in a block of its
+  /// own — which is also what makes the resulting lines read as
+  /// "rooms — [4 items] would go back to [3 items]".
+  static Map<String, dynamic> _asDiffable(Map<String, dynamic> doc) => {
+        for (final e in doc.entries)
+          if (e.key != '__readme') e.key: e.value,
+      };
+
+  /// Every property that differs between the room on screen and a recovery
+  /// copy of it — the list the recovery dialog shows before anything changes.
+  ///
+  /// The config is compared property by property. The room's other document —
+  /// the drawings, racks, plans, cabling and estimate — is compared at its top
+  /// level instead: "nodes — [12 items] would become [13 items]" is the honest
+  /// summary of a drawing, and walking into every box to list the ones that
+  /// moved would produce a page nobody reads.
+  @visibleForTesting
+  static List<ConfigDelta> recoveryDeltas({
+    required Map<String, dynamic> currentConfig,
+    required Map<String, dynamic> currentFlow,
+    required RecoveryFind found,
+  }) {
+    final deltas = diffConfigs(currentConfig, found.document);
+
+    const labels = {
+      'nodes': 'Signal flow',
+      'cables': 'Signal flow',
+      'racks': 'Racks',
+      'rackItems': 'Racks',
+      'rackSlots': 'Racks',
+      'locations': 'Floor plan',
+      'floorPlans': 'Floor plan',
+      'screenSwitches': 'Cabling',
+      'cablingSchematic': 'Cabling',
+      'cost': 'Cost estimate',
+    };
+
+    final keys = <String>{...currentFlow.keys, ...found.flow.keys}
+      ..remove('__readme');
+    for (final key in keys.toList()..sort()) {
+      final before = currentFlow[key];
+      final after = found.flow[key];
+      if (jsonEncode(before) == jsonEncode(after)) continue;
+      deltas.add(ConfigDelta(
+        section: labels[key] ?? 'Room document',
+        key: key,
+        kind: !currentFlow.containsKey(key)
+            ? DeltaKind.added
+            : !found.flow.containsKey(key)
+                ? DeltaKind.removed
+                : DeltaKind.changed,
+        before: before,
+        after: after,
+      ));
+    }
+    return deltas;
+  }
+
+  /// Puts a recovery copy back — INTO MEMORY, not onto disk.
+  ///
+  /// The file is left exactly as it was. That is deliberate: the user has just
+  /// been shown a list of differences and said "yes, that one", and the next
+  /// thing they should do is look at the room before committing it. Save is
+  /// what writes it, as it is for every other edit — and the Save button lights
+  /// its unsaved dot the moment this returns, which is the honest state.
+  void applyRecovery(RecoveryFind found) {
+    if (found.kind == 'project') {
+      project = BuildingProject.fromJson(found.document);
+      projectDirty = true;
+      _projectRooms.clear();
+      pendingRecovery = null;
+      AppLogger.logInfo(
+          'Recovered the project from ${found.folder} (taken '
+          '${found.takenAt}). The file is untouched until it is saved.');
+      notifyListeners();
+      return;
+    }
+
+    roomConfig = Map<String, dynamic>.from(found.document);
+    _bumpConfigRevision();
+
+    _resetAvFlow();
+    if (found.flow.isNotEmpty) _readAvFlowJson(found.flow);
+    _avFlowSyncedPath = currentConfigPath;
+
+    _resetSchematicLayout();
+    if (found.schematic.isNotEmpty) {
+      _readSchematicJson(Map<String, dynamic>.from(found.schematic));
+    }
+    _schematicSyncedPath = currentConfigPath;
+
+    pendingRecovery = null;
+    AppLogger.logInfo(
+        'Recovered the room from ${found.folder} (taken ${found.takenAt}). '
+        '$currentConfigPath is untouched until it is saved.');
+    notifyListeners();
+  }
+
+  /// Opens the recovery folder in the file manager, creating it first when no
+  /// copy has been written yet.
   ///
   /// Its own method rather than [revealInFileManager], which expects a FILE and
   /// would open the parent of a folder handed to it — here that would be the
@@ -10594,24 +10993,62 @@ class AppStateProvider extends ChangeNotifier {
     }
     return openInDesktop(autosaveFolder);
   }
+}
 
-  /// Drops the oldest snapshots past [kAutosaveGenerations]. Failures are
-  /// logged and swallowed: a folder that will not delete must never stop the
-  /// next backup from being taken.
-  Future<void> _pruneAutosaves() async {
-    try {
-      final root = Directory(autosaveFolder);
-      if (!root.existsSync()) return;
-      final folders = root.listSync().whereType<Directory>().toList()
-        ..sort(
-            (a, b) => path.basename(a.path).compareTo(path.basename(b.path)));
-      for (int i = 0; i < folders.length - kAutosaveGenerations; i++) {
-        await folders[i].delete(recursive: true);
-      }
-    } catch (e) {
-      AppLogger.logError('Could not prune the autosave folder', e);
-    }
-  }
+/// A recovery copy read back off disk, with everything the prompt needs to
+/// describe it and everything [AppStateProvider.applyRecovery] needs to put it
+/// back.
+class RecoveryFind {
+  /// 'room' or 'project'.
+  final String kind;
+
+  /// The slot it was read from.
+  final String folder;
+
+  /// The file it is a copy of, as recorded when it was written.
+  final String origin;
+
+  /// When the copy was taken.
+  final DateTime takenAt;
+
+  /// The config (room) or the project JSON.
+  final Map<String, dynamic> document;
+
+  /// The room's merged sidecar document — drawings, racks, plans, cabling,
+  /// estimate. Empty for a project, and for a room that had none.
+  final Map<String, dynamic> flow;
+
+  /// The room's control schematic layout. Empty when there was none.
+  final Map<String, dynamic> schematic;
+
+  /// Every property that differs from what is on screen. Filled in by
+  /// [withDeltas] once the comparison has been made.
+  final List<ConfigDelta> deltas;
+
+  const RecoveryFind({
+    required this.kind,
+    required this.folder,
+    required this.origin,
+    required this.takenAt,
+    required this.document,
+    this.flow = const {},
+    this.schematic = const {},
+    this.deltas = const [],
+  });
+
+  RecoveryFind withDeltas(List<ConfigDelta> found) => RecoveryFind(
+        kind: kind,
+        folder: folder,
+        origin: origin,
+        takenAt: takenAt,
+        document: document,
+        flow: flow,
+        schematic: schematic,
+        deltas: found,
+      );
+
+  /// What to call the document in the prompt.
+  String get noun => kind == 'project' ? 'project' : 'room';
 }
 
 /// Where a value in the working config came from. Drives the coloring in the

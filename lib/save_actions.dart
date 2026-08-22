@@ -617,24 +617,35 @@ Future<bool> confirmCloseWithUnsavedWork(
     // app: that would lose exactly the work the user just asked to keep.
     return saveEverything(context, provider);
   }
-  return answer == 'discard';
+  if (answer == 'discard') {
+    // Said deliberately, so the recovery copy goes with it. Leaving it behind
+    // would mean being asked about this same work on Monday, which is
+    // second-guessing an answer the user has already given — and the recovery
+    // prompt would then be a thing people learn to dismiss, which is how the
+    // one that mattered gets dismissed too.
+    provider.clearAllRecovery();
+    return true;
+  }
+  return false;
 }
 
-/// One sentence about the backups, for the exit dialog and App Config.
+/// One sentence about the recovery copy, for the exit dialog, the start screen
+/// and App Config.
 String autosaveStatusLine(AppStateProvider provider) {
   if (!provider.autosaveEnabled) {
     return 'Autosave is off — there is no recovery copy of this work.';
   }
-  final at = provider.lastAutosaveAt;
   if (provider.lastAutosaveError.isNotEmpty) {
-    return 'The last autosave failed: ${provider.lastAutosaveError}';
+    return 'The last recovery copy failed: ${provider.lastAutosaveError}';
   }
-  if (at == null) {
-    return 'Autosave runs every ${provider.autosaveMinutes} minute'
-        '${provider.autosaveMinutes == 1 ? '' : 's'}; no backup has been taken '
-        'in this session yet.';
+  final at = provider.lastAutosaveAt;
+  final folder = provider.lastAutosaveFolder;
+  if (at == null || folder.isEmpty) {
+    return 'A recovery copy is kept every ${provider.autosaveMinutes} minute'
+        '${provider.autosaveMinutes == 1 ? '' : 's'} while there is unsaved '
+        'work. Nothing is waiting to be recovered right now.';
   }
-  return 'Last backup ${_clock(at)} in ${provider.lastAutosaveFolder}.';
+  return 'Unsaved work copied ${_clock(at)} to $folder.';
 }
 
 String _clock(DateTime t) {
@@ -773,7 +784,7 @@ class SaveToolbar extends StatelessWidget {
               value: 'backup_now',
               child: _MenuLine(
                 icon: Icons.backup_outlined,
-                label: 'Back up now',
+                label: 'Copy unsaved work now',
                 hint: autosaveStatusLine(provider),
               ),
             ),
@@ -811,9 +822,10 @@ class SaveToolbar extends StatelessWidget {
             duration: const Duration(seconds: 6),
             content: Text(folder.isEmpty
                 ? (provider.lastAutosaveError.isEmpty
-                    ? 'Nothing open to back up yet.'
-                    : 'The backup failed: ${provider.lastAutosaveError}')
-                : 'Backed up to $folder'),
+                    ? 'Everything is saved — there is nothing a recovery copy '
+                        'would hold.'
+                    : 'The recovery copy failed: ${provider.lastAutosaveError}')
+                : 'Recovery copy written to $folder'),
             backgroundColor:
                 folder.isEmpty && provider.lastAutosaveError.isNotEmpty
                     ? snackErrorFillOn(messenger)

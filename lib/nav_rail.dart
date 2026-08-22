@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
+import 'package:auris/auris.dart';
 import 'package:flutter/material.dart';
 
+import 'app_state.dart';
 import 'contrast.dart';
 
 /// ============================================================================
@@ -36,31 +38,49 @@ import 'contrast.dart';
 ///  case, which is the point.
 /// ============================================================================
 
-/// One entry in the rail: an icon, the word under it, and nothing else. The
-/// order is the order of `AppTab`, because the rail's index IS the tab index.
+/// One entry in the rail: an icon, the word under it, and the tab it selects.
+///
+/// The tab is named rather than inferred from the row's position, because the
+/// rail is no longer every tab there is. Two of them are ABOVE it, in the
+/// banner across the top of the page — see `TopLevelBar` in main.dart:
+///
+///   * PROJECT, because a job is not one of fifteen views of a room. It is the
+///     thing the room belongs to, and burying it in the same column as Racks
+///     and Flow Rules said the opposite.
+///   * APP CONFIG, because settings are not a place in the work either. It is
+///     the gear, where everything else in the world keeps its gear.
+///
+/// Both still have their own [AppTab] and their own page; only their doorway
+/// moved. Which is exactly why the row carries its tab: with two of them gone
+/// the rail's index and the tab's index are no longer the same number, and a
+/// rail that assumed they were showed every page one place out.
 class NavTab {
+  final AppTab tab;
   final IconData icon;
   final String label;
-  const NavTab(this.icon, this.label);
+  const NavTab(this.tab, this.icon, this.label);
 }
 
 const List<NavTab> kNavTabs = [
-  NavTab(Icons.apartment, 'Project'),
-  NavTab(Icons.request_quote, 'Cost'),
-  NavTab(Icons.auto_awesome, 'Wizard'),
-  NavTab(Icons.router, 'Devices'),
-  NavTab(Icons.settings, 'System'),
-  NavTab(Icons.data_object, 'Raw JSON'),
-  NavTab(Icons.account_tree, 'Schematic'),
-  NavTab(Icons.cable, 'AV Flow'),
-  NavTab(Icons.map, 'Floor Plan'),
-  NavTab(Icons.account_tree_outlined, 'Cabling'),
-  NavTab(Icons.view_day, 'Racks'),
-  NavTab(Icons.inventory_2, 'Catalog'),
-  NavTab(Icons.schema, 'Schema'),
-  NavTab(Icons.rule_folder, 'Flow Rules'),
-  NavTab(Icons.build_circle, 'App Config'),
+  NavTab(AppTab.cost, Icons.request_quote, 'Cost'),
+  NavTab(AppTab.wizard, Icons.auto_awesome, 'Wizard'),
+  NavTab(AppTab.devices, Icons.router, 'Devices'),
+  NavTab(AppTab.system, Icons.settings, 'System'),
+  NavTab(AppTab.rawJson, Icons.data_object, 'Raw JSON'),
+  NavTab(AppTab.schematic, Icons.account_tree, 'Schematic'),
+  NavTab(AppTab.avFlow, Icons.cable, 'AV Flow'),
+  NavTab(AppTab.floorPlan, Icons.map, 'Floor Plan'),
+  NavTab(AppTab.cabling, Icons.account_tree_outlined, 'Cabling'),
+  NavTab(AppTab.racks, Icons.view_day, 'Racks'),
+  NavTab(AppTab.deviceEditor, Icons.inventory_2, 'Catalog'),
+  NavTab(AppTab.schemaEditor, Icons.schema, 'Schema'),
+  NavTab(AppTab.flowRules, Icons.rule_folder, 'Flow Rules'),
 ];
+
+/// The tabs that are NOT in the rail, for the places that have to know the
+/// difference — the banner that draws them, and the test that keeps the two
+/// lists between them covering every tab exactly once.
+const List<AppTab> kBannerTabs = [AppTab.project, AppTab.appConfig];
 
 /// Breathing room either side of a label, so a word that measures exactly the
 /// pane's width is not left touching both edges.
@@ -151,7 +171,12 @@ class _AppNavRailState extends State<AppNavRail> {
     if (pos.maxScrollExtent <= 0) return; // everything is already on screen
     final rowHeight =
         (pos.viewportDimension + pos.maxScrollExtent) / kNavTabs.length;
-    final top = rowHeight * widget.selectedIndex;
+    // The rail's own position, not the tab's: the two stopped being the same
+    // number when Project and App Config moved into the banner. A tab that is
+    // not in the rail has no row to reveal.
+    final row = kNavTabs.indexWhere((t) => t.tab.index == widget.selectedIndex);
+    if (row < 0) return;
+    final top = rowHeight * row;
     final bottom = top + rowHeight;
     final double target;
     if (top < pos.pixels) {
@@ -320,13 +345,14 @@ class _AppNavRailState extends State<AppNavRail> {
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Column(
                 children: [
-                  for (int i = 0; i < kNavTabs.length; i++)
+                  for (final tab in kNavTabs)
                     NavRailRow(
-                      tab: kNavTabs[i],
-                      selected: i == widget.selectedIndex,
+                      tab: tab,
+                      selected: tab.tab.index == widget.selectedIndex,
                       fit: fit,
                       style: base,
-                      onTap: () => widget.onDestinationSelected(i),
+                      onTap: () =>
+                          widget.onDestinationSelected(tab.tab.index),
                     ),
                 ],
               ),
@@ -360,17 +386,43 @@ class NavRailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    // The selected row paints a band behind itself, so its ink is chosen
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    // WHICH ROLE THE SELECTED BAND COMES FROM DEPENDS ON THE THEME FAMILY,
+    // because the two families put the user's accent in different places.
+    //
+    //   * CLASSIC derives its secondary from the accent — and App Config's
+    //     "Secondary element color" exists precisely to override it, with
+    //     "colors the navigation highlight" written on the tin. So the band is
+    //     secondaryContainer, and that setting keeps meaning what it says.
+    //   * AURIS never recolors its secondary. Its slate is semantic and fixed,
+    //     whichever accent is chosen — so a band drawn from secondaryContainer
+    //     stayed slate while the rest of the app went teal or magenta, and the
+    //     accent picker looked broken on the one control people look at most.
+    //     Auris puts the accent in the primary ramp, so the band comes from
+    //     there.
+    //
+    // Asked of the THEME rather than of the provider: Auris carries its
+    // resolved scheme as a ThemeExtension, so a widget can tell which family
+    // it is being painted in without reaching back up to app state — and a
+    // test can pump a bare theme and get the same answer the app does.
+    final bool auris = theme.extension<AurisScheme>() != null;
+    final Color band =
+        auris ? scheme.primaryContainer : scheme.secondaryContainer;
+    final Color bandInk =
+        auris ? scheme.onPrimaryContainer : scheme.onSecondaryContainer;
+
+    // The selected row paints that band behind itself, so its ink is chosen
     // against THAT rather than against the page. The M3 pair —
     // onSecondaryContainer on secondaryContainer — measures 2.7:1 on this
     // app's Classic dark theme, and Classic's accent is a colour the user
     // picks out of a wheel, so no fixed pairing can be trusted here.
-    final background = selected ? scheme.secondaryContainer : scheme.surface;
+    final background = selected ? band : scheme.surface;
     final color = readableOn(
       background,
       prefer: [
-        selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+        selected ? bandInk : scheme.onSurfaceVariant,
         scheme.onSurface,
       ],
     );
