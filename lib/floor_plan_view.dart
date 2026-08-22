@@ -245,7 +245,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+      SnackBar(content: Text(msg), backgroundColor: error ? snackErrorFill(context) : null),
     );
   }
 
@@ -899,7 +899,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               child: TextButton.icon(
                 icon: const Icon(Icons.delete_outline, size: 16),
                 label: const Text('Delete'),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
                 onPressed: () {
                   provider.removeAvAnnotation(plan.id, selected.id);
                   setState(() => _selectedNoteId = '');
@@ -1097,9 +1097,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text(
+            child: Text(
               'Remove',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
         ],
@@ -3669,9 +3669,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('remove'),
-              child: const Text(
+              child: Text(
                 'Remove the plan',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
             TextButton(
@@ -3854,9 +3854,9 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop('delete'),
-                child: const Text(
+                child: Text(
                   'Remove',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
               TextButton(
@@ -4254,8 +4254,14 @@ enum _PlanTool { none, location, callout, notation }
 
 /// Sentinels for [_FloorPlanViewState._cableLayer]. Not cable types, so they
 /// are spelled in a way no cable ever will be.
-const String _kLayerOff = ' off';
-const String _kLayerAll = ' all';
+///
+/// WRITTEN AS AN ESCAPE, not as the byte itself. The value is identical
+/// either way, but a NUL sitting in the source makes the whole FILE binary
+/// as far as the tools are concerned: grep answers 'binary file matches'
+/// instead of the line, so every search anybody runs over this file — the
+/// longest one in the project — comes back with nothing useful.
+const String _kLayerOff = '\u0000off';
+const String _kLayerAll = '\u0000all';
 
 /// How wide the key panel is drawn, and how much of that the swatch column
 /// takes. Fixed, because a legend whose width follows its longest cable name
@@ -4271,7 +4277,7 @@ const int _kPlanKeyMaxRows = 12;
 /// Added to a bundle id for the stub drawn when only ONE of its ends is on the
 /// sheet — see [_FloorPlanViewState._offSheetRuns]. Keeps the stub from
 /// colliding with the real run's id if both ever appear at once.
-const String _kOffSheetSuffix = ' off-sheet';
+const String _kOffSheetSuffix = '\u0000off-sheet';
 
 /// How near a tap has to land to count as hitting a run.
 ///

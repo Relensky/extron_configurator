@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import 'app_state.dart';
+import 'contrast.dart';
 
 /// ============================================================================
 ///  SNACK BARS THAT ACTUALLY GO AWAY
@@ -27,6 +28,49 @@ import 'app_state.dart';
 ///  picker. A plain `showSnackBar` is fine for a message shown from a button
 ///  press with nothing else happening.
 /// ============================================================================
+
+/// The fill for a snack bar that reports a failure.
+///
+/// `Colors.red` was doing this job, and it does not read: a snack bar's text
+/// colour comes from the theme (near-white on a light theme, near-black on a
+/// dark one), and plain red measures between 3.1:1 and 5.4:1 against those
+/// across this app's four themes — under the 4.5:1 that body text needs on
+/// three of them.
+///
+/// So the FILL is chosen against the ink rather than fixed. Contrast is
+/// symmetric, so this asks the same question the text colours ask, the other
+/// way round: which of the theme's error tones can this text be read on. The
+/// last resort is one of two Material error tones, because a snack bar that
+/// has given up on being red has given up on saying "this failed".
+Color snackErrorFillFor(ThemeData theme) {
+  final ink = theme.snackBarTheme.contentTextStyle?.color ??
+      theme.colorScheme.onInverseSurface;
+  return readableOn(
+    ink,
+    prefer: [
+      theme.colorScheme.error,
+      theme.colorScheme.errorContainer,
+      // M3's error tones, dark and light. One of the two clears 4.5:1 against
+      // any ink there is.
+      const Color(0xFF8C1D18),
+      const Color(0xFFF9DEDC),
+    ],
+  );
+}
+
+/// [snackErrorFillFor], for the common case of having a context to hand.
+Color snackErrorFill(BuildContext context) =>
+    snackErrorFillFor(Theme.of(context));
+
+/// [snackErrorFillFor] from the messenger the bar is going to.
+///
+/// Nearly every failure message in this app is reported after an await — a
+/// file was written, a dialog closed, an export ran — and by then the widget's
+/// own BuildContext may be gone. The messenger was captured before the gap
+/// precisely because it outlives that, so it is also the right thing to read
+/// the theme from.
+Color snackErrorFillOn(ScaffoldMessengerState messenger) =>
+    snackErrorFillFor(Theme.of(messenger.context));
 
 /// Shows [snackBar] and guarantees it disappears.
 ///

@@ -390,9 +390,9 @@ class _AvFlowViewState extends State<AvFlowView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('remove'),
-              child: const Text(
+              child: Text(
                 'Remove it',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
             TextButton(
@@ -427,7 +427,7 @@ class _AvFlowViewState extends State<AvFlowView> {
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+      SnackBar(content: Text(msg), backgroundColor: error ? snackErrorFill(context) : null),
     );
   }
 
@@ -3016,9 +3016,9 @@ class _AvFlowViewState extends State<AvFlowView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('delete'),
-              child: const Text(
+              child: Text(
                 'Remove device',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
             TextButton(

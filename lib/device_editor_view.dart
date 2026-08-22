@@ -98,7 +98,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+      SnackBar(content: Text(msg), backgroundColor: error ? snackErrorFill(context) : null),
     );
   }
 
@@ -1119,7 +1119,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             TextButton.icon(
               icon: const Icon(Icons.delete_outline, size: 18),
               label: const Text('Remove from catalog'),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
               onPressed: () => _confirmDelete(entry),
             ),
           ],
@@ -1296,7 +1296,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: snackErrorFill(context)),
             child: const Text('Remove'),
           ),
         ],

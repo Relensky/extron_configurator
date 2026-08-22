@@ -316,6 +316,85 @@ void main() {
     );
   });
 
+  group('the tab is one scroll region', () {
+    // It used to be two — a header that scrolled inside itself above a list
+    // that scrolled on its own — which put a scrollbar inside a scrollbar and
+    // meant the building total could only be reached by dragging the inner
+    // one while the outer sat still.
+    // Text fields carry a scroller of their own — horizontal on a single-line
+    // field, vertical on a multi-line one — tagged with the 'editable'
+    // restoration id. Those are field internals, not the page.
+    bool isPageScroller(Widget w) =>
+        w is Scrollable &&
+        w.axisDirection == AxisDirection.down &&
+        w.restorationId != 'editable';
+
+    final vertical = find.byWidgetPredicate(isPageScroller);
+
+    for (final pane in ['Rooms', 'Master parts', 'Vendors']) {
+      testWidgets('on $pane', (tester) async {
+        final p = withProject();
+        await pump(tester, p, width: 1200);
+        await tester.tap(find.text(pane));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(of: find.byType(ProjectView), matching: vertical),
+          findsOneWidget,
+          reason: '$pane has more than one thing that scrolls',
+        );
+      });
+    }
+
+    testWidgets('the building total is as tall as its contents',
+        (tester) async {
+      // A sliver of its own, not the last row of a list: nothing about it
+      // should ever be able to scroll independently.
+      final p = withProject();
+      await pump(tester, p, width: 1200);
+
+      final totals = find.text('Building total');
+      expect(totals, findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.ancestor(of: totals, matching: find.byType(Card)).first,
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Scrollable &&
+                w.axisDirection == AxisDirection.down &&
+                w.restorationId != 'editable',
+          ),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('scrolling reaches the building total', (tester) async {
+      final p = withProject();
+      // Short enough that the totals card starts below the fold.
+      await pump(tester, p, width: 1200);
+      tester.view.physicalSize = const Size(1200, 420);
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.descendant(
+          of: find.byType(ProjectView),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Scrollable &&
+                w.axisDirection == AxisDirection.down &&
+                w.restorationId != 'editable',
+          ),
+        ),
+        const Offset(0, -600),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Project total'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   for (final width in [1100.0, 1400.0, 1900.0]) {
     testWidgets('the tab lays out at ${width.round()} px wide', (tester) async {
       final p = withProject();

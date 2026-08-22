@@ -253,9 +253,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
     if (bytes == null) {
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Could not render the estimate to an image.'),
-          backgroundColor: Colors.red,
+          backgroundColor: snackErrorFillOn(messenger),
         ),
       );
       return;
@@ -283,7 +283,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to save the image: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: snackErrorFillOn(messenger),
         ),
       );
     }
@@ -2256,7 +2256,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             messenger.showSnackBar(
               SnackBar(
                 content: Text(result.message),
-                backgroundColor: result.ok ? null : Colors.red,
+                backgroundColor: result.ok ? null : snackErrorFillOn(messenger),
               ),
             );
             return;
@@ -3850,7 +3850,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to save the estimate: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: snackErrorFillOn(messenger),
         ),
       );
     }

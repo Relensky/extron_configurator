@@ -56,7 +56,7 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: error ? Colors.red : null,
+        backgroundColor: error ? snackErrorFill(context) : null,
       ),
     );
   }

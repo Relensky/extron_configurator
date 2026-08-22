@@ -85,7 +85,7 @@ Future<void> exportRoomWorkbook(
       SnackBar(
         duration: const Duration(seconds: 6),
         content: Text('Failed to save the workbook: $e'),
-        backgroundColor: Colors.red,
+        backgroundColor: snackErrorFillOn(messenger),
       ),
     );
   }

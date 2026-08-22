@@ -1,3 +1,4 @@
+import 'app_snack.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -111,7 +112,7 @@ class _AvRackViewState extends State<AvRackView> {
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+      SnackBar(content: Text(msg), backgroundColor: error ? snackErrorFill(context) : null),
     );
   }
 
@@ -2139,9 +2140,9 @@ class _AvRackViewState extends State<AvRackView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('remove'),
-              child: const Text(
+              child: Text(
                 'Remove',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
             TextButton(

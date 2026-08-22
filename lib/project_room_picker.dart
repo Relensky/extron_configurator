@@ -107,7 +107,7 @@ Future<bool> saveOpenRoom(
     SnackBar(
       duration: const Duration(seconds: 5),
       content: Text(failed ? result : 'Room saved to $result'),
-      backgroundColor: failed ? Colors.red : null,
+      backgroundColor: failed ? snackErrorFillOn(messenger) : null,
     ),
   );
   return !failed;
@@ -145,7 +145,7 @@ class _StepButton extends StatelessWidget {
                 SnackBar(
                   duration: const Duration(seconds: 5),
                   content: Text(error),
-                  backgroundColor: Colors.red,
+                  backgroundColor: snackErrorFillOn(messenger),
                 ),
               );
             },
@@ -183,7 +183,7 @@ class _RoomMenu extends StatelessWidget {
           SnackBar(
             duration: const Duration(seconds: 5),
             content: Text(error),
-            backgroundColor: Colors.red,
+            backgroundColor: snackErrorFillOn(messenger),
           ),
         );
       },

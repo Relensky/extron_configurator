@@ -1,3 +1,4 @@
+import 'contrast.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -228,28 +229,50 @@ class _JsonEditorViewState extends State<JsonEditorView> {
               Text('Raw Config.json Editor', style: Theme.of(context).textTheme.headlineSmall),
               // Where the text stands relative to the config, since there is
               // no longer a button to press for the answer.
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(
-                  _pendingText != null
-                      ? Icons.edit
-                      : (_errorMessage.isEmpty
-                          ? Icons.check_circle_outline
-                          : Icons.error_outline),
-                  size: 18,
-                  color: _pendingText != null
-                      ? Colors.orange
-                      : (_errorMessage.isEmpty ? Colors.green : Colors.red),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _pendingText != null
-                      ? 'Applying edits...'
-                      : (_errorMessage.isEmpty
-                          ? 'Applied to the loaded config'
-                          : 'Not applied — invalid JSON'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ]),
+              // THREE CHANNELS, not one. The icon says which state this is,
+              // the sentence says it in words, and the colour only reinforces
+              // them — so it reads the same to somebody who cannot tell the
+              // green from the red.
+              //
+              // The colours themselves are measured rather than named: plain
+              // Colors.green is 2.8:1 on a light surface and Colors.orange is
+              // 2.0:1, both under the 3:1 an icon needs to be seen at all.
+              Builder(builder: (context) {
+                final theme = Theme.of(context);
+                final surface = theme.colorScheme.surface;
+                final (IconData icon, Color tint, String label) =
+                    _pendingText != null
+                        ? (
+                            Icons.edit,
+                            warningOn(surface),
+                            'Applying edits…',
+                          )
+                        : _errorMessage.isEmpty
+                            ? (
+                                Icons.check_circle_outline,
+                                successOn(surface),
+                                'Applied to the loaded config',
+                              )
+                            : (
+                                Icons.error_outline,
+                                readableOn(
+                                  surface,
+                                  prefer: [theme.colorScheme.error],
+                                ),
+                                'Not applied — invalid JSON',
+                              );
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 18, color: tint),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: theme.textTheme.bodySmall?.copyWith(color: tint),
+                    ),
+                  ],
+                );
+              }),
             ],
           ),
           const SizedBox(height: 8),
@@ -263,11 +286,23 @@ class _JsonEditorViewState extends State<JsonEditorView> {
           ),
           const SizedBox(height: 16),
           if (_errorMessage.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.red.shade900,
-              child: Text("Invalid JSON: $_errorMessage", style: const TextStyle(color: Colors.white)),
-            ),
+            Builder(builder: (context) {
+              // A themed pair rather than a fixed dark red under fixed white:
+              // the scheme guarantees these two read together, and on the
+              // light themes the old pairing put white on a red the rest of
+              // the page had no relationship with.
+              final scheme = Theme.of(context).colorScheme;
+              return Container(
+                padding: const EdgeInsets.all(12),
+                color: scheme.errorContainer,
+                child: Text(
+                  'Invalid JSON: $_errorMessage',
+                  style: TextStyle(
+                    color: errorOn(scheme, scheme.errorContainer),
+                  ),
+                ),
+              );
+            }),
           const SizedBox(height: 8),
           Expanded(
             // TAB = INDENT (like VS Code): intercept the Tab key before the

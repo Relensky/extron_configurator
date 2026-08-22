@@ -316,7 +316,7 @@ class _MainDashboardState extends State<MainDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
               "Place config.json there or set a Template file in App Config."),
-          backgroundColor: Colors.red));
+          backgroundColor: snackErrorFill(context)));
     }
   }
 
@@ -1001,7 +1001,7 @@ Future<void> _saveAllProject(
   } catch (e) {
     messenger.showSnackBar(SnackBar(
       content: Text('Save All failed: $e'),
-      backgroundColor: Colors.red,
+      backgroundColor: snackErrorFillOn(messenger),
     ));
     return;
   }
@@ -1221,7 +1221,7 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
                     ? 'Changes discarded — editing the original file as-is.'
                     : 'Could not reload the original file; the migrated '
                         'version stays loaded.'),
-                backgroundColor: ok ? null : Colors.red,
+                backgroundColor: ok ? null : snackErrorFillOn(messenger),
               ));
             },
             child: const Text('Use Original (discard changes)'),

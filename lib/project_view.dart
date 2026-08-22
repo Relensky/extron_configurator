@@ -9,6 +9,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_swap_dialogs.dart' show pickCatalogModel;
 import 'building_project.dart';
+import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'project_estimate.dart';
@@ -75,6 +76,22 @@ class _ProjectViewState extends State<ProjectView> {
 
   String _search = '';
 
+  /// One controller for the whole tab, so the scrollbar has something to drag
+  /// and switching panes can put the view back at the top — landing halfway
+  /// down a different list is disorienting.
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _showPane(_ProjectPane pane) {
+    setState(() => _pane = pane);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
   void _snack(String message, {bool error = false}) {
     if (!mounted) return;
     showTimedSnackBar(
@@ -82,7 +99,7 @@ class _ProjectViewState extends State<ProjectView> {
       SnackBar(
         duration: const Duration(seconds: 5),
         content: Text(message),
-        backgroundColor: error ? Colors.red : null,
+        backgroundColor: error ? snackErrorFill(context) : null,
       ),
     );
   }
@@ -300,25 +317,29 @@ class _ProjectViewState extends State<ProjectView> {
     final provider = context.watch<AppStateProvider>();
     final estimate = provider.priceProject();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Flexible with a scroll view inside, not a bare Column: the header is
-        // three rows of fields, figures and buttons, and at 150% text on a
-        // short window it is taller than the whole page. Left rigid it painted
-        // an overflow stripe across the top of the tab; this way it takes the
-        // room it needs when there is room, and scrolls within itself when
-        // there is not — while the pane below keeps the rest.
-        Flexible(
-          child: SingleChildScrollView(
-            child: _header(context, provider, estimate),
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: switch (_pane) {
-            _ProjectPane.rooms => _RoomsPane(estimate: estimate),
-            _ProjectPane.parts => _PartsPane(
+    // ONE SCROLL REGION FOR THE WHOLE TAB.
+    //
+    // It used to be two: a header that scrolled inside itself when the window
+    // was short, above a list that scrolled on its own. That put a scrollbar
+    // inside a scrollbar — two thumbs on screen at once, neither of them
+    // moving the thing you were looking at — and it meant the building total
+    // at the foot of the room list could only be reached by scrolling the
+    // inner one while the outer one sat still.
+    //
+    // Slivers rather than a Column in a SingleChildScrollView, so the rows are
+    // still built lazily: a building with two hundred parts on its master list
+    // should not lay out two hundred cards to show the first six.
+    return Scrollbar(
+      controller: _scroll,
+      child: CustomScrollView(
+        controller: _scroll,
+        slivers: [
+          SliverToBoxAdapter(child: _header(context, provider, estimate)),
+          const SliverToBoxAdapter(child: Divider(height: 1)),
+          ...switch (_pane) {
+            _ProjectPane.rooms => roomsSlivers(context, estimate),
+            _ProjectPane.parts => partsSlivers(
+              context,
               estimate: estimate,
               vendorFilter: _vendorFilter,
               untaggedFilter: _untaggedFilter,
@@ -327,10 +348,10 @@ class _ProjectViewState extends State<ProjectView> {
               onVendorFilter: (v) => setState(() => _vendorFilter = v),
               onSearch: (s) => setState(() => _search = s),
             ),
-            _ProjectPane.vendors => _VendorsPane(estimate: estimate),
+            _ProjectPane.vendors => vendorsSlivers(context, estimate),
           },
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -449,7 +470,7 @@ class _ProjectViewState extends State<ProjectView> {
                     ),
                 ],
                 selected: {_pane},
-                onSelectionChanged: (s) => setState(() => _pane = s.first),
+                onSelectionChanged: (s) => _showPane(s.first),
               ),
               const SizedBox(width: 12),
               // Expanded so the Wrap is CONSTRAINED and therefore actually
@@ -565,126 +586,129 @@ class _TotalChip extends StatelessWidget {
 //  ROOMS
 // ---------------------------------------------------------------------------
 
-class _RoomsPane extends StatelessWidget {
-  final ProjectEstimate estimate;
-  const _RoomsPane({required this.estimate});
+/// The Rooms pane, as slivers for the tab's one scroll view.
+List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
+  final provider = context.read<AppStateProvider>();
+  final theme = Theme.of(context);
 
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.read<AppStateProvider>();
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-          child: Row(
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: () async {
-                  final picked = await FilePicker.pickFiles(
-                    dialogTitle: 'Add room configs to the project',
-                    type: FileType.custom,
-                    allowedExtensions: const ['json'],
-                    allowMultiple: true,
-                  );
-                  if (picked == null) return;
-                  final problems = <String>[];
-                  var added = 0;
-                  for (final f in picked.files) {
-                    if (f.path == null) continue;
-                    final error = provider.addRoomToProject(f.path!);
-                    if (error.isEmpty) {
-                      added++;
-                    } else {
-                      problems.add(error);
-                    }
+  return [
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        child: Row(
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: () async {
+                final picked = await FilePicker.pickFiles(
+                  dialogTitle: 'Add room configs to the project',
+                  type: FileType.custom,
+                  allowedExtensions: const ['json'],
+                  allowMultiple: true,
+                );
+                if (picked == null) return;
+                final problems = <String>[];
+                var added = 0;
+                for (final f in picked.files) {
+                  if (f.path == null) continue;
+                  final error = provider.addRoomToProject(f.path!);
+                  if (error.isEmpty) {
+                    added++;
+                  } else {
+                    problems.add(error);
                   }
-                  if (!context.mounted) return;
-                  showTimedSnackBar(
-                    ScaffoldMessenger.of(context),
-                    SnackBar(
-                      duration: const Duration(seconds: 5),
-                      content: Text(
-                        problems.isEmpty
-                            ? '$added room${added == 1 ? '' : 's'} added.'
-                            : '$added added. ${problems.join(' ')}',
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add rooms…'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () {
-                  final error = provider.addCurrentRoomToProject();
-                  if (!context.mounted) return;
-                  showTimedSnackBar(
-                    ScaffoldMessenger.of(context),
-                    SnackBar(
-                      duration: const Duration(seconds: 5),
-                      content: Text(
-                        error.isEmpty ? 'Added the open room.' : error,
-                      ),
-                      backgroundColor: error.isEmpty ? null : Colors.red,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.playlist_add, size: 18),
-                label: const Text('Add the open room'),
-              ),
-              // Expanded, not a Spacer: the sentence is longer than the space
-              // left beside two buttons on a laptop, and an unconstrained Text
-              // simply runs off the edge.
-              Expanded(
-                child: Text(
-                  'Rooms are references. Fix a price on the room’s own Cost '
-                  'tab, then Refresh.',
-                  textAlign: TextAlign.right,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (estimate.rooms.isEmpty)
-          const Expanded(
-            child: Center(
-              child: Text(
-                'No rooms on this project yet.\n\n'
-                'Add the config.json files for the rooms in this building and '
-                'they will be priced together.',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          )
-        else
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: estimate.rooms.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 6),
-              itemBuilder: (context, index) {
-                if (index == estimate.rooms.length) {
-                  return _BuildingTotals(estimate: estimate);
                 }
-                return _RoomRow(
-                  room: estimate.rooms[index],
-                  currency: estimate.currency,
-                  isFirst: index == 0,
-                  isLast: index == estimate.rooms.length - 1,
+                if (!context.mounted) return;
+                showTimedSnackBar(
+                  ScaffoldMessenger.of(context),
+                  SnackBar(
+                    duration: const Duration(seconds: 5),
+                    content: Text(
+                      problems.isEmpty
+                          ? '$added room${added == 1 ? '' : 's'} added.'
+                          : '$added added. ${problems.join(' ')}',
+                    ),
+                  ),
                 );
               },
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add rooms…'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () {
+                final error = provider.addCurrentRoomToProject();
+                if (!context.mounted) return;
+                showTimedSnackBar(
+                  ScaffoldMessenger.of(context),
+                  SnackBar(
+                    duration: const Duration(seconds: 5),
+                    content: Text(
+                      error.isEmpty ? 'Added the open room.' : error,
+                    ),
+                    backgroundColor: error.isEmpty
+                        ? null
+                        : Theme.of(context).colorScheme.error,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.playlist_add, size: 18),
+              label: const Text('Add the open room'),
+            ),
+            // Expanded, not a Spacer: the sentence is longer than the space
+            // left beside two buttons on a laptop, and an unconstrained Text
+            // simply runs off the edge.
+            Expanded(
+              child: Text(
+                'Rooms are references. Fix a price on the room’s own Cost '
+                'tab, then Refresh.',
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    if (estimate.rooms.isEmpty)
+      const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'No rooms on this project yet.\n\n'
+              'Add the config.json files for the rooms in this building and '
+              'they will be priced together.',
+              textAlign: TextAlign.center,
             ),
           ),
-      ],
-    );
-  }
+        ),
+      )
+    else ...[
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverList.separated(
+          itemCount: estimate.rooms.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 6),
+          itemBuilder: (context, index) => _RoomRow(
+            room: estimate.rooms[index],
+            currency: estimate.currency,
+            isFirst: index == 0,
+            isLast: index == estimate.rooms.length - 1,
+          ),
+        ),
+      ),
+      // Its own sliver rather than the last row of the list, so it is exactly
+      // as tall as its contents and can never end up scrolling inside the
+      // scroll it already sits in.
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        sliver: SliverToBoxAdapter(child: _BuildingTotals(estimate: estimate)),
+      ),
+    ],
+  ];
 }
 
 class _RoomRow extends StatelessWidget {
@@ -709,15 +733,28 @@ class _RoomRow extends StatelessWidget {
     final isOpen = provider.openProjectRoom?.id == room.ref.id;
     final unsaved = isOpen && provider.roomHasUnsavedChanges;
 
+    // The card's fill changes with the row's state — primaryContainer when it
+    // is the open room, errorContainer when it could not be read — so the ink
+    // on it has to be chosen against THAT, not against the page. Painting
+    // colorScheme.primary on primaryContainer measured 1.2:1 on this app's
+    // dark theme, which is text you cannot see at all.
+    final fill = room.ok
+        ? (isOpen
+              ? theme.colorScheme.primaryContainer
+              : dimmed
+              ? theme.colorScheme.surfaceContainerLow
+              : theme.colorScheme.surface)
+        : theme.colorScheme.errorContainer;
+    final ink = foregroundOn(theme.colorScheme, fill);
+    final quiet = readableOn(
+      fill,
+      prefer: [theme.colorScheme.onSurfaceVariant, ink],
+    );
+    final alarm = errorOn(theme.colorScheme, fill);
+
     return Card(
       margin: EdgeInsets.zero,
-      color: room.ok
-          ? (isOpen
-                ? theme.colorScheme.primaryContainer
-                : dimmed
-                ? theme.colorScheme.surfaceContainerLow
-                : null)
-          : theme.colorScheme.errorContainer,
+      color: fill,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
         child: Row(
@@ -743,15 +780,14 @@ class _RoomRow extends StatelessWidget {
                   Text(
                     room.name,
                     style: theme.textTheme.titleSmall?.copyWith(
+                      color: ink,
                       decoration: dimmed ? TextDecoration.lineThrough : null,
                     ),
                   ),
                   Text(
                     room.ok ? room.ref.configPath : room.room.error,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: room.ok
-                          ? theme.colorScheme.onSurfaceVariant
-                          : theme.colorScheme.onErrorContainer,
+                      color: room.ok ? quiet : alarm,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -763,11 +799,7 @@ class _RoomRow extends StatelessWidget {
                   if (isOpen)
                     Row(
                       children: [
-                        Icon(
-                          Icons.edit_note,
-                          size: 13,
-                          color: theme.colorScheme.primary,
-                        ),
+                        Icon(Icons.edit_note, size: 13, color: ink),
                         const SizedBox(width: 4),
                         Text(
                           unsaved
@@ -775,9 +807,8 @@ class _RoomRow extends StatelessWidget {
                                     'changes'
                               : 'Open in the editor',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: unsaved
-                                ? theme.colorScheme.error
-                                : theme.colorScheme.primary,
+                            color: unsaved ? alarm : ink,
+                            fontWeight: unsaved ? FontWeight.w600 : null,
                           ),
                         ),
                       ],
@@ -803,11 +834,7 @@ class _RoomRow extends StatelessWidget {
             if (e != null && _roomFlags(room).isNotEmpty)
               Tooltip(
                 message: _roomFlags(room).join('\n'),
-                child: Icon(
-                  Icons.info_outline,
-                  size: 18,
-                  color: theme.colorScheme.tertiary,
-                ),
+                child: Icon(Icons.info_outline, size: 18, color: quiet),
               ),
             IconButton(
               tooltip: 'Move up',
@@ -939,7 +966,10 @@ class _BuildingTotals extends StatelessWidget {
                   'The figures above add them as though they were the same '
                   'one — fix the room currencies before relying on any of it.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
+                    color: errorOn(
+                      theme.colorScheme,
+                      theme.colorScheme.surfaceContainerHigh,
+                    ),
                   ),
                 ),
               ),
@@ -968,115 +998,21 @@ class _BuildingTotals extends StatelessWidget {
 //  MASTER PARTS
 // ---------------------------------------------------------------------------
 
-class _PartsPane extends StatelessWidget {
-  final ProjectEstimate estimate;
-  final String vendorFilter;
-  final String untaggedFilter;
-  final String undrivenFilter;
-  final String search;
-  final ValueChanged<String> onVendorFilter;
-  final ValueChanged<String> onSearch;
+/// The master parts list, as slivers for the tab's one scroll view.
+List<Widget> partsSlivers(
+  BuildContext context, {
+  required ProjectEstimate estimate,
+  required String vendorFilter,
+  required String untaggedFilter,
+  required String undrivenFilter,
+  required String search,
+  required ValueChanged<String> onVendorFilter,
+  required ValueChanged<String> onSearch,
+}) {
+  final theme = Theme.of(context);
+  final needle = search.trim().toLowerCase();
 
-  const _PartsPane({
-    required this.estimate,
-    required this.vendorFilter,
-    required this.untaggedFilter,
-    required this.undrivenFilter,
-    required this.search,
-    required this.onVendorFilter,
-    required this.onSearch,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final needle = search.trim().toLowerCase();
-
-    final lines = [
-      for (final l in estimate.master)
-        if (_matchesVendor(l) && _matchesSearch(l, needle)) l,
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 260,
-                child: LiveTextField(
-                  fieldId: 'project_part_search',
-                  initial: search,
-                  label: 'Search parts',
-                  hint: 'model, part number, maker',
-                  onChanged: onSearch,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    _filterChip(context, 'All (${estimate.master.length})', ''),
-                    for (final p in estimate.vendors)
-                      if (!p.isUntagged)
-                        _filterChip(
-                          context,
-                          '${p.name} (${p.lines.length})',
-                          p.vendor!.id,
-                        ),
-                    if (estimate.untaggedParts > 0)
-                      _filterChip(
-                        context,
-                        'Untagged (${estimate.untaggedParts})',
-                        untaggedFilter,
-                        warn: true,
-                      ),
-                    if (estimate.master.any((l) => l.hasControlGap))
-                      _filterChip(
-                        context,
-                        'No control module (${estimate.master.where(
-                          (l) => l.hasControlGap,
-                        ).length})',
-                        undrivenFilter,
-                        warn: true,
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (estimate.master.isEmpty)
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Nothing to order yet.\n\n'
-                'The master list is built from the rooms on this project — '
-                'add rooms that have equipment on them.',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          )
-        else
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: lines.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) return _PartsHeaderRow(theme: theme);
-                return _PartRow(line: lines[index - 1], estimate: estimate);
-              },
-            ),
-          ),
-      ],
-    );
-  }
-
-  bool _matchesVendor(MasterPartLine line) {
+  bool matchesVendor(MasterPartLine line) {
     if (vendorFilter.isEmpty) return true;
     if (vendorFilter == untaggedFilter) return line.vendor == null;
     // Not a vendor at all — the other question this list gets asked. It shares
@@ -1086,7 +1022,7 @@ class _PartsPane extends StatelessWidget {
     return line.vendor?.id == vendorFilter;
   }
 
-  bool _matchesSearch(MasterPartLine line, String needle) {
+  bool matchesSearch(MasterPartLine line) {
     if (needle.isEmpty) return true;
     return '${line.description} ${line.model} ${line.partNumber} '
             '${line.manufacturer} ${line.category}'
@@ -1094,20 +1030,104 @@ class _PartsPane extends StatelessWidget {
         .contains(needle);
   }
 
-  Widget _filterChip(
-    BuildContext context,
-    String label,
-    String value, {
-    bool warn = false,
-  }) {
-    final theme = Theme.of(context);
-    return FilterChip(
-      label: Text(label),
-      selected: vendorFilter == value,
-      onSelected: (_) => onVendorFilter(value),
-      backgroundColor: warn ? theme.colorScheme.errorContainer : null,
-    );
-  }
+  Widget filterChip(String label, String value, {bool warn = false}) =>
+      FilterChip(
+        label: Text(
+          label,
+          // Chosen against the chip's own background rather than left to the
+          // default, which is picked for the surface the chip normally sits
+          // on and is not readable on an error fill.
+          style: warn
+              ? TextStyle(color: theme.colorScheme.onErrorContainer)
+              : null,
+        ),
+        selected: vendorFilter == value,
+        onSelected: (_) => onVendorFilter(value),
+        backgroundColor: warn ? theme.colorScheme.errorContainer : null,
+      );
+
+  final lines = [
+    for (final l in estimate.master)
+      if (matchesVendor(l) && matchesSearch(l)) l,
+  ];
+
+  return [
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 260,
+              child: LiveTextField(
+                fieldId: 'project_part_search',
+                initial: search,
+                label: 'Search parts',
+                hint: 'model, part number, maker',
+                onChanged: onSearch,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  filterChip('All (${estimate.master.length})', ''),
+                  for (final p in estimate.vendors)
+                    if (!p.isUntagged)
+                      filterChip('${p.name} (${p.lines.length})', p.vendor!.id),
+                  if (estimate.untaggedParts > 0)
+                    filterChip(
+                      'Untagged (${estimate.untaggedParts})',
+                      untaggedFilter,
+                      warn: true,
+                    ),
+                  if (estimate.master.any((l) => l.hasControlGap))
+                    filterChip(
+                      'No control module (${estimate.master.where((l) => l.hasControlGap).length})',
+                      undrivenFilter,
+                      warn: true,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    if (estimate.master.isEmpty)
+      const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Nothing to order yet.\n\n'
+              'The master list is built from the rooms on this project — '
+              'add rooms that have equipment on them.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      )
+    else ...[
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _PartsHeaderRow(theme: theme),
+        ),
+      ),
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        sliver: SliverList.builder(
+          itemCount: lines.length,
+          itemBuilder: (context, index) =>
+              _PartRow(line: lines[index], estimate: estimate),
+        ),
+      ),
+    ],
+  ];
 }
 
 class _PartsHeaderRow extends StatelessWidget {
@@ -1316,11 +1336,8 @@ class _PartRow extends StatelessWidget {
                       key: ValueKey('project_swap_${line.key}'),
                       tooltip: 'Swap this product in every room that has it',
                       icon: const Icon(Icons.swap_horiz, size: 18),
-                      onPressed: () => swapPartAcrossProject(
-                        context,
-                        provider,
-                        line,
-                      ),
+                      onPressed: () =>
+                          swapPartAcrossProject(context, provider, line),
                     )
                   : const SizedBox(),
             ),
@@ -1430,7 +1447,7 @@ Future<void> swapPartAcrossProject(
     SnackBar(
       duration: const Duration(seconds: 8),
       content: Text(parts.join('  ·  ')),
-      backgroundColor: result.disk.failures.isEmpty ? null : Colors.red,
+      backgroundColor: result.disk.failures.isEmpty ? null : snackErrorFill(context),
     ),
   );
 }
@@ -1443,6 +1460,8 @@ class _SwapPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final surface = theme.dialogTheme.backgroundColor ??
+        theme.colorScheme.surfaceContainerHigh;
 
     Widget warning(IconData icon, String text, {bool severe = false}) =>
         Padding(
@@ -1455,7 +1474,16 @@ class _SwapPreviewDialog extends StatelessWidget {
                 size: 18,
                 color: severe
                     ? theme.colorScheme.error
-                    : theme.colorScheme.tertiary,
+                    // tertiary is 2.1:1 on the light themes — invisible for
+                    // something whose whole job is to be noticed.
+                    : readableOn(
+                        surface,
+                        prefer: [
+                          theme.colorScheme.tertiary,
+                          theme.colorScheme.onSurfaceVariant,
+                        ],
+                        minRatio: kContrastLarge,
+                      ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1661,7 +1689,7 @@ class _NeverNeedsModuleButtonState extends State<_NeverNeedsModuleButton> {
       SnackBar(
         duration: const Duration(seconds: 6),
         content: Text(result.message),
-        backgroundColor: result.ok ? null : Colors.red,
+        backgroundColor: result.ok ? null : snackErrorFill(context),
       ),
     );
   }
@@ -1670,7 +1698,8 @@ class _NeverNeedsModuleButtonState extends State<_NeverNeedsModuleButton> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Tooltip(
-      message: 'Nothing can drive a ${widget.model} anywhere — record that on '
+      message:
+          'Nothing can drive a ${widget.model} anywhere — record that on '
           'the catalog entry',
       child: TextButton(
         key: ValueKey('never_needs_module_${widget.model}'),
@@ -1757,97 +1786,107 @@ class _VendorPicker extends StatelessWidget {
 //  VENDORS
 // ---------------------------------------------------------------------------
 
-class _VendorsPane extends StatelessWidget {
-  final ProjectEstimate estimate;
-  const _VendorsPane({required this.estimate});
+/// The Vendors pane, as slivers for the tab's one scroll view.
+List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
+  final provider = context.read<AppStateProvider>();
+  final theme = Theme.of(context);
+  final vendors = estimate.project.vendors;
+  final conflicts = estimate.project.vendorConflicts;
 
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.read<AppStateProvider>();
-    final theme = Theme.of(context);
-    final vendors = estimate.project.vendors;
-    final conflicts = estimate.project.vendorConflicts;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-          child: Row(
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: () => provider.addProjectVendor(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add vendor'),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'A part is tagged by the FIRST vendor whose rules claim it. '
-                  'Manufacturer rules are checked before category rules, so '
-                  '“buy Extron direct” beats “the reseller does '
-                  'screens” for an Extron screen. Order matters — move a '
-                  'vendor up to give it priority.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (conflicts.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Card(
-              color: theme.colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Overlapping rules',
-                      style: theme.textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    for (final c in conflicts)
-                      Text(
-                        '${c.kind} "${c.rule}" is claimed by '
-                        '${c.vendors.map((v) => v.name).join(' and ')}. '
-                        '${c.vendors.first.name} wins.',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                  ],
+  return [
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        child: Row(
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: () => provider.addProjectVendor(),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add vendor'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'A part is tagged by the FIRST vendor whose rules claim it. '
+                'Manufacturer rules are checked before category rules, so '
+                '“buy Extron direct” beats “the reseller does screens” for an '
+                'Extron screen. Order matters — move a vendor up to give it '
+                'priority.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
-          ),
-        Expanded(
-          child: vendors.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No vendors yet.\n\n'
-                    'Add one per company you send quote requests to, and give '
-                    'it the manufacturers or the categories it sells.',
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  itemCount: vendors.length,
-                  itemBuilder: (context, index) => _VendorCard(
-                    vendor: vendors[index],
-                    package: estimate.packageFor(vendors[index].id),
-                    currency: estimate.currency,
-                    isFirst: index == 0,
-                    isLast: index == vendors.length - 1,
-                  ),
-                ),
+          ],
         ),
-      ],
-    );
-  }
+      ),
+    ),
+    if (conflicts.isNotEmpty)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Card(
+            color: theme.colorScheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Overlapping rules',
+                    // Against the card's own fill. The theme's title colour is
+                    // chosen for a surface, and on an error container it is
+                    // the wrong side of readable.
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  for (final c in conflicts)
+                    Text(
+                      '${c.kind} "${c.rule}" is claimed by '
+                      '${c.vendors.map((v) => v.name).join(' and ')}. '
+                      '${c.vendors.first.name} wins.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    if (vendors.isEmpty)
+      const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'No vendors yet.\n\n'
+              'Add one per company you send quote requests to, and give it '
+              'the manufacturers or the categories it sells.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      )
+    else
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        sliver: SliverList.builder(
+          itemCount: vendors.length,
+          itemBuilder: (context, index) => _VendorCard(
+            vendor: vendors[index],
+            package: estimate.packageFor(vendors[index].id),
+            currency: estimate.currency,
+            isFirst: index == 0,
+            isLast: index == vendors.length - 1,
+          ),
+        ),
+      ),
+  ];
 }
 
 class _VendorCard extends StatelessWidget {

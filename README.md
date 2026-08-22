@@ -417,6 +417,21 @@ added. The project total is the sum of the room totals, never a building-wide
 percentage — a building where two rooms are taxed differently is ordinary, and
 it must not quietly average.
 
+### One scroll, not two
+
+The tab is a single `CustomScrollView`. It used to be a header that scrolled
+inside itself above a list that scrolled on its own — a scrollbar inside a
+scrollbar, two thumbs on screen at once, and a building total at the foot of the
+room list that could only be reached by dragging the inner one while the outer
+sat still.
+
+Slivers rather than a Column in a `SingleChildScrollView`, so rows are still
+built lazily: a building with two hundred parts on its master list should not
+lay out two hundred cards to show the first six. The **Building total** card is
+its own `SliverToBoxAdapter` rather than the last row of the list, so it is
+exactly as tall as its contents and can never scroll inside the scroll it sits
+in.
+
 ### Working the rooms from the project
 
 **Project and Cost sit at the top of the rail**, because that is the order the
@@ -626,6 +641,58 @@ send a competitor's pricing to a supplier and your margins to both.
 Sheet names come from vendor and room names, which are free text — they are
 clipped to 31 characters and numbered when two collide, because Excel refuses
 to open a workbook with two sheets of one name.
+
+## Colour contrast
+
+There are four themes — Classic and Auris, each light and dark — and **Classic's
+accent is a colour the user picks out of a wheel**. That last part is why
+hand-picking foreground colours does not work here: there is no fixed palette to
+check against, because the palette is whatever somebody chose this morning.
+
+`contrast.dart` measures instead. `contrastRatio` is the WCAG formula;
+`readableOn` takes the colours a design would *like* and returns the first that
+actually reads on the background it is going on, falling back to plain black or
+white when none do. `errorOn` and `foregroundOn` are the two shapes that come
+up constantly. WCAG AA is 4.5:1 for body text and 3:1 for large text and icons
+that carry meaning; both thresholds are constants, and `color_contrast_test.dart`
+asserts them across all four themes at five accents.
+
+What the audit found and what changed:
+
+| Pairing | Measured | Fix |
+|---|---|---|
+| `primary` on `primaryContainer` | **1.2–1.8:1** | The open room's row on the Project tab. Now `foregroundOn`. |
+| `error` on `primaryContainer` | **1.3–2.1:1** | Same row's "unsaved changes" note. Now `errorOn`. |
+| `error` on `errorContainer` | **1.4–5.6:1** (fails 3 of 4) | Vendor-conflict card, filter chips. Now `onErrorContainer` / `errorOn`. |
+| `onSurfaceVariant` on `errorContainer` | **1.5–3.6:1** | Default chip label on a warn-filled chip. Now set explicitly. |
+| `onSecondaryContainer` on `secondaryContainer` | **2.7:1** (Classic dark) | The rail's selected row. Now `readableOn`. |
+| `tertiary` on `surface` | **2.1–2.4:1** (light themes) | Info and warning icons. Now `readableOn` at the 3:1 icon threshold. |
+| `Colors.red` snackbar under themed text | **3.1–5.4:1** | 29 sites. Now `snackErrorFill`, which picks the fill *against the bar's own text colour* — contrast is symmetric, so the same question asked the other way round. |
+| `Colors.red` as text on a surface | **~4:1** | 8 sites. Now `colorScheme.error`, which measures 4.9–7.1:1. |
+
+Two further fixes came out of the same pass:
+
+- **The Raw JSON tab's status indicator** already carried an icon and a
+  sentence alongside its colour, so the state was never colour-only — but the
+  colours themselves were `Colors.green` (2.8:1 on a light surface) and
+  `Colors.orange` (2.0:1), both under the 3:1 an icon needs to be seen at all.
+  They now come from `successOn` / `warningOn`, which supply the tone Material
+  3 has no role for and then measure it. The invalid-JSON banner was a fixed
+  `red.shade900` under fixed white; it is `errorContainer` / `errorOn` now.
+- **`floor_plan_view.dart` had three literal NUL bytes** in its layer
+  sentinels. The values are unchanged — they are written as ` ` escapes
+  instead of the raw byte — because a NUL in the source makes the whole file
+  binary to every tool: `grep` answered "binary file matches" instead of the
+  line, so any search across the project silently skipped the largest file in
+  it. `source_hygiene_test.dart` stops the next one.
+
+The editor's syntax-highlighting palette (string green, number orange) is left
+alone: it already branches on light/dark and both branches measure above 4.5:1.
+
+**The drawings are deliberately out of scope.** Cable colours, conversion
+highlights and plan annotations are a fixed vocabulary — HDMI is that blue on
+every machine, and a run that changed colour with the theme would stop matching
+its own legend and its printout.
 
 ## The left rail fits, whatever the window
 

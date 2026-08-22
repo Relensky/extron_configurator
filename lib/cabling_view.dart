@@ -560,9 +560,9 @@ class _CablingViewState extends State<CablingView> {
                       ),
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(true),
-                        child: const Text(
+                        child: Text(
                           'Reset',
-                          style: TextStyle(color: Colors.red),
+                          style: TextStyle(color: Theme.of(context).colorScheme.error),
                         ),
                       ),
                     ],
@@ -968,7 +968,7 @@ class _CablingViewState extends State<CablingView> {
         value: 'delete',
         child: Text(
           box.isDerived ? 'Take it off the drawing' : 'Delete this box',
-          style: const TextStyle(color: Colors.red),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ),
     ]);
@@ -1026,11 +1026,11 @@ class _CablingViewState extends State<CablingView> {
           child: Text('Next of the ${siblings.length} runs here  (↓)'),
         ),
       const PopupMenuDivider(),
-      const PopupMenuItem(
+      PopupMenuItem(
         value: 'delete',
         child: Text(
           'Take this run off the drawing',
-          style: TextStyle(color: Colors.red),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ),
     ]);

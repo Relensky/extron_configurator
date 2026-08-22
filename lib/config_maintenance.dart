@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 
 /// ============================================================================
@@ -39,7 +40,7 @@ Future<bool> confirmRemoveConfigKey(BuildContext context,
           icon: const Icon(Icons.delete_outline, size: 18),
           label: const Text('Remove'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: snackErrorFill(context),
             foregroundColor: Colors.white,
           ),
           onPressed: () => Navigator.of(ctx).pop(true),

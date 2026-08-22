@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'contrast.dart';
+
 /// ============================================================================
 ///  THE LEFT RAIL
 /// ============================================================================
@@ -359,9 +361,19 @@ class NavRailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = selected
-        ? scheme.onSecondaryContainer
-        : scheme.onSurfaceVariant;
+    // The selected row paints a band behind itself, so its ink is chosen
+    // against THAT rather than against the page. The M3 pair —
+    // onSecondaryContainer on secondaryContainer — measures 2.7:1 on this
+    // app's Classic dark theme, and Classic's accent is a colour the user
+    // picks out of a wheel, so no fixed pairing can be trusted here.
+    final background = selected ? scheme.secondaryContainer : scheme.surface;
+    final color = readableOn(
+      background,
+      prefer: [
+        selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+        scheme.onSurface,
+      ],
+    );
 
     final row = SizedBox(
       height: fit.rowHeight,
@@ -374,7 +386,7 @@ class NavRailRow extends StatelessWidget {
           // easy to hit.
           child: Ink(
             decoration: BoxDecoration(
-              color: selected ? scheme.secondaryContainer : null,
+              color: selected ? background : null,
             ),
             padding: EdgeInsets.symmetric(vertical: fit.pad, horizontal: 4),
             // BoxFit.scaleDown is the belt to the measurement's braces. The

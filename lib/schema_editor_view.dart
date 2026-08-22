@@ -1,3 +1,4 @@
+import 'app_snack.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -126,7 +127,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: error ? Colors.red : null),
+      SnackBar(content: Text(msg), backgroundColor: error ? snackErrorFill(context) : null),
     );
   }
 

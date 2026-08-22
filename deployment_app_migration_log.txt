@@ -2197,3 +2197,1149 @@
   -> Added missing property: 'dev_nbps' (Default: '0')
   NOTE: No default template available to audit against (set one in App Config).
 --------------------------------------------------
+[2026-08-22T00:38:38.389377] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch9106cfe\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.508670] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchfe4cad51\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.533735] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchfe4cad51\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.583551] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switche1f64772\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.606657] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switche1f64772\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.631708] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switche1f64772\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.679110] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch9c1b81b\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.724682] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchedbc93de\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.780652] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch2871602f\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.840719] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchdddbcb31\z_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.911778] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchbfe87b1\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:38.958840] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch11c43cbf\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:39.008432] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch5b3525fd\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:39.095559] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch2ad28f08\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:39.133639] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch2ad28f08\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:39.159276] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch2ad28f08\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  OK: Loaded config already matches the current template schema. No changes required.
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:39.199872] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchf390e8af\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:39.222957] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchf390e8af\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:39.268504] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch78b1cf32\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:40.368680] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch4887fdf5\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:41.070163] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch3c4bb779\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:38:41.248842] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchd22d8a91\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:24.797429] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchf530e887\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:24.881065] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch1c2dd068\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:24.905670] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch1c2dd068\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:24.954721] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch72986946\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:24.978767] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch72986946\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:24.997297] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch72986946\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.050337] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchd873966c\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.123428] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch67c09f53\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.173544] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch151ab143\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.237773] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch53a70b84\z_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.310507] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchdd0cea6b\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.357567] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switche193c95c\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.402941] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch1c87d33b\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.468108] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch59892758\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.499332] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch59892758\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.526867] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch59892758\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  OK: Loaded config already matches the current template schema. No changes required.
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.573447] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch1dc86eeb\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.592461] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch1dc86eeb\b_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:25.643269] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switche687ea3f\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:26.697987] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch83cae25\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:27.392490] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switch764cb8bf\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------
+[2026-08-22T00:47:27.513767] CONFIG LOADED: C:\Users\dstanley\AppData\Local\Temp\rcb_room_switchfb0ac51f\a_config.json
+  BACKUP SAVED: Original file preserved as 'UNKNOWN000_old_config.json'
+  --------------------------------------------------
+  SYSTEM MIGRATION: Added 21 missing schema properties to match current template standards.
+  -> Added missing property: 'gve_bldg' (Default: 'UNKNOWN')
+  -> Added missing property: 'gve_room' (Default: '000')
+  -> Added missing property: 'gui_mic_mix' (Default: 'No')
+  -> Added missing property: 'gui_routing_available' (Default: 'No')
+  -> Added missing property: 'gui_routing_mode' (Default: 'Normal')
+  -> Added missing property: 'gui_tab' (Default: '2_Cam_Dev')
+  -> Added missing property: 'gui_capture_source_available' (Default: 'No')
+  -> Added missing property: 'gui_usb_or_vga' (Default: 'USB')
+  -> Added missing property: 'dev_projectors' (Default: '0')
+  -> Added missing property: 'dev_cameras' (Default: '0')
+  -> Added missing property: 'dev_switchers' (Default: '0')
+  -> Added missing property: 'dev_dsps' (Default: '0')
+  -> Added missing property: 'dev_usb_switchers' (Default: '0')
+  -> Added missing property: 'dev_power_controllers' (Default: '0')
+  -> Added missing property: 'dev_media_ports' (Default: '0')
+  -> Added missing property: 'dev_wireless' (Default: '0')
+  -> Added missing property: 'dev_recorders' (Default: '0')
+  -> Added missing property: 'dev_screens' (Default: '0')
+  -> Added missing property: 'dev_nav_switchers' (Default: '0')
+  -> Added missing property: 'dev_share_stations' (Default: '0')
+  -> Added missing property: 'dev_nbps' (Default: '0')
+  NOTE: No default template available to audit against (set one in App Config).
+--------------------------------------------------

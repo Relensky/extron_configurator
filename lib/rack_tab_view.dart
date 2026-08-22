@@ -145,9 +145,9 @@ class _RackTabViewState extends State<RackTabView> {
     final bytes = await captureBoundary(_captureKey, pixelRatio: 2.0);
     if (bytes == null) {
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Nothing to export — add a rack first.'),
-          backgroundColor: Colors.red,
+          backgroundColor: snackErrorFillOn(messenger),
         ),
       );
       return;
@@ -174,7 +174,7 @@ class _RackTabViewState extends State<RackTabView> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to save image: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: snackErrorFillOn(messenger),
         ),
       );
     }

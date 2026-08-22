@@ -709,7 +709,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? Colors.red : null,
+      backgroundColor: error ? snackErrorFill(context) : null,
     ));
   }
 

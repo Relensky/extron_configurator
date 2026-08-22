@@ -57,7 +57,7 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: error ? Colors.red : null,
+        backgroundColor: error ? snackErrorFill(context) : null,
       ),
     );
   }
