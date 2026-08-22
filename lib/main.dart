@@ -1220,7 +1220,14 @@ class TopLevelBar extends StatelessWidget {
             // theme container colours are tinted from an accent somebody picks
             // out of a wheel. The "unsaved" red gets the same check — the error
             // colour is the one that fails first on a dark accent.
-            Flexible(
+            // Expanded, not Flexible-plus-Spacer. Both are flex:1, so the two
+            // of them SPLIT the free width — and because a Flexible is loose,
+            // the half the short job name did not use was left over at the end
+            // of the row, which is to say to the RIGHT of the gear. That is
+            // how a corner button ends up sitting in the middle of the window.
+            // One tight child that eats everything going puts it back in the
+            // corner, and the name still ellipsises when it is long.
+            Expanded(
               child: Text(
                 provider.projectDirty
                     ? '${provider.projectDisplayName} — unsaved'
@@ -1240,7 +1247,6 @@ class TopLevelBar extends StatelessWidget {
                 ),
               ),
             ),
-            const Spacer(),
             IconButton(
               key: const ValueKey('banner_app_config'),
               visualDensity: VisualDensity.compact,

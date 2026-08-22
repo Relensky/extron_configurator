@@ -99,6 +99,38 @@ void main() {
     expect(inBanner('Bessey Hall — unsaved'), findsOneWidget);
   });
 
+  testWidgets('the gear sits in the corner, not in the middle',
+      (tester) async {
+    final p = fresh();
+    p.newProject(name: 'Bessey Hall');
+    await pump(tester, p);
+
+    // MEASURED, not eyeballed. The first attempt at this bar used a Flexible
+    // for the job name AND a Spacer, both flex:1 — so they split the free
+    // width between them and the half the short name did not use was left
+    // over to the RIGHT of the gear, parking a corner button 600 pixels from
+    // the corner.
+    final gear = tester.getRect(find.byKey(const ValueKey('banner_app_config')));
+    final window = tester.getRect(find.byType(TopLevelBar));
+    expect(gear.right, closeTo(window.right, 1),
+        reason: 'the gear is flush with the right edge of the banner');
+  });
+
+  testWidgets('a long job name pushes nothing off the end', (tester) async {
+    final p = fresh();
+    p.newProject(
+      name: 'Bessey Hall Phase Two Instructional Technology Refresh, '
+          'Rooms 101 through 240 inclusive',
+    );
+    await pump(tester, p);
+
+    expect(tester.takeException(), isNull);
+    final gear = tester.getRect(find.byKey(const ValueKey('banner_app_config')));
+    final window = tester.getRect(find.byType(TopLevelBar));
+    expect(gear.right, closeTo(window.right, 1));
+    expect(window.contains(gear.centerLeft), isTrue);
+  });
+
   testWidgets('the banner survives the rail being folded away',
       (tester) async {
     final p = fresh();
