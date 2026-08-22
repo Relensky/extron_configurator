@@ -43,6 +43,16 @@ import 'package:file_picker/file_picker.dart';
 /// it should not have to import the app's entry point to say which tab they
 /// are.
 enum AppTab {
+  // THE TWO MONEY TABS FIRST, and the job above the room.
+  //
+  // The rail used to open on the Wizard because a session started by building
+  // a room. A session now starts by opening a JOB: the project says which
+  // rooms there are, and the room you work on is picked from it. So the tab
+  // that answers "what is this building" comes first, the tab that answers
+  // "what does this room come to" second, and the tabs that build a room
+  // follow — which is the order the work is actually done in.
+  project('project'),
+  cost('cost'),
   wizard('wizard'),
   devices('devices'),
   system('system'),
@@ -55,11 +65,6 @@ enum AppTab {
   floorPlan('floor_plan'),
   cabling('cabling'),
   racks('racks'),
-  cost('cost'),
-  // After Cost because it is the same question asked one level up: Cost is
-  // what this room comes to, Project is what the building comes to. Before the
-  // catalog, because it is about a job rather than about the app.
-  project('project'),
   deviceEditor('device_editor'),
   // The two documents that describe how the app itself behaves, next to the
   // catalog for the same reason it is there: they are about every room rather
@@ -4861,6 +4866,9 @@ class AppStateProvider extends ChangeNotifier {
     }
 
     if (parts.values.every((p) => p == null)) {
+      // No sidecars is still a state that matches the files — an AV-only room
+      // nobody has drawn yet is not an unsaved one.
+      markRoomSaved();
       notifyListeners();
       return;
     }
@@ -4873,6 +4881,12 @@ class AppStateProvider extends ChangeNotifier {
       for (final part in RoomSidecarPart.values)
         if (parts[part] != null) kRoomSidecarSuffix[part]!,
     ];
+    // The room now matches its files in full — config AND sidecars. Taken
+    // here rather than at the end of the config load because that runs before
+    // this does, and a baseline captured with no diagram in it would report
+    // every freshly opened room as unsaved.
+    markRoomSaved();
+
     AppLogger.logInfo(
         'Room document loaded from ${found.join(', ')} beside '
         '$currentConfigPath (${avNodes.length} devices, '
@@ -6068,35 +6082,49 @@ class AppStateProvider extends ChangeNotifier {
   /// Prompts the user to pick an existing config file and loads it.
   /// Automatically creates a backup of the original file if migration is needed.
   Future<bool> loadExistingConfig() async {
+    FilePickerResult? result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    final picked = result?.files.single.path;
+    if (picked == null) return false;
+    return openConfigAtPath(picked);
+  }
+
+  /// Loads the config at [file] — everything [loadExistingConfig] does once
+  /// the picker has closed.
+  ///
+  /// Its own method because opening a room is no longer always a file dialog:
+  /// a project names its rooms, and switching to one of them has to go through
+  /// exactly the same pipeline — the same backup, the same migration, the same
+  /// change log — or a room opened from the project would be a differently
+  /// loaded room from the same room opened by hand.
+  Future<bool> openConfigAtPath(String file) async {
     try {
-      FilePickerResult? result = await FilePicker.pickFiles(
-        type: FileType.custom, 
-        allowedExtensions: ['json']
+      final f = File(file);
+      final originalContents = await f.readAsString();
+      final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
+
+      // Remember the working file so 'Apply Changes' in the raw editor can
+      // save back to it directly.
+      currentConfigPath = f.path;
+
+      // The room on screen is not the room the last target named.
+      clearDeploymentTarget();
+
+      await _processLoadedConfig(
+        originalContents: originalContents,
+        parsedConfig: parsedConfig,
+        backupDirectory: f.parent.path,
+        sourceLabel: f.path,
+        // Change log named after the opened file: <name>_backup_log.txt
+        changeLogBaseName: path.basenameWithoutExtension(f.path),
       );
-      if (result != null) {
-        final file = File(result.files.single.path!);
-        final originalContents = await file.readAsString();
-        final Map<String, dynamic> parsedConfig = jsonDecode(originalContents);
-
-        // Remember the working file so 'Apply Changes' in the raw editor can
-        // save back to it directly.
-        currentConfigPath = file.path;
-
-        // The room on screen is not the room the last target named.
-        clearDeploymentTarget();
-
-        await _processLoadedConfig(
-          originalContents: originalContents,
-          parsedConfig: parsedConfig,
-          backupDirectory: file.parent.path,
-          sourceLabel: file.path,
-          // Change log named after the opened file: <name>_backup_log.txt
-          changeLogBaseName: path.basenameWithoutExtension(file.path),
-        );
-        AppLogger.logInfo("Loaded existing config from ${file.path}");
-        return true;
-      }
-      return false;
+      // The room now matches the file it came from, so the unsaved-work
+      // check has a baseline to compare against.
+      markRoomSaved();
+      AppLogger.logInfo("Loaded existing config from ${f.path}");
+      return true;
     } catch (e, stack) {
       AppLogger.logError("Failed to load existing config", e, stack);
       return false;
@@ -6984,6 +7012,96 @@ class AppStateProvider extends ChangeNotifier {
       : avDeviceLibrary.filePath.isNotEmpty
           ? avDeviceLibrary.filePath
           : path.join(effectiveRootFolder, 'av_devices.json');
+
+  /// Records in the CATALOG that a product has no control interface at all —
+  /// [AvDeviceTemplate.neverControlled] — and writes the catalog straight away.
+  ///
+  /// THIS IS NOT THE SAME DECISION as excluding a box from the room config.
+  /// The two look alike on screen and are worlds apart in scope:
+  ///
+  ///   * [AvNode.excludeFromControl] / [CostLineItem.noControl] say "this box,
+  ///     in this room, is not ours to drive" — an owner-furnished display, the
+  ///     building's switch, somebody else's codec. The same product in the
+  ///     room next door may well be driven.
+  ///   * THIS says "no example of this product, anywhere, ever has a control
+  ///     interface" — a passive splitter, a plate, a USB capture stick. It is
+  ///     a fact about the product, so it belongs to the catalog, and it stops
+  ///     every room that ever draws one from carrying it in the "waiting for a
+  ///     control module" list. A warning about something that can never be
+  ///     fixed is a warning people learn to scroll past, which is how the real
+  ///     ones get missed.
+  ///
+  /// Saved immediately rather than left dirty. The Catalog tab has its own Save
+  /// button and can afford to batch; the Cost and Project tabs do not, and an
+  /// edit that lives only in memory until something else happens to write the
+  /// file is an edit somebody loses.
+  ///
+  /// Returns whether anything was written and the sentence to show.
+  Future<({bool ok, String message})> setModelNeverControlled(
+    String model,
+    bool value,
+  ) async {
+    final name = model.trim();
+    if (name.isEmpty) {
+      return (
+        ok: false,
+        message: 'This line has no model on it, so there is no catalog entry '
+            'to mark. Give the device a model first.',
+      );
+    }
+
+    final entry = avDeviceLibrary.templateForModel(name);
+    if (entry == null) {
+      // Deliberately not created here. An entry conjured out of a quote line
+      // would have a model and nothing else — no maker, no part number, no
+      // price — and would then shadow the real one when somebody imported it.
+      // The Cost tab's "Add to catalog" exists for this and asks for the rest.
+      return (
+        ok: false,
+        message: '"$name" is not in the catalog yet. Add it to the catalog '
+            'first, then mark it as never needing a module.',
+      );
+    }
+
+    if (entry.neverControlled == value) {
+      return (
+        ok: true,
+        message: value
+            ? '"$name" is already marked as never needing a control module.'
+            : '"$name" already expects a control module.',
+      );
+    }
+
+    avDeviceLibrary.upsert(entry.copyWith(neverControlled: value));
+    final file = await saveAvDeviceLibrary();
+    // The catalog is a plain object rather than a listenable, so the pages
+    // reading it have to be told.
+    avDeviceLibraryChanged();
+
+    AppLogger.logInfo(
+      'Catalog: "$name" marked '
+      '${value ? 'as never needing a control module' : 'as needing a control '
+          'module again'}'
+      '${file.isEmpty ? ' (in memory only — the catalog file could not be '
+          'written)' : ' and saved to $file'}.',
+    );
+
+    if (file.isEmpty) {
+      return (
+        ok: false,
+        message: '"$name" was changed in memory, but the catalog file could '
+            'not be written — check the Catalog tab.',
+      );
+    }
+    return (
+      ok: true,
+      message: value
+          ? '"$name" never needs a control module. Every room that draws one '
+              'stops reporting it as missing a driver.'
+          : '"$name" expects a control module again, so rooms will report it '
+              'when it has none.',
+    );
+  }
 
   /// Writes the device catalog. Returns the file written, or '' on failure.
   Future<String> saveAvDeviceLibrary() async {
@@ -8767,6 +8885,9 @@ class AppStateProvider extends ChangeNotifier {
       _avFlowSyncedPath = outputFile;
       // The diagrams and the cost estimate follow the config to its new home.
       await saveProjectSidecars();
+      markRoomSaved();
+      // The project's cached read of this room is now the stale one.
+      _projectRooms.clear();
       notifyListeners();
       return true;
 
@@ -9806,6 +9927,212 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+
+
+  // --- is this room behind its file? ---------------------------------------
+
+  /// The room as it stood the last time it was loaded or saved.
+  ///
+  /// A fingerprint rather than a flag. A flag would have to be set by every
+  /// mutation in this class — hundreds of them, across the wizard, the device
+  /// forms, the canvas, the racks and the estimate — and the one that got
+  /// missed would be the one that lost somebody's work silently.
+  ///
+  /// Comparing the document to itself cannot be forgotten to do. It costs an
+  /// encode of the room, so it is asked ON DEMAND — when somebody is about to
+  /// leave the room — and never per frame.
+  String _savedRoomFingerprint = '';
+
+  String _roomFingerprint() {
+    try {
+      return jsonEncode(_sortJson(_pruneConfig(roomConfig))) +
+          jsonEncode(avFlowAsJson());
+    } catch (_) {
+      // A room that cannot be encoded is a room we cannot compare; treat it as
+      // changed so the prompt errs towards keeping work rather than losing it.
+      return DateTime.now().microsecondsSinceEpoch.toString();
+    }
+  }
+
+  /// Records the room as matching its files — called after a load and after a
+  /// save.
+  void markRoomSaved() => _savedRoomFingerprint = _roomFingerprint();
+
+  /// True when the room in memory differs from the files it came from.
+  ///
+  /// Covers the config AND the sidecars, because "unsaved work" on this app is
+  /// as often a diagram or a typed price as it is a field on a form.
+  bool get roomHasUnsavedChanges =>
+      currentConfigPath.isNotEmpty &&
+      _savedRoomFingerprint.isNotEmpty &&
+      _roomFingerprint() != _savedRoomFingerprint;
+
+  /// Writes the room back over the file it came from, with no dialog, and its
+  /// sidecars with it.
+  ///
+  /// Export Config asks where to put it, which is right for producing a copy
+  /// and wrong for the thing somebody does forty times an afternoon while
+  /// moving between the rooms of a job. Returns the file written, or a message
+  /// beginning with 'Error' — the caller shows either.
+  Future<String> saveRoomInPlace() async {
+    pendingRawEditorCommit?.call(); // raw-editor typing goes out with it
+    if (currentConfigPath.isEmpty) {
+      return 'Error: this room has never been saved, so there is no file to '
+          'save it back to. Use Export Config once to give it one.';
+    }
+    if (roomConfig.isEmpty) return 'Error: there is nothing to save.';
+    try {
+      const encoder = JsonEncoder.withIndent('    ');
+      await File(currentConfigPath)
+          .writeAsString(encoder.convert(_sortJson(_pruneConfig(roomConfig))));
+      await saveProjectSidecars();
+      markRoomSaved();
+      // The project's cached read of this room is now the stale one.
+      _projectRooms.clear();
+      AppLogger.logInfo('Room saved in place to $currentConfigPath.');
+      notifyListeners();
+      return currentConfigPath;
+    } catch (e, stack) {
+      AppLogger.logError('Failed to save the room to $currentConfigPath', e,
+          stack);
+      return 'Error: $e';
+    }
+  }
+
+  // --- working on a room of the project ------------------------------------
+
+  /// The project room the editor currently holds, or null.
+  ///
+  /// Derived from [currentConfigPath] rather than remembered separately. A
+  /// second copy of "which room is open" is a second thing to keep in step,
+  /// and it would be wrong the first time somebody opened one of the project's
+  /// rooms through the ordinary Open Config dialog — which should light up the
+  /// picker exactly as if they had chosen it there.
+  ProjectRoomRef? get openProjectRoom {
+    if (currentConfigPath.isEmpty) return null;
+    for (final ref in project.rooms) {
+      final absolute = BuildingProject.resolvePath(
+        ref.configPath,
+        currentProjectPath,
+      );
+      if (absolute.isNotEmpty && _samePath(absolute, currentConfigPath)) {
+        return ref;
+      }
+    }
+    return null;
+  }
+
+  /// Two paths naming the same file, allowing for Windows' case-insensitivity
+  /// and for one of them being spelled with different separators.
+  static bool _samePath(String a, String b) {
+    final left = path.normalize(a).replaceAll('\\', '/');
+    final right = path.normalize(b).replaceAll('\\', '/');
+    return Platform.isWindows
+        ? left.toLowerCase() == right.toLowerCase()
+        : left == right;
+  }
+
+  /// Opens one of the project's rooms into the editor.
+  ///
+  /// The whole room, not just the config: the sidecars are read straight away
+  /// rather than waiting for somebody to visit the AV Flow tab. Switching
+  /// rooms from a picker means the NEXT tab you look at is as likely to be
+  /// Racks or Cost as the diagram, and a room that half-arrives — control
+  /// config from the new room, drawing still from the old one — is the worst
+  /// possible version of this feature.
+  ///
+  /// Loading the sidecars here also settles [avFlowNeedsChoice] before it can
+  /// fire. That prompt exists for "you have an unsaved diagram and the file
+  /// you opened has one too"; on a deliberate room switch the answer is always
+  /// the room being switched to, and asking would be noise on every hop.
+  ///
+  /// Returns the message to show, or '' when it worked.
+  Future<String> openProjectRoomRef(ProjectRoomRef ref) async {
+    final absolute = BuildingProject.resolvePath(
+      ref.configPath,
+      currentProjectPath,
+    );
+    if (absolute.isEmpty) return 'That room has no file on the project.';
+    if (!File(absolute).existsSync()) {
+      return 'The config is not at $absolute.';
+    }
+
+    final ok = await openConfigAtPath(absolute);
+    if (!ok) return 'Could not open $absolute — see the log.';
+
+    loadAvFlowForCurrentConfig();
+
+    // Both the room being left and the room being opened are now better read
+    // live than from the cache: the one being left may have unsaved edits the
+    // cache never saw, and the one being opened is about to be priced from
+    // memory instead.
+    _projectRooms.clear();
+
+    AppLogger.logInfo(
+      'Project room "${ref.fallbackName}" opened into the editor from '
+      '$absolute.',
+    );
+    notifyListeners();
+    return '';
+  }
+
+  /// Steps to the next or previous room on the project, skipping nothing —
+  /// including the rooms excluded from the total, which are still rooms
+  /// somebody works on.
+  ///
+  /// Returns the message to show, or '' when it worked.
+  Future<String> stepProjectRoom(int delta) async {
+    if (project.rooms.isEmpty) return 'This project has no rooms yet.';
+    final current = openProjectRoom;
+    final from = current == null
+        ? -1
+        : project.rooms.indexWhere((r) => r.id == current.id);
+    // From nowhere, forward lands on the first room and back on the last.
+    final next = from < 0
+        ? (delta > 0 ? 0 : project.rooms.length - 1)
+        : (from + delta) % project.rooms.length;
+    return openProjectRoomRef(
+      project.rooms[next < 0 ? next + project.rooms.length : next],
+    );
+  }
+
+  /// The open room as the rollup should see it: from MEMORY, not from disk.
+  ///
+  /// This is what makes an edit on a room tab show up in the building total
+  /// without a save-and-refresh round trip. A price typed on the Cost tab, a
+  /// box added to the diagram, a device given its module — all of it reaches
+  /// the project on the next rebuild, because the project reads the same
+  /// objects the room tabs are editing rather than the file underneath them.
+  ///
+  /// The room's own file is of course still behind until somebody saves, and
+  /// the Rooms pane says so on the row rather than letting the figure quietly
+  /// disagree with what is on disk.
+  LoadedRoom _liveRoom(String configPath) {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    final title =
+        (setup is Map ? setup['gui_full_room_name']?.toString() : '')?.trim() ??
+            '';
+    return LoadedRoom(
+      configPath: configPath,
+      title: title,
+      // The same three collections readRoomFromDisk builds a model out of —
+      // the ones costing and the control-gap rule actually read.
+      model: AvFlowModel(
+        nodes: List<AvNode>.from(avNodes),
+        cables: List<AvCable>.from(avCables),
+        racks: List<RackFrame>.from(avRacks),
+        rackSlots: const {},
+        rackItems: List<RackItem>.from(avRackItems),
+        canvasSize: Size.zero,
+        roomTitle: title,
+        unplaced: const [],
+      ),
+      settings: avCost,
+      config: roomConfig,
+      flowPath: avFlowSidecarPath,
+    );
+  }
+
   // --- pricing -------------------------------------------------------------
 
   /// Forgets the cached room reads, so the next estimate re-reads every file.
@@ -9826,11 +10153,22 @@ class AppStateProvider extends ChangeNotifier {
   ProjectEstimate priceProject({bool fresh = false}) {
     if (fresh) _projectRooms.clear();
 
+    final rooms = <String, LoadedRoom>{};
     for (final ref in project.rooms) {
-      if (_projectRooms.containsKey(ref.id)) continue;
-      _projectRooms[ref.id] = readRoomFromDisk(
-        BuildingProject.resolvePath(ref.configPath, currentProjectPath),
+      final absolute = BuildingProject.resolvePath(
+        ref.configPath,
+        currentProjectPath,
       );
+      // The room in the editor is read from MEMORY and never cached: it is
+      // being edited, so a copy of it is out of date the moment it is taken,
+      // and the file underneath it is out of date until somebody saves.
+      if (currentConfigPath.isNotEmpty && _samePath(absolute, currentConfigPath)) {
+        rooms[ref.id] = _liveRoom(absolute);
+        _projectRooms.remove(ref.id);
+        continue;
+      }
+      rooms[ref.id] =
+          _projectRooms[ref.id] ??= readRoomFromDisk(absolute);
     }
     // Rooms that have left the project should not keep their files cached.
     _projectRooms.removeWhere(
@@ -9844,7 +10182,7 @@ class AppStateProvider extends ChangeNotifier {
       rates: laborRates,
       baseCosts: baseCosts,
       tier: pricingTier,
-      rooms: _projectRooms,
+      rooms: rooms,
       // The control-module rule needs application data the rollup has no way
       // to reach on its own: which config sections a family's count makes
       // live, and which python module claims a model.

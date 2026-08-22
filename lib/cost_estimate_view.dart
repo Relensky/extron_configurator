@@ -2100,6 +2100,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         : (nodes.isNotEmpty &&
               nodes.every((n) => provider.avNodeIsUncontrolled(n)));
 
+    // The CATALOG's verdict, on its own. [uncontrolled] above folds it
+    // together with this room's own exclusion, which is right for the icon and
+    // wrong for the menu: "this box is not ours to drive" and "no example of
+    // this product is ever driven" are two decisions at two scopes, and the
+    // menu has to offer each of them in its own state.
+    final catalogModel = extra != null ? extra.catalogModel : line.model;
+    final neverControlled = provider.avModelNeverControlled(catalogModel);
+
     if (configKey.isNotEmpty) {
       return KeyedSubtree(
         key: slot,
@@ -2186,6 +2194,38 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
           ),
           PopupMenuItem(
+            value: 'nevercontrol',
+            enabled: catalogModel.trim().isNotEmpty,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                neverControlled ? Icons.settings_remote : Icons.block,
+                size: 18,
+              ),
+              title: Text(
+                neverControlled
+                    ? 'This product does need a module'
+                    : 'This product never needs a module',
+              ),
+              subtitle: Text(
+                catalogModel.trim().isEmpty
+                    ? 'Only a line with a catalog model can be marked — add '
+                          'it to the catalog first.'
+                    : neverControlled
+                    ? 'Saved to the catalog: every room that draws a '
+                          '$catalogModel starts reporting it again when it '
+                          'has no driver.'
+                    // Said plainly, because it is the one choice on this menu
+                    // that reaches outside the room in front of you.
+                    : 'A passive splitter, a plate, a USB stick — nothing can '
+                          'drive it anywhere. Saved to the CATALOG, so every '
+                          'room that draws a $catalogModel stops asking for a '
+                          'module, not just this one.',
+              ),
+            ),
+          ),
+          PopupMenuItem(
             value: 'spare',
             enabled: extra != null,
             child: ListTile(
@@ -2206,7 +2246,21 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             ),
           ),
         ],
-        onSelected: (choice) {
+        onSelected: (choice) async {
+          if (choice == 'nevercontrol') {
+            final messenger = ScaffoldMessenger.of(context);
+            final result = await provider.setModelNeverControlled(
+              catalogModel,
+              !neverControlled,
+            );
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(result.message),
+                backgroundColor: result.ok ? null : Colors.red,
+              ),
+            );
+            return;
+          }
           if (choice == 'spare' && extra != null) {
             provider.updateAvCostExtraEquipment(
               extra.copyWith(spare: !extra.spare),

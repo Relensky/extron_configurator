@@ -417,6 +417,47 @@ added. The project total is the sum of the room totals, never a building-wide
 percentage — a building where two rooms are taxed differently is ordinary, and
 it must not quietly average.
 
+### Working the rooms from the project
+
+**Project and Cost sit at the top of the rail**, because that is the order the
+work happens in: open the job, see what the building costs, then go down into
+the rooms that make it up.
+
+Once a project has rooms, a **room picker sits in the title bar on every tab**.
+Pick a room — or step through them with the arrows — and the editor loads it:
+config *and* sidecars together, so the next tab you look at is that room's and
+not half of the last one's. `openProjectRoomRef` goes through the same pipeline
+as Open Config (same backup, same migration, same change log), so a room opened
+from the picker is not a differently loaded room from the same room opened by
+hand. Opening one of the project's rooms through the ordinary Open Config dialog
+lights the picker up too — it derives the current room from `currentConfigPath`
+rather than remembering an id that could drift.
+
+**The open room is priced from memory, not from disk.** That is what makes an
+edit on a room tab reach the building total without a save-and-refresh round
+trip: type a price on Cost, add a box on the diagram, give a device its module,
+and the project's total, master parts list and control-gap list all follow on the
+next rebuild. Every other room is read from disk and cached; the open one never
+is, because a copy of a document being edited is out of date the moment it is
+taken.
+
+The honest half of that bargain is said out loud in two places — the Rooms pane
+marks the open room and says when it is counted *with unsaved changes*, and the
+title bar grows a **Save room** button whenever the room differs from its file.
+
+**Save room writes back over the room's own file, with no dialog.** Export
+Config asks where to put it, which is right for producing a copy and wrong for
+the thing somebody does forty times an afternoon while moving between rooms.
+Switching away from a room that is behind its file offers to save first.
+
+"Is this room behind its file?" is answered by **fingerprinting the document**
+(`roomHasUnsavedChanges`) rather than by a dirty flag. A flag would have to be
+set by every mutation in `AppStateProvider` — hundreds of them across the wizard,
+the device forms, the canvas, the racks and the estimate — and the one that got
+missed would be the one that lost somebody's work silently. Comparing the room to
+itself cannot be forgotten to do; it costs an encode, so it is asked on demand
+and never per frame.
+
 ### Tagging parts to vendors
 
 Which company quotes a part is a fact about the **job**, not about the product,
@@ -527,6 +568,46 @@ It is never a blocker. Specifying a device before its driver exists is ordinary,
 and the swap goes through onto a model nothing drives — it just tells you, which
 is the point.
 
+#### Retiring a row: products that never need a module
+
+Two different things end up on that list, and only one of them is a to-do:
+
+- a driver that has not been written yet, which somebody will fix;
+- a product that has **no control interface at all** — a passive splitter, a
+  plate, a USB capture stick — which nobody will ever fix.
+
+Left alone, the second kind accumulates, and a list of permanent warnings is one
+people learn to scroll past. So both tabs can retire it at the source, by
+setting `neverControlled` on the **catalog entry** (`av_devices.json`):
+
+- **Project tab** — a "Never needs one" button sits on the gap note itself, on
+  the row that is complaining. It confirms first, because it is the only control
+  on the master list that reaches outside the project.
+- **Cost tab** — "This product never needs a module" in the flag menu, next to
+  the per-room choice it must not be confused with.
+
+Both call `AppStateProvider.setModelNeverControlled`, which **saves the catalog
+immediately** — neither tab has a catalog Save button, and an edit that lives in
+memory until something else writes the file is an edit somebody loses.
+
+**Scope is the thing to get right here**, and the wording on both tabs leans on
+it:
+
+| | Means | Lives in |
+|---|---|---|
+| `AvNode.excludeFromControl` / `CostLineItem.noControl` | *This box, in this room, is not ours to drive* — an owner-furnished display, the building's switch | the room |
+| `AvDeviceTemplate.neverControlled` | *No example of this product, anywhere, ever has a control interface* | the catalog |
+
+A model the catalog does not have is **refused rather than invented**: an entry
+conjured out of a quote line would carry a model and nothing else — no maker, no
+part number, no price — and would then shadow the real one on the next import.
+Use "Add to catalog" first. Nothing else on the entry is touched.
+
+Un-marking is on the Catalog tab's "Never in the room config" tick. The Cost
+tab's menu toggles both ways; the Project tab's button does not, because a marked
+product no longer appears on the gap list at all — there would be no row to press
+— and the confirm text says where to go instead.
+
 ### What comes out
 
 **Workbook** writes one `.xlsx`: a Summary (building total, a row per room, a
@@ -545,6 +626,45 @@ send a competitor's pricing to a supplier and your margins to both.
 Sheet names come from vendor and room names, which are free text — they are
 clipped to 31 characters and numbered when two collide, because Excel refuses
 to open a workbook with two sheets of one name.
+
+## The left rail fits, whatever the window
+
+Fifteen tabs down the side of a window that is not always fifteen tabs tall, in
+a pane that can be dragged to 72 pixels wide, at a text size somebody can push
+to 150%. The rail sizes itself to the pane in both directions:
+
+- **Labels shrink to the width.** Two-word labels wrap by themselves, but
+  "Schematic" is one word: the type size is measured against the pane so the
+  longest word always fits, at any text scale.
+- **Rows shrink to the height**, so every tab is on screen at once. A rail you
+  have to scroll to reach App Config is a rail where App Config may as well not
+  exist.
+
+**It is no longer a `NavigationRail`.** That widget cannot do the height half:
+its destinations have a floor of about 55 pixels each whatever you set — the
+icon-size properties do not move it at all, and wringing the label down to 7pt
+only reaches 55 — so fifteen of them need 830 pixels and a laptop has 600. The
+rail is drawn directly instead, one row whose padding, icon and type are all
+computed from the space available.
+
+Three modes, picked by measurement rather than by breakpoint:
+
+1. **Comfortable** — generous padding and a 22px icon, whenever the window can
+   afford it.
+2. **Tight** — padding, icon and type scaled down together until fifteen rows
+   fit. Type has a floor of 7pt (multiplied by the app text scale, so 150% still
+   reads at 10.5); dropping a point is a far smaller loss than dropping the
+   words, and it is often the difference between "Floor Plan" taking one line
+   and taking two — worth ~150 pixels down the rail.
+3. **Icons with tooltips** — the last resort, for a window with no room for
+   fifteen legible labelled rows. Not a nice rail, and it beats the two
+   alternatives at 420 pixels of height: type nobody can read, or five tabs
+   hidden below the fold.
+
+Scrolling survives below even that, with the selected tab still scrolled into
+view — but it is the rare case now rather than the normal one, and the tests
+assert which is which so a regression that quietly brings the scrollbar back on
+a laptop fails instead of passing.
 
 ## Save All
 

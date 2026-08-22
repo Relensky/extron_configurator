@@ -303,7 +303,17 @@ class _ProjectViewState extends State<ProjectView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _header(context, provider, estimate),
+        // Flexible with a scroll view inside, not a bare Column: the header is
+        // three rows of fields, figures and buttons, and at 150% text on a
+        // short window it is taller than the whole page. Left rigid it painted
+        // an overflow stripe across the top of the tab; this way it takes the
+        // room it needs when there is room, and scrolls within itself when
+        // there is not — while the pane below keeps the rest.
+        Flexible(
+          child: SingleChildScrollView(
+            child: _header(context, provider, estimate),
+          ),
+        ),
         const Divider(height: 1),
         Expanded(
           child: switch (_pane) {
@@ -696,11 +706,17 @@ class _RoomRow extends StatelessWidget {
     final theme = Theme.of(context);
     final e = room.estimate;
     final dimmed = !room.ref.included;
+    final isOpen = provider.openProjectRoom?.id == room.ref.id;
+    final unsaved = isOpen && provider.roomHasUnsavedChanges;
 
     return Card(
       margin: EdgeInsets.zero,
       color: room.ok
-          ? (dimmed ? theme.colorScheme.surfaceContainerLow : null)
+          ? (isOpen
+                ? theme.colorScheme.primaryContainer
+                : dimmed
+                ? theme.colorScheme.surfaceContainerLow
+                : null)
           : theme.colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
@@ -740,6 +756,32 @@ class _RoomRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  // The room in the editor is priced from MEMORY, so its row
+                  // can be ahead of its own file. Saying so is the price of
+                  // that: a total nobody can reconcile with the folder is a
+                  // total nobody trusts.
+                  if (isOpen)
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.edit_note,
+                          size: 13,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          unsaved
+                              ? 'Open in the editor — counted with its unsaved '
+                                    'changes'
+                              : 'Open in the editor',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: unsaved
+                                ? theme.colorScheme.error
+                                : theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -1171,7 +1213,7 @@ class _PartRow extends StatelessWidget {
                             color: theme.colorScheme.error,
                           ),
                           const SizedBox(width: 4),
-                          Expanded(
+                          Flexible(
                             child: Text(
                               'No control module — $undriven',
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -1180,6 +1222,16 @@ class _PartRow extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          // The fix, next to the complaint. Some of these rows
+                          // are a driver waiting to be written and some are a
+                          // passive splitter that will never have one, and the
+                          // second kind is why this list gets scrolled past —
+                          // so the way to retire it is on the row that is
+                          // wrong, not three tabs away.
+                          if (line.model.trim().isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            _NeverNeedsModuleButton(model: line.model),
+                          ],
                         ],
                       ),
                     ),
@@ -1533,6 +1585,104 @@ class _SwapPreviewDialog extends StatelessWidget {
           child: Text('Swap ${plan.boxes} box(es)'),
         ),
       ],
+    );
+  }
+}
+
+/// "Never needs one" — retiring a control-gap row by telling the CATALOG that
+/// the product has no control interface at all.
+///
+/// A confirm step, short but real, because this is the only control on the
+/// master list that reaches outside the project: it is written to
+/// av_devices.json and every room in every job stops asking about that product
+/// from then on. The rest of this tab edits the project; this edits the price
+/// list everyone shares.
+///
+/// The reverse is deliberately NOT here. Once a product is marked, it stops
+/// appearing on this list at all, so there would be no row to un-mark it from —
+/// the tick on the Catalog tab is where that lives, and the confirm text says
+/// so rather than leaving somebody hunting.
+class _NeverNeedsModuleButton extends StatefulWidget {
+  final String model;
+  const _NeverNeedsModuleButton({required this.model});
+
+  @override
+  State<_NeverNeedsModuleButton> createState() =>
+      _NeverNeedsModuleButtonState();
+}
+
+class _NeverNeedsModuleButtonState extends State<_NeverNeedsModuleButton> {
+  /// True while the catalog is being written, so a second press cannot start a
+  /// second write of the same file.
+  bool _busy = false;
+
+  Future<void> _mark() async {
+    final provider = context.read<AppStateProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${widget.model} never needs a module?'),
+        content: Text(
+          'For a product nothing can drive anywhere — a passive splitter, a '
+          'plate, a USB capture stick.\n\n'
+          'This is saved to the CATALOG, not to this project. Every room in '
+          'every job that draws a ${widget.model} stops reporting it as '
+          'waiting for a control module.\n\n'
+          'If instead this particular box just is not yours to drive — an '
+          'owner-furnished display, the building’s switch — leave this alone '
+          'and mark that box on the room’s own Cost tab.\n\n'
+          'To undo it later, untick "Never in the room config" on the Catalog '
+          'tab.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('never_needs_module_confirm'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save to catalog'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+
+    setState(() => _busy = true);
+    final result = await provider.setModelNeverControlled(widget.model, true);
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.red,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: 'Nothing can drive a ${widget.model} anywhere — record that on '
+          'the catalog entry',
+      child: TextButton(
+        key: ValueKey('never_needs_module_${widget.model}'),
+        onPressed: _busy ? null : _mark,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: theme.textTheme.bodySmall,
+        ),
+        child: const Text('Never needs one'),
+      ),
     );
   }
 }

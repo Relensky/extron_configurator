@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/main.dart';
+import 'package:extron_configurator/nav_rail.dart';
 
 /// Two things that used to depend on which page somebody happened to be
 /// standing on: the room workbook lived on two of the twelve tabs, and "can I
@@ -129,13 +130,11 @@ void main() {
     expect(AppTab.values[AppTab.system.index + 1], AppTab.rawJson);
 
     await pumpApp(tester, room());
-    // NavigationRailDestination is a description, not a widget, so the rail
-    // itself is what carries the order.
+    // The rail draws its own rows now — NavigationRail could not shrink far
+    // enough to fit them all — so the order is read off the rows themselves.
     final labels = [
-      for (final d in tester
-          .widget<NavigationRail>(find.byType(NavigationRail))
-          .destinations)
-        (d.label as Text).data,
+      for (final row in tester.widgetList<NavRailRow>(find.byType(NavRailRow)))
+        row.tab.label,
     ];
     expect(labels.indexOf('Raw JSON'), labels.indexOf('System') + 1);
     // The rail order and the enum order have to agree, or every tab shows the
@@ -149,11 +148,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('pane_fold_nav_rail')));
     await tester.pumpAndSettle();
-    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byType(NavRailRow), findsNothing);
     expect(find.byKey(const ValueKey('pane_unfold_nav_rail')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('pane_unfold_nav_rail')));
     await tester.pumpAndSettle();
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(NavRailRow), findsNWidgets(kNavTabs.length));
   });
 }

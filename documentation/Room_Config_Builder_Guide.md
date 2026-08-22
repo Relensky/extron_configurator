@@ -59,6 +59,8 @@ They run down the left-hand rail in roughly the order you use them.
 
 | Tab | What it's for |
 |---|---|
+| **Project** | A whole building: several rooms quoted together, one master parts list, split into a quote request per vendor. |
+| **Cost** | The estimate for the room you're on: equipment, cable, labor, tax and fees. |
 | **Wizard** | The room's identity — building, room number, name — and how many of each device it has. |
 | **Devices** | One sub-tab per device: model, IP, connection type, module, and whatever else the schema says that family has. |
 | **System** | Everything else in `SYSTEM_SETUP`: switcher inputs and outputs, panel behaviour, outlet names. |
@@ -68,17 +70,22 @@ They run down the left-hand rail in roughly the order you use them.
 | **Floor Plan** | Where things physically are, with callouts on a sheet. |
 | **Cabling** | Low-voltage runs that aren't signal — screen triggers, shades, and a run schedule. |
 | **Racks** | Rack elevations, front and rear, with clearances and a parts list. |
-| **Cost** | The estimate: equipment, cable, labor, tax and fees. |
-| **Project** | A whole building: several rooms quoted together, one master parts list, split into a quote request per vendor. |
 | **Catalog** | The device catalog every drawing and every price is built from. |
 | **Schema** | What the Devices and System tabs look like — labels, types, descriptions, device families. |
 | **Flow Rules** | How the AV Flow decides what to draw. |
 | **App Config** | Where the files live, the theme, the SFTP settings and the active deployment target. |
 
+Project and Cost are at the top because that's the order the work goes in: open
+the job, see what the building costs, then go into the rooms that make it up.
+
 The **Catalog**, **Schema** and **Flow Rules** tabs work with no room open at
 all — they're about the app, not about one room. So does **Project**, for a
 different reason: it points at room *files* and prices them off disk, so
 reviewing a building's quote never means opening a room.
+
+The rail always fits the window. Shrink the window and the tabs get tighter; get
+it small enough and the words come off and you're left with icons you can hover
+for the name. You should never have to scroll it to find a tab.
 
 # Setting up, once
 
@@ -667,6 +674,68 @@ You'll see it in three places:
 
 Cable and rack hardware are never flagged — they were never going to have a
 driver. Neither is anything you've marked as never controlled on the Catalog tab.
+
+#### "Never needs one"
+
+Two different things land on that list. One is a driver nobody has written yet,
+which somebody will get to. The other is a thing that simply has no control
+interface — a passive splitter, a plate, a USB capture stick — and no amount of
+work will ever change that.
+
+Leave the second kind on the list and it just grows, until the list is mostly
+noise and the real ones get skipped. So you can retire it: press **Never needs
+one** on the row, right next to where it's complaining, and confirm.
+
+That's saved to the **catalog**, not to this project. Every room in every job
+that draws one stops asking about it from then on — which is what you want,
+because it's a fact about the product.
+
+The same choice is on the Cost tab, in the little flag menu on the row: **"This
+product never needs a module"**.
+
+Be careful which of the two you want, because they look alike and aren't:
+
+- **"Not part of the room config"** — this box, in this room, isn't yours to
+  drive. An owner-furnished display, the building's switch, another
+  department's codec. The same product next door might well be driven.
+- **"This product never needs a module"** — nothing can drive one of these,
+  anywhere, ever.
+
+The product has to be in the catalog already. If it isn't, use **Add to
+catalog** first — the app won't invent an entry from a quote line, because one
+built that way would have a name and nothing else and would get in the way of
+the real entry later.
+
+Changed your mind? Untick **Never in the room config** on the Catalog tab. (The
+Project tab's button only goes one way, because once a product is marked it
+stops appearing on that list — there'd be no row left to press.)
+
+### Working through the rooms
+
+Once the project has rooms, there's a **room picker in the title bar** — on
+every tab, not just this one. Pick a room, or use the arrows to step through
+them, and the editor loads it. Everything: the config, the drawing, the racks,
+the estimate. Then go to whichever tab you want and you're looking at that
+room's version of it.
+
+That's the point of putting it in the title bar rather than here. The tab is the
+*question* and the room is the *subject*, and you should be able to change one
+without losing the other. Sitting on Cost and stepping through eight rooms is a
+perfectly ordinary thing to want to do.
+
+**Your edits show up in the project straight away.** Type a price on the Cost
+tab and the building total moves — you don't have to save first and press
+Refresh. The project reads the room you're editing out of memory, and every
+other room off disk.
+
+The catch, and the app says it in two places: what you've changed isn't in the
+room's *file* yet. The Rooms list marks the open room and says when it's being
+counted with unsaved changes, and a **Save room** button appears in the title bar
+whenever there's something to save. That button writes straight back over the
+room's own file — no dialog, no picking a folder.
+
+Switch rooms with unsaved work and you'll be asked whether to save first, because
+switching reads the next room off disk and anything not saved would go.
 
 ### Getting it out
 

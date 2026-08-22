@@ -24,6 +24,7 @@ import 'cabling_view.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
 import 'nav_rail.dart';
+import 'project_room_picker.dart';
 import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
@@ -532,7 +533,24 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Room Config Builder'),
+        // The app's name, and — once a project is open — which of its rooms
+        // you are looking at. Beside the title rather than out in the actions
+        // because it is not an action: it says what is on screen.
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            // Both halves flexible: at 150% text the app's own name is wider
+            // than the title slot on a laptop, so a rigid Text painted an
+            // overflow stripe across the top bar before the picker even got a
+            // say. The name gives way first — it is the one thing on screen
+            // nobody needs to read twice.
+            Flexible(
+              child: Text('Room Config Builder', overflow: TextOverflow.ellipsis),
+            ),
+            Flexible(child: ProjectRoomPicker()),
+          ],
+        ),
+        titleSpacing: 16,
         actions: [
           // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
           // to live on two of the twelve tabs, which made "send me the

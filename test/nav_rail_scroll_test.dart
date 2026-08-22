@@ -8,11 +8,18 @@ import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/main.dart';
 import 'package:extron_configurator/nav_rail.dart';
 
-/// Fourteen tabs down the side of a window that is not fourteen tabs tall, in
-/// a pane that can be dragged down to 72 pixels wide, at a text size somebody
-/// can push to 150%. The rail has to stay reachable and readable through all
-/// of that: the wheel scrolls it, the tab you land on comes into view, and no
-/// label is ever painted wider than the pane it sits in.
+/// Fifteen tabs down the side of a window that is not fifteen tabs tall, in a
+/// pane that can be dragged down to 72 pixels wide, at a text size somebody can
+/// push to 150%.
+///
+/// The rail's job is to FIT: every tab on screen at once, at any window size
+/// anybody actually uses, with no label clipped. A rail you have to scroll to
+/// reach App Config is a rail where App Config may as well not exist.
+///
+/// Scrolling is still here for the window so short that even the minimum
+/// legible row cannot fit fifteen times — and the checks below say which case
+/// is which, so a regression that quietly brings the scrollbar back on a
+/// laptop fails rather than passing.
 void main() {
   AppStateProvider room({double scale = 1.0}) =>
       AppStateProvider(autoLoadSettings: false)
@@ -20,7 +27,6 @@ void main() {
         ..firstRunSetupNeeded = false
         ..textScale = scale;
 
-  /// A window short enough that the rail cannot possibly fit — a laptop.
   Future<void> pumpApp(
     WidgetTester tester,
     AppStateProvider provider, {
@@ -40,62 +46,136 @@ void main() {
 
   ScrollPosition railScroll(WidgetTester tester) => tester
       .state<ScrollableState>(find.ancestor(
-        of: find.byType(NavigationRail),
+        of: find.byType(NavRailRow).first,
         matching: find.byType(Scrollable),
       ).first)
       .position;
 
-  /// One notch of a mouse wheel over the middle of the rail.
+  /// One notch of a mouse wheel over the rail.
   Future<void> wheel(WidgetTester tester, double dy) async {
     final pointer = TestPointer(1, PointerDeviceKind.mouse);
-    final over = tester.getCenter(find.byType(NavigationRail));
+    // The viewport, not a row: once the rail has scrolled, the first row is
+    // off the top and the event would land on nothing.
+    final over = tester.getCenter(find.byType(Scrollable).first);
     await tester.sendEventToBinding(pointer.hover(over));
     await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the wheel scrolls the rail, both ways', (tester) async {
-    await pumpApp(tester, room());
-    final pos = railScroll(tester);
-    // A rail taller than the window is the whole reason any of this exists.
-    expect(pos.maxScrollExtent, greaterThan(0));
-    expect(pos.pixels, 0);
+  /// True when the rail is showing words. On a window too short for fifteen
+  /// labelled rows it falls back to icons with tooltips, and asking after the
+  /// labels then is asking after something the rail deliberately does not have.
+  bool railHasLabels(WidgetTester tester) =>
+      tester.widget<NavRailRow>(find.byType(NavRailRow).first).fit.labels;
 
-    await wheel(tester, 200);
-    expect(pos.pixels, greaterThan(0));
-    final down = pos.pixels;
+  /// The bottom of the last row, against the bottom of the window.
+  void expectEveryTabOnScreen(WidgetTester tester, String where) {
+    expect(find.byType(NavRailRow), findsNWidgets(kNavTabs.length));
+    final rows = find.byType(NavRailRow);
+    final last = tester.getRect(rows.last);
+    final viewport = tester.getRect(find.byType(Scrollable).first);
+    expect(
+      last.bottom,
+      lessThanOrEqualTo(viewport.bottom + 0.5),
+      reason: 'the last tab is off the bottom $where',
+    );
+    expect(
+      railScroll(tester).maxScrollExtent,
+      // Not exactly zero: the rows are sized from measured text, so fifteen of
+      // them land on the viewport height give or take a rounding error.
+      lessThan(1),
+      reason: 'the rail still needs scrolling $where',
+    );
+  }
 
-    await wheel(tester, -200);
-    expect(pos.pixels, lessThan(down));
+  group('every tab fits, without scrolling', () {
+    for (final size in [
+      const Size(1200, 600), // the laptop that used to cut tabs off
+      const Size(1600, 900),
+      const Size(1920, 1080),
+      const Size(1200, 500), // a short window somebody has dragged down
+    ]) {
+      testWidgets('${size.width.round()}x${size.height.round()}',
+          (tester) async {
+        await pumpApp(tester, room(), size: size);
+        expectEveryTabOnScreen(tester, 'at ${size.height.round()} px tall');
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('and at 150% text on a laptop', (tester) async {
+      await pumpApp(tester, room(scale: 1.5));
+      expectEveryTabOnScreen(tester, 'at 1.5 x text');
+    });
   });
 
-  testWidgets('the last tab can be scrolled to and tapped', (tester) async {
+  testWidgets('the last tab can be tapped without scrolling to it',
+      (tester) async {
     final p = room();
     await pumpApp(tester, p);
-    // App Config is the bottom of the rail — the tab that used to be cut off.
-    await wheel(tester, railScroll(tester).maxScrollExtent);
-    await tester.tap(find.text('App Config'));
+    // The row itself, not its label — the rail drops to icons on a window too
+    // short for words, and the bottom tab has to stay reachable either way.
+    await tester.tap(find.byType(NavRailRow).last);
     await tester.pumpAndSettle();
     expect(p.selectedTabIndex, AppTab.appConfig.index);
   });
 
-  testWidgets('a tab picked from elsewhere is scrolled into view',
+  testWidgets('a window with no room for words keeps every tab, as icons',
       (tester) async {
-    final p = room();
-    await pumpApp(tester, p);
-    final pos = railScroll(tester);
-    expect(pos.pixels, 0);
+    await pumpApp(tester, room(scale: 1.5), size: const Size(1200, 420));
+    expect(railHasLabels(tester), isFalse);
+    expectEveryTabOnScreen(tester, 'as icons at 1.5 x text');
+    // The word is still reachable.
+    expect(find.byType(Tooltip), findsWidgets);
+  });
 
-    // Nothing to do with the rail: the wizard hands over to another tab, a
-    // report jumps to Cabling. The rail still has to show where you are.
-    p.selectTab(AppTab.appConfig.index);
-    await tester.pumpAndSettle();
-    expect(pos.pixels, greaterThan(0));
+  testWidgets('rows are more generous when there is room for it',
+      (tester) async {
+    // The shrinking is supposed to be a response to a short window, not the
+    // permanent state: a big screen should not get the cramped rail.
+    await pumpApp(tester, room(), size: const Size(1200, 500));
+    final tight = tester.getSize(find.byType(NavRailRow).first).height;
 
-    // And back up again when the selection moves above the viewport.
-    p.selectTab(AppTab.wizard.index);
-    await tester.pumpAndSettle();
-    expect(pos.pixels, 0);
+    await pumpApp(tester, room(), size: const Size(1200, 1400));
+    final roomy = tester.getSize(find.byType(NavRailRow).first).height;
+
+    expect(roomy, greaterThan(tight));
+  });
+
+  group('the window too short for even the minimum row', () {
+    // 250 px of rail cannot hold fifteen legible tabs by any arithmetic, so
+    // this is where scrolling still earns its place.
+    const tiny = Size(1200, 250);
+
+    testWidgets('scrolls, both ways', (tester) async {
+      await pumpApp(tester, room(), size: tiny);
+      final pos = railScroll(tester);
+      expect(pos.maxScrollExtent, greaterThan(0));
+
+      await wheel(tester, 200);
+      expect(pos.pixels, greaterThan(0));
+      final down = pos.pixels;
+
+      await wheel(tester, -200);
+      expect(pos.pixels, lessThan(down));
+    });
+
+    testWidgets('and brings a tab picked elsewhere into view', (tester) async {
+      final p = room();
+      await pumpApp(tester, p, size: tiny);
+      final pos = railScroll(tester);
+      expect(pos.pixels, 0);
+
+      // Nothing to do with the rail: the wizard hands over to another tab, a
+      // report jumps to Cabling. The rail still has to show where you are.
+      p.selectTab(AppTab.appConfig.index);
+      await tester.pumpAndSettle();
+      expect(pos.pixels, greaterThan(0));
+
+      p.selectTab(AppTab.project.index);
+      await tester.pumpAndSettle();
+      expect(pos.pixels, 0);
+    });
   });
 
   /// A label that does not fit is not an exception and is not a wrong size —
@@ -104,6 +184,13 @@ void main() {
   /// ever be: the minimum intrinsic width of wrapping text IS its longest
   /// word. Wider than the box it was given, and letters are being cut off.
   void expectNothingClipped(WidgetTester tester, String where) {
+    if (!railHasLabels(tester)) {
+      // Icon-only: every tab is still there and its word is a hover away.
+      expect(find.byType(NavRailRow), findsNWidgets(kNavTabs.length));
+      expect(find.byType(Tooltip), findsWidgets, reason: 'no tooltips $where');
+      expect(tester.takeException(), isNull);
+      return;
+    }
     for (final tab in kNavTabs) {
       final label = find.text(tab.label);
       expect(label, findsWidgets, reason: '${tab.label} is missing');
@@ -137,8 +224,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final railWidth = tester.getSize(find.byType(NavigationRail)).width;
+    final railWidth = tester.getSize(find.byType(NavRailRow).first).width;
     expect(railWidth, lessThan(100), reason: 'the pane did not narrow');
     expectNothingClipped(tester, 'in the narrowed pane at 1.5 x text');
+    // Narrow AND tall-text is the worst case for fitting, and it still must.
+    expectEveryTabOnScreen(tester, 'in the narrowed pane at 1.5 x text');
   });
 }

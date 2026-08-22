@@ -457,3 +457,255 @@ not json at all
 ^
 
 --------------------------------------------------
+[2026-08-21T22:27:13.933226] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_166feb00\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-21T22:27:45.995087] ERROR: Failed to read C:\Users\dstanley\AppData\Local\Temp\flow_rules_bad_a71f84d1\av_flow_rules.json — using the built-in flow rules.
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.parse (dart:convert-patch/convert_patch.dart:885:48)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:35:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      FlowRules.load (package:extron_configurator/flow_rules.dart:745:21)
+<asynchronous suspension>
+#7      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/flow_rules_test.dart:175:21)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-21T22:28:03.593163] ERROR: Project could not read the room config C:\Users\dstanley\AppData\Local\Temp\rcb_project_test1fff63b8\bad_config.json
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+--------------------------------------------------
+[2026-08-21T22:28:04.716835] ERROR: Project swap could not write C:\Users\dstanley\AppData\Local\Temp\rcb_swap_test8681c6fe\a_config.json
+Details: Bad state: The config is not at C:\Users\dstanley\AppData\Local\Temp\rcb_swap_test8681c6fe\a_config.json.
+StackTrace:
+#0      _swapInRoomFiles (package:extron_configurator/project_swap.dart:335:19)
+#1      applyProjectSwap (package:extron_configurator/project_swap.dart:278:20)
+#2      main.apply (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:248:52)
+#3      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:500:22)
+#4      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:25)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#6      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-21T22:28:11.299089] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_dea3cf93\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-21T22:28:15.600068] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_9db3d74c\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-21T23:58:33.905723] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_bcd06993\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-21T23:59:06.836490] ERROR: Failed to read C:\Users\dstanley\AppData\Local\Temp\flow_rules_bad_c068ee20\av_flow_rules.json — using the built-in flow rules.
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.parse (dart:convert-patch/convert_patch.dart:885:48)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:35:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      FlowRules.load (package:extron_configurator/flow_rules.dart:745:21)
+<asynchronous suspension>
+#7      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/flow_rules_test.dart:175:21)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-21T23:59:25.711114] ERROR: Project could not read the room config C:\Users\dstanley\AppData\Local\Temp\rcb_project_test3ae3ea8f\bad_config.json
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+--------------------------------------------------
+[2026-08-21T23:59:26.773646] ERROR: Project swap could not write C:\Users\dstanley\AppData\Local\Temp\rcb_swap_testcd907a49\a_config.json
+Details: Bad state: The config is not at C:\Users\dstanley\AppData\Local\Temp\rcb_swap_testcd907a49\a_config.json.
+StackTrace:
+#0      _swapInRoomFiles (package:extron_configurator/project_swap.dart:335:19)
+#1      applyProjectSwap (package:extron_configurator/project_swap.dart:278:20)
+#2      main.apply (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:248:52)
+#3      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:500:22)
+#4      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:25)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#6      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-21T23:59:33.060192] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_78e4e9df\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-21T23:59:37.594537] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_6ceadde2\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-22T00:00:42.774710] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_61e62a77\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-22T00:01:20.151421] ERROR: Failed to read C:\Users\dstanley\AppData\Local\Temp\flow_rules_bad_188f5cb9\av_flow_rules.json — using the built-in flow rules.
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.parse (dart:convert-patch/convert_patch.dart:885:48)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:35:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      FlowRules.load (package:extron_configurator/flow_rules.dart:745:21)
+<asynchronous suspension>
+#7      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/flow_rules_test.dart:175:21)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-22T00:01:39.198747] ERROR: Project could not read the room config C:\Users\dstanley\AppData\Local\Temp\rcb_project_test6bd54e90\bad_config.json
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+--------------------------------------------------
+[2026-08-22T00:01:40.081760] ERROR: Project swap could not write C:\Users\dstanley\AppData\Local\Temp\rcb_swap_testec5092f8\a_config.json
+Details: Bad state: The config is not at C:\Users\dstanley\AppData\Local\Temp\rcb_swap_testec5092f8\a_config.json.
+StackTrace:
+#0      _swapInRoomFiles (package:extron_configurator/project_swap.dart:335:19)
+#1      applyProjectSwap (package:extron_configurator/project_swap.dart:278:20)
+#2      main.apply (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:248:52)
+#3      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:500:22)
+#4      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:25)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#6      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-22T00:01:47.015416] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_3286e8c8\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-22T00:01:52.194360] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_91b0cb30\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-22T00:04:40.188402] ERROR: Failed to read the signal flow from C:\Users\dstanley\AppData\Local\Temp\av_flow_sidecar_test_c7bc362f\BSS103_config_av_flow.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-22T00:05:15.120015] ERROR: Failed to read C:\Users\dstanley\AppData\Local\Temp\flow_rules_bad_2ad9fef4\av_flow_rules.json — using the built-in flow rules.
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+StackTrace:
+#0      _ChunkedJsonParser.fail (dart:convert-patch/convert_patch.dart:1467:5)
+#1      _ChunkedJsonParser.parse (dart:convert-patch/convert_patch.dart:885:48)
+#2      _parseJson (dart:convert-patch/convert_patch.dart:35:10)
+#3      JsonDecoder.convert (dart:convert/json.dart:640:36)
+#4      JsonCodec.decode (dart:convert/json.dart:219:41)
+#5      jsonDecode (dart:convert/json.dart:160:12)
+#6      FlowRules.load (package:extron_configurator/flow_rules.dart:745:21)
+<asynchronous suspension>
+#7      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/flow_rules_test.dart:175:21)
+<asynchronous suspension>
+#8      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#9      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#10     Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-22T00:05:33.532962] ERROR: Project could not read the room config C:\Users\dstanley\AppData\Local\Temp\rcb_project_teste484530d\bad_config.json
+Details: FormatException: Unexpected character (at character 3)
+{ this is not json
+  ^
+
+--------------------------------------------------
+[2026-08-22T00:05:35.048028] ERROR: Project swap could not write C:\Users\dstanley\AppData\Local\Temp\rcb_swap_test4b73e5b3\a_config.json
+Details: Bad state: The config is not at C:\Users\dstanley\AppData\Local\Temp\rcb_swap_test4b73e5b3\a_config.json.
+StackTrace:
+#0      _swapInRoomFiles (package:extron_configurator/project_swap.dart:335:19)
+#1      applyProjectSwap (package:extron_configurator/project_swap.dart:278:20)
+#2      main.apply (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:248:52)
+#3      main.<anonymous closure>.<anonymous closure> (file:///C:/GitHub/extron_configurator/test/project_swap_test.dart:500:22)
+#4      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:25)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#6      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+
+--------------------------------------------------
+[2026-08-22T00:05:40.952910] ERROR: Failed to read the cost from C:\Users\dstanley\AppData\Local\Temp\room_sidecar_split_c87ee424\BSS103_config_cost.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------
+[2026-08-22T00:05:45.939227] ERROR: Failed to load the control schematic from C:\Users\dstanley\AppData\Local\Temp\schematic_sidecar_test_ab28053d\BSS103_config_control_schematic.json
+Details: FormatException: Unexpected character (at character 1)
+not json at all
+^
+
+--------------------------------------------------

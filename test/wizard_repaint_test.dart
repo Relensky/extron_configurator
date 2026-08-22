@@ -61,6 +61,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
+    // The rail opens on Project now, and this test is about the Wizard.
+    provider.selectTab(AppTab.wizard.index);
+
     await tester.pumpWidget(
       ChangeNotifierProvider<AppStateProvider>.value(
         value: provider,
