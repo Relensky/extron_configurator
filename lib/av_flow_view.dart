@@ -188,9 +188,23 @@ class AvFlowView extends StatefulWidget {
   State<AvFlowView> createState() => _AvFlowViewState();
 }
 
-class _AvFlowViewState extends State<AvFlowView> {
+class _AvFlowViewState extends State<AvFlowView>
+    with SingleTickerProviderStateMixin {
   final GlobalKey _diagramKey = GlobalKey();
   final TransformationController _transform = TransformationController();
+
+  /// Drives the chevrons travelling along the selected run - see
+  /// [_SignalFlowPainter].
+  ///
+  /// RUNS ONLY WHILE SOMETHING IS SELECTED. A canvas with nothing picked has
+  /// no reason to be repainting sixty times a second, and this page is one
+  /// somebody leaves open all afternoon on a laptop.
+  late final AnimationController _signalFlow = AnimationController(
+    vsync: this,
+    // One chevron's travel from one position to the next. Slow enough to read
+    // as flow rather than as flicker; a diagram is not a progress bar.
+    duration: const Duration(milliseconds: 1100),
+  );
 
   /// The window the canvas is looked at through, so "Fit to view" can measure
   /// it; the drawing itself is measured through [_diagramKey].
@@ -252,6 +266,7 @@ class _AvFlowViewState extends State<AvFlowView> {
     // So a workbook exported from another tab can still be illustrated with
     // this page's diagram — see diagram_capture.dart.
     registerDiagramCanvas(AppTab.avFlow, _diagramKey);
+    capturingDiagram.addListener(_captureChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AppStateProvider>();
@@ -276,8 +291,60 @@ class _AvFlowViewState extends State<AvFlowView> {
   @override
   void dispose() {
     unregisterDiagramCanvas(AppTab.avFlow, _diagramKey);
+    capturingDiagram.removeListener(_captureChanged);
     _transform.dispose();
+    _signalFlow.dispose();
     super.dispose();
+  }
+
+  /// The colour of the run the chevrons are travelling along, so they read as
+  /// part of the line rather than as something dropped on top of it.
+  ///
+  /// Falls back to nothing visible when the selected run has gone - a cable
+  /// deleted while it was selected, which is the ordinary way one is deleted.
+  Color _selectedCableColor(AvFlowModel model, AppStateProvider provider) {
+    final id = _selectedCableId;
+    if (id == null) return Colors.transparent;
+    for (final cable in model.cables) {
+      if (cable.id == id) return cable.colorFor(provider.avSignalColors);
+    }
+    return Colors.transparent;
+  }
+
+  /// Holds the chevrons still while the drawing is being photographed.
+  ///
+  /// The layer takes itself off the page for a capture anyway, so this is not
+  /// what keeps the chevrons out of the picture. It is that a ticker driving
+  /// frames for something nobody is drawing is a ticker with nothing to do -
+  /// and a capture of every tab walks four pages with a beat on each, which is
+  /// long enough to be worth not spending.
+  void _captureChanged() {
+    if (!mounted) return;
+    if (capturingDiagram.value) {
+      _signalFlow.stop();
+    } else if (_selectedCableId != null && !_signalFlow.isAnimating) {
+      _signalFlow.repeat();
+    }
+  }
+
+  /// Picks a run, or clears the selection with null.
+  ///
+  /// The one way it is set, so the animation cannot be left running by a path
+  /// that forgot about it. Five places select a cable - the canvas, the label,
+  /// a drag, a double-tap, and leaving edit mode - and a ticker still spinning
+  /// after the last of them is a page quietly burning a frame budget with
+  /// nothing on screen to show for it.
+  void _selectCable(String? id) {
+    if (_selectedCableId == id) return;
+    setState(() => _selectedCableId = id);
+    if (id == null) {
+      _signalFlow.stop();
+      // Back to the start, so the next run picked begins its travel at the
+      // same place rather than wherever the last one happened to stop.
+      _signalFlow.value = 0;
+    } else if (!_signalFlow.isAnimating) {
+      _signalFlow.repeat();
+    }
   }
 
   /// Rebuilds [_backgroundImage] when the room's backdrop changes. Cheap when
@@ -905,6 +972,17 @@ class _AvFlowViewState extends State<AvFlowView> {
       if (mounted) _syncBackgroundImage(provider);
     });
 
+    // A RUN DELETED WHILE IT WAS SELECTED leaves its id behind. The waypoint
+    // handles and the flow layer both tolerate that and simply draw nothing,
+    // but the animation would go on ticking for a line that is no longer on
+    // the canvas. Deferred for the same reason as the backdrop above.
+    if (_selectedCableId != null &&
+        !model.cables.any((c) => c.id == _selectedCableId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _selectCable(null);
+      });
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -969,12 +1047,14 @@ class _AvFlowViewState extends State<AvFlowView> {
             ),
             label: const Text('Edit'),
             selected: _editMode,
-            onSelected: (v) => setState(() {
-              _editMode = v;
-              _cableMode = false;
-              _pendingPort = null;
-              _selectedCableId = null;
-            }),
+            onSelected: (v) {
+              _selectCable(null);
+              setState(() {
+                _editMode = v;
+                _cableMode = false;
+                _pendingPort = null;
+              });
+            },
           ),
           if (_editMode)
             FilterChip(
@@ -1328,8 +1408,7 @@ class _AvFlowViewState extends State<AvFlowView> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
-                final hit = _cableAt(details.localPosition);
-                setState(() => _selectedCableId = hit);
+                _selectCable(_cableAt(details.localPosition));
               },
               // Double-clicking a run opens it. onDoubleTapDown carries the
               // position; onDoubleTap does not, and without both the hit test
@@ -1343,7 +1422,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                 if (hit == null) return;
                 final matches = model.cables.where((c) => c.id == hit);
                 if (matches.isEmpty) return;
-                setState(() => _selectedCableId = hit);
+                _selectCable(hit);
                 _showCableDialog(provider, matches.first);
               },
               child: CustomPaint(
@@ -1353,6 +1432,24 @@ class _AvFlowViewState extends State<AvFlowView> {
                   selectedId: _selectedCableId,
                   brightness: theme.brightness,
                   palette: provider.avSignalColors,
+                ),
+              ),
+            ),
+          ),
+          // WHICH WAY THE SIGNAL GOES ON THE RUN THAT IS SELECTED. Its own
+          // layer above the cables rather than part of that painter, and
+          // inside a RepaintBoundary: this is the one thing on the canvas
+          // repainting every frame, and it must not drag two hundred static
+          // cables and a background image through the raster with it.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: RepaintBoundary(
+                child: _SelectedSignalFlow(
+                  progress: _signalFlow,
+                  points: _selectedCableId == null
+                      ? null
+                      : _paths[_selectedCableId],
+                  color: _selectedCableColor(model, provider),
                 ),
               ),
             ),
@@ -1489,6 +1586,9 @@ class _AvFlowViewState extends State<AvFlowView> {
       final color = cable.colorFor(provider.avSignalColors);
       widgets.add(
         Positioned(
+          // Keyed by the run it names: it is the one reliable handle on a
+          // cable, since the line itself is paint rather than a widget.
+          key: ValueKey('av_cable_label_${cable.id}'),
           // Centred on the anchor. FractionalTranslation rather than measuring
           // the text: the label is as wide as whatever somebody typed in it.
           left: at.dx,
@@ -1497,11 +1597,11 @@ class _AvFlowViewState extends State<AvFlowView> {
             translation: const Offset(-0.5, -0.5),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _selectedCableId = cable.id),
+              onTap: () => _selectCable(cable.id),
               onDoubleTap: () => _showCableDialog(provider, cable),
               onPanStart: _editMode
                   ? (_) {
-                      setState(() => _selectedCableId = cable.id);
+                      _selectCable(cable.id);
                       // ONE snapshot for the whole gesture, taken before it
                       // moves: the updates below record none, so a drag is
                       // one press of Undo rather than fifty.
@@ -4582,6 +4682,12 @@ class _CablePainter extends CustomPainter {
   /// The route as a path with its corners rounded off, so a cable reads as
   /// sweeping around an obstacle rather than hitting a hard right angle.
   /// The radius shrinks on short legs so a tight detour still draws cleanly.
+  ///
+  /// Shared with [_SignalFlowPainter]: the chevrons have to travel along the
+  /// line that was actually drawn, corners and all, and a second copy of this
+  /// would drift off it at the first turn.
+  static Path polyline(List<Offset> points) => _polyline(points);
+
   static Path _polyline(List<Offset> points) {
     final p = Path()..moveTo(points.first.dx, points.first.dy);
     if (points.length < 3) {
@@ -4636,6 +4742,148 @@ class _CablePainter extends CustomPainter {
       old.selectedId != selectedId ||
       old.brightness != brightness ||
       !_sameMap(old.palette, palette);
+}
+
+// ---------------------------------------------------------------------------
+//  WHICH WAY THE SIGNAL GOES
+// ---------------------------------------------------------------------------
+
+/// The chevrons travelling along the selected run.
+///
+/// WHY IT MOVES. A selected cable was already drawn thicker and haloed, which
+/// says "this one" and nothing else. On a crowded canvas the question that
+/// actually follows a click is the other one - which END is this feeding? -
+/// and the static arrowhead at the destination answers it only if you can
+/// find the destination, which on a run that turns four corners behind three
+/// boxes is exactly what is hard. Movement answers it without being read:
+/// nothing else on the diagram moves, so the eye lands on the selected run
+/// and travels with it to the end it is going to.
+///
+/// IT IS NOT IN THE EXPORT. The chevrons are a selection affordance, they have
+/// no still frame that means anything, and their phase at the instant of a
+/// capture is arbitrary - a picture of one is a picture of some marks partway
+/// along a line. The drawing already carries direction in the arrowhead, which
+/// is what a printed sheet needs. [capturingDiagram] is the same flag the grid
+/// stands down for, and it is set a frame before the photograph is taken.
+class _SelectedSignalFlow extends StatelessWidget {
+  /// 0 to 1, repeating: one chevron's travel from its position to the next.
+  final Animation<double> progress;
+
+  /// The selected run's route, or null when nothing is selected.
+  final List<Offset>? points;
+
+  final Color color;
+
+  const _SelectedSignalFlow({
+    required this.progress,
+    required this.points,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final route = points;
+    if (route == null || route.length < 2) return const SizedBox.shrink();
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: capturingDiagram,
+      builder: (context, capturing, _) => capturing
+          ? const SizedBox.shrink()
+          : AnimatedBuilder(
+              animation: progress,
+              builder: (context, _) => CustomPaint(
+                size: Size.infinite,
+                painter: _SignalFlowPainter(
+                  points: route,
+                  color: color,
+                  phase: progress.value,
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Paints the travelling chevrons. See [_SelectedSignalFlow] for why.
+class _SignalFlowPainter extends CustomPainter {
+  final List<Offset> points;
+  final Color color;
+
+  /// 0 to 1. One whole step of the pattern, so the chevrons hand over to each
+  /// other and the run reads as continuous flow rather than as a burst that
+  /// restarts.
+  final double phase;
+
+  const _SignalFlowPainter({
+    required this.points,
+    required this.color,
+    required this.phase,
+  });
+
+  /// How far apart the chevrons sit along the run.
+  ///
+  /// Far enough apart to read as separate marks travelling rather than as a
+  /// crawling dashed line, and close enough that a short run between two
+  /// adjacent boxes still gets two of them.
+  static const double _spacing = 30;
+
+  /// Half the width of a chevron's V, and how far its point leads its tails.
+  static const double _half = 5;
+  static const double _lead = 6;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (color.a == 0) return;
+    final path = _CablePainter.polyline(points);
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    for (final metric in metrics) {
+      final length = metric.length;
+      if (length < _lead * 2) continue;
+
+      // Starts BEHIND the beginning and runs PAST the end, so a chevron fades
+      // in off the source rather than appearing out of nothing in the middle
+      // of the line.
+      for (var at = phase * _spacing; at < length; at += _spacing) {
+        final tangent = metric.getTangentForOffset(at);
+        if (tangent == null) continue;
+
+        // Faded at both ends. A chevron sitting on top of the connector it
+        // starts from, or on the arrowhead it is travelling into, reads as a
+        // smudge on the drawing.
+        final fade = math.min(at, length - at) / _spacing;
+        final alpha = fade.clamp(0.0, 1.0);
+        if (alpha <= 0.02) continue;
+
+        final unit = tangent.vector;
+        final normal = Offset(-unit.dy, unit.dx);
+        final tip = tangent.position + unit * _lead;
+        final back = tangent.position - unit * (_lead * 0.4);
+
+        canvas.drawPath(
+          Path()
+            ..moveTo(back.dx + normal.dx * _half, back.dy + normal.dy * _half)
+            ..lineTo(tip.dx, tip.dy)
+            ..lineTo(back.dx - normal.dx * _half, back.dy - normal.dy * _half),
+          stroke..color = color.withValues(alpha: alpha),
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignalFlowPainter old) =>
+      old.phase != phase ||
+      old.color != color ||
+      !identical(old.points, points);
 }
 
 // ---------------------------------------------------------------------------
