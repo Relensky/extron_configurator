@@ -468,14 +468,18 @@ List<AvDeviceTemplate> searchCatalog(
   String query, {
   int limit = 300,
 }) {
-  final matched = entries
-      .where((e) => AvDeviceLibrary.matchesSearch(e, query))
-      .toList();
+  // Reduced ONCE. This runs over the whole catalog on every keystroke, and
+  // re-splitting the same query for each of sixteen hundred entries was most
+  // of what the search box was doing between one character and the next.
+  final q = SearchQuery(query);
+  final matched = <AvDeviceTemplate>[
+    for (final e in entries)
+      if (AvDeviceLibrary.matchesQuery(e, q)) e,
+  ];
   final needle = AvDeviceLibrary.normalizeModel(query);
-  final terms = searchTerms(query);
+  final terms = q.terms;
   if (needle.isNotEmpty) {
-    int rank(AvDeviceTemplate e) {
-      final model = AvDeviceLibrary.normalizeModel(e.model);
+    int rank(String model) {
       if (model == needle) return 0;
       if (model.startsWith(needle)) return 1;
       if (model.contains(needle)) return 2;
@@ -489,12 +493,25 @@ List<AvDeviceTemplate> searchCatalog(
       return 3 + terms.where((t) => !model.contains(t)).length;
     }
 
-    matched.sort((a, b) {
-      final byRank = rank(a).compareTo(rank(b));
-      return byRank != 0
-          ? byRank
-          : a.model.toLowerCase().compareTo(b.model.toLowerCase());
+    // Ranked once per entry rather than once per COMPARISON. A comparison
+    // sort asks the comparator O(n log n) times, and each of those calls was
+    // normalizing a model name again — thirty thousand string rebuilds to put
+    // sixteen hundred rows in order.
+    final ordered = <({AvDeviceTemplate entry, int rank, String name})>[
+      for (final e in matched)
+        (
+          entry: e,
+          rank: rank(AvDeviceLibrary.normalizeModel(e.model)),
+          name: e.model.toLowerCase(),
+        ),
+    ];
+    ordered.sort((a, b) {
+      final byRank = a.rank.compareTo(b.rank);
+      return byRank != 0 ? byRank : a.name.compareTo(b.name);
     });
+    matched
+      ..clear()
+      ..addAll([for (final o in ordered) o.entry]);
   }
   return matched.length > limit ? matched.sublist(0, limit) : matched;
 }
@@ -746,8 +763,32 @@ class AvDeviceLibrary {
     return withLength.isEmpty ? options.first : withLength.last;
   }
 
-  static String _norm(String model) =>
-      model.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
+  static final RegExp _modelSeparators = RegExp(r'[\s_\-]+');
+
+  static String _norm(String model) {
+    // Every model lookup in the app comes through here, and the catalog
+    // search ranks its hits with it, so this is measured in thousands of
+    // calls per keystroke rather than one. Plain ASCII — which every model
+    // name is — folds in one pass over the code units; anything else falls
+    // back to the lowercase-and-strip this has always been, because Unicode
+    // lowercasing is not a per-character operation.
+    final length = model.length;
+    final units = <int>[];
+    for (var i = 0; i < length; i++) {
+      final c = model.codeUnitAt(i);
+      if (c > 0x7f) {
+        return model.trim().toLowerCase().replaceAll(_modelSeparators, '');
+      }
+      // Space, tab, newline, vertical tab, form feed, carriage return,
+      // underscore and hyphen are the separators; the trim() the old form
+      // began with is subsumed by dropping whitespace wherever it appears.
+      if (c == 0x20 || (c >= 0x09 && c <= 0x0d) || c == 0x5f || c == 0x2d) {
+        continue;
+      }
+      units.add(c >= 0x41 && c <= 0x5a ? c + 0x20 : c);
+    }
+    return String.fromCharCodes(units);
+  }
 
   /// The key an entry is stored under — exposed so callers comparing two
   /// libraries agree with this one on what "the same model" means.
@@ -770,13 +811,38 @@ class AvDeviceLibrary {
   /// "epsonpowerlite" as one run of characters and found nothing, on the most
   /// natural way there is to look that projector up. Each WORD is required, so
   /// adding words still narrows.
-  static bool matchesSearch(AvDeviceTemplate entry, String query) {
-    return searchMatches(
+  static bool matchesSearch(AvDeviceTemplate entry, String query) =>
+      matchesQuery(entry, SearchQuery(query));
+
+  /// [matchesSearch] against a query that has already been reduced — what a
+  /// search over the WHOLE catalog wants, so the query is split once per
+  /// keystroke instead of once per entry.
+  static bool matchesQuery(AvDeviceTemplate entry, SearchQuery query) =>
+      query.isEmpty || query.matchesKey(searchHaystack(entry));
+
+  /// The four fields a search reads, reduced to letters and digits, and
+  /// remembered per entry.
+  ///
+  /// The catalog is immutable once loaded and the reduced form of an entry
+  /// never changes, so computing it for every entry on every keystroke was
+  /// rebuilding the same sixteen hundred strings a few times a second. An
+  /// [Expando] rather than a field because [AvDeviceTemplate] is const and its
+  /// entries are shared; an entry that is replaced in the catalog is a new
+  /// object and gets its own answer, and a dropped one takes its cache with it.
+  static String searchHaystack(AvDeviceTemplate entry) {
+    final cached = _searchHaystacks[entry];
+    if (cached != null) return cached;
+    final built = searchKey(
       '${entry.model} ${entry.manufacturer} ${entry.partNumber} '
       '${entry.category}',
-      query,
     );
+    _searchHaystacks[entry] = built;
+    return built;
   }
+
+  static final Expando<String> _searchHaystacks = Expando<String>(
+    'catalog search keys',
+  );
 
   // -------------------------------------------------------------------------
   //  ONE PART NUMBER, ONE ENTRY
@@ -793,8 +859,11 @@ class AvDeviceLibrary {
   //  into one entry.
 
   /// A part number for comparison: case and spacing are noise on a SKU.
+  static final RegExp _runsOfSpace = RegExp(r'\s+');
+  static final RegExp _anyDigit = RegExp(r'[0-9]');
+
   static String normalizePartNumber(String partNumber) =>
-      partNumber.trim().toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+      partNumber.trim().toUpperCase().replaceAll(_runsOfSpace, ' ');
 
   /// Whether [partNumber] identifies a specific product, rather than standing
   /// in for one that hasn't got a SKU.
@@ -803,7 +872,7 @@ class AvDeviceLibrary {
   /// and means "quoted per job" — reporting those four as duplicates of each
   /// other would be noise, and merging them would be wrong.
   static bool isRealPartNumber(String partNumber) =>
-      partNumber.trim().isNotEmpty && partNumber.contains(RegExp(r'[0-9]'));
+      partNumber.trim().isNotEmpty && partNumber.contains(_anyDigit);
 
   /// Every part number that is on more than one entry, most entries first.
   /// Empty when the catalog is clean, which is what the Device Editor checks

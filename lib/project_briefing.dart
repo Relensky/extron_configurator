@@ -1,0 +1,373 @@
+import 'building_project.dart';
+import 'project_estimate.dart';
+import 'project_schedule.dart';
+
+/// ============================================================================
+///  WHAT CHANGED WHILE YOU WERE AWAY
+/// ============================================================================
+///  A project gets picked up weeks after it was put down, usually because
+///  somebody asked a question about it. Everything needed to answer that
+///  question is already in the app — spread across four panes, two of which
+///  have to be scrolled and one of which nobody opens unless they suspect
+///  something is wrong.
+///
+///  So opening a project produces a BRIEFING: the handful of things that have
+///  gone from "fine" to "needs a decision" since anybody last looked, in one
+///  reading, in the order they matter.
+///
+///    1. WHAT IS LATE — an order date that has passed, a note past its date.
+///       These cannot be fixed by working faster and every day of delay costs
+///       another day.
+///    2. WHAT IS ABOUT TO BE — an order due inside a fortnight, a note due
+///       inside a week. Still recoverable, which is the whole point of saying
+///       so now.
+///    3. WHAT IS NOT ANSWERED — parts with no lead time, no price, no vendor,
+///       no spare, no control module. None of these is urgent today and all of
+///       them become urgent on somebody else's schedule.
+///
+///  NOTHING HERE IS NEW INFORMATION. Every line is derived from the project and
+///  the rooms, and every line names the pane it can be fixed on. The value is
+///  entirely in the fact that nobody had to go looking — a warning that has to
+///  be navigated to is a warning that gets found the week after it mattered.
+///
+///  IT IS ALSO NOT A BLOCKER. A project with nothing wrong produces a briefing
+///  that says so and can be dismissed with one key; see [ProjectBriefing.isQuiet],
+///  which is what the caller checks before deciding to show it at all.
+/// ============================================================================
+
+/// How much attention one briefing line is asking for.
+enum BriefingUrgency {
+  /// Already gone: a date in the past.
+  late,
+
+  /// Coming up, and still avoidable.
+  soon,
+
+  /// A question nobody has answered. Not urgent today.
+  open,
+
+  /// Nothing wrong — the "all clear" line.
+  clear,
+}
+
+/// Which pane answers a briefing line, so the reader is pointed at the fix
+/// rather than left to hunt for it.
+enum BriefingPane { rooms, parts, timeline, vendors, todo }
+
+const Map<BriefingPane, String> kBriefingPaneLabels = {
+  BriefingPane.rooms: 'Rooms',
+  BriefingPane.parts: 'Core Components',
+  BriefingPane.timeline: 'Timeline',
+  BriefingPane.vendors: 'Vendors',
+  BriefingPane.todo: 'To do',
+};
+
+/// One thing worth knowing on the way in.
+class BriefingLine {
+  final BriefingUrgency urgency;
+
+  /// The headline, written as the thing that is true rather than as a count:
+  /// "3 parts are past their order date" reads as a fact, "3 late parts" reads
+  /// as a label somebody has to interpret.
+  final String message;
+
+  /// The first few specifics, so the line can be acted on without opening
+  /// anything. Empty when the message says it all.
+  final List<String> detail;
+
+  /// Where it gets fixed.
+  final BriefingPane pane;
+
+  const BriefingLine({
+    required this.urgency,
+    required this.message,
+    required this.pane,
+    this.detail = const [],
+  });
+}
+
+/// The whole briefing, in reading order.
+class ProjectBriefing {
+  final List<BriefingLine> lines;
+
+  /// The day it was worked out against.
+  final DateTime asOf;
+
+  const ProjectBriefing({required this.lines, required this.asOf});
+
+  List<BriefingLine> _at(BriefingUrgency u) =>
+      [for (final l in lines) if (l.urgency == u) l];
+
+  List<BriefingLine> get lateLines => _at(BriefingUrgency.late);
+  List<BriefingLine> get soonLines => _at(BriefingUrgency.soon);
+  List<BriefingLine> get openLines => _at(BriefingUrgency.open);
+
+  /// True when there is nothing time-critical — no late lines and nothing due
+  /// soon. Open questions do not count: a job always has some, and a briefing
+  /// that appears every single time is one that gets dismissed unread.
+  bool get isQuiet => lateLines.isEmpty && soonLines.isEmpty;
+
+  /// True when there is nothing to say at all.
+  bool get isEmpty => lines.isEmpty;
+}
+
+/// How many specifics a line names before it stops listing and starts counting.
+///
+/// Three, because the point of the detail is to make a line actionable without
+/// opening anything, and a list of eleven is a list somebody has to read rather
+/// than glance at — at which point they may as well open the pane.
+const int _maxDetail = 3;
+
+/// Names the first few of [all], then says how many more there are.
+List<String> _some(Iterable<String> all) {
+  final list = all.toList();
+  if (list.length <= _maxDetail) return list;
+  return [
+    ...list.take(_maxDetail),
+    'and ${list.length - _maxDetail} more',
+  ];
+}
+
+/// Works out what somebody opening this project needs to know.
+///
+/// [asOf] is the day the dates are measured against; it defaults to today and
+/// is passed explicitly only by tests, which need an answer that does not
+/// change with the clock.
+ProjectBriefing buildProjectBriefing({
+  required ProjectEstimate estimate,
+  DateTime? asOf,
+}) {
+  final now = dateOnly(asOf ?? DateTime.now());
+  final project = estimate.project;
+  final schedule = buildProjectSchedule(estimate: estimate, asOf: now);
+  final lines = <BriefingLine>[];
+
+  // --- 1. what is already late ---------------------------------------------
+
+  final lateParts = schedule.lateLines;
+  if (lateParts.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.late,
+      message: lateParts.length == 1
+          ? '1 part is past the date it had to be ordered on'
+          : '${lateParts.length} parts are past the date they had to be '
+              'ordered on',
+      pane: BriefingPane.timeline,
+      detail: _some([
+        for (final p in lateParts)
+          '${p.line.description} — order date was '
+              '${formatScheduleDate(p.orderBy!)}'
+              ' (${formatDayGap(p.daysUntilOrder ?? 0)})',
+      ]),
+    ));
+  }
+
+  final overdue = project.overdueTodos(now);
+  if (overdue.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.late,
+      message: overdue.length == 1
+          ? '1 job note is past its date'
+          : '${overdue.length} job notes are past their date',
+      pane: BriefingPane.todo,
+      detail: _some([
+        for (final t in overdue)
+          '${t.text} — due ${formatScheduleDate(t.due!)}'
+              ' (${formatDayGap(t.daysUntilDue(now) ?? 0)})',
+      ]),
+    ));
+  }
+
+  // The deadline itself having gone is worth its own line: every order date on
+  // the job is worked back from it, so they are all wrong until it is moved.
+  final deadline = project.deliveryDeadline;
+  if (deadline != null && deadline.isBefore(now)) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.late,
+      message: 'The delivery deadline (${formatScheduleDate(deadline)}) has '
+          'passed. Every order date on this job is worked back from it.',
+      pane: BriefingPane.timeline,
+    ));
+  }
+
+  // --- 2. what is about to be ----------------------------------------------
+
+  final dueSoon = schedule.dueSoonLines;
+  if (dueSoon.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.soon,
+      message: dueSoon.length == 1
+          ? '1 part has to be ordered within the next $kOrderDueSoonDays days'
+          : '${dueSoon.length} parts have to be ordered within the next '
+              '$kOrderDueSoonDays days',
+      pane: BriefingPane.timeline,
+      detail: _some([
+        for (final p in dueSoon)
+          '${p.line.description} — order by '
+              '${formatScheduleDate(p.orderBy!)}'
+              ' (${formatDayGap(p.daysUntilOrder ?? 0)})',
+      ]),
+    ));
+  }
+
+  final todosSoon = project.todosDueSoon(asOf: now);
+  if (todosSoon.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.soon,
+      message: todosSoon.length == 1
+          ? '1 job note is due this week'
+          : '${todosSoon.length} job notes are due this week',
+      pane: BriefingPane.todo,
+      detail: _some([
+        for (final t in todosSoon)
+          '${t.text} — ${formatDayGap(t.daysUntilDue(now) ?? 0)}',
+      ]),
+    ));
+  }
+
+  // --- 3. what nobody has answered -----------------------------------------
+
+  final noLead = schedule.unknownLines;
+  if (noLead.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: noLead.length == 1
+          ? '1 part has no lead time, so it is not on the timeline'
+          : '${noLead.length} parts have no lead time, so they are not on the '
+              'timeline',
+      pane: BriefingPane.parts,
+      detail: _some([for (final p in noLead) p.line.description]),
+    ));
+  }
+
+  if (project.deliveryDeadline == null && estimate.master.isNotEmpty) {
+    lines.add(const BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: 'No delivery deadline is set, so nothing can be scheduled.',
+      pane: BriefingPane.timeline,
+    ));
+  }
+
+  final blocked = [
+    for (final t in project.todos)
+      if (t.state == ProjectTodoState.blocked) t,
+  ];
+  if (blocked.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: blocked.length == 1
+          ? '1 job note is waiting on somebody else'
+          : '${blocked.length} job notes are waiting on somebody else',
+      pane: BriefingPane.todo,
+      detail: _some([for (final t in blocked) t.text]),
+    ));
+  }
+
+  final actionable = [
+    for (final t in project.actionableTodos)
+      if (!t.isOverdue(now) && t.due == null) t,
+  ];
+  if (actionable.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: actionable.length == 1
+          ? '1 job note is still open'
+          : '${actionable.length} job notes are still open',
+      pane: BriefingPane.todo,
+      detail: _some([for (final t in actionable) t.text]),
+    ));
+  }
+
+  if (estimate.failedRooms > 0) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: estimate.failedRooms == 1
+          ? '1 room could not be read, so the project total is short by '
+              'whatever it costs'
+          : '${estimate.failedRooms} rooms could not be read, so the project '
+              'total is short by whatever they cost',
+      pane: BriefingPane.rooms,
+      detail: _some([
+        for (final r in estimate.rooms)
+          if (!r.ok) '${r.name} — ${r.room.error}',
+      ]),
+    ));
+  }
+
+  if (estimate.unpricedParts > 0) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: estimate.unpricedParts == 1
+          ? '1 part has no price anywhere on the job'
+          : '${estimate.unpricedParts} parts have no price anywhere on the job',
+      pane: BriefingPane.parts,
+      detail: _some([
+        for (final l in estimate.master)
+          if (l.unpriced) l.description,
+      ]),
+    ));
+  }
+
+  if (estimate.untaggedParts > 0) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: estimate.untaggedParts == 1
+          ? '1 part is not tagged to a vendor, so it is on no quote request'
+          : '${estimate.untaggedParts} parts are not tagged to a vendor, so '
+              'they are on no quote request',
+      pane: BriefingPane.vendors,
+      detail: _some([
+        for (final l in estimate.master)
+          if (l.vendor == null) l.description,
+      ]),
+    ));
+  }
+
+  if (estimate.undrivenDevices > 0) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: '${estimate.undrivenDevices} device'
+          '${estimate.undrivenDevices == 1 ? '' : 's'} on this job have no '
+          'control module — quoted, and they will not commission as they '
+          'stand',
+      pane: BriefingPane.parts,
+      detail: _some([
+        for (final l in estimate.master)
+          if (l.hasControlGap) '${l.description} ×${l.undrivenQty}',
+      ]),
+    ));
+  }
+
+  // Not a mistake, and not the app's decision — but nothing else was ever
+  // going to raise it, because a spare is not on any drawing.
+  if (estimate.spareUnits == 0 && estimate.partsWithoutSpares.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: 'Nothing on this job has a spare. '
+          '${estimate.partsWithoutSpares.length} '
+          'product${estimate.partsWithoutSpares.length == 1 ? '' : 's'} would '
+          'be replaced out of the next budget rather than off the shelf.',
+      pane: BriefingPane.parts,
+    ));
+  }
+
+  if (estimate.mixedCurrency) {
+    lines.add(const BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: 'Rooms on this job are quoted in different currencies, and the '
+          'totals add them as though they were the same one.',
+      pane: BriefingPane.rooms,
+    ));
+  }
+
+  if (lines.isEmpty) {
+    lines.add(const BriefingLine(
+      urgency: BriefingUrgency.clear,
+      message: 'Nothing needs attention: every part is priced, tagged and '
+          'scheduled, and the job list is clear.',
+      pane: BriefingPane.rooms,
+    ));
+  }
+
+  return ProjectBriefing(lines: lines, asOf: now);
+}

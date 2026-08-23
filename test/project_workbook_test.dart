@@ -162,6 +162,10 @@ void main() {
       expect(tabNames(archive), [
         'Summary',
         'Core Components',
+        // When to buy it and what is spared: two questions the parts list
+        // cannot answer in a column, read by different people.
+        'Order Timeline',
+        'Spares',
         'Extron Direct',
         'AV Reseller',
         'Bessey 101',

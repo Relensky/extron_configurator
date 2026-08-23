@@ -10015,6 +10015,78 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  // --- when the order has to go in ------------------------------------------
+  //  Three setters and no computed dates: the order-by date on every row is
+  //  derived from these on the spot (see project_schedule.dart), so moving the
+  //  deadline moves the whole schedule instead of leaving stale dates behind.
+
+  /// Sets the date the job needs everything delivered by, or clears it.
+  void setProjectDeadline(DateTime? date) {
+    project.deliveryDeadline = date == null ? null : dateOnly(date);
+    AppLogger.logInfo(
+      date == null
+          ? 'Project delivery deadline cleared.'
+          : 'Project delivery deadline set to ${formatIsoDate(dateOnly(date))}.',
+    );
+    _projectChanged();
+  }
+
+  /// Records how long one master-list part takes to arrive, in calendar days,
+  /// or forgets the figure when [days] is null.
+  void setProjectPartLeadTime(String partKey, int? days) {
+    project.setPartLeadTime(partKey, days);
+    _projectChanged();
+  }
+
+  /// Sets the date one master-list part has to arrive by, ahead of the rest of
+  /// the job, or clears it so the part wants the project deadline again.
+  void setProjectPartNeedBy(String partKey, DateTime? date) {
+    project.setPartNeedBy(partKey, date);
+    _projectChanged();
+  }
+
+  // --- the job's to-do list -------------------------------------------------
+
+  /// Adds a note to the job's list. Blank text does nothing.
+  void addProjectTodo(String text, {String roomId = ''}) {
+    final id = project.addTodo(text, roomId: roomId);
+    if (id.isEmpty) return;
+    _projectChanged();
+  }
+
+  void setProjectTodoState(String id, ProjectTodoState state) {
+    project.setTodoState(id, state);
+    _projectChanged();
+  }
+
+  void setProjectTodoText(String id, String text) {
+    project.setTodoText(id, text);
+    _projectChanged();
+  }
+
+  void setProjectTodoRoom(String id, String roomId) {
+    project.setTodoRoom(id, roomId);
+    _projectChanged();
+  }
+
+  /// Sets the date one note has to be done by, or clears it.
+  void setProjectTodoDue(String id, DateTime? date) {
+    project.setTodoDue(id, date);
+    _projectChanged();
+  }
+
+  void removeProjectTodo(String id) {
+    project.removeTodo(id);
+    _projectChanged();
+  }
+
+  /// Drops every finished note, and says how many went.
+  int clearDoneProjectTodos() {
+    final gone = project.clearDoneTodos();
+    if (gone > 0) _projectChanged();
+    return gone;
+  }
+
 
 
   // --- is this room behind its file? ---------------------------------------

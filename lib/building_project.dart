@@ -42,6 +42,14 @@ import 'av_device_library.dart' show AvDeviceLibrary;
 ///      because that is the decision being made: "we buy the ceiling mics from
 ///      the integrator" is true of the whole job at once.
 ///
+///  LEAD TIMES AND THE DEADLINE are the third half — the part of a job that is
+///  not money and not who sells it, but WHEN it has to be bought. They live
+///  here for the same reason vendor tags do: how long a part takes to arrive is
+///  a fact about this order on this job, and the date it has to be on site by
+///  is a fact about the building, not about any one room. See
+///  project_schedule.dart for the arithmetic that turns them into an order-by
+///  date per part.
+///
 ///  See project_estimate.dart for the rollup that turns this plus the rooms on
 ///  disk into per-room totals, a core components list and per-vendor packages.
 /// ============================================================================
@@ -75,6 +83,208 @@ const Map<VendorTagSource, String> kVendorTagSourceLabels = {
   VendorTagSource.categoryRule: 'By category',
   VendorTagSource.none: 'Untagged',
 };
+
+// ---------------------------------------------------------------------------
+//  DATES, WITHOUT THE TIME
+// ---------------------------------------------------------------------------
+//  Every date on a job is a DAY: the delivery lands on the 14th, the order goes
+//  in on the 3rd. Carrying a time of day around is what makes a deadline read
+//  as the 13th after a save and a reload in another timezone, and what makes
+//  "is this overdue" hinge on the hour the app happened to be opened at.
+//
+//  So every date this file stores and reads is normalized to local midnight and
+//  written as a plain `yyyy-mm-dd` string. Both of those are one function each,
+//  here, rather than a convention every call site is trusted to remember.
+
+/// [when] with the clock stripped: local midnight on the same calendar day.
+DateTime dateOnly(DateTime when) => DateTime(when.year, when.month, when.day);
+
+/// Today, as a date with no time — what "is this overdue" is measured against.
+DateTime today() => dateOnly(DateTime.now());
+
+/// A date as `yyyy-mm-dd`, which sorts as text and survives a hand edit.
+String formatIsoDate(DateTime when) =>
+    '${when.year.toString().padLeft(4, '0')}-'
+    '${when.month.toString().padLeft(2, '0')}-'
+    '${when.day.toString().padLeft(2, '0')}';
+
+/// A `yyyy-mm-dd` back, or null when it is missing or not a date.
+///
+/// Tolerant on the way in because a project file is a supported thing to hand
+/// edit: a full ISO timestamp, which is what an older writer or another tool
+/// might leave, is accepted and reduced to its day.
+DateTime? parseIsoDate(Object? raw) {
+  if (raw == null) return null;
+  final text = raw.toString().trim();
+  if (text.isEmpty) return null;
+  final parsed = DateTime.tryParse(text);
+  return parsed == null ? null : dateOnly(parsed);
+}
+
+/// Whole days from [from] to [to], forwards positive.
+///
+/// Measured between two local midnights via UTC, because subtracting local
+/// DateTimes across a daylight-saving boundary yields 23 or 25 hours and
+/// truncates to a day out — which is a whole day of lead time, in the
+/// direction that misses the delivery.
+int daysBetween(DateTime from, DateTime to) {
+  final a = DateTime.utc(from.year, from.month, from.day);
+  final b = DateTime.utc(to.year, to.month, to.day);
+  return b.difference(a).inDays;
+}
+
+// ---------------------------------------------------------------------------
+//  THE JOB'S OWN TO-DO LIST
+// ---------------------------------------------------------------------------
+//  Everything else this app records is a FACT about the building: what is in
+//  the room, what it costs, who sells it, when it has to be ordered. A job also
+//  accumulates a second kind of thing entirely — "the client wants the second
+//  display moved", "chase Extron about the DTP lead time", "check whether 214
+//  is still in scope" — and until now those lived in an email thread, a
+//  notebook, or nowhere.
+//
+//  They belong on the project because they are about the JOB rather than about
+//  any one room, and because the project file is the document that gets opened
+//  when somebody picks the job back up after three weeks on something else.
+//
+//  DELIBERATELY PLAIN. A note, a state, when it was written, and a date it has
+//  to be done by. No assignees and no priority ladder — a job list that needs
+//  its own workflow is one people stop filling in.
+//
+//  THE DUE DATE IS OPTIONAL AND MEANS SOMETHING WHEN IT IS SET. Most notes on a
+//  job do not have a deadline; the ones that do have a real one ("the client
+//  wants an answer before Friday", "this has to be decided before the order
+//  goes in"), and those are the ones that need to surface on their own rather
+//  than waiting to be scrolled past. An item with no date is not late and never
+//  nags — see [ProjectTodo.isOverdue].
+
+/// Where one job note stands.
+enum ProjectTodoState {
+  /// Still to do — the default, and what the count on the tab is counting.
+  open,
+
+  /// Waiting on somebody else. Still open work, and not something the person
+  /// looking at the list can act on today, which is the whole distinction.
+  blocked,
+
+  /// Finished. Kept rather than deleted: "when did we agree to move that
+  /// display" is a question that gets asked, and a list that forgets its own
+  /// history cannot answer it.
+  done,
+}
+
+const Map<ProjectTodoState, String> kProjectTodoStateLabels = {
+  ProjectTodoState.open: 'To do',
+  ProjectTodoState.blocked: 'Waiting on',
+  ProjectTodoState.done: 'Done',
+};
+
+ProjectTodoState _todoStateFromName(String name) => ProjectTodoState.values
+    .firstWhere(
+      (s) => s.name == name,
+      // An unreadable state is OPEN rather than done. A hand-edited file that
+      // loses a note's state should surface the note, not bury it.
+      orElse: () => ProjectTodoState.open,
+    );
+
+/// One thing somebody has to do on this job.
+class ProjectTodo {
+  final String id;
+
+  /// What has to happen, in whatever words it was said in.
+  final String text;
+
+  final ProjectTodoState state;
+
+  /// When it was first written down. Shown as an age, because the useful
+  /// question about an open item is how long it has been open.
+  final DateTime created;
+
+  /// When it was marked done, null while it is not. Kept so a finished list
+  /// still says when each thing actually happened.
+  final DateTime? completed;
+
+  /// When this has to be done by, or null when it is simply on the list.
+  ///
+  /// Most notes never get one and should not: a deadline on everything is a
+  /// deadline on nothing. The ones that carry a date carry a real one, which
+  /// is what makes [isOverdue] worth surfacing on its own.
+  final DateTime? due;
+
+  /// The room this is about, by [ProjectRoomRef.id], or '' for the job as a
+  /// whole. Optional on purpose: half of these are about a specific room and
+  /// half are about the job, and forcing a room onto the second kind would
+  /// make them all get filed against whichever room came first.
+  final String roomId;
+
+  const ProjectTodo({
+    required this.id,
+    required this.text,
+    this.state = ProjectTodoState.open,
+    required this.created,
+    this.completed,
+    this.due,
+    this.roomId = '',
+  });
+
+  bool get isDone => state == ProjectTodoState.done;
+
+  /// Still work: to do or waiting on somebody.
+  bool get isOpen => state != ProjectTodoState.done;
+
+  /// Past its date and not finished.
+  ///
+  /// A FINISHED item is never overdue however late it was — the list is not
+  /// there to keep score — and an item with no date never is, so adding notes
+  /// freely never produces a list that nags.
+  bool isOverdue([DateTime? asOf]) =>
+      isOpen && due != null && due!.isBefore(dateOnly(asOf ?? DateTime.now()));
+
+  /// Days until [due]: negative when it has gone, null when there is no date.
+  int? daysUntilDue([DateTime? asOf]) => due == null
+      ? null
+      : daysBetween(dateOnly(asOf ?? DateTime.now()), due!);
+
+  ProjectTodo copyWith({
+    String? text,
+    ProjectTodoState? state,
+    DateTime? completed,
+    bool clearCompleted = false,
+    DateTime? due,
+    bool clearDue = false,
+    String? roomId,
+  }) => ProjectTodo(
+    id: id,
+    text: text ?? this.text,
+    state: state ?? this.state,
+    created: created,
+    completed: clearCompleted ? null : (completed ?? this.completed),
+    due: clearDue ? null : (due ?? this.due),
+    roomId: roomId ?? this.roomId,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'text': text,
+    'state': state.name,
+    'created': formatIsoDate(created),
+    if (completed != null) 'completed': formatIsoDate(completed!),
+    if (due != null) 'due': formatIsoDate(due!),
+    if (roomId.isNotEmpty) 'roomId': roomId,
+  };
+
+  factory ProjectTodo.fromJson(Map<String, dynamic> json) => ProjectTodo(
+    id: json['id']?.toString() ?? '',
+    text: json['text']?.toString() ?? '',
+    state: _todoStateFromName(json['state']?.toString() ?? ''),
+    // A note with no date on it is still a note. Today rather than dropping
+    // it: the text is the thing worth keeping.
+    created: parseIsoDate(json['created']) ?? today(),
+    completed: parseIsoDate(json['completed']),
+    due: parseIsoDate(json['due']),
+    roomId: json['roomId']?.toString() ?? '',
+  );
+}
 
 /// A company the job buys from, and what it is assumed to quote.
 class ProjectVendor {
@@ -355,11 +565,58 @@ class BuildingProject {
   /// dangling name.
   final Map<String, String> partVendors;
 
+  // -------------------------------------------------------------------------
+  //  WHEN IT HAS TO BE BOUGHT
+  // -------------------------------------------------------------------------
+  //  A quote answers "what does the building cost". It does not answer the
+  //  question that actually sinks installs, which is "what should already have
+  //  been ordered by now" — and that one is only answerable at the JOB level,
+  //  because the deadline is the building's and the lead time is the order's.
+  //
+  //  Three facts, and the schedule is derived from them rather than stored:
+  //  the date the job needs everything by, how long each part takes to come,
+  //  and the parts that are wanted EARLIER than the rest. Nothing here holds a
+  //  computed date — see project_schedule.dart — so moving the deadline moves
+  //  every order-by date with it instead of leaving stale ones behind.
+
+  /// The date the job needs everything delivered by, or null when nobody has
+  /// said. Date only: a delivery lands on a day, not at a time, and carrying a
+  /// clock reading through a save-and-reload is how a deadline drifts across
+  /// midnight into the day before.
+  DateTime? deliveryDeadline;
+
+  /// Core component key -> lead time in calendar days.
+  ///
+  /// CALENDAR days rather than working days, because that is the unit vendors
+  /// quote in ("6-8 weeks") and converting a quoted figure into working days
+  /// at the keyboard is an invitation to get it wrong in the safe-looking
+  /// direction. An absent entry means nobody has asked the vendor yet, which
+  /// the schedule reports as unknown rather than assuming zero — a part
+  /// silently treated as available tomorrow is exactly the part that holds up
+  /// an install.
+  final Map<String, int> partLeadTimes;
+
+  /// Core component key -> the date THAT part has to arrive by, when it is not
+  /// the project's own deadline.
+  ///
+  /// Screens, mounts, floor boxes and conduit go in while the walls are still
+  /// open, weeks before the rack is delivered — so "everything by the 14th" is
+  /// wrong for them in the one direction that cannot be recovered from. An
+  /// entry here overrides [deliveryDeadline] for that part only, and its
+  /// absence means the part is wanted with everything else.
+  final Map<String, DateTime> partNeedBy;
+
+  /// The job's own list of things to do — see [ProjectTodo]. Newest first is
+  /// how it is shown, but stored in the order it was written so a reordering
+  /// on screen never rewrites the file.
+  final List<ProjectTodo> todos;
+
   /// Counters behind [nextRoomId] / [nextVendorId], persisted so ids stay
   /// unique across sessions — a reused id would re-point somebody's hand
   /// vendor tags at a different room.
   int _roomCounter;
   int _vendorCounter;
+  int _todoCounter;
 
   BuildingProject({
     this.name = '',
@@ -371,18 +628,31 @@ class BuildingProject {
     List<ProjectRoomRef>? rooms,
     List<ProjectVendor>? vendors,
     Map<String, String>? partVendors,
+    this.deliveryDeadline,
+    Map<String, int>? partLeadTimes,
+    Map<String, DateTime>? partNeedBy,
+    List<ProjectTodo>? todos,
     int roomCounter = 0,
     int vendorCounter = 0,
+    int todoCounter = 0,
   }) : rooms = rooms ?? [],
        vendors = vendors ?? [],
        partVendors = partVendors ?? {},
+       partLeadTimes = partLeadTimes ?? {},
+       partNeedBy = partNeedBy ?? {},
+       todos = todos ?? [],
        _roomCounter = roomCounter,
-       _vendorCounter = vendorCounter;
+       _vendorCounter = vendorCounter,
+       _todoCounter = todoCounter;
 
   bool get isEmpty =>
       rooms.isEmpty &&
       vendors.isEmpty &&
       partVendors.isEmpty &&
+      deliveryDeadline == null &&
+      partLeadTimes.isEmpty &&
+      partNeedBy.isEmpty &&
+      todos.isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       jobNumber.trim().isEmpty &&
@@ -395,6 +665,109 @@ class BuildingProject {
 
   String nextRoomId() => 'room${++_roomCounter}';
   String nextVendorId() => 'vendor${++_vendorCounter}';
+  String nextTodoId() => 'todo${++_todoCounter}';
+
+  // -------------------------------------------------------------------------
+  //  THE TO-DO LIST
+  // -------------------------------------------------------------------------
+
+  /// Open items — to do, and waiting on somebody. What the tab's badge counts.
+  List<ProjectTodo> get openTodos => [for (final t in todos) if (t.isOpen) t];
+
+  /// Items to do that are not waiting on anybody: the ones somebody can pick
+  /// up right now.
+  List<ProjectTodo> get actionableTodos =>
+      [for (final t in todos) if (t.state == ProjectTodoState.open) t];
+
+  /// Open items that have gone past their date.
+  List<ProjectTodo> overdueTodos([DateTime? asOf]) =>
+      [for (final t in todos) if (t.isOverdue(asOf)) t];
+
+  /// Open items due within [days] and not yet past — the ones to start on.
+  List<ProjectTodo> todosDueSoon({int days = 7, DateTime? asOf}) {
+    final now = dateOnly(asOf ?? DateTime.now());
+    return [
+      for (final t in todos)
+        if (t.isOpen && t.due != null && !t.due!.isBefore(now))
+          if (daysBetween(now, t.due!) <= days) t,
+    ];
+  }
+
+  /// Adds a note and hands back its id. Blank text adds nothing — an empty row
+  /// on a to-do list is a row somebody has to work out how to delete.
+  String addTodo(
+    String text, {
+    String roomId = '',
+    DateTime? created,
+    DateTime? due,
+  }) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return '';
+    final id = nextTodoId();
+    todos.add(
+      ProjectTodo(
+        id: id,
+        text: trimmed,
+        created: dateOnly(created ?? DateTime.now()),
+        due: due == null ? null : dateOnly(due),
+        roomId: roomId,
+      ),
+    );
+    return id;
+  }
+
+  /// Sets the date one note has to be done by, or clears it so it is simply on
+  /// the list.
+  void setTodoDue(String id, DateTime? date) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i < 0) return;
+    todos[i] = todos[i].copyWith(
+      due: date == null ? null : dateOnly(date),
+      clearDue: date == null,
+    );
+  }
+
+  /// Moves one note to [state], stamping or clearing its completion date.
+  ///
+  /// Re-opening something clears the date rather than leaving the old one on
+  /// it: a note that says it was finished in March and is sitting in the open
+  /// column is a note that will be read wrong.
+  void setTodoState(String id, ProjectTodoState state, {DateTime? when}) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i < 0) return;
+    todos[i] = todos[i].copyWith(
+      state: state,
+      completed: state == ProjectTodoState.done
+          ? dateOnly(when ?? DateTime.now())
+          : null,
+      clearCompleted: state != ProjectTodoState.done,
+    );
+  }
+
+  /// Rewrites one note's text. Blank is ignored — see [addTodo].
+  void setTodoText(String id, String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i >= 0) todos[i] = todos[i].copyWith(text: trimmed);
+  }
+
+  /// Files one note against a room, or against the job when [roomId] is blank.
+  void setTodoRoom(String id, String roomId) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i >= 0) todos[i] = todos[i].copyWith(roomId: roomId);
+  }
+
+  void removeTodo(String id) => todos.removeWhere((t) => t.id == id);
+
+  /// Drops every finished note. The one bulk action the list offers, because
+  /// tidying a long done-list one row at a time is the reason people stop
+  /// marking things done.
+  int clearDoneTodos() {
+    final before = todos.length;
+    todos.removeWhere((t) => t.isDone);
+    return before - todos.length;
+  }
 
   ProjectVendor? vendorById(String id) {
     if (id.isEmpty) return null;
@@ -500,6 +873,30 @@ class BuildingProject {
     }
   }
 
+  /// Records how many calendar days [partKey] takes to arrive, or forgets the
+  /// figure when [days] is null or negative.
+  ///
+  /// Zero is a real answer and is kept: "it is on the shelf" is something
+  /// somebody checked, and the schedule shows it as a part that can be ordered
+  /// on the day it is needed rather than as one nobody has asked about.
+  void setPartLeadTime(String partKey, int? days) {
+    if (days == null || days < 0) {
+      partLeadTimes.remove(partKey);
+    } else {
+      partLeadTimes[partKey] = days;
+    }
+  }
+
+  /// Sets the date [partKey] has to arrive by, ahead of the rest of the job,
+  /// or clears it so the part goes back to wanting the project deadline.
+  void setPartNeedBy(String partKey, DateTime? date) {
+    if (date == null) {
+      partNeedBy.remove(partKey);
+    } else {
+      partNeedBy[partKey] = dateOnly(date);
+    }
+  }
+
   /// Drops a vendor and every pin that named it. Leaving the pins would make
   /// the parts unreachable — tagged to a vendor with no row to click.
   void removeVendor(String id) {
@@ -563,8 +960,17 @@ class BuildingProject {
     'rooms': [for (final r in rooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
     if (partVendors.isNotEmpty) 'partVendors': partVendors,
+    if (deliveryDeadline != null)
+      'deliveryDeadline': formatIsoDate(deliveryDeadline!),
+    if (partLeadTimes.isNotEmpty) 'partLeadTimes': partLeadTimes,
+    if (partNeedBy.isNotEmpty)
+      'partNeedBy': {
+        for (final e in partNeedBy.entries) e.key: formatIsoDate(e.value),
+      },
+    if (todos.isNotEmpty) 'todos': [for (final t in todos) t.toJson()],
     'roomCounter': _roomCounter,
     'vendorCounter': _vendorCounter,
+    if (_todoCounter > 0) 'todoCounter': _todoCounter,
   };
 
   factory BuildingProject.fromJson(Map<String, dynamic> json) {
@@ -581,6 +987,37 @@ class BuildingProject {
     if (rawPins is Map) {
       rawPins.forEach((k, v) => pins[k.toString()] = v.toString());
     }
+
+    // Lead times and the dates that go with them. A figure that is not a
+    // number, or a date that is not a date, is DROPPED rather than defaulted:
+    // a hand-edited file with "6-8 weeks" typed into a day count should read
+    // as "nobody has answered this yet", which is true and visible, instead of
+    // as zero days, which is false and invisible.
+    final leadTimes = <String, int>{};
+    final rawLead = json['partLeadTimes'];
+    if (rawLead is Map) {
+      rawLead.forEach((k, v) {
+        final days = v is num ? v.toInt() : int.tryParse(v.toString().trim());
+        if (days != null && days >= 0) leadTimes[k.toString()] = days;
+      });
+    }
+    final needBy = <String, DateTime>{};
+    final rawNeedBy = json['partNeedBy'];
+    if (rawNeedBy is Map) {
+      rawNeedBy.forEach((k, v) {
+        final date = parseIsoDate(v);
+        if (date != null) needBy[k.toString()] = date;
+      });
+    }
+
+    // A note with no words on it is not a note. Everything else about a to-do
+    // is recoverable — a missing date becomes today, an unreadable state
+    // becomes open — but there is nothing to show for an empty one.
+    final todos = [
+      for (final t in (json['todos'] as List? ?? []))
+        if (t is Map && t['text']?.toString().trim().isNotEmpty == true)
+          ProjectTodo.fromJson(Map<String, dynamic>.from(t)),
+    ];
 
     // Counters are rebuilt from the ids present as well as read from the file:
     // a project hand-edited to add a room (which is a supported thing to do —
@@ -608,6 +1045,17 @@ class BuildingProject {
       rooms: rooms,
       vendors: vendors,
       partVendors: pins,
+      deliveryDeadline: parseIsoDate(json['deliveryDeadline']),
+      partLeadTimes: leadTimes,
+      partNeedBy: needBy,
+      todos: todos,
+      // Rebuilt from the ids present as well as read, for the same reason the
+      // room and vendor counters are: a reused id would make two notes the
+      // same note, and ticking one would tick the other.
+      todoCounter: [
+        (json['todoCounter'] as num?)?.toInt() ?? 0,
+        highest(todos.map((t) => t.id), 'todo'),
+      ].reduce((a, b) => a > b ? a : b),
       roomCounter: [
         (json['roomCounter'] as num?)?.toInt() ?? 0,
         highest(rooms.map((r) => r.id), 'room'),
@@ -658,8 +1106,13 @@ class BuildingProject {
     rooms: List<ProjectRoomRef>.from(rooms),
     vendors: List<ProjectVendor>.from(vendors),
     partVendors: Map<String, String>.from(partVendors),
+    deliveryDeadline: deliveryDeadline,
+    partLeadTimes: Map<String, int>.from(partLeadTimes),
+    partNeedBy: Map<String, DateTime>.from(partNeedBy),
+    todos: List<ProjectTodo>.from(todos),
     roomCounter: _roomCounter,
     vendorCounter: _vendorCounter,
+    todoCounter: _todoCounter,
   );
 }
 

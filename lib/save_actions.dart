@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'building_project.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
+import 'project_briefing_dialog.dart';
 
 /// ============================================================================
 ///  ONE SAVE BUTTON THAT KNOWS WHAT YOU ARE LOOKING AT
@@ -422,6 +423,12 @@ Future<bool> openProjectFromFile(
     messenger,
     SnackBar(content: Text('Opened ${provider.projectDisplayName}.')),
   );
+  // Where the job stands, once, on the way in — see project_briefing.dart. It
+  // puts nothing on screen unless something is actually time-critical, so a
+  // healthy project still opens straight onto the tab.
+  if (context.mounted) {
+    await showProjectBriefing(context, provider);
+  }
   return true;
 }
 

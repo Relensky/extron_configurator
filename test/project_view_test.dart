@@ -398,7 +398,13 @@ void main() {
   for (final width in [1100.0, 1400.0, 1900.0]) {
     testWidgets('the tab lays out at ${width.round()} px wide', (tester) async {
       final p = withProject();
-      for (final pane in ['Rooms', 'Core Components', 'Vendors']) {
+      for (final pane in [
+        'Rooms',
+        'Core Components',
+        'Timeline',
+        'Vendors',
+        'To do',
+      ]) {
         await pump(tester, p, width: width);
         await tester.tap(find.text(pane));
         await tester.pumpAndSettle();

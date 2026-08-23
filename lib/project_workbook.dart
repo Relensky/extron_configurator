@@ -4,6 +4,7 @@ import 'building_project.dart';
 import 'control_gaps.dart';
 import 'cost_estimate.dart';
 import 'project_estimate.dart';
+import 'project_schedule.dart';
 import 'report_tools.dart';
 import 'xlsx_writer.dart';
 
@@ -41,6 +42,12 @@ const List<String> kProjectWorkbookSheets = ['Summary', 'Core Components'];
 /// it. Named here so the tests and the tab-order check can agree on it.
 const String kProjectControlSheet = 'Control Gaps';
 
+/// The tab the spares answer lands on — what is spared, and what is not.
+const String kProjectSparesSheet = 'Spares';
+
+/// The tab purchasing works down: what to order, in the order to order it.
+const String kProjectTimelineSheet = 'Order Timeline';
+
 // ---------------------------------------------------------------------------
 //  SECTIONS
 // ---------------------------------------------------------------------------
@@ -63,6 +70,25 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
           ['Job number', project.jobNumber],
         if (project.client.trim().isNotEmpty) ['Client', project.client],
         ['Rooms quoted', estimate.costedRooms.length],
+        if (project.deliveryDeadline != null)
+          [
+            'Delivery deadline',
+            formatScheduleDate(project.deliveryDeadline!),
+          ],
+        // On the summary because it is a figure somebody decides about rather
+        // than reads: a job with no spares on it is a decision, and one nobody
+        // is asked to make is one that gets made by default.
+        [
+          'Spares',
+          estimate.spareUnits == 0
+              ? 'none on this job'
+              : '${trimNumber(estimate.spareUnits)} unit'
+                    '${estimate.spareUnits == 1 ? '' : 's'} across '
+                    '${estimate.sparedParts.length} product'
+                    '${estimate.sparedParts.length == 1 ? '' : 's'} '
+                    '(${formatMoney(estimate.sparesTotal, currency)}) — '
+                    'see the $kProjectSparesSheet sheet',
+        ],
         if (project.rooms.length != estimate.costedRooms.length)
           [
             'Rooms not counted',
@@ -165,6 +191,48 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
     ));
   }
 
+  // The job's own list, on the summary rather than a sheet of its own: it is
+  // short, it is the thing somebody wants to see when they pick the job back
+  // up, and a tab nobody clicks is a tab nobody reads. Open items only —
+  // finished ones are history and belong on screen, not in a document that
+  // gets sent out.
+  final openTodos = project.openTodos;
+  if (openTodos.isNotEmpty) {
+    final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
+    // Dated items first, soonest due at the top — the same order the tab
+    // shows them in, so the document and the screen agree about what matters.
+    final ordered = [...openTodos]..sort((a, b) {
+      final ad = a.due;
+      final bd = b.due;
+      if (ad != null && bd != null && ad != bd) return ad.compareTo(bd);
+      if (ad == null && bd != null) return 1;
+      if (ad != null && bd == null) return -1;
+      return a.created.compareTo(b.created);
+    });
+    sections.add((
+      title: 'Still to do on this job (${openTodos.length})',
+      header: const ['Item', 'About', 'State', 'Due', 'Open since'],
+      rows: [
+        for (final t in ordered)
+          [
+            t.text,
+            t.roomId.isEmpty
+                ? 'the job'
+                : roomNames[t.roomId] ?? t.roomId,
+            kProjectTodoStateLabels[t.state] ?? '',
+            t.due == null
+                ? ''
+                // Late is spelled out rather than left to the reader to work
+                // out from a date and today's date.
+                : t.isOverdue()
+                    ? '${formatScheduleDate(t.due!)} — PAST ITS DATE'
+                    : formatScheduleDate(t.due!),
+            formatScheduleDate(t.created),
+          ],
+      ],
+    ));
+  }
+
   final warnings = _projectWarnings(estimate);
   if (warnings.isNotEmpty) {
     sections.add((
@@ -228,6 +296,16 @@ List<String> _projectWarnings(ProjectEstimate estimate) => [
         '${estimate.controlGaps.map((g) => g.room.ref.id).toSet().length} '
         'room(s) have no control module. They are quoted and they will not '
         'commission as they stand — see the $kProjectControlSheet sheet.',
+  // Not a mistake, and not something the app should decide — but a building
+  // where nothing at all is spared is a building where the first failure is
+  // paid for out of a budget that has already closed, and nobody was ever
+  // going to be reminded of that by a drawing.
+  if (estimate.spareUnits == 0 && estimate.partsWithoutSpares.isNotEmpty)
+    'Nothing on this job has a spare. '
+        '${estimate.partsWithoutSpares.length} '
+        'product${estimate.partsWithoutSpares.length == 1 ? '' : 's'} would '
+        'be replaced out of the next budget rather than off the shelf — see '
+        'the $kProjectSparesSheet sheet.',
   for (final c in estimate.project.vendorConflicts)
     '${c.kind} rule "${c.rule}" is claimed by '
         '${c.vendors.map((v) => v.name).join(' and ')}. '
@@ -283,6 +361,13 @@ List<ReportSection> masterPartsSections(
         'Model',
         'Part number',
         'Qty',
+        // Spares are tagged ON the line rather than split onto one of their
+        // own, because they are the same product at the same price — see the
+        // Spares sheet for the job's whole answer. Blank rather than 0 on a
+        // part nobody spared: a column of zeroes reads as a column of
+        // decisions, and these are the opposite.
+        'Spares',
+        'For install',
         'Unit price',
         'Extended',
         if (includeVendorColumn) 'Vendor',
@@ -300,6 +385,8 @@ List<ReportSection> masterPartsSections(
             l.model,
             l.partNumber,
             l.qty,
+            l.hasSpares ? l.spareQty : '',
+            l.hasSpares ? l.drawnQty : '',
             unit(l),
             cash(l.total),
             if (includeVendorColumn) l.vendor?.name ?? 'UNTAGGED',
@@ -327,6 +414,221 @@ List<ReportSection> masterPartsSections(
                 .fold(0.0, (s, l) => s + l.total)),
           ],
       ['ALL PARTS', cash(estimate.partsTotal)],
+    ],
+  ));
+
+  return sections;
+}
+
+/// When each part has to be ordered, and what cannot be scheduled yet.
+///
+/// The Core Components list says what to buy; this says when. Kept as its own
+/// set of sections because it is read by a different person for a different
+/// reason — purchasing works down this in date order, and does not care which
+/// vendor rule tagged what.
+List<ReportSection> projectTimelineSections(
+  ProjectEstimate estimate, {
+  DateTime? asOf,
+}) {
+  final schedule = buildProjectSchedule(estimate: estimate, asOf: asOf);
+  final sections = <ReportSection>[];
+
+  sections.add((
+    title: 'The dates',
+    header: const ['', ''],
+    rows: [
+      [
+        'Delivery deadline',
+        schedule.deadline == null
+            ? 'not set — nothing can be scheduled'
+            : formatScheduleDate(schedule.deadline!),
+      ],
+      [
+        'First order due',
+        schedule.firstOrderDate == null
+            ? '—'
+            : formatScheduleDate(schedule.firstOrderDate!),
+      ],
+      ['Past their order date', schedule.lateCount],
+      ['To order within $kOrderDueSoonDays days', schedule.dueSoonCount],
+      ['No lead time recorded', schedule.unknownCount],
+      ['Worked out on', formatScheduleDate(schedule.asOf)],
+    ],
+  ));
+
+  final dated = [for (final l in schedule.lines) if (l.orderBy != null) l];
+  if (dated.isNotEmpty) {
+    sections.add((
+      title: 'Order by',
+      header: const [
+        'Order by',
+        'Part',
+        'Qty',
+        'Vendor',
+        'Lead time',
+        'On site by',
+        'Status',
+      ],
+      rows: [
+        for (final l in dated)
+          [
+            formatScheduleDate(l.orderBy!),
+            l.line.description,
+            l.line.qty,
+            l.line.vendor?.name ?? 'UNTAGGED',
+            formatLeadTime(l.leadDays),
+            // The early ones are called out: a part wanted ahead of the job is
+            // the thing somebody has to remember.
+            l.needByIsOwn
+                ? '${formatScheduleDate(l.needBy!)} (ahead of the job)'
+                : formatScheduleDate(l.needBy!),
+            '${kOrderStatusLabels[l.status]} — '
+                '${formatDayGap(l.daysUntilOrder ?? 0)}',
+          ],
+      ],
+    ));
+  }
+
+  // Listed rather than left out. A timeline that silently omits the parts
+  // nobody has a lead time for reads as complete while being the opposite.
+  final unscheduled = [for (final l in schedule.lines) if (l.orderBy == null) l];
+  if (unscheduled.isNotEmpty) {
+    sections.add((
+      title: 'Cannot be scheduled yet (${unscheduled.length})',
+      header: const ['Part', 'Qty', 'Vendor', 'What is missing'],
+      rows: [
+        for (final l in unscheduled)
+          [
+            l.line.description,
+            l.line.qty,
+            l.line.vendor?.name ?? 'UNTAGGED',
+            l.status == OrderStatus.noDeadline
+                ? 'no delivery date for this part or the job'
+                : 'nobody has asked the vendor how long it takes',
+          ],
+      ],
+    ));
+  }
+
+  return sections;
+}
+
+/// The job's spares: what is spared, how many, and what is NOT.
+///
+/// Two tables, and the second is the one worth having. A list of the spares
+/// somebody remembered to ask for reads as a job with spares on it; the list of
+/// products with none is the one that turns into a decision — and it is the
+/// list nothing in this app was ever going to produce on its own, because a
+/// spare is not on any drawing and nothing was ever going to notice its
+/// absence.
+///
+/// Equipment only in the second table, deliberately. Nobody wants a report
+/// nagging about a spare blanking plate, and a list long enough to include them
+/// is a list whose real rows — the boxes with power supplies in them — go
+/// unread.
+List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
+
+  /// Which rooms asked for the spares — "who wanted this" is the question
+  /// that follows every spare on a quote somebody is trimming.
+  String askedBy(MasterPartLine line) {
+    final ids = line.spareByRoom.keys.toList()
+      ..sort((a, b) => (line.spareByRoom[b] ?? 0).compareTo(
+            line.spareByRoom[a] ?? 0,
+          ));
+    return [
+      for (final id in ids)
+        '${roomNames[id] ?? id} ×${trimNumber(line.spareByRoom[id] ?? 0)}',
+    ].join(', ');
+  }
+
+  final spared = estimate.sparedParts;
+  final without = estimate.partsWithoutSpares;
+  final sections = <ReportSection>[];
+
+  sections.add((
+    title: 'Spares on this job',
+    header: const [
+      'Part',
+      'Manufacturer',
+      'Model',
+      'Part number',
+      'Spares',
+      'For install',
+      'Total bought',
+      'Unit price',
+      'Spares cost',
+      'Asked for by',
+    ],
+    rows: spared.isEmpty
+        ? [
+            [
+              'Nothing on this job is spared.',
+              '', '', '', '', '', '', '', '', '',
+            ],
+          ]
+        : [
+            for (final l in spared)
+              [
+                l.description,
+                l.manufacturer,
+                l.model,
+                l.partNumber,
+                l.spareQty,
+                l.drawnQty,
+                l.qty,
+                l.unpriced ? 'not priced' : formatMoney(l.unitPrice, currency),
+                cash(l.spareQty * l.unitPrice),
+                askedBy(l),
+              ],
+          ],
+  ));
+
+  sections.add((
+    title: 'Equipment with NO spare (${without.length})',
+    header: const [
+      'Part',
+      'Manufacturer',
+      'Model',
+      'Part number',
+      'Units on the job',
+      'Unit price',
+      'One spare would cost',
+      'Rooms',
+    ],
+    rows: without.isEmpty
+        ? [
+            ['Every product on this job has a spare.', '', '', '', '', '', '', ''],
+          ]
+        : [
+            for (final l in without)
+              [
+                l.description,
+                l.manufacturer,
+                l.model,
+                l.partNumber,
+                l.qty,
+                l.unpriced ? 'not priced' : formatMoney(l.unitPrice, currency),
+                l.unpriced ? '' : cash(l.unitPrice),
+                [
+                  for (final id in l.roomIdsByQty())
+                    '${roomNames[id] ?? id} '
+                        '×${trimNumber(l.qtyByRoom[id] ?? 0)}',
+                ].join(', '),
+              ],
+          ],
+  ));
+
+  sections.add((
+    title: 'Spares total',
+    header: const ['', ''],
+    rows: [
+      ['Products with a spare', spared.length],
+      ['Equipment with none', without.length],
+      ['Spare units bought', estimate.spareUnits],
+      ['Spares cost', cash(estimate.sparesTotal)],
     ],
   ));
 
@@ -539,6 +841,30 @@ Uint8List buildProjectWorkbookBytes({
       sheetName: tab(kProjectWorkbookSheets[1]),
       title: '$title — core components list',
       sections: master,
+      generated: stamp,
+    ));
+  }
+
+  // Purchasing works down this in date order and does not care which vendor
+  // rule tagged what, so it is a sheet rather than more columns on the parts
+  // list.
+  if (estimate.master.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectTimelineSheet),
+      title: '$title — when to order',
+      sections: projectTimelineSections(estimate, asOf: stamp),
+      generated: stamp,
+    ));
+  }
+
+  // Its own sheet rather than a block at the foot of the parts list: "what is
+  // not spared" is a list of things that are NOT on the order, and a table of
+  // absences buried under a table of purchases is a table nobody reads.
+  if (estimate.master.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectSparesSheet),
+      title: '$title — spares',
+      sections: projectSparesSections(estimate),
       generated: stamp,
     ));
   }

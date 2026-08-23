@@ -12,10 +12,14 @@ import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
+import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
 import 'project_pricing.dart';
 import 'project_room_picker.dart';
+import 'project_schedule.dart';
 import 'project_swap.dart';
+import 'project_todo_view.dart';
+import 'project_timeline_view.dart';
 import 'project_workbook.dart';
 import 'save_actions.dart';
 
@@ -49,7 +53,9 @@ import 'save_actions.dart';
 enum _ProjectPane {
   rooms('Rooms', Icons.meeting_room),
   parts('Core Components', Icons.inventory_2),
-  vendors('Vendors', Icons.local_shipping);
+  timeline('Timeline', Icons.event_available),
+  vendors('Vendors', Icons.local_shipping),
+  todo('To do', Icons.checklist);
 
   final String label;
   final IconData icon;
@@ -284,7 +290,9 @@ class _ProjectViewState extends State<ProjectView> {
               onVendorFilter: (v) => setState(() => _vendorFilter = v),
               onSearch: (s) => setState(() => _search = s),
             ),
+            _ProjectPane.timeline => timelineSlivers(context, estimate),
             _ProjectPane.vendors => vendorsSlivers(context, estimate),
+            _ProjectPane.todo => todoSlivers(context, estimate),
           },
         ],
       ),
@@ -301,6 +309,7 @@ class _ProjectViewState extends State<ProjectView> {
         estimate.failedRooms +
         estimate.unpricedParts +
         (estimate.mixedCurrency ? 1 : 0);
+    final openTodos = provider.project.openTodos.length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -414,6 +423,12 @@ class _ProjectViewState extends State<ProjectView> {
                         : null,
                   ),
                 ),
+              // The date the building has to be finished by, beside the money
+              // rather than buried in the timeline pane — it is the one figure
+              // on this tab that every other date is derived from, and a
+              // deadline nobody can see from the top of the screen is a
+              // deadline nobody sets.
+              DeadlineChip(estimate: estimate),
               if (provider.projectDirty)
                 Text(
                   'Unsaved',
@@ -425,7 +440,21 @@ class _ProjectViewState extends State<ProjectView> {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
+          // A Wrap rather than a Row, so the pane switcher and the file
+          // actions BOTH keep their natural width and the actions drop to
+          // their own line when the two together do not fit.
+          //
+          // This was a Row with the actions in an Expanded, which wrapped the
+          // actions but gave the switcher whatever was left over — and a
+          // switcher that has grown a fourth pane overflows a 1100-pixel
+          // window by a few pixels rather than shrinking. Neither of these is
+          // a thing that can usefully be squeezed: they are both rows of
+          // labelled buttons.
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SegmentedButton<_ProjectPane>(
                 segments: [
@@ -433,59 +462,69 @@ class _ProjectViewState extends State<ProjectView> {
                     ButtonSegment(
                       value: pane,
                       icon: Icon(pane.icon, size: 18),
-                      label: Text(pane.label),
+                      // The open count rides on the tab itself. A to-do list
+                      // that has to be opened to find out whether it has
+                      // anything on it is one nobody opens.
+                      label: Text(
+                        pane == _ProjectPane.todo && openTodos > 0
+                            ? '${pane.label} ($openTodos)'
+                            : pane.label,
+                      ),
                     ),
                 ],
                 selected: {_pane},
                 onSelectionChanged: (s) => _showPane(s.first),
               ),
-              const SizedBox(width: 12),
-              // Expanded so the Wrap is CONSTRAINED and therefore actually
-              // wraps. A Spacer with an unconstrained Wrap beside it lets the
-              // buttons keep their natural width and run off the edge — which
-              // is exactly what six of them did on anything under about 1600
-              // pixels.
-              Expanded(
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () => _newProject(provider),
-                      icon: const Icon(Icons.note_add_outlined, size: 18),
-                      label: const Text('New'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _openProject(provider),
-                      icon: const Icon(Icons.folder_open, size: 18),
-                      label: const Text('Open'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _saveProject(provider),
-                      icon: const Icon(Icons.save_outlined, size: 18),
-                      label: const Text('Save'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () {
-                        provider.refreshProjectRooms();
-                        _snack('Re-read every room from disk.');
-                      },
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Refresh'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: () => _exportWorkbook(provider, estimate),
-                      icon: const Icon(Icons.table_view, size: 18),
-                      label: const Text('Workbook'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: () => _exportRfqs(provider, estimate),
-                      icon: const Icon(Icons.send_outlined, size: 18),
-                      label: const Text('Quote requests'),
-                    ),
-                  ],
-                ),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _newProject(provider),
+                    icon: const Icon(Icons.note_add_outlined, size: 18),
+                    label: const Text('New'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _openProject(provider),
+                    icon: const Icon(Icons.folder_open, size: 18),
+                    label: const Text('Open'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _saveProject(provider),
+                    icon: const Icon(Icons.save_outlined, size: 18),
+                    label: const Text('Save'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      provider.refreshProjectRooms();
+                      _snack('Re-read every room from disk.');
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Refresh'),
+                  ),
+                  // The same summary a project shows on the way in. Reachable
+                  // on purpose: it is shown once on open and only when
+                  // something is time-critical, and "what was that list again"
+                  // is asked five minutes later.
+                  TextButton.icon(
+                    key: const ValueKey('project_briefing_button'),
+                    onPressed: () =>
+                        showProjectBriefing(context, provider, force: true),
+                    icon: const Icon(Icons.flag_outlined, size: 18),
+                    label: const Text('Where it stands'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _exportWorkbook(provider, estimate),
+                    icon: const Icon(Icons.table_view, size: 18),
+                    label: const Text('Workbook'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => _exportRfqs(provider, estimate),
+                    icon: const Icon(Icons.send_outlined, size: 18),
+                    label: const Text('Quote requests'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1298,6 +1337,15 @@ class _BuildingTotals extends StatelessWidget {
 //  CORE COMPONENTS
 // ---------------------------------------------------------------------------
 
+/// Master-list filters that are not a vendor id. Ids are always `vendor<n>`,
+/// so these can never collide with one by accident.
+///
+/// Public because the filter is a piece of state on the tab and these are two
+/// of the values it takes — the header's warning chip already reaches for the
+/// unpriced one the same way.
+const String kSparedFilter = '<spared>';
+const String kNoSpareFilter = '<no-spare>';
+
 /// The core components list, as slivers for the tab's one scroll view.
 List<Widget> partsSlivers(
   BuildContext context, {
@@ -1321,6 +1369,12 @@ List<Widget> partsSlivers(
     // two rows of chips would be two rows to read.
     if (vendorFilter == undrivenFilter) return line.hasControlGap;
     if (vendorFilter == unpricedFilter) return line.unpriced;
+    if (vendorFilter == kSparedFilter) return line.hasSpares;
+    // Equipment only, for the same reason the report's list is: nobody wants
+    // to be asked about a spare blanking plate.
+    if (vendorFilter == kNoSpareFilter) {
+      return line.kind == MasterPartKind.equipment && !line.hasSpares;
+    }
     return line.vendor?.id == vendorFilter;
   }
 
@@ -1357,6 +1411,9 @@ List<Widget> partsSlivers(
     for (final l in estimate.master)
       if (matchesVendor(l) && matchesSearch(l)) l,
   ];
+
+  // Built once for the whole list rather than per row — see [_PartRow].
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
 
   return [
     SliverToBoxAdapter(
@@ -1402,6 +1459,20 @@ List<Widget> partsSlivers(
                       unpricedFilter,
                       warn: true,
                     ),
+                  // Both halves of the spares question, because they are two
+                  // different jobs: checking what was asked for, and deciding
+                  // about what was not. The second is the one nothing else in
+                  // the app would ever raise.
+                  if (estimate.sparedParts.isNotEmpty)
+                    filterChip(
+                      'Spared (${estimate.sparedParts.length})',
+                      kSparedFilter,
+                    ),
+                  if (estimate.partsWithoutSpares.isNotEmpty)
+                    filterChip(
+                      'No spare (${estimate.partsWithoutSpares.length})',
+                      kNoSpareFilter,
+                    ),
                 ],
               ),
             ),
@@ -1435,8 +1506,11 @@ List<Widget> partsSlivers(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         sliver: SliverList.builder(
           itemCount: lines.length,
-          itemBuilder: (context, index) =>
-              _PartRow(line: lines[index], estimate: estimate),
+          itemBuilder: (context, index) => _PartRow(
+            line: lines[index],
+            estimate: estimate,
+            roomNames: roomNames,
+          ),
         ),
       ),
     ],
@@ -1449,17 +1523,17 @@ class _PartsHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Text label(String text, TextAlign align) => Text(
+      text,
+      textAlign: align,
+      style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
+    );
+
     Widget h(String text, int flex, {TextAlign align = TextAlign.left}) =>
-        Expanded(
-          flex: flex,
-          child: Text(
-            text,
-            textAlign: align,
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        );
+        Expanded(flex: flex, child: label(text, align));
+
+    Widget fixed(String text, double width) =>
+        SizedBox(width: width, child: label(text, TextAlign.right));
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: Row(
@@ -1468,7 +1542,20 @@ class _PartsHeaderRow extends StatelessWidget {
           h('Qty', 1, align: TextAlign.right),
           h('Unit', 2, align: TextAlign.right),
           h('Extended', 2, align: TextAlign.right),
+          // The gap the row has in front of its vendor cell. Without it every
+          // heading from here rightwards sat eight pixels left of the column
+          // it names.
+          const SizedBox(width: 8),
           h('Vendor', 3),
+          // When it has to be bought, beside who buys it — the two halves of
+          // placing one order, and the reason the lead time lives on this list
+          // rather than on a screen of its own. Fixed widths rather than flex,
+          // to line up with [_ScheduleCells], which cannot flex: a date is a
+          // fixed amount of text and a column that shrinks below it would
+          // ellipsize the one thing the column is for.
+          fixed('Lead time', 84),
+          const SizedBox(width: 8),
+          fixed('Order by', 132),
           const SizedBox(width: 40),
           const SizedBox(width: 40),
         ],
@@ -1481,14 +1568,25 @@ class _PartRow extends StatelessWidget {
   final MasterPartLine line;
   final ProjectEstimate estimate;
 
-  const _PartRow({required this.line, required this.estimate});
+  /// Room id -> name, built ONCE for the whole list and handed down.
+  ///
+  /// This row used to build it itself, which on a job with forty rooms and two
+  /// hundred parts meant assembling the same forty-entry map two hundred times
+  /// per scroll — per rebuild, in a list whose whole point is that it builds
+  /// rows lazily while somebody drags the scrollbar.
+  final Map<String, String> roomNames;
+
+  const _PartRow({
+    required this.line,
+    required this.estimate,
+    required this.roomNames,
+  });
 
   @override
   Widget build(BuildContext context) {
     final provider = context.read<AppStateProvider>();
     final theme = Theme.of(context);
     final currency = estimate.currency;
-    final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
 
     final rooms = [
       for (final id in line.roomIdsByQty())
@@ -1573,12 +1671,37 @@ class _PartRow extends StatelessWidget {
             ),
             Expanded(
               flex: 1,
-              child: Text(
-                trimNumber(line.qty),
-                textAlign: TextAlign.right,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    trimNumber(line.qty),
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  // Tagged under the count rather than in a column of its own:
+                  // a spare is part of the quantity being bought, and on most
+                  // jobs most rows have none — a whole column would be blank
+                  // on nine rows in ten and cost every row the width to say
+                  // nothing.
+                  if (line.hasSpares)
+                    Tooltip(
+                      message:
+                          '${trimNumber(line.spareQty)} of these are spares '
+                          'for the shelf.\n'
+                          '${trimNumber(line.drawnQty)} go into rooms.',
+                      child: Text(
+                        '${trimNumber(line.spareQty)} spare',
+                        textAlign: TextAlign.right,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.tertiary,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             Expanded(
@@ -1642,6 +1765,7 @@ class _PartRow extends StatelessWidget {
               flex: 3,
               child: _VendorPicker(line: line, estimate: estimate),
             ),
+            _ScheduleCells(line: line, provider: provider),
             SizedBox(
               width: 40,
               child: line.tagSource == VendorTagSource.pinned
@@ -1683,6 +1807,162 @@ class _PartRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The lead time and the order-by date, on the part row.
+///
+/// Two cells and one target: pressing either opens the same editor, because
+/// "six weeks" and "has to be here by the 3rd" are one thing somebody learns in
+/// one phone call and would otherwise be two separate clicks to record.
+///
+/// The order-by cell is DERIVED and never typed — it is the delivery date minus
+/// the lead time, worked out on the spot (see project_schedule.dart), so
+/// moving the job's deadline moves every one of these without anybody editing
+/// a row.
+class _ScheduleCells extends StatelessWidget {
+  final MasterPartLine line;
+  final AppStateProvider provider;
+
+  const _ScheduleCells({required this.line, required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final part = schedulePart(line: line, project: provider.project);
+    final color = orderStatusColor(context, part.status);
+    final orderBy = part.orderBy;
+
+    // What the cell says when there is no date, spelled as the thing that is
+    // missing rather than as a dash — a blank tells somebody nothing about
+    // which of the two facts to go and find.
+    final String orderText;
+    if (orderBy != null) {
+      orderText = formatScheduleDate(orderBy);
+    } else if (part.status == OrderStatus.noDeadline) {
+      orderText = 'no deadline';
+    } else {
+      orderText = 'set lead time';
+    }
+
+    void edit() => showPartScheduleDialog(context, provider, line);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 84,
+          child: Tooltip(
+            message: part.leadDays == null
+                ? 'Nobody has recorded how long this takes to arrive.\n'
+                    'Click to set it.'
+                : 'Takes ${formatLeadTime(part.leadDays)} to arrive.\n'
+                    'Click to change it.',
+            child: InkWell(
+              key: ValueKey('part_lead_${line.key}'),
+              borderRadius: BorderRadius.circular(4),
+              onTap: edit,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  formatLeadTime(part.leadDays),
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: part.leadDays == null
+                        ? theme.colorScheme.onSurfaceVariant
+                        : null,
+                    fontStyle:
+                        part.leadDays == null ? FontStyle.italic : null,
+                    decoration: part.leadDays == null
+                        ? TextDecoration.underline
+                        : null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 132,
+          child: Tooltip(
+            message: orderBy == null
+                ? 'Needs a lead time and a delivery date before this can be '
+                    'worked out.'
+                : '${kOrderStatusLabels[part.status]}'
+                    ' — ${formatDayGap(part.daysUntilOrder ?? 0)}.\n'
+                    'On site by ${formatScheduleDate(part.needBy!)}'
+                    '${part.needByIsOwn ? ' (ahead of the job)' : ''}.',
+            child: InkWell(
+              key: ValueKey('part_orderby_${line.key}'),
+              borderRadius: BorderRadius.circular(4),
+              onTap: edit,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (part.needsAttention) ...[
+                          Icon(
+                            orderStatusIcon(part.status),
+                            size: 13,
+                            color: color,
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                        Flexible(
+                          child: Text(
+                            orderText,
+                            textAlign: TextAlign.right,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: orderBy == null
+                                  ? theme.colorScheme.onSurfaceVariant
+                                  : color,
+                              fontWeight: part.needsAttention
+                                  ? FontWeight.w600
+                                  : null,
+                              fontStyle:
+                                  orderBy == null ? FontStyle.italic : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (orderBy != null)
+                      Text(
+                        formatDayGap(part.daysUntilOrder ?? 0),
+                        textAlign: TextAlign.right,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: color,
+                        ),
+                      ),
+                    // The early-delivery flag lives here rather than in a
+                    // column of its own: it is rare, and a whole column that
+                    // is blank on ninety-five rows out of a hundred costs
+                    // every row width to say nothing.
+                    if (part.needByIsOwn && part.needBy != null)
+                      Text(
+                        'on site ${formatScheduleDate(part.needBy!)}',
+                        textAlign: TextAlign.right,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

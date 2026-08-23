@@ -367,6 +367,28 @@ class MasterPartLine {
   /// manager checks a delivery against.
   final Map<String, double> qtyByRoom;
 
+  /// How many of [qty] are SPARES — bought for the shelf rather than for a
+  /// system, summed across every room that asked for one.
+  ///
+  /// Rolled up rather than recomputed, because a room decides its own spares
+  /// two different ways: a count against a device on the diagram
+  /// ([CostLine.spareQty]), and a whole line typed in as a shelf spare
+  /// ([CostLine.spare]). Both are money for a box nobody will install, both
+  /// have to arrive with the order, and from the job's point of view they are
+  /// one figure.
+  final double spareQty;
+
+  /// Room id -> the spares that room asked for. Which room wanted the spare is
+  /// the question that follows "why are we buying eleven of these", and a
+  /// single total cannot answer it.
+  final Map<String, double> spareByRoom;
+
+  /// Units the rooms will actually install — [qty] less [spareQty].
+  double get drawnQty => qty - spareQty;
+
+  /// True when somebody has asked for a spare of this part.
+  bool get hasSpares => spareQty > 0;
+
   /// The vendor this part is tagged to, and how it got there.
   final ProjectVendor? vendor;
   final VendorTagSource tagSource;
@@ -415,6 +437,8 @@ class MasterPartLine {
     required this.unpriced,
     this.undrivenByRoom = const {},
     this.lineKeysByRoom = const {},
+    this.spareQty = 0,
+    this.spareByRoom = const {},
   });
 
   /// Units across the job with no control module behind them.
@@ -542,6 +566,54 @@ class ProjectEstimate {
   /// Every part on the job, ignoring which section it came from.
   double get partsTotal =>
       equipmentTotal + hardwareTotal + cablingTotal + extrasTotal;
+
+  // -------------------------------------------------------------------------
+  //  SPARES
+  // -------------------------------------------------------------------------
+  //  A spare is the cheapest insurance on a job and the easiest thing to leave
+  //  off it: it is not on any drawing, so nothing in the app was ever going to
+  //  ask about it, and the first time anybody notices is the morning a failed
+  //  switcher has to be replaced out of next year's budget.
+  //
+  //  So the job reports BOTH halves — what is spared, and what is not. The
+  //  second is the one that matters: a list of the spares somebody remembered
+  //  says nothing about the eleven products they did not.
+
+  /// Every part with a spare on it, most spares first.
+  ///
+  /// Ties break on the description so two parts with one spare each do not
+  /// swap places between two readings of the same job.
+  List<MasterPartLine> get sparedParts {
+    final out = [for (final l in master) if (l.hasSpares) l];
+    out.sort((a, b) {
+      final byQty = b.spareQty.compareTo(a.spareQty);
+      return byQty != 0
+          ? byQty
+          : a.description.toLowerCase().compareTo(b.description.toLowerCase());
+    });
+    return out;
+  }
+
+  /// EQUIPMENT with no spare on it, in master-list order.
+  ///
+  /// Equipment only, deliberately. A spare blanking plate is not a thing
+  /// anybody wants a report to nag about, and a list that asked for one would
+  /// be long enough that nobody would read the rows that matter — the boxes
+  /// with power supplies in them that a room stops working without.
+  List<MasterPartLine> get partsWithoutSpares => [
+    for (final l in master)
+      if (l.kind == MasterPartKind.equipment && !l.hasSpares) l,
+  ];
+
+  /// Units bought for the shelf across the whole job.
+  double get spareUnits =>
+      master.fold(0.0, (sum, l) => sum + l.spareQty);
+
+  /// What the spares come to. Priced at the line's own unit price — the same
+  /// figure the rest of the job pays, which is the point of a spare being part
+  /// of its line rather than a line of its own.
+  double get sparesTotal =>
+      master.fold(0.0, (sum, l) => sum + l.spareQty * l.unitPrice);
 
   /// True when nothing is missing: every room read, every part priced.
   bool get isComplete => failedRooms == 0 && unpricedParts == 0;
@@ -734,6 +806,8 @@ ProjectEstimate computeProjectEstimate({
       unpriced: a.unpriced,
       undrivenByRoom: a.undrivenByRoom,
       lineKeysByRoom: a.lineKeysByRoom,
+      spareQty: a.spareQty,
+      spareByRoom: a.spareByRoom,
     ));
   }
 
@@ -835,9 +909,11 @@ class _PartAccumulator {
 
   double qty = 0;
   double total = 0;
+  double spareQty = 0;
   double minUnitPrice = double.infinity;
   double maxUnitPrice = 0;
   final Map<String, double> qtyByRoom = {};
+  final Map<String, double> spareByRoom = {};
   final Map<String, int> undrivenByRoom = {};
   final Map<String, Set<String>> lineKeysByRoom = {};
 
@@ -860,6 +936,15 @@ class _PartAccumulator {
     qty += line.qty;
     total += line.total;
     qtyByRoom[roomId] = (qtyByRoom[roomId] ?? 0) + line.qty;
+
+    // A room says "spare" two ways and the job cannot tell them apart: a whole
+    // line typed in as a shelf spare is entirely spare, and a device group
+    // with a spares figure on it is spare for that many of its units.
+    final spare = line.spare ? line.qty : line.spareQty;
+    if (spare > 0) {
+      spareQty += spare;
+      spareByRoom[roomId] = (spareByRoom[roomId] ?? 0) + spare;
+    }
     // The key this room prices by, kept so a price set on the job can be
     // written where the room will look for it.
     (lineKeysByRoom[roomId] ??= <String>{}).add(line.key);
