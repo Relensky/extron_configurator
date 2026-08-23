@@ -86,14 +86,79 @@ class BriefingLine {
   });
 }
 
+/// Where the job stands overall, above the list of things to deal with.
+///
+/// The list answers "what needs doing"; this answers "what IS this job" — how
+/// big, what it costs, when it delivers and when the buying starts. Somebody
+/// opening a project after three weeks away needs both, and the second one
+/// first: a list of five warnings means something different on a nine-room
+/// building due in March than on a one-room job with no date on it.
+class BriefingOverview {
+  /// Rooms counted, and rooms on the job — they differ when one is excluded
+  /// or could not be read.
+  final int roomsCosted;
+  final int roomsTotal;
+
+  final double grandTotal;
+  final String currency;
+
+  /// Parts on the master list, and how many of them nothing can schedule.
+  final int parts;
+  final int partsWithoutLeadTime;
+
+  /// The job's own delivery deadline, null when nobody has set one.
+  final DateTime? deadline;
+
+  /// The delivery phases and their dates, in the project's own order. Empty on
+  /// a job that never split into them.
+  final List<({String name, DateTime? deadline, int parts})> phases;
+
+  /// The next order that has to go in, and the last date anything is needed —
+  /// the two ends of the buying. Null when nothing can be dated.
+  final DateTime? firstOrder;
+  final DateTime? lastDelivery;
+
+  /// The next few order dates with what is due on each, so the briefing can
+  /// show the actual schedule rather than only a count of what is wrong.
+  final List<({DateTime date, int parts, bool late})> nextOrders;
+
+  const BriefingOverview({
+    required this.roomsCosted,
+    required this.roomsTotal,
+    required this.grandTotal,
+    required this.currency,
+    required this.parts,
+    required this.partsWithoutLeadTime,
+    required this.deadline,
+    required this.phases,
+    required this.firstOrder,
+    required this.lastDelivery,
+    required this.nextOrders,
+  });
+}
+
+/// How many order dates the briefing lists before it stops.
+///
+/// Four, because the point is "what is coming up", not the whole schedule —
+/// the Timeline pane is the whole schedule, and a briefing that reproduces it
+/// is one nobody reads to the end of.
+const int _maxOrderDates = 4;
+
 /// The whole briefing, in reading order.
 class ProjectBriefing {
   final List<BriefingLine> lines;
 
+  /// What this job is, above what is wrong with it.
+  final BriefingOverview overview;
+
   /// The day it was worked out against.
   final DateTime asOf;
 
-  const ProjectBriefing({required this.lines, required this.asOf});
+  const ProjectBriefing({
+    required this.lines,
+    required this.overview,
+    required this.asOf,
+  });
 
   List<BriefingLine> _at(BriefingUrgency u) =>
       [for (final l in lines) if (l.urgency == u) l];
@@ -369,5 +434,55 @@ ProjectBriefing buildProjectBriefing({
     ));
   }
 
-  return ProjectBriefing(lines: lines, asOf: now);
+  return ProjectBriefing(
+    lines: lines,
+    overview: _overviewOf(estimate, schedule, now),
+    asOf: now,
+  );
+}
+
+/// What the job IS, as opposed to what is wrong with it.
+BriefingOverview _overviewOf(
+  ProjectEstimate estimate,
+  ProjectSchedule schedule,
+  DateTime now,
+) {
+  final project = estimate.project;
+
+  // The order dates that are still ahead, plus any that have gone — a date
+  // that has passed is the most important one on the list, so it is not
+  // filtered out for being in the past.
+  final days = schedule.orderDays;
+  final upcoming = [
+    for (final d in days)
+      (
+        date: d.date,
+        parts: d.parts.length,
+        late: d.date.isBefore(now),
+      ),
+  ];
+
+  return BriefingOverview(
+    roomsCosted: estimate.costedRooms.length,
+    roomsTotal: estimate.rooms.length,
+    grandTotal: estimate.grandTotal,
+    currency: estimate.currency,
+    parts: estimate.master.length,
+    partsWithoutLeadTime: schedule.unknownCount,
+    deadline: project.deliveryDeadline,
+    phases: [
+      for (final entry in schedule.byTrack(project))
+        if (entry.track != null)
+          (
+            name: entry.track!.name,
+            deadline: entry.track!.deadline ?? project.deliveryDeadline,
+            parts: entry.parts.length,
+          ),
+    ],
+    firstOrder: schedule.firstOrderDate,
+    lastDelivery: schedule.lastNeedDate,
+    nextOrders: upcoming.length > _maxOrderDates
+        ? upcoming.sublist(0, _maxOrderDates)
+        : upcoming,
+  );
 }

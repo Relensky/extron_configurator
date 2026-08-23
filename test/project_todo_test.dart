@@ -2,7 +2,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'dart:ui';
+
+import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/building_project.dart';
+import 'package:extron_configurator/cost_estimate.dart';
+import 'package:extron_configurator/project_estimate.dart';
 
 /// The job's own to-do list: the notes that are about the WORK rather than
 /// about the building.
@@ -269,6 +274,79 @@ void main() {
 
       expect(project.todos.single.due, DateTime(2026, 3, 1));
       expect(copy.todos.single.due, DateTime(2026, 4, 1));
+    });
+  });
+
+  group('what a room is called on the list', () {
+    LoadedRoom loaded({String bldg = 'BSS', String number = '103'}) =>
+        LoadedRoom(
+          configPath: '/rooms/BSS_103_config.json',
+          title: 'Behavioral And Social Science 103',
+          model: const AvFlowModel(
+            nodes: [],
+            cables: [],
+            racks: [],
+            rackSlots: {},
+            canvasSize: Size(900, 560),
+            roomTitle: '',
+            unplaced: [],
+          ),
+          settings: RoomCostSettings(),
+          config: {
+            'SYSTEM_SETUP': {
+              if (bldg.isNotEmpty) 'gve_bldg': bldg,
+              if (number.isNotEmpty) 'gve_room': number,
+            },
+          },
+        );
+
+    ProjectRoomCost cost(LoadedRoom room, {String label = ''}) =>
+        ProjectRoomCost(
+          ref: ProjectRoomRef(
+            id: 'room1',
+            configPath: room.configPath,
+            label: label,
+          ),
+          room: room,
+        );
+
+    test('it is the building code and number, not the file', () {
+      // "BSS_103_config" is how the room is STORED. "BSS 103" is what is on
+      // the door, and what a note filed against the room has to say.
+      expect(loaded().roomCode, 'BSS 103');
+      expect(cost(loaded()).codeName, 'BSS 103');
+    });
+
+    test('a code with no number, and a number with no code, still read', () {
+      expect(loaded(number: '').roomCode, 'BSS');
+      expect(loaded(bldg: '').roomCode, '103');
+    });
+
+    test('a room that says neither falls back rather than going blank', () {
+      final bare = loaded(bldg: '', number: '');
+      expect(bare.roomCode, isEmpty);
+      // The full name off the config, which is better than the file name and
+      // is what the rest of the app already shows.
+      expect(cost(bare).codeName, 'Behavioral And Social Science 103');
+    });
+
+    test('a room that could not be read still gets a name', () {
+      final broken = LoadedRoom(
+        configPath: '/rooms/gone_config.json',
+        title: '',
+        model: const AvFlowModel(
+            nodes: [],
+            cables: [],
+            racks: [],
+            rackSlots: {},
+            canvasSize: Size(900, 560),
+            roomTitle: '',
+            unplaced: [],
+          ),
+        settings: RoomCostSettings(),
+        error: 'no such file',
+      );
+      expect(broken.roomCode, isEmpty);
     });
   });
 }

@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'control_prefill.dart' show buildControlSideForPreset;
+import 'new_room_dialog.dart';
+import 'project_room_picker.dart' show confirmLeavingRoom;
 import 'building_project.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
@@ -386,6 +389,163 @@ Future<bool> startNewProject(
     ScaffoldMessenger.of(context),
     const SnackBar(
       content: Text('New project started. Add the rooms it covers.'),
+    ),
+  );
+  return true;
+}
+
+/// Creates a room from the template and applies what the new-room dialog was
+/// told — the room mode, and the room type's preset with the control side
+/// built from it.
+///
+/// Shared rather than written twice: a room is started from the toolbar AND
+/// from the project's room picker, and the two must produce the SAME room. The
+/// caller keeps whatever is particular to its own route — which tab to land
+/// on, whether to run the estimator wizard, where to save the file — and this
+/// holds the part that is the room itself.
+///
+/// Returns false when no template could be found, having said so.
+Future<bool> createRoomFromChoice(
+  BuildContext context,
+  AppStateProvider provider,
+  NewRoomChoice choice, {
+  bool announce = true,
+}) async {
+  // The template path always resolves (explicit file, else config.json in the
+  // Root Folder / working directory), so attempt the create and report the
+  // resolved location on failure.
+  final created = await provider.createNewConfig();
+  if (!context.mounted) return created;
+  if (!created) {
+    showTimedSnackBar(
+      ScaffoldMessenger.of(context),
+      SnackBar(
+        content: Text(
+          'No template found at ${provider.effectiveTemplateFilePath}. '
+          'Place config.json there or set a Template file in App Config.',
+        ),
+        backgroundColor: snackErrorFill(context),
+      ),
+    );
+    return false;
+  }
+
+  // Set after the create: createNewConfig resets the AV document, and the room
+  // mode lives in it.
+  provider.setRoomMode(choice.mode);
+
+  // The room type goes in before anything else, so what it draws lands on a
+  // canvas that already has the room's usual gear rather than colliding with
+  // it afterwards.
+  final preset = choice.preset;
+  if (preset == null) return true;
+
+  final summary = provider.applyRoomPreset(
+    preset,
+    // Renumbered into this room's own scheme when it has a number. A new room
+    // usually does not yet, and then the preset's numbering stands until
+    // somebody renumbers the boxes.
+    jackPrefix: roomJackPrefix(provider),
+  );
+
+  // The control side, built from what the preset just drew. Skipped for an
+  // AV-only room, which by definition has no control system yet.
+  final control = choice.mode == RoomMode.avOnly
+      ? null
+      : buildControlSideForPreset(provider, preset);
+
+  if (!announce || !context.mounted) return true;
+  showTimedSnackBar(
+    ScaffoldMessenger.of(context),
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: Text(
+        '${preset.name}: ${summary.devices} devices, ${summary.jacks} '
+        'jacks, ${summary.cables} runs and ${summary.racks} rack'
+        '${summary.racks == 1 ? '' : 's'} added.'
+        '${control == null ? '' : ' ${control.blocks} control block'
+              '${control.blocks == 1 ? '' : 's'} and ${control.settings} '
+              'system setting${control.settings == 1 ? '' : 's'} filled in'
+              '${control.withoutModule == 0 ? '' : ', ${control.withoutModule} '
+                  'device${control.withoutModule == 1 ? '' : 's'} still '
+                  'needing a python module'}.'}'
+        ' Set the room number on the Wizard tab, then check the jack '
+        'numbering.',
+      ),
+    ),
+  );
+  return true;
+}
+
+/// This room's jack prefix — its number, digits only. '' when the room has no
+/// number yet, which tells [AppStateProvider.applyRoomPreset] to leave a
+/// preset's own numbering alone rather than renumbering it to nothing.
+String roomJackPrefix(AppStateProvider provider) {
+  final setup = provider.roomConfig['SYSTEM_SETUP'];
+  final room = (setup is Map ? setup['gve_room']?.toString() : null) ?? '';
+  return room.replaceAll(RegExp(r'[^0-9]'), '');
+}
+
+/// Starts a new room and puts it straight onto the open project.
+///
+/// A project points at FILES, so a room that has never been saved has nothing
+/// to point at — which is why this asks where to put it before adding it,
+/// rather than creating a room that cannot join the job it was started for.
+///
+/// Returns true when a room was created, saved and added.
+Future<bool> createProjectRoom(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  if (!await confirmLeavingRoom(context, provider)) return false;
+  if (!context.mounted) return false;
+
+  final choice = await showNewRoomDialog(context);
+  if (choice == null || !context.mounted) return false;
+
+  if (!await createRoomFromChoice(context, provider, choice)) return false;
+  if (!context.mounted) return false;
+
+  final messenger = ScaffoldMessenger.of(context);
+
+  // Where it goes. Asked here rather than left for later: a new room that is
+  // never saved is not on the project, and finding that out afterwards means
+  // redoing the room.
+  if (!await provider.exportRoomConfig()) {
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(
+        content: Text(
+          'The room was created but not saved, so it is not on the project '
+          'yet. Save it and use "Add rooms" on the Project tab.',
+        ),
+      ),
+    );
+    return false;
+  }
+
+  final error = provider.addCurrentRoomToProject();
+  if (error.isNotEmpty) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(error),
+        backgroundColor: snackErrorFillOn(messenger),
+      ),
+    );
+    return false;
+  }
+
+  // Nothing to mark: the picker resolves the open room from the config path
+  // (see AppStateProvider.openProjectRoom), so saving it and adding it is
+  // already enough for the picker that started this to read as this room.
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      content: Text(
+        'Added to ${provider.projectDisplayName}. Set the building and room '
+        'number on the Wizard tab.',
+      ),
     ),
   );
   return true;

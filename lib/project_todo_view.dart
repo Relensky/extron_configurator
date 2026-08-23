@@ -73,10 +73,30 @@ List<Widget> todoSlivers(BuildContext context, ProjectEstimate estimate) {
           a.completed ?? a.created,
         ));
 
-  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
+  // THE BUILDING CODE AND ROOM NUMBER — 'BSS 103' — not the config file name.
+  //
+  // A note is filed against a room, and the room somebody means is the one on
+  // the door. Falling through to the file name put "BSS_101_config" on the
+  // list, which is an artefact of how the room is stored and not a thing
+  // anybody calls it. See [ProjectRoomCost.codeName].
+  //
+  // Built once here and handed to the picker, the menu and every row, so all
+  // three name a room the same way — a note that says "BSS 103" in the list
+  // and something else in its own dropdown is a note nobody trusts.
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
+
+  /// The rooms a note can be filed against, in project order, with the name
+  /// each is shown under. Rooms that failed to read are still offered: a note
+  /// about a room whose file is missing is exactly the note somebody needs to
+  /// be able to write.
+  final roomChoices = [
+    for (final r in estimate.rooms) (id: r.ref.id, name: roomNames[r.ref.id]!),
+  ];
 
   return [
-    SliverToBoxAdapter(child: _AddTodoBar(provider: provider)),
+    SliverToBoxAdapter(
+      child: _AddTodoBar(provider: provider, rooms: roomChoices),
+    ),
     if (todos.isEmpty)
       const SliverToBoxAdapter(
         child: Padding(
@@ -115,6 +135,7 @@ List<Widget> todoSlivers(BuildContext context, ProjectEstimate estimate) {
             provider: provider,
             estimate: estimate,
             roomNames: roomNames,
+            rooms: roomChoices,
           ),
         ),
       ),
@@ -144,6 +165,7 @@ List<Widget> todoSlivers(BuildContext context, ProjectEstimate estimate) {
               provider: provider,
               estimate: estimate,
               roomNames: roomNames,
+              rooms: roomChoices,
             ),
           ),
         ),
@@ -187,7 +209,13 @@ class _SectionLabel extends StatelessWidget {
 /// thought and the note is enough friction to lose it.
 class _AddTodoBar extends StatefulWidget {
   final AppStateProvider provider;
-  const _AddTodoBar({required this.provider});
+
+  /// Room id and the name to show it under — the building code and number.
+  /// Passed in rather than read off the project, which only knows each room's
+  /// file path and label and so cannot name one.
+  final List<({String id, String name})> rooms;
+
+  const _AddTodoBar({required this.provider, required this.rooms});
 
   @override
   State<_AddTodoBar> createState() => _AddTodoBarState();
@@ -235,7 +263,7 @@ class _AddTodoBarState extends State<_AddTodoBar> {
 
   @override
   Widget build(BuildContext context) {
-    final rooms = widget.provider.project.rooms;
+    final rooms = widget.rooms;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Row(
@@ -276,10 +304,7 @@ class _AddTodoBarState extends State<_AddTodoBar> {
                 for (final r in rooms)
                   DropdownMenuItem(
                     value: r.id,
-                    child: Text(
-                      r.label.trim().isEmpty ? r.fallbackName : r.label,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(r.name, overflow: TextOverflow.ellipsis),
                   ),
                 const DropdownMenuItem(
                   value: _kCustomScope,
@@ -456,6 +481,9 @@ class _ScopeButton extends StatelessWidget {
   final ProjectTodo todo;
   final AppStateProvider provider;
 
+  /// The same room names the picker offers — see [todoSlivers].
+  final List<({String id, String name})> rooms;
+
   /// The resolved name, or '' when the note is about the job as a whole.
   final String label;
   final IconData icon;
@@ -463,6 +491,7 @@ class _ScopeButton extends StatelessWidget {
   const _ScopeButton({
     required this.todo,
     required this.provider,
+    required this.rooms,
     required this.label,
     required this.icon,
   });
@@ -474,7 +503,6 @@ class _ScopeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    final rooms = provider.project.rooms;
 
     return PopupMenuButton<String>(
       key: ValueKey('todo_scope_${todo.id}'),
@@ -484,10 +512,7 @@ class _ScopeButton extends StatelessWidget {
       itemBuilder: (_) => [
         const PopupMenuItem(value: _job, child: Text('The job')),
         for (final r in rooms)
-          PopupMenuItem(
-            value: r.id,
-            child: Text(r.label.trim().isEmpty ? r.fallbackName : r.label),
-          ),
+          PopupMenuItem(value: r.id, child: Text(r.name)),
         const PopupMenuDivider(),
         const PopupMenuItem(value: _custom, child: Text('Something else…')),
       ],
@@ -595,11 +620,16 @@ class _TodoRow extends StatelessWidget {
   final ProjectEstimate estimate;
   final Map<String, String> roomNames;
 
+  /// The same rooms the picker at the top offers, so the menu on a row and
+  /// the picker never disagree about what a room is called.
+  final List<({String id, String name})> rooms;
+
   const _TodoRow({
     required this.todo,
     required this.provider,
     required this.estimate,
     required this.roomNames,
+    required this.rooms,
   });
 
   @override
@@ -688,6 +718,7 @@ class _TodoRow extends StatelessWidget {
                         _ScopeButton(
                           todo: todo,
                           provider: provider,
+                          rooms: rooms,
                           label: scopeText,
                           icon: scopeIcon,
                         ),

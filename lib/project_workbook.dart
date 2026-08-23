@@ -198,7 +198,13 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
   // gets sent out.
   final openTodos = project.openTodos;
   if (openTodos.isNotEmpty) {
-    final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
+    // The building code and number, the same as the tab shows — a note filed
+    // against a room means the room on the door.
+    //
+    // Only here. The tables above are a QUOTE, and a quote says "Behavioral
+    // And Social Science 103" because that is what the customer calls it; a
+    // job list is read by the people doing the work, who call it BSS 103.
+    final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
     // Dated items first, soonest due at the top — the same order the tab
     // shows them in, so the document and the screen agree about what matters.
     final ordered = [...openTodos]..sort((a, b) {

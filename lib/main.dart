@@ -14,7 +14,6 @@ import 'av_device_library.dart';
 import 'av_only_notice.dart';
 import 'av_flow_view.dart';
 import 'contrast.dart';
-import 'control_prefill.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
 import 'device_editor_view.dart';
@@ -286,58 +285,12 @@ class _MainDashboardState extends State<MainDashboard> {
     final NewRoomChoice? choice = await showNewRoomDialog(context);
     if (choice == null || !context.mounted) return;
 
-    // The template path always resolves (explicit file, else config.json in
-    // the Root Folder / working directory), so just attempt the create and
-    // report the resolved location on failure.
-    final bool success = await provider.createNewConfig();
+    // The room itself — template, mode and room-type preset — is shared with
+    // the project picker's "New room on this project", so the two routes
+    // cannot drift into producing different rooms. See [createRoomFromChoice].
+    final bool success = await createRoomFromChoice(context, provider, choice);
     if (!context.mounted) return;
     if (success) {
-      // Set after the create: createNewConfig resets the AV document, and the
-      // room mode lives in it.
-      provider.setRoomMode(choice.mode);
-
-      // The room type goes in before the estimator wizard, so anything picked
-      // there lands on a canvas that already has the room's usual gear on it
-      // rather than colliding with it afterwards.
-      final preset = choice.preset;
-      if (preset != null) {
-        final summary = provider.applyRoomPreset(
-          preset,
-          // Renumbered into this room's own scheme when it has a number. A new
-          // room usually doesn't yet, and then the preset's numbering stands
-          // until somebody renumbers the boxes.
-          jackPrefix: _roomJackPrefix(provider),
-        );
-
-        // The control side, built from what the preset just drew. Skipped for
-        // an AV-only room, which by definition has no control system yet — the
-        // banner on the Wizard tab is how that room gets one, when somebody
-        // decides it should have one.
-        final control = choice.mode == RoomMode.avOnly
-            ? null
-            : buildControlSideForPreset(provider, preset);
-
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 8),
-            content: Text(
-              '${preset.name}: ${summary.devices} devices, ${summary.jacks} '
-              'jacks, ${summary.cables} runs and ${summary.racks} rack'
-              '${summary.racks == 1 ? '' : 's'} added.'
-              '${control == null ? '' : ' ${control.blocks} control block'
-                  '${control.blocks == 1 ? '' : 's'} and ${control.settings} '
-                  'system setting${control.settings == 1 ? '' : 's'} filled in'
-                  '${control.withoutModule == 0 ? '' : ', ${control.withoutModule} '
-                      'device${control.withoutModule == 1 ? '' : 's'} still '
-                      'needing a python module'}.'}'
-              ' Set the room number on the Wizard tab, then check the jack '
-              'numbering.',
-            ),
-          ),
-        );
-      }
-
       if (choice.startFromEstimator) {
         final placed = await showDeviceStartWizard(context, provider);
         if (!context.mounted) return;
@@ -373,22 +326,12 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
       );
     } else {
+      // createRoomFromChoice has already said what was missing; this is the
+      // one thing it cannot do, which is send somebody to the setting.
       provider.selectTab(AppTab.appConfig.index);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("No template found at ${provider.effectiveTemplateFilePath}. "
-              "Place config.json there or set a Template file in App Config."),
-          backgroundColor: snackErrorFill(context)));
     }
   }
 
-  /// This room's jack prefix — its number, digits only. '' when the room has
-  /// no number yet, which tells [AppStateProvider.applyRoomPreset] to leave a
-  /// preset's own numbering alone rather than renumbering it to nothing.
-  static String _roomJackPrefix(AppStateProvider provider) {
-    final setup = provider.roomConfig['SYSTEM_SETUP'];
-    final room = (setup is Map ? setup['gve_room']?.toString() : null) ?? '';
-    return room.replaceAll(RegExp(r'[^0-9]'), '');
-  }
 
   /// Puts the working file back the way it was before the last save, after
   /// showing exactly what that costs.
@@ -625,9 +568,15 @@ class _MainDashboardState extends State<MainDashboard> {
     //
     // Built here because they need this State's methods, but they live on the
     // banner, beside the job, where the rest of "which document am I working
-    // on" lives. The title bar keeps the controls that are about the
-    // APPLICATION or that START a session — New and Open, the exports, the
-    // screenshot, the theme and the gear.
+    // on" lives — the conversion, the processor transfers, undo-last-save,
+    // the EXPORTS and Save. The title bar keeps only what is about the
+    // APPLICATION or STARTS a session: New and Open, the screenshot, the
+    // theme and the gear.
+    //
+    // The exports moved down here because they are about the DOCUMENT, not
+    // the app: "give me this as a spreadsheet" is the same kind of question
+    // as "save this" and "convert this", and it was the odd one out sitting
+    // up beside the theme toggle.
     final documentActions = <Widget>[
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
@@ -706,6 +655,57 @@ class _MainDashboardState extends State<MainDashboard> {
             ? () => _undoLastSave(context, provider)
             : null,
       ),
+      // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
+      // to live on two of the twelve tabs, which made "send me the
+      // workbook" a question about which page somebody happened to be on.
+      IconButton(
+        key: const ValueKey('export_workbook'),
+        icon: const Icon(Icons.menu_book),
+        tooltip: hasConfig
+            ? 'Export the full room workbook — every tab, one .xlsx'
+            : 'Export the full room workbook — nothing loaded yet',
+        onPressed:
+            hasConfig ? () => exportRoomWorkbook(context, provider) : null,
+      ),
+      // ...and THIS tab on its own, the three ways a document leaves this
+      // app. Beside the workbook button so the answer to "can I get this
+      // as a spreadsheet" is in the same place on every page.
+      PopupMenuButton<String>(
+        key: const ValueKey('export_tab_menu'),
+        icon: const Icon(Icons.file_download_outlined),
+        tooltip: _tabExportTooltip(selectedIndex, hasConfig),
+        // The catalog is the app's own price list, so it exports with no
+        // room loaded — everything else needs one.
+        enabled: _tabExports(selectedIndex) &&
+            (hasConfig || _tabWorksWithoutConfig(selectedIndex)),
+        onSelected: (v) => exportTabReport(
+          context,
+          provider,
+          AppTab.values[selectedIndex],
+          v,
+        ),
+        itemBuilder: (ctx) => [
+          PopupMenuItem(
+            value: 'xlsx',
+            child: Text(
+              '${_tabExportLabel(selectedIndex)} as a spreadsheet (.xlsx)',
+            ),
+          ),
+          PopupMenuItem(
+            value: 'txt',
+            child: Text(
+              '${_tabExportLabel(selectedIndex)} as plain text (.txt)',
+            ),
+          ),
+          PopupMenuItem(
+            value: 'copy',
+            child: Text(
+              'Copy ${_tabExportLabel(selectedIndex).toLowerCase()} to the '
+              'clipboard',
+            ),
+          ),
+        ],
+      ),
       // SAVE, AND EVERY OTHER WAY OF SAVING. One button that writes
       // whatever document the tab on screen belongs to — the room on the
       // room tabs, the job on the Project tab, the catalog on the Catalog
@@ -762,57 +762,6 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'Open Existing Config',
             onPressed: () => _openExistingConfig(context, provider),
           ),
-          // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
-          // to live on two of the twelve tabs, which made "send me the
-          // workbook" a question about which page somebody happened to be on.
-          IconButton(
-            key: const ValueKey('export_workbook'),
-            icon: const Icon(Icons.menu_book),
-            tooltip: hasConfig
-                ? 'Export the full room workbook — every tab, one .xlsx'
-                : 'Export the full room workbook — nothing loaded yet',
-            onPressed:
-                hasConfig ? () => exportRoomWorkbook(context, provider) : null,
-          ),
-          // ...and THIS tab on its own, the three ways a document leaves this
-          // app. Beside the workbook button so the answer to "can I get this
-          // as a spreadsheet" is in the same place on every page.
-          PopupMenuButton<String>(
-            key: const ValueKey('export_tab_menu'),
-            icon: const Icon(Icons.file_download_outlined),
-            tooltip: _tabExportTooltip(selectedIndex, hasConfig),
-            // The catalog is the app's own price list, so it exports with no
-            // room loaded — everything else needs one.
-            enabled: _tabExports(selectedIndex) &&
-                (hasConfig || _tabWorksWithoutConfig(selectedIndex)),
-            onSelected: (v) => exportTabReport(
-              context,
-              provider,
-              AppTab.values[selectedIndex],
-              v,
-            ),
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'xlsx',
-                child: Text(
-                  '${_tabExportLabel(selectedIndex)} as a spreadsheet (.xlsx)',
-                ),
-              ),
-              PopupMenuItem(
-                value: 'txt',
-                child: Text(
-                  '${_tabExportLabel(selectedIndex)} as plain text (.txt)',
-                ),
-              ),
-              PopupMenuItem(
-                value: 'copy',
-                child: Text(
-                  'Copy ${_tabExportLabel(selectedIndex).toLowerCase()} to the '
-                  'clipboard',
-                ),
-              ),
-            ],
-          ),
           IconButton(
             icon: const Icon(Icons.photo_camera),
             tooltip: 'Screenshot & annotate',
@@ -826,22 +775,26 @@ class _MainDashboardState extends State<MainDashboard> {
           // App Config, at the end of the row that is about the app itself.
           IconButton(
             key: const ValueKey('banner_app_config'),
-            icon: Icon(
-              Icons.settings,
-              color: readableOn(
-                appBarFill,
-                prefer: [appBarInk, theme.colorScheme.onSurface],
-                minRatio: kContrastLarge,
-              ),
-            ),
+            // UNSELECTED IS THE ORDINARY ONE. Exactly the ink the buttons
+            // either side of it inherit from the bar — the gear is not doing
+            // anything special while App Config is closed, and a gear that is
+            // permanently a different colour from its neighbours reads as
+            // already selected.
+            icon: Icon(Icons.settings, color: appBarInk),
             isSelected: selectedIndex == AppTab.appConfig.index,
             selectedIcon: Icon(
               Icons.settings,
-              color: readableOn(
+              // SELECTED IS THE ACCENT, and it has to be visibly the accent.
+              //
+              // readableOn would hand back appBarInk on any theme whose app
+              // bar IS the accent — Classic is one — which left the selected
+              // gear painted the same colour as the unselected one and the
+              // two states indistinguishable. legibleTone keeps the accent's
+              // HUE and moves its lightness until it reads on the bar, so
+              // there is always a difference to see.
+              color: legibleTone(
+                theme.colorScheme.secondary,
                 appBarFill,
-                // The accent only gets to be the selected colour when it is
-                // actually legible on the bar it is painted on.
-                prefer: [theme.colorScheme.primary, appBarInk],
                 minRatio: kContrastLarge,
               ),
             ),

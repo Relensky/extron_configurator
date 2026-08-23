@@ -81,6 +81,32 @@ class LoadedRoom {
 
   final RoomCostSettings settings;
 
+  /// How the building actually refers to this room: the building code and the
+  /// room number, 'BSS 103'. '' when the config carries neither.
+  ///
+  /// This is the name written on the door and on the work order, and it is the
+  /// one to show anywhere a room has to be picked out of a list of rooms in
+  /// the same building. [title] is the full prose name ('Behavioral And Social
+  /// Science 103') which is right on a quote and too long for a row; the
+  /// FILE name is right nowhere — "BSS_101_config" is an artefact of how the
+  /// room is stored, not what anybody calls it.
+  ///
+  /// Read straight off the config rather than through the provider's building
+  /// table: a room is loaded here without an app around it. `gve_bldg` holds
+  /// the code on anything recent, and a legacy config that still holds a full
+  /// building name yields that plus the number, which is still the room rather
+  /// than the file.
+  String get roomCode {
+    final setup = config['SYSTEM_SETUP'];
+    if (setup is! Map) return '';
+    final building = setup['gve_bldg']?.toString().trim() ?? '';
+    final number = setup['gve_room']?.toString().trim() ?? '';
+    return [
+      building,
+      number,
+    ].where((part) => part.isNotEmpty).join(' ');
+  }
+
   /// Why this room could not be read, or '' when it was.
   ///
   /// A missing room does NOT throw. A building is quoted from a folder of
@@ -318,6 +344,18 @@ class ProjectRoomCost {
     if (ref.label.trim().isNotEmpty) return ref.label.trim();
     if (room.title.trim().isNotEmpty) return room.title.trim();
     return ref.fallbackName;
+  }
+
+  /// What to call this room where it has to be told apart from the others in
+  /// the same building at a glance: the building code and room number,
+  /// 'BSS 103'.
+  ///
+  /// Falls back to [name] when the config has neither — a room that could not
+  /// be read has no code to show, and a row with nothing on it is worse than a
+  /// row with a file name on it.
+  String get codeName {
+    final code = room.roomCode;
+    return code.isEmpty ? name : code;
   }
 
   bool get ok => estimate != null;

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
+import 'save_actions.dart' show createProjectRoom;
 
 /// ============================================================================
 ///  THE ROOM PICKER IN THE TITLE BAR
@@ -36,7 +37,17 @@ class ProjectRoomPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
     final rooms = provider.project.rooms;
-    if (rooms.isEmpty) return const SizedBox.shrink();
+
+    // Shown once there is a PROJECT, not once there are rooms.
+    //
+    // It used to need rooms, which hid it on exactly the job that needs it
+    // most: a project just started has none, and the menu is now where a room
+    // is started FROM. With no project at all it stays hidden — a permanently
+    // empty dropdown explaining itself is worse than nothing.
+    final hasProject = rooms.isNotEmpty ||
+        provider.currentProjectPath.isNotEmpty ||
+        provider.project.name.trim().isNotEmpty;
+    if (!hasProject) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     final open = provider.openProjectRoom;
@@ -71,17 +82,19 @@ class ProjectRoomPicker extends StatelessWidget {
                 ),
               ),
             ),
-          _StepButton(
-            icon: Icons.chevron_left,
-            tooltip: 'Previous room on the project',
-            delta: -1,
-          ),
+          if (rooms.isNotEmpty)
+            _StepButton(
+              icon: Icons.chevron_left,
+              tooltip: 'Previous room on the project',
+              delta: -1,
+            ),
           _RoomMenu(open: open, rooms: rooms),
-          _StepButton(
-            icon: Icons.chevron_right,
-            tooltip: 'Next room on the project',
-            delta: 1,
-          ),
+          if (rooms.isNotEmpty)
+            _StepButton(
+              icon: Icons.chevron_right,
+              tooltip: 'Next room on the project',
+              delta: 1,
+            ),
           if (open != null && provider.roomHasUnsavedChanges)
             Padding(
               padding: const EdgeInsets.only(left: 4),
@@ -167,6 +180,10 @@ class _StepButton extends StatelessWidget {
 }
 
 class _RoomMenu extends StatelessWidget {
+  /// Not a room id — those are always `room<n>` — so the last entry on the
+  /// menu can never be mistaken for one of the rooms above it.
+  static const String _newRoom = '<new-room>';
+
   final ProjectRoomRef? open;
   final List<ProjectRoomRef> rooms;
 
@@ -184,6 +201,14 @@ class _RoomMenu extends StatelessWidget {
       tooltip: 'Switch to another room on this project',
       constraints: const BoxConstraints(minWidth: 260, maxWidth: 460),
       onSelected: (id) async {
+        // Starting a room is the same decision as switching to one — "which
+        // room am I working on" — so it belongs on the same menu rather than
+        // three clicks away on the Project tab. It goes LAST, under a divider:
+        // the rooms are the answer nearly every time this is opened.
+        if (id == _newRoom) {
+          await createProjectRoom(context, provider);
+          return;
+        }
         final ref = provider.project.roomById(id);
         if (ref == null) return;
         if (!await confirmLeavingRoom(context, provider)) return;
@@ -222,6 +247,17 @@ class _RoomMenu extends StatelessWidget {
                   : const Text('Not counted in the project total'),
             ),
           ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: _newRoom,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.add_home_work_outlined, size: 18),
+            title: Text('New room on this project…'),
+            subtitle: Text('Created, saved and added to the job'),
+          ),
+        ),
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -229,9 +265,11 @@ class _RoomMenu extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              open == null
-                  ? 'Pick a room'
-                  : _nameFor(provider, open!),
+              open != null
+                  ? _nameFor(provider, open!)
+                  : rooms.isEmpty
+                  ? 'No rooms yet'
+                  : 'Pick a room',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: onBar,
                 fontStyle: open == null ? FontStyle.italic : null,

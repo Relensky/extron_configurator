@@ -85,10 +85,23 @@ void main() {
       );
     }
 
+    // The exports act on the DOCUMENT — "give me this as a spreadsheet" is
+    // the same kind of question as "save this" — so they sit on the document
+    // row beside Save rather than up beside the theme toggle.
+    for (final key in ['export_workbook', 'export_tab_menu']) {
+      expect(
+        find.descendant(
+          of: find.byType(TopLevelBar),
+          matching: find.byKey(ValueKey(key)),
+        ),
+        findsOneWidget,
+        reason: '$key acts on the open document, so it is on the document row',
+      );
+    }
+
     // The title bar: the things that are about the application, and the two
     // that START a session rather than acting on the one in progress.
-    for (final key in ['new_config', 'open_config', 'export_workbook',
-        'export_tab_menu', 'banner_app_config']) {
+    for (final key in ['new_config', 'open_config', 'banner_app_config']) {
       expect(
         find.descendant(
           of: find.byType(AppBar),

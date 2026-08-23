@@ -215,4 +215,111 @@ void main() {
       expect(kBriefingPaneLabels[line.pane], isNotNull);
     }
   });
+
+  group('where it stands, overall', () {
+    test('it carries the job size, money and dates', () {
+      final screen = part('Projection screen');
+      final project = BuildingProject(
+        deliveryDeadline: DateTime(2026, 9, 1),
+        partLeadTimes: {screen.key: 45},
+      );
+      final o = buildProjectBriefing(
+        estimate: estimateOf(project, master: [screen]),
+        asOf: march,
+      ).overview;
+
+      expect(o.parts, 1);
+      expect(o.deadline, DateTime(2026, 9, 1));
+      // 1 Sep less 45 days.
+      expect(o.firstOrder, DateTime(2026, 7, 18));
+      expect(o.lastDelivery, DateTime(2026, 9, 1));
+      expect(o.partsWithoutLeadTime, 0);
+    });
+
+    test('the order dates are listed, with what is due on each', () {
+      final a = part('Projection screen');
+      final b = part('Ceiling mount');
+      final c = part('Equipment rack');
+      final project = BuildingProject(
+        deliveryDeadline: DateTime(2026, 9, 1),
+        partLeadTimes: {a.key: 45, b.key: 45, c.key: 10},
+      );
+      final o = buildProjectBriefing(
+        estimate: estimateOf(project, master: [a, b, c]),
+        asOf: march,
+      ).overview;
+
+      // Two dates: the two 45-day parts share one, the 10-day part has its
+      // own. An order date is a trip to purchasing, not a row per part.
+      expect(o.nextOrders, hasLength(2));
+      expect(o.nextOrders.first.date, DateTime(2026, 7, 18));
+      expect(o.nextOrders.first.parts, 2);
+      expect(o.nextOrders.first.late, isFalse);
+      expect(o.nextOrders.last.date, DateTime(2026, 8, 22));
+      expect(o.nextOrders.last.parts, 1);
+    });
+
+    test('a date that has gone is flagged rather than dropped', () {
+      final screen = part('Projection screen');
+      final project = BuildingProject(
+        deliveryDeadline: DateTime(2026, 4, 1),
+        partLeadTimes: {screen.key: 200},
+      );
+      final o = buildProjectBriefing(
+        estimate: estimateOf(project, master: [screen]),
+        asOf: march,
+      ).overview;
+
+      expect(o.nextOrders, hasLength(1));
+      expect(o.nextOrders.single.late, isTrue);
+    });
+
+    test('it stops after a few dates rather than reprinting the timeline', () {
+      final parts = <MasterPartLine>[];
+      final project = BuildingProject(deliveryDeadline: DateTime(2026, 12, 1));
+      for (var i = 0; i < 9; i++) {
+        final p = part('Part $i');
+        parts.add(p);
+        // A different lead time each, so each lands on its own order date.
+        project.setPartLeadTime(p.key, 10 + i * 5);
+      }
+      final o = buildProjectBriefing(
+        estimate: estimateOf(project, master: parts),
+        asOf: march,
+      ).overview;
+      expect(o.nextOrders.length, lessThanOrEqualTo(4));
+    });
+
+    test('the phases and their dates are on it', () {
+      final conduit = part('Conduit');
+      final project = BuildingProject(deliveryDeadline: DateTime(2026, 9, 1));
+      final infra = project.addTrack(
+        'Infrastructure',
+        deadline: DateTime(2026, 4, 1),
+      );
+      project.setPartTrack(conduit.key, infra.id);
+      project.setPartLeadTime(conduit.key, 10);
+
+      final o = buildProjectBriefing(
+        estimate: estimateOf(project, master: [conduit]),
+        asOf: march,
+      ).overview;
+
+      expect(o.phases, hasLength(1));
+      expect(o.phases.single.name, 'Infrastructure');
+      expect(o.phases.single.deadline, DateTime(2026, 4, 1));
+      expect(o.phases.single.parts, 1);
+    });
+
+    test('a job with no dates still reports what it is', () {
+      final o = buildProjectBriefing(
+        estimate: estimateOf(BuildingProject()),
+        asOf: march,
+      ).overview;
+      expect(o.deadline, isNull);
+      expect(o.firstOrder, isNull);
+      expect(o.nextOrders, isEmpty);
+      expect(o.phases, isEmpty);
+    });
+  });
 }
