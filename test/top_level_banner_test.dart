@@ -66,13 +66,24 @@ void main() {
 
     // The banner: the job, and the buttons that act on the open document.
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
+    // Save is the exception to the split: it acts on the document, but it
+    // lives in the far corner of the TITLE bar because it is the control
+    // reached for most and the one that must never be hunted for.
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byKey(const ValueKey('save_context')),
+      ),
+      findsOneWidget,
+      reason: 'Save sits in the title bar corner',
+    );
     expect(
       find.descendant(
         of: find.byType(TopLevelBar),
         matching: find.byKey(const ValueKey('save_context')),
       ),
-      findsOneWidget,
-      reason: 'Save acts on the document, so it belongs beside the job',
+      findsNothing,
+      reason: 'and not also on the document row',
     );
     for (final key in ['new_config', 'open_config']) {
       expect(
@@ -156,13 +167,15 @@ void main() {
     // over to the RIGHT of the buttons, parking the corner control 600 pixels
     // from the corner.
     final banner = tester.getRect(find.byType(TopLevelBar));
-    final saveMenu = tester.getRect(
+    // The LAST control on the banner — Save moved to the title bar's corner,
+    // so the exports are now what has to reach this one.
+    final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('save_menu')),
+        matching: find.byKey(const ValueKey('export_tab_menu')),
       ),
     );
-    expect(saveMenu.right, closeTo(banner.right, 1),
+    expect(lastOnBanner.right, closeTo(banner.right, 1),
         reason: 'the last button on the banner is flush with its right edge');
   });
 
@@ -178,14 +191,14 @@ void main() {
         reason: 'a long name ellipsises rather than overflowing');
 
     final banner = tester.getRect(find.byType(TopLevelBar));
-    final saveMenu = tester.getRect(
+    final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('save_menu')),
+        matching: find.byKey(const ValueKey('export_tab_menu')),
       ),
     );
-    expect(saveMenu.right, closeTo(banner.right, 1));
-    expect(banner.contains(saveMenu.centerLeft), isTrue);
+    expect(lastOnBanner.right, closeTo(banner.right, 1));
+    expect(banner.contains(lastOnBanner.centerLeft), isTrue);
   });
 
   testWidgets('the banner survives the rail being folded away',

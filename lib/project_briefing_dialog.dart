@@ -221,6 +221,102 @@ class _Overview extends StatelessWidget {
                 ),
               ),
           ],
+
+          // THE JOB LIST, as items. "4 job notes are still open" is a number
+          // to go and look at; the notes are what somebody came back to the
+          // project to read, and most of them are one line long.
+          if (o.todos.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'STILL TO DO',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: muted,
+              ),
+            ),
+            const SizedBox(height: 2),
+            for (final todo in o.todos) _todoLine(context, todo),
+            if (o.moreTodos > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, left: 15),
+                child: Text(
+                  'and ${o.moreTodos} more',
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _todoLine(BuildContext context, BriefingTodo todo) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final ink = todo.late
+        ? errorTextOn(
+            theme.colorScheme,
+            theme.dialogTheme.backgroundColor ?? theme.colorScheme.surface,
+          )
+        : null;
+
+    // What the note is filed under and when it is due, after the note itself —
+    // both are qualifiers, and a row that leads with "BSS 103" buries the one
+    // thing being read.
+    final tail = [
+      if (todo.scope.isNotEmpty) todo.scope,
+      if (todo.due != null)
+        todo.late
+            ? 'due ${formatScheduleDate(todo.due!)} — '
+                  '${formatDayGap(daysBetween(asOf, todo.due!))}'
+            : 'due ${formatScheduleDate(todo.due!)}',
+      if (todo.blocked) 'waiting on somebody',
+    ].join('  ·  ');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              todo.late
+                  ? Icons.error_outline
+                  : todo.blocked
+                  ? Icons.pause_circle_outline
+                  : Icons.check_box_outline_blank,
+              size: 13,
+              color: todo.late
+                  ? ink
+                  : todo.blocked
+                  ? theme.colorScheme.tertiary
+                  : muted,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  todo.text,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ink,
+                    fontWeight: todo.late ? FontWeight.w600 : null,
+                  ),
+                ),
+                if (tail.isNotEmpty)
+                  Text(
+                    tail,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: todo.late ? ink : muted,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );

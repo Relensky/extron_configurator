@@ -80,9 +80,11 @@ void main() {
   ///
   /// That bar is the BANNER now, not the title bar: the buttons that act on
   /// the open document sit beside the job, and the title bar keeps the ones
-  /// that are about the application.
+  /// that are about the application — plus SAVE, which sits in the far corner
+  /// of the title bar because it is the one control that must never be hunted
+  /// for.
   final saveButton = find.descendant(
-    of: find.byType(TopLevelBar),
+    of: find.byType(AppBar),
     matching: find.widgetWithIcon(IconButton, Icons.save),
   );
 

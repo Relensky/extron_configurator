@@ -568,10 +568,11 @@ class _MainDashboardState extends State<MainDashboard> {
     //
     // Built here because they need this State's methods, but they live on the
     // banner, beside the job, where the rest of "which document am I working
-    // on" lives — the conversion, the processor transfers, undo-last-save,
-    // the EXPORTS and Save. The title bar keeps only what is about the
-    // APPLICATION or STARTS a session: New and Open, the screenshot, the
-    // theme and the gear.
+    // on" lives — the conversion, the processor transfers, undo-last-save and
+    // the EXPORTS. The title bar keeps what is about the APPLICATION or
+    // STARTS a session — New and Open, the screenshot, the theme, the gear —
+    // and SAVE, which sits in the far corner because it is the one control
+    // that must never be hunted for.
     //
     // The exports moved down here because they are about the DOCUMENT, not
     // the app: "give me this as a spreadsheet" is the same kind of question
@@ -706,14 +707,6 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         ],
       ),
-      // SAVE, AND EVERY OTHER WAY OF SAVING. One button that writes
-      // whatever document the tab on screen belongs to — the room on the
-      // room tabs, the job on the Project tab, the catalog on the Catalog
-      // tab — with a dot on it when that document is behind its file, and
-      // a menu beside it holding Save As, the other document, Save All to
-      // a room folder, and an on-demand backup. See save_actions.dart for
-      // why the three buttons that used to be here were not enough.
-      const SaveToolbar(),
     ];
 
     // The bar the app-level buttons are painted on, so their ink can be
@@ -775,32 +768,47 @@ class _MainDashboardState extends State<MainDashboard> {
           // App Config, at the end of the row that is about the app itself.
           IconButton(
             key: const ValueKey('banner_app_config'),
-            // UNSELECTED IS THE ORDINARY ONE. Exactly the ink the buttons
-            // either side of it inherit from the bar — the gear is not doing
-            // anything special while App Config is closed, and a gear that is
-            // permanently a different colour from its neighbours reads as
-            // already selected.
-            icon: Icon(Icons.settings, color: appBarInk),
-            isSelected: selectedIndex == AppTab.appConfig.index,
-            selectedIcon: Icon(
+            // UNSELECTED IS THE ACCENT; SELECTED IS THE ORDINARY INK.
+            //
+            // The gear stands out while App Config is CLOSED — it is the way
+            // in, and the one control on the bar worth drawing an eye to — and
+            // drops back to the same ink as its neighbours once you are on it,
+            // where it is just the tab you are already standing on.
+            //
+            // legibleTone rather than readableOn for the accent: readableOn
+            // hands back appBarInk on any theme whose app bar IS the accent —
+            // Classic is one — which would paint the two states the same
+            // colour and leave them indistinguishable. legibleTone keeps the
+            // accent's HUE and moves its lightness until it reads on the bar,
+            // so there is always a difference to see.
+            icon: Icon(
               Icons.settings,
-              // SELECTED IS THE ACCENT, and it has to be visibly the accent.
-              //
-              // readableOn would hand back appBarInk on any theme whose app
-              // bar IS the accent — Classic is one — which left the selected
-              // gear painted the same colour as the unselected one and the
-              // two states indistinguishable. legibleTone keeps the accent's
-              // HUE and moves its lightness until it reads on the bar, so
-              // there is always a difference to see.
               color: legibleTone(
                 theme.colorScheme.secondary,
                 appBarFill,
                 minRatio: kContrastLarge,
               ),
             ),
+            isSelected: selectedIndex == AppTab.appConfig.index,
+            selectedIcon: Icon(Icons.settings, color: appBarInk),
             tooltip: 'App Config — file locations, theme, pricing, autosave',
             onPressed: () => provider.selectTab(AppTab.appConfig.index),
           ),
+          // SAVE, AND EVERY OTHER WAY OF SAVING — last, in the far corner.
+          //
+          // One button that writes whatever document the tab on screen
+          // belongs to: the room on the room tabs, the job on the Project
+          // tab, the catalog on the Catalog tab. It carries a dot when that
+          // document is behind its file, and a menu beside it holding Save
+          // As, the other document, Save All to a room folder, and an
+          // on-demand backup. See save_actions.dart for why the three
+          // buttons that used to be here were not enough.
+          //
+          // The corner because it is the control reached for most and the
+          // one that must never be hunted for — and because it is the only
+          // button on either bar whose position should not depend on how
+          // many others happen to be showing.
+          const SaveToolbar(),
         ],
       ),
       body: Column(

@@ -165,9 +165,14 @@ void main() {
     expect(all, contains('no price'));
     expect(all, contains('not tagged to a vendor'));
     expect(all, contains('No delivery deadline'));
-    expect(all, contains('job note'));
     // Nothing on this job is spared, and nothing else would ever raise it.
     expect(all, contains('spare'));
+    // The open note is not summarised into a line — it is listed in full in
+    // the overview, and a count over the top of the list says it twice.
+    expect(
+      [for (final t in briefing.overview.todos) t.text],
+      ['a note with no date'],
+    );
   });
 
   test('an empty job says so rather than saying nothing', () {
@@ -320,6 +325,115 @@ void main() {
       expect(o.firstOrder, isNull);
       expect(o.nextOrders, isEmpty);
       expect(o.phases, isEmpty);
+    });
+  });
+
+  group('the active job list is on it', () {
+    test('open notes are listed as items, not counted', () {
+      final project = BuildingProject();
+      project.addTodo('move the second display');
+      project.addTodo('chase Extron on the DTP lead time');
+
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(project),
+        asOf: march,
+      );
+
+      expect(
+        [for (final t in briefing.overview.todos) t.text],
+        containsAll([
+          'move the second display',
+          'chase Extron on the DTP lead time',
+        ]),
+      );
+      // ...and NOT also summarised in a line over the top of the list.
+      expect(
+        briefing.openLines.map((l) => l.message).join(' '),
+        isNot(contains('still open')),
+      );
+    });
+
+    test('overdue first, then dated, then the rest', () {
+      final project = BuildingProject();
+      project.addTodo('undated', created: DateTime(2026, 1, 1));
+      project.addTodo('due later', due: DateTime(2026, 5, 1));
+      project.addTodo('overdue', due: DateTime(2026, 1, 1));
+      project.addTodo('due sooner', due: DateTime(2026, 4, 1));
+
+      final todos = buildProjectBriefing(
+        estimate: estimateOf(project),
+        asOf: march,
+      ).overview.todos;
+
+      expect(
+        [for (final t in todos) t.text],
+        ['overdue', 'due sooner', 'due later', 'undated'],
+      );
+      expect(todos.first.late, isTrue);
+      expect(todos.last.due, isNull);
+      expect(todos.last.late, isFalse);
+    });
+
+    test('a blocked note sinks and says so', () {
+      final project = BuildingProject();
+      final waiting = project.addTodo('waiting on the room list');
+      project.addTodo('something to do');
+      project.setTodoState(waiting, ProjectTodoState.blocked);
+
+      final todos = buildProjectBriefing(
+        estimate: estimateOf(project),
+        asOf: march,
+      ).overview.todos;
+
+      expect(todos.last.text, 'waiting on the room list');
+      expect(todos.last.blocked, isTrue);
+      expect(todos.first.blocked, isFalse);
+    });
+
+    test('a finished note is not on it', () {
+      final project = BuildingProject();
+      final done = project.addTodo('already handled');
+      project.addTodo('still open');
+      project.setTodoState(done, ProjectTodoState.done);
+
+      final todos = buildProjectBriefing(
+        estimate: estimateOf(project),
+        asOf: march,
+      ).overview.todos;
+      expect(todos, hasLength(1));
+      expect(todos.single.text, 'still open');
+    });
+
+    test('a long list stops and counts the rest', () {
+      final project = BuildingProject();
+      for (var i = 0; i < 11; i++) {
+        project.addTodo('note $i');
+      }
+      final o = buildProjectBriefing(
+        estimate: estimateOf(project),
+        asOf: march,
+      ).overview;
+
+      expect(o.todos, hasLength(6));
+      // Never pretends to be the whole list.
+      expect(o.moreTodos, 5);
+    });
+
+    test('a note carries what it is filed under', () {
+      final project = BuildingProject();
+      project.addTodo('order the mounts', scopeLabel: 'punch list');
+      project.addTodo('about the job');
+
+      final byText = {
+        for (final t in buildProjectBriefing(
+          estimate: estimateOf(project),
+          asOf: march,
+        ).overview.todos)
+          t.text: t,
+      };
+      expect(byText['order the mounts']!.scope, 'punch list');
+      // The job as a whole has nothing to add.
+      expect(byText['about the job']!.scope, isEmpty);
     });
   });
 }

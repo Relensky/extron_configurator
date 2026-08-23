@@ -86,6 +86,36 @@ class BriefingLine {
   });
 }
 
+/// One open job note, resolved for reading.
+///
+/// Carries the room's NAME rather than its id — the briefing is a thing to
+/// read, and "room3" is not a room — and the two flags the list colours by.
+class BriefingTodo {
+  final String text;
+
+  /// What it is filed under: a room's building code and number, a scope
+  /// somebody typed, or '' for the job as a whole.
+  final String scope;
+
+  /// When it has to be done, null when it is simply on the list.
+  final DateTime? due;
+
+  /// Past its date. Never true for an item with no date — see
+  /// [ProjectTodo.isOverdue].
+  final bool late;
+
+  /// Waiting on somebody else, so it is open work nobody here can act on.
+  final bool blocked;
+
+  const BriefingTodo({
+    required this.text,
+    required this.scope,
+    required this.due,
+    required this.late,
+    required this.blocked,
+  });
+}
+
 /// Where the job stands overall, above the list of things to deal with.
 ///
 /// The list answers "what needs doing"; this answers "what IS this job" — how
@@ -122,6 +152,17 @@ class BriefingOverview {
   /// show the actual schedule rather than only a count of what is wrong.
   final List<({DateTime date, int parts, bool late})> nextOrders;
 
+  /// The job list, as items rather than as a count.
+  ///
+  /// "4 job notes are still open" is a number to go and look at; the notes
+  /// themselves are the thing somebody came back to the project to read, and
+  /// half of them are one line long. Overdue first, then dated, then the rest
+  /// — the same order the To do pane shows them in.
+  final List<BriefingTodo> todos;
+
+  /// Open items beyond the few listed, so the strip can say what it left out.
+  final int moreTodos;
+
   const BriefingOverview({
     required this.roomsCosted,
     required this.roomsTotal,
@@ -134,6 +175,8 @@ class BriefingOverview {
     required this.firstOrder,
     required this.lastDelivery,
     required this.nextOrders,
+    required this.todos,
+    required this.moreTodos,
   });
 }
 
@@ -143,6 +186,14 @@ class BriefingOverview {
 /// the Timeline pane is the whole schedule, and a briefing that reproduces it
 /// is one nobody reads to the end of.
 const int _maxOrderDates = 4;
+
+/// How many open notes the briefing lists before it stops.
+///
+/// Six, because this is a reminder of what is outstanding rather than the list
+/// itself — the To do pane is the list, and a briefing that reproduces a job's
+/// thirty notes is one nobody reads to the end of. What is left out is counted
+/// so the strip never pretends to be complete.
+const int _maxTodos = 6;
 
 /// The whole briefing, in reading order.
 class ProjectBriefing {
@@ -313,35 +364,11 @@ ProjectBriefing buildProjectBriefing({
     ));
   }
 
-  final blocked = [
-    for (final t in project.todos)
-      if (t.state == ProjectTodoState.blocked) t,
-  ];
-  if (blocked.isNotEmpty) {
-    lines.add(BriefingLine(
-      urgency: BriefingUrgency.open,
-      message: blocked.length == 1
-          ? '1 job note is waiting on somebody else'
-          : '${blocked.length} job notes are waiting on somebody else',
-      pane: BriefingPane.todo,
-      detail: _some([for (final t in blocked) t.text]),
-    ));
-  }
-
-  final actionable = [
-    for (final t in project.actionableTodos)
-      if (!t.isOverdue(now) && t.due == null) t,
-  ];
-  if (actionable.isNotEmpty) {
-    lines.add(BriefingLine(
-      urgency: BriefingUrgency.open,
-      message: actionable.length == 1
-          ? '1 job note is still open'
-          : '${actionable.length} job notes are still open',
-      pane: BriefingPane.todo,
-      detail: _some([for (final t in actionable) t.text]),
-    ));
-  }
+  // The open notes are NOT counted into a line here. They are listed in full
+  // in the overview above — see [BriefingOverview.todos] — and a line saying
+  // "4 job notes are still open" directly over a list of those four notes is
+  // the same fact twice. What survives as a line is the two that are about
+  // TIME rather than about the work: past its date, and due this week.
 
   if (estimate.failedRooms > 0) {
     lines.add(BriefingLine(
@@ -462,6 +489,26 @@ BriefingOverview _overviewOf(
       ),
   ];
 
+  // The job list, in the order the To do pane shows it: overdue first, then
+  // whatever carries a date, then the undated ones oldest-first. Blocked ones
+  // sink, being open work nobody here can act on today.
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
+  final open = [...project.openTodos]..sort((a, b) {
+    final aLate = a.isOverdue(now);
+    final bLate = b.isOverdue(now);
+    if (aLate != bLate) return aLate ? -1 : 1;
+    final aBlocked = a.state == ProjectTodoState.blocked;
+    final bBlocked = b.state == ProjectTodoState.blocked;
+    if (aBlocked != bBlocked) return aBlocked ? 1 : -1;
+    final ad = a.due;
+    final bd = b.due;
+    if (ad != null && bd != null && ad != bd) return ad.compareTo(bd);
+    if (ad == null && bd != null) return 1;
+    if (ad != null && bd == null) return -1;
+    return a.created.compareTo(b.created);
+  });
+  final shown = open.length > _maxTodos ? open.sublist(0, _maxTodos) : open;
+
   return BriefingOverview(
     roomsCosted: estimate.costedRooms.length,
     roomsTotal: estimate.rooms.length,
@@ -484,5 +531,18 @@ BriefingOverview _overviewOf(
     nextOrders: upcoming.length > _maxOrderDates
         ? upcoming.sublist(0, _maxOrderDates)
         : upcoming,
+    todos: [
+      for (final t in shown)
+        BriefingTodo(
+          text: t.text,
+          scope: t.roomId.isNotEmpty
+              ? (roomNames[t.roomId] ?? t.roomId)
+              : t.scopeLabel.trim(),
+          due: t.due,
+          late: t.isOverdue(now),
+          blocked: t.state == ProjectTodoState.blocked,
+        ),
+    ],
+    moreTodos: open.length - shown.length,
   );
 }
