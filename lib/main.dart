@@ -619,21 +619,16 @@ class _MainDashboardState extends State<MainDashboard> {
           : AppTab.wizard,
     );
 
-    // THE DOCUMENT'S OWN BUTTONS — everything that opens, converts, moves or
-    // writes the room in front of you.
+    // THE DOCUMENT'S OWN BUTTONS — everything that acts on the room already in
+    // front of you: convert it, fetch it from a processor, send it to one, put
+    // back the last save, write it.
     //
-    // Built here because they need this State's methods, but they are NOT in
-    // the title bar any more: they belong on the banner, beside the job, where
-    // the rest of "which document am I working on" lives. What stays in the
-    // title bar is the handful of controls that are about the APPLICATION
-    // rather than about the document — the exports, the screenshot, the theme
-    // and the gear.
+    // Built here because they need this State's methods, but they live on the
+    // banner, beside the job, where the rest of "which document am I working
+    // on" lives. The title bar keeps the controls that are about the
+    // APPLICATION or that START a session — New and Open, the exports, the
+    // screenshot, the theme and the gear.
     final documentActions = <Widget>[
-      IconButton(
-        icon: const Icon(Icons.note_add),
-        tooltip: 'New Config (from template)',
-        onPressed: () => _createNewConfig(context, provider),
-      ),
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
       // reviewed, accepted or thrown away. Grayed out when the loaded
@@ -667,11 +662,6 @@ class _MainDashboardState extends State<MainDashboard> {
         onPressed: provider.lastLoadHadChanges
             ? () => _showMigrationLogDialog(context, provider.systemLogs)
             : null,
-      ),
-      IconButton(
-        icon: const Icon(Icons.folder_open),
-        tooltip: 'Open Existing Config',
-        onPressed: () => _openExistingConfig(context, provider),
       ),
       IconButton(
         icon: const Icon(Icons.cloud_download),
@@ -755,6 +745,23 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         titleSpacing: 16,
         actions: [
+          // NEW AND OPEN, first and leftmost.
+          //
+          // They start a session rather than acting on the one in progress, so
+          // they sit with the application's own controls rather than with the
+          // buttons that write, convert and transfer whatever is already open.
+          IconButton(
+            key: const ValueKey('new_config'),
+            icon: const Icon(Icons.note_add),
+            tooltip: 'New Config (from template)',
+            onPressed: () => _createNewConfig(context, provider),
+          ),
+          IconButton(
+            key: const ValueKey('open_config'),
+            icon: const Icon(Icons.folder_open),
+            tooltip: 'Open Existing Config',
+            onPressed: () => _openExistingConfig(context, provider),
+          ),
           // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
           // to live on two of the twelve tabs, which made "send me the
           // workbook" a question about which page somebody happened to be on.
@@ -1300,7 +1307,11 @@ class TopLevelBar extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: provider.projectDirty
-                      ? errorOn(theme.colorScheme, bannerFill)
+                      // The banner is a fill, so the container answer — but
+                      // held to the small-text bar, because "— unsaved" is
+                      // the smallest and most important red on the page.
+                      ? legibleTone(
+                          errorOn(theme.colorScheme, bannerFill), bannerFill)
                       : readableOn(
                           bannerFill,
                           prefer: [

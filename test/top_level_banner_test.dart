@@ -74,10 +74,21 @@ void main() {
       findsOneWidget,
       reason: 'Save acts on the document, so it belongs beside the job',
     );
+    for (final key in ['new_config', 'open_config']) {
+      expect(
+        find.descendant(
+          of: find.byType(TopLevelBar),
+          matching: find.byKey(ValueKey(key)),
+        ),
+        findsNothing,
+        reason: '$key starts a session, so it is not on the document row',
+      );
+    }
 
-    // The title bar: the things that are about the application.
-    for (final key in ['export_workbook', 'export_tab_menu',
-        'banner_app_config']) {
+    // The title bar: the things that are about the application, and the two
+    // that START a session rather than acting on the one in progress.
+    for (final key in ['new_config', 'open_config', 'export_workbook',
+        'export_tab_menu', 'banner_app_config']) {
       expect(
         find.descendant(
           of: find.byType(AppBar),

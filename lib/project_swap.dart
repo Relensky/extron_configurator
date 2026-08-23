@@ -17,7 +17,7 @@ import 'project_estimate.dart';
 ///  because the decision was never written down anywhere.
 ///
 ///  This does the same swap the room does, in every room at once, from the
-///  master parts list where the problem is actually visible.
+///  core components list where the problem is actually visible.
 ///
 ///  THREE THINGS MAKE IT SAFE ENOUGH TO DO AT ALL:
 ///

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
@@ -105,6 +107,10 @@ Future<int> showModelDefaultsDialog(
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) {
         final theme = Theme.of(ctx);
+        final media = MediaQuery.of(ctx);
+        // The app-wide Text Size from App Config arrives as a text scaler, so
+        // this is the same number the type is being multiplied by.
+        final textScale = media.textScaler.scale(1.0).clamp(1.0, 2.0);
         final int ticked =
             selection.values.fold(0, (sum, keys) => sum + keys.length);
 
@@ -129,11 +135,28 @@ Future<int> showModelDefaultsDialog(
           title: const Text(
             'Use the python module’s default connection settings?',
           ),
+          // SIZED TO THE WINDOW AND TO THE TEXT, not to two numbers.
+          //
+          // 720x460 was fixed, so at 130% text the connection picker ran past
+          // the right-hand edge and the last connection — usually Network —
+          // was simply not reachable. The box now grows with the text scale
+          // and stops at what the window can actually show, so a bigger type
+          // size makes the dialog bigger rather than making the end of it
+          // disappear.
           content: SizedBox(
-            width: 720,
-            height: 460,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            key: const ValueKey('model_defaults_content'),
+            width: math.min(720 * textScale, media.size.width - 96),
+            height: math.min(460 * textScale, media.size.height - 220),
+            // ONE SCROLLING LIST, header and all.
+            //
+            // The explanation, the picker and the divider used to sit above an
+            // Expanded list, which meant they took their full height first and
+            // the list got whatever was left — and on a small window at 150%
+            // text there was nothing left, so the header itself overflowed the
+            // box. Everything is a row of the same list now, so the dialog can
+            // be any size at any text scale and the worst case is a scroll
+            // rather than a stripe.
+            child: ListView(
               children: [
                 Text(
                   'You can compare the current application device '
@@ -163,36 +186,43 @@ Future<int> showModelDefaultsDialog(
                 // FROM.
                 if (styles.isNotEmpty || hasOriginal) ...[
                   const SizedBox(height: 10),
-                  Row(
+                  // A WRAP OF CHIPS, not a SegmentedButton.
+                  //
+                  // A segmented button lays its segments in one row and will
+                  // not wrap, so the only way to fit seven of them in a fixed
+                  // width was to put the row in a horizontal scroll view — and
+                  // a scroll view with no visible scrollbar does not read as
+                  // "there is more over here", it reads as a button that has
+                  // been cut in half. Chips wrap onto a second line instead,
+                  // which is the one arrangement where every connection is
+                  // visible at every text size.
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text('Compare against:',
-                          style: theme.textTheme.bodySmall),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: SegmentedButton<String>(
-                            style: const ButtonStyle(
-                                visualDensity: VisualDensity.compact),
-                            segments: [
-                              const ButtonSegment(
-                                value: '',
-                                label: Text('As configured'),
-                              ),
-                              for (final s in styles)
-                                ButtonSegment(value: s, label: Text(s)),
-                              if (hasOriginal)
-                                const ButtonSegment(
-                                  value: kOriginalFileComparison,
-                                  label: Text(kOriginalFileComparison),
-                                ),
-                            ],
-                            selected: {askingAbout ?? ''},
-                            onSelectionChanged: (v) => askAbout(
-                                v.first.isEmpty ? null : v.first),
-                          ),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Text('Compare against:',
+                            style: theme.textTheme.bodySmall),
                       ),
+                      for (final option in <({String value, String label})>[
+                        (value: '', label: 'As configured'),
+                        for (final s in styles) (value: s, label: s),
+                        if (hasOriginal)
+                          (
+                            value: kOriginalFileComparison,
+                            label: kOriginalFileComparison,
+                          ),
+                      ])
+                        ChoiceChip(
+                          key: ValueKey('compare_${option.value}'),
+                          label: Text(option.label),
+                          visualDensity: VisualDensity.compact,
+                          selected: (askingAbout ?? '') == option.value,
+                          onSelected: (_) => askAbout(
+                              option.value.isEmpty ? null : option.value),
+                        ),
                     ],
                   ),
                 ],
@@ -214,10 +244,7 @@ Future<int> showModelDefaultsDialog(
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      for (final m in shown) ...[
+                for (final m in shown) ...[
                         Padding(
                           padding: const EdgeInsets.only(top: 6, bottom: 2),
                           child: Row(
@@ -287,9 +314,6 @@ Future<int> showModelDefaultsDialog(
                             ),
                           ),
                       ],
-                    ],
-                  ),
-                ),
               ],
             ),
           ),

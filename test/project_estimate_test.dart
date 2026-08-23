@@ -126,7 +126,7 @@ void main() {
       estimate.master.firstWhere(
         (l) => l.description.toLowerCase().contains(needle.toLowerCase()),
         orElse: () => throw StateError(
-          'No master part matching "$needle". Have: '
+          'No core component matching "$needle". Have: '
           '${estimate.master.map((l) => l.description).join(', ')}',
         ),
       );
@@ -290,10 +290,10 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  //  THE MASTER PARTS LIST
+  //  THE CORE COMPONENTS LIST
   // -------------------------------------------------------------------------
 
-  group('the master parts list', () {
+  group('the core components list', () {
     test('merges the same model across rooms onto one line', () {
       final a = writeRoom('a', name: 'Room A', nodes: [
         device('d1', 'TX 1', 'DTP2 T 211'),

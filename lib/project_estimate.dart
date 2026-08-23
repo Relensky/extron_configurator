@@ -22,7 +22,7 @@ import 'room_sidecar.dart';
 ///
 ///    * WHAT EACH ROOM COSTS, so the building total can be broken back down to
 ///      the room somebody is asking about.
-///    * ONE MASTER PARTS LIST, with every room's quantities merged onto a
+///    * ONE CORE COMPONENTS LIST, with every room's quantities merged onto a
 ///      single line per part. This is the whole reason the feature exists: a
 ///      vendor asked to quote eighteen switchers as one line quotes better than
 ///      one asked to quote nine rooms of two.
@@ -385,6 +385,18 @@ class MasterPartLine {
   /// while something on it is a blank.
   final bool unpriced;
 
+  /// Room id -> the keys THAT ROOM files this part under.
+  ///
+  /// [key] is the cross-room merge key, and a room does not price by it: a
+  /// room's own price overrides are filed under its line keys
+  /// ([CostLine.key]), which are finer — the same product can group into two
+  /// lines in one room. Putting a price on this part for the job means writing
+  /// under the keys each room will actually look up, so those keys are carried
+  /// here rather than guessed at afterwards.
+  ///
+  /// A set per room because of exactly that: two lines, two keys, one part.
+  final Map<String, Set<String>> lineKeysByRoom;
+
   const MasterPartLine({
     required this.key,
     required this.kind,
@@ -402,6 +414,7 @@ class MasterPartLine {
     required this.tagSource,
     required this.unpriced,
     this.undrivenByRoom = const {},
+    this.lineKeysByRoom = const {},
   });
 
   /// Units across the job with no control module behind them.
@@ -720,6 +733,7 @@ ProjectEstimate computeProjectEstimate({
       tagSource: tag.source,
       unpriced: a.unpriced,
       undrivenByRoom: a.undrivenByRoom,
+      lineKeysByRoom: a.lineKeysByRoom,
     ));
   }
 
@@ -825,6 +839,7 @@ class _PartAccumulator {
   double maxUnitPrice = 0;
   final Map<String, double> qtyByRoom = {};
   final Map<String, int> undrivenByRoom = {};
+  final Map<String, Set<String>> lineKeysByRoom = {};
 
   /// Set while every room that carries this part failed to price it. One room
   /// with a real price is enough to make the part priced — the total is then
@@ -845,6 +860,9 @@ class _PartAccumulator {
     qty += line.qty;
     total += line.total;
     qtyByRoom[roomId] = (qtyByRoom[roomId] ?? 0) + line.qty;
+    // The key this room prices by, kept so a price set on the job can be
+    // written where the room will look for it.
+    (lineKeysByRoom[roomId] ??= <String>{}).add(line.key);
     // Assigned rather than added: the figure is the room's whole count for
     // this model, and a model that groups into two lines in one room (one
     // excluded from cost, say) would otherwise count its gaps twice.

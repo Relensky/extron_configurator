@@ -13,6 +13,7 @@ import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'project_estimate.dart';
+import 'project_pricing.dart';
 import 'project_room_picker.dart';
 import 'project_swap.dart';
 import 'project_workbook.dart';
@@ -47,7 +48,7 @@ import 'save_actions.dart';
 /// Which pane is showing.
 enum _ProjectPane {
   rooms('Rooms', Icons.meeting_room),
-  parts('Master parts', Icons.inventory_2),
+  parts('Core Components', Icons.inventory_2),
   vendors('Vendors', Icons.local_shipping);
 
   final String label;
@@ -75,6 +76,10 @@ class _ProjectViewState extends State<ProjectView> {
 
   /// Same idea, for the parts nothing will drive.
   static const String _undrivenFilter = '<no-module>';
+
+  /// Parts nothing anywhere has a price for. Reached by pressing the warning
+  /// in the header, which is where somebody first learns they exist.
+  static const String _unpricedFilter = '<unpriced>';
 
   String _search = '';
 
@@ -274,6 +279,7 @@ class _ProjectViewState extends State<ProjectView> {
               vendorFilter: _vendorFilter,
               untaggedFilter: _untaggedFilter,
               undrivenFilter: _undrivenFilter,
+              unpricedFilter: _unpricedFilter,
               search: _search,
               onVendorFilter: (v) => setState(() => _vendorFilter = v),
               onSearch: (s) => setState(() => _search = s),
@@ -371,18 +377,49 @@ class _ProjectViewState extends State<ProjectView> {
               ),
               if (warnings > 0)
                 Tooltip(
-                  message: _warningTooltip(estimate),
-                  child: Chip(
-                    avatar: const Icon(Icons.warning_amber, size: 18),
-                    label: Text('$warnings to check'),
+                  message: estimate.unpricedParts > 0
+                      ? '${_warningTooltip(estimate)}'
+                          '\n\nClick to list the parts with no price.'
+                      : _warningTooltip(estimate),
+                  // AN ACTION, not a label. A count of things to check that
+                  // cannot be pressed leaves somebody hunting through a parts
+                  // list for the three rows it is talking about; pressing it
+                  // shows exactly those rows.
+                  child: ActionChip(
+                    key: const ValueKey('project_warnings'),
+                    avatar: Icon(
+                      Icons.warning_amber,
+                      size: 18,
+                      color: foregroundOn(
+                        theme.colorScheme,
+                        theme.colorScheme.errorContainer,
+                      ),
+                    ),
+                    label: Text(
+                      '$warnings to check',
+                      style: TextStyle(
+                        color: foregroundOn(
+                          theme.colorScheme,
+                          theme.colorScheme.errorContainer,
+                        ),
+                      ),
+                    ),
                     backgroundColor: theme.colorScheme.errorContainer,
+                    onPressed: estimate.unpricedParts > 0
+                        ? () => setState(() {
+                              _pane = _ProjectPane.parts;
+                              _vendorFilter = _unpricedFilter;
+                              _search = '';
+                            })
+                        : null,
                   ),
                 ),
               if (provider.projectDirty)
                 Text(
                   'Unsaved',
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.error,
+                    color: errorTextOn(theme.colorScheme, theme.cardColor),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
             ],
@@ -470,7 +507,169 @@ class _ProjectViewState extends State<ProjectView> {
   ].join('\n');
 }
 
-/// A labelled figure in the header strip.
+//// Puts a price on a part from the parts list, either way.
+///
+/// Two buttons rather than a checkbox, because they are two different
+/// decisions and the wrong one is not obviously wrong afterwards:
+///
+///   * SAVE TO CATALOG is for a part that simply had no price on file. It is a
+///     fact about the product; every room and every future job gets it.
+///   * PRICE ON THIS JOB is for a figure that was negotiated. The catalog goes
+///     on saying list price and this job says what was agreed.
+///
+/// The rooms it would touch are named before either button is pressed, because
+/// "this writes nine files" is not something to discover afterwards.
+Future<void> showPartPriceDialog(
+  BuildContext context,
+  AppStateProvider provider,
+  MasterPartLine line,
+  String currency,
+) async {
+  final rooms = roomsCarrying(provider, line);
+  final controller = TextEditingController(
+    text: line.unpriced ? '' : trimNumber(line.unitPrice),
+  );
+  final messenger = ScaffoldMessenger.of(context);
+
+  final answer = await showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      final theme = Theme.of(ctx);
+      return StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final price = double.tryParse(controller.text.trim()) ?? 0;
+          final valid = price > 0;
+          final hasModel = line.model.trim().isNotEmpty;
+
+          return AlertDialog(
+            key: const ValueKey('part_price_dialog'),
+            title: Text(
+              line.model.trim().isEmpty ? line.description : line.model.trim(),
+            ),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(line.description, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('part_price_field'),
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Unit price',
+                      prefixText: currency,
+                      border: const OutlineInputBorder(),
+                      helperText:
+                          '${trimNumber(line.qty)} on this job, across '
+                          '${rooms.length} room${rooms.length == 1 ? '' : 's'}',
+                    ),
+                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    rooms.isEmpty
+                        ? 'No room on this project carries this part.'
+                        : 'Pricing it on this job writes '
+                            '${rooms.length == 1 ? 'one room' : '${rooms.length} rooms'}: '
+                            '${rooms.join(', ')}.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  if (!hasModel) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'This part has no model, so the catalog has nothing to '
+                      'file a price under — only the job price is available.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: errorTextOn(theme.colorScheme,
+                            theme.dialogTheme.backgroundColor ??
+                                theme.colorScheme.surface),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'cancel'),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                key: const ValueKey('price_this_job'),
+                onPressed: valid && rooms.isNotEmpty
+                    ? () => Navigator.pop(ctx, 'job')
+                    : null,
+                child: const Text('Price on this job only'),
+              ),
+              FilledButton(
+                key: const ValueKey('price_to_catalog'),
+                onPressed:
+                    valid && hasModel ? () => Navigator.pop(ctx, 'catalog') : null,
+                child: const Text('Save to catalog'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  final price = double.tryParse(controller.text.trim()) ?? 0;
+  controller.dispose();
+  if (answer == null || answer == 'cancel' || price <= 0) return;
+
+  if (answer == 'catalog') {
+    final saved =
+        await priceInCatalog(provider: provider, line: line, price: price);
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(
+          saved.startsWith('Error')
+              ? saved
+              : '${line.model} priced at ${formatMoney(price, currency)} in '
+                  'the catalog. Every room prices from it.',
+        ),
+        backgroundColor:
+            saved.startsWith('Error') ? snackErrorFillOn(messenger) : null,
+      ),
+    );
+    return;
+  }
+
+  final result =
+      await priceAcrossProject(provider: provider, line: line, price: price);
+  final parts = [
+    if (result.roomsWritten > 0)
+      '${result.roomsWritten} room'
+          '${result.roomsWritten == 1 ? '' : 's'} written',
+    if (result.openRoomChanged)
+      'the open room changed on screen — save it to keep the price',
+    if (result.failures.isNotEmpty)
+      '${result.failures.length} could not be written: '
+          '${result.failures.join('; ')}',
+  ];
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: Text(
+        '${line.description} priced at ${formatMoney(price, currency)} on this '
+        'job — ${parts.join('; ')}.',
+      ),
+      backgroundColor:
+          result.failures.isEmpty ? null : snackErrorFillOn(messenger),
+    ),
+  );
+}
+
+// A labelled figure in the header strip.
 class _TotalChip extends StatelessWidget {
   final String label;
   final String value;
@@ -609,7 +808,8 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
                     ),
                     backgroundColor: error.isEmpty
                         ? null
-                        : Theme.of(context).colorScheme.error,
+                        : errorTextOn(Theme.of(context).colorScheme,
+                            Theme.of(context).cardColor),
                   ),
                 );
               },
@@ -1095,16 +1295,17 @@ class _BuildingTotals extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-//  MASTER PARTS
+//  CORE COMPONENTS
 // ---------------------------------------------------------------------------
 
-/// The master parts list, as slivers for the tab's one scroll view.
+/// The core components list, as slivers for the tab's one scroll view.
 List<Widget> partsSlivers(
   BuildContext context, {
   required ProjectEstimate estimate,
   required String vendorFilter,
   required String untaggedFilter,
   required String undrivenFilter,
+  required String unpricedFilter,
   required String search,
   required ValueChanged<String> onVendorFilter,
   required ValueChanged<String> onSearch,
@@ -1119,6 +1320,7 @@ List<Widget> partsSlivers(
     // the one filter because only one of these is usefully on at a time, and
     // two rows of chips would be two rows to read.
     if (vendorFilter == undrivenFilter) return line.hasControlGap;
+    if (vendorFilter == unpricedFilter) return line.unpriced;
     return line.vendor?.id == vendorFilter;
   }
 
@@ -1192,6 +1394,12 @@ List<Widget> partsSlivers(
                     filterChip(
                       'No control module (${estimate.master.where((l) => l.hasControlGap).length})',
                       undrivenFilter,
+                      warn: true,
+                    ),
+                  if (estimate.unpricedParts > 0)
+                    filterChip(
+                      'No price (${estimate.unpricedParts})',
+                      unpricedFilter,
                       warn: true,
                     ),
                 ],
@@ -1335,14 +1543,14 @@ class _PartRow extends StatelessWidget {
                           Icon(
                             Icons.memory,
                             size: 13,
-                            color: theme.colorScheme.error,
+                            color: errorTextOn(theme.colorScheme, theme.cardColor),
                           ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               'No control module — $undriven',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.error,
+                                color: errorTextOn(theme.colorScheme, theme.cardColor),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1376,11 +1584,24 @@ class _PartRow extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Tooltip(
-                message: line.priceVaries
-                    ? 'Rooms on this job hold different prices for this part '
-                          '— one of them has a negotiated override.'
-                    : '',
-                child: Text(
+                message: line.unpriced
+                    ? 'Nothing on this job has a price for this part. Click '
+                        'to set one — in the catalog, or on this job only.'
+                    : line.priceVaries
+                        ? 'Rooms on this job hold different prices for this '
+                            'part — one of them has a negotiated override.\n'
+                            'Click to set one price for the job.'
+                        : 'Click to change the price',
+                child: InkWell(
+                  key: ValueKey('part_price_${line.key}'),
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: () => showPartPriceDialog(
+                    context,
+                    provider,
+                    line,
+                    currency,
+                  ),
+                  child: Text(
                   line.unpriced
                       ? 'not priced'
                       : line.priceVaries
@@ -1389,8 +1610,21 @@ class _PartRow extends StatelessWidget {
                       : formatMoney(line.unitPrice, currency),
                   textAlign: TextAlign.right,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: line.unpriced ? theme.colorScheme.error : null,
+                    // "not priced" is small red text on a card, and the
+                    // scheme's own error red clears the 4.5:1 minimum by a
+                    // whisker on some accents — passing, and still hard to
+                    // read. legibleTone keeps the red and lightens it until it
+                    // clears the AAA bar instead.
+                    color: line.unpriced
+                        ? errorTextOn(theme.colorScheme, theme.cardColor)
+                        : null,
+                    fontWeight: line.unpriced ? FontWeight.w600 : null,
                     fontStyle: line.priceVaries ? FontStyle.italic : null,
+                    decoration:
+                        line.unpriced ? TextDecoration.underline : null,
+                    decorationColor:
+                        errorTextOn(theme.colorScheme, theme.cardColor),
+                  ),
                   ),
                 ),
               ),
@@ -1426,7 +1660,7 @@ class _PartRow extends StatelessWidget {
                             : Icons.rule,
                         size: 18,
                         color: line.tagSource == VendorTagSource.none
-                            ? theme.colorScheme.error
+                            ? errorTextOn(theme.colorScheme, theme.cardColor)
                             : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
@@ -1578,7 +1812,7 @@ class _SwapPreviewDialog extends StatelessWidget {
                 icon,
                 size: 18,
                 color: severe
-                    ? theme.colorScheme.error
+                    ? errorTextOn(theme.colorScheme, theme.cardColor)
                     // tertiary is 2.1:1 on the light themes — invisible for
                     // something whose whole job is to be noticed.
                     : readableOn(
@@ -1595,7 +1829,9 @@ class _SwapPreviewDialog extends StatelessWidget {
                 child: Text(
                   text,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: severe ? theme.colorScheme.error : null,
+                    color: severe
+                        ? errorTextOn(theme.colorScheme, theme.cardColor)
+                        : null,
                   ),
                 ),
               ),
@@ -1648,7 +1884,7 @@ class _SwapPreviewDialog extends StatelessWidget {
                               ].join('  ·  '),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: room.dropped > 0
-                                    ? theme.colorScheme.error
+                                    ? errorTextOn(theme.colorScheme, theme.cardColor)
                                     : theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
@@ -1853,7 +2089,9 @@ class _VendorPicker extends StatelessWidget {
             value: '',
             child: Text(
               'Untagged',
-              style: TextStyle(color: theme.colorScheme.error),
+              style: TextStyle(
+                color: errorTextOn(theme.colorScheme, theme.cardColor),
+              ),
             ),
           ),
           for (final v in vendors)

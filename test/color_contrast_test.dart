@@ -211,6 +211,35 @@ void main() {
     for (final t in themes()) {
       final s = t.theme.colorScheme;
 
+      test('small red text holds the STRONG bar — ${t.name}', () {
+        // The scheme's own error red clears the 4.5:1 minimum on every fill
+        // this app paints — by as little as 4.65:1, which is passing and
+        // still hard to read at 12pt on a near-black panel. errorTextOn keeps
+        // the red and lightens it until it clears 7:1.
+        for (final bg in [
+          s.surface,
+          t.theme.cardColor,
+          s.surfaceContainerLow,
+          s.surfaceContainerHigh,
+          t.theme.dialogTheme.backgroundColor ?? s.surface,
+        ]) {
+          expectReadable('errorTextOn', errorTextOn(s, bg), bg, t.name,
+              min: kContrastStrong);
+        }
+      });
+
+      test('a legible tone is still the colour it started as — ${t.name}', () {
+        // The point of legibleTone over readableOn: red stays red. Measured
+        // as hue, because "still red" is not something a ratio can say.
+        final red = errorTextOn(s, s.surface);
+        expect(
+          (HSLColor.fromColor(red).hue - HSLColor.fromColor(s.error).hue)
+              .abs(),
+          lessThan(1.0),
+          reason: 'the warning colour must not drift off its own hue',
+        );
+      });
+
       test('error text on a container fill — ${t.name}', () {
         // colorScheme.error straight onto a container measures as low as
         // 1.3:1 on these themes. errorOn is what the app calls instead.

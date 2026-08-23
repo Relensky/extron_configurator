@@ -891,6 +891,35 @@ close the app: that would lose exactly the work the user just asked to keep.
 
 A session with everything saved closes as immediately as it always did.
 
+## Fixing a part that has no price
+
+An unpriced part makes the job's total short by an unknown amount, and the
+parts list is where that is visible — so it is where the fix is.
+
+The **"N to check"** warning in the Project header is a button. Pressing it
+switches to Core Components filtered to the parts nothing anywhere has a price
+for; the same filter is a chip on that pane (**No price (N)**). Clicking the
+price cell on any row opens a dialog naming the rooms that carry the part, with
+two ways out — and they are two different decisions, which is why they are two
+buttons rather than a checkbox:
+
+- **Save to catalog** — the part simply had no price on file. The figure is a
+  fact about the product, so it goes into `av_devices.json`; every room on this
+  job and every future job prices from it. No room file is touched. The write
+  is an upsert, so a part number, rack height or education price already on the
+  entry survives.
+- **Price on this job only** — the figure was negotiated for this customer.
+  It is written as a per-room price override into each room that carries the
+  part, so the catalog goes on saying list price and this job says what was
+  agreed.
+
+The second one writes room files, which the Project tab otherwise never does.
+It earns the exception the way the project-wide model swap does: one part, one
+figure, every room named before you press it and counted afterwards, rooms that
+do not carry the part left alone, and a room that cannot be written reported
+rather than skipped. **The open room is never written underneath the editor** —
+its override lands in memory, so you see the change and save it yourself.
+
 ## The application icon
 
 The source artwork lives in `design/` (`icon.ai`, and the `icon.png` every icon

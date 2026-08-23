@@ -121,7 +121,7 @@ void main() {
     final p = withProject();
     await pump(tester, p);
 
-    await tester.tap(find.text('Master parts'));
+    await tester.tap(find.text('Core Components'));
     await tester.pumpAndSettle();
 
     // One transmitter line, quantity two, and the rooms it is for.
@@ -141,7 +141,7 @@ void main() {
       (tester) async {
     final p = withProject();
     await pump(tester, p);
-    await tester.tap(find.text('Master parts'));
+    await tester.tap(find.text('Core Components'));
     await tester.pumpAndSettle();
 
     final estimate = p.priceProject();
@@ -168,7 +168,7 @@ void main() {
       (tester) async {
     final p = withProject();
     await pump(tester, p);
-    await tester.tap(find.text('Master parts'));
+    await tester.tap(find.text('Core Components'));
     await tester.pumpAndSettle();
 
     final extronKey = p
@@ -331,7 +331,7 @@ void main() {
 
     final vertical = find.byWidgetPredicate(isPageScroller);
 
-    for (final pane in ['Rooms', 'Master parts', 'Vendors']) {
+    for (final pane in ['Rooms', 'Core Components', 'Vendors']) {
       testWidgets('on $pane', (tester) async {
         final p = withProject();
         await pump(tester, p, width: 1200);
@@ -398,7 +398,7 @@ void main() {
   for (final width in [1100.0, 1400.0, 1900.0]) {
     testWidgets('the tab lays out at ${width.round()} px wide', (tester) async {
       final p = withProject();
-      for (final pane in ['Rooms', 'Master parts', 'Vendors']) {
+      for (final pane in ['Rooms', 'Core Components', 'Vendors']) {
         await pump(tester, p, width: width);
         await tester.tap(find.text(pane));
         await tester.pumpAndSettle();

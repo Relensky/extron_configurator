@@ -161,7 +161,7 @@ void main() {
 
       expect(tabNames(archive), [
         'Summary',
-        'Master Parts',
+        'Core Components',
         'Extron Direct',
         'AV Reseller',
         'Bessey 101',
@@ -186,7 +186,7 @@ void main() {
     test('the master list merges the transmitter and says which rooms', () {
       final archive = ZipDecoder()
           .decodeBytes(buildProjectWorkbookBytes(estimate: job()));
-      final master = sheetNamed(archive, 'Master Parts');
+      final master = sheetNamed(archive, 'Core Components');
 
       expect(master, contains('60-1439-13'));
       // Two rooms, one line, and the breakdown that makes it checkable.
@@ -322,7 +322,7 @@ void main() {
         contains('have no control module'),
       );
       expect(
-        sheetNamed(archive, 'Master Parts'),
+        sheetNamed(archive, 'Core Components'),
         contains('no module: '),
       );
     });

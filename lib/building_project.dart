@@ -43,7 +43,7 @@ import 'av_device_library.dart' show AvDeviceLibrary;
 ///      the integrator" is true of the whole job at once.
 ///
 ///  See project_estimate.dart for the rollup that turns this plus the rooms on
-///  disk into per-room totals, a master parts list and per-vendor packages.
+///  disk into per-room totals, a core components list and per-vendor packages.
 /// ============================================================================
 
 // ---------------------------------------------------------------------------
@@ -349,7 +349,7 @@ class BuildingProject {
   final List<ProjectRoomRef> rooms;
   final List<ProjectVendor> vendors;
 
-  /// Master part key (see [masterPartKey]) -> vendor id, for the parts
+  /// Core component key (see [masterPartKey]) -> vendor id, for the parts
   /// somebody has pinned by hand. Beats the manufacturer rules; an entry whose
   /// vendor has since been deleted resolves to untagged rather than to a
   /// dangling name.

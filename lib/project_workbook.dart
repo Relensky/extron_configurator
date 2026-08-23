@@ -16,7 +16,7 @@ import 'xlsx_writer.dart';
 ///
 ///    Summary       — what the building costs, and the same figure broken back
 ///                    down to one row per room
-///    Master Parts  — every part once, quantities merged across rooms, with the
+///    Core Components — every part once, quantities merged across rooms, with the
 ///                    vendor it is tagged to and which rooms it is for
 ///    <Vendor>      — one tab per vendor: exactly what that company is being
 ///                    asked to quote
@@ -35,7 +35,7 @@ import 'xlsx_writer.dart';
 /// ============================================================================
 
 /// The fixed sheets, in workbook order. Vendor and room tabs follow.
-const List<String> kProjectWorkbookSheets = ['Summary', 'Master Parts'];
+const List<String> kProjectWorkbookSheets = ['Summary', 'Core Components'];
 
 /// The building-wide control-gap sheet, added only when there is something on
 /// it. Named here so the tests and the tab-order check can agree on it.
@@ -217,7 +217,7 @@ List<String> _projectWarnings(ProjectEstimate estimate) => [
         '${estimate.untaggedParts == 1 ? ' is' : 's are'} not tagged to any '
         'vendor, so '
         '${estimate.untaggedParts == 1 ? 'it is' : 'they are'} on no quote '
-        'request. See the Untagged rows on Master Parts.',
+        'request. See the Untagged rows on Core Components.',
   // Not a pricing problem, and on the pricing sheet anyway. A building quoted
   // without anybody noticing that six of its boxes have no driver is a
   // building that arrives on site and cannot be commissioned, and the quote is
@@ -537,7 +537,7 @@ Uint8List buildProjectWorkbookBytes({
   if (master.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kProjectWorkbookSheets[1]),
-      title: '$title — master parts list',
+      title: '$title — core components list',
       sections: master,
       generated: stamp,
     ));

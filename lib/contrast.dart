@@ -80,6 +80,55 @@ Color readableOn(
       : Colors.white;
 }
 
+/// WCAG AAA for body text — the bar this app holds SMALL COLOURED text to.
+///
+/// Not pedantry. 4.5:1 is the minimum at which body text is legible for most
+/// people in good conditions; a warning set in 12pt red at 4.8:1 on a near
+/// black panel is the case where "passes" and "readable" part company, and it
+/// is the one people actually complain about.
+const double kContrastStrong = 7.0;
+
+/// [color] moved along its own lightness until it reads on [background].
+///
+/// KEEPS THE HUE. That is the whole point: a warning that stopped being red
+/// would stop meaning "warning", so this does not fall back to black or white
+/// while any red will do — it lightens the red on a dark ground and darkens it
+/// on a light one, a step at a time, and stops the moment it clears the bar.
+/// Only if the colour runs out of lightness in both directions does
+/// [readableOn] take over, because unreadable-and-red is worse than readable.
+///
+/// Both directions are tried and the NEARER answer wins, so a colour that is
+/// already close keeps its character.
+Color legibleTone(
+  Color color,
+  Color background, {
+  double minRatio = kContrastStrong,
+}) {
+  if (contrastRatio(color, background) >= minRatio) return color;
+
+  final hsl = HSLColor.fromColor(color);
+  const step = 0.02;
+  for (double delta = step; delta <= 1.0; delta += step) {
+    for (final candidate in [
+      if (hsl.lightness + delta <= 1.0)
+        hsl.withLightness(hsl.lightness + delta).toColor(),
+      if (hsl.lightness - delta >= 0.0)
+        hsl.withLightness(hsl.lightness - delta).toColor(),
+    ]) {
+      if (contrastRatio(candidate, background) >= minRatio) return candidate;
+    }
+  }
+  return readableOn(background, prefer: [color], minRatio: minRatio);
+}
+
+/// The error colour for small TEXT on [background], held to [kContrastStrong].
+///
+/// [errorOn] answers "which of the scheme's error roles reads here", which is
+/// the right question for a fill somebody chose. This answers the harder one —
+/// "make red legible here" — and is what the small red labels use.
+Color errorTextOn(ColorScheme scheme, Color background) =>
+    legibleTone(scheme.error, background);
+
 /// The error colour to paint ON a container fill.
 ///
 /// The obvious `colorScheme.error` is the wrong answer on a container and it
