@@ -66,6 +66,10 @@ enum _ProjectPane {
   const _ProjectPane(this.label, this.icon);
 }
 
+/// How much weight a header action carries. The two exports are what the tab
+/// is for and are drawn as such; the file actions are not.
+enum _ActionEmphasis { plain, tonal, filled }
+
 class ProjectView extends StatefulWidget {
   const ProjectView({super.key});
 
@@ -91,6 +95,16 @@ class _ProjectViewState extends State<ProjectView> {
   /// in the header, which is where somebody first learns they exist.
   static const String _unpricedFilter = '<unpriced>';
 
+  /// Which room's spares the master list is narrowed to, '' for every room's.
+  ///
+  /// A second filter rather than another value of [_vendorFilter], because it
+  /// is a narrowing of that one and not an alternative to it: "the spares" and
+  /// "BSS 103's spares" are the same question asked at two depths, and a
+  /// single filter could not hold both at once. It only means anything while
+  /// the Spared chip is on, and is dropped the moment that chip goes off —
+  /// see [_setVendorFilter].
+  String _spareRoom = '';
+
   String _search = '';
 
   /// One controller for the whole tab, so the scrollbar has something to drag
@@ -108,6 +122,16 @@ class _ProjectViewState extends State<ProjectView> {
     setState(() => _pane = pane);
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
+
+  /// Switches the master list's filter, dropping the room narrowing with it.
+  ///
+  /// The room only qualifies the spares chip. Left set behind a switch to
+  /// Vendor A it would be an invisible filter — a list quietly missing rows,
+  /// with nothing on screen saying why.
+  void _setVendorFilter(String value) => setState(() {
+    _vendorFilter = value;
+    if (value != kSparedFilter) _spareRoom = '';
+  });
 
   void _snack(String message, {bool error = false}) {
     if (!mounted) return;
@@ -293,8 +317,10 @@ class _ProjectViewState extends State<ProjectView> {
               untaggedFilter: _untaggedFilter,
               undrivenFilter: _undrivenFilter,
               unpricedFilter: _unpricedFilter,
+              spareRoom: _spareRoom,
               search: _search,
-              onVendorFilter: (v) => setState(() => _vendorFilter = v),
+              onVendorFilter: _setVendorFilter,
+              onSpareRoom: (id) => setState(() => _spareRoom = id),
               onSearch: (s) => setState(() => _search = s),
             ),
             _ProjectPane.timeline => timelineSlivers(context, estimate),
@@ -323,44 +349,28 @@ class _ProjectViewState extends State<ProjectView> {
         provider.currentProjectPath.isNotEmpty ||
         provider.project.name.trim().isNotEmpty;
 
+    // THE HEADER GIVES WAY BEFORE THE CONTROLS DO. On a window narrow enough
+    // that the title strip and the buttons cannot both have their full size,
+    // it is the TITLE that has to shrink: a project name is a field somebody
+    // typed once and reads at a glance, and the buttons are the reason the
+    // header exists at all. Before this the name kept its whole row and the
+    // actions were squeezed until Quote requests sat half off the edge, which
+    // is a button that cannot be pressed on a screen with plenty of room left
+    // on it.
+    return LayoutBuilder(builder: (context, box) {
+    // Below this the three identity fields cannot sit side by side and still
+    // leave a name field wide enough to read a project name in. Measured from
+    // what they need rather than picked off a device list: 160 + 140 for the
+    // two small ones, 16 of gaps, 32 of page padding, and enough left for the
+    // name to be a field rather than a slot.
+    final compact = box.maxWidth < 920;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: LiveTextField(
-                  fieldId: 'project_name_${provider.currentProjectPath}',
-                  initial: provider.project.name,
-                  label: 'Project',
-                  hint: 'Bessey Hall AV refresh',
-                  onChanged: (v) => provider.setProjectField(name: v),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 160,
-                child: LiveTextField(
-                  fieldId: 'project_bldg_${provider.currentProjectPath}',
-                  initial: provider.project.building,
-                  label: 'Building',
-                  onChanged: (v) => provider.setProjectField(building: v),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 140,
-                child: LiveTextField(
-                  fieldId: 'project_job_${provider.currentProjectPath}',
-                  initial: provider.project.jobNumber,
-                  label: 'Job number',
-                  onChanged: (v) => provider.setProjectField(jobNumber: v),
-                ),
-              ),
-            ],
-          ),
+          _identity(provider, compact: compact),
           const SizedBox(height: 10),
           // A Wrap rather than a Row: the strip is five items of text whose
           // width is whatever the figures happen to be, and a project total in
@@ -474,6 +484,17 @@ class _ProjectViewState extends State<ProjectView> {
                     ButtonSegment(
                       value: pane,
                       icon: Icon(pane.icon, size: 18),
+                      // The label goes when the window cannot hold seven of
+                      // them. Seven labelled segments are wider than a narrow
+                      // window on their own, and a switcher that overflows is
+                      // a pane nobody can reach — the icons are the same seven
+                      // targets, in the same order, with the name on a
+                      // tooltip.
+                      tooltip: compact
+                          ? (pane == _ProjectPane.todo && openTodos > 0
+                              ? '${pane.label} ($openTodos open)'
+                              : pane.label)
+                          : null,
                       // The open count rides on the tab itself. A to-do list
                       // that has to be opened to find out whether it has
                       // anything on it is one nobody opens.
@@ -481,75 +502,93 @@ class _ProjectViewState extends State<ProjectView> {
                       // by any more — 'Notes' is also a column on the room
                       // list — and a test that taps the wrong one of three
                       // matches is a test that fails for the wrong reason.
-                      label: Text(
-                        pane == _ProjectPane.todo && openTodos > 0
-                            ? '${pane.label} ($openTodos)'
-                            : pane.label,
-                        key: ValueKey('project_pane_${pane.name}'),
-                      ),
+                      label: compact
+                          ? null
+                          : Text(
+                              pane == _ProjectPane.todo && openTodos > 0
+                                  ? '${pane.label} ($openTodos)'
+                                  : pane.label,
+                              key: ValueKey('project_pane_${pane.name}'),
+                            ),
                     ),
                 ],
                 selected: {_pane},
                 onSelectionChanged: (s) => _showPane(s.first),
+                // With the labels gone the icon IS the pane, so the selected
+                // one must keep it. The default swaps in a tick, which on a
+                // labelled switcher marks the choice and on this one erases
+                // the only thing naming it.
+                showSelectedIcon: !compact,
               ),
               Wrap(
                 alignment: WrapAlignment.end,
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  TextButton.icon(
+                  _action(
+                    compact: compact,
+                    icon: Icons.note_add_outlined,
+                    label: 'New',
                     onPressed: () => _newProject(provider),
-                    icon: const Icon(Icons.note_add_outlined, size: 18),
-                    label: const Text('New'),
                   ),
-                  TextButton.icon(
+                  _action(
+                    compact: compact,
+                    icon: Icons.folder_open,
+                    label: 'Open',
                     onPressed: () => _openProject(provider),
-                    icon: const Icon(Icons.folder_open, size: 18),
-                    label: const Text('Open'),
                   ),
-                  TextButton.icon(
+                  _action(
+                    compact: compact,
+                    icon: Icons.save_outlined,
+                    label: 'Save',
                     onPressed: () => _saveProject(provider),
-                    icon: const Icon(Icons.save_outlined, size: 18),
-                    label: const Text('Save'),
                   ),
                   // Beside New and Open, because it is the third thing you do
                   // to a FILE. Disabled when there is no job to put away —
                   // pressing Close on nothing should not clear the starter
                   // vendors out from under somebody who has just pressed New.
-                  TextButton.icon(
-                    key: const ValueKey('project_close'),
-                    onPressed: hasProject ? () => _closeProject(provider) : null,
-                    icon: const Icon(Icons.close, size: 18),
-                    label: const Text('Close'),
+                  _action(
+                    compact: compact,
+                    buttonKey: const ValueKey('project_close'),
+                    icon: Icons.close,
+                    label: 'Close',
+                    onPressed:
+                        hasProject ? () => _closeProject(provider) : null,
                   ),
-                  TextButton.icon(
+                  _action(
+                    compact: compact,
+                    icon: Icons.refresh,
+                    label: 'Refresh',
                     onPressed: () {
                       provider.refreshProjectRooms();
                       _snack('Re-read every room from disk.');
                     },
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Refresh'),
                   ),
                   // The same summary a project shows on the way in. Reachable
                   // on purpose: it is shown once on open and only when
                   // something is time-critical, and "what was that list again"
                   // is asked five minutes later.
-                  TextButton.icon(
-                    key: const ValueKey('project_briefing_button'),
+                  _action(
+                    compact: compact,
+                    buttonKey: const ValueKey('project_briefing_button'),
+                    icon: Icons.flag_outlined,
+                    label: 'Where it stands',
                     onPressed: () =>
                         showProjectBriefing(context, provider, force: true),
-                    icon: const Icon(Icons.flag_outlined, size: 18),
-                    label: const Text('Where it stands'),
                   ),
-                  FilledButton.tonalIcon(
+                  _action(
+                    compact: compact,
+                    icon: Icons.table_view,
+                    label: 'Workbook',
+                    emphasis: _ActionEmphasis.tonal,
                     onPressed: () => _exportWorkbook(provider, estimate),
-                    icon: const Icon(Icons.table_view, size: 18),
-                    label: const Text('Workbook'),
                   ),
-                  FilledButton.icon(
+                  _action(
+                    compact: compact,
+                    icon: Icons.send_outlined,
+                    label: 'Quote requests',
+                    emphasis: _ActionEmphasis.filled,
                     onPressed: () => _exportRfqs(provider, estimate),
-                    icon: const Icon(Icons.send_outlined, size: 18),
-                    label: const Text('Quote requests'),
                   ),
                 ],
               ),
@@ -557,6 +596,130 @@ class _ProjectViewState extends State<ProjectView> {
           ),
         ],
       ),
+    );
+    });
+  }
+
+  /// One file or export action, labelled while there is room for the label.
+  ///
+  /// COMPACT IS ICON-ONLY, not a smaller label and not an overflow menu. Eight
+  /// labelled buttons need most of a wide window; on a narrow one they wrapped
+  /// onto a third line and pushed the last of them past the edge, which is how
+  /// Quote requests became a button nobody could press. As icons all eight
+  /// stay on one line, in the same order, in the same place — and the label
+  /// they lose comes back as the tooltip, which is where the name of a control
+  /// somebody uses twice a week belongs anyway.
+  ///
+  /// An overflow menu was the other option and is worse: it would hide exactly
+  /// the two buttons this tab exists to produce, and hide them only on the
+  /// small screens where hunting through a menu costs the most.
+  Widget _action({
+    required bool compact,
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    Key? buttonKey,
+    _ActionEmphasis emphasis = _ActionEmphasis.plain,
+  }) {
+    final glyph = Icon(icon, size: 18);
+    if (compact) {
+      return switch (emphasis) {
+        _ActionEmphasis.plain => IconButton(
+          key: buttonKey,
+          tooltip: label,
+          onPressed: onPressed,
+          icon: glyph,
+        ),
+        _ActionEmphasis.tonal => IconButton.filledTonal(
+          key: buttonKey,
+          tooltip: label,
+          onPressed: onPressed,
+          icon: glyph,
+        ),
+        _ActionEmphasis.filled => IconButton.filled(
+          key: buttonKey,
+          tooltip: label,
+          onPressed: onPressed,
+          icon: glyph,
+        ),
+      };
+    }
+
+    final text = Text(label);
+    return switch (emphasis) {
+      _ActionEmphasis.plain => TextButton.icon(
+        key: buttonKey,
+        onPressed: onPressed,
+        icon: glyph,
+        label: text,
+      ),
+      _ActionEmphasis.tonal => FilledButton.tonalIcon(
+        key: buttonKey,
+        onPressed: onPressed,
+        icon: glyph,
+        label: text,
+      ),
+      _ActionEmphasis.filled => FilledButton.icon(
+        key: buttonKey,
+        onPressed: onPressed,
+        icon: glyph,
+        label: text,
+      ),
+    };
+  }
+
+  /// The project's name, building and job number.
+  ///
+  /// Side by side while there is room, stacked when there is not: the name is
+  /// the wide one and the other two are short codes, so a narrow window keeps
+  /// a usable name field by giving the codes a line of their own rather than
+  /// by shaving every field down to a few characters each.
+  Widget _identity(AppStateProvider provider, {required bool compact}) {
+    final name = LiveTextField(
+      fieldId: 'project_name_${provider.currentProjectPath}',
+      initial: provider.project.name,
+      label: 'Project',
+      hint: 'Bessey Hall AV refresh',
+      onChanged: (v) => provider.setProjectField(name: v),
+    );
+    final building = LiveTextField(
+      fieldId: 'project_bldg_${provider.currentProjectPath}',
+      initial: provider.project.building,
+      label: 'Building',
+      onChanged: (v) => provider.setProjectField(building: v),
+    );
+    final job = LiveTextField(
+      fieldId: 'project_job_${provider.currentProjectPath}',
+      initial: provider.project.jobNumber,
+      label: 'Job number',
+      onChanged: (v) => provider.setProjectField(jobNumber: v),
+    );
+
+    if (!compact) {
+      return Row(
+        children: [
+          Expanded(child: name),
+          const SizedBox(width: 8),
+          SizedBox(width: 160, child: building),
+          const SizedBox(width: 8),
+          SizedBox(width: 140, child: job),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        name,
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: building),
+            const SizedBox(width: 8),
+            Expanded(child: job),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1423,9 +1586,14 @@ List<Widget> partsSlivers(
   required String search,
   required ValueChanged<String> onVendorFilter,
   required ValueChanged<String> onSearch,
+  String spareRoom = '',
+  ValueChanged<String>? onSpareRoom,
 }) {
   final theme = Theme.of(context);
   final needle = search.trim().toLowerCase();
+  // Only ever a narrowing of the spares list — see [_ProjectViewState].
+  final sparesOnly = vendorFilter == kSparedFilter;
+  final room = sparesOnly ? spareRoom : '';
 
   bool matchesVendor(MasterPartLine line) {
     if (vendorFilter.isEmpty) return true;
@@ -1435,7 +1603,11 @@ List<Widget> partsSlivers(
     // two rows of chips would be two rows to read.
     if (vendorFilter == undrivenFilter) return line.hasControlGap;
     if (vendorFilter == unpricedFilter) return line.unpriced;
-    if (vendorFilter == kSparedFilter) return line.hasSpares;
+    if (vendorFilter == kSparedFilter) {
+      return room.isEmpty
+          ? line.hasSpares
+          : (line.spareByRoom[room] ?? 0) > 0;
+    }
     // Equipment only, for the same reason the report's list is: nobody wants
     // to be asked about a spare blanking plate.
     if (vendorFilter == kNoSpareFilter) {
@@ -1477,6 +1649,21 @@ List<Widget> partsSlivers(
     for (final l in estimate.master)
       if (matchesVendor(l) && matchesSearch(l)) l,
   ];
+
+  // ISOLATED SPARES ARE ORDERED BY SPARE, not by the master list's own order.
+  // The master list is grouped so a vendor can read it; a spares list is read
+  // to find the big asks, and a part with six spares on it has no business
+  // sitting below one with a single spare because of what category it is in.
+  if (sparesOnly) {
+    double spareOf(MasterPartLine l) =>
+        room.isEmpty ? l.spareQty : (l.spareByRoom[room] ?? 0);
+    lines.sort((a, b) {
+      final byQty = spareOf(b).compareTo(spareOf(a));
+      return byQty != 0
+          ? byQty
+          : a.description.toLowerCase().compareTo(b.description.toLowerCase());
+    });
+  }
 
   // Built once for the whole list rather than per row — see [_PartRow].
   final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
@@ -1546,6 +1733,18 @@ List<Widget> partsSlivers(
         ),
       ),
     ),
+    // Everything about the spares, only while the spares are what is on
+    // screen. It carries the money the chip cannot — a count of spared PARTS
+    // says nothing about whether the spares are a rounding error or a fifth of
+    // the quote — and the rooms that asked for them.
+    if (sparesOnly)
+      SliverToBoxAdapter(
+        child: _SparesPanel(
+          estimate: estimate,
+          selectedRoom: room,
+          onRoom: onSpareRoom ?? (_) {},
+        ),
+      ),
     if (estimate.master.isEmpty)
       const SliverFillRemaining(
         hasScrollBody: false,
@@ -1576,11 +1775,160 @@ List<Widget> partsSlivers(
             line: lines[index],
             estimate: estimate,
             roomNames: roomNames,
+            spareRoom: room,
+            sparesOnly: sparesOnly,
           ),
         ),
       ),
     ],
   ];
+}
+
+/// The spares, isolated: what the job is buying for the shelf, what it costs,
+/// and which room asked for each of it.
+///
+/// ONLY ON SCREEN WHILE THE SPARED FILTER IS ON. It is a summary of a subset,
+/// and a summary of a subset shown above the whole list is a summary that gets
+/// read as the job's own figures.
+///
+/// The room chips are the point of the panel rather than decoration on it. A
+/// master list merges rooms together on purpose — that is the entire reason it
+/// exists — and the merge is what makes a spare impossible to account for
+/// afterwards: "eleven, four of them spare" can be neither approved nor
+/// trimmed until somebody knows whose four they are. Pressing a room narrows
+/// the list under the panel to that room's spares, and every row then counts
+/// and prices that room's share rather than the job's.
+class _SparesPanel extends StatelessWidget {
+  final ProjectEstimate estimate;
+
+  /// The room the list is narrowed to, '' for every room's spares.
+  final String selectedRoom;
+  final ValueChanged<String> onRoom;
+
+  const _SparesPanel({
+    required this.estimate,
+    required this.selectedRoom,
+    required this.onRoom,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final currency = estimate.currency;
+    final byRoom = estimate.sparesByRoom;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    // What is on screen right now, which is not always the job's own figure:
+    // with a room selected these are that room's spares, and a panel that went
+    // on showing the job total beside a filtered list would be inviting
+    // somebody to read the wrong number off it.
+    final shown = selectedRoom.isEmpty
+        ? null
+        : byRoom.where((r) => r.roomId == selectedRoom).firstOrNull;
+    final units = shown?.units ?? estimate.spareUnits;
+    final cash = shown?.cost ?? estimate.sparesTotal;
+    final parts = shown?.parts ?? estimate.sparedParts.length;
+
+    Widget roomChip(String label, String value, {String? tooltip}) {
+      final chip = FilterChip(
+        key: ValueKey('spare_room_$value'),
+        label: Text(label),
+        selected: selectedRoom == value,
+        onSelected: (_) => onRoom(selectedRoom == value ? '' : value),
+      );
+      return tooltip == null ? chip : Tooltip(message: tooltip, child: chip);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Card(
+        key: const ValueKey('project_spares_panel'),
+        margin: EdgeInsets.zero,
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.5,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.inventory_outlined,
+                    size: 16,
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      shown == null
+                          ? 'Spares on this job'
+                          : 'Spares for ${shown.name}',
+                      style: theme.textTheme.titleSmall,
+                    ),
+                  ),
+                  Text(
+                    '${trimNumber(units)} '
+                    '${units == 1 ? 'unit' : 'units'} across '
+                    '$parts ${parts == 1 ? 'part' : 'parts'}  ·  '
+                    '${formatMoney(cash, currency)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.tertiary,
+                    ),
+                  ),
+                ],
+              ),
+              if (byRoom.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Nothing on this job is spared. Spares are asked for on a '
+                    'room’s Cost page, and every one of them shows up here.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
+                )
+              else ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 4),
+                  child: Text(
+                    'ASKED FOR BY',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: muted,
+                    ),
+                  ),
+                ),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    roomChip(
+                      'Every room (${trimNumber(estimate.spareUnits)})',
+                      '',
+                      tooltip: 'Every spare on the job, whoever asked for it',
+                    ),
+                    for (final r in byRoom)
+                      roomChip(
+                        '${r.name} (${trimNumber(r.units)})',
+                        r.roomId,
+                        tooltip:
+                            '${trimNumber(r.units)} spare '
+                            '${r.units == 1 ? 'unit' : 'units'} across '
+                            '${r.parts} ${r.parts == 1 ? 'part' : 'parts'}'
+                            '  ·  ${formatMoney(r.cost, currency)}',
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PartsHeaderRow extends StatelessWidget {
@@ -1642,10 +1990,21 @@ class _PartRow extends StatelessWidget {
   /// rows lazily while somebody drags the scrollbar.
   final Map<String, String> roomNames;
 
+  /// The room whose spares the list is narrowed to, '' for all of them.
+  /// Only ever set while [sparesOnly] is.
+  final String spareRoom;
+
+  /// True while the list is isolating spares, which changes what this row is
+  /// being read for: not "what is being bought" but "what is going on a shelf,
+  /// and for whom".
+  final bool sparesOnly;
+
   const _PartRow({
     required this.line,
     required this.estimate,
     required this.roomNames,
+    this.spareRoom = '',
+    this.sparesOnly = false,
   });
 
   @override
@@ -1665,6 +2024,23 @@ class _PartRow extends StatelessWidget {
       if (line.partNumber.isNotEmpty) 'PN ${line.partNumber}',
       kMasterPartKindLabels[line.kind]!,
     ].join('  ·  ');
+
+    // WHO ASKED FOR THE SPARES. Named rather than totalled, for the same
+    // reason the undriven list below is: "4 spare" is a figure to go and
+    // investigate, "BSS 103 x3, ENG 210 x1" is an answer. Shown on every
+    // spared row rather than only while the list is filtered, because the
+    // question follows the spare wherever it is read.
+    final sparedBy = [
+      for (final id in line.spareRoomIdsByQty())
+        '${roomNames[id] ?? id} ×${trimNumber(line.spareByRoom[id] ?? 0)}',
+    ].join(', ');
+
+    // With a room selected the row counts and prices THAT room's spares. A row
+    // that went on showing the job's eleven under a list titled 'Spares for
+    // BSS 103' would be the one number nobody could check.
+    final roomSpare = spareRoom.isEmpty
+        ? line.spareQty
+        : (line.spareByRoom[spareRoom] ?? 0);
 
     // Which rooms still have no driver for this product. Named rather than
     // counted: "3 undriven" is something to go and investigate, a list of
@@ -1699,6 +2075,47 @@ class _PartRow extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (line.hasSpares)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.inventory_outlined,
+                            size: 13,
+                            color: theme.colorScheme.tertiary,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Spare for $sparedBy',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.tertiary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          // What the shelf units cost, next to who wanted
+                          // them - the two halves of deciding whether a spare
+                          // stays on the quote. Only while the spares are what
+                          // is being read: on the full master list it is a
+                          // third money figure on a row that already has two.
+                          if (sparesOnly && !line.unpriced) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              formatMoney(
+                                roomSpare * line.unitPrice,
+                                currency,
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.tertiary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   if (line.hasControlGap)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
@@ -1710,7 +2127,14 @@ class _PartRow extends StatelessWidget {
                             color: errorTextOn(theme.colorScheme, theme.cardColor),
                           ),
                           const SizedBox(width: 4),
+                          // Both halves flex. The note used to be flexible
+                          // beside a fixed-width button, which on a narrow
+                          // window left the text a negative width and put an
+                          // overflow stripe across the row — the button is the
+                          // wider of the two and had to be allowed to shrink
+                          // as well.
                           Flexible(
+                            flex: 3,
                             child: Text(
                               'No control module — $undriven',
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -1727,7 +2151,12 @@ class _PartRow extends StatelessWidget {
                           // wrong, not three tabs away.
                           if (line.model.trim().isNotEmpty) ...[
                             const SizedBox(width: 6),
-                            _NeverNeedsModuleButton(model: line.model),
+                            Flexible(
+                              flex: 2,
+                              child: _NeverNeedsModuleButton(
+                                model: line.model,
+                              ),
+                            ),
                           ],
                         ],
                       ),
@@ -1755,12 +2184,17 @@ class _PartRow extends StatelessWidget {
                   // nothing.
                   if (line.hasSpares)
                     Tooltip(
-                      message:
-                          '${trimNumber(line.spareQty)} of these are spares '
-                          'for the shelf.\n'
-                          '${trimNumber(line.drawnQty)} go into rooms.',
+                      message: spareRoom.isEmpty
+                          ? '${trimNumber(line.spareQty)} of these are spares '
+                              'for the shelf.\n'
+                              '${trimNumber(line.drawnQty)} go into rooms.'
+                          : '${roomNames[spareRoom] ?? spareRoom} asked for '
+                              '${trimNumber(roomSpare)} of these as spares.\n'
+                              '${trimNumber(line.spareQty)} spare on the job '
+                              'in total, out of ${trimNumber(line.qty)} '
+                              'bought.',
                       child: Text(
-                        '${trimNumber(line.spareQty)} spare',
+                        '${trimNumber(roomSpare)} spare',
                         textAlign: TextAlign.right,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.tertiary,
@@ -2441,7 +2875,11 @@ class _NeverNeedsModuleButtonState extends State<_NeverNeedsModuleButton> {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           textStyle: theme.textTheme.bodySmall,
         ),
-        child: const Text('Never needs one'),
+        child: const Text(
+          'Never needs one',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }

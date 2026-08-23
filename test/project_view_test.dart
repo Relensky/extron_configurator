@@ -34,7 +34,17 @@ void main() {
     ports: const [],
   );
 
-  String writeRoom(String stem, String name, List<AvNode> nodes) {
+  String writeRoom(
+    String stem,
+    String name,
+    List<AvNode> nodes, {
+    /// Shelf spares this room asked for: description -> units. Written as
+    /// whole spare LINES on the cost sidecar, which is one of the two ways a
+    /// room says "spare" and the one a test can write without guessing at a
+    /// device group's line key.
+    Map<String, double> spares = const {},
+    double sparePrice = 300,
+  }) {
     final configPath = path.join(dir.path, '${stem}_config.json');
     File(configPath).writeAsStringSync(jsonEncode({
       'SYSTEM_SETUP': {'gui_full_room_name': name},
@@ -43,6 +53,23 @@ void main() {
         .writeAsStringSync(jsonEncode({
       'nodes': [for (final n in nodes) n.toJson()],
     }));
+    if (spares.isNotEmpty) {
+      File(path.join(dir.path, '${stem}_config_cost.json'))
+          .writeAsStringSync(jsonEncode({
+        'cost': {
+          'extraEquipment': [
+            for (final e in spares.entries)
+              {
+                'id': '$stem-${e.key}',
+                'description': e.key,
+                'qty': e.value,
+                'unitPrice': sparePrice,
+                'spare': true,
+              },
+          ],
+        },
+      }));
+    }
     return configPath;
   }
 
@@ -135,6 +162,97 @@ void main() {
         .firstWhere((l) => l.partNumber == '60-1439-13');
     expect(transmitter.qty, 2, reason: 'one in each room, merged onto a line');
     expect(transmitter.qtyByRoom, hasLength(2));
+  });
+
+  group('isolating the spares', () {
+    /// A job whose two rooms both put a spare on the shelf, one of them twice.
+    AppStateProvider withSpares() {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.avDeviceLibrary = AvDeviceLibrary.empty();
+      p.newProject(name: 'Bessey refresh', building: 'BSS');
+      p.addRoomToProject(writeRoom(
+        'a',
+        'Bessey 101',
+        [],
+        spares: {'Spare lamp': 2},
+      ));
+      p.addRoomToProject(writeRoom(
+        'b',
+        'Bessey 103',
+        [],
+        spares: {'Spare lamp': 1, 'Spare panel': 1},
+      ));
+      return p;
+    }
+
+    Future<void> openSpares(WidgetTester tester, AppStateProvider p) async {
+      await pump(tester, p);
+      await tester.tap(find.text('Core Components'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Spared ('));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the spares filter shows what they cost and who asked',
+        (tester) async {
+      await openSpares(tester, withSpares());
+
+      expect(find.byKey(const ValueKey('project_spares_panel')),
+          findsOneWidget);
+      // 4 units at 300 across two parts.
+      expect(find.textContaining('4 units across 2 parts'), findsOneWidget);
+      expect(find.textContaining(r'$1,200.00'), findsWidgets);
+
+      // The rooms that asked, on the row rather than only in a total — the
+      // whole point of the feature is that a merged line can be broken back
+      // down to the room that wanted it.
+      expect(find.text('Spare for Bessey 101 ×2, Bessey 103 ×1'),
+          findsOneWidget);
+      expect(find.text('Spare for Bessey 103 ×1'), findsOneWidget);
+    });
+
+    testWidgets('a room chip narrows the list to that room’s spares',
+        (tester) async {
+      final p = withSpares();
+      await openSpares(tester, p);
+
+      final room = p.project.rooms.first.id;
+      await tester.tap(find.byKey(ValueKey('spare_room_$room')));
+      await tester.pumpAndSettle();
+
+      // Bessey 101 asked for two lamps and nothing else, so the panel counts
+      // and prices ITS spares and the panel is titled for it.
+      expect(find.text('Spares for Bessey 101'), findsOneWidget);
+      expect(find.textContaining('2 units across 1 part'), findsOneWidget);
+      // The other room's panel-only line is gone from the list.
+      expect(find.textContaining('Spare panel'), findsNothing);
+      expect(find.text('2 spare'), findsOneWidget);
+    });
+
+    testWidgets('leaving the spares filter drops the room narrowing',
+        (tester) async {
+      final p = withSpares();
+      await openSpares(tester, p);
+      await tester.tap(
+        find.byKey(ValueKey('spare_room_${p.project.rooms.first.id}')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('All ('));
+      await tester.pumpAndSettle();
+
+      // A room left selected behind another filter would be an invisible one:
+      // a list quietly missing rows with nothing on screen saying why.
+      expect(find.byKey(const ValueKey('project_spares_panel')), findsNothing);
+      expect(find.textContaining('Spare panel'), findsOneWidget);
+    });
+
+    testWidgets('a job with no spares offers no chip at all', (tester) async {
+      await pump(tester, withProject());
+      await tester.tap(find.text('Core Components'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Spared ('), findsNothing);
+    });
   });
 
   testWidgets('the starter vendors tag the parts without any setup',
@@ -395,23 +513,121 @@ void main() {
     });
   });
 
-  for (final width in [1100.0, 1400.0, 1900.0]) {
+  for (final width in [700.0, 900.0, 1100.0, 1400.0, 1900.0]) {
     testWidgets('the tab lays out at ${width.round()} px wide', (tester) async {
       final p = withProject();
+      // A narrow window drops the segment labels so seven panes still fit, so
+      // which of the two the switcher offers is itself part of the layout
+      // being checked.
       for (final pane in [
-        'Rooms',
-        'Core Components',
-        'Timeline',
-        'Vendors',
-        'To do',
-        'Notes',
-        'History',
+        (label: 'Rooms', icon: Icons.meeting_room),
+        (label: 'Core Components', icon: Icons.inventory_2),
+        (label: 'Timeline', icon: Icons.event_available),
+        (label: 'Vendors', icon: Icons.local_shipping),
+        (label: 'To do', icon: Icons.checklist),
+        (label: 'Notes', icon: Icons.sticky_note_2_outlined),
+        (label: 'History', icon: Icons.history),
       ]) {
         await pump(tester, p, width: width);
-        await tester.tap(find.text(pane));
+        await tester.tap(
+          width < 920
+              ? find.byIcon(pane.icon).first
+              : find.text(pane.label).first,
+        );
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: '$pane at $width');
+        expect(tester.takeException(), isNull, reason: '${pane.label} at $width');
       }
     });
   }
+
+  // -------------------------------------------------------------------------
+  //  THE HEADER ON A SMALL WINDOW
+  // -------------------------------------------------------------------------
+  //  The title strip and the buttons cannot both have their full size on a
+  //  narrow window, and it is the TITLE that has to give: a project name is
+  //  read at a glance and typed once, and the buttons are the reason the
+  //  header is there at all.
+
+  group('the header gives way before the buttons do', () {
+    testWidgets('a wide window keeps the fields on one line and the labels on '
+        'the buttons', (tester) async {
+      await pump(tester, withProject(), width: 1600);
+
+      expect(find.text('Quote requests'), findsOneWidget);
+      expect(find.text('Where it stands'), findsOneWidget);
+      expect(find.text('Core Components'), findsOneWidget);
+      // The three identity fields sit side by side, so the two short ones are
+      // still their own fixed width.
+      final name = tester.getRect(find.byType(TextField).first);
+      final building = tester.getRect(find.byType(TextField).at(1));
+      expect(building.left, greaterThan(name.left));
+      expect(building.top, name.top, reason: 'same line');
+    });
+
+    testWidgets('a narrow window stacks the fields and keeps every button on '
+        'screen', (tester) async {
+      await pump(tester, withProject(), width: 800);
+
+      // The codes drop to a line of their own, leaving the name a field wide
+      // enough to read a project name in.
+      final name = tester.getRect(find.byType(TextField).first);
+      final building = tester.getRect(find.byType(TextField).at(1));
+      expect(building.top, greaterThan(name.top), reason: 'own line');
+
+      // Every action is still there, as an icon, and still inside the window.
+      for (final icon in [
+        Icons.note_add_outlined,
+        Icons.folder_open,
+        Icons.save_outlined,
+        Icons.close,
+        Icons.refresh,
+        Icons.flag_outlined,
+        Icons.table_view,
+        Icons.send_outlined,
+      ]) {
+        final button = find.byIcon(icon);
+        expect(button, findsWidgets, reason: '$icon is still offered');
+        expect(
+          tester.getRect(button.first).right,
+          lessThanOrEqualTo(800),
+          reason: '$icon is on screen, not past the edge',
+        );
+      }
+      // The labels are gone, which is the whole point — they are what did not
+      // fit.
+      expect(find.text('Quote requests'), findsNothing);
+    });
+
+    testWidgets('the collapsed buttons still do their job', (tester) async {
+      final p = withProject();
+      await pump(tester, p, width: 800);
+
+      // Pressed by icon, with nothing standing in the way of the tap — the
+      // failure this guards is a button drawn on screen and overlapped by
+      // whatever wrapped on top of it.
+      await tester.tap(find.byIcon(Icons.flag_outlined));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('project_briefing')), findsOneWidget);
+    });
+
+    testWidgets('the selected pane keeps its icon when the labels go',
+        (tester) async {
+      await pump(tester, withProject(), width: 800);
+      // Rooms is the pane the tab opens on. With no label beside it, a tick
+      // in place of the icon would leave the current pane the one segment
+      // with nothing on it saying what it is.
+      expect(find.byIcon(Icons.meeting_room), findsWidgets);
+    });
+
+    testWidgets('a narrow window still reaches every pane', (tester) async {
+      final p = withProject();
+      await pump(tester, p, width: 800);
+
+      // The labels are gone from the switcher, so the icons have to be the
+      // targets — and all seven have to be on screen.
+      await tester.tap(find.byIcon(Icons.inventory_2).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Search parts'), findsOneWidget);
+    });
+  });
 }

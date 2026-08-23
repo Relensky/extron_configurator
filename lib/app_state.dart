@@ -8756,8 +8756,10 @@ class AppStateProvider extends ChangeNotifier {
       // The work is in its file, so the recovery copy is a copy of nothing —
       // and a copy of nothing is what would be offered back on the next open.
       clearRoomRecovery();
-      // The project's cached read of this room is now the stale one.
-      _projectRooms.clear();
+      // The project's cached read of THIS room is now the stale one. Only
+      // this one: dropping the whole cache made saving a room in a forty-room
+      // job re-read forty files to learn that one of them had changed.
+      _forgetCachedRoom(currentConfigPath);
       notifyListeners(); // The Undo button becomes available
       return currentConfigPath;
     } catch (e, stack) {
@@ -9769,6 +9771,28 @@ class AppStateProvider extends ChangeNotifier {
   /// the answer could have changed on disk.
   final Map<String, LoadedRoom> _projectRooms = {};
 
+  /// The last answer [priceProject] gave, or null when it has to work it out.
+  ///
+  /// WHY MEMOISE AT ALL. Pricing a job is a pure function of the project, the
+  /// rooms and the catalog, and it is not cheap: forty rooms of twenty-five
+  /// devices is about a thousand priced lines, merged onto one master list and
+  /// tagged. The Project tab asks for it on EVERY build — and the tab rebuilds
+  /// on every keystroke in the project name box, every filter chip, every
+  /// vendor pick — so the same thousand lines were being priced from scratch
+  /// several times a second while somebody typed a job name.
+  ///
+  /// WHY IT CANNOT GO STALE. It is dropped in [notifyListeners], which every
+  /// mutation on this provider goes through — so the cached answer can only
+  /// survive a stretch in which nothing changed at all. That is the opposite
+  /// of the usual invalidation problem: there is no list of inputs to keep in
+  /// step with, and a new field added to the project next year invalidates
+  /// this correctly without anybody remembering it exists.
+  ProjectEstimate? _projectEstimate;
+
+  /// Set for exactly one [notifyListeners], by a change that provably cannot
+  /// alter a price. See [_projectChanged].
+  bool _keepEstimate = false;
+
   String get projectDisplayName {
     final name = project.name.trim();
     if (name.isNotEmpty) return name;
@@ -9778,8 +9802,23 @@ class AppStateProvider extends ChangeNotifier {
     return 'Untitled project';
   }
 
-  void _projectChanged() {
+  /// Marks the project edited and tells the listeners.
+  ///
+  /// [repricing] is false for a change that CANNOT move a number on the
+  /// estimate, and it is the only way the memoised estimate survives an edit.
+  /// The default is true — a change is assumed to matter until somebody has
+  /// looked at it and decided otherwise, because being slow is a nuisance and
+  /// being wrong about a quote is not.
+  ///
+  /// What qualifies is narrower than it looks. The estimate holds the project
+  /// itself by reference, so the job's own name, client and notes are already
+  /// live in a cached answer — nothing is copied out of them. A room LABEL is
+  /// not the same case: room refs are immutable and an edit replaces one, so a
+  /// cached estimate would go on holding the old one. Neither is the currency,
+  /// which every money figure on the estimate was formatted with.
+  void _projectChanged({bool repricing = true}) {
     projectDirty = true;
+    if (!repricing) _keepEstimate = true;
     notifyListeners();
   }
 
@@ -9911,7 +9950,11 @@ class AppStateProvider extends ChangeNotifier {
       project.notes = notes;
     }
     if (currency != null && currency.isNotEmpty) project.currency = currency;
-    _projectChanged();
+    // Typing a job name re-prices nothing. It used to re-price everything: the
+    // Project tab asks for the estimate on every build, and this method is
+    // called on every keystroke in four different boxes. The currency is the
+    // one field here that money on the estimate was actually formatted with.
+    _projectChanged(repricing: currency != null && currency.isNotEmpty);
   }
 
   // --- rooms ---------------------------------------------------------------
@@ -10663,12 +10706,58 @@ class AppStateProvider extends ChangeNotifier {
 
   // --- pricing -------------------------------------------------------------
 
+  /// Forgets the cached read of ONE room — the one whose file just changed
+  /// under this app.
+  ///
+  /// Saving a room used to drop the whole cache, so the next price re-read
+  /// every file on the job to discover what the app already knew: exactly one
+  /// of them had moved. On a forty-room building that is thirty-nine rooms of
+  /// file reads per save.
+  ///
+  /// Falls back to dropping everything when there is no path to match on,
+  /// because a cache that might be stale and cannot be checked is one to throw
+  /// away.
+  void _forgetCachedRoom(String configPath) {
+    if (configPath.trim().isEmpty) {
+      _projectRooms.clear();
+      return;
+    }
+    final byId = {for (final r in project.rooms) r.id: r};
+    _projectRooms.removeWhere((id, _) {
+      final ref = byId[id];
+      // A room that has left the project keeps no cache entry either way.
+      if (ref == null) return true;
+      return _samePath(
+        BuildingProject.resolvePath(ref.configPath, currentProjectPath),
+        configPath,
+      );
+    });
+  }
+
   /// Forgets the cached room reads, so the next estimate re-reads every file.
   /// Called when the project's rooms change and by the Refresh button — a room
   /// saved in another window is a change this app cannot be told about.
   void refreshProjectRooms() {
     _projectRooms.clear();
     notifyListeners();
+  }
+
+  /// Drops the memoised estimate on the way out of every mutation.
+  ///
+  /// Overridden rather than hooked at each call site because there are two
+  /// hundred of them: a cache that has to be invalidated by hand in two
+  /// hundred places is a cache that is wrong in one of them. See
+  /// [_projectEstimate].
+  @override
+  void notifyListeners() {
+    // Consumed here whether or not it was set, so a flag can never outlive the
+    // one change it was set for.
+    if (_keepEstimate) {
+      _keepEstimate = false;
+    } else {
+      _projectEstimate = null;
+    }
+    super.notifyListeners();
   }
 
   /// Prices the project.
@@ -10679,7 +10768,14 @@ class AppStateProvider extends ChangeNotifier {
   /// re-reading forty files to answer "which column does this row go in" would
   /// make the tab feel broken.
   ProjectEstimate priceProject({bool fresh = false}) {
-    if (fresh) _projectRooms.clear();
+    if (fresh) {
+      _projectRooms.clear();
+      _projectEstimate = null;
+    }
+    // Worked out once per change rather than once per build — see
+    // [_projectEstimate] for why that is safe.
+    final cached = _projectEstimate;
+    if (cached != null) return cached;
 
     final rooms = <String, LoadedRoom>{};
     for (final ref in project.rooms) {
@@ -10703,7 +10799,7 @@ class AppStateProvider extends ChangeNotifier {
       (id, _) => !project.rooms.any((r) => r.id == id),
     );
 
-    return computeProjectEstimate(
+    return _projectEstimate = computeProjectEstimate(
       project: project,
       projectPath: currentProjectPath,
       library: avDeviceLibrary,

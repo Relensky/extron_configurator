@@ -707,16 +707,10 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
 
   /// Which rooms asked for the spares — "who wanted this" is the question
   /// that follows every spare on a quote somebody is trimming.
-  String askedBy(MasterPartLine line) {
-    final ids = line.spareByRoom.keys.toList()
-      ..sort((a, b) => (line.spareByRoom[b] ?? 0).compareTo(
-            line.spareByRoom[a] ?? 0,
-          ));
-    return [
-      for (final id in ids)
-        '${roomNames[id] ?? id} ×${trimNumber(line.spareByRoom[id] ?? 0)}',
-    ].join(', ');
-  }
+  String askedBy(MasterPartLine line) => [
+    for (final id in line.spareRoomIdsByQty())
+      '${roomNames[id] ?? id} ×${trimNumber(line.spareByRoom[id] ?? 0)}',
+  ].join(', ');
 
   final spared = estimate.sparedParts;
   final without = estimate.partsWithoutSpares;
@@ -790,6 +784,40 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
                   for (final id in l.roomIdsByQty())
                     '${roomNames[id] ?? id} '
                         '×${trimNumber(l.qtyByRoom[id] ?? 0)}',
+                ].join(', '),
+              ],
+          ],
+  ));
+
+  // WHOSE SPARES THEY ARE. The two tables above are per PART, which is what a
+  // vendor is quoting; this one is per ROOM, which is what gets approved or
+  // trimmed. A spares bill nobody can break back down to a room is one that
+  // gets cut whole because no one could defend any part of it.
+  final byRoom = estimate.sparesByRoom;
+  sections.add((
+    title: 'Spares by room (${byRoom.length})',
+    header: const [
+      'Room',
+      'Spare units',
+      'Products spared',
+      'Spares cost',
+      'What was spared',
+    ],
+    rows: byRoom.isEmpty
+        ? [
+            ['No room on this job asked for a spare.', '', '', '', ''],
+          ]
+        : [
+            for (final r in byRoom)
+              [
+                r.name,
+                r.units,
+                r.parts,
+                cash(r.cost),
+                [
+                  for (final l in estimate.sparedPartsForRoom(r.roomId))
+                    '${l.description} '
+                        '×${trimNumber(l.spareByRoom[r.roomId] ?? 0)}',
                 ].join(', '),
               ],
           ],

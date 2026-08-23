@@ -1,4 +1,5 @@
 import 'building_project.dart';
+import 'cost_estimate.dart' show formatMoney;
 import 'project_estimate.dart';
 import 'project_schedule.dart';
 
@@ -578,3 +579,156 @@ BriefingOverview _overviewOf(
     moreTodos: open.length - shown.length,
   );
 }
+
+// ---------------------------------------------------------------------------
+//  THE BRIEFING AS TEXT
+// ---------------------------------------------------------------------------
+
+/// The whole briefing as plain text, for the clipboard.
+///
+/// WHY THIS EXISTS. The briefing answers "where does this job stand", and that
+/// question is almost never asked by the person looking at the screen — it is
+/// asked by a manager on email, a client on a call, or a colleague in a chat
+/// window, and the answer has until now had to be retyped out of a dialog by
+/// somebody reading it off. Retyped status is status that goes stale, loses the
+/// dates, and quietly drops whichever line the typist judged unimportant.
+///
+/// PLAIN TEXT, not a table and not a spreadsheet. It is pasted into a message
+/// body, so it has to survive a proportional font and a narrow window: no
+/// column rules, no padding that only lines up in a monospaced font beyond the
+/// one short label column, and nothing that reads as broken when a client's
+/// mail app rewraps it.
+///
+/// IT SAYS THE SAME THINGS THE DIALOG DOES, in the same order, including the
+/// pane that fixes each line. A copy that summarised harder than the screen
+/// would be a second, quieter briefing — and the moment the two disagree the
+/// written one is the one that gets believed, because it is the one in the
+/// email.
+String renderBriefingText(ProjectBriefing briefing, {required String title}) {
+  final o = briefing.overview;
+  final out = StringBuffer();
+
+  out.writeln(title.trim().isEmpty ? 'Project' : title.trim());
+  out.writeln('Where it stands on ${formatScheduleDate(briefing.asOf)}');
+  out.writeln();
+
+  // The label column is padded because these are facts read as pairs; nothing
+  // else in the document is, so nothing else is aligned.
+  void fact(String label, String value) =>
+      out.writeln('${label.padRight(18)}$value');
+
+  fact(
+    'Rooms',
+    o.roomsCosted == o.roomsTotal
+        ? '${o.roomsCosted}'
+        : '${o.roomsCosted} of ${o.roomsTotal} counted',
+  );
+  fact('Project total', formatMoney(o.grandTotal, o.currency));
+  fact(
+    'Core components',
+    o.partsWithoutLeadTime == 0
+        ? '${o.parts}'
+        : '${o.parts} · ${o.partsWithoutLeadTime} with no lead time',
+  );
+  if (o.partsOnOrder > 0 || o.partsReceived > 0) {
+    fact(
+      'Bought',
+      [
+        if (o.partsOnOrder > 0) '${o.partsOnOrder} on order',
+        if (o.partsReceived > 0) '${o.partsReceived} arrived',
+      ].join(' · '),
+    );
+  }
+  fact(
+    'Delivery',
+    o.deadline == null
+        ? 'no deadline set'
+        : '${formatScheduleDate(o.deadline!)} · '
+              '${formatDayGap(daysBetween(briefing.asOf, o.deadline!))}',
+  );
+  for (final phase in o.phases) {
+    fact(
+      phase.name,
+      phase.deadline == null
+          ? '${phase.parts} ${_parts(phase.parts)} — no date'
+          : '${formatScheduleDate(phase.deadline!)} · ${phase.parts} '
+                '${_parts(phase.parts)}',
+    );
+  }
+  if (o.firstOrder != null) {
+    fact(
+      'Buying runs',
+      '${formatScheduleDate(o.firstOrder!)}'
+      '${o.lastDelivery == null ? '' : ' -> '
+          '${formatScheduleDate(o.lastDelivery!)}'}',
+    );
+  }
+
+  if (o.nextOrders.isNotEmpty) {
+    out.writeln();
+    out.writeln('ORDER BY');
+    for (final day in o.nextOrders) {
+      out.writeln(
+        '  ${formatScheduleDate(day.date)} — ${day.parts} '
+        '${_parts(day.parts)} · '
+        '${formatDayGap(daysBetween(briefing.asOf, day.date))}',
+      );
+    }
+  }
+
+  if (o.todos.isNotEmpty) {
+    out.writeln();
+    out.writeln('STILL TO DO');
+    for (final todo in o.todos) {
+      final tail = [
+        if (todo.scope.isNotEmpty) todo.scope,
+        if (todo.due != null)
+          todo.late
+              ? 'due ${formatScheduleDate(todo.due!)} — '
+                    '${formatDayGap(daysBetween(briefing.asOf, todo.due!))}'
+              : 'due ${formatScheduleDate(todo.due!)}',
+        if (todo.blocked) 'waiting on somebody',
+      ].join(' · ');
+      out.writeln('  - ${todo.text}${tail.isEmpty ? '' : '  ($tail)'}');
+    }
+    if (o.moreTodos > 0) out.writeln('  ... and ${o.moreTodos} more');
+  }
+
+  void block(String heading, List<BriefingLine> lines) {
+    if (lines.isEmpty) return;
+    out.writeln();
+    out.writeln(heading.toUpperCase());
+    for (final line in lines) {
+      out.writeln('  ${line.message}');
+      for (final d in line.detail) {
+        out.writeln('      · $d');
+      }
+      // The pane that fixes it travels with the line, because a status mail
+      // that says what is wrong and not where it is answered is a mail that
+      // comes straight back as a question.
+      if (line.urgency != BriefingUrgency.clear) {
+        out.writeln('      Fixed on ${kBriefingPaneLabels[line.pane]}');
+      }
+    }
+  }
+
+  block('Already late', briefing.lateLines);
+  block('Coming up', briefing.soonLines);
+  block('Still open', briefing.openLines);
+  final clear = [
+    for (final l in briefing.lines)
+      if (l.urgency == BriefingUrgency.clear) l,
+  ];
+  if (clear.isNotEmpty) {
+    out.writeln();
+    for (final l in clear) {
+      out.writeln(l.message);
+    }
+  }
+
+  return '${out.toString().trimRight()}\n';
+}
+
+/// 'part' or 'parts'. Its own function because the briefing says it eleven
+/// times and a status mail with "1 parts" in it reads as machine output.
+String _parts(int n) => n == 1 ? 'part' : 'parts';

@@ -501,10 +501,25 @@ class MasterPartLine {
 
   /// The rooms this part appears in, most first — how the master list's room
   /// column reads when it has to fit in a cell.
-  List<String> roomIdsByQty() {
-    final ids = qtyByRoom.keys.toList();
+  List<String> roomIdsByQty() => _byQty(qtyByRoom);
+
+  /// The rooms that ASKED for a spare of this part, most first.
+  ///
+  /// Separate from [roomIdsByQty] because they answer different questions and
+  /// routinely disagree: a part can be in nine rooms and spared by one, and
+  /// the room with the most of them installed is rarely the room that wanted
+  /// the shelf unit. "Who wanted this" is the question that follows every
+  /// spare on a quote somebody is trimming, and the room order has to be the
+  /// spare order for the answer to read.
+  List<String> spareRoomIdsByQty() => _byQty(spareByRoom);
+
+  /// Room ids off [counts], biggest first, ties broken on the id so two rooms
+  /// with the same figure do not swap places between two readings of the same
+  /// job.
+  static List<String> _byQty(Map<String, double> counts) {
+    final ids = counts.keys.toList();
     ids.sort((a, b) {
-      final byQty = (qtyByRoom[b] ?? 0).compareTo(qtyByRoom[a] ?? 0);
+      final byQty = (counts[b] ?? 0).compareTo(counts[a] ?? 0);
       return byQty != 0 ? byQty : a.compareTo(b);
     });
     return ids;
@@ -535,6 +550,29 @@ class VendorPackage {
   bool get isUntagged => vendor == null;
   String get name => vendor?.name ?? 'Untagged';
 }
+
+/// One room's whole spares bill — what it asked for, and what that costs.
+///
+/// A record rather than a class because it is a row on a summary and nothing
+/// else: it has no behaviour, it is rebuilt from [ProjectEstimate.master]
+/// every time it is asked for, and nothing stores it.
+typedef SpareRoomTally = ({
+  /// The room's id on the project, so a row can be filtered back to the room.
+  String roomId,
+
+  /// What to call it. Already resolved — see [ProjectEstimate.sparesByRoom].
+  String name,
+
+  /// Units this room asked to have on the shelf.
+  double units,
+
+  /// What those units come to at the parts' own unit prices.
+  double cost,
+
+  /// How many DIFFERENT parts they are. Two spares of one switcher and one
+  /// each of two is the same three units and a different decision.
+  int parts,
+});
 
 /// A building, priced.
 class ProjectEstimate {
@@ -666,6 +704,76 @@ class ProjectEstimate {
   /// of its line rather than a line of its own.
   double get sparesTotal =>
       master.fold(0.0, (sum, l) => sum + l.spareQty * l.unitPrice);
+
+  /// The spares broken back down to the room that asked for them, dearest
+  /// first.
+  ///
+  /// The master list merges rooms together on purpose — one line per part is
+  /// the whole reason it exists — and that merge is exactly what makes a spare
+  /// hard to account for afterwards. "Eleven of these, four of them spare" is
+  /// a figure a project manager can neither approve nor trim without knowing
+  /// whose four they are, and the answer is on the rooms rather than on the
+  /// part.
+  ///
+  /// [name] is resolved here rather than left as an id because this is a thing
+  /// to read: 'room3' is not a room. A spare filed against a room that is no
+  /// longer on the job still lists, under its id, rather than vanishing — a
+  /// spare that disappears quietly is money that stays on the quote.
+  List<SpareRoomTally> get sparesByRoom {
+    final names = {for (final r in rooms) r.ref.id: r.name};
+    final units = <String, double>{};
+    final cost = <String, double>{};
+    final parts = <String, int>{};
+    for (final l in master) {
+      l.spareByRoom.forEach((roomId, qty) {
+        if (qty <= 0) return;
+        units[roomId] = (units[roomId] ?? 0) + qty;
+        cost[roomId] = (cost[roomId] ?? 0) + qty * l.unitPrice;
+        parts[roomId] = (parts[roomId] ?? 0) + 1;
+      });
+    }
+    final out = [
+      for (final id in units.keys)
+        (
+          roomId: id,
+          name: names[id] ?? id,
+          units: units[id] ?? 0,
+          cost: cost[id] ?? 0,
+          parts: parts[id] ?? 0,
+        ),
+    ];
+    // Dearest first: the money is what gets questioned. Ties break on the
+    // name so two rooms with identical spares do not swap places between two
+    // readings of the same job.
+    out.sort((a, b) {
+      final byCost = b.cost.compareTo(a.cost);
+      if (byCost != 0) return byCost;
+      final byUnits = b.units.compareTo(a.units);
+      return byUnits != 0
+          ? byUnits
+          : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return out;
+  }
+
+  /// The spares one room asked for, dearest line first.
+  ///
+  /// Empty for a room that spared nothing, which is the ordinary case and not
+  /// a fault.
+  List<MasterPartLine> sparedPartsForRoom(String roomId) {
+    final out = [
+      for (final l in master)
+        if ((l.spareByRoom[roomId] ?? 0) > 0) l,
+    ];
+    out.sort((a, b) {
+      final byCost = ((b.spareByRoom[roomId] ?? 0) * b.unitPrice)
+          .compareTo((a.spareByRoom[roomId] ?? 0) * a.unitPrice);
+      return byCost != 0
+          ? byCost
+          : a.description.toLowerCase().compareTo(b.description.toLowerCase());
+    });
+    return out;
+  }
 
   /// True when nothing is missing: every room read, every part priced.
   bool get isComplete => failedRooms == 0 && unpricedParts == 0;

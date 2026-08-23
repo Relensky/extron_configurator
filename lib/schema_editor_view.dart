@@ -86,6 +86,104 @@ const List<String> kSchemaFieldTypes = [
   'source_map',
 ];
 
+/// What each type actually PUTS ON THE TAB, and when to reach for it.
+///
+/// The picker used to offer the eleven raw values and nothing else, which asks
+/// whoever is describing a key to already know what 'combo' and 'source_map'
+/// draw — and the only place that is written down is a comment block at the top
+/// of ui_schema.dart, which is a source file. Somebody adding a key to a schema
+/// is not reading source; they are looking at a dropdown deciding whether their
+/// new key wants a switch or a list, and this is the moment to answer that.
+///
+/// [name] is what the control is CALLED — 'On/off switch' rather than 'bool' —
+/// and the raw value is still shown beside it, because the raw value is what
+/// lands in ui_schema.json and somebody hand-editing that file has to be able
+/// to match the two up.
+///
+/// [blurb] is one line, in the present tense, describing what appears on the
+/// tab. Where a type needs something else filled in to work at all, the line
+/// says so: a dropdown with no options is the commonest broken schema entry
+/// there is.
+const Map<String, ({String name, String blurb})> kSchemaFieldTypeInfo = {
+  'auto': (
+    name: 'Decide from the value',
+    blurb: 'Looks at what is in the config: true/false becomes a switch, a '
+        'number becomes a number field, anything else becomes a text box. The '
+        'right answer for most keys.',
+  ),
+  'text': (
+    name: 'Text box',
+    blurb: 'A plain text field. Use it to force text on a key that holds '
+        'something like "10.0.0.5" or "01" — values the automatic choice '
+        'would read as a number and quietly reformat.',
+  ),
+  'int': (
+    name: 'Whole number',
+    blurb: 'A text field that stores an integer. Anything that will not parse '
+        'is refused rather than written as text.',
+  ),
+  'double': (
+    name: 'Decimal number',
+    blurb: 'A text field that stores a decimal — gains, delays, levels.',
+  ),
+  'bool': (
+    name: 'On/off switch',
+    blurb: 'A switch storing true or false. Use it on a key that holds those '
+        'and nothing else.',
+  ),
+  'dropdown': (
+    name: 'Pick one from a list',
+    blurb: 'A fixed list of choices. Fill in Options below — a dropdown with '
+        'none is a field nobody can set.',
+  ),
+  'combo': (
+    name: 'One choice, several keys',
+    blurb: 'ONE dropdown that writes to several config keys at once. Fill in '
+        'both Options and the keys it writes, in the same order — this is how '
+        'a single "Which room mode?" sets four keys that must agree.',
+  ),
+  'hidden': (
+    name: 'Never shown',
+    blurb: 'The key stays in the config and is kept off the tab. Use it for '
+        'keys a combo or the Setup Wizard owns, so nobody edits one half of a '
+        'pair by hand.',
+  ),
+  'room_sources': (
+    name: 'Pick one of this room’s sources',
+    blurb: 'A dropdown whose choices are the sources THIS room has, read off '
+        'its input_* keys — so it says HDMI 1 and Laptop rather than a list '
+        'typed into the schema and gone stale.',
+  ),
+  'module_states': (
+    name: 'Pick a state from the device’s module',
+    blurb: 'A dropdown filled live from the device’s Python module: the '
+        'states of one of its commands. Name the command below — the list is '
+        'empty until you do.',
+  ),
+  'source_map': (
+    name: 'Pairs of sources',
+    blurb: 'Rows of two source dropdowns with add and remove — a display’s '
+        'source_overrides. The only structured editor here; every other '
+        'object key belongs on the Raw JSON tab.',
+  ),
+};
+
+/// What the type is called, with the raw value in brackets when the two are
+/// not obviously the same thing. Falls back to the raw value, so a type added
+/// to [kSchemaFieldTypes] and not described here still reads.
+String _fieldTypeName(String type) {
+  final info = kSchemaFieldTypeInfo[type];
+  return info == null ? type : info.name;
+}
+
+/// The line under the picker: what the CURRENT choice will draw. Answers the
+/// question at the moment it is being asked, rather than making somebody open
+/// the menu again to re-read an option they have already picked.
+String _fieldTypeBlurb(String type) =>
+    kSchemaFieldTypeInfo[type]?.blurb ??
+    'No description for this type — see the comment block at the top of '
+        'ui_schema.dart.';
+
 class SchemaEditorView extends StatefulWidget {
   const SchemaEditorView({super.key});
 
@@ -430,19 +528,34 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         ),
         _searchBox(),
         const SizedBox(height: 8),
+        // FILTERED FIRST, THEN BUILT LAZILY. A SYSTEM_SETUP block runs to
+        // several hundred keys, and this list used to lay out a row for every
+        // one of them on every rebuild — which is every character typed into
+        // the search box above it, the one place the list is guaranteed to be
+        // long and the typing guaranteed to be fast.
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-            children: [
+          child: Builder(builder: (context) {
+            final visible = [
               for (final key in keys)
                 if (_matchesSearch(key))
-                  ...() {
-                    final spec = schema.specFor(key, sectionKey: _block);
-                    if (_undescribedOnly && spec != null) return <Widget>[];
-                    return [_coverageRow(schema, key, spec, block as Map)];
-                  }(),
-            ],
-          ),
+                  if (!(_undescribedOnly &&
+                      schema.specFor(key, sectionKey: _block) != null))
+                    key,
+            ];
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              itemCount: visible.length,
+              itemBuilder: (context, index) {
+                final key = visible[index];
+                return _coverageRow(
+                  schema,
+                  key,
+                  schema.specFor(key, sectionKey: _block),
+                  block as Map,
+                );
+              },
+            );
+          }),
         ),
       ],
     );
@@ -1391,18 +1504,60 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                       'One key, or a whole family with a star in it — '
                           'power1_outlet_*.'),
                   const SizedBox(height: 8),
+                  // WHAT THIS FIELD BECOMES ON THE TAB. Every option names
+                  // the control it draws and explains itself underneath,
+                  // because the choice is being made by somebody describing a
+                  // config key — who has no reason to know what 'combo' or
+                  // 'source_map' render as, and whose only other source for
+                  // that is a comment block inside ui_schema.dart.
+                  //
+                  // The raw value rides along beside the name: it is what
+                  // lands in the file, and a schema hand-edited afterwards has
+                  // to be matchable back to what was picked here.
                   DropdownButtonFormField<String>(
                     key: const ValueKey('schema_field_type'),
                     initialValue:
                         kSchemaFieldTypes.contains(type) ? type : 'auto',
                     isExpanded: true,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Rendered as',
-                      border: OutlineInputBorder(),
+                      helperText: _fieldTypeBlurb(type),
+                      helperMaxLines: 4,
+                      border: const OutlineInputBorder(),
                     ),
+                    // Closed, it is one line: the menu's two-line rows would
+                    // otherwise set the height of the field itself.
+                    selectedItemBuilder: (ctx) => [
+                      for (final t in kSchemaFieldTypes)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(_fieldTypeName(t)),
+                        ),
+                    ],
                     items: [
                       for (final t in kSchemaFieldTypes)
-                        DropdownMenuItem(value: t, child: Text(t)),
+                        DropdownMenuItem(
+                          value: t,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_fieldTypeName(t)),
+                              Text(
+                                t,
+                                style: Theme.of(ctx)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(ctx)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      fontFamily: 'monospace',
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                     onChanged: (v) => setLocal(() => type = v ?? 'auto'),
                   ),

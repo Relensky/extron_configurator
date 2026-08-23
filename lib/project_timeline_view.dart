@@ -13,6 +13,7 @@ import 'project_estimate.dart';
 import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
 import 'project_schedule.dart';
+import 'stepped_date_picker.dart';
 
 /// ============================================================================
 ///  THE DELIVERY TIMELINE
@@ -150,8 +151,14 @@ Future<PickedDate?> showProjectDatePicker(
   required String title,
 }) async {
   final now = today();
-  final picked = await showDatePicker(
-    context: context,
+  // NOT the Material picker. Almost every date on this tab is months or years
+  // out — an order date worked back from a delivery next spring, a phase in
+  // the summer after this one — and Material's only shortcut out of the month
+  // grid is a year list that drops back onto the same month number in the new
+  // year. This one narrows: year, then month, then day. See
+  // stepped_date_picker.dart.
+  final picked = await showSteppedDatePicker(
+    context,
     initialDate: initial ?? now,
     // A job can be scheduled against a date that has already gone — a project
     // picked up halfway through is the ordinary case, and a picker that

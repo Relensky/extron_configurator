@@ -436,4 +436,68 @@ void main() {
       expect(byText['about the job']!.scope, isEmpty);
     });
   });
+
+  group('copied to the clipboard', () {
+    // "Where does this job stand" is almost never asked by the person looking
+    // at the screen. Before this the answer was retyped out of a dialog by
+    // somebody reading it off, which is how a status loses its dates.
+    ProjectBriefing briefingOf() {
+      final screen = part('Projection screen');
+      final project = BuildingProject(
+        deliveryDeadline: DateTime(2026, 4, 1),
+        partLeadTimes: {screen.key: 200},
+      );
+      project.addTodo('chase Extron', due: DateTime(2026, 2, 1));
+      return buildProjectBriefing(
+        estimate: estimateOf(project, master: [screen]),
+        asOf: march,
+      );
+    }
+
+    test('it leads with the job and the day it was read', () {
+      final text = renderBriefingText(briefingOf(), title: 'Bessey refresh');
+      final lines = text.split('\n');
+      expect(lines.first, 'Bessey refresh');
+      expect(lines[1], 'Where it stands on 4 Mar 2026');
+    });
+
+    test('it carries the same facts the dialog shows', () {
+      final text = renderBriefingText(briefingOf(), title: 'Bessey refresh');
+      expect(text, contains('Project total'));
+      expect(text, contains('Delivery'));
+      expect(text, contains('1 Apr 2026'));
+      expect(text, contains('STILL TO DO'));
+      expect(text, contains('chase Extron'));
+    });
+
+    test('a warning travels with the pane that fixes it', () {
+      final text = renderBriefingText(briefingOf(), title: 'Bessey refresh');
+      expect(text, contains('ALREADY LATE'));
+      expect(text, contains('past the date'));
+      // A status mail that says what is wrong and not where it is answered
+      // comes straight back as a question.
+      expect(text, contains('Fixed on Timeline'));
+      // The specifics come with it rather than being summarised away.
+      expect(text, contains('Projection screen'));
+    });
+
+    test('a healthy job copies as a job with nothing wrong', () {
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(BuildingProject()),
+        asOf: march,
+      );
+      final text = renderBriefingText(briefing, title: 'Quiet job');
+      expect(text, contains('Quiet job'));
+      expect(text, isNot(contains('ALREADY LATE')));
+      // It ends on one newline, not none and not three — it is pasted into a
+      // message body with text underneath it.
+      expect(text.endsWith('\n'), isTrue);
+      expect(text.endsWith('\n\n'), isFalse);
+    });
+
+    test('an untitled job still says what it is', () {
+      final text = renderBriefingText(briefingOf(), title: '   ');
+      expect(text.split('\n').first, 'Project');
+    });
+  });
 }

@@ -228,6 +228,52 @@ void main() {
       expect((onDisk['fields'] as Map)['gui_new_feature'], isNull);
     });
 
+    testWidgets('the field editor says what each rendering actually draws',
+        (tester) async {
+      final p = loadedProvider();
+      await pump(tester, p);
+
+      final row = find.byKey(const ValueKey('schema_coverage_gui_new_feature'));
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(of: row, matching: find.text('Describe')),
+      );
+      await tester.pumpAndSettle();
+
+      // Closed, the picker names the CONTROL rather than the raw value, and
+      // says underneath what that control does — the question is being
+      // answered by somebody describing a config key, who has no reason to
+      // know what 'auto' renders as.
+      expect(find.text('Decide from the value'), findsOneWidget);
+      expect(find.textContaining('true/false becomes a switch'), findsWidgets);
+
+      // Open, every option carries its name and the raw value that lands in
+      // ui_schema.json, so a file hand-edited afterwards can be matched back
+      // to what was picked here.
+      await tester.tap(find.byKey(const ValueKey('schema_field_type')));
+      await tester.pumpAndSettle();
+      expect(find.text('One choice, several keys'), findsWidgets);
+      expect(find.text('combo'), findsWidgets);
+
+      // Picking one moves the explanation with it.
+      await tester.tap(find.text('Pick one from a list').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('a dropdown with none'), findsWidgets);
+    });
+
+    testWidgets('every rendering the picker offers explains itself',
+        (tester) async {
+      // The failure this guards is a type added to the list and not to the
+      // descriptions — an option that goes back to being a bare word in a
+      // dropdown, which is the state this replaced.
+      for (final type in kSchemaFieldTypes) {
+        expect(kSchemaFieldTypeInfo[type], isNotNull, reason: type);
+        expect(kSchemaFieldTypeInfo[type]!.name, isNotEmpty, reason: type);
+        expect(kSchemaFieldTypeInfo[type]!.blurb, isNotEmpty, reason: type);
+      }
+    });
+
     testWidgets('the raw view applies a whole document, and says why not',
         (tester) async {
       final p = loadedProvider();

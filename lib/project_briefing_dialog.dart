@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'contrast.dart';
 import 'building_project.dart' show daysBetween;
@@ -403,6 +405,17 @@ class _BriefingDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        // COPY, beside the dismissal rather than buried in the title. "Where
+        // does this job stand" is almost never asked by the person reading the
+        // screen — it is asked on email, on a call, or in a chat window — and
+        // until this button the answer was retyped by somebody reading it off,
+        // which is how a status loses its dates.
+        TextButton.icon(
+          key: const ValueKey('briefing_copy'),
+          icon: const Icon(Icons.copy_all_outlined, size: 18),
+          label: const Text('Copy'),
+          onPressed: () => _copy(context),
+        ),
         FilledButton(
           key: const ValueKey('briefing_close'),
           autofocus: true,
@@ -410,6 +423,26 @@ class _BriefingDialog extends StatelessWidget {
           child: const Text('Got it'),
         ),
       ],
+    );
+  }
+
+  /// Puts the whole briefing on the clipboard and says so.
+  ///
+  /// The dialog STAYS OPEN. Copying is something somebody does on the way to
+  /// pasting it somewhere, and a dialog that closed itself would take the text
+  /// off screen at exactly the moment they want to check they got the right
+  /// job before they send it.
+  Future<void> _copy(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await Clipboard.setData(
+      ClipboardData(text: renderBriefingText(briefing, title: title)),
+    );
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(
+        duration: Duration(seconds: 3),
+        content: Text('Where this job stands copied to the clipboard'),
+      ),
     );
   }
 
