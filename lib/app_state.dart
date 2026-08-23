@@ -10045,6 +10045,9 @@ class AppStateProvider extends ChangeNotifier {
       summary: 'removed from the job (its file is untouched)',
     );
     project.rooms.removeWhere((r) => r.id == roomId);
+    // A spare bought FOR that room goes with it. A building spare does not -
+    // it was never that room's, and it is still on the shelf list.
+    project.dropSparesForRoom(roomId);
     _projectRooms.remove(roomId);
     _projectChanged();
   }
@@ -10104,6 +10107,118 @@ class AppStateProvider extends ChangeNotifier {
     if (to < 0 || to >= project.rooms.length) return;
     final room = project.rooms.removeAt(from);
     project.rooms.insert(to, room);
+    _projectChanged();
+  }
+
+  // --- spares --------------------------------------------------------------
+  //
+  //  The spares the JOB buys, as opposed to the ones a room asks for on its own
+  //  Cost tab. See [ProjectSpare] for where the line between the two is and
+  //  why it is there.
+
+  /// What one spare is called in the log: the part, and who it is for.
+  String _spareLogName(ProjectSpare spare) => spare.forBuilding
+      ? '${spare.description} (building spare)'
+      : '${spare.description} (${projectRoomCode(spare.roomId)})';
+
+  /// Adds a spare for [roomId], or for the building when [roomId] is ''.
+  ProjectSpare addProjectSpare({
+    required String partKey,
+    required String description,
+    String model = '',
+    String manufacturer = '',
+    String partNumber = '',
+    double qty = 1,
+    String roomId = '',
+    String note = '',
+  }) {
+    final spare = project.addSpare(
+      partKey: partKey,
+      description: description,
+      model: model,
+      manufacturer: manufacturer,
+      partNumber: partNumber,
+      qty: qty,
+      roomId: roomId,
+      note: note,
+    );
+    _logProjectEdit(
+      itemKey: projectPartItemKey(partKey),
+      itemName: description,
+      field: 'Spare',
+      summary: spare.forBuilding
+          ? '${trimNumber(spare.qty)} added for the building'
+          : '${trimNumber(spare.qty)} added for '
+              '${projectRoomCode(spare.roomId)}',
+    );
+    _projectChanged();
+    return spare;
+  }
+
+  /// Changes how many of a spare the job is buying.
+  void setProjectSpareQty(String spareId, double qty) {
+    final before = project.spareById(spareId);
+    if (before == null || before.qty == qty) return;
+    project.updateSpare(spareId, qty: qty);
+    final after = project.spareById(spareId)!;
+    _logProjectEdit(
+      itemKey: projectPartItemKey(after.partKey),
+      itemName: _spareLogName(after),
+      field: 'Spare',
+      summary: 'set to ${trimNumber(after.qty)}',
+      coalesce: true,
+    );
+    _projectChanged();
+  }
+
+  /// Moves a spare between a room and the building.
+  ///
+  /// [roomId] of '' is the building, and is the whole point: a spare somebody
+  /// put against one room that turns out to be the shelf unit for the campus
+  /// moves with one press rather than being deleted and retyped.
+  void moveProjectSpare(String spareId, String roomId) {
+    final before = project.spareById(spareId);
+    if (before == null || before.roomId == roomId) return;
+    project.updateSpare(spareId, roomId: roomId);
+    final after = project.spareById(spareId)!;
+    _logProjectEdit(
+      itemKey: projectPartItemKey(after.partKey),
+      itemName: after.description,
+      field: 'Spare',
+      summary: after.forBuilding
+          ? 'moved off ${projectRoomCode(before.roomId)} to the building'
+          : before.forBuilding
+              ? 'moved from the building to ${projectRoomCode(roomId)}'
+              : 'moved from ${projectRoomCode(before.roomId)} to '
+                  '${projectRoomCode(roomId)}',
+    );
+    _projectChanged();
+  }
+
+  void setProjectSpareNote(String spareId, String note) {
+    final spare = project.spareById(spareId);
+    if (spare == null || spare.note.trim() == note.trim()) return;
+    project.updateSpare(spareId, note: note);
+    _logProjectEdit(
+      itemKey: projectPartItemKey(spare.partKey),
+      itemName: _spareLogName(spare),
+      field: 'Spare',
+      summary: note.trim().isEmpty ? 'note cleared' : 'note written',
+      coalesce: true,
+    );
+    _projectChanged();
+  }
+
+  void removeProjectSpare(String spareId) {
+    final spare = project.spareById(spareId);
+    if (spare == null) return;
+    project.removeSpare(spareId);
+    _logProjectEdit(
+      itemKey: projectPartItemKey(spare.partKey),
+      itemName: _spareLogName(spare),
+      field: 'Spare',
+      summary: 'taken off the job',
+    );
     _projectChanged();
   }
 

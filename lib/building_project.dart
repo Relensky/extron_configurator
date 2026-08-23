@@ -909,6 +909,116 @@ String masterPartKey({
 }
 
 // ---------------------------------------------------------------------------
+//  SPARES THE JOB BUYS, RATHER THAN A ROOM
+// ---------------------------------------------------------------------------
+//  A room's own spares live in that room's cost file: a fourth display for a
+//  room with three drawn is a decision about THAT room, made on its Cost tab,
+//  and it travels with the room to whatever job the room ends up on.
+//
+//  A BUILDING'S spares are not that. "Two spare projectors for the campus
+//  store" is a decision about the JOB, it belongs to no room, and there is no
+//  room file it could be written into without lying about which room is buying
+//  it. So it lives here, on the project, where it can also be re-pointed at a
+//  room - or off one - without rewriting anything on disk.
+//
+//  Both kinds end up on the same master line and in the same total. See
+//  [MasterPartLine.spareQty] and [MasterPartLine.buildingSpareQty].
+
+/// One spare the JOB is buying, for a room or for the building.
+class ProjectSpare {
+  final String id;
+
+  /// The master-list key of the part this is a spare FOR - see
+  /// [masterPartKey]. What ties it to the line it is counted onto.
+  final String partKey;
+
+  /// The part as it read when the spare was added.
+  ///
+  /// Stored rather than resolved on the way out, for the same reason a history
+  /// entry stores its item name: a spare for a product that has since been
+  /// swapped out of every room is still a spare somebody decided to buy, and a
+  /// row that went blank would be money on the quote with nothing beside it.
+  final String description;
+  final String model;
+  final String manufacturer;
+  final String partNumber;
+
+  /// How many are being bought.
+  final double qty;
+
+  /// The room this is a spare for, or '' for the building as a whole.
+  ///
+  /// The one field that moves. "Move it off the room" is this going blank, and
+  /// nothing else about the spare changes - not its part, not its quantity,
+  /// not what it cost.
+  final String roomId;
+
+  /// Why, in the words of whoever asked for it. 'For the store', 'the dean
+  /// wants one on the shelf'.
+  final String note;
+
+  const ProjectSpare({
+    required this.id,
+    required this.partKey,
+    required this.description,
+    this.model = '',
+    this.manufacturer = '',
+    this.partNumber = '',
+    this.qty = 1,
+    this.roomId = '',
+    this.note = '',
+  });
+
+  /// True when this is the building's spare rather than a room's.
+  bool get forBuilding => roomId.trim().isEmpty;
+
+  ProjectSpare copyWith({
+    double? qty,
+    String? roomId,
+    String? note,
+  }) => ProjectSpare(
+    id: id,
+    partKey: partKey,
+    description: description,
+    model: model,
+    manufacturer: manufacturer,
+    partNumber: partNumber,
+    qty: qty ?? this.qty,
+    // Not `?? this.roomId`: '' is a real answer here and means the building,
+    // so a move off a room has to be able to say it.
+    roomId: roomId ?? this.roomId,
+    note: note ?? this.note,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'partKey': partKey,
+    'description': description,
+    if (model.isNotEmpty) 'model': model,
+    if (manufacturer.isNotEmpty) 'manufacturer': manufacturer,
+    if (partNumber.isNotEmpty) 'partNumber': partNumber,
+    'qty': qty,
+    if (roomId.isNotEmpty) 'roomId': roomId,
+    if (note.trim().isNotEmpty) 'note': note.trim(),
+  };
+
+  factory ProjectSpare.fromJson(Map<String, dynamic> json) => ProjectSpare(
+    id: json['id']?.toString() ?? '',
+    partKey: json['partKey']?.toString() ?? '',
+    description: json['description']?.toString() ?? '',
+    model: json['model']?.toString() ?? '',
+    manufacturer: json['manufacturer']?.toString() ?? '',
+    partNumber: json['partNumber']?.toString() ?? '',
+    // A spare with no readable quantity is one of it. Dropping the row would
+    // lose a decision; reading it as zero would put a line of nothing on the
+    // quote.
+    qty: (json['qty'] as num?)?.toDouble() ?? 1,
+    roomId: json['roomId']?.toString() ?? '',
+    note: json['note']?.toString() ?? '',
+  );
+}
+
+// ---------------------------------------------------------------------------
 //  THE PROJECT
 // ---------------------------------------------------------------------------
 
@@ -1013,6 +1123,11 @@ class BuildingProject {
   /// schedule's warnings about it worth reading.
   final Map<String, PartOrder> partOrders;
 
+  /// Spares the JOB is buying, for a room or for the building. See
+  /// [ProjectSpare]. Empty on a job that only uses the rooms' own spares,
+  /// which behaves exactly as it did before this existed.
+  final List<ProjectSpare> spares;
+
   /// Counters behind [nextRoomId] / [nextVendorId], persisted so ids stay
   /// unique across sessions — a reused id would re-point somebody's hand
   /// vendor tags at a different room.
@@ -1020,6 +1135,7 @@ class BuildingProject {
   int _vendorCounter;
   int _todoCounter;
   int _trackCounter;
+  int _spareCounter;
 
   BuildingProject({
     this.name = '',
@@ -1038,11 +1154,13 @@ class BuildingProject {
     List<ProjectTrack>? tracks,
     Map<String, String>? partTracks,
     Map<String, PartOrder>? partOrders,
+    List<ProjectSpare>? spares,
     List<ProjectEdit>? history,
     int roomCounter = 0,
     int vendorCounter = 0,
     int todoCounter = 0,
     int trackCounter = 0,
+    int spareCounter = 0,
   }) : rooms = rooms ?? [],
        vendors = vendors ?? [],
        partVendors = partVendors ?? {},
@@ -1052,11 +1170,13 @@ class BuildingProject {
        tracks = tracks ?? [],
        partTracks = partTracks ?? {},
        partOrders = partOrders ?? {},
+       spares = spares ?? [],
        history = history ?? [],
        _roomCounter = roomCounter,
        _vendorCounter = vendorCounter,
        _todoCounter = todoCounter,
-       _trackCounter = trackCounter;
+       _trackCounter = trackCounter,
+       _spareCounter = spareCounter;
 
   bool get isEmpty =>
       rooms.isEmpty &&
@@ -1069,6 +1189,7 @@ class BuildingProject {
       tracks.isEmpty &&
       partTracks.isEmpty &&
       partOrders.isEmpty &&
+      spares.isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       jobNumber.trim().isEmpty &&
@@ -1083,6 +1204,79 @@ class BuildingProject {
   String nextVendorId() => 'vendor${++_vendorCounter}';
   String nextTodoId() => 'todo${++_todoCounter}';
   String nextTrackId() => 'track${++_trackCounter}';
+  String nextSpareId() => 'spare${++_spareCounter}';
+
+  // -------------------------------------------------------------------------
+  //  SPARES THE JOB BUYS
+  // -------------------------------------------------------------------------
+
+  /// Adds a spare and returns it. See [ProjectSpare].
+  ProjectSpare addSpare({
+    required String partKey,
+    required String description,
+    String model = '',
+    String manufacturer = '',
+    String partNumber = '',
+    double qty = 1,
+    String roomId = '',
+    String note = '',
+  }) {
+    final spare = ProjectSpare(
+      id: nextSpareId(),
+      partKey: partKey,
+      description: description,
+      model: model,
+      manufacturer: manufacturer,
+      partNumber: partNumber,
+      // A spare of none is not a spare. Clamped rather than refused: the box
+      // it is typed into can be emptied mid-edit, and a row that vanished
+      // while somebody was retyping its quantity would be worse.
+      qty: qty <= 0 ? 1 : qty,
+      roomId: roomId,
+      note: note,
+    );
+    spares.add(spare);
+    return spare;
+  }
+
+  ProjectSpare? spareById(String id) {
+    for (final s in spares) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  /// Changes one spare. [roomId] of '' moves it to the building, which is the
+  /// whole point of it being a separate field - see [ProjectSpare.roomId].
+  void updateSpare(String id, {double? qty, String? roomId, String? note}) {
+    final at = spares.indexWhere((s) => s.id == id);
+    if (at < 0) return;
+    spares[at] = spares[at].copyWith(
+      qty: qty == null ? null : (qty <= 0 ? 1 : qty),
+      roomId: roomId,
+      note: note,
+    );
+  }
+
+  void removeSpare(String id) => spares.removeWhere((s) => s.id == id);
+
+  /// The job's spares for one room, or for the building when [roomId] is ''.
+  List<ProjectSpare> sparesFor(String roomId) =>
+      [for (final s in spares) if (s.roomId == roomId) s];
+
+  /// Every spare the job buys for the building rather than for a room.
+  List<ProjectSpare> get buildingSpares =>
+      [for (final s in spares) if (s.forBuilding) s];
+
+  /// A room leaving the job takes its spares with it - but only the ones that
+  /// were FOR that room. A building spare is nobody's room's and stays.
+  ///
+  /// Called when a room is removed, so a spare cannot outlive the room it was
+  /// bought for and quietly go on being quoted under a name nothing resolves.
+  void dropSparesForRoom(String roomId) {
+    if (roomId.isEmpty) return;
+    spares.removeWhere((s) => s.roomId == roomId);
+  }
 
   // -------------------------------------------------------------------------
   //  THE TO-DO LIST
@@ -1607,12 +1801,14 @@ class BuildingProject {
       'partOrders': {
         for (final e in partOrders.entries) e.key: e.value.toJson(),
       },
+    if (spares.isNotEmpty) 'spares': [for (final s in spares) s.toJson()],
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
     'roomCounter': _roomCounter,
     'vendorCounter': _vendorCounter,
     if (_todoCounter > 0) 'todoCounter': _todoCounter,
     if (_trackCounter > 0) 'trackCounter': _trackCounter,
+    if (_spareCounter > 0) 'spareCounter': _spareCounter,
   };
 
   factory BuildingProject.fromJson(Map<String, dynamic> json) {
@@ -1661,6 +1857,12 @@ class BuildingProject {
       for (final t in (json['tracks'] as List? ?? []))
         if (t is Map && t['name']?.toString().trim().isNotEmpty == true)
           ProjectTrack.fromJson(Map<String, dynamic>.from(t)),
+    ];
+
+    final spares = [
+      for (final entry in (json['spares'] as List? ?? []))
+        if (entry is Map)
+          ProjectSpare.fromJson(Map<String, dynamic>.from(entry)),
     ];
     final trackPins = <String, String>{};
     final rawTracks = json['partTracks'];
@@ -1734,7 +1936,12 @@ class BuildingProject {
       tracks: tracks,
       partTracks: trackPins,
       partOrders: orders,
+      spares: spares,
       history: history,
+      spareCounter: [
+        (json['spareCounter'] as num?)?.toInt() ?? 0,
+        highest(spares.map((s) => s.id), 'spare'),
+      ].reduce((a, b) => a > b ? a : b),
       trackCounter: [
         (json['trackCounter'] as num?)?.toInt() ?? 0,
         highest(tracks.map((t) => t.id), 'track'),
@@ -1803,11 +2010,13 @@ class BuildingProject {
     tracks: List<ProjectTrack>.from(tracks),
     partTracks: Map<String, String>.from(partTracks),
     partOrders: Map<String, PartOrder>.from(partOrders),
+    spares: List<ProjectSpare>.from(spares),
     history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,
     vendorCounter: _vendorCounter,
     todoCounter: _todoCounter,
     trackCounter: _trackCounter,
+    spareCounter: _spareCounter,
   );
 }
 

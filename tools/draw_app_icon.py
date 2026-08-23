@@ -11,7 +11,17 @@ carry alpha, the maskable web icons inset to the safe zone.
 THE DRAWING. A construction helmet over a gear, arranged so the whole thing
 reads as a face: the helmet is the head, the gear is a beard around the jaw,
 and the gear's inner arc is the smile. Three flat colours and one charcoal
-outline weight, matching the icon this replaced.
+outline weight, matching the icon this replaced, plus one the outline does not
+use: the face it sits on and the helmet's slots are WHITE, so they stay white
+on a dark ground instead of showing it through. Nothing is knocked out to
+transparent any more except the ground around the artwork itself.
+
+The eyes and smile are drawn as two nodes joined by a link, so the face
+doubles as a signal running between two points — but in the same charcoal as
+every outline here, NOT in a colour of their own. That is deliberate and has
+been tried both ways: given its own colour the face is the first thing the eye
+lands on, and this is a helmet-and-gear mark with a face in it rather than a
+face wearing a helmet. Charcoal keeps it quiet.
 
 Everything is drawn at SUPERSAMPLE times the final size and reduced with
 LANCZOS. There is no vector rasteriser in this project's toolchain, and that
@@ -25,6 +35,7 @@ from PIL import Image, ImageDraw
 ORANGE = (246, 146, 30, 255)     # #F6921E, off the icon this replaced
 BLUE = (63, 169, 245, 255)       # #3FA9F5
 CHARCOAL = (64, 64, 65, 255)     # #404041
+WHITE = (255, 255, 255, 255)
 NOTHING = (0, 0, 0, 0)
 
 SIZE = 1024
@@ -103,8 +114,11 @@ def build():
         width=w,
     )
 
-    # Punch the face out of the middle. ImageDraw writes raw pixels rather than
-    # compositing, so filling with a transparent colour genuinely erases.
+    # The face, laid over the middle of the gear. White rather than erased
+    # through: the eyes and smile need a ground of their own to be read
+    # against, and knocked out they were read against whatever sat behind the
+    # icon — fine on a white page, but on a dark one the face became a hole and
+    # took the smile with it.
     #
     # The opening sits ABOVE the gear's own centre, which is what turns a ring
     # into a beard: the blue is left thick under the chin and thin at the
@@ -113,7 +127,7 @@ def build():
     face_cy = gear_cy - px(40)
     d.ellipse(
         [cx - r_hole, face_cy - r_hole, cx + r_hole, face_cy + r_hole],
-        fill=NOTHING,
+        fill=WHITE,
         outline=CHARCOAL,
         width=w,
     )
@@ -141,14 +155,17 @@ def build():
         width=w,
     )
 
-    # The two vents either side of the ridge, erased through to the ground.
+    # The two vents either side of the ridge. Filled white rather than erased
+    # through: knocked out they are the ground's colour, which is white on the
+    # web and in Explorer but the wallpaper on a desktop and black in a dark
+    # title bar, and the helmet loses its slots wherever that ground is dark.
     for sign in (-1, 1):
         x0 = cx + sign * px(112)
         x1 = cx + sign * px(170)
         d.rounded_rectangle(
             [min(x0, x1), px(150), max(x0, x1), px(430)],
             radius=px(29),
-            fill=NOTHING,
+            fill=WHITE,
             outline=CHARCOAL,
             width=w,
         )
@@ -162,39 +179,57 @@ def build():
         width=w,
     )
 
-    # The slot the original carries on the right of its brim.
+    # The slot the original carries on the right of its brim, white for the
+    # same reason as the vents.
     d.rounded_rectangle(
         [S - px(390), brim_top + px(18), S - px(60), brim_top + px(72)],
         radius=px(27),
-        fill=NOTHING,
+        fill=WHITE,
         outline=CHARCOAL,
         width=w,
     )
 
-    # ---- the face ----------------------------------------------------------
-    # Solid charcoal, no outline: at 32 px an outlined eye fills in and turns
-    # into a blob.
-    eye_y = face_cy + px(52)
-    eye_rx = px(31)
-    eye_ry = px(37)
-    for sign in (-1, 1):
-        ex = cx + sign * px(103)
-        d.ellipse(
-            [ex - eye_rx, eye_y - eye_ry, ex + eye_rx, eye_y + eye_ry],
-            fill=CHARCOAL,
-        )
+    # ---- the face: two nodes and the link between them ---------------------
+    # The eyes are the nodes and the smile is the link, and they are one
+    # figure rather than three: the link's ends stop AT the node centres, not
+    # short of them, so the pair reads as two points with a signal running
+    # between them, and only then as a face. Drawn apart — which is what the
+    # eyes and smile were before — it was a mouth that happened to sit under
+    # two dots, and the connection was not there to be read.
+    #
+    # The nodes are deliberately fatter than the link. Equal weights make a
+    # rounded-cap stroke, which is exactly what this was; the step in width is
+    # the whole reason it now reads as node-link-node.
+    #
+    # Solid, no outline: at 32 px an outlined node fills in and turns into a
+    # blob. Charcoal, the same ink as every edge in the drawing, so the face
+    # reads as part of the line work rather than as the mark's subject — see
+    # the note at the top before giving it a colour of its own again.
+    #
+    # The one cost: charcoal on charcoal means that below about 24 px the link
+    # closes up with the gear's inner outline just under it. The fat nodes are
+    # what keep the figure legible down there, so do not thin them to match
+    # the link.
+    #
+    # r_link is concentric with the gear's inner edge, so the beard still
+    # reads as closing around the face rather than sitting behind it.
+    r_link = px(125)
+    link_half = px(15)
+    node_r = px(38)
+    node_deg = (20, 160)
 
-    # The smile: concentric with the gear's inner edge, so the beard reads as
-    # closing around it rather than sitting behind it.
-    r_smile = px(128)
-    half = px(16)
     d.polygon(
-        crescent(cx, face_cy, r_smile + half, r_smile - half, 22, 158),
+        crescent(
+            cx, face_cy, r_link + link_half, r_link - link_half, *node_deg
+        ),
         fill=CHARCOAL,
     )
-    for deg in (22, 158):
-        ex, ey = polar(cx, face_cy, r_smile, deg)
-        d.ellipse([ex - half, ey - half, ex + half, ey + half], fill=CHARCOAL)
+    for deg in node_deg:
+        nx, ny = polar(cx, face_cy, r_link, deg)
+        d.ellipse(
+            [nx - node_r, ny - node_r, nx + node_r, ny + node_r],
+            fill=CHARCOAL,
+        )
 
     return img.resize((SIZE, SIZE), Image.LANCZOS)
 

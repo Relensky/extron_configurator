@@ -20,6 +20,7 @@ import 'project_notes_view.dart';
 import 'project_pricing.dart';
 import 'project_room_picker.dart';
 import 'project_schedule.dart';
+import 'project_spares_view.dart';
 import 'project_swap.dart';
 import 'project_todo_view.dart';
 import 'project_timeline_view.dart';
@@ -1784,11 +1785,17 @@ List<Widget> partsSlivers(
                   // different jobs: checking what was asked for, and deciding
                   // about what was not. The second is the one nothing else in
                   // the app would ever raise.
-                  if (estimate.sparedParts.isNotEmpty)
-                    filterChip(
-                      'Spared (${estimate.sparedParts.length})',
-                      kSparedFilter,
-                    ),
+                  //
+                  // ALWAYS OFFERED, even on a job with no spares on it. This
+                  // is the way in to the section where a spare is ADDED, and a
+                  // chip that appeared only once somebody had already added
+                  // one would be a door that opens from the inside.
+                  filterChip(
+                    estimate.sparedParts.isEmpty
+                        ? 'Spares'
+                        : 'Spares (${estimate.sparedParts.length})',
+                    kSparedFilter,
+                  ),
                   if (estimate.partsWithoutSpares.isNotEmpty)
                     filterChip(
                       'No spare (${estimate.partsWithoutSpares.length})',
@@ -1801,10 +1808,12 @@ List<Widget> partsSlivers(
         ),
       ),
     ),
-    // Everything about the spares, only while the spares are what is on
-    // screen. It carries the money the chip cannot — a count of spared PARTS
-    // says nothing about whether the spares are a rounding error or a fifth of
-    // the quote — and the rooms that asked for them.
+    // THE SPARES SECTION, only while the spares are what is on screen. It is
+    // where a spare is added, scoped to a room or to the building, and moved
+    // between the two — see project_spares_view.dart.
+    if (sparesOnly) ...spareSectionSlivers(context, estimate),
+    // And the room filter under it, for reading the parts list itself as one
+    // room's shelf list.
     if (sparesOnly)
       SliverToBoxAdapter(
         child: _SparesPanel(

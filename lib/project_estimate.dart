@@ -436,6 +436,38 @@ class MasterPartLine {
   /// single total cannot answer it.
   final Map<String, double> spareByRoom;
 
+  /// How many of [spareQty] are the BUILDING's rather than any room's.
+  ///
+  /// A spare on a shelf for the whole campus is a different decision from a
+  /// fourth display bought for the room with three drawn, and the two are
+  /// answerable to different people: one is the job's contingency and the
+  /// other is that room's. Counted apart so the job can say which it has.
+  final double buildingSpareQty;
+
+  /// The share of the installed units this part's spares would cover.
+  ///
+  /// 2 spare projectors against 40 installed is 0.05. THE FIGURE THE DECISION
+  /// IS ACTUALLY MADE ON: nobody can weigh "two spares" without knowing two
+  /// out of how many, and on a building job the answer is routinely a number
+  /// nobody has in their head.
+  ///
+  /// Null when nothing is installed - a spare for a part no room is having is
+  /// a coverage of nothing, and printing "infinity%" or "0%" would both be
+  /// saying something untrue.
+  double? get spareCoverage {
+    final installed = drawnQty;
+    if (installed <= 0) return null;
+    return spareQty / installed;
+  }
+
+  /// The same figure for the BUILDING's spares alone, which is what a shelf
+  /// spare is judged on. Null for the same reason.
+  double? get buildingSpareCoverage {
+    final installed = drawnQty;
+    if (installed <= 0) return null;
+    return buildingSpareQty / installed;
+  }
+
   /// Units the rooms will actually install — [qty] less [spareQty].
   double get drawnQty => qty - spareQty;
 
@@ -505,6 +537,7 @@ class MasterPartLine {
     this.lineKeysByRoom = const {},
     this.spareQty = 0,
     this.spareByRoom = const {},
+    this.buildingSpareQty = 0,
     this.catalogLeadDays,
   });
 
@@ -587,6 +620,35 @@ typedef SpareRoomTally = ({
   /// How many DIFFERENT parts they are. Two spares of one switcher and one
   /// each of two is the same three units and a different decision.
   int parts,
+});
+
+/// One part's spares held for the BUILDING rather than for any room.
+///
+/// The row the shelf list is read off, and the one figure on it that cannot be
+/// worked out by looking at the part alone is the coverage: two spare
+/// projectors is a number nobody can weigh without "two out of how many".
+typedef BuildingSpareLine = ({
+  /// The master line these are spares of, for its price, its vendor and its
+  /// key.
+  MasterPartLine line,
+
+  /// Units on the shelf for the building.
+  double qty,
+
+  /// What they come to at the part's own unit price.
+  double cost,
+
+  /// The share of the installed units these cover - 0.05 for two against
+  /// forty. Null when no room is having this part at all, which is a real
+  /// case: a spare kept for a model every room has since been swapped off.
+  double? coverage,
+
+  /// The rooms that HAVE this part, biggest first, so a shelf spare says what
+  /// it is a spare for.
+  List<String> roomIds,
+
+  /// How many of the part those rooms are installing between them.
+  double installed,
 });
 
 /// A building, priced.
@@ -719,6 +781,50 @@ class ProjectEstimate {
   /// of its line rather than a line of its own.
   double get sparesTotal =>
       master.fold(0.0, (sum, l) => sum + l.spareQty * l.unitPrice);
+
+  /// The building's own spares, dearest first.
+  ///
+  /// Separate from [sparesByRoom] because they answer to different people. A
+  /// fourth display bought for the room with three drawn is that room's
+  /// contingency and shows up in its total; a switcher on a shelf for the
+  /// campus is the JOB's, belongs to no room, and is the thing somebody has to
+  /// justify as a percentage rather than as a line.
+  List<BuildingSpareLine> get buildingSpares {
+    final out = <BuildingSpareLine>[
+      for (final l in master)
+        if (l.buildingSpareQty > 0)
+          (
+            line: l,
+            qty: l.buildingSpareQty,
+            cost: l.buildingSpareQty * l.unitPrice,
+            coverage: l.buildingSpareCoverage,
+            // Which rooms it is a spare FOR. The whole reason a shelf spare
+            // is legible at all: "two spare projectors" means nothing until
+            // the twelve rooms with projectors in them are named beside it.
+            roomIds: l.roomIdsByQty(),
+            installed: l.drawnQty,
+          ),
+    ];
+    out.sort((a, b) {
+      final byCost = b.cost.compareTo(a.cost);
+      return byCost != 0
+          ? byCost
+          : a.line.description.toLowerCase().compareTo(
+              b.line.description.toLowerCase(),
+            );
+    });
+    return out;
+  }
+
+  /// Units on the shelf for the building rather than for any room.
+  double get buildingSpareUnits =>
+      master.fold(0.0, (sum, l) => sum + l.buildingSpareQty);
+
+  /// What the building's spares come to.
+  double get buildingSparesTotal => master.fold(
+    0.0,
+    (sum, l) => sum + l.buildingSpareQty * l.unitPrice,
+  );
 
   /// The spares broken back down to the room that asked for them, dearest
   /// first.
@@ -955,6 +1061,52 @@ ProjectEstimate computeProjectEstimate({
     }
   }
 
+  // --- the spares the JOB buys ---------------------------------------------
+  //
+  //  Folded in AFTER the rooms, because a project spare is counted onto the
+  //  line the rooms built and priced at the price they established. See
+  //  [ProjectSpare] for why these do not live in a room file.
+  for (final spare in project.spares) {
+    // A spare pointed at a room that has left the job, or at one excluded from
+    // the total, is not on this quote. It stays on the project - the room may
+    // come back - but it is not bought by a rollup the room is not in.
+    if (!spare.forBuilding &&
+        !included.any((r) => r.ref.id == spare.roomId)) {
+      continue;
+    }
+
+    final existing = acc[spare.partKey];
+    if (existing != null) {
+      existing.addProjectSpare(spare, unitPrice: existing.lowUnitPrice);
+      continue;
+    }
+
+    // Nothing on the job has this part. Give it a line of its own and price it
+    // off the catalog, which is the only thing here that knows what it costs.
+    final fresh = _PartAccumulator.forSpare(
+      spare,
+      kind: MasterPartKind.equipment,
+    );
+    final template = spare.model.trim().isEmpty
+        ? null
+        : library.templateForModel(spare.model);
+    final priced = template?.priceForTier(tier);
+    if (priced != null && priced.price > 0) {
+      fresh.unpriced = false;
+      fresh.minUnitPrice = priced.price;
+      fresh.maxUnitPrice = priced.price;
+      fresh.catalogLeadDays = template?.leadTimeDays;
+      if (template != null && template.category.isNotEmpty) {
+        fresh.category = template.category;
+      }
+      if (template != null && template.manufacturer.isNotEmpty) {
+        fresh.manufacturer = template.manufacturer;
+      }
+    }
+    fresh.addProjectSpare(spare, unitPrice: fresh.lowUnitPrice);
+    acc[spare.partKey] = fresh;
+  }
+
   // --- tag and sort --------------------------------------------------------
   final master = <MasterPartLine>[];
   var unpricedParts = 0;
@@ -989,6 +1141,7 @@ ProjectEstimate computeProjectEstimate({
       lineKeysByRoom: a.lineKeysByRoom,
       spareQty: a.spareQty,
       spareByRoom: a.spareByRoom,
+      buildingSpareQty: a.buildingSpareQty,
       catalogLeadDays: a.catalogLeadDays,
     ));
   }
@@ -1092,6 +1245,7 @@ class _PartAccumulator {
   double qty = 0;
   double total = 0;
   double spareQty = 0;
+  double buildingSpareQty = 0;
 
   /// The catalog's lead time for this product, taken from the first room that
   /// could resolve it. One product, one figure — rooms cannot disagree about
@@ -1101,6 +1255,25 @@ class _PartAccumulator {
   double maxUnitPrice = 0;
   final Map<String, double> qtyByRoom = {};
   final Map<String, double> spareByRoom = {};
+
+  /// Takes one of the JOB's own spares onto this part - see [ProjectSpare].
+  ///
+  /// It is bought, so it counts into [qty] and into [total]; it is spare, so
+  /// it counts into [spareQty] as well and therefore stays out of [drawnQty].
+  /// Priced at this part's own unit price, which is the same rule the rooms'
+  /// spares are already priced by.
+  void addProjectSpare(ProjectSpare spare, {double unitPrice = 0}) {
+    if (spare.qty <= 0) return;
+    qty += spare.qty;
+    total += spare.qty * unitPrice;
+    spareQty += spare.qty;
+    if (spare.forBuilding) {
+      buildingSpareQty += spare.qty;
+    } else {
+      spareByRoom[spare.roomId] =
+          (spareByRoom[spare.roomId] ?? 0) + spare.qty;
+    }
+  }
   final Map<String, int> undrivenByRoom = {};
   final Map<String, Set<String>> lineKeysByRoom = {};
 
@@ -1118,6 +1291,23 @@ class _PartAccumulator {
         partNumber = first.partNumber,
         manufacturer = first.manufacturer,
         category = first.category;
+
+  /// For a spare of a part NO ROOM IS HAVING - a switcher held for the campus
+  /// store, a model every room was swapped off since somebody put it on the
+  /// shelf list.
+  ///
+  /// It gets a line of its own rather than being dropped, because it is money
+  /// on the order either way, and a spare that quietly disappeared off the
+  /// quote is the failure this whole feature exists to stop. It reads as
+  /// unpriced until a price is put on it, which is the truth: nothing on the
+  /// job priced it.
+  _PartAccumulator.forSpare(ProjectSpare spare, {required this.kind})
+      : key = spare.partKey,
+        description = spare.description,
+        model = spare.model,
+        partNumber = spare.partNumber,
+        manufacturer = spare.manufacturer,
+        category = '';
 
   void add(
     String roomId,
