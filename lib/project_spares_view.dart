@@ -587,6 +587,7 @@ Future<void> showAddSpareDialog(
   ProjectEstimate estimate,
 ) async {
   final provider = context.read<AppStateProvider>();
+  final messenger = ScaffoldMessenger.of(context);
   final parts = [
     for (final l in estimate.master)
       if (l.kind == MasterPartKind.equipment) l,
@@ -595,7 +596,7 @@ Future<void> showAddSpareDialog(
   );
 
   if (parts.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(
         content: Text(
           'There is nothing to spare yet. Add rooms with equipment on them '
@@ -606,126 +607,13 @@ Future<void> showAddSpareDialog(
     return;
   }
 
-  String partKey = parts.first.key;
-  String roomId = '';
-  final qty = TextEditingController(text: '1');
-  final note = TextEditingController();
-
-  final added = await showDialog<bool>(
+  final answer = await showDialog<_NewSpare>(
     context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setLocal) => AlertDialog(
-        key: const ValueKey('add_spare_dialog'),
-        title: const Text('Add a spare'),
-        content: SizedBox(
-          width: 460,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DropdownButtonFormField<String>(
-                key: const ValueKey('add_spare_part'),
-                initialValue: partKey,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Spare of',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final l in parts)
-                    DropdownMenuItem(
-                      value: l.key,
-                      child: Text(
-                        l.description,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-                onChanged: (v) => setLocal(() => partKey = v ?? partKey),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                key: const ValueKey('add_spare_scope'),
-                initialValue: roomId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'A spare for',
-                  helperText:
-                      'The building keeps it on a shelf for every room. A '
-                      'room keeps it against that room.',
-                  helperMaxLines: 3,
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('The building'),
-                  ),
-                  for (final room in estimate.rooms)
-                    DropdownMenuItem(
-                      value: room.ref.id,
-                      child: Text(room.name),
-                    ),
-                ],
-                onChanged: (v) => setLocal(() => roomId = v ?? ''),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 110,
-                    child: TextField(
-                      key: const ValueKey('add_spare_qty'),
-                      controller: qty,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'How many',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      key: const ValueKey('add_spare_note'),
-                      controller: note,
-                      decoration: const InputDecoration(
-                        labelText: 'Why',
-                        hintText: 'for the store',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('add_spare_confirm'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    ),
+    builder: (_) => _AddSpareDialog(parts: parts, estimate: estimate),
   );
+  if (answer == null) return;
 
-  // Read BEFORE they are disposed, which is the whole reason these two lines
-  // are not the last thing in the function.
-  final typedQty = double.tryParse(qty.text.trim()) ?? 1;
-  final typedNote = note.text;
-  qty.dispose();
-  note.dispose();
-  if (added != true) return;
-
-  final line = parts.firstWhere((l) => l.key == partKey);
+  final line = parts.firstWhere((l) => l.key == answer.partKey);
   provider.addProjectSpare(
     partKey: line.key,
     // The part as it reads TODAY. Stored on the spare so the row still says
@@ -734,8 +622,158 @@ Future<void> showAddSpareDialog(
     model: line.model,
     manufacturer: line.manufacturer,
     partNumber: line.partNumber,
-    qty: typedQty,
-    roomId: roomId,
-    note: typedNote,
+    qty: answer.qty,
+    roomId: answer.roomId,
+    note: answer.note,
+  );
+}
+
+/// What the add dialog came back with.
+typedef _NewSpare = ({
+  String partKey,
+  String roomId,
+  double qty,
+  String note,
+});
+
+/// The dialog owns its own text controllers.
+///
+/// Stateful for exactly that reason: a controller made by the caller has to be
+/// disposed by the caller, and the only moment the caller can do it is while
+/// the dialog is still animating away with the fields still on screen - which
+/// throws. Owned here, they go when the dialog's State does.
+class _AddSpareDialog extends StatefulWidget {
+  final List<MasterPartLine> parts;
+  final ProjectEstimate estimate;
+
+  const _AddSpareDialog({required this.parts, required this.estimate});
+
+  @override
+  State<_AddSpareDialog> createState() => _AddSpareDialogState();
+}
+
+class _AddSpareDialogState extends State<_AddSpareDialog> {
+  late String _partKey = widget.parts.first.key;
+
+  /// '' is the building, and is the default: a spare added from the JOB is
+  /// more often the shelf unit for the campus than a fourth display for one
+  /// room, which is a decision that gets made on that room's own page.
+  String _roomId = '';
+
+  final TextEditingController _qty = TextEditingController(text: '1');
+  final TextEditingController _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _qty.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    key: const ValueKey('add_spare_dialog'),
+    title: const Text('Add a spare'),
+    content: SizedBox(
+      width: 460,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DropdownButtonFormField<String>(
+            key: const ValueKey('add_spare_part'),
+            initialValue: _partKey,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Spare of',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final l in widget.parts)
+                DropdownMenuItem(
+                  value: l.key,
+                  child: Text(
+                    l.description,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (v) => setState(() => _partKey = v ?? _partKey),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            key: const ValueKey('add_spare_scope'),
+            initialValue: _roomId,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'A spare for',
+              helperText:
+                  'The building keeps it on a shelf for every room. A room '
+                  'keeps it against that room.',
+              helperMaxLines: 3,
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem(
+                value: '',
+                child: Text('The building'),
+              ),
+              for (final room in widget.estimate.rooms)
+                DropdownMenuItem(
+                  value: room.ref.id,
+                  child: Text(room.name),
+                ),
+            ],
+            onChanged: (v) => setState(() => _roomId = v ?? ''),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 110,
+                child: TextField(
+                  key: const ValueKey('add_spare_qty'),
+                  controller: _qty,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'How many',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('add_spare_note'),
+                  controller: _note,
+                  decoration: const InputDecoration(
+                    labelText: 'Why',
+                    hintText: 'for the store',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const ValueKey('add_spare_confirm'),
+        onPressed: () => Navigator.of(context).pop((
+          partKey: _partKey,
+          roomId: _roomId,
+          qty: double.tryParse(_qty.text.trim()) ?? 1,
+          note: _note.text,
+        )),
+        child: const Text('Add'),
+      ),
+    ],
   );
 }

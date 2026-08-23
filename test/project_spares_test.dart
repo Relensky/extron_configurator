@@ -306,6 +306,27 @@ void main() {
       expect(byRoom.rows.first.last, 'Display ×2');
     });
 
+    test('the building s own shelf list is a table of its own', () {
+      final estimate = estimateOf(
+        [
+          line(
+            description: 'Display',
+            qty: 42,
+            spareQty: 2,
+            unitPrice: 1500,
+          ),
+        ],
+        rooms: [room('room1', 'BSS', '103')],
+      );
+
+      final shelf = projectSparesSections(estimate)
+          .firstWhere((s) => s.title.startsWith('Spares for the building'));
+      // Nothing is on the building here - every spare on this fixture is a
+      // room's - and a table that said nothing would read as a question
+      // nobody was asked.
+      expect(shelf.rows.single.first, contains('Nothing is spared'));
+    });
+
     test('a job with nothing spared says so on the room table too', () {
       final byRoom = projectSparesSections(estimateOf([line(description: 'X')]))
           .firstWhere((s) => s.title.startsWith('Spares by room'));

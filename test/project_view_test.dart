@@ -190,7 +190,7 @@ void main() {
       await pump(tester, p);
       await tester.tap(find.text('Core Components'));
       await tester.pumpAndSettle();
-      await tester.tap(find.textContaining('Spared ('));
+      await tester.tap(find.textContaining('Spares'));
       await tester.pumpAndSettle();
     }
 
@@ -225,9 +225,20 @@ void main() {
       // and prices ITS spares and the panel is titled for it.
       expect(find.text('Spares for Bessey 101'), findsOneWidget);
       expect(find.textContaining('2 units across 1 part'), findsOneWidget);
-      // The other room's panel-only line is gone from the list.
-      expect(find.textContaining('Spare panel'), findsNothing);
       expect(find.text('2 spare'), findsOneWidget);
+
+      // The other room's part is gone from the LIST. Not from the page: the
+      // section above it is the whole job's shelf list and stays whole, and
+      // the chip narrows the parts under it.
+      final panel = p
+          .priceProject()
+          .master
+          .firstWhere((l) => l.description == 'Spare panel');
+      expect(
+        find.byKey(ValueKey('part_price_${panel.key}')),
+        findsNothing,
+        reason: 'the panel is not one of Bessey 101 spares',
+      );
     });
 
     testWidgets('leaving the spares filter drops the room narrowing',
@@ -248,11 +259,22 @@ void main() {
       expect(find.textContaining('Spare panel'), findsOneWidget);
     });
 
-    testWidgets('a job with no spares offers no chip at all', (tester) async {
+    testWidgets('a job with no spares still offers the way in', (tester) async {
+      // The chip is the door to the section where a spare is ADDED, so one
+      // that appeared only once somebody had already added a spare would be a
+      // door that opens from the inside.
       await pump(tester, withProject());
       await tester.tap(find.text('Core Components'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Spared ('), findsNothing);
+
+      expect(find.text('Spares'), findsOneWidget);
+      await tester.tap(find.text('Spares'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('project_spares_section')),
+          findsOneWidget);
+      expect(find.textContaining('Nothing on this job is spared yet'),
+          findsOneWidget);
     });
   });
 

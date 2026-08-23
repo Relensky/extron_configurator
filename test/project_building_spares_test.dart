@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 

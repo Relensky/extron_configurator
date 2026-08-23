@@ -790,6 +790,55 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
           ],
   ));
 
+  // THE BUILDING'S OWN, which no room's table can carry: a switcher on a shelf
+  // for the campus belongs to no room, and the figure it is approved on is not
+  // its price but its COVERAGE. Two spare projectors is a number nobody can
+  // weigh until they know two out of how many.
+  final shelf = estimate.buildingSpares;
+  sections.add((
+    title: 'Spares for the building (${shelf.length})',
+    header: const [
+      'Part',
+      'Manufacturer',
+      'Model',
+      'On the shelf',
+      'Installed on the job',
+      'Coverage',
+      'Cost',
+      'A spare for',
+    ],
+    rows: shelf.isEmpty
+        ? [
+            [
+              'Nothing is spared for the building as a whole.',
+              '', '', '', '', '', '', '',
+            ],
+          ]
+        : [
+            for (final row in shelf)
+              [
+                row.line.description,
+                row.line.manufacturer,
+                row.line.model,
+                row.qty,
+                row.installed,
+                // A part no room is having covers nothing measurable, and
+                // both '0%' and 'infinity%' would be saying something untrue.
+                row.coverage == null
+                    ? 'nothing installed'
+                    : '${(row.coverage! * 100).toStringAsFixed(
+                        row.coverage! >= 0.1 ? 0 : 1,
+                      )}%',
+                cash(row.cost),
+                [
+                  for (final id in row.roomIds)
+                    '${roomNames[id] ?? id} '
+                        '×${trimNumber(row.line.qtyByRoom[id] ?? 0)}',
+                ].join(', '),
+              ],
+          ],
+  ));
+
   // WHOSE SPARES THEY ARE. The two tables above are per PART, which is what a
   // vendor is quoting; this one is per ROOM, which is what gets approved or
   // trimmed. A spares bill nobody can break back down to a room is one that
@@ -831,7 +880,11 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
       ['Products with a spare', spared.length],
       ['Equipment with none', without.length],
       ['Spare units bought', estimate.spareUnits],
+      // Split out because the two are approved by different people: a room's
+      // spare is that room's contingency, and the building's is the job's.
+      ['Of those, for the building', estimate.buildingSpareUnits],
       ['Spares cost', cash(estimate.sparesTotal)],
+      ['Of that, for the building', cash(estimate.buildingSparesTotal)],
     ],
   ));
 
