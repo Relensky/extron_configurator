@@ -14,6 +14,8 @@ import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
+import 'project_history_view.dart';
+import 'project_notes_view.dart';
 import 'project_pricing.dart';
 import 'project_room_picker.dart';
 import 'project_schedule.dart';
@@ -55,7 +57,9 @@ enum _ProjectPane {
   parts('Core Components', Icons.inventory_2),
   timeline('Timeline', Icons.event_available),
   vendors('Vendors', Icons.local_shipping),
-  todo('To do', Icons.checklist);
+  todo('To do', Icons.checklist),
+  notes('Notes', Icons.sticky_note_2_outlined),
+  history('History', Icons.history);
 
   final String label;
   final IconData icon;
@@ -130,6 +134,9 @@ class _ProjectViewState extends State<ProjectView> {
 
   Future<void> _openProject(AppStateProvider provider) =>
       openProjectFromFile(context, provider);
+
+  Future<void> _closeProject(AppStateProvider provider) =>
+      closeProjectFile(context, provider);
 
   /// Returns true when the project ended up on disk.
   Future<bool> _saveProject(
@@ -293,6 +300,8 @@ class _ProjectViewState extends State<ProjectView> {
             _ProjectPane.timeline => timelineSlivers(context, estimate),
             _ProjectPane.vendors => vendorsSlivers(context, estimate),
             _ProjectPane.todo => todoSlivers(context, estimate),
+            _ProjectPane.notes => notesSlivers(context, estimate),
+            _ProjectPane.history => historySlivers(context, estimate),
           },
         ],
       ),
@@ -310,6 +319,9 @@ class _ProjectViewState extends State<ProjectView> {
         estimate.unpricedParts +
         (estimate.mixedCurrency ? 1 : 0);
     final openTodos = provider.project.openTodos.length;
+    final hasProject = provider.project.rooms.isNotEmpty ||
+        provider.currentProjectPath.isNotEmpty ||
+        provider.project.name.trim().isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -465,10 +477,15 @@ class _ProjectViewState extends State<ProjectView> {
                       // The open count rides on the tab itself. A to-do list
                       // that has to be opened to find out whether it has
                       // anything on it is one nobody opens.
+                      // Keyed: a pane's LABEL is not a unique thing to find
+                      // by any more — 'Notes' is also a column on the room
+                      // list — and a test that taps the wrong one of three
+                      // matches is a test that fails for the wrong reason.
                       label: Text(
                         pane == _ProjectPane.todo && openTodos > 0
                             ? '${pane.label} ($openTodos)'
                             : pane.label,
+                        key: ValueKey('project_pane_${pane.name}'),
                       ),
                     ),
                 ],
@@ -494,6 +511,16 @@ class _ProjectViewState extends State<ProjectView> {
                     onPressed: () => _saveProject(provider),
                     icon: const Icon(Icons.save_outlined, size: 18),
                     label: const Text('Save'),
+                  ),
+                  // Beside New and Open, because it is the third thing you do
+                  // to a FILE. Disabled when there is no job to put away —
+                  // pressing Close on nothing should not clear the starter
+                  // vendors out from under somebody who has just pressed New.
+                  TextButton.icon(
+                    key: const ValueKey('project_close'),
+                    onPressed: hasProject ? () => _closeProject(provider) : null,
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('Close'),
                   ),
                   TextButton.icon(
                     onPressed: () {
@@ -1109,6 +1136,45 @@ class _RoomRowState extends State<_RoomRow> {
               ),
             ] else
               const Expanded(flex: 3, child: SizedBox()),
+            // WHAT IS TRUE ABOUT THIS ROOM that no other column asks — the
+            // asbestos above the grid, the wall it shares with the studio.
+            //
+            // Editable here rather than read-only, because the moment somebody
+            // wants to write one is while they are looking at the room list;
+            // sending them to the Notes pane to type it is how it ends up in
+            // an email instead. The same field, either way — the Notes pane
+            // and this column write to the same place.
+            //
+            // One line, because a row is a row. The full text is in the
+            // tooltip and on the Notes pane, which is where a long one belongs.
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Notes',
+                    style: theme.textTheme.labelSmall?.copyWith(color: quiet),
+                  ),
+                  Tooltip(
+                    message: room.ref.notes.trim().isEmpty
+                        ? 'Anything true of this room that the other columns '
+                              'do not say. Goes out beside it on the workbook.'
+                        : room.ref.notes,
+                    child: LiveTextField(
+                      key: ValueKey('room_row_notes_${room.ref.id}'),
+                      fieldId: 'room_row_notes_${room.ref.id}',
+                      initial: room.ref.notes,
+                      hint: 'e.g. asbestos above the grid',
+                      onChanged: (v) =>
+                          provider.updateProjectRoom(room.ref.id, notes: v),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
             if (e != null && _roomFlags(room).isNotEmpty)
               Tooltip(
                 message: _roomFlags(room).join('\n'),
@@ -1774,7 +1840,11 @@ class _PartRow extends StatelessWidget {
                           'Clear the pin — let the vendor rules decide '
                           'again',
                       icon: const Icon(Icons.push_pin, size: 18),
-                      onPressed: () => provider.pinProjectPart(line.key, ''),
+                      onPressed: () => provider.pinProjectPart(
+                        line.key,
+                        '',
+                        partName: line.description,
+                      ),
                     )
                   : Tooltip(
                       message: kVendorTagSourceLabels[line.tagSource] ?? '',
@@ -1838,7 +1908,15 @@ class _ScheduleCells extends StatelessWidget {
     // missing rather than as a dash — a blank tells somebody nothing about
     // which of the two facts to go and find.
     final String orderText;
-    if (orderBy != null) {
+    // BOUGHT BEATS DUE. Once a part is on order the order-by date is history,
+    // and showing it would read as something still to do.
+    if (part.status == OrderStatus.received) {
+      orderText = 'received';
+    } else if (part.isBought) {
+      orderText = part.order?.expectedOn == null
+          ? 'on order'
+          : 'due ${formatScheduleDate(part.order!.expectedOn!)}';
+    } else if (orderBy != null) {
       orderText = formatScheduleDate(orderBy);
     } else if (part.status == OrderStatus.noDeadline) {
       orderText = 'no deadline';
@@ -1857,8 +1935,14 @@ class _ScheduleCells extends StatelessWidget {
             message: part.leadDays == null
                 ? 'Nobody has recorded how long this takes to arrive.\n'
                     'Click to set it.'
+                : part.leadFromCatalog
+                // Worth distinguishing: a date worked back from what the
+                // catalog remembers is a different kind of promise from one
+                // worked back from what a vendor quoted last week.
+                ? 'Takes ${formatLeadTime(part.leadDays)} to arrive, from the '
+                      'catalog.\nClick to set a figure for this job.'
                 : 'Takes ${formatLeadTime(part.leadDays)} to arrive.\n'
-                    'Click to change it.',
+                      'Click to change it.',
             child: InkWell(
               key: ValueKey('part_lead_${line.key}'),
               borderRadius: BorderRadius.circular(4),
@@ -1934,7 +2018,20 @@ class _ScheduleCells extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (orderBy != null)
+                    if (part.isBought)
+                      Text(
+                        part.status == OrderStatus.received
+                            ? 'arrived'
+                            : part.order?.poNumber.trim().isNotEmpty == true
+                            ? 'PO ${part.order!.poNumber.trim()}'
+                            : 'ordered',
+                        textAlign: TextAlign.right,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: color,
+                        ),
+                      )
+                    else if (orderBy != null)
                       Text(
                         formatDayGap(part.daysUntilOrder ?? 0),
                         textAlign: TextAlign.right,
@@ -2399,6 +2496,7 @@ class _VendorPicker extends StatelessWidget {
           provider.pinProjectPart(
             line.key,
             chosen == _ruleOnly(line) ? '' : chosen,
+            partName: line.description,
           );
         },
       ),

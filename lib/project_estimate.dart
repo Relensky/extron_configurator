@@ -427,6 +427,19 @@ class MasterPartLine {
   /// True when somebody has asked for a spare of this part.
   bool get hasSpares => spareQty > 0;
 
+  /// How long the CATALOG says this product takes to arrive, in calendar days,
+  /// or null when the catalog has never been told.
+  ///
+  /// Carried on the line rather than looked up when the schedule is worked
+  /// out, for the same reason [partNumber] and [manufacturer] are: the line is
+  /// what the estimate was built from, and a catalog edit should not silently
+  /// change dates on a schedule that was already produced.
+  ///
+  /// The JOB's own figure beats this — see project_schedule.dart. This is the
+  /// starting point, so a product whose lead time is recorded once is not
+  /// retyped on every project that specifies it.
+  final int? catalogLeadDays;
+
   /// The vendor this part is tagged to, and how it got there.
   final ProjectVendor? vendor;
   final VendorTagSource tagSource;
@@ -477,6 +490,7 @@ class MasterPartLine {
     this.lineKeysByRoom = const {},
     this.spareQty = 0,
     this.spareByRoom = const {},
+    this.catalogLeadDays,
   });
 
   /// Units across the job with no control module behind them.
@@ -793,6 +807,12 @@ ProjectEstimate computeProjectEstimate({
           undriven: kind == MasterPartKind.equipment
               ? (undriven[room.ref.id]?[line.model.trim().toLowerCase()] ?? 0)
               : 0,
+          // What the CATALOG says this product takes to arrive, resolved once
+          // here where the library is to hand — see
+          // [MasterPartLine.catalogLeadDays].
+          catalogLeadDays: line.model.trim().isEmpty
+              ? null
+              : library.templateForModel(line.model)?.leadTimeDays,
         );
   }
 
@@ -846,6 +866,7 @@ ProjectEstimate computeProjectEstimate({
       lineKeysByRoom: a.lineKeysByRoom,
       spareQty: a.spareQty,
       spareByRoom: a.spareByRoom,
+      catalogLeadDays: a.catalogLeadDays,
     ));
   }
 
@@ -948,6 +969,11 @@ class _PartAccumulator {
   double qty = 0;
   double total = 0;
   double spareQty = 0;
+
+  /// The catalog's lead time for this product, taken from the first room that
+  /// could resolve it. One product, one figure — rooms cannot disagree about
+  /// how long a thing takes to arrive.
+  int? catalogLeadDays;
   double minUnitPrice = double.infinity;
   double maxUnitPrice = 0;
   final Map<String, double> qtyByRoom = {};
@@ -970,7 +996,16 @@ class _PartAccumulator {
         manufacturer = first.manufacturer,
         category = first.category;
 
-  void add(String roomId, CostLine line, {int undriven = 0}) {
+  void add(
+    String roomId,
+    CostLine line, {
+    int undriven = 0,
+    int? catalogLeadDays,
+  }) {
+    // First room that could resolve it wins: one product has one lead time,
+    // and rooms cannot disagree about how long a thing takes to arrive.
+    this.catalogLeadDays ??= catalogLeadDays;
+
     qty += line.qty;
     total += line.total;
     qtyByRoom[roomId] = (qtyByRoom[roomId] ?? 0) + line.qty;

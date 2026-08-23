@@ -265,6 +265,26 @@ class AvDeviceTemplate {
   /// Empty when nobody has recorded one.
   final String url;
 
+  /// How long this product takes to arrive, in calendar days. Null when nobody
+  /// has recorded one.
+  ///
+  /// A FACT ABOUT THE PRODUCT, which is why it belongs here beside the price
+  /// and the part number rather than only on a job. The same projector is six
+  /// weeks out on every job that specifies it, and a lead time that lives only
+  /// on the project is one that gets retyped per project — which in practice
+  /// means it stops getting typed at all.
+  ///
+  /// A JOB CAN STILL DISAGREE. What a vendor quotes this quarter beats what
+  /// the catalog remembers from last year, so a figure recorded against the
+  /// part on the project wins over this one; see [BuildingProject.partLeadTimes]
+  /// and the resolution order in project_schedule.dart.
+  ///
+  /// NULL AND ZERO ARE DIFFERENT ANSWERS, the same way they are on a job: null
+  /// is "nobody has asked", zero is "it is on the shelf". Folding them together
+  /// would make every product nobody has checked look immediately available,
+  /// which is the one direction this must not be wrong in.
+  final int? leadTimeDays;
+
   final String notes;
 
   final List<AvPort> ports;
@@ -292,6 +312,7 @@ class AvDeviceTemplate {
     this.cableSignal,
     this.cableLengthFt = 0,
     this.url = '',
+    this.leadTimeDays,
     this.notes = '',
     required this.ports,
     this.custom = false,
@@ -361,6 +382,10 @@ class AvDeviceTemplate {
     double? cableLengthFt,
     bool clearCableSignal = false,
     String? url,
+    int? leadTimeDays,
+    // Null means "leave it alone" on every other field here, so taking a lead
+    // time back OFF an entry needs its own flag.
+    bool clearLeadTime = false,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -382,6 +407,7 @@ class AvDeviceTemplate {
     cableSignal: clearCableSignal ? null : (cableSignal ?? this.cableSignal),
     cableLengthFt: cableLengthFt ?? this.cableLengthFt,
     url: url ?? this.url,
+    leadTimeDays: clearLeadTime ? null : (leadTimeDays ?? this.leadTimeDays),
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -405,9 +431,22 @@ class AvDeviceTemplate {
     if (cableSignal != null) 'cableSignal': cableSignal!.name,
     if (cableLengthFt > 0) 'cableLengthFt': cableLengthFt,
     if (url.isNotEmpty) 'url': url,
+    if (leadTimeDays != null) 'leadTimeDays': leadTimeDays,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
+
+  /// A lead time off a catalog file, or null when there is not a usable one.
+  ///
+  /// Zero is kept — "in stock" is an answer somebody checked. A negative
+  /// figure, or text somebody typed where a number belongs ("6-8 weeks"), is
+  /// dropped, because the alternative is a product that silently reads as
+  /// available tomorrow.
+  static int? _leadTimeFromJson(Object? raw) {
+    if (raw == null) return null;
+    final days = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
+    return (days == null || days < 0) ? null : days;
+  }
 
   factory AvDeviceTemplate.fromJson(
     Map<String, dynamic> json, {
@@ -452,6 +491,10 @@ class AvDeviceTemplate {
     // 'link' is read as an alias for the same reason 'watts' and 'cost' are:
     // it is what a hand-written entry tends to say.
     url: (json['url'] ?? json['link'])?.toString() ?? '',
+    // Anything that is not a whole number of days reads as "nobody has asked"
+    // rather than as zero: a catalog hand-edited to say "6-8 weeks" must not
+    // turn the product into one that is on the shelf.
+    leadTimeDays: _leadTimeFromJson(json['leadTimeDays']),
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))

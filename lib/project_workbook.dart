@@ -48,6 +48,14 @@ const String kProjectSparesSheet = 'Spares';
 /// The tab purchasing works down: what to order, in the order to order it.
 const String kProjectTimelineSheet = 'Order Timeline';
 
+/// Who changed what, and when. Added only when there is something on it.
+///
+/// ON THE WORKBOOK, NOT ON A QUOTE REQUEST. The workbook is the internal
+/// document — it already carries labor rates and margins, which is exactly why
+/// the vendor RFQ is a separate file — so an audit trail belongs on it. The
+/// RFQ is built from the vendor package alone and cannot pick this up.
+const String kProjectHistorySheet = 'History';
+
 // ---------------------------------------------------------------------------
 //  SECTIONS
 // ---------------------------------------------------------------------------
@@ -460,6 +468,14 @@ List<ReportSection> projectTimelineSections(
       ['Past their order date', schedule.lateCount],
       ['To order within $kOrderDueSoonDays days', schedule.dueSoonCount],
       ['No lead time recorded', schedule.unknownCount],
+      ['On order', schedule.onOrderCount],
+      if (schedule.arrivingLateCount > 0)
+        [
+          'On order but promised LATE',
+          '${schedule.arrivingLateCount} — bought, and the room will not have '
+              'them in time',
+        ],
+      ['Arrived', schedule.receivedCount],
       ['Worked out on', formatScheduleDate(schedule.asOf)],
     ],
   ));
@@ -500,7 +516,15 @@ List<ReportSection> projectTimelineSections(
     ));
   }
 
-  final dated = [for (final l in schedule.lines) if (l.orderBy != null) l];
+  // STILL TO BUY. A part already on order has no trip to purchasing left to
+  // schedule, and leaving it here would put a date in front of somebody for an
+  // order that went out last week. What HAS been bought gets its own table
+  // below, because "is it bought" is the first thing anybody asks of this
+  // sheet and a document that only lists what is outstanding cannot answer it.
+  final dated = [
+    for (final l in schedule.lines)
+      if (l.orderBy != null && !l.isBought) l,
+  ];
   if (dated.isNotEmpty) {
     sections.add((
       title: 'Order by',
@@ -535,9 +559,56 @@ List<ReportSection> projectTimelineSections(
     ));
   }
 
+  // What has been bought, and whether it is going to make it.
+  final bought = [for (final l in schedule.lines) if (l.isBought) l];
+  if (bought.isNotEmpty) {
+    sections.add((
+      title: 'Bought (${bought.length})',
+      header: const [
+        'Part',
+        'Qty',
+        'Vendor',
+        'PO',
+        'Ordered',
+        'Vendor promised',
+        'On site by',
+        'Arrived',
+        'Status',
+      ],
+      rows: [
+        for (final l in bought)
+          [
+            l.line.description,
+            l.line.qty,
+            l.line.vendor?.name ?? 'UNTAGGED',
+            l.order?.poNumber ?? '',
+            l.order?.orderedOn == null
+                ? ''
+                : formatScheduleDate(l.order!.orderedOn!),
+            l.order?.expectedOn == null
+                ? ''
+                : formatScheduleDate(l.order!.expectedOn!),
+            l.needBy == null ? '' : formatScheduleDate(l.needBy!),
+            l.order?.receivedOn == null
+                ? ''
+                : formatScheduleDate(l.order!.receivedOn!),
+            // Spelled out rather than left to be worked out from two dates:
+            // an order placed on time against a promise that lands after the
+            // room needs it is the thing this table exists to surface.
+            l.status == OrderStatus.arrivingLate
+                ? 'ON ORDER — PROMISED AFTER IT IS NEEDED'
+                : kOrderStatusLabels[l.status] ?? '',
+          ],
+      ],
+    ));
+  }
+
   // Listed rather than left out. A timeline that silently omits the parts
   // nobody has a lead time for reads as complete while being the opposite.
-  final unscheduled = [for (final l in schedule.lines) if (l.orderBy == null) l];
+  final unscheduled = [
+    for (final l in schedule.lines)
+      if (l.orderBy == null && !l.isBought) l,
+  ];
   if (unscheduled.isNotEmpty) {
     sections.add((
       title: 'Cannot be scheduled yet (${unscheduled.length})',
@@ -557,6 +628,63 @@ List<ReportSection> projectTimelineSections(
   }
 
   return sections;
+}
+
+/// Every recorded change on this job, newest first.
+///
+/// The document answer to the question the History pane answers on screen:
+/// "this says four weeks, it said eight in March — who changed it, and when".
+/// A workbook filed at the end of a job is what somebody reads a year later,
+/// and a file holding only the current values cannot settle that.
+///
+/// One row per change, with the item NAMED as it read at the time. A part that
+/// has since been renamed or dropped off the job still reads correctly here,
+/// which is the whole point of storing the name with the entry rather than
+/// resolving it when the sheet is written.
+List<ReportSection> projectHistorySections(ProjectEstimate estimate) {
+  final entries = estimate.project.recentHistory;
+  if (entries.isEmpty) return const [];
+
+  return [
+    (
+      title: 'Changes (${entries.length}, newest first)',
+      header: const ['Date', 'Time', 'Item', 'Kind', 'What', 'Change', 'By'],
+      rows: [
+        for (final e in entries)
+          [
+            formatIsoDate(e.at),
+            // 24 hour, so the sheet sorts and reads the same on both sides of
+            // the Atlantic.
+            '${e.at.hour.toString().padLeft(2, '0')}:'
+                '${e.at.minute.toString().padLeft(2, '0')}',
+            e.itemName,
+            e.itemKind,
+            e.field,
+            e.summary,
+            // A blank login is left blank rather than dressed up as a name.
+            e.user,
+          ],
+      ],
+    ),
+    (
+      title: 'Who has worked on this job',
+      header: const ['Login', 'Changes'],
+      rows: [
+        for (final user in estimate.project.historyUsers)
+          [
+            user,
+            entries
+                .where((e) => e.user.toLowerCase() == user.toLowerCase())
+                .length,
+          ],
+        if (entries.any((e) => e.user.isEmpty))
+          [
+            '(not recorded)',
+            entries.where((e) => e.user.isEmpty).length,
+          ],
+      ],
+    ),
+  ];
 }
 
 /// The job's spares: what is spared, how many, and what is NOT.
@@ -921,6 +1049,19 @@ Uint8List buildProjectWorkbookBytes({
       sheetName: tab(kProjectControlSheet),
       title: '$title — devices without a control module',
       sections: gaps,
+      generated: stamp,
+    ));
+  }
+
+  // After the job's own sheets and before the vendor tabs: it is a record
+  // about the JOB, and it should not push the tabs somebody actually sends
+  // anywhere further along than they already are.
+  final changes = projectHistorySections(estimate);
+  if (changes.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectHistorySheet),
+      title: '$title — who changed what',
+      sections: changes,
       generated: stamp,
     ));
   }

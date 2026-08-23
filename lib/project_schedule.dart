@@ -57,6 +57,19 @@ enum OrderStatus {
   /// Nothing has said when this is needed: no project deadline and no date on
   /// the part itself.
   noDeadline,
+
+  /// ON ORDER, and the vendor's promised date lands AFTER the day it is
+  /// needed. Ordered in time or not, this one is still going to be late — and
+  /// it is the problem nobody would otherwise see until the week it mattered,
+  /// which is why it ranks with the things that have already gone wrong.
+  arrivingLate,
+
+  /// On order. Not late, not due, not a question — bought, and the only thing
+  /// left is for it to turn up.
+  ordered,
+
+  /// It has arrived. Finished with.
+  received,
 }
 
 const Map<OrderStatus, String> kOrderStatusLabels = {
@@ -65,6 +78,9 @@ const Map<OrderStatus, String> kOrderStatusLabels = {
   OrderStatus.onTrack: 'On track',
   OrderStatus.unknown: 'No lead time',
   OrderStatus.noDeadline: 'No date set',
+  OrderStatus.arrivingLate: 'Ordered — arriving late',
+  OrderStatus.ordered: 'On order',
+  OrderStatus.received: 'Received',
 };
 
 /// How close an order-by date has to be before the list stops calling it fine.
@@ -83,6 +99,15 @@ class PartScheduleLine {
   /// one. Null and zero are different answers — see the header.
   final int? leadDays;
 
+  /// True when [leadDays] came from the CATALOG rather than from a figure
+  /// recorded against this part on this job.
+  ///
+  /// Worth saying on screen: a date worked back from what the catalog
+  /// remembers is a different kind of promise from one worked back from what a
+  /// vendor quoted last week, and somebody checking a schedule should be able
+  /// to tell which they are looking at.
+  final bool leadFromCatalog;
+
   /// The date this part has to be on site by: its own date when it has one,
   /// otherwise the project's deadline, otherwise null.
   final DateTime? needBy;
@@ -94,6 +119,15 @@ class PartScheduleLine {
   /// The phase this part is delivered in, or null when it goes with the job as
   /// a whole. See [ProjectTrack].
   final ProjectTrack? track;
+
+  /// What has been bought against this part, or null when nothing has.
+  final PartOrder? order;
+
+  /// True when this part is bought and needs no more scheduling.
+  bool get isBought =>
+      status == OrderStatus.ordered ||
+      status == OrderStatus.arrivingLate ||
+      status == OrderStatus.received;
 
   /// What the timeline calls this part's phase.
   String get trackName => track?.name ?? 'The job';
@@ -117,11 +151,19 @@ class PartScheduleLine {
     required this.status,
     required this.daysUntilOrder,
     this.track,
+    this.leadFromCatalog = false,
+    this.order,
   });
 
   /// True when this row is something to act on rather than something to read.
+  ///
+  /// [OrderStatus.arrivingLate] counts: it is bought, so nothing on the
+  /// ordering side can be done about it, but somebody has to know the room is
+  /// not going to have it in time.
   bool get needsAttention =>
-      status == OrderStatus.late || status == OrderStatus.dueSoon;
+      status == OrderStatus.late ||
+      status == OrderStatus.dueSoon ||
+      status == OrderStatus.arrivingLate;
 }
 
 /// The job's core components, in the order they have to be bought.
@@ -157,9 +199,34 @@ class ProjectSchedule {
   /// Parts nobody has recorded a lead time for.
   List<PartScheduleLine> get unknownLines => _withStatus(OrderStatus.unknown);
 
+  /// Parts bought and not yet arrived.
+  List<PartScheduleLine> get onOrderLines => [
+    for (final l in lines)
+      if (l.status == OrderStatus.ordered ||
+          l.status == OrderStatus.arrivingLate)
+        l,
+  ];
+
+  /// Bought, and the vendor's date lands after the day it is needed. Nothing
+  /// on the ordering side can fix these — but the room is not going to have
+  /// them in time, and that is worth knowing before the week it matters.
+  List<PartScheduleLine> get arrivingLateLines =>
+      _withStatus(OrderStatus.arrivingLate);
+
+  /// Parts that have turned up.
+  List<PartScheduleLine> get receivedLines =>
+      _withStatus(OrderStatus.received);
+
+  /// Parts still to buy — what the order dates are actually about.
+  List<PartScheduleLine> get toBuyLines =>
+      [for (final l in lines) if (!l.isBought) l];
+
   int get lateCount => lateLines.length;
   int get dueSoonCount => dueSoonLines.length;
   int get unknownCount => unknownLines.length;
+  int get onOrderCount => onOrderLines.length;
+  int get arrivingLateCount => arrivingLateLines.length;
+  int get receivedCount => receivedLines.length;
 
   /// True when there is nothing to schedule against — no deadline anywhere.
   bool get hasNoDates =>
@@ -229,6 +296,10 @@ class ProjectSchedule {
     final byDate = <String, List<PartScheduleLine>>{};
     final dates = <String, DateTime>{};
     for (final l in lines) {
+      // Already bought: there is no trip to purchasing left to schedule, and
+      // leaving it on the strip would put a date in somebody's calendar for
+      // an order that went out last week.
+      if (l.isBought) continue;
       final d = l.orderBy;
       if (d == null) continue;
       final key = formatIsoDate(d);
@@ -298,7 +369,14 @@ PartScheduleLine schedulePart({
   final own = project.partNeedBy[line.key];
   final track = project.trackForPart(line.key);
   final needBy = own ?? track?.deadline ?? project.deliveryDeadline;
-  final leadDays = project.partLeadTimes[line.key];
+
+  // TWO SOURCES FOR THE LEAD TIME, job first. What a vendor quoted for THIS
+  // order beats what the catalog remembers about the product in general — but
+  // the catalog is what stops the figure being retyped on every job, and a
+  // product whose lead time was recorded once now schedules itself.
+  final jobLead = project.partLeadTimes[line.key];
+  final leadDays = jobLead ?? line.catalogLeadDays;
+  final leadFromCatalog = jobLead == null && line.catalogLeadDays != null;
 
   DateTime? orderBy;
   if (needBy != null && leadDays != null) {
@@ -307,8 +385,20 @@ PartScheduleLine schedulePart({
     orderBy = addDays(needBy, -leadDays);
   }
 
+  // WHAT HAS BEEN BOUGHT COMES FIRST. A part on order is not late and not due
+  // — it is bought, and the only question left is whether the vendor's date
+  // still clears the day it is needed. Asking "was this ordered late" of
+  // something already ordered is how a warning list starts crying wolf.
+  final order = project.orderForPart(line.key);
+
   final OrderStatus status;
-  if (needBy == null) {
+  if (order != null && order.isReceived) {
+    status = OrderStatus.received;
+  } else if (order != null && order.isOrdered) {
+    status = order.arrivesLate(needBy)
+        ? OrderStatus.arrivingLate
+        : OrderStatus.ordered;
+  } else if (needBy == null) {
     status = OrderStatus.noDeadline;
   } else if (leadDays == null) {
     status = OrderStatus.unknown;
@@ -329,6 +419,8 @@ PartScheduleLine schedulePart({
     status: status,
     daysUntilOrder: orderBy == null ? null : daysBetween(now, orderBy),
     track: track,
+    leadFromCatalog: leadFromCatalog,
+    order: order,
   );
 }
 

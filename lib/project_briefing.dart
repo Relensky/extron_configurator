@@ -136,6 +136,12 @@ class BriefingOverview {
   final int parts;
   final int partsWithoutLeadTime;
 
+  /// Bought and not yet arrived, and bought and arrived. The half of the job
+  /// that is done — without which "3 parts are late" is a number nobody can
+  /// weigh.
+  final int partsOnOrder;
+  final int partsReceived;
+
   /// The job's own delivery deadline, null when nobody has set one.
   final DateTime? deadline;
 
@@ -170,6 +176,8 @@ class BriefingOverview {
     required this.currency,
     required this.parts,
     required this.partsWithoutLeadTime,
+    required this.partsOnOrder,
+    required this.partsReceived,
     required this.deadline,
     required this.phases,
     required this.firstOrder,
@@ -274,6 +282,28 @@ ProjectBriefing buildProjectBriefing({
           '${p.line.description} — order date was '
               '${formatScheduleDate(p.orderBy!)}'
               ' (${formatDayGap(p.daysUntilOrder ?? 0)})',
+      ]),
+    ));
+  }
+
+  // BOUGHT, AND STILL GOING TO BE LATE. Nothing on the ordering side can fix
+  // this one — which is exactly why it has to be said out loud rather than
+  // left to be discovered in the week the room needs the part.
+  final arrivingLate = schedule.arrivingLateLines;
+  if (arrivingLate.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.late,
+      message: arrivingLate.length == 1
+          ? '1 part is on order but the vendor is promising it after the day '
+              'it is needed'
+          : '${arrivingLate.length} parts are on order but the vendor is '
+              'promising them after the day they are needed',
+      pane: BriefingPane.timeline,
+      detail: _some([
+        for (final p in arrivingLate)
+          '${p.line.description} — promised '
+              '${formatScheduleDate(p.order!.expectedOn!)}, needed '
+              '${formatScheduleDate(p.needBy!)}',
       ]),
     ));
   }
@@ -516,6 +546,8 @@ BriefingOverview _overviewOf(
     currency: estimate.currency,
     parts: estimate.master.length,
     partsWithoutLeadTime: schedule.unknownCount,
+    partsOnOrder: schedule.onOrderCount,
+    partsReceived: schedule.receivedCount,
     deadline: project.deliveryDeadline,
     phases: [
       for (final entry in schedule.byTrack(project))

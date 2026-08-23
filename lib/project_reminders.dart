@@ -214,7 +214,10 @@ ReminderExport buildOrderReminders({
 
   final skipped = [
     for (final l in chosen)
-      if (l.orderBy == null)
+      // Already bought: nothing to remind anybody to do, and a calendar entry
+      // for an order that went out last week is exactly the noise that makes
+      // people stop importing these.
+      if (l.orderBy == null && !l.isBought)
         '${l.line.description} — '
             '${l.status == OrderStatus.noDeadline ? 'no delivery date' : 'no lead time recorded'}',
   ];

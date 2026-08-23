@@ -9823,6 +9823,30 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// Puts the job away, leaving an empty one behind.
+  ///
+  /// EMPTY, not "a new project": [newProject] seeds the usual vendor split,
+  /// which is right when somebody has asked to start a job and wrong when they
+  /// have asked to stop working on one — a Close that left two vendors and an
+  /// unsaved flag behind would be a Close that did not close anything.
+  ///
+  /// THE OPEN ROOM IS LEFT ALONE. A room is its own document: it was openable
+  /// before the project existed and it stays open afterwards, exactly as it
+  /// does when a different project is opened over the top of this one. Closing
+  /// the job means the job, not everything on screen.
+  ///
+  /// Says nothing about unsaved work — that is the caller's to ask, before
+  /// this is reached. See [closeProjectFile].
+  void closeProject() {
+    final was = projectDisplayName;
+    project = BuildingProject(currency: currencySymbol);
+    currentProjectPath = '';
+    projectDirty = false;
+    _projectRooms.clear();
+    AppLogger.logInfo('Project "$was" closed.');
+    notifyListeners();
+  }
+
   /// Writes the project. Returns the error to show, or '' on success.
   ///
   /// [to] re-homes it — and re-homing a project REWRITES ITS ROOM PATHS,
@@ -9874,7 +9898,18 @@ class AppStateProvider extends ChangeNotifier {
     if (building != null) project.building = building;
     if (jobNumber != null) project.jobNumber = jobNumber;
     if (client != null) project.client = client;
-    if (notes != null) project.notes = notes;
+    if (notes != null && notes.trim() != project.notes.trim()) {
+      project.notes = notes;
+      _logProjectEdit(
+        itemKey: 'project',
+        itemName: project.name,
+        field: 'Notes',
+        summary: notes.trim().isEmpty ? 'cleared' : 'written',
+        coalesce: true,
+      );
+    } else if (notes != null) {
+      project.notes = notes;
+    }
     if (currency != null && currency.isNotEmpty) project.currency = currency;
     _projectChanged();
   }
@@ -9921,11 +9956,18 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
 
-    project.rooms.add(ProjectRoomRef(
+    final added = ProjectRoomRef(
       id: project.nextRoomId(),
       configPath: BuildingProject.storePath(absolute, currentProjectPath),
       label: label,
-    ));
+    );
+    project.rooms.add(added);
+    _logProjectEdit(
+      itemKey: 'room:${added.id}',
+      itemName: added.fallbackName,
+      field: 'Room',
+      summary: 'added to the job',
+    );
     AppLogger.logInfo('Room $absolute added to the project.');
     _projectChanged();
     return '';
@@ -9942,6 +9984,13 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void removeRoomFromProject(String roomId) {
+    final was = project.roomById(roomId)?.fallbackName ?? '';
+    _logProjectEdit(
+      itemKey: 'room:$roomId',
+      itemName: was,
+      field: 'Room',
+      summary: 'removed from the job (its file is untouched)',
+    );
     project.rooms.removeWhere((r) => r.id == roomId);
     _projectRooms.remove(roomId);
     _projectChanged();
@@ -9955,11 +10004,43 @@ class AppStateProvider extends ChangeNotifier {
   }) {
     final index = project.rooms.indexWhere((r) => r.id == roomId);
     if (index < 0) return;
-    project.rooms[index] = project.rooms[index].copyWith(
+    final before = project.rooms[index];
+    project.rooms[index] = before.copyWith(
       label: label,
       included: included,
       notes: notes,
     );
+    final after = project.rooms[index];
+
+    // One line per DECISION. Typing a note is one decision however many
+    // keystrokes it takes, so the note is logged as "written" rather than
+    // once per character — and only when it actually changed.
+    if (included != null && included != before.included) {
+      _logProjectEdit(
+        itemKey: 'room:$roomId',
+        itemName: after.fallbackName,
+        field: 'Room',
+        summary: included ? 'counted in the total' : 'taken out of the total',
+      );
+    }
+    if (notes != null && notes.trim() != before.notes.trim()) {
+      _logProjectEdit(
+        itemKey: 'room:$roomId',
+        itemName: after.fallbackName,
+        field: 'Notes',
+        summary: notes.trim().isEmpty ? 'cleared' : 'written',
+        coalesce: true,
+      );
+    }
+    if (label != null && label.trim() != before.label.trim()) {
+      _logProjectEdit(
+        itemKey: 'room:$roomId',
+        itemName: after.fallbackName,
+        field: 'Room',
+        summary: label.trim().isEmpty ? 'label cleared' : 'renamed',
+        coalesce: true,
+      );
+    }
     _projectChanged();
   }
 
@@ -10008,10 +10089,49 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  // --- the log ---------------------------------------------------------------
+  //  Every decision made ON THE JOB goes through one of the setters below, so
+  //  this is the one place that has to remember to record it. See
+  //  [ProjectEdit] for what is logged and what deliberately is not.
+
+  /// Records a change against an item and marks the project edited.
+  ///
+  /// [itemName] is the item as it reads RIGHT NOW, stored with the entry so
+  /// the log still makes sense after the part is renamed or the room is taken
+  /// off the job.
+  /// [coalesce] for fields that write through on every keystroke — a note, a
+  /// label. See [BuildingProject.logEdit].
+  void _logProjectEdit({
+    required String itemKey,
+    required String field,
+    required String summary,
+    String itemName = '',
+    bool coalesce = false,
+  }) {
+    project.logEdit(
+      itemKey: itemKey,
+      itemName: itemName,
+      field: field,
+      summary: summary,
+      coalesce: coalesce,
+    );
+  }
+
+  /// The log key and display name for one master-list part.
+  static String projectPartItemKey(String partKey) => 'part:$partKey';
+
   /// Pins one master-list part to a vendor, or clears the pin (blank id) so it
   /// falls back to the rules.
-  void pinProjectPart(String partKey, String vendorId) {
+  void pinProjectPart(String partKey, String vendorId, {String partName = ''}) {
     project.pinPart(partKey, vendorId);
+    _logProjectEdit(
+      itemKey: projectPartItemKey(partKey),
+      itemName: partName,
+      field: 'Vendor',
+      summary: vendorId.isEmpty
+          ? 'pin cleared — back to the vendor rules'
+          : 'pinned to ${project.vendorById(vendorId)?.name ?? vendorId}',
+    );
     _projectChanged();
   }
 
@@ -10023,6 +10143,14 @@ class AppStateProvider extends ChangeNotifier {
   /// Sets the date the job needs everything delivered by, or clears it.
   void setProjectDeadline(DateTime? date) {
     project.deliveryDeadline = date == null ? null : dateOnly(date);
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Delivery deadline',
+      summary: date == null
+          ? 'cleared'
+          : 'set to ${formatIsoDate(dateOnly(date))}',
+    );
     AppLogger.logInfo(
       date == null
           ? 'Project delivery deadline cleared.'
@@ -10033,15 +10161,39 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Records how long one master-list part takes to arrive, in calendar days,
   /// or forgets the figure when [days] is null.
-  void setProjectPartLeadTime(String partKey, int? days) {
+  void setProjectPartLeadTime(String partKey, int? days, {String partName = ''}) {
+    final before = project.partLeadTimes[partKey];
     project.setPartLeadTime(partKey, days);
+    final after = project.partLeadTimes[partKey];
+    if (before != after) {
+      _logProjectEdit(
+        itemKey: projectPartItemKey(partKey),
+        itemName: partName,
+        field: 'Lead time',
+        summary: after == null
+            ? 'cleared — nobody has asked the vendor'
+            : 'set to $after day${after == 1 ? '' : 's'}',
+      );
+    }
     _projectChanged();
   }
 
   /// Sets the date one master-list part has to arrive by, ahead of the rest of
   /// the job, or clears it so the part wants the project deadline again.
-  void setProjectPartNeedBy(String partKey, DateTime? date) {
+  void setProjectPartNeedBy(String partKey, DateTime? date, {String partName = ''}) {
+    final before = project.partNeedBy[partKey];
     project.setPartNeedBy(partKey, date);
+    final after = project.partNeedBy[partKey];
+    if (before != after) {
+      _logProjectEdit(
+        itemKey: projectPartItemKey(partKey),
+        itemName: partName,
+        field: 'On site by',
+        summary: after == null
+            ? 'back to the job deadline'
+            : 'wanted early, by ${formatIsoDate(after)}',
+      );
+    }
     _projectChanged();
   }
 
@@ -10052,6 +10204,12 @@ class AppStateProvider extends ChangeNotifier {
   /// Adds a delivery phase and hands it back.
   ProjectTrack addProjectTrack(String name, {DateTime? deadline}) {
     final track = project.addTrack(name, deadline: deadline);
+    _logProjectEdit(
+      itemKey: 'track:${track.id}',
+      itemName: track.name,
+      field: 'Phase',
+      summary: 'added',
+    );
     _projectChanged();
     return track;
   }
@@ -10072,17 +10230,113 @@ class AppStateProvider extends ChangeNotifier {
 
   void setProjectTrackDeadline(String id, DateTime? date) {
     project.setTrackDeadline(id, date);
+    _logProjectEdit(
+      itemKey: 'track:$id',
+      itemName: project.trackById(id)?.name ?? '',
+      field: 'Phase deadline',
+      summary: date == null
+          ? 'back to the job deadline'
+          : 'set to ${formatIsoDate(dateOnly(date))}',
+    );
     _projectChanged();
   }
 
   void removeProjectTrack(String id) {
+    final was = project.trackById(id)?.name ?? '';
     project.removeTrack(id);
+    _logProjectEdit(
+      itemKey: 'track:$id',
+      itemName: was,
+      field: 'Phase',
+      summary: 'removed',
+    );
     _projectChanged();
   }
 
   /// Puts one master-list part on a phase, or back with the job when blank.
-  void setProjectPartTrack(String partKey, String trackId) {
+  void setProjectPartTrack(String partKey, String trackId, {String partName = ''}) {
+    final before = project.partTracks[partKey];
     project.setPartTrack(partKey, trackId);
+    if (before != project.partTracks[partKey]) {
+      _logProjectEdit(
+        itemKey: projectPartItemKey(partKey),
+        itemName: partName,
+        field: 'Phase',
+        summary: trackId.isEmpty
+            ? 'delivered with the job'
+            : 'moved to ${project.trackById(trackId)?.name ?? trackId}',
+      );
+    }
+    _projectChanged();
+  }
+
+  // --- what has actually been bought ----------------------------------------
+
+  /// Records an order against one master-list part, or clears it when the
+  /// record is empty. See [PartOrder].
+  void setProjectPartOrder(String partKey, PartOrder? order, {String partName = ''}) {
+    final before = project.orderForPart(partKey);
+    project.setPartOrder(partKey, order);
+    final after = project.orderForPart(partKey);
+
+    // Only the transitions worth a line. Typing a PO number one character at a
+    // time is one decision, not eleven, and a log that records every keystroke
+    // is one nobody can read.
+    final was = _orderStateOf(before);
+    final now = _orderStateOf(after);
+    if (was != now) {
+      _logProjectEdit(
+        itemKey: projectPartItemKey(partKey),
+        itemName: partName,
+        field: 'Order',
+        summary: switch (now) {
+          'received' => 'arrived'
+              '${after?.receivedOn == null ? '' : ' on '
+                  '${formatIsoDate(after!.receivedOn!)}'}',
+          'ordered' => 'ordered'
+              '${after?.orderedOn == null ? '' : ' on '
+                  '${formatIsoDate(after!.orderedOn!)}'}'
+              '${after?.poNumber.trim().isNotEmpty == true
+                  ? ', PO ${after!.poNumber.trim()}'
+                  : ''}',
+          _ => 'order record cleared',
+        },
+      );
+    }
+    _projectChanged();
+  }
+
+  /// Which of the three states an order record is in, for deciding whether a
+  /// change is worth logging.
+  static String _orderStateOf(PartOrder? order) {
+    if (order == null || !order.isOrdered) return 'none';
+    return order.isReceived ? 'received' : 'ordered';
+  }
+
+  /// Marks a part ordered today, keeping whatever else is already on the
+  /// record. The one-click case — the paperwork usually catches up later.
+  void markProjectPartOrdered(String partKey, {DateTime? on}) {
+    final existing = project.orderForPart(partKey) ?? const PartOrder();
+    project.setPartOrder(
+      partKey,
+      existing.copyWith(orderedOn: dateOnly(on ?? DateTime.now())),
+    );
+    _projectChanged();
+  }
+
+  /// Marks a part received today. An arrival implies it was ordered, so a
+  /// record that somehow has no order date gets one rather than sitting in a
+  /// state that reads as "arrived without being bought".
+  void markProjectPartReceived(String partKey, {DateTime? on}) {
+    final when = dateOnly(on ?? DateTime.now());
+    final existing = project.orderForPart(partKey) ?? const PartOrder();
+    project.setPartOrder(
+      partKey,
+      existing.copyWith(
+        receivedOn: when,
+        orderedOn: existing.orderedOn ?? when,
+      ),
+    );
     _projectChanged();
   }
 
@@ -10116,12 +10370,36 @@ class AppStateProvider extends ChangeNotifier {
   }) {
     final id = project.addTodo(text, roomId: roomId, scopeLabel: scopeLabel);
     if (id.isEmpty) return;
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: text.trim(),
+      field: 'Job list',
+      summary: 'added',
+    );
     _projectChanged();
   }
 
   void setProjectTodoState(String id, ProjectTodoState state) {
     project.setTodoState(id, state);
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: _todoTextOf(id),
+      field: 'Job list',
+      summary: switch (state) {
+        ProjectTodoState.done => 'marked done',
+        ProjectTodoState.blocked => 'waiting on somebody else',
+        ProjectTodoState.open => 'back on the list',
+      },
+    );
     _projectChanged();
+  }
+
+  /// One note's text, for naming it in the log. '' when it has gone.
+  String _todoTextOf(String id) {
+    for (final t in project.todos) {
+      if (t.id == id) return t.text;
+    }
+    return '';
   }
 
   void setProjectTodoText(String id, String text) {
@@ -10143,11 +10421,28 @@ class AppStateProvider extends ChangeNotifier {
   /// Sets the date one note has to be done by, or clears it.
   void setProjectTodoDue(String id, DateTime? date) {
     project.setTodoDue(id, date);
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: _todoTextOf(id),
+      field: 'Job list',
+      summary: date == null
+          ? 'date taken off'
+          : 'due ${formatIsoDate(dateOnly(date))}',
+    );
     _projectChanged();
   }
 
   void removeProjectTodo(String id) {
+    // Named BEFORE it goes, or the entry that records the removal cannot say
+    // what was removed.
+    final was = _todoTextOf(id);
     project.removeTodo(id);
+    _logProjectEdit(
+      itemKey: 'todo:$id',
+      itemName: was,
+      field: 'Job list',
+      summary: 'removed',
+    );
     _projectChanged();
   }
 

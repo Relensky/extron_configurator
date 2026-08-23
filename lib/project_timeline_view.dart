@@ -10,6 +10,7 @@ import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show trimNumber;
 import 'project_estimate.dart';
+import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
 import 'project_schedule.dart';
 
@@ -198,10 +199,17 @@ Color orderStatusColor(BuildContext context, OrderStatus status) {
   final theme = Theme.of(context);
   switch (status) {
     case OrderStatus.late:
+    // Bought and still going to be late. It reads as a problem because it is
+    // one — nothing on the ordering side can fix it now.
+    case OrderStatus.arrivingLate:
       return errorTextOn(theme.colorScheme, theme.cardColor);
     case OrderStatus.dueSoon:
       return theme.colorScheme.tertiary;
     case OrderStatus.onTrack:
+    // Bought and on its way: the same settled colour as a part with time in
+    // hand, because from here neither needs anybody to do anything.
+    case OrderStatus.ordered:
+    case OrderStatus.received:
       return theme.colorScheme.primary;
     case OrderStatus.unknown:
     case OrderStatus.noDeadline:
@@ -215,6 +223,9 @@ IconData orderStatusIcon(OrderStatus status) => switch (status) {
   OrderStatus.onTrack => Icons.check_circle_outline,
   OrderStatus.unknown => Icons.help_outline,
   OrderStatus.noDeadline => Icons.event_note,
+  OrderStatus.arrivingLate => Icons.running_with_errors,
+  OrderStatus.ordered => Icons.local_shipping_outlined,
+  OrderStatus.received => Icons.inventory_2,
 };
 
 /// The timeline pane, as slivers for the project tab's one scroll view.
@@ -450,6 +461,243 @@ Future<void> exportOrderReminders(
               '${export.skipped.length == 1 ? '' : 's'} could not be dated)',
     target,
   );
+}
+
+/// Whether this part has been bought, and what the vendor promised.
+///
+/// Four facts, all of which somebody already has written down: the PO it went
+/// out on, the day it went, the date promised, and the day it turned up. This
+/// is a record of a decision, not a procurement system.
+///
+/// THE ORDER DATE IS WHAT COUNTS. A PO number with no date cannot be measured
+/// against a deadline, so a part is only treated as bought once there is a day
+/// on it — see [PartOrder.isOrdered].
+class _OrderBlock extends StatefulWidget {
+  final PartOrder order;
+
+  /// The day this part is actually needed, so a promised date landing after it
+  /// can be called out here rather than discovered later.
+  final DateTime? needBy;
+
+  final ValueChanged<PartOrder> onChanged;
+
+  const _OrderBlock({
+    required this.order,
+    required this.needBy,
+    required this.onChanged,
+  });
+
+  @override
+  State<_OrderBlock> createState() => _OrderBlockState();
+}
+
+class _OrderBlockState extends State<_OrderBlock> {
+  /// Its own controller, built once. A TextEditingController rebuilt on every
+  /// keystroke puts the caret back to the start, which is what typing into a
+  /// PO number felt like the first time this was written.
+  late final TextEditingController _po = TextEditingController(
+    text: widget.order.poNumber,
+  );
+
+  @override
+  void dispose() {
+    _po.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final order = widget.order;
+    final arrivingLate = order.arrivesLate(widget.needBy);
+    final alarm = errorTextOn(theme.colorScheme, theme.cardColor);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              order.isReceived
+                  ? Icons.inventory_2
+                  : order.isOrdered
+                  ? Icons.local_shipping_outlined
+                  : Icons.shopping_cart_checkout,
+              size: 18,
+              color: muted,
+            ),
+            const SizedBox(width: 8),
+            Text('Bought?', style: theme.textTheme.labelMedium),
+            const Spacer(),
+            // The one-click case. The paperwork usually catches up later, and
+            // a record that demands a PO number before it will believe the
+            // order went in is one nobody fills in on the day.
+            if (!order.isOrdered)
+              FilledButton.tonal(
+                key: const ValueKey('part_mark_ordered'),
+                onPressed: () =>
+                    widget.onChanged(order.copyWith(orderedOn: today())),
+                child: const Text('Ordered today'),
+              )
+            else if (!order.isReceived)
+              FilledButton.tonal(
+                key: const ValueKey('part_mark_received'),
+                onPressed: () =>
+                    widget.onChanged(order.copyWith(receivedOn: today())),
+                child: const Text('Arrived today'),
+              )
+            else
+              TextButton(
+                key: const ValueKey('part_clear_received'),
+                onPressed: () =>
+                    widget.onChanged(order.copyWith(clearReceivedOn: true)),
+                child: const Text('Not arrived after all'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                key: const ValueKey('part_po_number'),
+                controller: _po,
+                decoration: const InputDecoration(
+                  labelText: 'PO number',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (v) => widget.onChanged(order.copyWith(poNumber: v)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _DateButton(
+                label: 'Ordered',
+                value: order.orderedOn,
+                buttonKey: const ValueKey('part_ordered_on'),
+                onPick: (d) => widget.onChanged(
+                  d == null
+                      ? order.copyWith(clearOrderedOn: true)
+                      : order.copyWith(orderedOn: d),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _DateButton(
+                label: 'Vendor promised',
+                value: order.expectedOn,
+                buttonKey: const ValueKey('part_expected_on'),
+                warn: arrivingLate,
+                onPick: (d) => widget.onChanged(
+                  d == null
+                      ? order.copyWith(clearExpectedOn: true)
+                      : order.copyWith(expectedOn: d),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (order.isReceived)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Arrived ${formatScheduleDate(order.receivedOn!)}. This part is '
+              'finished with — it is off the order schedule.',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          )
+        else if (arrivingLate) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.running_with_errors, size: 16, color: alarm),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'The vendor is promising it AFTER the day it is needed. It '
+                  'is bought — but the room will not have it in time.',
+                  key: const ValueKey('part_arriving_late'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: alarm,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A labelled date, picked or cleared.
+class _DateButton extends StatelessWidget {
+  final String label;
+  final DateTime? value;
+  final ValueChanged<DateTime?> onPick;
+  final Key? buttonKey;
+  final bool warn;
+
+  const _DateButton({
+    required this.label,
+    required this.value,
+    required this.onPick,
+    this.buttonKey,
+    this.warn = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ink = warn
+        ? errorTextOn(theme.colorScheme, theme.cardColor)
+        : theme.colorScheme.onSurfaceVariant;
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            key: buttonKey,
+            onPressed: () async {
+              final picked = await showProjectDatePicker(
+                context,
+                initial: value,
+                title: label,
+              );
+              if (picked == null) return;
+              onPick(picked.date);
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(color: ink),
+                ),
+                Text(
+                  value == null ? 'not set' : formatScheduleDate(value!),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: warn ? ink : null,
+                    fontWeight: warn ? FontWeight.w600 : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (value != null)
+          ClearDateButton(
+            tooltip: 'Clear $label',
+            onPressed: () => onPick(null),
+          ),
+      ],
+    );
+  }
 }
 
 /// The job's delivery phases, side by side.
@@ -1108,6 +1356,9 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
   late DateTime? _needBy = widget.provider.project.partNeedBy[widget.line.key];
   late String _trackId =
       widget.provider.project.partTracks[widget.line.key] ?? '';
+  late PartOrder _order =
+      widget.provider.project.orderForPart(widget.line.key) ??
+      const PartOrder();
 
   @override
   void dispose() {
@@ -1120,9 +1371,29 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
     // Blank means "nobody has asked yet" and is a real answer — it puts the
     // part back on the unscheduled list rather than pretending it is in stock.
     final days = text.isEmpty ? null : int.tryParse(text);
-    widget.provider.setProjectPartLeadTime(widget.line.key, days);
-    widget.provider.setProjectPartNeedBy(widget.line.key, _needBy);
-    widget.provider.setProjectPartTrack(widget.line.key, _trackId);
+    // The part's DESCRIPTION goes with each entry, so the history still reads
+    // correctly after the part is renamed or drops off the job.
+    final name = widget.line.description;
+    widget.provider.setProjectPartLeadTime(
+      widget.line.key,
+      days,
+      partName: name,
+    );
+    widget.provider.setProjectPartNeedBy(
+      widget.line.key,
+      _needBy,
+      partName: name,
+    );
+    widget.provider.setProjectPartTrack(
+      widget.line.key,
+      _trackId,
+      partName: name,
+    );
+    widget.provider.setProjectPartOrder(
+      widget.line.key,
+      _order,
+      partName: name,
+    );
     Navigator.of(context).pop();
   }
 
@@ -1293,6 +1564,30 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
                   ),
                 ),
               ],
+            ),
+
+            // --- and whether it has actually been bought -------------------
+            //
+            // On the same dialog as the lead time, because they are the two
+            // halves of one question. Once this is filled in the part stops
+            // being scheduled at all: it is bought, and the only thing left is
+            // whether the vendor's date still clears the day it is needed.
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 8),
+            _OrderBlock(
+              order: _order,
+              needBy: effectiveNeed,
+              onChanged: (o) => setState(() => _order = o),
+            ),
+
+            // WHAT HAS HAPPENED TO THIS PART. The question people actually
+            // ask — "it said eight weeks in March, who changed it" — and the
+            // one a flat log across a nine-room job cannot answer.
+            ItemHistory(
+              entries: widget.provider.project.historyFor(
+                AppStateProvider.projectPartItemKey(widget.line.key),
+              ),
             ),
           ],
         ),

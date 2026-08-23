@@ -551,6 +551,38 @@ Future<bool> createProjectRoom(
   return true;
 }
 
+/// Puts the job away. Returns true when it was actually closed.
+///
+/// Asks about unsaved work first, through the same prompt New and Open use, so
+/// "close" cannot be the one route that loses a room list somebody spent ten
+/// minutes tagging. The OPEN ROOM is left exactly where it is — a room is its
+/// own document, and closing the job it belongs to is not a reason to shut it.
+Future<bool> closeProjectFile(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  if (!await confirmLeavingProject(context, provider)) return false;
+  if (!context.mounted) return false;
+
+  final was = provider.projectDisplayName;
+  final hadRoom = provider.currentConfigPath.isNotEmpty;
+  provider.closeProject();
+
+  showTimedSnackBar(
+    ScaffoldMessenger.of(context),
+    SnackBar(
+      content: Text(
+        hadRoom
+            // Said out loud, because the room staying open is the part that
+            // would otherwise look like the close only half worked.
+            ? 'Closed $was. The open room is still open.'
+            : 'Closed $was.',
+      ),
+    ),
+  );
+  return true;
+}
+
 /// Opens a project file. Returns true when one was opened.
 Future<bool> openProjectFromFile(
   BuildContext context,

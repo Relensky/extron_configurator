@@ -149,6 +149,248 @@ DateTime addDays(DateTime when, int days) =>
     DateTime(when.year, when.month, when.day + days);
 
 // ---------------------------------------------------------------------------
+//  WHO CHANGED WHAT, AND WHEN
+// ---------------------------------------------------------------------------
+//  A job is worked on by more than one person over more than one month, and
+//  the questions that come up months later are always the same two: WHEN did
+//  this change, and WHO changed it. "The lead time on the projector says four
+//  weeks, it said eight in March" is not an argument anybody can settle from a
+//  file that only holds the current value.
+//
+//  So the decisions on a project — the lead times, the orders, the vendor
+//  pins, the dates, the notes — are logged as they are made, against the ITEM
+//  they belong to. Per item rather than per file: "what has happened to this
+//  projector" is the question people actually ask, and a flat list of every
+//  edit on a nine-room job cannot answer it.
+//
+//  WHAT IS NOT LOGGED, deliberately: the room files. A room is its own
+//  document with its own backup-and-undo machinery, and shadowing every device
+//  edit into the project would double-record work the room already tracks
+//  while making the project file grow with changes that are not the project's.
+//  This is the log of decisions made ON THE JOB.
+//
+//  THE TIME IS PART OF IT. Everywhere else in this file a date is a DAY, on
+//  purpose — a delivery lands on the 14th, not at 14:32. A log entry is the
+//  exception: two edits on the same afternoon are two edits, and reducing them
+//  both to "the 14th" loses the order they happened in, which is the one thing
+//  a history is for.
+
+/// The Windows login of whoever is running the app, for attributing an edit.
+///
+/// `USERNAME` on Windows, `USER` elsewhere, and '' when the environment says
+/// nothing. Blank is an honest answer and is recorded as such — inventing
+/// 'unknown' as if it were a name would put a user called Unknown in the
+/// filter list beside the real ones.
+String currentUserName() {
+  final env = Platform.environment;
+  final name = (Platform.isWindows ? env['USERNAME'] : env['USER']) ?? '';
+  return name.trim();
+}
+
+/// One recorded change.
+class ProjectEdit {
+  /// What was changed, as `<kind>:<id>` — `part:<masterKey>`, `todo:<id>`,
+  /// `room:<id>`, `track:<id>`, or `project` for the job itself.
+  ///
+  /// Opaque on purpose: the log survives a part being renamed or a room being
+  /// removed, and an entry whose item has since gone is still a true statement
+  /// about what somebody did.
+  final String itemKey;
+
+  /// A short label for the item as it read AT THE TIME — 'DTP CrossPoint 108',
+  /// 'BSS 103'. Stored rather than resolved on the way out, because the whole
+  /// value of a history is that it still reads correctly after the thing it
+  /// describes has been renamed or deleted.
+  final String itemName;
+
+  /// What changed about it: 'Lead time', 'Order', 'Vendor', 'Deadline'.
+  final String field;
+
+  /// What actually happened, in a sentence somebody can read six months later:
+  /// 'set to 6 weeks', 'ordered on PO-1234', 'cleared'.
+  final String summary;
+
+  /// The Windows login it was done under. '' when the environment gave none.
+  final String user;
+
+  /// When — with the time on it. See the note above on why this one is not a
+  /// date-only value.
+  final DateTime at;
+
+  const ProjectEdit({
+    required this.itemKey,
+    required this.itemName,
+    required this.field,
+    required this.summary,
+    required this.user,
+    required this.at,
+  });
+
+  /// The kind of thing this was — 'part', 'todo', 'room', 'track', 'project'.
+  String get itemKind {
+    final i = itemKey.indexOf(':');
+    return i < 0 ? itemKey : itemKey.substring(0, i);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'itemKey': itemKey,
+    if (itemName.isNotEmpty) 'itemName': itemName,
+    'field': field,
+    'summary': summary,
+    if (user.isNotEmpty) 'user': user,
+    'at': at.toIso8601String(),
+  };
+
+  factory ProjectEdit.fromJson(Map<String, dynamic> json) => ProjectEdit(
+    itemKey: json['itemKey']?.toString() ?? '',
+    itemName: json['itemName']?.toString() ?? '',
+    field: json['field']?.toString() ?? '',
+    summary: json['summary']?.toString() ?? '',
+    user: json['user']?.toString() ?? '',
+    // An entry with no readable time is dated to the epoch rather than
+    // dropped: something happened, and losing the record because the stamp is
+    // unreadable is worse than showing it at the bottom of the list.
+    at: DateTime.tryParse(json['at']?.toString() ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+  );
+}
+
+/// How many entries a project keeps.
+///
+/// A log that grows without limit turns the project file into something that
+/// takes a second to open and a scroll bar to read. Five hundred is more than
+/// a year of ordinary work on one building, and the oldest go first — a job's
+/// recent history is the part anybody asks about.
+const int kMaxProjectHistory = 500;
+
+/// How long a run of edits to one continuous field counts as one change.
+///
+/// Two minutes: long enough that typing a paragraph, stopping to think and
+/// carrying on stays one entry, short enough that coming back after lunch and
+/// rewriting the note is recorded as the separate decision it is.
+const Duration kEditCoalesceWindow = Duration(minutes: 2);
+
+// ---------------------------------------------------------------------------
+//  WHAT HAS ACTUALLY BEEN BOUGHT
+// ---------------------------------------------------------------------------
+//  The schedule says what to order and when. It has no idea whether any of it
+//  WAS ordered — and a warning that does not know is a warning that is wrong
+//  the morning after somebody raises the first purchase order. "3 parts are
+//  past their order date" stops meaning anything the moment two of them went
+//  out last week, and a list that cries wolf is a list people stop opening.
+//
+//  So an order is recorded against the part: the PO it went out on, the day it
+//  went, the date the vendor promised, and the day it turned up. That is the
+//  whole model — this is a record of a decision, not a procurement system, and
+//  every field on it is one somebody already has written down somewhere.
+//
+//  IT CHANGES WHAT THE SCHEDULE SAYS. A part on order is not late and not due;
+//  it is bought, and the only question left about it is whether the promised
+//  date still clears the day it is needed. A part that has arrived is finished
+//  with entirely. See project_schedule.dart.
+
+/// One part, ordered.
+class PartOrder {
+  /// The purchase order it went out on — free text, because a PO number is
+  /// whatever the finance system calls it. Empty is allowed: "we ordered it"
+  /// is worth recording before the paperwork catches up.
+  final String poNumber;
+
+  /// The day the order went in. Null means somebody has started filling this
+  /// in and not said when — the part still counts as NOT ordered, because a
+  /// record with no date cannot be checked against anything.
+  final DateTime? orderedOn;
+
+  /// What the vendor promised. Null when they have not said.
+  ///
+  /// This is the figure that makes an order worth recording rather than just
+  /// ticking: an order placed in time against a promise that lands after the
+  /// room needs it is a problem nobody would otherwise see until the week it
+  /// mattered.
+  final DateTime? expectedOn;
+
+  /// The day it turned up. Once set, this part is done.
+  final DateTime? receivedOn;
+
+  /// Units ordered, when it was not the whole line. 0 means "all of it" —
+  /// the ordinary case, and one nobody should have to type.
+  final double qty;
+
+  final String notes;
+
+  const PartOrder({
+    this.poNumber = '',
+    this.orderedOn,
+    this.expectedOn,
+    this.receivedOn,
+    this.qty = 0,
+    this.notes = '',
+  });
+
+  /// True when this is a real order rather than a half-filled record.
+  ///
+  /// The DATE is what makes it one. A PO number with no date cannot be
+  /// measured against a deadline, and treating it as ordered would take the
+  /// part off the schedule on the strength of a text field.
+  bool get isOrdered => orderedOn != null;
+
+  bool get isReceived => receivedOn != null;
+
+  /// True when the vendor's promised date lands after [needBy] — ordered, and
+  /// still going to be late. False when either date is missing: this is a
+  /// statement about two known dates, not a guess.
+  bool arrivesLate(DateTime? needBy) =>
+      expectedOn != null && needBy != null && expectedOn!.isAfter(needBy);
+
+  PartOrder copyWith({
+    String? poNumber,
+    DateTime? orderedOn,
+    bool clearOrderedOn = false,
+    DateTime? expectedOn,
+    bool clearExpectedOn = false,
+    DateTime? receivedOn,
+    bool clearReceivedOn = false,
+    double? qty,
+    String? notes,
+  }) => PartOrder(
+    poNumber: poNumber ?? this.poNumber,
+    orderedOn: clearOrderedOn ? null : (orderedOn ?? this.orderedOn),
+    expectedOn: clearExpectedOn ? null : (expectedOn ?? this.expectedOn),
+    receivedOn: clearReceivedOn ? null : (receivedOn ?? this.receivedOn),
+    qty: qty ?? this.qty,
+    notes: notes ?? this.notes,
+  );
+
+  /// True when there is nothing on this record worth keeping — what an entry
+  /// looks like after somebody clears the last field on it.
+  bool get isEmpty =>
+      poNumber.trim().isEmpty &&
+      orderedOn == null &&
+      expectedOn == null &&
+      receivedOn == null &&
+      qty == 0 &&
+      notes.trim().isEmpty;
+
+  Map<String, dynamic> toJson() => {
+    if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
+    if (orderedOn != null) 'orderedOn': formatIsoDate(orderedOn!),
+    if (expectedOn != null) 'expectedOn': formatIsoDate(expectedOn!),
+    if (receivedOn != null) 'receivedOn': formatIsoDate(receivedOn!),
+    if (qty > 0) 'qty': qty,
+    if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+  };
+
+  factory PartOrder.fromJson(Map<String, dynamic> json) => PartOrder(
+    poNumber: json['poNumber']?.toString() ?? '',
+    orderedOn: parseIsoDate(json['orderedOn']),
+    expectedOn: parseIsoDate(json['expectedOn']),
+    receivedOn: parseIsoDate(json['receivedOn']),
+    qty: (json['qty'] as num?)?.toDouble() ?? 0,
+    notes: json['notes']?.toString() ?? '',
+  );
+}
+
+// ---------------------------------------------------------------------------
 //  TRACKS: THE JOB HAS MORE THAN ONE DEADLINE
 // ---------------------------------------------------------------------------
 //  A building does not get finished on one date. The conduit, the backboxes and
@@ -753,6 +995,15 @@ class BuildingProject {
   /// the job as a whole, against [deliveryDeadline].
   final Map<String, String> partTracks;
 
+  /// Every recorded change, oldest first. See [ProjectEdit].
+  final List<ProjectEdit> history;
+
+  /// Core component key -> what has been bought against it. See [PartOrder].
+  ///
+  /// A part with no entry has not been ordered, which is what makes the
+  /// schedule's warnings about it worth reading.
+  final Map<String, PartOrder> partOrders;
+
   /// Counters behind [nextRoomId] / [nextVendorId], persisted so ids stay
   /// unique across sessions — a reused id would re-point somebody's hand
   /// vendor tags at a different room.
@@ -777,6 +1028,8 @@ class BuildingProject {
     List<ProjectTodo>? todos,
     List<ProjectTrack>? tracks,
     Map<String, String>? partTracks,
+    Map<String, PartOrder>? partOrders,
+    List<ProjectEdit>? history,
     int roomCounter = 0,
     int vendorCounter = 0,
     int todoCounter = 0,
@@ -789,6 +1042,8 @@ class BuildingProject {
        todos = todos ?? [],
        tracks = tracks ?? [],
        partTracks = partTracks ?? {},
+       partOrders = partOrders ?? {},
+       history = history ?? [],
        _roomCounter = roomCounter,
        _vendorCounter = vendorCounter,
        _todoCounter = todoCounter,
@@ -804,6 +1059,7 @@ class BuildingProject {
       todos.isEmpty &&
       tracks.isEmpty &&
       partTracks.isEmpty &&
+      partOrders.isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       jobNumber.trim().isEmpty &&
@@ -1126,6 +1382,112 @@ class BuildingProject {
     partTracks.removeWhere((_, v) => v == id);
   }
 
+  // -------------------------------------------------------------------------
+  //  THE LOG
+  // -------------------------------------------------------------------------
+
+  /// Records one change. [at] and [user] are for tests and for replaying an
+  /// import; ordinary callers let them default to now and the Windows login.
+  ///
+  /// DELIBERATELY NOT PART OF [isEmpty]. A project whose only content is a log
+  /// of changes to nothing is an empty project — otherwise a job that was
+  /// built up and then emptied would refuse to be treated as blank, and the
+  /// "nothing to save" path would stop working.
+  void logEdit({
+    required String itemKey,
+    required String field,
+    required String summary,
+    String itemName = '',
+    String? user,
+    DateTime? at,
+    bool coalesce = false,
+  }) {
+    final when = at ?? DateTime.now();
+    final who = user ?? currentUserName();
+
+    // TYPING IS ONE DECISION, NOT FORTY. A field that writes through on every
+    // keystroke — a note, a label — would otherwise put one entry per
+    // character in the log and bury everything else on the job.
+    //
+    // Only for fields that say they are continuous, and only when the same
+    // person is still editing the same field of the same item inside the
+    // window. A done/undone pair on a to-do is two decisions however fast they
+    // happen, so discrete changes never coalesce.
+    if (coalesce && history.isNotEmpty) {
+      final last = history.last;
+      if (last.itemKey == itemKey &&
+          last.field == field &&
+          last.user == who &&
+          when.difference(last.at).abs() < kEditCoalesceWindow) {
+        history[history.length - 1] = ProjectEdit(
+          itemKey: itemKey,
+          itemName: itemName.isEmpty ? last.itemName : itemName,
+          field: field,
+          summary: summary,
+          user: who,
+          at: when,
+        );
+        return;
+      }
+    }
+
+    history.add(
+      ProjectEdit(
+        itemKey: itemKey,
+        itemName: itemName,
+        field: field,
+        summary: summary,
+        user: who,
+        at: when,
+      ),
+    );
+    if (history.length > kMaxProjectHistory) {
+      history.removeRange(0, history.length - kMaxProjectHistory);
+    }
+  }
+
+  /// Everything recorded against one item, NEWEST FIRST — which is the order
+  /// "what has happened to this" is read in.
+  List<ProjectEdit> historyFor(String itemKey) => [
+    for (final h in history.reversed)
+      if (h.itemKey == itemKey) h,
+  ];
+
+  /// The whole log, newest first.
+  List<ProjectEdit> get recentHistory => history.reversed.toList();
+
+  /// Every login that has touched this job, in the order they first appear.
+  /// What the History pane offers as a filter.
+  List<String> get historyUsers {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final h in history) {
+      if (h.user.isEmpty) continue;
+      if (seen.add(h.user.toLowerCase())) out.add(h.user);
+    }
+    return out;
+  }
+
+  /// What has been bought against [partKey], or null when nothing has.
+  PartOrder? orderForPart(String partKey) => partOrders[partKey];
+
+  /// Records an order against [partKey]. An empty record removes the entry
+  /// rather than leaving a blank one that would take the part off the
+  /// schedule while saying nothing about when it was bought.
+  void setPartOrder(String partKey, PartOrder? order) {
+    if (order == null || order.isEmpty) {
+      partOrders.remove(partKey);
+    } else {
+      partOrders[partKey] = order;
+    }
+  }
+
+  /// Parts with an order against them that has not arrived yet.
+  List<String> get onOrderKeys => [
+    for (final e in partOrders.entries)
+      if (e.value.isOrdered && !e.value.isReceived) e.key,
+  ];
+
   /// Puts [partKey] on [trackId], or back with the job when it is blank.
   void setPartTrack(String partKey, String trackId) {
     if (trackId.isEmpty) {
@@ -1232,6 +1594,12 @@ class BuildingProject {
     if (todos.isNotEmpty) 'todos': [for (final t in todos) t.toJson()],
     if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
     if (partTracks.isNotEmpty) 'partTracks': partTracks,
+    if (partOrders.isNotEmpty)
+      'partOrders': {
+        for (final e in partOrders.entries) e.key: e.value.toJson(),
+      },
+    if (history.isNotEmpty)
+      'history': [for (final h in history) h.toJson()],
     'roomCounter': _roomCounter,
     'vendorCounter': _vendorCounter,
     if (_todoCounter > 0) 'todoCounter': _todoCounter,
@@ -1291,6 +1659,29 @@ class BuildingProject {
       rawTracks.forEach((k, v) => trackPins[k.toString()] = v.toString());
     }
 
+    // An order record with nothing on it is dropped: it would take a part off
+    // the schedule without saying anything about when it was bought.
+    // Trimmed on the way in as well as on the way out, so a file that grew
+    // under an older build does not stay large forever.
+    final rawHistory = (json['history'] as List? ?? []);
+    final history = [
+      for (final h in rawHistory)
+        if (h is Map) ProjectEdit.fromJson(Map<String, dynamic>.from(h)),
+    ];
+    if (history.length > kMaxProjectHistory) {
+      history.removeRange(0, history.length - kMaxProjectHistory);
+    }
+
+    final orders = <String, PartOrder>{};
+    final rawOrders = json['partOrders'];
+    if (rawOrders is Map) {
+      rawOrders.forEach((k, v) {
+        if (v is! Map) return;
+        final order = PartOrder.fromJson(Map<String, dynamic>.from(v));
+        if (!order.isEmpty) orders[k.toString()] = order;
+      });
+    }
+
     final todos = [
       for (final t in (json['todos'] as List? ?? []))
         if (t is Map && t['text']?.toString().trim().isNotEmpty == true)
@@ -1329,6 +1720,8 @@ class BuildingProject {
       todos: todos,
       tracks: tracks,
       partTracks: trackPins,
+      partOrders: orders,
+      history: history,
       trackCounter: [
         (json['trackCounter'] as num?)?.toInt() ?? 0,
         highest(tracks.map((t) => t.id), 'track'),
@@ -1396,6 +1789,8 @@ class BuildingProject {
     todos: List<ProjectTodo>.from(todos),
     tracks: List<ProjectTrack>.from(tracks),
     partTracks: Map<String, String>.from(partTracks),
+    partOrders: Map<String, PartOrder>.from(partOrders),
+    history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,
     vendorCounter: _vendorCounter,
     todoCounter: _todoCounter,

@@ -131,6 +131,17 @@ class _Overview extends StatelessWidget {
                 ? '${o.parts}'
                 : '${o.parts}  ·  ${o.partsWithoutLeadTime} with no lead time',
           ),
+          // The half of the job that is DONE. Without it, a count of what is
+          // late is a number nobody can weigh.
+          if (o.partsOnOrder > 0 || o.partsReceived > 0)
+            fact(
+              Icons.local_shipping_outlined,
+              'Bought',
+              [
+                if (o.partsOnOrder > 0) '${o.partsOnOrder} on order',
+                if (o.partsReceived > 0) '${o.partsReceived} arrived',
+              ].join('  ·  '),
+            ),
           fact(
             Icons.event,
             'Delivery',

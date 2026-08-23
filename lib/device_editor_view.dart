@@ -661,6 +661,39 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             ),
             const SizedBox(width: 12),
             SizedBox(
+              width: 140,
+              child: LiveTextField(
+                fieldId: 'lead_$key',
+                // Blank is a real answer and NOT the same as 0 — see
+                // [AvDeviceTemplate.leadTimeDays]. Blank means nobody has
+                // asked the vendor; 0 means it is on the shelf. A schedule
+                // that folded them together would make every product nobody
+                // has checked look available tomorrow.
+                initial: entry.leadTimeDays == null
+                    ? ''
+                    : '${entry.leadTimeDays}',
+                label: 'Lead time',
+                suffix: 'days',
+                helper: entry.leadTimeDays == 0
+                    ? 'in stock'
+                    : 'blank = not asked',
+                numeric: true,
+                onChanged: (v) {
+                  final typed = v.trim();
+                  final days = typed.isEmpty ? null : int.tryParse(typed);
+                  setState(
+                    () => _apply(
+                      entry.copyWith(
+                        leadTimeDays: days,
+                        clearLeadTime: days == null,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
               width: 130,
               child: LiveTextField(
                 fieldId: 'watts_$key',

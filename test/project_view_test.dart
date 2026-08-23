@@ -404,6 +404,8 @@ void main() {
         'Timeline',
         'Vendors',
         'To do',
+        'Notes',
+        'History',
       ]) {
         await pump(tester, p, width: width);
         await tester.tap(find.text(pane));

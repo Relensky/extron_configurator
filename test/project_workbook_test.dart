@@ -469,4 +469,117 @@ void main() {
       isNotEmpty,
     );
   });
+
+  // -------------------------------------------------------------------------
+  //  THE HISTORY SHEET
+  // -------------------------------------------------------------------------
+
+  group('the history sheet', () {
+    /// The same job, with a few recorded changes on it.
+    ProjectEstimate jobWithHistory() {
+      final estimate = job();
+      estimate.project
+        ..logEdit(
+          itemKey: 'part:x',
+          itemName: 'DTP2 T 211',
+          field: 'Lead time',
+          summary: 'set to 42 days',
+          user: 'alice',
+          at: DateTime(2026, 3, 4, 9, 5),
+        )
+        ..logEdit(
+          itemKey: 'part:x',
+          itemName: 'DTP2 T 211',
+          field: 'Order',
+          summary: 'ordered on 2026-03-05, PO PO-1234',
+          user: 'bob',
+          at: DateTime(2026, 3, 5, 14, 32),
+        )
+        ..logEdit(
+          itemKey: 'project',
+          itemName: 'Bessey refresh',
+          field: 'Delivery deadline',
+          summary: 'set to 2026-06-01',
+          // No login: what an environment that says nothing produces. Left
+          // blank rather than dressed up as a name — see currentUserName.
+          user: '',
+          at: DateTime(2026, 3, 6, 11, 0),
+        );
+      return estimate;
+    }
+
+    test('it is there, after the job sheets and before the vendors', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: jobWithHistory()));
+
+      expect(tabNames(archive), [
+        'Summary',
+        'Core Components',
+        'Order Timeline',
+        'Spares',
+        // A record about the JOB, so it sits with the job's own sheets rather
+        // than pushing the tabs somebody actually sends further along.
+        'History',
+        'Extron Direct',
+        'AV Reseller',
+        'Bessey 101',
+        'Bessey 103',
+      ]);
+    });
+
+    test('it carries the change, the item, the time and the login', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: jobWithHistory()));
+      final sheet = sheetNamed(archive, 'History');
+
+      expect(sheet, contains('DTP2 T 211'));
+      expect(sheet, contains('set to 42 days'));
+      expect(sheet, contains('ordered on 2026-03-05, PO PO-1234'));
+      expect(sheet, contains('alice'));
+      expect(sheet, contains('bob'));
+      // 24 hour, zero padded, so the column sorts and reads the same
+      // everywhere.
+      expect(sheet, contains('14:32'));
+      expect(sheet, contains('09:05'));
+      expect(sheet, contains('2026-03-04'));
+    });
+
+    test('it reads newest first and counts who did what', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: jobWithHistory()));
+      final sheet = sheetNamed(archive, 'History');
+
+      // The most recent change comes before the oldest one on the sheet.
+      expect(
+        sheet.indexOf('Delivery deadline'),
+        lessThan(sheet.indexOf('set to 42 days')),
+      );
+      expect(sheet, contains('Who has worked on this job'));
+      // The entry nobody was recorded against is counted rather than dropped.
+      expect(sheet, contains('(not recorded)'));
+    });
+
+    test('a job with no recorded changes has no sheet at all', () {
+      final archive =
+          ZipDecoder().decodeBytes(buildProjectWorkbookBytes(estimate: job()));
+      expect(tabNames(archive), isNot(contains('History')));
+    });
+
+    test('a QUOTE REQUEST never carries it', () {
+      final estimate = jobWithHistory();
+      final archive = ZipDecoder().decodeBytes(
+        buildVendorRfqBytes(
+          estimate: estimate,
+          package: estimate.vendors.first,
+        ),
+      );
+
+      // This is the file that gets emailed to a supplier. An audit trail of
+      // who changed what internally is exactly the kind of thing that must not
+      // leave the building on it.
+      expect(tabNames(archive), isNot(contains('History')));
+      expect(wholeBook(archive), isNot(contains('alice')));
+      expect(wholeBook(archive), isNot(contains('PO-1234')));
+    });
+  });
 }
