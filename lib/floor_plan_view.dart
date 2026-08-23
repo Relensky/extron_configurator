@@ -436,7 +436,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             caption = planName.isEmpty ? 'Floor plan' : planName;
           } else {
             final what = layer == _kLayerAll ? 'All runs' : layer;
-            caption = many && planName.isNotEmpty ? '$planName — $what' : what;
+            caption = many && planName.isNotEmpty ? '$planName - $what' : what;
           }
           out.add((
             name: uniqueXlsxSheetName(caption, taken),
@@ -549,7 +549,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final model = buildAvFlowModel(provider);
     final sections = locationSections(model);
     if (sections.isEmpty) {
-      _snack('Nothing to report yet — no locations, runs or callouts.');
+      _snack('Nothing to report yet - no locations, runs or callouts.');
       return;
     }
     final title = model.roomTitle.isEmpty ? 'Floor plan' : model.roomTitle;
@@ -573,7 +573,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
     final model = buildAvFlowModel(provider);
     final sections = locationSections(model);
     if (sections.isEmpty) {
-      _snack('Nothing to report yet — no locations, runs or callouts.');
+      _snack('Nothing to report yet - no locations, runs or callouts.');
       return;
     }
     final title = model.roomTitle.isEmpty ? 'Floor plan' : model.roomTitle;
@@ -1059,7 +1059,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             autofocus: true,
             decoration: const InputDecoration(
               labelText: 'Sheet name',
-              hintText: 'e.g. Level 2, Reflected ceiling, Demolition',
+              hintText: 'e.g. Level 2, Reflected ceiling, Furniture',
               border: OutlineInputBorder(),
             ),
             onSubmitted: (v) => Navigator.of(ctx).pop(v),
@@ -1103,7 +1103,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           '${sheet.markers.length == 1 ? '' : 's'}',
                   ].join(' and ')}. The drawing file it points at stays where '
                   'it is, and the room\'s locations themselves are not touched '
-                  '— they belong to the room, and only where they are DRAWN '
+                  '- they belong to the room, and only where they are DRAWN '
                   'belongs to this sheet.',
         ),
         actions: [
@@ -1159,7 +1159,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Everything printed on the sheet — run labels, the key — '
+                    'Everything printed on the sheet - run labels, the key - '
                     'takes its ink from the paper, so every colour here reads '
                     'either way.',
                     style: Theme.of(ctx).textTheme.bodySmall,
@@ -1296,7 +1296,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   contentKey: _planKey,
                   viewportKey: _viewportKey,
                 );
-                if (!fitted) _snack('The plan is still drawing — try again.');
+                if (!fitted) _snack('The plan is still drawing - try again.');
               },
             ),
             // The legend that travels with the exported image. On by default:
@@ -1305,7 +1305,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             FilterChip(
               avatar: const Icon(Icons.legend_toggle, size: 18),
               label: const Text('Key'),
-              tooltip: 'Draw the key on the sheet — it is part of the '
+              tooltip: 'Draw the key on the sheet - it is part of the '
                   'exported image',
               selected: !plan.keyHidden,
               onSelected: (v) => provider.updateAvFloorPlan(
@@ -1820,7 +1820,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   children: [
                     Expanded(
                       child: Text(
-                        'KEY — ${plan.name}'.toUpperCase(),
+                        'KEY - ${plan.name}'.toUpperCase(),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -1912,7 +1912,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                           'see ${c.workbookSheet}'
                               '${c.workbookRef.isEmpty ? '' : ' · ${c.workbookRef}'}',
                         if (c.note.isNotEmpty) c.note,
-                      ].join(' — '),
+                      ].join(' - '),
                     ),
                   if (plan.callouts.length > _kPlanKeyMaxRows)
                     _keyMore(dark, plan.callouts.length - _kPlanKeyMaxRows),
@@ -1966,7 +1966,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
   Widget _keyMore(bool dark, int hidden) => Padding(
     padding: const EdgeInsets.only(top: 1),
     child: Text(
-      '+$hidden more — see the location report',
+      '+$hidden more - see the location report',
       style: TextStyle(
         fontSize: 8.5,
         fontStyle: FontStyle.italic,
@@ -2654,7 +2654,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           if (missing > 0)
             Tooltip(
               message: 'At least one end of a run has to be on THIS sheet '
-                  'before it can be drawn — with one end placed it leaves the '
+                  'before it can be drawn - with one end placed it leaves the '
                   'page as a squiggle. Turn on "Place locations" and click '
                   'where the missing end goes.',
               child: Text(
@@ -2721,7 +2721,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
         await file.writeAsBytes(drawing.bytes);
         written.add(p.basename(file.path));
       } catch (e) {
-        failed.add('${drawing.caption} — $e');
+        failed.add('${drawing.caption} - $e');
       }
     }
 
@@ -2842,7 +2842,8 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             maxLines: 4,
             minLines: 1,
             decoration: const InputDecoration(
-              hintText: 'e.g. Core drill here — conduit up to ceiling',
+              hintText: 'e.g. Contact facilities: conduit up to the '
+                  'ceiling here',
               border: OutlineInputBorder(),
             ),
           ),
@@ -2928,7 +2929,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
           provider.removeAvLocationMarker(plan.id, location.id);
           _snack(
             '${location.name} taken off ${plan.name}. The location itself is '
-            'untouched — undo, or click the sheet again to put it back.',
+            'untouched - undo, or click the sheet again to put it back.',
           );
         },
         child: Tooltip(
@@ -3355,7 +3356,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
               List<Offset>.from(bends)..removeAt(i),
             ),
             child: Tooltip(
-              message: 'Drag to route this run — it snaps square with the '
+              message: 'Drag to route this run - it snaps square with the '
                   'bends either side · double-click to drop it',
               child: Container(
                 width: r * 2,
@@ -3682,7 +3683,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                   'the key, the callout list and the notes end up on top of the '
                   'walls. This is paper added round the plan for them to sit '
                   'on. It is part of the sheet, so it is in the exported image '
-                  'and in the workbook — and everything already drawn moves '
+                  'and in the workbook - and everything already drawn moves '
                   'with the plan rather than sliding off it.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
@@ -4399,7 +4400,7 @@ class _CountStrip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Text(
           model.locations.isEmpty
-              ? 'No locations yet — add some under "Locations" and set them on '
+              ? 'No locations yet - add some under "Locations" and set them on '
                     'each device, and the jack and cable counts appear here.'
               : 'Nothing is recorded at any location yet.',
           style: theme.textTheme.bodySmall,

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// Putting a job away.
@@ -161,6 +162,54 @@ void main() {
         isNull,
         reason: 'Close on nothing must not clear a job somebody just started',
       );
+    });
+  });
+
+  group('the job is FOR somebody', () {
+    // Renamed from 'client': this shop's work is for the university, and
+    // nobody on the other side of one of these quotes is buying anything.
+    test('it round-trips under its own name', () {
+      final project = BuildingProject(stakeholder: 'Facilities');
+      expect(project.toJson()['stakeholder'], 'Facilities');
+      expect(project.toJson().containsKey('client'), isFalse);
+      expect(
+        BuildingProject.fromJson(project.toJson()).stakeholder,
+        'Facilities',
+      );
+    });
+
+    test('a project file written before the rename still reads', () {
+      // The old key is what is in every project file already saved, and one
+      // of them is what somebody opens this afternoon.
+      final old = BuildingProject.fromJson({
+        'name': 'Bessey refresh',
+        'client': 'Physics department',
+      });
+      expect(old.stakeholder, 'Physics department');
+      // Written back under the new name, so the old key retires as each
+      // project is saved rather than on a migration nobody asked for.
+      expect(old.toJson()['stakeholder'], 'Physics department');
+      expect(old.toJson().containsKey('client'), isFalse);
+    });
+
+    test('the new name wins when a file somehow carries both', () {
+      final both = BuildingProject.fromJson({
+        'client': 'the old answer',
+        'stakeholder': 'the current one',
+      });
+      expect(both.stakeholder, 'the current one');
+    });
+
+    test('it counts toward a project having anything in it at all', () {
+      // Otherwise Close would treat a job with a stakeholder typed on it as
+      // an empty one and put it away without asking.
+      expect(BuildingProject().isEmpty, isTrue);
+      expect(BuildingProject(stakeholder: 'Facilities').isEmpty, isFalse);
+    });
+
+    test('a clone carries it', () {
+      final project = BuildingProject(stakeholder: 'Facilities');
+      expect(project.clone().stakeholder, 'Facilities');
     });
   });
 }

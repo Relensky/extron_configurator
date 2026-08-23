@@ -40,13 +40,13 @@ String recoveryLine(ConfigDelta delta) {
 
   switch (delta.kind) {
     case DeltaKind.added:
-      return '${delta.label} — not in the file, would be added: '
+      return '${delta.label} - not in the file, would be added: '
           '${show(delta.after)}';
     case DeltaKind.removed:
-      return '${delta.label} — in the file, would be removed: '
+      return '${delta.label} - in the file, would be removed: '
           '${show(delta.before)}';
     case DeltaKind.changed:
-      return '${delta.label} — ${show(delta.before)} would become '
+      return '${delta.label} - ${show(delta.before)} would become '
           '${show(delta.after)}';
   }
 }
@@ -136,7 +136,7 @@ Future<void> showRecoveryDialog(
             ),
             const SizedBox(height: 10),
             Text(
-              'Restoring puts the copy on screen — ${found.origin.isEmpty ? 'the '
+              'Restoring puts the copy on screen - ${found.origin.isEmpty ? 'the '
                   'file' : p.basename(found.origin)} is not written until you '
                   'press Save.',
               style: Theme.of(ctx).textTheme.bodySmall,
@@ -173,7 +173,7 @@ Future<void> showRecoveryDialog(
         SnackBar(
           duration: const Duration(seconds: 8),
           content: Text(
-            'Recovered work is on screen. $name has NOT been written yet — '
+            'Recovered work is on screen. $name has NOT been written yet - '
             'check it, then press Save.',
           ),
         ),

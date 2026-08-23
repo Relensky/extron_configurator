@@ -63,7 +63,7 @@ void main() {
       // And it grows with the name: a fixed guess is a cable through the last
       // word of a long room name.
       expect(
-        avRoomTitleRect('Sierra Hall 1200 — Active Learning', null).width,
+        avRoomTitleRect('Sierra Hall 1200 - Active Learning', null).width,
         greaterThan(rect.width),
       );
     });

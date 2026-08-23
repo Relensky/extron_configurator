@@ -74,7 +74,7 @@ void main() {
     expect(find.byKey(const ValueKey('stepped_date_month_3')), findsOneWidget);
 
     await stepUp(tester);
-    expect(find.text('2021 – 2036'), findsOneWidget);
+    expect(find.text('2021 - 2036'), findsOneWidget);
     expect(find.byKey(const ValueKey('stepped_date_year_2028')), findsOneWidget);
 
     // Nowhere further up to go — a range is not inside anything.

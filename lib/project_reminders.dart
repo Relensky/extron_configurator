@@ -167,7 +167,7 @@ ReminderExport buildOrderReminders({
       ..write('\n\n');
     for (final p in parts) {
       body.write('• ${p.line.qty.toStringAsFixed(0)} × ${p.line.description}');
-      if (p.line.vendor != null) body.write('  —  ${p.line.vendor!.name}');
+      if (p.line.vendor != null) body.write('  -  ${p.line.vendor!.name}');
       body.write('  (lead ${formatLeadTime(p.leadDays)}');
       if (p.needBy != null) {
         body.write(', on site by ${formatScheduleDate(p.needBy!)}');
@@ -218,7 +218,7 @@ ReminderExport buildOrderReminders({
       // for an order that went out last week is exactly the noise that makes
       // people stop importing these.
       if (l.orderBy == null && !l.isBought)
-        '${l.line.description} — '
+        '${l.line.description} - '
             '${l.status == OrderStatus.noDeadline ? 'no delivery date' : 'no lead time recorded'}',
   ];
 

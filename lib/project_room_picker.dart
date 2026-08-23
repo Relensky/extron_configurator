@@ -312,7 +312,7 @@ Future<bool> confirmLeavingRoom(
     builder: (ctx) => AlertDialog(
       title: const Text('Save this room first?'),
       content: Text(
-        '$name has changes that are not in its file — a field, a box on a '
+        '$name has changes that are not in its file - a field, a box on a '
         'drawing, a price, or all three.\n\n'
         'Switching rooms reads the next room off disk, so anything not saved '
         'here goes.',

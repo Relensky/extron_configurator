@@ -483,7 +483,7 @@ Future<bool> showScreenSwitchEditor(
                   ],
                 ),
                 const SizedBox(height: 14),
-                Text('Start — the switch', style: Theme.of(ctx).textTheme.titleSmall),
+                Text('Start - the switch', style: Theme.of(ctx).textTheme.titleSmall),
                 const SizedBox(height: 6),
                 _ScreenSwitchEnd(
                   provider: provider,
@@ -505,7 +505,7 @@ Future<bool> showScreenSwitchEditor(
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'End — the screen or motor',
+                  'End - the screen or motor',
                   style: Theme.of(ctx).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 6),

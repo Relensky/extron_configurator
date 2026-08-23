@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/project_history_view.dart';
 
@@ -166,6 +169,104 @@ void main() {
       p.setProjectField(notes: 'same');
       p.setProjectField(notes: 'same');
       expect(p.project.historyFor('project'), hasLength(1));
+    });
+  });
+
+  group('a room is named the way the work order names it', () {
+    /// A room config with the code on the door in it, on disk.
+    String writeRoom(
+      String stem, {
+      String bldg = 'BSS',
+      String number = '103',
+    }) {
+      final configPath = path.join(dir.path, '${stem}_config.json');
+      File(configPath).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {
+          'gui_full_room_name': 'Behavioral And Social Science 103',
+          if (bldg.isNotEmpty) 'gve_bldg': bldg,
+          if (number.isNotEmpty) 'gve_room': number,
+        },
+      }));
+      return configPath;
+    }
+
+    test('saving a room records the room code and the file', () async {
+      final p = job();
+      final file = writeRoom('bss103');
+      p.addRoomToProject(file);
+      await p.openConfigAtPath(file);
+
+      await p.saveCurrentConfigToFile();
+
+      final saved = p.project.history.where((e) => e.field == 'Saved');
+      expect(saved, hasLength(1));
+      // 'BSS_103_config' is how the room is STORED. This is what is on the
+      // door, followed by which of its files was written.
+      expect(saved.single.itemName, 'BSS 103 - Config');
+      expect(saved.single.summary, startsWith('to disk'));
+    });
+
+    test('the sidecars written with it are named too', () async {
+      final p = job();
+      final file = writeRoom('bss103');
+      p.addRoomToProject(file);
+      await p.openConfigAtPath(file);
+      // A room with a diagram writes its AV flow beside the config.
+      p.addAvNode(const AvNode(
+        id: 'd1',
+        label: 'Lectern TX',
+        model: 'DTP2 T 211',
+        pos: Offset.zero,
+        ports: [],
+      ));
+
+      await p.saveCurrentConfigToFile();
+
+      final saved = p.project.history.lastWhere((e) => e.field == 'Saved');
+      // One entry per SAVE, not one per file: six rows per press would bury
+      // every decision on the job under the act of pressing Save.
+      expect(p.project.history.where((e) => e.field == 'Saved'), hasLength(1));
+      expect(saved.summary, contains('AV flow'));
+    });
+
+    test('a room nobody has read yet falls back to its file', () {
+      // Neither open nor priced, so there is no config in memory to read a
+      // code out of. A file stem is a poor name and it is still better than
+      // an entry with no subject at all.
+      final p = job();
+      p.addRoomToProject(writeRoom('mystery'));
+      final id = p.project.rooms.first.id;
+      expect(p.projectRoomLogName(id), 'mystery_config');
+      expect(p.projectRoomLogName(id, file: 'Config'),
+          'mystery_config - Config');
+    });
+
+    test('a room saved outside the open job is not logged onto it', () async {
+      final p = job();
+      final file = writeRoom('elsewhere');
+      // Never added to the project.
+      await p.openConfigAtPath(file);
+
+      await p.saveCurrentConfigToFile();
+
+      expect(p.project.history.where((e) => e.field == 'Saved'), isEmpty);
+    });
+
+    test('adding and removing a room name it the same way', () async {
+      final p = job();
+      final file = writeRoom('bss103');
+      p.addRoomToProject(file);
+      await p.openConfigAtPath(file);
+      // The code is read off whatever is in memory, so it is available from
+      // the moment the room is open rather than only after a price.
+      final id = p.project.rooms.first.id;
+      expect(p.projectRoomLogName(id), 'BSS 103');
+      expect(p.projectRoomLogName(id, file: 'Cost'), 'BSS 103 - Cost');
+
+      p.removeRoomFromProject(id);
+      final removed = p.project.history.last;
+      expect(removed.itemName, 'BSS 103');
+      expect(removed.summary, contains('removed from the job'));
     });
   });
 

@@ -284,7 +284,7 @@ void main() {
       );
     });
 
-    test('two runs of the SAME cable look alike — they are alike', () {
+    test('two runs of the SAME cable look alike - they are alike', () {
       // They are told apart by being fanned onto their own lanes, not by
       // being drawn as if they were different cables.
       final p = room();

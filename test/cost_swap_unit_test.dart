@@ -235,7 +235,7 @@ void main() {
       await pick(tester, 'model:display 65', 'Display 86');
 
       expect(find.byKey(const ValueKey('swap_no_module_warning')), findsNothing,
-          reason: 'nothing to warn about — a module claims the 86');
+          reason: 'nothing to warn about - a module claims the 86');
       expect(p.avNodeById('PROJECTORDEVICE_1')!.model, 'Display 86');
     });
 

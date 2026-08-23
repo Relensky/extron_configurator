@@ -255,7 +255,7 @@ void main() {
       expect(plan.alreadyDrawn, greaterThan(0));
     });
 
-    test('output numbers are left alone — there is no output side', () {
+    test('output numbers are left alone - there is no output side', () {
       final plan = planRoutingFromConfig(room(extraSetup: const {
         'output_monitor_1': '2',
         'output_audio': '1',

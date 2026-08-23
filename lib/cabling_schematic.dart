@@ -1429,7 +1429,7 @@ CablingSchematic buildCablingSchematic({
     final box = CablingBox(
       id: kUnplacedBoxId,
       label: 'Not placed yet',
-      body: '$unplacedEnds run${unplacedEnds == 1 ? '' : 's'} end here — '
+      body: '$unplacedEnds run${unplacedEnds == 1 ? '' : 's'} end here - '
           'set a location on the device, or place it on the floor plan, and '
           'the run moves to it.',
       kind: CablingBoxKind.location,

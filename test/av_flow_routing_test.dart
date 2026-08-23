@@ -270,7 +270,7 @@ void main() {
 
   const template = 'C:/GitHub/ControlScript-Template/rooms';
 
-  test('BSS 239 — the current standard hyflex build', () async {
+  test('BSS 239 - the current standard hyflex build', () async {
     final p = await roomFrom('$template/BSS239/code/upload_to_root/config.json');
     if (p == null) return; // the template repo is not beside this one
     final plan = planRoutingFromConfig(p);
@@ -374,7 +374,7 @@ void main() {
     expect(tie(plan, 'output_proj_2'), isNull);
   });
 
-  test('BSS 122 — the catalog counts connectors on this one', () async {
+  test('BSS 122 - the catalog counts connectors on this one', () async {
     final p = await roomFrom('$template/BSS122/code/upload_to_root/config.json');
     if (p == null) return;
     final plan = planRoutingFromConfig(p);
@@ -400,7 +400,7 @@ void main() {
         isEmpty);
   });
 
-  test('AJH 125A — an IN1608, whose outputs are lettered', () async {
+  test('AJH 125A - an IN1608, whose outputs are lettered', () async {
     final p =
         await roomFrom('$template/AJH125A/code/upload_to_root/config.json');
     if (p == null) return;

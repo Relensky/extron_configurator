@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
@@ -65,6 +66,18 @@ enum _ProjectPane {
   final IconData icon;
   const _ProjectPane(this.label, this.icon);
 }
+
+/// Below this the header stops trying to fit everything side by side: the
+/// identity fields stack and the buttons drop their labels.
+///
+/// Measured from what the fields need rather than picked off a device list.
+/// The two short codes take 160 and 140, the gaps and the page padding take
+/// another 56, and what is left has to hold two PROSE fields - the job's name
+/// and who it is for - at a width where each is a field rather than a slot.
+///
+/// Public so the layout tests can ask which side of it they are on instead of
+/// carrying a second copy of the number that drifts from this one.
+const double kProjectHeaderCompactWidth = 1040;
 
 /// How much weight a header action carries. The two exports are what the tab
 /// is for and are drawn as such; the file actions are not.
@@ -190,7 +203,7 @@ class _ProjectViewState extends State<ProjectView> {
     ProjectEstimate estimate,
   ) async {
     if (estimate.rooms.isEmpty) {
-      _snack('Add some rooms first — there is nothing to write.');
+      _snack('Add some rooms first - there is nothing to write.');
       return;
     }
     final picked = await FilePicker.saveFile(
@@ -233,7 +246,7 @@ class _ProjectViewState extends State<ProjectView> {
       _snack(
         estimate.master.isEmpty
             ? 'Nothing on the master list yet.'
-            : 'No parts are tagged to a vendor yet — set up a vendor rule or '
+            : 'No parts are tagged to a vendor yet - set up a vendor rule or '
                   'tag some parts, and each vendor gets a file.',
       );
       return;
@@ -254,7 +267,7 @@ class _ProjectViewState extends State<ProjectView> {
         );
         written.add(name);
       } catch (e) {
-        failed.add('$name — $e');
+        failed.add('$name - $e');
       }
     }
 
@@ -358,12 +371,7 @@ class _ProjectViewState extends State<ProjectView> {
     // is a button that cannot be pressed on a screen with plenty of room left
     // on it.
     return LayoutBuilder(builder: (context, box) {
-    // Below this the three identity fields cannot sit side by side and still
-    // leave a name field wide enough to read a project name in. Measured from
-    // what they need rather than picked off a device list: 160 + 140 for the
-    // two small ones, 16 of gaps, 32 of page padding, and enough left for the
-    // name to be a field rather than a slot.
-    final compact = box.maxWidth < 920;
+    final compact = box.maxWidth < kProjectHeaderCompactWidth;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -694,11 +702,30 @@ class _ProjectViewState extends State<ProjectView> {
       label: 'Job number',
       onChanged: (v) => provider.setProjectField(jobNumber: v),
     );
+    // WHO THE JOB IS FOR, beside what it is called. It goes out on the
+    // workbook's first sheet and on every quote request, and until it was here
+    // the only way to set it was through the API - a field on a document
+    // nobody could fill in.
+    //
+    // Second rather than last: it is prose like the name, and the two short
+    // codes belong together at the end. Put last, a narrow window would strand
+    // a full-width prose field underneath a row of two codes.
+    final stakeholder = LiveTextField(
+      fieldId: 'project_stakeholder_${provider.currentProjectPath}',
+      initial: provider.project.stakeholder,
+      label: 'Stakeholder',
+      hint: 'Physics department',
+      onChanged: (v) => provider.setProjectField(stakeholder: v),
+    );
 
     if (!compact) {
       return Row(
         children: [
-          Expanded(child: name),
+          // The name gets the larger share: it is the longest of the four and
+          // the one every other screen refers back to.
+          Expanded(flex: 3, child: name),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: stakeholder),
           const SizedBox(width: 8),
           SizedBox(width: 160, child: building),
           const SizedBox(width: 8),
@@ -711,6 +738,8 @@ class _ProjectViewState extends State<ProjectView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         name,
+        const SizedBox(height: 8),
+        stakeholder,
         const SizedBox(height: 8),
         Row(
           children: [
@@ -725,11 +754,11 @@ class _ProjectViewState extends State<ProjectView> {
 
   String _warningTooltip(ProjectEstimate estimate) => [
     if (estimate.failedRooms > 0)
-      '${estimate.failedRooms} room(s) could not be read — the total is short.',
+      '${estimate.failedRooms} room(s) could not be read - the total is short.',
     if (estimate.unpricedParts > 0)
       '${estimate.unpricedParts} part(s) have no price anywhere.',
     if (estimate.undrivenDevices > 0)
-      '${estimate.undrivenDevices} device(s) have no control module — quoted, '
+      '${estimate.undrivenDevices} device(s) have no control module - quoted, '
           'but they will not commission as they stand.',
     if (estimate.mixedCurrency)
       'Rooms are quoted in different currencies and are being added anyway.',
@@ -812,7 +841,7 @@ Future<void> showPartPriceDialog(
                     const SizedBox(height: 8),
                     Text(
                       'This part has no model, so the catalog has nothing to '
-                      'file a price under — only the job price is available.',
+                      'file a price under - only the job price is available.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: errorTextOn(theme.colorScheme,
                             theme.dialogTheme.backgroundColor ??
@@ -879,7 +908,7 @@ Future<void> showPartPriceDialog(
       '${result.roomsWritten} room'
           '${result.roomsWritten == 1 ? '' : 's'} written',
     if (result.openRoomChanged)
-      'the open room changed on screen — save it to keep the price',
+      'the open room changed on screen - save it to keep the price',
     if (result.failures.isNotEmpty)
       '${result.failures.length} could not be written: '
           '${result.failures.join('; ')}',
@@ -890,7 +919,7 @@ Future<void> showPartPriceDialog(
       duration: const Duration(seconds: 8),
       content: Text(
         '${line.description} priced at ${formatMoney(price, currency)} on this '
-        'job — ${parts.join('; ')}.',
+        'job - ${parts.join('; ')}.',
       ),
       backgroundColor:
           result.failures.isEmpty ? null : snackErrorFillOn(messenger),
@@ -1195,7 +1224,7 @@ class _RoomRowState extends State<_RoomRow> {
             Tooltip(
               message: room.ref.included
                   ? 'Counted in the project total'
-                  : 'Kept on the job but out of the total — an alternate, or '
+                  : 'Kept on the job but out of the total - an alternate, or '
                         'a later phase',
               child: Checkbox(
                 value: room.ref.included,
@@ -1257,7 +1286,7 @@ class _RoomRowState extends State<_RoomRow> {
                         Expanded(
                           child: Text(
                             unsaved
-                                ? 'Open in the editor — counted with its '
+                                ? 'Open in the editor - counted with its '
                                       'unsaved changes'
                                 : 'Open in the editor',
                             maxLines: 2,
@@ -1329,7 +1358,8 @@ class _RoomRowState extends State<_RoomRow> {
                       key: ValueKey('room_row_notes_${room.ref.id}'),
                       fieldId: 'room_row_notes_${room.ref.id}',
                       initial: room.ref.notes,
-                      hint: 'e.g. asbestos above the grid',
+                      hint: 'e.g. asbestos above the grid, contact '
+                          'facilities',
                       onChanged: (v) =>
                           provider.updateProjectRoom(room.ref.id, notes: v),
                     ),
@@ -1338,10 +1368,23 @@ class _RoomRowState extends State<_RoomRow> {
               ),
             ),
             const SizedBox(width: 4),
+            // WHAT IS ODD ABOUT THIS ROOM. Bigger than the buttons beside it
+            // on purpose: it is the one thing on the row that is not always
+            // there, and at 18 pixels in the quiet ink it read as decoration.
+            //
+            // Pressing it COPIES. What it lists is the answer to "why is this
+            // room's total short", and that question is nearly always being
+            // asked by somebody who is not in front of the app: a tooltip can
+            // only be read, and a list that has to be retyped into a message
+            // is one that arrives shortened.
             if (e != null && _roomFlags(room).isNotEmpty)
-              Tooltip(
-                message: _roomFlags(room).join('\n'),
-                child: Icon(Icons.info_outline, size: 18, color: quiet),
+              IconButton(
+                key: ValueKey('room_row_flags_${room.ref.id}'),
+                tooltip:
+                    '${_roomFlags(room).join('\n')}'
+                    '\n\nClick to copy',
+                icon: Icon(Icons.info_outline, size: 24, color: quiet),
+                onPressed: () => _copyFlags(room),
               ),
             IconButton(
               tooltip: 'Move up',
@@ -1368,17 +1411,42 @@ class _RoomRowState extends State<_RoomRow> {
     );
   }
 
+  /// Puts the room's flags on the clipboard, named so the paste stands alone.
+  ///
+  /// The room's code leads, because a bare list of "3 line(s) have no price"
+  /// pasted into a message is a fact with no subject.
+  Future<void> _copyFlags(ProjectRoomCost room) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final flags = _roomFlags(room);
+    await Clipboard.setData(
+      ClipboardData(
+        text: [
+          room.codeName,
+          for (final f in flags) '- $f',
+        ].join('\n'),
+      ),
+    );
+    if (!mounted) return;
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 3),
+        content: Text('Copied what is flagged on ${room.codeName}'),
+      ),
+    );
+  }
+
   static List<String> _roomFlags(ProjectRoomCost room) {
     final e = room.estimate!;
     return [
       if (room.room.isEmpty) 'Nothing drawn in this room yet.',
       if (e.unpricedLines > 0)
-        '${e.unpricedLines} line(s) have no price — this room\'s total is '
+        '${e.unpricedLines} line(s) have no price - this room\'s total is '
             'short.',
       if (e.unratedLabor > 0)
         '${e.unratedLabor} labor line(s) have no rate on the rate card.',
       if (e.estimatedLines > 0)
-        '${e.estimatedLines} line(s) priced off the base-cost card — '
+        '${e.estimatedLines} line(s) priced off the base-cost card - '
             'budgetary, not quoted.',
       if (e.otherTierLines > 0)
         '${e.otherTierLines} line(s) could only be priced at the other '
@@ -1532,7 +1600,7 @@ class _BuildingTotals extends StatelessWidget {
                 child: Text(
                   'Rooms on this project are quoted in different currencies. '
                   'The figures above add them as though they were the same '
-                  'one — fix the room currencies before relying on any of it.',
+                  'one - fix the room currencies before relying on any of it.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: errorOn(
                       theme.colorScheme,
@@ -1548,7 +1616,7 @@ class _BuildingTotals extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'Fees and tax are each room’s own, applied at that '
-                'room’s rates and then added — not a project-wide '
+                'room’s rates and then added - not a project-wide '
                 'percentage.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
@@ -1753,7 +1821,7 @@ List<Widget> partsSlivers(
             padding: EdgeInsets.all(24),
             child: Text(
               'Nothing to order yet.\n\n'
-              'The master list is built from the rooms on this project — '
+              'The master list is built from the rooms on this project - '
               'add rooms that have equipment on them.',
               textAlign: TextAlign.center,
             ),
@@ -2136,7 +2204,7 @@ class _PartRow extends StatelessWidget {
                           Flexible(
                             flex: 3,
                             child: Text(
-                              'No control module — $undriven',
+                              'No control module - $undriven',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: errorTextOn(theme.colorScheme, theme.cardColor),
                               ),
@@ -2209,10 +2277,10 @@ class _PartRow extends StatelessWidget {
               child: Tooltip(
                 message: line.unpriced
                     ? 'Nothing on this job has a price for this part. Click '
-                        'to set one — in the catalog, or on this job only.'
+                        'to set one - in the catalog, or on this job only.'
                     : line.priceVaries
                         ? 'Rooms on this job hold different prices for this '
-                            'part — one of them has a negotiated override.\n'
+                            'part - one of them has a negotiated override.\n'
                             'Click to set one price for the job.'
                         : 'Click to change the price',
                 child: InkWell(
@@ -2228,7 +2296,7 @@ class _PartRow extends StatelessWidget {
                   line.unpriced
                       ? 'not priced'
                       : line.priceVaries
-                      ? '${formatMoney(line.unitPrice, currency)}–'
+                      ? '${formatMoney(line.unitPrice, currency)}-'
                             '${formatMoney(line.maxUnitPrice, currency)}'
                       : formatMoney(line.unitPrice, currency),
                   textAlign: TextAlign.right,
@@ -2271,7 +2339,7 @@ class _PartRow extends StatelessWidget {
               child: line.tagSource == VendorTagSource.pinned
                   ? IconButton(
                       tooltip:
-                          'Clear the pin — let the vendor rules decide '
+                          'Clear the pin - let the vendor rules decide '
                           'again',
                       icon: const Icon(Icons.push_pin, size: 18),
                       onPressed: () => provider.pinProjectPart(
@@ -2409,7 +2477,7 @@ class _ScheduleCells extends StatelessWidget {
                 ? 'Needs a lead time and a delivery date before this can be '
                     'worked out.'
                 : '${kOrderStatusLabels[part.status]}'
-                    ' — ${formatDayGap(part.daysUntilOrder ?? 0)}.\n'
+                    ' - ${formatDayGap(part.daysUntilOrder ?? 0)}.\n'
                     'On site by ${formatScheduleDate(part.needBy!)}'
                     '${part.needByIsOwn ? ' (ahead of the job)' : ''}.',
             child: InkWell(
@@ -2577,7 +2645,7 @@ Future<void> swapPartAcrossProject(
         content: Text(
           plan.failedRooms.isEmpty
               ? 'No room on this project has a ${line.model} on its drawing.'
-              : 'Nothing to swap — and ${plan.failedRooms.length} room(s) '
+              : 'Nothing to swap - and ${plan.failedRooms.length} room(s) '
                     'could not be read, so they were not checked.',
         ),
       ),
@@ -2600,7 +2668,7 @@ Future<void> swapPartAcrossProject(
     '$boxes box(es) swapped to ${template.model} across $rooms room(s)',
     if (result.disk.dropped > 0) '${result.disk.dropped} run(s) dropped',
     if (result.openRoomDirty)
-      'the open room changed in memory — save it to keep the change',
+      'the open room changed in memory - save it to keep the change',
     if (result.disk.failures.isNotEmpty)
       '${result.disk.failures.length} room(s) failed: '
           '${result.disk.failures.first}',
@@ -2724,7 +2792,7 @@ class _SwapPreviewDialog extends StatelessWidget {
               warning(
                 Icons.link_off,
                 '${plan.dropped} drawn run(s) land on connectors the '
-                '${plan.to.model} does not have. They will be REMOVED — draw '
+                '${plan.to.model} does not have. They will be REMOVED - draw '
                 'them again on the Signal Flow tab of those rooms afterwards.',
                 severe: true,
               ),
@@ -2734,7 +2802,7 @@ class _SwapPreviewDialog extends StatelessWidget {
                 'No Python module claims ${plan.to.model}, so the module is '
                 'cleared on all ${plan.blocks} control block(s). Those devices '
                 'will show as having no control module until a driver is '
-                'picked — which is what you want them to say.',
+                'picked - which is what you want them to say.',
               ),
             if (plan.newModule.isNotEmpty && plan.blocks > 0)
               warning(
@@ -2760,7 +2828,7 @@ class _SwapPreviewDialog extends StatelessWidget {
             warning(
               Icons.save,
               'This writes to the room files directly. There is no '
-              'project-wide undo — a room\'s own Undo only covers the room '
+              'project-wide undo - a room\'s own Undo only covers the room '
               'open in the editor.',
               severe: true,
             ),
@@ -2818,13 +2886,13 @@ class _NeverNeedsModuleButtonState extends State<_NeverNeedsModuleButton> {
       builder: (ctx) => AlertDialog(
         title: Text('${widget.model} never needs a module?'),
         content: Text(
-          'For a product nothing can drive anywhere — a passive splitter, a '
+          'For a product nothing can drive anywhere - a passive splitter, a '
           'plate, a USB capture stick.\n\n'
           'This is saved to the CATALOG, not to this project. Every room in '
           'every job that draws a ${widget.model} stops reporting it as '
           'waiting for a control module.\n\n'
-          'If instead this particular box just is not yours to drive — an '
-          'owner-furnished display, the building’s switch — leave this alone '
+          'If instead this particular box just is not yours to drive - an '
+          'owner-furnished display, the building’s switch - leave this alone '
           'and mark that box on the room’s own Cost tab.\n\n'
           'To undo it later, untick "Never in the room config" on the Catalog '
           'tab.',
@@ -2864,7 +2932,7 @@ class _NeverNeedsModuleButtonState extends State<_NeverNeedsModuleButton> {
     final theme = Theme.of(context);
     return Tooltip(
       message:
-          'Nothing can drive a ${widget.model} anywhere — record that on '
+          'Nothing can drive a ${widget.model} anywhere - record that on '
           'the catalog entry',
       child: TextButton(
         key: ValueKey('never_needs_module_${widget.model}'),
@@ -2987,7 +3055,7 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
                 'A part is tagged by the FIRST vendor whose rules claim it. '
                 'Manufacturer rules are checked before category rules, so '
                 '“buy Extron direct” beats “the reseller does screens” for an '
-                'Extron screen. Order matters — move a vendor up to give it '
+                'Extron screen. Order matters - move a vendor up to give it '
                 'priority.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
@@ -3163,7 +3231,7 @@ class _VendorCard extends StatelessWidget {
               label: 'Categories',
               hint: 'Camera',
               helper:
-                  'Matches finer categories too — "Camera" claims '
+                  'Matches finer categories too - "Camera" claims '
                   '"Camera - PTZ". Checked after the manufacturer rules.',
               values: vendor.categories,
               suggestions: facets.categories,
@@ -3192,7 +3260,7 @@ class _VendorCard extends StatelessWidget {
 /// hint, because a rule is matched EXACTLY: "Extron Electronics" typed into a
 /// catalog that says "Extron" is a rule that silently matches nothing, and
 /// nothing about the screen would say so.
-class _RuleEditor extends StatelessWidget {
+class _RuleEditor extends StatefulWidget {
   final String label;
   final String hint;
   final String helper;
@@ -3210,24 +3278,86 @@ class _RuleEditor extends StatelessWidget {
   });
 
   @override
+  State<_RuleEditor> createState() => _RuleEditorState();
+}
+
+/// ADDING RULES IS A RUN, NOT A SINGLE ACT. Nobody gives a vendor one
+/// category; they give it six, one after another, off a list they are reading.
+///
+/// So the box has to survive its own success. Three things used to go wrong the
+/// moment a value was added, all of them because adding one rebuilds the whole
+/// tab underneath it:
+///
+///   * The field was rebuilt from scratch. It sits in a Wrap AFTER the chips,
+///     so adding one moved it a position along and Flutter matched it to the
+///     chip that had taken its place — new controller, new focus node, cleared
+///     text, closed list. Its state is owned here now, and the box is keyed.
+///   * The focus went with it, so the next value meant reaching for the mouse.
+///     Focus is put straight back.
+///   * The new chip pushed the box down a row, and on a card near the bottom
+///     of a long list of vendors that is a box that has left the screen. It is
+///     scrolled back into view after every add.
+class _RuleEditorState extends State<_RuleEditor> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focus = FocusNode();
+
+  /// What the field itself is, for scrolling it back into view — the widget
+  /// tree above it is rebuilt on every add, so a context captured in build
+  /// would be a context that has gone.
+  final GlobalKey _fieldKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  /// Takes one value, then puts the box back where it was, ready for the next.
+  void _add(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return;
+    if (widget.values.any((v) => v.toLowerCase() == trimmed.toLowerCase())) {
+      _controller.clear();
+      return;
+    }
+    widget.onChanged([...widget.values, trimmed]);
+    _controller.clear();
+    // After the frame the new chip lands in: the box has moved by then, and
+    // scrolling to where it used to be would scroll to the wrong place.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focus.requestFocus();
+      final box = _fieldKey.currentContext;
+      if (box != null) {
+        Scrollable.ensureVisible(
+          box,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 150),
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final unused = [
-      for (final s in suggestions)
-        if (!values.any((v) => v.toLowerCase() == s.toLowerCase())) s,
+      for (final s in widget.suggestions)
+        if (!widget.values.any((v) => v.toLowerCase() == s.toLowerCase())) s,
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          widget.label,
           style: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         Text(
-          helper,
+          widget.helper,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -3238,43 +3368,71 @@ class _RuleEditor extends StatelessWidget {
           runSpacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            for (final v in values)
+            for (final v in widget.values)
               InputChip(
+                key: ValueKey('rule_chip_${widget.label}_$v'),
                 label: Text(v),
-                onDeleted: () => onChanged([
-                  for (final x in values)
+                onDeleted: () => widget.onChanged([
+                  for (final x in widget.values)
                     if (x != v) x,
                 ]),
               ),
             SizedBox(
+              // Keyed so it is matched to itself rather than to whichever chip
+              // has taken its place in the Wrap.
+              key: ValueKey('rule_add_${widget.label}'),
               width: 220,
-              child: Autocomplete<String>(
+              child: RawAutocomplete<String>(
+                textEditingController: _controller,
+                focusNode: _focus,
                 optionsBuilder: (value) {
                   final needle = value.text.trim().toLowerCase();
                   if (needle.isEmpty) return const Iterable<String>.empty();
                   return unused.where((s) => s.toLowerCase().contains(needle));
                 },
-                onSelected: (s) => onChanged([...values, s]),
+                onSelected: _add,
+                optionsViewBuilder: (context, onSelected, options) => Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 4,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: 240,
+                        maxWidth: 220,
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: options.length,
+                        itemBuilder: (context, i) {
+                          final option = options.elementAt(i);
+                          return InkWell(
+                            onTap: () => onSelected(option),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              child: Text(option),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
                 fieldViewBuilder:
                     (context, controller, focusNode, onFieldSubmitted) =>
                         TextField(
+                          key: _fieldKey,
                           controller: controller,
                           focusNode: focusNode,
                           decoration: InputDecoration(
                             isDense: true,
-                            hintText: 'add — e.g. $hint',
+                            hintText: 'add, e.g. ${widget.hint}',
                             border: const OutlineInputBorder(),
                           ),
-                          onSubmitted: (text) {
-                            final value = text.trim();
-                            if (value.isEmpty) return;
-                            if (!values.any(
-                              (v) => v.toLowerCase() == value.toLowerCase(),
-                            )) {
-                              onChanged([...values, value]);
-                            }
-                            controller.clear();
-                          },
+                          onSubmitted: _add,
                         ),
               ),
             ),

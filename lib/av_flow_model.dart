@@ -757,7 +757,7 @@ class AvNode {
   /// Keep this device off the cost estimate.
   ///
   /// Not everything on the diagram is being bought. A display the room already
-  /// has, a codec the customer is supplying, the building's network switch, a
+  /// has, a codec the stakeholder is supplying, the building's network switch, a
   /// box somebody else's contract covers — all of them have to be DRAWN,
   /// because the signal goes through them and the cable schedule and the rack
   /// elevation are wrong without them, and none of them belongs on the quote.

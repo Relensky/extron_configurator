@@ -392,7 +392,7 @@ bool _migrateRenamedPreset(Directory dir, RoomPreset preset) {
     // shipped copy is written beside it. Two entries in the picker is a
     // nuisance; losing a shop's edited preset is not.
     AppLogger.logError(
-      'Could not rename the "$oldName" room preset — leaving it as it is',
+      'Could not rename the "$oldName" room preset - leaving it as it is',
       e,
       stack,
     );
@@ -663,7 +663,7 @@ RoomPreset _basicClassroom() {
     // a CAMERADEVICE block with a driver slot of its own.
     _device(
       'AVNODE_9',
-      'DTP transmitter — instructor',
+      'DTP transmitter - instructor',
       _frontWall.id,
       [
         _p('hdmi', 'HDMI', SignalType.hdmi, PortDirection.input),
@@ -1020,7 +1020,7 @@ RoomPreset _hyflexClassroom() {
     ),
     _device(
       'AVNODE_9',
-      'DTP transmitter — instructor',
+      'DTP transmitter - instructor',
       _rearWall.id,
       [
         _p('hdmi', 'HDMI', SignalType.hdmi, PortDirection.input),
@@ -1031,7 +1031,7 @@ RoomPreset _hyflexClassroom() {
     ),
     _device(
       'AVNODE_10',
-      'DTP transmitter — audience',
+      'DTP transmitter - audience',
       _frontWall.id,
       [
         _p('hdmi', 'HDMI', SignalType.hdmi, PortDirection.input),
@@ -1140,7 +1140,7 @@ RoomPreset _hyflexClassroom() {
         'DTP CrossPoint 84 and a DMP 64 in the rack, an Epson PowerLite '
         'L630U, instructor and audience cameras, a ceiling mic array, an AV '
         'Bridge 2x1 capture feed through an Inogeni Toggle, a VIA GO2 and a '
-        'networked DaLite screen controller — all on an APC AP7900B.',
+        'networked DaLite screen controller - all on an APC AP7900B.',
     builtIn: true,
     jackPrefix: kPresetJackPrefix,
     // Read off the cabling below. The projector hangs off DTP OUT 3B, which
@@ -1725,7 +1725,7 @@ RoomPreset _activeLearningSpace() {
     // twisted pair with a transmitter beside them.
     _device(
       'AVNODE_11',
-      'DTP transmitter — instructor',
+      'DTP transmitter - instructor',
       _rearWall.id,
       [
         _p('hdmi', 'HDMI', SignalType.hdmi, PortDirection.input),
@@ -1736,7 +1736,7 @@ RoomPreset _activeLearningSpace() {
     ),
     _device(
       'AVNODE_12',
-      'DTP transmitter — audience',
+      'DTP transmitter - audience',
       _frontWall.id,
       [
         _p('hdmi', 'HDMI', SignalType.hdmi, PortDirection.input),

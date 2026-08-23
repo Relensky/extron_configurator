@@ -57,6 +57,16 @@ const Map<RoomSidecarPart, String> kRoomSidecarSuffix = {
   RoomSidecarPart.cost: 'cost',
 };
 
+/// What to call each part where a PERSON reads it: the job history, a message
+/// about what was saved. The suffix above is the file name; this is the name.
+const Map<RoomSidecarPart, String> kRoomSidecarFileLabels = {
+  RoomSidecarPart.flow: 'AV flow',
+  RoomSidecarPart.racks: 'Racks',
+  RoomSidecarPart.floorPlans: 'Floor plans',
+  RoomSidecarPart.cabling: 'Cabling',
+  RoomSidecarPart.cost: 'Cost',
+};
+
 /// Which top-level keys of the combined document each part owns.
 ///
 /// Every key the app writes must appear exactly once here or it would be

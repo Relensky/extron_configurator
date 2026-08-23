@@ -123,7 +123,7 @@ Future<ProjectExport> saveProjectFolder({
       await body(file);
       written.add(name);
     } catch (e) {
-      skipped.add('$name — $e');
+      skipped.add('$name - $e');
       AppLogger.logError('Save All could not write $name', e);
     }
   }
@@ -185,7 +185,7 @@ Future<ProjectExport> saveProjectFolder({
   );
   final costSections = costReportSections(estimate);
   if (costSections.isEmpty) {
-    skipped.add('${named('cost_estimate')}.txt — nothing priced yet');
+    skipped.add('${named('cost_estimate')}.txt - nothing priced yet');
   } else {
     await write('${named('cost_estimate')}.txt', (f) async {
       await f.writeAsString(
@@ -204,7 +204,7 @@ Future<ProjectExport> saveProjectFolder({
   // --- the diagram images --------------------------------------------------
   Future<void> image(String suffix, Uint8List? bytes, String what) async {
     if (bytes == null) {
-      skipped.add('${named(suffix)}.png — $what could not be captured');
+      skipped.add('${named(suffix)}.png - $what could not be captured');
       return;
     }
     await write('${named(suffix)}.png', (f) async => f.writeAsBytes(bytes));
@@ -218,7 +218,7 @@ Future<ProjectExport> saveProjectFolder({
   // names each after the sheet it is, so the folder can be read without
   // opening all of them.
   if (floorPlanSheets.isEmpty) {
-    skipped.add('${named('floor_plan')}.png — the floor plan '
+    skipped.add('${named('floor_plan')}.png - the floor plan '
         'could not be captured');
   }
   for (final sheet in floorPlanSheets) {
@@ -241,7 +241,7 @@ Future<ProjectExport> saveProjectFolder({
   // on somebody else's machine.
   final sheets = provider.floorPlanSheetsWithImages;
   if (sheets.isEmpty) {
-    skipped.add('the floor plan drawings — no sheet has an image');
+    skipped.add('the floor plan drawings - no sheet has an image');
   }
   final copied = <String>{};
   for (final sheet in sheets) {
@@ -251,7 +251,7 @@ Future<ProjectExport> saveProjectFolder({
     if (!copied.add(name)) continue;
     if (!source.existsSync()) {
       skipped.add(
-        '$name — the drawing for "${sheet.name}" is not where the room says',
+        '$name - the drawing for "${sheet.name}" is not where the room says',
       );
     } else {
       await write(name, (f) async => source.copy(f.path));
@@ -265,7 +265,7 @@ Future<ProjectExport> saveProjectFolder({
       .where((e) => e.custom)
       .toList();
   if (customEntries.isEmpty) {
-    skipped.add('av_devices.json — no custom catalog entries to back up');
+    skipped.add('av_devices.json - no custom catalog entries to back up');
   } else {
     await write('av_devices.json', (f) async {
       await f.writeAsString(
@@ -287,7 +287,7 @@ Future<ProjectExport> saveProjectFolder({
   // The category prices behind any budget lines. Without them a total that
   // was partly a budget looks like a quote a year later.
   if (provider.baseCosts.allUnset) {
-    skipped.add('base_costs.json — no base costs are set');
+    skipped.add('base_costs.json - no base costs are set');
   } else {
     await write('base_costs.json', (f) async {
       await f.writeAsString(encoder.convert(provider.baseCosts.toJson()));

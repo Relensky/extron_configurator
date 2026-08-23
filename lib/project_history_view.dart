@@ -45,7 +45,7 @@ List<Widget> historySlivers(BuildContext context, ProjectEstimate estimate) {
             child: Text(
               'Nothing recorded yet.\n\n'
               'Lead times, orders, vendor pins, dates, notes and the job list '
-              'are logged here as they are changed — with the login of '
+              'are logged here as they are changed - with the login of '
               'whoever changed them.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium,
@@ -154,7 +154,7 @@ class _EditRow extends StatelessWidget {
               Text(
                 // A blank login is left blank rather than dressed up as a
                 // name — see [currentUserName].
-                edit.user.isEmpty ? '—' : edit.user,
+                edit.user.isEmpty ? '-' : edit.user,
                 style: theme.textTheme.bodySmall?.copyWith(color: muted),
               ),
             ],

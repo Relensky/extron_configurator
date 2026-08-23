@@ -330,7 +330,7 @@ void main() {
     // 'Extended' caption is supposed to be sitting over.
     final row = find
         .ancestor(
-          of: find.textContaining('HDMI 3 —'),
+          of: find.textContaining('HDMI 3 -'),
           matching: find.byType(Row),
         )
         .last;

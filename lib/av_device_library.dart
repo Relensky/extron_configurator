@@ -1339,7 +1339,7 @@ class AvDeviceLibrary {
         return library;
       } catch (e, stack) {
         AppLogger.logError(
-          'Failed to load av_devices.json from $candidate — using built-in '
+          'Failed to load av_devices.json from $candidate - using built-in '
           'defaults.',
           e,
           stack,
@@ -2091,7 +2091,7 @@ class AvDeviceLibrary {
       'Fan panel 1U',
       'Vent plate',
       1,
-      notes: 'Powered — set its watts on the catalog entry',
+      notes: 'Powered - set its watts on the catalog entry',
     ),
     _hardware('Rack shelf 1U', 'Shelf', 1, notes: 'Fixed'),
     _hardware('Rack shelf 2U', 'Shelf', 2, notes: 'Fixed'),

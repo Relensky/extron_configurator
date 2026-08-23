@@ -1176,7 +1176,7 @@ class UiSchema {
       OptionSpec(
           value: 'Conference',
           label: 'Menu Tabs: 2 - Camera & Devices '
-              '(subs the Camera2Handler — no instructor camera)'),
+              '(subs the Camera2Handler - no instructor camera)'),
     ]));
     s._add(FieldSpec(key: 'gui_capture_source_available', type: 'dropdown',
         options: const [OptionSpec(value: 'Yes'), OptionSpec(value: 'No')]));
@@ -1200,7 +1200,7 @@ class UiSchema {
         expectCondition: 'gui_usb_or_vga=VGA',
         flag: const ['gui_usb_or_vga', 'gui_inputs'],
         message: 'Sources include VGA (gui_tab_type is "{gui_tab_type}") but '
-            'gui_usb_or_vga is "{gui_usb_or_vga}" — set it to VGA, or pick a '
+            'gui_usb_or_vga is "{gui_usb_or_vga}" - set it to VGA, or pick a '
             'USB sources option.',
       ),
       ConsistencyRule(
@@ -1208,7 +1208,7 @@ class UiSchema {
         expectCondition: 'gui_usb_or_vga=USB',
         flag: const ['gui_usb_or_vga', 'gui_inputs'],
         message: 'Sources include USB (gui_tab_type is "{gui_tab_type}") but '
-            'gui_usb_or_vga is "{gui_usb_or_vga}" — set it to USB, or pick a '
+            'gui_usb_or_vga is "{gui_usb_or_vga}" - set it to USB, or pick a '
             'VGA sources option.',
       ),
     ]);
@@ -1282,7 +1282,7 @@ class UiSchema {
         return schema;
       } catch (e, stack) {
         AppLogger.logError(
-            'Failed to load ui_schema.json from $candidate — using built-in defaults.',
+            'Failed to load ui_schema.json from $candidate - using built-in defaults.',
             e,
             stack);
         schema.source = 'Built-in defaults (failed to load $candidate: $e)';

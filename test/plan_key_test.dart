@@ -109,7 +109,7 @@ void main() {
     final p = room();
     await pump(tester, p);
 
-    expect(find.textContaining('KEY — LEVEL 1'), findsOneWidget);
+    expect(find.textContaining('KEY - LEVEL 1'), findsOneWidget);
     // Only the surfaces actually on this sheet.
     expect(find.text('Ceiling'), findsOneWidget);
     expect(find.text('Rack'), findsOneWidget);
@@ -129,12 +129,12 @@ void main() {
   ) async {
     final p = room();
     await pump(tester, p);
-    expect(find.textContaining('KEY — LEVEL 1'), findsOneWidget);
+    expect(find.textContaining('KEY - LEVEL 1'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(FilterChip, 'Key'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('KEY — LEVEL 1'), findsNothing);
+    expect(find.textContaining('KEY - LEVEL 1'), findsNothing);
     expect(p.activeFloorPlan!.keyHidden, isTrue);
     // And it is a property of the sheet, so it survives a reload.
     expect(FloorPlan.fromJson(p.activeFloorPlan!.toJson()).keyHidden, isTrue);
@@ -149,7 +149,7 @@ void main() {
     p.addFloorPlanSheet(name: 'Level 1');
     await pump(tester, p);
 
-    expect(find.textContaining('KEY —'), findsNothing);
+    expect(find.textContaining('KEY -'), findsNothing);
   });
 
   testWidgets('the key travels with the sheet, not with the room', (

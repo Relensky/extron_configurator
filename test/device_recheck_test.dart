@@ -287,10 +287,21 @@ void main() {
   group('labor rate shorthand', () {
     test('reads the letters off the role, keeping the level', () {
       expect(
+        laborRateInitialism('0482 Technology Support Specialist III - State'),
+        'TSSIII',
+      );
+      expect(laborRateInitialism('6533 Electrician - External'), 'E');
+      // A rate card written before the app stopped using em dashes is still
+      // on somebody's disk, and the funding tier after the dash is still not
+      // part of the role's name.
+      expect(
         laborRateInitialism('0482 Technology Support Specialist III — State'),
         'TSSIII',
       );
-      expect(laborRateInitialism('6533 Electrician — External'), 'E');
+      expect(
+        laborRateInitialism('6533 Electrician – External'),
+        'E',
+      );
       expect(
         laborRateInitialism('6699 Air Conditioning/Refrigeration Mechanic'),
         'ACRM',
@@ -311,7 +322,7 @@ void main() {
     test('typing the shorthand finds the role', () {
       const rate = LaborRate(
         id: 'tss3ns',
-        name: '0482 Technology Support Specialist III — Non-state',
+        name: '0482 Technology Support Specialist III - Non-state',
         hourlyRate: 83.76,
         notes: 'Class 0482 · Non-state funded campus & auxiliary',
       );

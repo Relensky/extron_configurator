@@ -75,9 +75,9 @@ String saveScopeDescription(SaveScope scope) => switch (scope) {
       SaveScope.room =>
         'the config file and the drawings, racks, plans and estimate beside it',
       SaveScope.project => 'the room list, the vendors and the tags',
-      SaveScope.catalog => 'av_devices.json — the equipment catalog',
-      SaveScope.schema => 'ui_schema.json — the field definitions',
-      SaveScope.flowRules => 'av_flow_rules.json — the drawing rule book',
+      SaveScope.catalog => 'av_devices.json - the equipment catalog',
+      SaveScope.schema => 'ui_schema.json - the field definitions',
+      SaveScope.flowRules => 'av_flow_rules.json - the drawing rule book',
     };
 
 /// Only the two documents that belong to a job can be written somewhere else.
@@ -260,7 +260,7 @@ bool _reportAppDataSave(
       messenger,
       SnackBar(
         duration: const Duration(seconds: 6),
-        content: Text('$what could not be written — see the log.'),
+        content: Text('$what could not be written - see the log.'),
         backgroundColor: snackErrorFillOn(messenger),
       ),
     );
@@ -344,7 +344,7 @@ Future<bool> confirmLeavingProject(
       title: const Text('This project has unsaved changes'),
       content: Text(
         '"${provider.projectDisplayName}" has edits that are not on disk. '
-        'The rooms themselves are untouched either way — only the room list, '
+        'The rooms themselves are untouched either way - only the room list, '
         'the vendors and the tags are at stake.',
       ),
       actions: [
@@ -832,7 +832,7 @@ Future<bool> confirmCloseWithUnsavedWork(
 /// and App Config.
 String autosaveStatusLine(AppStateProvider provider) {
   if (!provider.autosaveEnabled) {
-    return 'Autosave is off — there is no recovery copy of this work.';
+    return 'Autosave is off - there is no recovery copy of this work.';
   }
   if (provider.lastAutosaveError.isNotEmpty) {
     return 'The last recovery copy failed: ${provider.lastAutosaveError}';
@@ -894,11 +894,11 @@ class SaveToolbar extends StatelessWidget {
             child: const Icon(Icons.save),
           ),
           tooltip: blocked.isNotEmpty
-              ? 'Save $noun — $blocked'
+              ? 'Save $noun - $blocked'
               : saveScopeNeedsFile(provider, scope)
-                  ? 'Save $noun (Ctrl+S) — this ${noun.toLowerCase()} has no '
+                  ? 'Save $noun (Ctrl+S) - this ${noun.toLowerCase()} has no '
                       'file yet, so this asks where to put it'
-                  : 'Save $noun (Ctrl+S) — ${saveScopeDescription(scope)}'
+                  : 'Save $noun (Ctrl+S) - ${saveScopeDescription(scope)}'
                   '${dirty ? '\nThis $noun has unsaved changes.' : ''}',
           onPressed: blocked.isNotEmpty
               ? null
@@ -921,7 +921,7 @@ class SaveToolbar extends StatelessWidget {
                 hint: blocked.isNotEmpty
                     ? blocked
                     : saveScopeNeedsFile(provider, scope)
-                        ? 'No file yet — this asks where to put it'
+                        ? 'No file yet - this asks where to put it'
                         : saveScopeDescription(scope),
                 shortcut: 'Ctrl+S',
               ),
@@ -1021,7 +1021,7 @@ class SaveToolbar extends StatelessWidget {
             duration: const Duration(seconds: 6),
             content: Text(folder.isEmpty
                 ? (provider.lastAutosaveError.isEmpty
-                    ? 'Everything is saved — there is nothing a recovery copy '
+                    ? 'Everything is saved - there is nothing a recovery copy '
                         'would hold.'
                     : 'The recovery copy failed: ${provider.lastAutosaveError}')
                 : 'Recovery copy written to $folder'),

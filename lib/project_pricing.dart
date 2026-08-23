@@ -27,7 +27,7 @@ import 'room_sidecar.dart';
 ///      next refresh, and the next job gets it too. Nothing in any room file
 ///      changes.
 ///    * THIS JOB ONLY is right when the figure is a negotiated one — a
-///      discount for the quantity, a price this customer was quoted. It is
+///      discount for the quantity, a price this stakeholder was quoted. It is
 ///      written as a per-room override, so the catalog keeps saying list price
 ///      and this job says what was agreed.
 ///
@@ -91,13 +91,13 @@ Future<ProjectPriceResult> priceAcrossProject({
       _writeOverrides(absolute, keys, price);
       written++;
       AppLogger.logInfo(
-        'Project price: ${ref.fallbackName} — ${line.description} set to '
+        'Project price: ${ref.fallbackName} - ${line.description} set to '
         '$price on ${keys.length} line(s).',
       );
     } catch (e, stack) {
       AppLogger.logError('Could not price ${line.description} in $absolute', e,
           stack);
-      failures.add('${ref.fallbackName} — $e');
+      failures.add('${ref.fallbackName} - $e');
     }
   }
 
@@ -180,7 +180,7 @@ Future<String> priceInCatalog({
 
   final saved = await provider.saveAvDeviceLibrary();
   if (saved.isEmpty) {
-    return 'Error: the catalog could not be written — check the Catalog tab.';
+    return 'Error: the catalog could not be written - check the Catalog tab.';
   }
   // Every room prices from the catalog, so every room's figure just moved.
   provider.refreshProjectRooms();

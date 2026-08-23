@@ -72,7 +72,7 @@ void main() {
 
       await tester.tap(find.text('Switcher Y'));
       await tester.pumpAndSettle();
-      expect(find.text('Connectors — 1 in / 0 out'), findsOneWidget);
+      expect(find.text('Connectors - 1 in / 0 out'), findsOneWidget);
     });
 
     testWidgets('edits power and price straight into the catalog', (

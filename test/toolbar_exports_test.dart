@@ -69,7 +69,7 @@ void main() {
     );
   });
 
-  testWidgets('the catalog exports without a room — it is the price list',
+  testWidgets('the catalog exports without a room - it is the price list',
       (tester) async {
     final p = AppStateProvider(autoLoadSettings: false)
       ..settingsLoaded = true

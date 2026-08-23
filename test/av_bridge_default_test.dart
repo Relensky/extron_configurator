@@ -31,7 +31,7 @@ void main() {
     expect(hdmiIn, ['HDMI IN 1', 'HDMI IN 2']);
   });
 
-  test('and no DTP output — it is a Vaddio box', () {
+  test('and no DTP output - it is a Vaddio box', () {
     // DTP is Extron's twisted-pair connector and this entry carried one,
     // along with the two extra HDMI inputs: a switcher template copied over
     // the top of a Vaddio product. A port the box does not have is a port

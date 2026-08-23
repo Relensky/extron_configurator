@@ -129,7 +129,7 @@ class _AvRackViewState extends State<AvRackView> {
       contentKey: widget.captureKey,
       viewportKey: _viewportKey,
     );
-    if (!fitted) _snack('The elevation is still drawing — try again.');
+    if (!fitted) _snack('The elevation is still drawing - try again.');
   }
 
   /// Puts the carried device on [startU]. Sharing is automatic: if something
@@ -156,7 +156,7 @@ class _AvRackViewState extends State<AvRackView> {
           .length;
       _snack(
         occupants >= kMaxRackColumns
-            ? 'U$startU of ${rack.name} already holds $occupants devices — '
+            ? 'U$startU of ${rack.name} already holds $occupants devices - '
                   'that is as many as one rack unit will list.'
             : 'U$startU has no room for a ${height}U item on the '
                   '${face.name} of ${rack.name}.',
@@ -226,7 +226,7 @@ class _AvRackViewState extends State<AvRackView> {
           const Text('No racks yet.'),
           const SizedBox(height: 4),
           Text(
-            'Add a frame, then drag a device onto the U where it lands — or '
+            'Add a frame, then drag a device onto the U where it lands - or '
             'click the device and click the U.',
             style: theme.textTheme.bodySmall,
           ),
@@ -299,7 +299,7 @@ class _AvRackViewState extends State<AvRackView> {
               avatar: const Icon(Icons.pan_tool_alt, size: 16),
               label: Text(
                 'Placing: ${provider.rackOccupantLabel(_carriedNodeId!)}'
-                ' — click a U, or type one',
+                ' - click a U, or type one',
               ),
               onDeleted: () => setState(() => _carriedNodeId = null),
             ),
@@ -336,7 +336,7 @@ class _AvRackViewState extends State<AvRackView> {
             Text(
               provider.avNodes.any((n) => n.rackUnits > 0)
                   ? 'Every rack-mount device is placed.'
-                  : 'No device has a rack height yet — press "Recheck '
+                  : 'No device has a rack height yet - press "Recheck '
                         'devices" to take the heights off the catalog, or set '
                         '"Rack U" in a device\'s edit dialog on the Signal '
                         'Flow page.',
@@ -344,7 +344,7 @@ class _AvRackViewState extends State<AvRackView> {
             )
           else ...[
             Text(
-              'To place — drag one in, or click it:',
+              'To place - drag one in, or click it:',
               style: theme.textTheme.bodySmall,
             ),
             for (final n in unracked)
@@ -401,7 +401,7 @@ class _AvRackViewState extends State<AvRackView> {
       onPressed: onPressed,
       onDeleted: () => provider.removeAvRackItem(item.id),
       deleteIcon: const Icon(Icons.close, size: 16),
-      tooltip: 'Not in a rack — drag it onto a U, or click it and click '
+      tooltip: 'Not in a rack - drag it onto a U, or click it and click '
           'the U. × deletes it.',
     );
   }
@@ -1097,7 +1097,7 @@ class _AvRackViewState extends State<AvRackView> {
     if (stranded.isNotEmpty) {
       _snack(
         '${stranded.length} device${stranded.length == 1 ? '' : 's'} '
-        'un-racked — ${stranded.length == 1 ? 'it no longer fits' : 'they no '
+        'un-racked - ${stranded.length == 1 ? 'it no longer fits' : 'they no '
                   'longer fit'} in ${height}U.',
       );
     }
@@ -1576,7 +1576,7 @@ class _AvRackViewState extends State<AvRackView> {
     if (!place) {
       // An unplaced add cannot fail to fit — there is nothing to fit into.
       _snack(
-        '$added × ${template.model} waiting to be placed — drag one onto a U, '
+        '$added × ${template.model} waiting to be placed - drag one onto a U, '
         'or click it and click the U.',
       );
       return;
@@ -1585,7 +1585,7 @@ class _AvRackViewState extends State<AvRackView> {
       added == qty
           ? '$qty × ${template.model} added from U$startU up.'
           : added == 0
-          ? 'Nothing added — U$startU up is already occupied. '
+          ? 'Nothing added - U$startU up is already occupied. '
                 'Add them unplaced and drag them in.'
           : '$added of $qty added; the rest had nowhere to go.',
       error: added < qty,
@@ -1857,7 +1857,7 @@ class _AvRackViewState extends State<AvRackView> {
     if (!mounted) return;
     final pricedNote = price > 0
         ? ''
-        : ' It is on the cost sheet under Equipment, flagged as not priced — '
+        : ' It is on the cost sheet under Equipment, flagged as not priced - '
               'type a price there or here.';
     if (!place) {
       _snack('$added × $name waiting to be placed.$pricedNote');
@@ -1867,7 +1867,7 @@ class _AvRackViewState extends State<AvRackView> {
       added == qty
           ? '$qty × $name added from U$startU up.$pricedNote'
           : added == 0
-          ? 'Nothing added — U$startU up is already occupied. '
+          ? 'Nothing added - U$startU up is already occupied. '
                 'Add it unplaced and drag it in.'
           : '$added of $qty added; the rest had nowhere to go.$pricedNote',
       error: added < qty,
@@ -1912,7 +1912,7 @@ class _AvRackViewState extends State<AvRackView> {
             subtitle: Text(
               item != null
                   ? 'Another part from the catalog'
-                  : 'Another model — connectors, rack height and cables move '
+                  : 'Another model - connectors, rack height and cables move '
                         'with it',
             ),
           ),
@@ -1976,7 +1976,7 @@ class _AvRackViewState extends State<AvRackView> {
                 'it if it does not.'
           : 'The connectors come with it, the room config follows, and cables '
                 'are carried over to the matching connector wherever there is '
-                'one. This room\'s own settings — the address, the port — are '
+                'one. This room\'s own settings - the address, the port - are '
                 'kept.',
     );
     if (!mounted || picked == null) return;
@@ -2015,12 +2015,12 @@ class _AvRackViewState extends State<AvRackView> {
         '${result.carried} cable${result.carried == 1 ? '' : 's'} carried '
             'across',
       if (result.dropped > 0)
-        '${result.dropped} cable${result.dropped == 1 ? '' : 's'} dropped — '
+        '${result.dropped} cable${result.dropped == 1 ? '' : 's'} dropped - '
             'the new model has no matching connector, so draw '
             '${result.dropped == 1 ? 'it' : 'them'} again on the Signal Flow '
             'page',
       if (configured && module.isEmpty)
-        'no control module claims it, so the module was cleared — the Devices '
+        'no control module claims it, so the module was cleared - the Devices '
             'tab is showing it in red until one is picked',
       if (configured && module.isNotEmpty)
         'the config block moved to $module with this room\'s settings kept',

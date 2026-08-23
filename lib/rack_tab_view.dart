@@ -146,7 +146,7 @@ class _RackTabViewState extends State<RackTabView> {
     if (bytes == null) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Nothing to export — add a rack first.'),
+          content: Text('Nothing to export - add a rack first.'),
           backgroundColor: snackErrorFillOn(messenger),
         ),
       );

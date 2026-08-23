@@ -117,7 +117,7 @@ void main() {
       expect(drawn[5], 'Added on the drawing');
     });
 
-    test('totals per cable type — the line a PO is written against', () {
+    test('totals per cable type - the line a PO is written against', () {
       final p = room(runs: 4);
       final pull = p.addCablingBox(kind: CablingBoxKind.pullBox, label: 'Pull');
       final lectern = p
@@ -144,7 +144,7 @@ void main() {
       final p = room(runs: 5);
       final boxes = sectionNamed(
         cablingSections(buildAvFlowModel(p)),
-        'Cabling Drawing — Boxes',
+        'Cabling Drawing - Boxes',
       );
       final lectern = boxes.rows.firstWhere((r) => r[0] == 'Lectern');
       expect(lectern[1], 'Location');
@@ -160,7 +160,7 @@ void main() {
       );
       final boxes = sectionNamed(
         cablingSections(buildAvFlowModel(p)),
-        'Cabling Drawing — Boxes',
+        'Cabling Drawing - Boxes',
       );
       final note = boxes.rows.firstWhere((r) => r[0] == 'TSRV Scope');
       expect(note[1], 'Notes');
@@ -249,16 +249,16 @@ void main() {
 
       final byRow = {for (final r in counts.rows) '${r[0]}|${r[1]}': r};
       // The family totals, then what is in it.
-      expect(byRow['— AV cabling —|']![2], 3);
+      expect(byRow['- AV cabling -|']![2], 3);
       expect(byRow['AV cabling|HDBaseT / DTP']![2], 2);
       expect(byRow['AV cabling|Dante / AES67']![2], 1);
-      expect(byRow['— Network —|']![2], 1);
+      expect(byRow['- Network -|']![2], 1);
       expect(byRow['All cabling|']![2], 4);
 
       // The exact number of each type in each length.
       final lengthAt = counts.header.indexOf('25ft');
       expect(byRow['AV cabling|HDBaseT / DTP']![lengthAt], 2);
-      expect(byRow['— Network —|']![counts.header.indexOf('No length set')], 1);
+      expect(byRow['- Network -|']![counts.header.indexOf('No length set')], 1);
     });
 
     test('the cable schedule carries the family, the signal and the length', () {

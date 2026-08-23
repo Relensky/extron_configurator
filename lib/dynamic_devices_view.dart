@@ -204,7 +204,7 @@ class DeviceConfigurationForm extends StatelessWidget {
               'matching connector and ${drawn.dropped == 1 ? 'was' : 'were'} '
               'removed',
         if (!drawn.full)
-          ' — its connectors are unchanged, because the AV catalog has no '
+          ' - its connectors are unchanged, because the AV catalog has no '
               'entry for this model',
         '.',
       ].join();
@@ -219,7 +219,7 @@ class DeviceConfigurationForm extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              "Model saved — no module claims this model, so the control side "
+              "Model saved - no module claims this model, so the control side "
               "still needs one.$also")));
       return;
     }
@@ -232,7 +232,7 @@ class DeviceConfigurationForm extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              "Model '$model' set — already using module "
+              "Model '$model' set - already using module "
               "${preview.newModule}.$also")));
       return;
     }
@@ -247,7 +247,7 @@ class DeviceConfigurationForm extends StatelessWidget {
       final also = syncTheRoom();
       if (!context.mounted) return;
       final msg = applied.isEmpty
-          ? "Model '$model' saved — module defaults already in place.$also"
+          ? "Model '$model' saved - module defaults already in place.$also"
           : "Model '$model': set ${applied.join(', ')}.$also";
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } else {
@@ -256,9 +256,9 @@ class DeviceConfigurationForm extends StatelessWidget {
       final also = syncTheRoom();
       if (!context.mounted) return;
       final msg = n == 0
-          ? "Kept current settings — switched to module "
+          ? "Kept current settings - switched to module "
               "${preview.newModule}.$also"
-          : "Kept current settings — $n field${n == 1 ? '' : 's'} differ from "
+          : "Kept current settings - $n field${n == 1 ? '' : 's'} differ from "
               "${preview.newModule} defaults.$also";
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
@@ -478,7 +478,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                   noModule
                       ? 'The processor has nothing to talk to this device '
                             'with, so the room will not commission. Pick a '
-                            'module below — or set the model back to one a '
+                            'module below - or set the model back to one a '
                             'driver claims.'
                       : 'That driver covers ${_claimList(fault.claims)}. The '
                             'block would be commissioned as one of those, not '
@@ -678,7 +678,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                     decoration: InputDecoration(
                       labelText: 'Model (type or select)',
                       helperText: provider.availableModels.isEmpty
-                          ? 'No models found — add DEVICE_INFO dicts to the python modules'
+                          ? 'No models found - add DEVICE_INFO dicts to the python modules'
                           : '${provider.availableModelsFor(deviceKey).length} models for this device type '
                               '(${provider.availableModels.length} total); picking one sets the module + defaults',
                       border: const OutlineInputBorder(),
@@ -750,7 +750,7 @@ class DeviceConfigurationForm extends StatelessWidget {
                     decoration: InputDecoration(
                       labelText: 'Python Module (type or select)',
                       helperText: provider.availableModules.isEmpty
-                          ? 'No modules found in ${provider.effectiveModulesPath} — check the Python Modules Path in App Config'
+                          ? 'No modules found in ${provider.effectiveModulesPath} - check the Python Modules Path in App Config'
                           : '${provider.availableModules.length} modules found under ${provider.effectiveModulesPath}',
                       border: const OutlineInputBorder(),
                       // A real button: opens a searchable list of every module

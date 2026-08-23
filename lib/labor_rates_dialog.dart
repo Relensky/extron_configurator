@@ -98,7 +98,7 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
               controller: _search,
               decoration: InputDecoration(
                 labelText: 'Search',
-                hintText: 'name, class number, or shorthand — "tss", '
+                hintText: 'name, class number, or shorthand - "tss", '
                     '"tssIII", "electrician"',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 isDense: true,

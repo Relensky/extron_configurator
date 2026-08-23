@@ -66,10 +66,10 @@ void main() {
     );
     expect(box, findsOneWidget, reason: 'the job has a notes box');
 
-    await tester.enterText(box, 'Customer approved the 86in, not the 98in.');
+    await tester.enterText(box, 'Stakeholder approved the 86in, not the 98in.');
     await tester.pump();
 
-    expect(p.project.notes, 'Customer approved the 86in, not the 98in.');
+    expect(p.project.notes, 'Stakeholder approved the 86in, not the 98in.');
     // On the project, not smeared onto a room.
     expect(p.project.rooms.every((r) => r.notes.isEmpty), isTrue);
     expect(p.projectDirty, isTrue, reason: 'a typed note is unsaved work');
@@ -87,7 +87,7 @@ void main() {
         of: find.byKey(ValueKey('room_notes_box_${first.id}')),
         matching: find.byType(TextField),
       ),
-      'Asbestos above the grid — no drilling until abatement.',
+      'Asbestos above the grid - no drilling until abatement.',
     );
     await tester.pump();
     await tester.enterText(
@@ -95,17 +95,17 @@ void main() {
         of: find.byKey(ValueKey('room_notes_box_${second.id}')),
         matching: find.byType(TextField),
       ),
-      'Shares a wall with the studio — no fans on that side.',
+      'Shares a wall with the studio - no fans on that side.',
     );
     await tester.pump();
 
     expect(
       p.project.roomById(first.id)!.notes,
-      'Asbestos above the grid — no drilling until abatement.',
+      'Asbestos above the grid - no drilling until abatement.',
     );
     expect(
       p.project.roomById(second.id)!.notes,
-      'Shares a wall with the studio — no fans on that side.',
+      'Shares a wall with the studio - no fans on that side.',
     );
     // A room's note is meaningless anywhere else, so it must not have gone to
     // the job as well.
@@ -149,13 +149,13 @@ void main() {
         notes: 'Asbestos above the grid.',
       ),
     );
-    project.notes = 'Customer approved the 86in.';
+    project.notes = 'Stakeholder approved the 86in.';
 
     final file = '${dir.path}/bessey_project.json';
     await project.save(file);
     final back = await BuildingProject.load(file);
 
-    expect(back.notes, 'Customer approved the 86in.');
+    expect(back.notes, 'Stakeholder approved the 86in.');
     expect(back.rooms.single.notes, 'Asbestos above the grid.');
   });
 

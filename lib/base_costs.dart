@@ -269,14 +269,14 @@ class BaseCostBook {
   Map<String, dynamic> toJson() => {
     '__readme':
         'Base costs for the Room Config Builder: one typical unit price per '
-        'device category at each of the two published tiers — "price" is MSRP '
-        '(list) and "educationPrice" is the education price — used when a room '
+        'device category at each of the two published tiers - "price" is MSRP '
+        '(list) and "educationPrice" is the education price - used when a room '
         'has a switcher on the diagram but no model chosen yet. A model with a '
         'catalog price, or a price typed on the room, always wins over the '
         'figure here. 0 means "not set" and is reported as an unpriced line '
         'rather than costed at nothing. "aliases" translates a device '
-        'catalog\'s own category names onto the categories below — '
-        '"Matrix": "Switcher" — for families the app does not already know; '
+        'catalog\'s own category names onto the categories below - '
+        '"Matrix": "Switcher" - for families the app does not already know; '
         'leave a family out when it holds more than one kind of device, and '
         'the estimate will price it from the room\'s config section instead.',
     'costs': [for (final c in costs) c.toJson()],

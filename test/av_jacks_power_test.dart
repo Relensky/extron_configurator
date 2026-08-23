@@ -239,7 +239,7 @@ void main() {
       expect(power.rows.single[2], kPowerSourceLabels[PowerSource.unspecified]);
     });
 
-    test('jack fields are left out — a wall plate has no mains', () {
+    test('jack fields are left out - a wall plate has no mains', () {
       final p = room();
       p.addAvNode(wallBox('WB1', 'Wall box', 2));
       final power = sectionNamed(

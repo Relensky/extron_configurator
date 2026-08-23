@@ -50,12 +50,12 @@ void main() {
 
   group('a box whose model the catalog knows ignores its label', () {
     test('a transmitter called a camera is still a transmitter', () {
-      expect(family('DTP transmitter — camera 1',
+      expect(family('DTP transmitter - camera 1',
           model: 'DTP HDMI 4K 230 Tx'), isNull);
     });
 
     test('and one called a station is too', () {
-      expect(family('DTP transmitter — station 3',
+      expect(family('DTP transmitter - station 3',
           model: 'DTP HDMI 4K 230 Tx'), isNull);
     });
 

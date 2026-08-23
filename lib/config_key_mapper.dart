@@ -470,7 +470,7 @@ class ConfigKeyMap {
         return map;
       } catch (e, stack) {
         AppLogger.logError(
-            'Failed to load key_map.json from $candidate — legacy key mapping disabled.',
+            'Failed to load key_map.json from $candidate - legacy key mapping disabled.',
             e,
             stack);
         map.source = 'Built-in (failed to load $candidate: $e)';
@@ -625,13 +625,13 @@ class ConfigKeyMap {
         final target = config[targetSectionName];
         if (target is! Map) {
           changes.add(
-              "KEYMAP SKIPPED: cannot move '${rule.fromSection}.$key' — target section '$targetSectionName' not found.");
+              "KEYMAP SKIPPED: cannot move '${rule.fromSection}.$key' - target section '$targetSectionName' not found.");
           continue;
         }
         final Map<String, dynamic> targetSection = target as Map<String, dynamic>;
         if (targetSection.containsKey(rule.toKey)) {
           changes.add(
-              "KEYMAP SKIPPED: cannot move '${rule.fromSection}.$key' — '$targetSectionName.${rule.toKey}' already exists.");
+              "KEYMAP SKIPPED: cannot move '${rule.fromSection}.$key' - '$targetSectionName.${rule.toKey}' already exists.");
           continue;
         }
         targetSection[rule.toKey] = srcSection.remove(key);
@@ -710,7 +710,7 @@ class ConfigKeyMap {
                 reason: reason));
             changes.add(
                 "CONFLICT: '$sectionName.$key' held '$text' but the device is "
-                "${section['com_type']} — removed, that property is not valid "
+                "${section['com_type']} - removed, that property is not valid "
                 "on this connection.");
           } else {
             changes.add(

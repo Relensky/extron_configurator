@@ -309,7 +309,7 @@
       "keep_alive_trigger": null
     },
     "NBPDEVICE_1": {
-      "__comment": "A button panel has no model and no module — it is a UI device on the AV LAN, not something a driver talks to — so there is nothing here to carry over except the absence of a connection button.",
+      "__comment": "A button panel has no model and no module - it is a UI device on the AV LAN, not something a driver talks to - so there is nothing here to carry over except the absence of a connection button.",
       "btn_name": "",
       "lbl_name": "",
       "model": "",

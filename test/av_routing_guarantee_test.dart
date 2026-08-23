@@ -288,7 +288,7 @@ void main() {
       watch.elapsedMilliseconds,
       lessThan(400),
       reason: '30 devices and ${runs.length} runs took '
-          '${watch.elapsedMilliseconds}ms — too slow to drag through',
+          '${watch.elapsedMilliseconds}ms - too slow to drag through',
     );
   });
 

@@ -379,7 +379,7 @@ void main() {
       expect(find.text('×1'), findsWidgets);
       expect(find.text('3'), findsWidgets);
       expect(p.avNodes, hasLength(1),
-          reason: 'a spare is bought, not drawn — nothing was added to the '
+          reason: 'a spare is bought, not drawn - nothing was added to the '
               'diagram');
     });
 
@@ -623,7 +623,7 @@ void main() {
       expect(
         [for (final t in hits) t.model],
         isNot(contains('PT-MZ682BU8')),
-        reason: 'every word still has to land — this is a filter, not a mood',
+        reason: 'every word still has to land - this is a filter, not a mood',
       );
     });
 

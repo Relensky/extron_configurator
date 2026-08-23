@@ -250,7 +250,7 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
             padding: EdgeInsets.all(24),
             child: Text(
               'Nothing to schedule yet.\n\n'
-              'The timeline is built from the core components list — add '
+              'The timeline is built from the core components list - add '
               'rooms that have equipment on them.',
               textAlign: TextAlign.center,
             ),
@@ -281,7 +281,7 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
               child: Text(
                 'No deadline yet.\n\n'
                 'Set the delivery deadline in the header, then put a lead '
-                'time on the parts that matter — the Core Components list has '
+                'time on the parts that matter - the Core Components list has '
                 'a Lead time column. Anything that has to arrive earlier than '
                 'the rest (screens, mounts, floor boxes) gets its own date on '
                 'the same editor.',
@@ -421,7 +421,7 @@ Future<void> exportOrderReminders(
       messenger,
       const SnackBar(
         content: Text(
-          'Nothing has an order date yet — set a delivery deadline and some '
+          'Nothing has an order date yet - set a delivery deadline and some '
           'lead times first.',
         ),
       ),
@@ -613,7 +613,7 @@ class _OrderBlockState extends State<_OrderBlock> {
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               'Arrived ${formatScheduleDate(order.receivedOn!)}. This part is '
-              'finished with — it is off the order schedule.',
+              'finished with - it is off the order schedule.',
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
           )
@@ -626,7 +626,7 @@ class _OrderBlockState extends State<_OrderBlock> {
               Expanded(
                 child: Text(
                   'The vendor is promising it AFTER the day it is needed. It '
-                  'is bought — but the room will not have it in time.',
+                  'is bought - but the room will not have it in time.',
                   key: const ValueKey('part_arriving_late'),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: alarm,
@@ -920,7 +920,7 @@ class _TrackCard extends StatelessWidget {
                         final picked = await showProjectDatePicker(
                           context,
                           initial: t.deadline,
-                          title: '${t.name} — on site by',
+                          title: '${t.name} - on site by',
                         );
                         if (picked == null) return;
                         provider.setProjectTrackDeadline(t.id, picked.date);
@@ -1045,7 +1045,7 @@ class _TimelineSummary extends StatelessWidget {
           ),
           stat(
             'First order due',
-            firstOrder == null ? '—' : formatScheduleDate(firstOrder),
+            firstOrder == null ? '-' : formatScheduleDate(firstOrder),
             icon: Icons.play_arrow,
           ),
           if (schedule.lateCount > 0)
@@ -1277,7 +1277,7 @@ class _UnknownLeadTimes extends StatelessWidget {
                   const Icon(Icons.help_outline, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'Not on the timeline — no lead time recorded '
+                    'Not on the timeline - no lead time recorded '
                     '(${lines.length})',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -1485,7 +1485,7 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
                       child: Text(
                         t.deadline == null
                             ? t.name
-                            : '${t.name} — ${formatScheduleDate(t.deadline!)}',
+                            : '${t.name} - ${formatScheduleDate(t.deadline!)}',
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -1509,7 +1509,7 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
                       _needBy != null
                           ? formatScheduleDate(_needBy!)
                           : deadline != null
-                          ? 'With ${track?.name ?? 'the job'} — '
+                          ? 'With ${track?.name ?? 'the job'} - '
                                 '${formatScheduleDate(deadline)}'
                           : 'With ${track?.name ?? 'the job'} '
                                 '(no deadline set)',
@@ -1538,7 +1538,7 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
             const SizedBox(height: 4),
             Text(
               'Leave this on the job deadline unless the part has to arrive '
-              'earlier than everything else — a screen or a mount that goes '
+              'earlier than everything else - a screen or a mount that goes '
               'in before the walls close.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -1558,7 +1558,7 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
                 Expanded(
                   child: Text(
                     preview == null
-                        ? 'Order by — needs a lead time and a delivery date.'
+                        ? 'Order by - needs a lead time and a delivery date.'
                         : 'Order by ${formatScheduleDate(preview)}'
                             '  ·  ${formatDayGap(daysBetween(today(), preview))}',
                     key: const ValueKey('part_order_preview'),

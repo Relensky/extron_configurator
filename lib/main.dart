@@ -301,7 +301,7 @@ class _MainDashboardState extends State<MainDashboard> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '$placed device${placed == 1 ? '' : 's'} added — they are on '
+                '$placed device${placed == 1 ? '' : 's'} added - they are on '
                 'the Signal Flow canvas and priced here.',
               ),
             ),
@@ -348,7 +348,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
     if (deltas.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nothing to undo — the config already matches the backup.'),
+        content: Text('Nothing to undo - the config already matches the backup.'),
       ));
       return;
     }
@@ -373,7 +373,7 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               Text('Restoring $backupName rewrites both the file and what is '
                   'on screen. ${deltas.length} propert'
-                  '${deltas.length == 1 ? 'y' : 'ies'} would change — this '
+                  '${deltas.length == 1 ? 'y' : 'ies'} would change - this '
                   'includes anything you have edited since that save:'),
               const SizedBox(height: 12),
               Expanded(
@@ -416,7 +416,7 @@ class _MainDashboardState extends State<MainDashboard> {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(ok
-          ? 'Restored $backupName — the file and the editor are back to the '
+          ? 'Restored $backupName - the file and the editor are back to the '
               'previous save.'
           : 'Could not restore $backupName; nothing was changed.'),
       backgroundColor: ok ? Colors.green : Colors.orange.shade800,
@@ -606,8 +606,8 @@ class _MainDashboardState extends State<MainDashboard> {
           provider.conversionAcknowledged,
         )) {
           (false, _) => 'Nothing to convert in this file',
-          (true, false) => 'Convert — review the changes this file needs',
-          (true, true) => 'Conversion reviewed — open the log again',
+          (true, false) => 'Convert - review the changes this file needs',
+          (true, true) => 'Conversion reviewed - open the log again',
         },
         onPressed: provider.lastLoadHadChanges
             ? () => _showMigrationLogDialog(context, provider.systemLogs)
@@ -649,9 +649,9 @@ class _MainDashboardState extends State<MainDashboard> {
       IconButton(
         icon: const Icon(Icons.undo),
         tooltip: provider.canUndoLastSave
-            ? 'Undo Last Save — restore the config from '
+            ? 'Undo Last Save - restore the config from '
                 '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
-            : 'Undo Last Save — nothing has been saved over a local file yet',
+            : 'Undo Last Save - nothing has been saved over a local file yet',
         onPressed: provider.canUndoLastSave
             ? () => _undoLastSave(context, provider)
             : null,
@@ -663,8 +663,8 @@ class _MainDashboardState extends State<MainDashboard> {
         key: const ValueKey('export_workbook'),
         icon: const Icon(Icons.menu_book),
         tooltip: hasConfig
-            ? 'Export the full room workbook — every tab, one .xlsx'
-            : 'Export the full room workbook — nothing loaded yet',
+            ? 'Export the full room workbook - every tab, one .xlsx'
+            : 'Export the full room workbook - nothing loaded yet',
         onPressed:
             hasConfig ? () => exportRoomWorkbook(context, provider) : null,
       ),
@@ -791,7 +791,7 @@ class _MainDashboardState extends State<MainDashboard> {
             ),
             isSelected: selectedIndex == AppTab.appConfig.index,
             selectedIcon: Icon(Icons.settings, color: appBarInk),
-            tooltip: 'App Config — file locations, theme, pricing, autosave',
+            tooltip: 'App Config - file locations, theme, pricing, autosave',
             onPressed: () => provider.selectTab(AppTab.appConfig.index),
           ),
           // SAVE, AND EVERY OTHER WAY OF SAVING — last, in the far corner.
@@ -899,8 +899,8 @@ class _MainDashboardState extends State<MainDashboard> {
       !_tabExports(index)
           ? 'This tab has no tables to export'
           : (!hasConfig && !_tabWorksWithoutConfig(index))
-              ? 'Export this tab — nothing loaded yet'
-              : 'Export ${_tabExportLabel(index).toLowerCase()} — spreadsheet, '
+              ? 'Export this tab - nothing loaded yet'
+              : 'Export ${_tabExportLabel(index).toLowerCase()} - spreadsheet, '
                   'plain text or clipboard';
 
   static bool _tabWorksWithoutConfig(int index) =>
@@ -1263,7 +1263,7 @@ class TopLevelBar extends StatelessWidget {
             Expanded(
               child: Text(
                 provider.projectDirty
-                    ? '${provider.projectDisplayName} — unsaved'
+                    ? '${provider.projectDisplayName} - unsaved'
                     : provider.projectDisplayName,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleSmall?.copyWith(
@@ -1306,7 +1306,7 @@ void _announceConversionAvailable(BuildContext context) {
       duration: const Duration(seconds: 8),
       content: const Text(
         'This file needs converting to the current format. The changes are '
-        'ready in memory — press Convert in the toolbar to review them.',
+        'ready in memory - press Convert in the toolbar to review them.',
       ),
       action: SnackBarAction(
         label: 'CONVERT',
@@ -1439,7 +1439,7 @@ void _showMigrationLogDialog(BuildContext context, List<String> logs) {
               if (ctx.mounted) Navigator.of(ctx).pop();
               messenger.showSnackBar(SnackBar(
                 content: Text(ok
-                    ? 'Changes discarded — editing the original file as-is.'
+                    ? 'Changes discarded - editing the original file as-is.'
                     : 'Could not reload the original file; the migrated '
                         'version stays loaded.'),
                 backgroundColor: ok ? null : snackErrorFillOn(messenger),
@@ -1639,7 +1639,7 @@ class ProcessorSearchField extends StatelessWidget {
     final String suffix = ip.isEmpty ? '' : ' ($ip)';
     return fullName.isEmpty
         ? '$roomName$suffix'
-        : '$roomName — $fullName$suffix';
+        : '$roomName - $fullName$suffix';
   }
 
   @override
@@ -1777,7 +1777,7 @@ class AppSettingsView extends StatelessWidget {
               child: ProcessorSearchField(
                 label: 'Select Room Deployment',
                 helperText:
-                    'Search by building name, code, room number, or IP — '
+                    'Search by building name, code, room number, or IP - '
                     'rooms from processors.json, names from buildings.json.',
                 initialProcessor: provider.selectedProcessor,
                 onSelected: (proc) => provider.selectProcessor(proc),
@@ -1990,7 +1990,7 @@ class AppSettingsView extends StatelessWidget {
           subtitle: const Text(
               'Adds properties from ui_schema.json "device_defaults" that a '
               'loaded config\'s devices are missing (e.g. DSP audio groups). '
-              'Additions are listed in the load acknowledgement — nothing is '
+              'Additions are listed in the load acknowledgement - nothing is '
               'saved until you export or apply.'),
           value: provider.fillDeviceDefaultsOnLoad,
           onChanged: (val) => provider.setFillDeviceDefaultsOnLoad(val),
@@ -2004,7 +2004,7 @@ class AppSettingsView extends StatelessWidget {
           title: const Text('Confirm before deleting settings'),
           subtitle: const Text(
               'Ask before a trash button removes a property from the config '
-              '(Devices & System tabs). Turn off for one-click deletes — '
+              '(Devices & System tabs). Turn off for one-click deletes - '
               '"Check Defaults" can re-add anything removed by mistake.'),
           value: provider.confirmBeforeDelete,
           onChanged: (val) => provider.setConfirmBeforeDelete(val),
@@ -2024,8 +2024,8 @@ class AppSettingsView extends StatelessWidget {
           title: const Text('Keep a recovery copy of unsaved work'),
           subtitle: const Text(
               'While a room or project has unsaved changes, the app keeps a '
-              'working copy of it — config, drawings, racks, plans and '
-              'estimate — in its own folder. Your files are never written to; '
+              'working copy of it - config, drawings, racks, plans and '
+              'estimate - in its own folder. Your files are never written to; '
               'saving is what does that, and a save deletes the copy. If the '
               'app closes without saving, the copy is offered back the next '
               'time that file is opened, with a list of every difference.'),
@@ -2080,7 +2080,7 @@ class AppSettingsView extends StatelessWidget {
                     duration: const Duration(seconds: 6),
                     content: Text(folder.isEmpty
                         ? (provider.lastAutosaveError.isEmpty
-                            ? 'Everything is saved — there is nothing a '
+                            ? 'Everything is saved - there is nothing a '
                                 'recovery copy would hold.'
                             : 'The recovery copy failed: '
                                 '${provider.lastAutosaveError}')
@@ -2275,7 +2275,7 @@ class AppSettingsView extends StatelessWidget {
                 decoration: InputDecoration(
                   labelText: 'UI Schema File Path (ui_schema.json)',
                   hintText: 'Blank = ui_schema.json in the Root Folder / next to the app',
-                  helperText: 'Active schema: ${provider.uiSchema.source} — ${provider.uiSchema.fieldCount} field definitions',
+                  helperText: 'Active schema: ${provider.uiSchema.source} - ${provider.uiSchema.fieldCount} field definitions',
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.file_open),
@@ -2334,7 +2334,7 @@ class AppSettingsView extends StatelessWidget {
                   hintText:
                       'Blank = av_devices.json in the Root Folder / next to the app',
                   helperText:
-                      'Active catalog: ${provider.avDeviceLibrary.source} — '
+                      'Active catalog: ${provider.avDeviceLibrary.source} - '
                       '${provider.avDeviceLibrary.customCount} priced entries. '
                       'Put it on a shared drive to keep one price list for '
                       'everybody; saves merge rather than overwrite.',
@@ -2460,7 +2460,7 @@ class AppSettingsView extends StatelessWidget {
                 decoration: InputDecoration(
                   labelText: 'Legacy Key Map File Path (key_map.json)',
                   hintText: 'Blank = key_map.json in the Root Folder / next to the app',
-                  helperText: 'Active map: ${provider.keyMap.source} — ${provider.keyMap.ruleCount} rules. '
+                  helperText: 'Active map: ${provider.keyMap.source} - ${provider.keyMap.ruleCount} rules. '
                       'Applied automatically when a config is loaded.',
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
@@ -2573,7 +2573,7 @@ class AppSettingsView extends StatelessWidget {
         const SizedBox(height: 8),
         const Text(
             'SFTP settings used for every processor transfer. The defaults are '
-            'the Extron standards — only change them for nonstandard hardware.'),
+            'the Extron standards - only change them for nonstandard hardware.'),
         const SizedBox(height: 20),
         Row(
           children: [
@@ -2631,7 +2631,7 @@ class AppSettingsView extends StatelessWidget {
           title: const Text('Autofill the processor password'),
           subtitle: const Text(
               'Pre-fills the password in the SFTP upload/download dialogs. '
-              'Kept in the Windows credential store, not in app_config.json — '
+              'Kept in the Windows credential store, not in app_config.json - '
               'turning this off deletes it again.'),
         ),
         if (provider.useDefaultProcessorPassword) ...[
@@ -2678,10 +2678,10 @@ class _DefaultPasswordFieldState extends State<_DefaultPasswordField> {
       decoration: InputDecoration(
         labelText: 'Default Processor Password',
         helperText: _saveFailed
-            ? 'Could not save to the Windows credential store — the password '
+            ? 'Could not save to the Windows credential store - the password '
                 'is in use for this session only.'
             : 'Stored in the Windows credential store, encrypted for your user '
-                'account — never in app_config.json.',
+                'account - never in app_config.json.',
         helperMaxLines: 2,
         helperStyle:
             _saveFailed ? TextStyle(color: Colors.red.shade400) : null,
@@ -2929,7 +2929,7 @@ class _ProcessorSftpDialogState extends State<ProcessorSftpDialog> {
                     const SizedBox(height: 4),
                     Text(
                       _extraFilePath.isEmpty
-                          ? 'None selected — only config.json will be uploaded.'
+                          ? 'None selected - only config.json will be uploaded.'
                           : 'Will also upload: ${_extraFilePath.split(Platform.pathSeparator).last}',
                       style: TextStyle(
                         fontSize: 12,
@@ -3063,7 +3063,7 @@ class FirstRunSetupDialog extends StatelessWidget {
         children: const [
           Icon(Icons.tune),
           SizedBox(width: 10),
-          Expanded(child: Text('First-Time Setup — Locate Your Files')),
+          Expanded(child: Text('First-Time Setup - Locate Your Files')),
         ],
       ),
       content: SizedBox(
@@ -3074,7 +3074,7 @@ class FirstRunSetupDialog extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Pick the Root Folder first — every file found inside it is detected '
+                'Pick the Root Folder first - every file found inside it is detected '
                 'automatically. Use Browse on any row where a file lives somewhere else. '
                 'Green = found at the shown location, red = not found (you can still '
                 'finish and set it later in App Config). Choices are saved immediately, '
@@ -3119,7 +3119,7 @@ class FirstRunSetupDialog extends StatelessWidget {
                   exists: templateExists,
                   settingKey: 'templateFilePath'),
               _pathRow(context, provider,
-                  label: 'processors.json (deployment targets — read on startup)',
+                  label: 'processors.json (deployment targets - read on startup)',
                   value: provider.effectiveProcessorsFilePath,
                   exists: processorsExists,
                   settingKey: 'processorsFilePath'),
@@ -3129,23 +3129,23 @@ class FirstRunSetupDialog extends StatelessWidget {
                   exists: buildingsExists,
                   settingKey: 'buildingsFilePath'),
               _pathRow(context, provider,
-                  label: 'ui_schema.json (GUI field definitions — optional)',
+                  label: 'ui_schema.json (GUI field definitions - optional)',
                   value: provider.effectiveUiSchemaPath,
                   exists: schemaExists,
                   settingKey: 'uiSchemaPath'),
               _pathRow(context, provider,
-                  label: 'key_map.json (legacy key translation — optional)',
+                  label: 'key_map.json (legacy key translation - optional)',
                   value: provider.effectiveKeyMapPath,
                   exists: keyMapExists,
                   settingKey: 'keyMapPath'),
               _pathRow(context, provider,
-                  label: 'av_devices.json (device catalog & price list — put '
+                  label: 'av_devices.json (device catalog & price list - put '
                       'it on a share to keep one between you)',
                   value: provider.effectiveAvDevicesPath,
                   exists: avDevicesExists,
                   settingKey: 'avDevicesFilePath'),
               _pathRow(context, provider,
-                  label: 'av_flow_rules.json (how a room draws itself — '
+                  label: 'av_flow_rules.json (how a room draws itself - '
                       'optional)',
                   value: provider.effectiveFlowRulesPath,
                   exists: flowRulesExists,
@@ -3157,7 +3157,7 @@ class FirstRunSetupDialog extends StatelessWidget {
                   isDirectory: true,
                   settingKey: 'modulesPath'),
               _pathRow(context, provider,
-                  label: 'Documentation folder (PDF manuals — default: "documentation" sub-folder)',
+                  label: 'Documentation folder (PDF manuals - default: "documentation" sub-folder)',
                   value: provider.effectiveDocumentationPath,
                   exists: documentationExists,
                   isDirectory: true,
@@ -3171,7 +3171,7 @@ class FirstRunSetupDialog extends StatelessWidget {
           // Skipping also completes setup, so the app never nags again;
           // everything runs on the defaults shown above.
           onPressed: () => _finish(context, provider),
-          child: const Text('Skip — use the defaults shown'),
+          child: const Text('Skip - use the defaults shown'),
         ),
         ElevatedButton.icon(
           icon: const Icon(Icons.check),

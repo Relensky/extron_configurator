@@ -34,7 +34,7 @@ Future<bool> showControlPrefillDialog(
           width: 460,
           child: Text(
             plan.alreadyConfigured > 0
-                ? 'Every device on the diagram already has a control block — '
+                ? 'Every device on the diagram already has a control block - '
                       '${plan.alreadyConfigured} of them. Set each one\'s '
                       'python module on the Devices tab.'
                 : 'There are no devices on the signal flow yet. Draw the room '
@@ -73,7 +73,7 @@ Future<bool> showControlPrefillDialog(
         '${result.created} control block'
         '${result.created == 1 ? '' : 's'} created'
         '${result.withoutModule == 0 ? '.' : ', ${result.withoutModule} with '
-            'no python module — they are flagged on the Devices tab and on '
+            'no python module - they are flagged on the Devices tab and on '
             'the exported report.'}',
       ),
     ),
@@ -127,8 +127,8 @@ class _ControlPrefillDialog extends StatelessWidget {
                     '${plan.withoutModule.length == 1 ? '' : 's'} have no '
                     'python module',
                 'No driver in the module library claims these models, so the '
-                    'processor cannot talk to them. They are still created — '
-                    'with the module left blank — and listed on the Devices '
+                    'processor cannot talk to them. They are still created - '
+                    'with the module left blank - and listed on the Devices '
                     'tab and in the "Devices Without a Control Module" section '
                     'of the exported report until one is chosen.',
               ),
@@ -143,7 +143,7 @@ class _ControlPrefillDialog extends StatelessWidget {
                     '${plan.unplaceable.length == 1 ? '' : 's'} do not belong '
                     'to any device family',
                 'Nothing in the schema claims these, so there is nowhere to '
-                    'put a control block. Usually right — a speaker or a wall '
+                    'put a control block. Usually right - a speaker or a wall '
                     'plate never had one. If a projector is on this list, its '
                     'catalog category is what needs fixing: '
                     '${plan.unplaceable.map((e) => e.nodeLabel).take(6).join(', ')}'
@@ -158,7 +158,7 @@ class _ControlPrefillDialog extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 8, bottom: 4),
                       child: Text(
-                        '${family.label} — ${byFamily[family]!.length}',
+                        '${family.label} - ${byFamily[family]!.length}',
                         style: theme.textTheme.titleSmall,
                       ),
                     ),

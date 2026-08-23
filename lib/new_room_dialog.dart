@@ -107,7 +107,7 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
               subtitle: const Text(
                 'Pick the devices out of the catalog with quantities and a '
                 'running total first. They become the boxes on the signal '
-                'flow, the gear in the racks and the lines on the estimate — '
+                'flow, the gear in the racks and the lines on the estimate - '
                 'one list, entered once. It still runs after the room type '
                 'below, so both can be used together.',
               ),
@@ -126,7 +126,7 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
                   RadioListTile<RoomMode>(
                     value: RoomMode.full,
                     contentPadding: EdgeInsets.zero,
-                    title: Text('Yes — configure it now'),
+                    title: Text('Yes - configure it now'),
                     subtitle: Text(
                       'The full room: system settings, device control blocks '
                       'and the processor config, as well as the drawings and '
@@ -136,7 +136,7 @@ class _NewRoomDialogState extends State<_NewRoomDialog> {
                   RadioListTile<RoomMode>(
                     value: RoomMode.avOnly,
                     contentPadding: EdgeInsets.zero,
-                    title: Text('Not yet — AV only'),
+                    title: Text('Not yet - AV only'),
                     subtitle: Text(
                       'Building, room number and the devices. The System and '
                       'Raw JSON tabs step aside; the schematic, signal flow, '

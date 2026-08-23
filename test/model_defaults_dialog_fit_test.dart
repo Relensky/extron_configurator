@@ -135,7 +135,7 @@ void main() {
       expect(dialog.contains(box.centerLeft), isTrue,
           reason: '"$value" starts outside the dialog');
       expect(dialog.contains(box.centerRight), isTrue,
-          reason: '"$value" runs off the end of the dialog — the bug this '
+          reason: '"$value" runs off the end of the dialog - the bug this '
               'test exists for');
     }
   });

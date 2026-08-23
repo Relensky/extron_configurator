@@ -31,7 +31,7 @@ void main() {
     expect(
       offenders,
       isEmpty,
-      reason: 'NUL bytes make a file binary to grep and every other tool — '
+      reason: 'NUL bytes make a file binary to grep and every other tool - '
           'write the escape rather than the byte',
     );
   });

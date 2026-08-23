@@ -4,1325 +4,1325 @@
   "rates": [
     {
       "id": "c0400_state",
-      "name": "0400 Analyst/Programmer -12 — State",
+      "name": "0400 Analyst/Programmer -12 - State",
       "hourlyRate": 67.54,
-      "notes": "Class 0400 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0400 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0400_nonstate",
-      "name": "0400 Analyst/Programmer -12 — Non-state",
+      "name": "0400 Analyst/Programmer -12 - Non-state",
       "hourlyRate": 96.7,
-      "notes": "Class 0400 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0400 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0400_external",
-      "name": "0400 Analyst/Programmer -12 — External",
+      "name": "0400 Analyst/Programmer -12 - External",
       "hourlyRate": 107.48,
-      "notes": "Class 0400 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0400 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0410_state",
-      "name": "0410 Operating Systems Analyst -12 — State",
+      "name": "0410 Operating Systems Analyst -12 - State",
       "hourlyRate": 67.54,
-      "notes": "Class 0410 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0410 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0410_nonstate",
-      "name": "0410 Operating Systems Analyst -12 — Non-state",
+      "name": "0410 Operating Systems Analyst -12 - Non-state",
       "hourlyRate": 96.7,
-      "notes": "Class 0410 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0410 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0410_external",
-      "name": "0410 Operating Systems Analyst -12 — External",
+      "name": "0410 Operating Systems Analyst -12 - External",
       "hourlyRate": 107.48,
-      "notes": "Class 0410 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0410 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0420_state",
-      "name": "0420 Information Technology Consultant -12 — State",
+      "name": "0420 Information Technology Consultant -12 - State",
       "hourlyRate": 67.54,
-      "notes": "Class 0420 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0420 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0420_nonstate",
-      "name": "0420 Information Technology Consultant -12 — Non-state",
+      "name": "0420 Information Technology Consultant -12 - Non-state",
       "hourlyRate": 96.7,
-      "notes": "Class 0420 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0420 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0420_external",
-      "name": "0420 Information Technology Consultant -12 — External",
+      "name": "0420 Information Technology Consultant -12 - External",
       "hourlyRate": 107.48,
-      "notes": "Class 0420 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0420 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0430_state",
-      "name": "0430 Network Analyst -12 — State",
+      "name": "0430 Network Analyst -12 - State",
       "hourlyRate": 67.54,
-      "notes": "Class 0430 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0430 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0430_nonstate",
-      "name": "0430 Network Analyst -12 — Non-state",
+      "name": "0430 Network Analyst -12 - Non-state",
       "hourlyRate": 96.7,
-      "notes": "Class 0430 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0430 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0430_external",
-      "name": "0430 Network Analyst -12 — External",
+      "name": "0430 Network Analyst -12 - External",
       "hourlyRate": 107.48,
-      "notes": "Class 0430 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0430 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0440_state",
-      "name": "0440 Equipment Systems Specialist -12 — State",
+      "name": "0440 Equipment Systems Specialist -12 - State",
       "hourlyRate": 47.25,
-      "notes": "Class 0440 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0440 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0440_nonstate",
-      "name": "0440 Equipment Systems Specialist -12 — Non-state",
+      "name": "0440 Equipment Systems Specialist -12 - Non-state",
       "hourlyRate": 67.65,
-      "notes": "Class 0440 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0440 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0440_external",
-      "name": "0440 Equipment Systems Specialist -12 — External",
+      "name": "0440 Equipment Systems Specialist -12 - External",
       "hourlyRate": 75.2,
-      "notes": "Class 0440 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0440 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0462_state",
-      "name": "0462 Network And Communications Analyst II — State",
+      "name": "0462 Network And Communications Analyst II - State",
       "hourlyRate": 58.5,
-      "notes": "Class 0462 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0462 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0462_nonstate",
-      "name": "0462 Network And Communications Analyst II — Non-state",
+      "name": "0462 Network And Communications Analyst II - Non-state",
       "hourlyRate": 83.76,
-      "notes": "Class 0462 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0462 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0462_external",
-      "name": "0462 Network And Communications Analyst II — External",
+      "name": "0462 Network And Communications Analyst II - External",
       "hourlyRate": 93.1,
-      "notes": "Class 0462 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0462 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0463_state",
-      "name": "0463 Network And Communications Analyst III — State",
+      "name": "0463 Network And Communications Analyst III - State",
       "hourlyRate": 65.63,
-      "notes": "Class 0463 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0463 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0463_nonstate",
-      "name": "0463 Network And Communications Analyst III — Non-state",
+      "name": "0463 Network And Communications Analyst III - Non-state",
       "hourlyRate": 93.97,
-      "notes": "Class 0463 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0463 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0463_external",
-      "name": "0463 Network And Communications Analyst III — External",
+      "name": "0463 Network And Communications Analyst III - External",
       "hourlyRate": 104.45,
-      "notes": "Class 0463 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0463 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0464_state",
-      "name": "0464 Network And Communications Analyst IV — State",
+      "name": "0464 Network And Communications Analyst IV - State",
       "hourlyRate": 74.16,
-      "notes": "Class 0464 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0464 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0464_nonstate",
-      "name": "0464 Network And Communications Analyst IV — Non-state",
+      "name": "0464 Network And Communications Analyst IV - Non-state",
       "hourlyRate": 106.19,
-      "notes": "Class 0464 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0464 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0464_external",
-      "name": "0464 Network And Communications Analyst IV — External",
+      "name": "0464 Network And Communications Analyst IV - External",
       "hourlyRate": 118.03,
-      "notes": "Class 0464 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0464 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "tss3s",
-      "name": "0482 Technology Support Specialist III — State",
+      "name": "0482 Technology Support Specialist III - State",
       "hourlyRate": 58.5,
-      "notes": "Class 0482 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0482 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "tss3ns",
-      "name": "0482 Technology Support Specialist III — Non-state",
+      "name": "0482 Technology Support Specialist III - Non-state",
       "hourlyRate": 83.76,
-      "notes": "Class 0482 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0482 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "tss3e",
-      "name": "0482 Technology Support Specialist III — External",
+      "name": "0482 Technology Support Specialist III - External",
       "hourlyRate": 93.1,
-      "notes": "Class 0482 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0482 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0483_state",
-      "name": "0483 Technology Support Specialist IV — State",
+      "name": "0483 Technology Support Specialist IV - State",
       "hourlyRate": 65.63,
-      "notes": "Class 0483 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0483 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0483_nonstate",
-      "name": "0483 Technology Support Specialist IV — Non-state",
+      "name": "0483 Technology Support Specialist IV - Non-state",
       "hourlyRate": 93.97,
-      "notes": "Class 0483 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0483 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0483_external",
-      "name": "0483 Technology Support Specialist IV — External",
+      "name": "0483 Technology Support Specialist IV - External",
       "hourlyRate": 104.45,
-      "notes": "Class 0483 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0483 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0731_state",
-      "name": "0731 Groundsworker — State",
+      "name": "0731 Groundsworker - State",
       "hourlyRate": 30.21,
-      "notes": "Class 0731 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0731 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0731_nonstate",
-      "name": "0731 Groundsworker — Non-state",
+      "name": "0731 Groundsworker - Non-state",
       "hourlyRate": 43.25,
-      "notes": "Class 0731 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0731 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0731_external",
-      "name": "0731 Groundsworker — External",
+      "name": "0731 Groundsworker - External",
       "hourlyRate": 48.08,
-      "notes": "Class 0731 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0731 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0735_state",
-      "name": "0735 Irrigation Specialist — State",
+      "name": "0735 Irrigation Specialist - State",
       "hourlyRate": 32.95,
-      "notes": "Class 0735 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0735 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0735_nonstate",
-      "name": "0735 Irrigation Specialist — Non-state",
+      "name": "0735 Irrigation Specialist - Non-state",
       "hourlyRate": 47.18,
-      "notes": "Class 0735 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0735 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0735_external",
-      "name": "0735 Irrigation Specialist — External",
+      "name": "0735 Irrigation Specialist - External",
       "hourlyRate": 52.44,
-      "notes": "Class 0735 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0735 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0739_state",
-      "name": "0739 Pest Control And Spray Specialist — State",
+      "name": "0739 Pest Control And Spray Specialist - State",
       "hourlyRate": 31.72,
-      "notes": "Class 0739 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0739 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0739_nonstate",
-      "name": "0739 Pest Control And Spray Specialist — Non-state",
+      "name": "0739 Pest Control And Spray Specialist - Non-state",
       "hourlyRate": 45.41,
-      "notes": "Class 0739 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0739 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0739_external",
-      "name": "0739 Pest Control And Spray Specialist — External",
+      "name": "0739 Pest Control And Spray Specialist - External",
       "hourlyRate": 50.47,
-      "notes": "Class 0739 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0739 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0745_state",
-      "name": "0745 Gardening Specialist — State",
+      "name": "0745 Gardening Specialist - State",
       "hourlyRate": 32.95,
-      "notes": "Class 0745 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0745 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0745_nonstate",
-      "name": "0745 Gardening Specialist — Non-state",
+      "name": "0745 Gardening Specialist - Non-state",
       "hourlyRate": 47.18,
-      "notes": "Class 0745 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0745 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0745_external",
-      "name": "0745 Gardening Specialist — External",
+      "name": "0745 Gardening Specialist - External",
       "hourlyRate": 52.44,
-      "notes": "Class 0745 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0745 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0800_state",
-      "name": "0800 Public Affairs/Communication Specialist -12 Month — State",
+      "name": "0800 Public Affairs/Communication Specialist -12 Month - State",
       "hourlyRate": 46.46,
-      "notes": "Class 0800 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0800 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0800_nonstate",
-      "name": "0800 Public Affairs/Communication Specialist -12 Month — Non-state",
+      "name": "0800 Public Affairs/Communication Specialist -12 Month - Non-state",
       "hourlyRate": 66.51,
-      "notes": "Class 0800 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0800 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0800_external",
-      "name": "0800 Public Affairs/Communication Specialist -12 Month — External",
+      "name": "0800 Public Affairs/Communication Specialist -12 Month - External",
       "hourlyRate": 73.93,
-      "notes": "Class 0800 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0800 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0810_state",
-      "name": "0810 Media Production Specialist -12 Month — State",
+      "name": "0810 Media Production Specialist -12 Month - State",
       "hourlyRate": 51.2,
-      "notes": "Class 0810 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0810 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0810_nonstate",
-      "name": "0810 Media Production Specialist -12 Month — Non-state",
+      "name": "0810 Media Production Specialist -12 Month - Non-state",
       "hourlyRate": 73.3,
-      "notes": "Class 0810 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0810 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0810_external",
-      "name": "0810 Media Production Specialist -12 Month — External",
+      "name": "0810 Media Production Specialist -12 Month - External",
       "hourlyRate": 81.48,
-      "notes": "Class 0810 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0810 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0820_state",
-      "name": "0820 Graphic Designer -12 Month — State",
+      "name": "0820 Graphic Designer -12 Month - State",
       "hourlyRate": 51.2,
-      "notes": "Class 0820 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0820 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0820_nonstate",
-      "name": "0820 Graphic Designer -12 Month — Non-state",
+      "name": "0820 Graphic Designer -12 Month - Non-state",
       "hourlyRate": 73.3,
-      "notes": "Class 0820 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0820 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0820_external",
-      "name": "0820 Graphic Designer -12 Month — External",
+      "name": "0820 Graphic Designer -12 Month - External",
       "hourlyRate": 81.48,
-      "notes": "Class 0820 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0820 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0840_state",
-      "name": "0840 Performing Arts Technician -12 Month — State",
+      "name": "0840 Performing Arts Technician -12 Month - State",
       "hourlyRate": 40.88,
-      "notes": "Class 0840 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 0840 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c0840_nonstate",
-      "name": "0840 Performing Arts Technician -12 Month — Non-state",
+      "name": "0840 Performing Arts Technician -12 Month - Non-state",
       "hourlyRate": 58.53,
-      "notes": "Class 0840 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 0840 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c0840_external",
-      "name": "0840 Performing Arts Technician -12 Month — External",
+      "name": "0840 Performing Arts Technician -12 Month - External",
       "hourlyRate": 65.06,
-      "notes": "Class 0840 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 0840 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1032_state",
-      "name": "1032 Administrative Support Assistant -12 Month — State",
+      "name": "1032 Administrative Support Assistant -12 Month - State",
       "hourlyRate": 33.99,
-      "notes": "Class 1032 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1032 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1032_nonstate",
-      "name": "1032 Administrative Support Assistant -12 Month — Non-state",
+      "name": "1032 Administrative Support Assistant -12 Month - Non-state",
       "hourlyRate": 48.66,
-      "notes": "Class 1032 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1032 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1032_external",
-      "name": "1032 Administrative Support Assistant -12 Month — External",
+      "name": "1032 Administrative Support Assistant -12 Month - External",
       "hourlyRate": 54.09,
-      "notes": "Class 1032 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1032 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1035_state",
-      "name": "1035 Administrative Support Coordinator -12 Month — State",
+      "name": "1035 Administrative Support Coordinator -12 Month - State",
       "hourlyRate": 41.36,
-      "notes": "Class 1035 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1035 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1035_nonstate",
-      "name": "1035 Administrative Support Coordinator -12 Month — Non-state",
+      "name": "1035 Administrative Support Coordinator -12 Month - Non-state",
       "hourlyRate": 59.21,
-      "notes": "Class 1035 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1035 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1035_external",
-      "name": "1035 Administrative Support Coordinator -12 Month — External",
+      "name": "1035 Administrative Support Coordinator -12 Month - External",
       "hourlyRate": 65.81,
-      "notes": "Class 1035 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1035 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1038_state",
-      "name": "1038 Administrative Analyst/Specialist -12 Month — State",
+      "name": "1038 Administrative Analyst/Specialist -12 Month - State",
       "hourlyRate": 54.68,
-      "notes": "Class 1038 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1038 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1038_nonstate",
-      "name": "1038 Administrative Analyst/Specialist -12 Month — Non-state",
+      "name": "1038 Administrative Analyst/Specialist -12 Month - Non-state",
       "hourlyRate": 78.3,
-      "notes": "Class 1038 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1038 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1038_external",
-      "name": "1038 Administrative Analyst/Specialist -12 Month — External",
+      "name": "1038 Administrative Analyst/Specialist -12 Month - External",
       "hourlyRate": 87.03,
-      "notes": "Class 1038 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1038 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1481_state",
-      "name": "1481 Reprographics Specialist II — State",
+      "name": "1481 Reprographics Specialist II - State",
       "hourlyRate": 33.68,
-      "notes": "Class 1481 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1481 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1481_nonstate",
-      "name": "1481 Reprographics Specialist II — Non-state",
+      "name": "1481 Reprographics Specialist II - Non-state",
       "hourlyRate": 48.23,
-      "notes": "Class 1481 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1481 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1481_external",
-      "name": "1481 Reprographics Specialist II — External",
+      "name": "1481 Reprographics Specialist II - External",
       "hourlyRate": 53.61,
-      "notes": "Class 1481 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1481 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1482_state",
-      "name": "1482 Reprographics Specialist III — State",
+      "name": "1482 Reprographics Specialist III - State",
       "hourlyRate": 36.38,
-      "notes": "Class 1482 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1482 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1482_nonstate",
-      "name": "1482 Reprographics Specialist III — Non-state",
+      "name": "1482 Reprographics Specialist III - Non-state",
       "hourlyRate": 52.08,
-      "notes": "Class 1482 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1482 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1482_external",
-      "name": "1482 Reprographics Specialist III — External",
+      "name": "1482 Reprographics Specialist III - External",
       "hourlyRate": 57.89,
-      "notes": "Class 1482 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1482 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1483_state",
-      "name": "1483 Reprographics Specialist IV — State",
+      "name": "1483 Reprographics Specialist IV - State",
       "hourlyRate": 41.18,
-      "notes": "Class 1483 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1483 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1483_nonstate",
-      "name": "1483 Reprographics Specialist IV — Non-state",
+      "name": "1483 Reprographics Specialist IV - Non-state",
       "hourlyRate": 58.96,
-      "notes": "Class 1483 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1483 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1483_external",
-      "name": "1483 Reprographics Specialist IV — External",
+      "name": "1483 Reprographics Specialist IV - External",
       "hourlyRate": 65.53,
-      "notes": "Class 1483 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1483 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1506_state",
-      "name": "1506 Storekeeper I — State",
+      "name": "1506 Storekeeper I - State",
       "hourlyRate": 33.55,
-      "notes": "Class 1506 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1506 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1506_nonstate",
-      "name": "1506 Storekeeper I — Non-state",
+      "name": "1506 Storekeeper I - Non-state",
       "hourlyRate": 48.03,
-      "notes": "Class 1506 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1506 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1506_external",
-      "name": "1506 Storekeeper I — External",
+      "name": "1506 Storekeeper I - External",
       "hourlyRate": 53.39,
-      "notes": "Class 1506 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1506 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1508_state",
-      "name": "1508 Warehouse Worker — State",
+      "name": "1508 Warehouse Worker - State",
       "hourlyRate": 30.21,
-      "notes": "Class 1508 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1508 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1508_nonstate",
-      "name": "1508 Warehouse Worker — Non-state",
+      "name": "1508 Warehouse Worker - Non-state",
       "hourlyRate": 43.25,
-      "notes": "Class 1508 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1508 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1508_external",
-      "name": "1508 Warehouse Worker — External",
+      "name": "1508 Warehouse Worker - External",
       "hourlyRate": 48.08,
-      "notes": "Class 1508 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1508 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1513_state",
-      "name": "1513 Athletic Equipment Attendant II — State",
+      "name": "1513 Athletic Equipment Attendant II - State",
       "hourlyRate": 33.28,
-      "notes": "Class 1513 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1513 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1513_nonstate",
-      "name": "1513 Athletic Equipment Attendant II — Non-state",
+      "name": "1513 Athletic Equipment Attendant II - Non-state",
       "hourlyRate": 47.64,
-      "notes": "Class 1513 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1513 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1513_external",
-      "name": "1513 Athletic Equipment Attendant II — External",
+      "name": "1513 Athletic Equipment Attendant II - External",
       "hourlyRate": 52.96,
-      "notes": "Class 1513 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1513 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1578_state",
-      "name": "1578 Instructional Support Assistant II — State",
+      "name": "1578 Instructional Support Assistant II - State",
       "hourlyRate": 32.74,
-      "notes": "Class 1578 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1578 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1578_nonstate",
-      "name": "1578 Instructional Support Assistant II — Non-state",
+      "name": "1578 Instructional Support Assistant II - Non-state",
       "hourlyRate": 46.88,
-      "notes": "Class 1578 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1578 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1578_external",
-      "name": "1578 Instructional Support Assistant II — External",
+      "name": "1578 Instructional Support Assistant II - External",
       "hourlyRate": 52.11,
-      "notes": "Class 1578 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1578 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1579_state",
-      "name": "1579 Instructional Support Assistant III — State",
+      "name": "1579 Instructional Support Assistant III - State",
       "hourlyRate": 35.14,
-      "notes": "Class 1579 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1579 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1579_nonstate",
-      "name": "1579 Instructional Support Assistant III — Non-state",
+      "name": "1579 Instructional Support Assistant III - Non-state",
       "hourlyRate": 50.31,
-      "notes": "Class 1579 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1579 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1579_external",
-      "name": "1579 Instructional Support Assistant III — External",
+      "name": "1579 Instructional Support Assistant III - External",
       "hourlyRate": 55.92,
-      "notes": "Class 1579 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1579 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1730_state",
-      "name": "1730 Accounting Technician I — State",
+      "name": "1730 Accounting Technician I - State",
       "hourlyRate": 33.68,
-      "notes": "Class 1730 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 1730 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c1730_nonstate",
-      "name": "1730 Accounting Technician I — Non-state",
+      "name": "1730 Accounting Technician I - Non-state",
       "hourlyRate": 48.23,
-      "notes": "Class 1730 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 1730 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c1730_external",
-      "name": "1730 Accounting Technician I — External",
+      "name": "1730 Accounting Technician I - External",
       "hourlyRate": 53.61,
-      "notes": "Class 1730 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 1730 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c2010_state",
-      "name": "2010 Custodian — State",
+      "name": "2010 Custodian - State",
       "hourlyRate": 30.21,
-      "notes": "Class 2010 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 2010 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c2010_nonstate",
-      "name": "2010 Custodian — Non-state",
+      "name": "2010 Custodian - Non-state",
       "hourlyRate": 43.25,
-      "notes": "Class 2010 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 2010 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c2010_external",
-      "name": "2010 Custodian — External",
+      "name": "2010 Custodian - External",
       "hourlyRate": 48.08,
-      "notes": "Class 2010 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 2010 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c2866_state",
-      "name": "2866 Accompanist II — State",
+      "name": "2866 Accompanist II - State",
       "hourlyRate": 41.68,
-      "notes": "Class 2866 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 2866 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c2866_nonstate",
-      "name": "2866 Accompanist II — Non-state",
+      "name": "2866 Accompanist II - Non-state",
       "hourlyRate": 59.68,
-      "notes": "Class 2866 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 2866 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c2866_external",
-      "name": "2866 Accompanist II — External",
+      "name": "2866 Accompanist II - External",
       "hourlyRate": 66.34,
-      "notes": "Class 2866 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 2866 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c3024_state",
-      "name": "3024 Drafting Technician II — State",
+      "name": "3024 Drafting Technician II - State",
       "hourlyRate": 52.15,
-      "notes": "Class 3024 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 3024 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c3024_nonstate",
-      "name": "3024 Drafting Technician II — Non-state",
+      "name": "3024 Drafting Technician II - Non-state",
       "hourlyRate": 74.66,
-      "notes": "Class 3024 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 3024 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c3024_external",
-      "name": "3024 Drafting Technician II — External",
+      "name": "3024 Drafting Technician II - External",
       "hourlyRate": 82.99,
-      "notes": "Class 3024 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 3024 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c3082_state",
-      "name": "3082 Student Services Professional II — State",
+      "name": "3082 Student Services Professional II - State",
       "hourlyRate": 47.26,
-      "notes": "Class 3082 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 3082 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c3082_nonstate",
-      "name": "3082 Student Services Professional II — Non-state",
+      "name": "3082 Student Services Professional II - Non-state",
       "hourlyRate": 67.66,
-      "notes": "Class 3082 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 3082 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c3082_external",
-      "name": "3082 Student Services Professional II — External",
+      "name": "3082 Student Services Professional II - External",
       "hourlyRate": 75.21,
-      "notes": "Class 3082 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 3082 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c3084_state",
-      "name": "3084 Student Services Professional III — State",
+      "name": "3084 Student Services Professional III - State",
       "hourlyRate": 51.56,
-      "notes": "Class 3084 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 3084 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c3084_nonstate",
-      "name": "3084 Student Services Professional III — Non-state",
+      "name": "3084 Student Services Professional III - Non-state",
       "hourlyRate": 73.82,
-      "notes": "Class 3084 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 3084 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c3084_external",
-      "name": "3084 Student Services Professional III — External",
+      "name": "3084 Student Services Professional III - External",
       "hourlyRate": 82.06,
-      "notes": "Class 3084 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 3084 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6223_state",
-      "name": "6223 Laborer — State",
+      "name": "6223 Laborer - State",
       "hourlyRate": 30.21,
-      "notes": "Class 6223 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6223 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6223_nonstate",
-      "name": "6223 Laborer — Non-state",
+      "name": "6223 Laborer - Non-state",
       "hourlyRate": 43.25,
-      "notes": "Class 6223 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6223 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6223_external",
-      "name": "6223 Laborer — External",
+      "name": "6223 Laborer - External",
       "hourlyRate": 48.08,
-      "notes": "Class 6223 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6223 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6251_state",
-      "name": "6251 Facilities Worker II — State",
+      "name": "6251 Facilities Worker II - State",
       "hourlyRate": 45.8,
-      "notes": "Class 6251 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6251 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6251_nonstate",
-      "name": "6251 Facilities Worker II — Non-state",
+      "name": "6251 Facilities Worker II - Non-state",
       "hourlyRate": 65.57,
-      "notes": "Class 6251 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6251 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6251_external",
-      "name": "6251 Facilities Worker II — External",
+      "name": "6251 Facilities Worker II - External",
       "hourlyRate": 72.89,
-      "notes": "Class 6251 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6251 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6260_state",
-      "name": "6260 Facilities Control Specialist — State",
+      "name": "6260 Facilities Control Specialist - State",
       "hourlyRate": 65.91,
-      "notes": "Class 6260 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6260 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6260_nonstate",
-      "name": "6260 Facilities Control Specialist — Non-state",
+      "name": "6260 Facilities Control Specialist - Non-state",
       "hourlyRate": 94.37,
-      "notes": "Class 6260 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6260 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6260_external",
-      "name": "6260 Facilities Control Specialist — External",
+      "name": "6260 Facilities Control Specialist - External",
       "hourlyRate": 104.89,
-      "notes": "Class 6260 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6260 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6265_state",
-      "name": "6265 Facilities Project Supervisor — State",
+      "name": "6265 Facilities Project Supervisor - State",
       "hourlyRate": 73.69,
-      "notes": "Class 6265 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6265 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6265_nonstate",
-      "name": "6265 Facilities Project Supervisor — Non-state",
+      "name": "6265 Facilities Project Supervisor - Non-state",
       "hourlyRate": 105.51,
-      "notes": "Class 6265 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6265 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6265_external",
-      "name": "6265 Facilities Project Supervisor — External",
+      "name": "6265 Facilities Project Supervisor - External",
       "hourlyRate": 117.28,
-      "notes": "Class 6265 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6265 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6270_state",
-      "name": "6270 Automotive/Equipment Mechanic — State",
+      "name": "6270 Automotive/Equipment Mechanic - State",
       "hourlyRate": 52.64,
-      "notes": "Class 6270 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6270 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6270_nonstate",
-      "name": "6270 Automotive/Equipment Mechanic — Non-state",
+      "name": "6270 Automotive/Equipment Mechanic - Non-state",
       "hourlyRate": 75.37,
-      "notes": "Class 6270 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6270 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6270_external",
-      "name": "6270 Automotive/Equipment Mechanic — External",
+      "name": "6270 Automotive/Equipment Mechanic - External",
       "hourlyRate": 83.77,
-      "notes": "Class 6270 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6270 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6281_state",
-      "name": "6281 Metal Worker II — State",
+      "name": "6281 Metal Worker II - State",
       "hourlyRate": 65.91,
-      "notes": "Class 6281 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6281 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6281_nonstate",
-      "name": "6281 Metal Worker II — Non-state",
+      "name": "6281 Metal Worker II - Non-state",
       "hourlyRate": 94.37,
-      "notes": "Class 6281 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6281 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6281_external",
-      "name": "6281 Metal Worker II — External",
+      "name": "6281 Metal Worker II - External",
       "hourlyRate": 104.89,
-      "notes": "Class 6281 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6281 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6363_state",
-      "name": "6363 Light Automotive Equipment Operator — State",
+      "name": "6363 Light Automotive Equipment Operator - State",
       "hourlyRate": 31.72,
-      "notes": "Class 6363 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6363 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6363_nonstate",
-      "name": "6363 Light Automotive Equipment Operator — Non-state",
+      "name": "6363 Light Automotive Equipment Operator - Non-state",
       "hourlyRate": 45.41,
-      "notes": "Class 6363 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6363 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6363_external",
-      "name": "6363 Light Automotive Equipment Operator — External",
+      "name": "6363 Light Automotive Equipment Operator - External",
       "hourlyRate": 50.47,
-      "notes": "Class 6363 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6363 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6366_state",
-      "name": "6366 Heavy Equipment Operator/Bus Driver — State",
+      "name": "6366 Heavy Equipment Operator/Bus Driver - State",
       "hourlyRate": 32.95,
-      "notes": "Class 6366 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6366 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6366_nonstate",
-      "name": "6366 Heavy Equipment Operator/Bus Driver — Non-state",
+      "name": "6366 Heavy Equipment Operator/Bus Driver - Non-state",
       "hourlyRate": 47.18,
-      "notes": "Class 6366 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6366 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6366_external",
-      "name": "6366 Heavy Equipment Operator/Bus Driver — External",
+      "name": "6366 Heavy Equipment Operator/Bus Driver - External",
       "hourlyRate": 52.44,
-      "notes": "Class 6366 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6366 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6476_state",
-      "name": "6476 Carpenter — State",
+      "name": "6476 Carpenter - State",
       "hourlyRate": 52.64,
-      "notes": "Class 6476 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6476 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6476_nonstate",
-      "name": "6476 Carpenter — Non-state",
+      "name": "6476 Carpenter - Non-state",
       "hourlyRate": 75.37,
-      "notes": "Class 6476 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6476 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6476_external",
-      "name": "6476 Carpenter — External",
+      "name": "6476 Carpenter - External",
       "hourlyRate": 83.77,
-      "notes": "Class 6476 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6476 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6526_state",
-      "name": "6526 Painter — State",
+      "name": "6526 Painter - State",
       "hourlyRate": 52.64,
-      "notes": "Class 6526 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6526 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6526_nonstate",
-      "name": "6526 Painter — Non-state",
+      "name": "6526 Painter - Non-state",
       "hourlyRate": 75.37,
-      "notes": "Class 6526 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6526 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6526_external",
-      "name": "6526 Painter — External",
+      "name": "6526 Painter - External",
       "hourlyRate": 83.77,
-      "notes": "Class 6526 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6526 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6533_state",
-      "name": "6533 Electrician — State",
+      "name": "6533 Electrician - State",
       "hourlyRate": 58.96,
-      "notes": "Class 6533 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6533 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6533_nonstate",
-      "name": "6533 Electrician — Non-state",
+      "name": "6533 Electrician - Non-state",
       "hourlyRate": 84.41,
-      "notes": "Class 6533 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6533 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6533_external",
-      "name": "6533 Electrician — External",
+      "name": "6533 Electrician - External",
       "hourlyRate": 93.82,
-      "notes": "Class 6533 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6533 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6549_state",
-      "name": "6549 Plumber — State",
+      "name": "6549 Plumber - State",
       "hourlyRate": 58.96,
-      "notes": "Class 6549 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6549 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6549_nonstate",
-      "name": "6549 Plumber — Non-state",
+      "name": "6549 Plumber - Non-state",
       "hourlyRate": 84.41,
-      "notes": "Class 6549 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6549 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6549_external",
-      "name": "6549 Plumber — External",
+      "name": "6549 Plumber - External",
       "hourlyRate": 93.82,
-      "notes": "Class 6549 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6549 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6616_state",
-      "name": "6616 Mason — State",
+      "name": "6616 Mason - State",
       "hourlyRate": 52.64,
-      "notes": "Class 6616 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6616 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6616_nonstate",
-      "name": "6616 Mason — Non-state",
+      "name": "6616 Mason - Non-state",
       "hourlyRate": 75.37,
-      "notes": "Class 6616 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6616 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6616_external",
-      "name": "6616 Mason — External",
+      "name": "6616 Mason - External",
       "hourlyRate": 83.77,
-      "notes": "Class 6616 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6616 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6642_state",
-      "name": "6642 Locksmith — State",
+      "name": "6642 Locksmith - State",
       "hourlyRate": 52.64,
-      "notes": "Class 6642 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6642 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6642_nonstate",
-      "name": "6642 Locksmith — Non-state",
+      "name": "6642 Locksmith - Non-state",
       "hourlyRate": 75.37,
-      "notes": "Class 6642 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6642 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6642_external",
-      "name": "6642 Locksmith — External",
+      "name": "6642 Locksmith - External",
       "hourlyRate": 83.77,
-      "notes": "Class 6642 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6642 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6699_state",
-      "name": "6699 Air Conditioning/Refrigeration Mechanic — State",
+      "name": "6699 Air Conditioning/Refrigeration Mechanic - State",
       "hourlyRate": 58.96,
-      "notes": "Class 6699 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6699 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6699_nonstate",
-      "name": "6699 Air Conditioning/Refrigeration Mechanic — Non-state",
+      "name": "6699 Air Conditioning/Refrigeration Mechanic - Non-state",
       "hourlyRate": 84.41,
-      "notes": "Class 6699 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6699 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6699_external",
-      "name": "6699 Air Conditioning/Refrigeration Mechanic — External",
+      "name": "6699 Air Conditioning/Refrigeration Mechanic - External",
       "hourlyRate": 93.82,
-      "notes": "Class 6699 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6699 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6702_state",
-      "name": "6702 Building Service Engineer — State",
+      "name": "6702 Building Service Engineer - State",
       "hourlyRate": 58.96,
-      "notes": "Class 6702 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6702 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6702_nonstate",
-      "name": "6702 Building Service Engineer — Non-state",
+      "name": "6702 Building Service Engineer - Non-state",
       "hourlyRate": 84.41,
-      "notes": "Class 6702 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6702 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6702_external",
-      "name": "6702 Building Service Engineer — External",
+      "name": "6702 Building Service Engineer - External",
       "hourlyRate": 93.82,
-      "notes": "Class 6702 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6702 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6703_state",
-      "name": "6703 Operating Engineer — State",
+      "name": "6703 Operating Engineer - State",
       "hourlyRate": 52.64,
-      "notes": "Class 6703 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6703 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6703_nonstate",
-      "name": "6703 Operating Engineer — Non-state",
+      "name": "6703 Operating Engineer - Non-state",
       "hourlyRate": 75.37,
-      "notes": "Class 6703 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6703 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6703_external",
-      "name": "6703 Operating Engineer — External",
+      "name": "6703 Operating Engineer - External",
       "hourlyRate": 83.77,
-      "notes": "Class 6703 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6703 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6726_state",
-      "name": "6726 Planner/Estimator/Scheduler — State",
+      "name": "6726 Planner/Estimator/Scheduler - State",
       "hourlyRate": 52.15,
-      "notes": "Class 6726 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6726 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6726_nonstate",
-      "name": "6726 Planner/Estimator/Scheduler — Non-state",
+      "name": "6726 Planner/Estimator/Scheduler - Non-state",
       "hourlyRate": 74.66,
-      "notes": "Class 6726 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6726 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6726_external",
-      "name": "6726 Planner/Estimator/Scheduler — External",
+      "name": "6726 Planner/Estimator/Scheduler - External",
       "hourlyRate": 82.99,
-      "notes": "Class 6726 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6726 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6940_state",
-      "name": "6940 Facilities Maintenance Mechanic — State",
+      "name": "6940 Facilities Maintenance Mechanic - State",
       "hourlyRate": 52.64,
-      "notes": "Class 6940 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6940 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6940_nonstate",
-      "name": "6940 Facilities Maintenance Mechanic — Non-state",
+      "name": "6940 Facilities Maintenance Mechanic - Non-state",
       "hourlyRate": 75.37,
-      "notes": "Class 6940 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6940 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6940_external",
-      "name": "6940 Facilities Maintenance Mechanic — External",
+      "name": "6940 Facilities Maintenance Mechanic - External",
       "hourlyRate": 83.77,
-      "notes": "Class 6940 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6940 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6951_state",
-      "name": "6951 Piano Technician II — State",
+      "name": "6951 Piano Technician II - State",
       "hourlyRate": 37.22,
-      "notes": "Class 6951 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 6951 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c6951_nonstate",
-      "name": "6951 Piano Technician II — Non-state",
+      "name": "6951 Piano Technician II - Non-state",
       "hourlyRate": 53.29,
-      "notes": "Class 6951 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 6951 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c6951_external",
-      "name": "6951 Piano Technician II — External",
+      "name": "6951 Piano Technician II - External",
       "hourlyRate": 59.23,
-      "notes": "Class 6951 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 6951 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8185_state",
-      "name": "8185 Athletic Trainer II - 12 Month — State",
+      "name": "8185 Athletic Trainer II - 12 Month - State",
       "hourlyRate": 44.22,
-      "notes": "Class 8185 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 8185 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c8185_nonstate",
-      "name": "8185 Athletic Trainer II - 12 Month — Non-state",
+      "name": "8185 Athletic Trainer II - 12 Month - Non-state",
       "hourlyRate": 63.32,
-      "notes": "Class 8185 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 8185 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8185_external",
-      "name": "8185 Athletic Trainer II - 12 Month — External",
+      "name": "8185 Athletic Trainer II - 12 Month - External",
       "hourlyRate": 70.38,
-      "notes": "Class 8185 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 8185 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8346_state",
-      "name": "8346 Police Officer Cadet-Nonrepresented — State",
+      "name": "8346 Police Officer Cadet-Nonrepresented - State",
       "hourlyRate": 41.2,
-      "notes": "Class 8346 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 8346 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c8346_nonstate",
-      "name": "8346 Police Officer Cadet-Nonrepresented — Non-state",
+      "name": "8346 Police Officer Cadet-Nonrepresented - Non-state",
       "hourlyRate": 58.98,
-      "notes": "Class 8346 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 8346 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8346_external",
-      "name": "8346 Police Officer Cadet-Nonrepresented — External",
+      "name": "8346 Police Officer Cadet-Nonrepresented - External",
       "hourlyRate": 65.56,
-      "notes": "Class 8346 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 8346 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8350_state",
-      "name": "8350 Police Officer — State",
+      "name": "8350 Police Officer - State",
       "hourlyRate": 63.52,
-      "notes": "Class 8350 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 8350 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c8350_nonstate",
-      "name": "8350 Police Officer — Non-state",
+      "name": "8350 Police Officer - Non-state",
       "hourlyRate": 90.95,
-      "notes": "Class 8350 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 8350 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8350_external",
-      "name": "8350 Police Officer — External",
+      "name": "8350 Police Officer - External",
       "hourlyRate": 101.09,
-      "notes": "Class 8350 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 8350 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8354_state",
-      "name": "8354 Sergeant — State",
+      "name": "8354 Sergeant - State",
       "hourlyRate": 76.82,
-      "notes": "Class 8354 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 8354 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c8354_nonstate",
-      "name": "8354 Sergeant — Non-state",
+      "name": "8354 Sergeant - Non-state",
       "hourlyRate": 109.99,
-      "notes": "Class 8354 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 8354 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8354_external",
-      "name": "8354 Sergeant — External",
+      "name": "8354 Sergeant - External",
       "hourlyRate": 122.26,
-      "notes": "Class 8354 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 8354 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8800_state",
-      "name": "8800 Police Dispatcher -12 Month — State",
+      "name": "8800 Police Dispatcher -12 Month - State",
       "hourlyRate": 48.97,
-      "notes": "Class 8800 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 8800 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c8800_nonstate",
-      "name": "8800 Police Dispatcher -12 Month — Non-state",
+      "name": "8800 Police Dispatcher -12 Month - Non-state",
       "hourlyRate": 70.11,
-      "notes": "Class 8800 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 8800 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8800_external",
-      "name": "8800 Police Dispatcher -12 Month — External",
+      "name": "8800 Police Dispatcher -12 Month - External",
       "hourlyRate": 77.93,
-      "notes": "Class 8800 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 8800 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8810_state",
-      "name": "8810 Parking Officer -12 Month — State",
+      "name": "8810 Parking Officer -12 Month - State",
       "hourlyRate": 36.52,
-      "notes": "Class 8810 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 8810 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c8810_nonstate",
-      "name": "8810 Parking Officer -12 Month — Non-state",
+      "name": "8810 Parking Officer -12 Month - Non-state",
       "hourlyRate": 52.29,
-      "notes": "Class 8810 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 8810 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8810_external",
-      "name": "8810 Parking Officer -12 Month — External",
+      "name": "8810 Parking Officer -12 Month - External",
       "hourlyRate": 58.12,
-      "notes": "Class 8810 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 8810 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8820_state",
-      "name": "8820 Community Service Specialist -12 Month — State",
+      "name": "8820 Community Service Specialist -12 Month - State",
       "hourlyRate": 35.21,
-      "notes": "Class 8820 · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 8820 · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c8820_nonstate",
-      "name": "8820 Community Service Specialist -12 Month — Non-state",
+      "name": "8820 Community Service Specialist -12 Month - Non-state",
       "hourlyRate": 50.42,
-      "notes": "Class 8820 · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 8820 · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c8820_external",
-      "name": "8820 Community Service Specialist -12 Month — External",
+      "name": "8820 Community Service Specialist -12 Month - External",
       "hourlyRate": 56.04,
-      "notes": "Class 8820 · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 8820 · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c18xx_state",
-      "name": "18XX Student Assistant — State",
+      "name": "18XX Student Assistant - State",
       "hourlyRate": 20.11,
-      "notes": "Class 18XX · State funded campus dept — direct labor + 19% admin",
+      "notes": "Class 18XX · State funded campus dept - direct labor + 19% admin",
       "taxable": false
     },
     {
       "id": "c18xx_nonstate",
-      "name": "18XX Student Assistant — Non-state",
+      "name": "18XX Student Assistant - Non-state",
       "hourlyRate": 20.11,
-      "notes": "Class 18XX · Non-state funded campus & auxiliary — direct labor + 19% admin + 51.38% benefits",
+      "notes": "Class 18XX · Non-state funded campus & auxiliary - direct labor + 19% admin + 51.38% benefits",
       "taxable": false
     },
     {
       "id": "c18xx_external",
-      "name": "18XX Student Assistant — External",
+      "name": "18XX Student Assistant - External",
       "hourlyRate": 23.32,
-      "notes": "Class 18XX · External use — direct labor + 38% admin + 51.38% benefits",
+      "notes": "Class 18XX · External use - direct labor + 38% admin + 51.38% benefits",
       "taxable": false
     }
   ]

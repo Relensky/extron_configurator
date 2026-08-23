@@ -136,7 +136,7 @@ void main() {
       expect(tester.widget<Badge>(badge).isLabelVisible, isTrue);
 
       await tester.tap(
-        find.byTooltip('Convert — review the changes this file needs'),
+        find.byTooltip('Convert - review the changes this file needs'),
       );
       await tester.pumpAndSettle();
       expect(find.text('Legacy Config Updated'), findsOneWidget);
@@ -150,11 +150,11 @@ void main() {
 
       // And the log is still one click away.
       expect(
-        find.byTooltip('Conversion reviewed — open the log again'),
+        find.byTooltip('Conversion reviewed - open the log again'),
         findsOneWidget,
       );
       await tester.tap(
-        find.byTooltip('Conversion reviewed — open the log again'),
+        find.byTooltip('Conversion reviewed - open the log again'),
       );
       await tester.pumpAndSettle();
       expect(find.text('Legacy Config Updated'), findsOneWidget);

@@ -79,7 +79,7 @@ void main() {
     expect(
       r,
       greaterThanOrEqualTo(min),
-      reason: '$what is ${r.toStringAsFixed(2)}:1 on $where — needs $min:1',
+      reason: '$what is ${r.toStringAsFixed(2)}:1 on $where - needs $min:1',
     );
   }
 
@@ -131,7 +131,7 @@ void main() {
     for (final t in themes()) {
       final s = t.theme.colorScheme;
 
-      test('body text on every surface — ${t.name}', () {
+      test('body text on every surface - ${t.name}', () {
         expectReadable('onSurface', s.onSurface, s.surface, t.name);
         for (final bg in [
           s.surface,
@@ -145,7 +145,7 @@ void main() {
         }
       });
 
-      test('the error colour on an ordinary surface — ${t.name}', () {
+      test('the error colour on an ordinary surface - ${t.name}', () {
         expectReadable('error', s.error, s.surface, t.name);
       });
     }
@@ -176,7 +176,7 @@ void main() {
             final r = contrastRatio(pick.value, entry.value);
             if (r < kContrastBody) {
               failures.add(
-                '${pick.key} on ${entry.key} — ${t.name} — '
+                '${pick.key} on ${entry.key} - ${t.name} - '
                 '${r.toStringAsFixed(2)}:1',
               );
             }
@@ -188,7 +188,7 @@ void main() {
               '${failures.length} fill/theme combinations');
     });
 
-    test('the schemes own pairings are NOT safe — which is why the helpers '
+    test('the schemes own pairings are NOT safe - which is why the helpers '
         'exist', () {
       // Not a complaint about Material: a scheme's on-colours are generated
       // for its own generated palette, and this app hands it a colour a user
@@ -211,7 +211,7 @@ void main() {
     for (final t in themes()) {
       final s = t.theme.colorScheme;
 
-      test('small red text holds the STRONG bar — ${t.name}', () {
+      test('small red text holds the STRONG bar - ${t.name}', () {
         // The scheme's own error red clears the 4.5:1 minimum on every fill
         // this app paints — by as little as 4.65:1, which is passing and
         // still hard to read at 12pt on a near-black panel. errorTextOn keeps
@@ -228,7 +228,7 @@ void main() {
         }
       });
 
-      test('a legible tone is still the colour it started as — ${t.name}', () {
+      test('a legible tone is still the colour it started as - ${t.name}', () {
         // The point of legibleTone over readableOn: red stays red. Measured
         // as hue, because "still red" is not something a ratio can say.
         final red = errorTextOn(s, s.surface);
@@ -240,7 +240,7 @@ void main() {
         );
       });
 
-      test('error text on a container fill — ${t.name}', () {
+      test('error text on a container fill - ${t.name}', () {
         // colorScheme.error straight onto a container measures as low as
         // 1.3:1 on these themes. errorOn is what the app calls instead.
         for (final bg in [
@@ -253,7 +253,7 @@ void main() {
         }
       });
 
-      test('foreground on a container fill — ${t.name}', () {
+      test('foreground on a container fill - ${t.name}', () {
         for (final bg in [
           s.primaryContainer,
           s.secondaryContainer,
@@ -265,7 +265,7 @@ void main() {
         }
       });
 
-      test('the rail\'s selected row — ${t.name}', () {
+      test('the rail\'s selected row - ${t.name}', () {
         // What nav_rail.dart computes for the band behind the current tab.
         //
         // The band comes from a DIFFERENT role in the two families, because
@@ -285,7 +285,7 @@ void main() {
         expectReadable('rail label', ink, bg, t.name);
       });
 
-      test('the project total, painted on the accent — ${t.name}', () {
+      test('the project total, painted on the accent - ${t.name}', () {
         // _TotalChip's emphasis fill IS primaryContainer, so on the Classic
         // theme it is whatever colour somebody picked out of a wheel. The
         // figure used to be drawn in the page's ink, which went dark-on-dark
@@ -305,7 +305,7 @@ void main() {
             min: kContrastLarge);
       });
 
-      test('the top-level banner — ${t.name}', () {
+      test('the top-level banner - ${t.name}', () {
         final bg = s.surfaceContainerHighest;
         expectReadable(
           'job name',
@@ -328,7 +328,7 @@ void main() {
         );
       });
 
-      test('a failure snack bar — ${t.name}', () {
+      test('a failure snack bar - ${t.name}', () {
         // The fill is chosen against the bar's own text colour, which is what
         // makes this pass where a flat Colors.red did not.
         final ink = t.theme.snackBarTheme.contentTextStyle?.color ??
@@ -341,14 +341,14 @@ void main() {
         );
       });
 
-      test('an ordinary snack bar — ${t.name}', () {
+      test('an ordinary snack bar - ${t.name}', () {
         final ink = t.theme.snackBarTheme.contentTextStyle?.color ??
             s.onInverseSurface;
         final bg = t.theme.snackBarTheme.backgroundColor ?? s.inverseSurface;
         expectReadable('snack bar text', ink, bg, t.name);
       });
 
-      test('icons that carry meaning — ${t.name}', () {
+      test('icons that carry meaning - ${t.name}', () {
         // 3:1 rather than 4.5 — the threshold for a graphic rather than for
         // body text. This is the check plain `tertiary` failed at 2.1:1.
         final surface = s.surface;
@@ -365,7 +365,7 @@ void main() {
         );
       });
 
-      test('the status colours on the Raw JSON header — ${t.name}', () {
+      test('the status colours on the Raw JSON header - ${t.name}', () {
         // Icon plus wording carry the state; the colour only reinforces it.
         // It still has to be visible, at the 3:1 an icon needs.
         final bg = s.surface;
@@ -385,12 +385,12 @@ void main() {
         expectReadable('warning text', warningOn(bg), bg, t.name);
       });
 
-      test('the invalid-JSON banner — ${t.name}', () {
+      test('the invalid-JSON banner - ${t.name}', () {
         expectReadable('banner text', errorOn(s, s.errorContainer),
             s.errorContainer, t.name);
       });
 
-      test('the app bar title — ${t.name}', () {
+      test('the app bar title - ${t.name}', () {
         final bar = t.theme.appBarTheme.backgroundColor ?? s.surface;
         final ink = t.theme.appBarTheme.foregroundColor ?? s.onSurface;
         expectReadable('app bar text', ink, bar, t.name);

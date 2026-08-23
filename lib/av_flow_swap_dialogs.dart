@@ -242,7 +242,7 @@ Future<AvDeviceTemplate?> pickCatalogModel(
                     labelText: 'Search the catalog',
                     hintText: 'model, part number or maker',
                     prefixIcon: Icon(Icons.search, size: 20),
-                    helperText: 'Spaces and dashes are ignored — '
+                    helperText: 'Spaces and dashes are ignored - '
                         '"dtpcross108" finds "DTP CrossPoint 108".',
                   ),
                   onChanged: (_) => setLocal(() {}),
@@ -254,7 +254,7 @@ Future<AvDeviceTemplate?> pickCatalogModel(
                           child: Text(
                             searchController.text.trim().isEmpty
                                 ? 'The catalog is empty.'
-                                : 'No model matches — add it on the Catalog '
+                                : 'No model matches - add it on the Catalog '
                                     'tab first.',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodySmall,

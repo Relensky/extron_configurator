@@ -378,13 +378,13 @@
       "when": "gui_tab_type~VGA",
       "expect": "gui_usb_or_vga=VGA",
       "flag": ["gui_usb_or_vga", "gui_inputs"],
-      "message": "Sources include VGA (gui_tab_type is \"{gui_tab_type}\") but gui_usb_or_vga is \"{gui_usb_or_vga}\" — set it to VGA, or pick a USB sources option."
+      "message": "Sources include VGA (gui_tab_type is \"{gui_tab_type}\") but gui_usb_or_vga is \"{gui_usb_or_vga}\" - set it to VGA, or pick a USB sources option."
     },
     {
       "when": "gui_tab_type~USB",
       "expect": "gui_usb_or_vga=USB",
       "flag": ["gui_usb_or_vga", "gui_inputs"],
-      "message": "Sources include USB (gui_tab_type is \"{gui_tab_type}\") but gui_usb_or_vga is \"{gui_usb_or_vga}\" — set it to USB, or pick a VGA sources option."
+      "message": "Sources include USB (gui_tab_type is \"{gui_tab_type}\") but gui_usb_or_vga is \"{gui_usb_or_vga}\" - set it to USB, or pick a VGA sources option."
     }
   ],
   "device_defaults": {
@@ -484,36 +484,36 @@
         "label": "Panel Alias (alias)",
         "addIfMissing": true,
         "helperText": "Must match the device alias in the room's GC project",
-        "description": "The panel's device alias, and its whole address — a button panel has no IP and no COM port, it is a UI device on the AV LAN built alongside the touch panels. This is also how the processor tells the panels apart: every NBP carries the SAME element ids, burned into the hardware rather than drawn in a layout, so every command is sent with tps=<alias> and every press is traced back through the alias it arrived on. Two panels sharing an alias means one of them silently drives the other."
+        "description": "The panel's device alias, and its whole address - a button panel has no IP and no COM port, it is a UI device on the AV LAN built alongside the touch panels. This is also how the processor tells the panels apart: every NBP carries the SAME element ids, burned into the hardware rather than drawn in a layout, so every command is sent with tps=<alias> and every press is traced back through the alias it arrived on. Two panels sharing an alias means one of them silently drives the other."
       },
       "display": {
         "type": "int",
         "label": "Display Driven (display)",
         "addIfMissing": true,
         "helperText": "The PROJECTORDEVICE_n number this panel owns",
-        "description": "Which display this panel controls, as the number in its PROJECTORDEVICE_n block. The panel owns that display outright — power, source and volume — with no involvement from the room's switcher or the main touch panel, so the display it names should be one the room source never routes: set 'source_follow' false on that block. A display number with no handler behind it lights the panel up and controls nothing, and the processor says so at startup."
+        "description": "Which display this panel controls, as the number in its PROJECTORDEVICE_n block. The panel owns that display outright - power, source and volume - with no involvement from the room's switcher or the main touch panel, so the display it names should be one the room source never routes: set 'source_follow' false on that block. A display number with no handler behind it lights the panel up and controls nothing, and the processor says so at startup."
       },
       "sources": {
         "type": "hidden",
-        "description": "The panel's source buttons, in order, as a list of {\"label\", \"input\"} pairs — the text on the button and the input to select. The 'input' values are whatever the DISPLAY's own module calls them ('HDMI 1'), not switcher numbers, because this routes on the display rather than through a matrix. Three buttons by default; a panel with more needs matching element_ids. Edited on the Raw JSON tab: it is a list of objects, and a text box would turn it into a string.",
+        "description": "The panel's source buttons, in order, as a list of {\"label\", \"input\"} pairs - the text on the button and the input to select. The 'input' values are whatever the DISPLAY's own module calls them ('HDMI 1'), not switcher numbers, because this routes on the display rather than through a matrix. Three buttons by default; a panel with more needs matching element_ids. Edited on the Raw JSON tab: it is a list of objects, and a text box would turn it into a string.",
         "__comment": "Hidden because the device tab renders scalars. Described here so the info button and the device report still have the text."
       },
       "element_ids": {
         "type": "hidden",
         "description": "Per-room overrides for the panel's button and knob ids, as {\"power_on\": 60021, ...}. Empty is the normal case: the ids are burned into the NBP hardware and the template already knows the defaults (power_on/power_off, source_1..3, mute, knob_volume, level_volume). Fill it in only for a panel model whose ids differ, or one with more than three source buttons. Edited on the Raw JSON tab.",
-        "__comment": "Hidden for the same reason as 'sources' — it is an object, not a scalar."
+        "__comment": "Hidden for the same reason as 'sources' - it is an object, not a scalar."
       },
       "volume_default": {
         "type": "int",
         "addIfMissing": true,
         "label": "Startup Volume (volume_default)",
-        "description": "The level the panel's display is set to when the room comes up. In the display's own volume scale, not dB — see volume_min and volume_max."
+        "description": "The level the panel's display is set to when the room comes up. In the display's own volume scale, not dB - see volume_min and volume_max."
       },
       "volume_min": {
         "type": "int",
         "addIfMissing": true,
         "label": "Minimum Volume (volume_min)",
-        "description": "The bottom of the panel's volume knob, in the display's own scale (usually 0). The floor a user can turn down to, not a mute — the panel has its own mute button."
+        "description": "The bottom of the panel's volume knob, in the display's own scale (usually 0). The floor a user can turn down to, not a mute - the panel has its own mute button."
       },
       "volume_max": {
         "type": "int",
@@ -540,26 +540,26 @@
         "moduleCommand": "Input",
         "label": "Input",
         "addIfMissing": true,
-        "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed). In a share room this is the COMBINED-mode input — the leg of the room's distribution that reaches this screen — and input_individual is what it shows in individual mode."
+        "description": "Input the projector subscribe status follows. The options are read live from the selected Python module's 'Input' command dictionary, so only states that module actually supports are offered (manual typing still allowed). In a share room this is the COMBINED-mode input - the leg of the room's distribution that reaches this screen - and input_individual is what it shows in individual mode."
       },
       "device_role": {
         "type": "dropdown",
         "label": "Device Role (device_role)",
         "addIfMissing": true,
         "options": [
-          { "value": "", "label": "(auto — decide from the model list)" },
+          { "value": "", "label": "(auto - decide from the model list)" },
           { "value": "projector", "label": "projector (lamp hours, detail page, box-power relay)" },
-          { "value": "display", "label": "display (flat panel — no lamp hours, no relay)" }
+          { "value": "display", "label": "display (flat panel - no lamp hours, no relay)" }
         ],
         "helperText": "Blank falls back to the processor's display-model list",
-        "description": "Whether this slot is a flat panel or a lamp projector. The processor asks that question in three places — whether to read lamp hours, whether to build a box-power relay, and whether the panel says 'Display' or 'Projector' — and this key answers all three at once. Left blank it falls back to the processor's display-model list, which is demonstrably incomplete (the Sharp PN-C603D and PN-LE601 are panels and are not on it), so set it explicitly on anything the list gets wrong. An unrecognised value is logged and falls back to the list."
+        "description": "Whether this slot is a flat panel or a lamp projector. The processor asks that question in three places - whether to read lamp hours, whether to build a box-power relay, and whether the panel says 'Display' or 'Projector' - and this key answers all three at once. Left blank it falls back to the processor's display-model list, which is demonstrably incomplete (the Sharp PN-C603D and PN-LE601 are panels and are not on it), so set it explicitly on anything the list gets wrong. An unrecognised value is logged and falls back to the list."
       },
       "relay_port": {
         "type": "text",
         "label": "Relay Port (relay_port)",
         "addIfMissing": true,
         "helperText": "Blank means RLY1 for projector 1, RLY2 for projector 2, and so on",
-        "description": "Which port on the relay host switches this projector's box power. Leave it blank and projector <n> drives RLY<n> — the wiring every room had before this key existed. Name a port here for a room whose relay boxes are not landed in projector order, so the config says which one this projector is on instead of the box being re-wired to match. Only read when Relay Power Control (dev_relay_power) is on, and never for a slot that is a flat panel: a panel has no box to switch, so the processor builds it no relay at all.",
+        "description": "Which port on the relay host switches this projector's box power. Leave it blank and projector <n> drives RLY<n> - the wiring every room had before this key existed. Name a port here for a room whose relay boxes are not landed in projector order, so the config says which one this projector is on instead of the box being re-wired to match. Only read when Relay Power Control (dev_relay_power) is on, and never for a slot that is a flat panel: a panel has no box to switch, so the processor builds it no relay at all.",
         "__comment": "Free text rather than a dropdown: how many relay ports a room has is a property of the host box (the screen relays already reach RLY6), and the schema is not told which processor is in the rack."
       },
       "__source_rules_note": {
@@ -578,21 +578,21 @@
         "label": "Follows the room's source buttons (source_follow)",
         "addIfMissing": true,
         "helperText": "Off: this screen ignores the room's source buttons",
-        "description": "Leave this on for any screen that shows whatever the room has selected — that is nearly every screen, and it is what a room built before this setting existed already does. Turn it off for a screen that is not part of source selection: one that always shows the same thing, or one a button panel drives from its own inputs. With this off and no pinned source, the screen is never routed at all, which is exactly what an annex display fed from its own wall plates wants."
+        "description": "Leave this on for any screen that shows whatever the room has selected - that is nearly every screen, and it is what a room built before this setting existed already does. Turn it off for a screen that is not part of source selection: one that always shows the same thing, or one a button panel drives from its own inputs. With this off and no pinned source, the screen is never routed at all, which is exactly what an annex display fed from its own wall plates wants."
       },
       "source_fixed": {
         "type": "room_sources",
         "label": "Always shows this source (source_fixed)",
         "addIfMissing": true,
         "helperText": "Only used when the setting above is off. Blank = not routed",
-        "description": "The one source this screen always shows, whatever the room has selected — the confidence monitor that stays on the PC, the overflow projector parked on the extended desktop. The list is this room's own sources, read off the input_ keys on the System tab. Only used when \"Follows the room's source buttons\" is off. Leave it blank to take the screen out of routing altogether rather than pin it to anything."
+        "description": "The one source this screen always shows, whatever the room has selected - the confidence monitor that stays on the PC, the overflow projector parked on the extended desktop. The list is this room's own sources, read off the input_ keys on the System tab. Only used when \"Follows the room's source buttons\" is off. Leave it blank to take the screen out of routing altogether rather than pin it to anything."
       },
       "source_overrides": {
         "type": "source_map",
         "label": "Source Substitutions (source_overrides)",
         "addIfMissing": true,
         "helperText": "No rows: this screen shows whatever the room selected",
-        "description": "Source substitutions for this screen: while the room is on the source named on the left, route the one on the right here instead. The confidence monitor that mirrors the extended desktop whenever the PC is up and follows the room normally for everything else is one row — pc shows pc_extended — and nothing else about the screen changes. Both sides are this room's own sources, read off the input_ keys on the System tab, and the processor matches them lower-case. A screen with no rows follows the room's source buttons exactly as it always did. The pc row is read at startup too: it decides which input the screen comes up on, ahead of the old rule that put the extended desktop on screens 2 and 4 in Extended mode. Presenter Mode ignores every row here for as long as it is running.",
+        "description": "Source substitutions for this screen: while the room is on the source named on the left, route the one on the right here instead. The confidence monitor that mirrors the extended desktop whenever the PC is up and follows the room normally for everything else is one row - pc shows pc_extended - and nothing else about the screen changes. Both sides are this room's own sources, read off the input_ keys on the System tab, and the processor matches them lower-case. A screen with no rows follows the room's source buttons exactly as it always did. The pc row is read at startup too: it decides which input the screen comes up on, ahead of the old rule that put the extended desktop on screens 2 and 4 in Extended mode. Presenter Mode ignores every row here for as long as it is running.",
         "__comment": "A map, not a scalar: 'source_map' draws one room-source -> room-source row per entry, so the object never has to be typed on the Raw JSON tab."
       },
       "presenter_follow": {
@@ -600,22 +600,22 @@
         "label": "Included in Presenter Mode (presenter_follow)",
         "addIfMissing": true,
         "helperText": "Off: Presenter Mode leaves this screen alone",
-        "description": "Presenter Mode is the one button that throws the selected source onto every screen at once. Leave this on and this screen joins in, ignoring its own pinned source and substitutions for as long as the mode is running. Turn it off for a screen the room's switcher does not drive at all — otherwise Presenter Mode tries to route an output that is not there. Turn off \"Follows the room's source buttons\" for that screen too."
+        "description": "Presenter Mode is the one button that throws the selected source onto every screen at once. Leave this on and this screen joins in, ignoring its own pinned source and substitutions for as long as the mode is running. Turn it off for a screen the room's switcher does not drive at all - otherwise Presenter Mode tries to route an output that is not there. Turn off \"Follows the room's source buttons\" for that screen too."
       },
       "input_individual": {
         "type": "module_states",
         "moduleCommand": "Input",
         "label": "Individual-Mode Input (input_individual)",
         "addIfMissing": true,
-        "helperText": "SHARE ROOMS ONLY — leave blank and this screen is not a station",
+        "helperText": "SHARE ROOMS ONLY - leave blank and this screen is not a station",
         "description": "The station's own local input (usually HDMI 1), shown when a share room is switched to individual mode; 'input' is what the same screen shows in combined mode. Setting this is what MAKES a screen a station: leave it blank and the screen keeps one configured input and holds it, exactly as every non-share room's displays already do. The room-wide Combined/Individual toggle on the grid page drives every station at once, and share_room_default_mode picks which one the room starts in."
       },
       "speaker_mute": {
         "type": "bool",
         "label": "Mute Device Speakers (speaker_mute)",
         "addIfMissing": true,
-        "helperText": "Absent from a config the processor treats as ON — turn it off to leave this display's audio alone",
-        "description": "Whether the room's audio mute also silences THIS display's own speakers. On (the processor's default when the key is absent) it mutes them with the display's own commands — the mute state, or a volume of 0, whichever speaker_mute_method selects. Turn it OFF for a display that IS the room's audio output, or for a room whose audio is routed and controlled at the switcher/DSP instead, where the program mute already happens on that device and the display should be left alone. Not the same as use_device_mute, which hands VIDEO muting to the display's AV mute / shutter; this key is only ever about its speakers."
+        "helperText": "Absent from a config the processor treats as ON - turn it off to leave this display's audio alone",
+        "description": "Whether the room's audio mute also silences THIS display's own speakers. On (the processor's default when the key is absent) it mutes them with the display's own commands - the mute state, or a volume of 0, whichever speaker_mute_method selects. Turn it OFF for a display that IS the room's audio output, or for a room whose audio is routed and controlled at the switcher/DSP instead, where the program mute already happens on that device and the display should be left alone. Not the same as use_device_mute, which hands VIDEO muting to the display's AV mute / shutter; this key is only ever about its speakers."
       },
       "speaker_mute_method": {
         "type": "dropdown",
@@ -626,14 +626,14 @@
           { "value": "mute", "label": "mute (send the device's mute state)" }
         ],
         "helperText": "Ignored when speaker_mute is off",
-        "description": "How the display's speakers are silenced. 'volume' (default) calls the module's volume command with 0; 'mute' sends the module's mute state (AudioMute / SpeakerMute / Mute — whichever that driver exposes). Volume is the default because a muted display usually parks a MUTE banner on screen and leaves it there. A module with no volume command falls back to its mute command on its own, and one with neither is skipped rather than guessed at."
+        "description": "How the display's speakers are silenced. 'volume' (default) calls the module's volume command with 0; 'mute' sends the module's mute state (AudioMute / SpeakerMute / Mute - whichever that driver exposes). Volume is the default because a muted display usually parks a MUTE banner on screen and leaves it there. A module with no volume command falls back to its mute command on its own, and one with neither is skipped rather than guessed at."
       },
       "speaker_unmute_volume": {
         "type": "int",
         "label": "Speaker Unmute Volume (speaker_unmute_volume)",
         "addIfMissing": true,
         "helperText": "Only read when the method is 'volume'. Blank/absent = unmute with the mute command instead",
-        "description": "The level restored when unmuting a display that was silenced by volume: setting a volume to 0 does not record what it replaced, so there is nothing to go back to without this. Left unset, the processor unmutes with the module's mute command rather than pick a number that could be far too loud in an empty room. Note that 0 is a real level here and would leave the room silent — clear the key (trash button) instead of typing 0 if you want the fallback."
+        "description": "The level restored when unmuting a display that was silenced by volume: setting a volume to 0 does not record what it replaced, so there is nothing to go back to without this. Left unset, the processor unmutes with the module's mute command rather than pick a number that could be far too loud in an empty room. Note that 0 is a real level here and would leave the room silent - clear the key (trash button) instead of typing 0 if you want the fallback."
       }
     },
     "USBDEVICE_*": {
@@ -646,7 +646,7 @@
           { "value": "2", "label": "2 (the laptop plate / second host)" }
         ],
         "helperText": "The input the room sits on. The morning restart toggles away from it and back",
-        "description": "Which host the USB switcher hands the room's camera and microphone to when nobody has chosen. The processor drives this input once at startup, and the morning restart toggles to the OTHER input and back to force the USB devices to re-enumerate — so this is what the room comes up on every day. Only 1 and 2 are accepted: these are two-input switchers, and the processor logs a warning and falls back to 1 for anything else. Set it to 2 in a room wired with the laptop plate on the first port."
+        "description": "Which host the USB switcher hands the room's camera and microphone to when nobody has chosen. The processor drives this input once at startup, and the morning restart toggles to the OTHER input and back to force the USB devices to re-enumerate - so this is what the room comes up on every day. Only 1 and 2 are accepted: these are two-input switchers, and the processor logs a warning and falls back to 1 for anything else. Set it to 2 in a room wired with the laptop plate on the first port."
       }
     },
     "__mic_shutdown_note": {
@@ -667,15 +667,15 @@
         "type": "bool",
         "label": "Mute Ceiling Mics at Shutdown (shutdown_mute_ceiling_mics)",
         "addIfMissing": true,
-        "helperText": "Absent from a config the processor treats as ON — turn it off to leave the ceiling array as it was",
-        "description": "Whether shutting the room down mutes the ceiling microphone array. On (the processor's default when the key is absent) the array is closed as the room powers off, so nothing is left live overnight. It has a switch of its own because a room can want one and not the other — the ceiling array closed while the handhelds are left exactly as the instructor set them, or the reverse. Startup reads the same key, so an array this room does not mute at shutdown is not unmuted at startup either: the setting leaves it alone in both directions. Not to be confused with VoiceLift, which is always muted at shutdown and has no switch — an empty room amplifying itself is nothing any room wants."
+        "helperText": "Absent from a config the processor treats as ON - turn it off to leave the ceiling array as it was",
+        "description": "Whether shutting the room down mutes the ceiling microphone array. On (the processor's default when the key is absent) the array is closed as the room powers off, so nothing is left live overnight. It has a switch of its own because a room can want one and not the other - the ceiling array closed while the handhelds are left exactly as the instructor set them, or the reverse. Startup reads the same key, so an array this room does not mute at shutdown is not unmuted at startup either: the setting leaves it alone in both directions. Not to be confused with VoiceLift, which is always muted at shutdown and has no switch - an empty room amplifying itself is nothing any room wants."
       },
       "shutdown_mute_mics": {
         "type": "bool",
         "label": "Mute Microphones at Shutdown (shutdown_mute_mics)",
         "addIfMissing": true,
-        "helperText": "Absent from a config the processor treats as ON — turn it off to leave the mics as the instructor set them",
-        "description": "Whether shutting the room down mutes the room's microphones — the master mic group, and the mic slider on the panel with it. On (the processor's default when the key is absent) every handheld and lav is closed as the room powers off. Turn it OFF for a room whose mic levels are set once and left where somebody put them, or one whose microphones are managed outside this system. Startup reads the same key, so a room that does not mute at shutdown is not unmuted at startup either. The ceiling array follows its own key next to this one."
+        "helperText": "Absent from a config the processor treats as ON - turn it off to leave the mics as the instructor set them",
+        "description": "Whether shutting the room down mutes the room's microphones - the master mic group, and the mic slider on the panel with it. On (the processor's default when the key is absent) every handheld and lav is closed as the room powers off. Turn it OFF for a room whose mic levels are set once and left where somebody put them, or one whose microphones are managed outside this system. Startup reads the same key, so a room that does not mute at shutdown is not unmuted at startup either. The ceiling array follows its own key next to this one."
       }
     },
     "SWITCHERDEVICE_1": {
@@ -683,15 +683,15 @@
         "type": "bool",
         "label": "Mute Ceiling Mics at Shutdown (shutdown_mute_ceiling_mics)",
         "addIfMissing": true,
-        "helperText": "Only read in a room with no DSP — absent from a config the processor treats as ON",
-        "description": "Whether shutting the room down mutes the ceiling microphone array. On (the processor's default when the key is absent) the array is closed as the room powers off, so nothing is left live overnight. It has a switch of its own because a room can want one and not the other — the ceiling array closed while the handhelds are left exactly as the instructor set them, or the reverse. Startup reads the same key, so an array this room does not mute at shutdown is not unmuted at startup either: the setting leaves it alone in both directions. Not to be confused with VoiceLift, which is always muted at shutdown and has no switch — an empty room amplifying itself is nothing any room wants. Read off the switcher only in a room with NO DSP: the key lives on whichever device block carries this room's mic groups, and a room with a DSP answers from DSPDEVICE_1 instead."
+        "helperText": "Only read in a room with no DSP - absent from a config the processor treats as ON",
+        "description": "Whether shutting the room down mutes the ceiling microphone array. On (the processor's default when the key is absent) the array is closed as the room powers off, so nothing is left live overnight. It has a switch of its own because a room can want one and not the other - the ceiling array closed while the handhelds are left exactly as the instructor set them, or the reverse. Startup reads the same key, so an array this room does not mute at shutdown is not unmuted at startup either: the setting leaves it alone in both directions. Not to be confused with VoiceLift, which is always muted at shutdown and has no switch - an empty room amplifying itself is nothing any room wants. Read off the switcher only in a room with NO DSP: the key lives on whichever device block carries this room's mic groups, and a room with a DSP answers from DSPDEVICE_1 instead."
       },
       "shutdown_mute_mics": {
         "type": "bool",
         "label": "Mute Microphones at Shutdown (shutdown_mute_mics)",
         "addIfMissing": true,
-        "helperText": "Only read in a room with no DSP — absent from a config the processor treats as ON",
-        "description": "Whether shutting the room down mutes the room's microphones — the master mic group, and the mic slider on the panel with it. On (the processor's default when the key is absent) every handheld and lav is closed as the room powers off. Turn it OFF for a room whose mic levels are set once and left where somebody put them, or one whose microphones are managed outside this system. Startup reads the same key, so a room that does not mute at shutdown is not unmuted at startup either. The ceiling array follows its own key next to this one. Read off the switcher only in a room with NO DSP: the key lives on whichever device block carries this room's mic groups, and a room with a DSP answers from DSPDEVICE_1 instead."
+        "helperText": "Only read in a room with no DSP - absent from a config the processor treats as ON",
+        "description": "Whether shutting the room down mutes the room's microphones - the master mic group, and the mic slider on the panel with it. On (the processor's default when the key is absent) every handheld and lav is closed as the room powers off. Turn it OFF for a room whose mic levels are set once and left where somebody put them, or one whose microphones are managed outside this system. Startup reads the same key, so a room that does not mute at shutdown is not unmuted at startup either. The ceiling array follows its own key next to this one. Read off the switcher only in a room with NO DSP: the key lives on whichever device block carries this room's mic groups, and a room with a DSP answers from DSPDEVICE_1 instead."
       }
     }
   },
@@ -774,11 +774,11 @@
   "fields": {
     "morning_power_on_time": {
       "label": "Morning Power-On Time (morning_power_on_time)",
-      "description": "Set by the PROCESSOR, not by hand: the time it next brings the room up, written back into config.json as the schedule shifts. Shown here for reference — editing it is overwritten on the next cycle."
+      "description": "Set by the PROCESSOR, not by hand: the time it next brings the room up, written back into config.json as the schedule shifts. Shown here for reference - editing it is overwritten on the next cycle."
     },
     "nightly_shutdown_time": {
       "label": "Nightly Shutdown Time (nightly_shutdown_time)",
-      "description": "Set by the PROCESSOR, not by hand: the time it next shuts the room down, written back into config.json as the schedule shifts. Shown here for reference — editing it is overwritten on the next cycle."
+      "description": "Set by the PROCESSOR, not by hand: the time it next shuts the room down, written back into config.json as the schedule shifts. Shown here for reference - editing it is overwritten on the next cycle."
     },
     "btn_name": {
       "description": "GUI object name for the connection status that has two states. Usually represented as a red dot when disconnected."
@@ -819,7 +819,7 @@
       ]
     },
     "device_id": {
-      "description": "The ID to be sent to the device if it is required. Shown where a block already carries one, or where the model's driver asks for one — not offered on every device, because almost none of them need it."
+      "description": "The ID to be sent to the device if it is required. Shown where a block already carries one, or where the model's driver asks for one - not offered on every device, because almost none of them need it."
     },
     "gve_id": {
       "description": "String that identifies the device in GVE. Needs to be created when you add the room devices to GVE."
@@ -862,7 +862,7 @@
     },
     "default_cc_aud_cam": {
       "type": "bool",
-      "description": "In a two-camera room, start with the AUDIENCE camera selected as the capture-card source instead of the instructor camera — what the far end of a call sees when the room comes up. Ignored in a room with fewer than two cameras."
+      "description": "In a two-camera room, start with the AUDIENCE camera selected as the capture-card source instead of the instructor camera - what the far end of a call sees when the room comes up. Ignored in a room with fewer than two cameras."
     },
     "gui_capture_source_available": {
       "type": "dropdown",
@@ -870,7 +870,7 @@
         "Yes",
         "No"
       ],
-      "description": "Whether the panel offers a capture-source page at all — the controls that pick what gets sent to the capture card / USB interface for a Zoom or Teams call. 'No' hides them, for a room whose capture feed is fixed or that has no capture card."
+      "description": "Whether the panel offers a capture-source page at all - the controls that pick what gets sent to the capture card / USB interface for a Zoom or Teams call. 'No' hides them, for a room whose capture feed is fixed or that has no capture card."
     },
     "gui_usb_or_vga": {
       "type": "dropdown",
@@ -891,7 +891,7 @@
     },
     "gui_demo_mode": {
       "type": "bool",
-      "description": "Bring the room up with every device faked: each one gets a dummy connection handler, so the panel is fully usable while nothing is actually talked to. For demonstrating or exercising a panel off the hardware. Leave it false in a live room — no command reaches a device while it is on."
+      "description": "Bring the room up with every device faked: each one gets a dummy connection handler, so the panel is fully usable while nothing is actually talked to. For demonstrating or exercising a panel off the hardware. Leave it false in a live room - no command reaches a device while it is on."
     },
     "module": {
       "description": "File path to the module as a string."
@@ -925,7 +925,7 @@
         "com_type=SPI"
       ],
       "helperText": "Serial connections only",
-      "description": "Serial port in use if using Serial as the com type (e.g. COM1). Only the Serial connection opens a port on the host — a Network or SerialOverEthernet device reaches its hardware by ip_address + net_port, and an SPI device by its spdevice alias, so the field is not offered and the key is not written for those."
+      "description": "Serial port in use if using Serial as the com type (e.g. COM1). Only the Serial connection opens a port on the host - a Network or SerialOverEthernet device reaches its hardware by ip_address + net_port, and an SPI device by its spdevice alias, so the field is not offered and the key is not written for those."
     },
     "baud": {
       "type": "int",
@@ -944,11 +944,11 @@
       "type": "int",
       "addIfMissing": true,
       "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
-      "description": "Port for the response from the device. 0 is automatically assigned by the processor. Not carried by a Serial or SPI device — the processor has no service port to open for a COM line or an SP bus."
+      "description": "Port for the response from the device. 0 is automatically assigned by the processor. Not carried by a Serial or SPI device - the processor has no service port to open for a COM line or an SP bus."
     },
     "use_device_mute": {
       "type": "bool",
-      "description": "Whether pressing Video Mute also mutes the PICTURE at this display itself — the processor sends the module's AV mute / video mute / shutter command on top of muting the switcher output feeding it. Turn it on for a display that must black out even when it isn't fed from the switcher, or one whose own blanking is cleaner than dropping the signal. Not to be confused with speaker_mute, which is the same idea for the display's SPEAKERS."
+      "description": "Whether pressing Video Mute also mutes the PICTURE at this display itself - the processor sends the module's AV mute / video mute / shutter command on top of muting the switcher output feeding it. Turn it on for a display that must black out even when it isn't fed from the switcher, or one whose own blanking is cleaner than dropping the signal. Not to be confused with speaker_mute, which is the same idea for the display's SPEAKERS."
     },
     "user": {
       "addIfMissing": true,
@@ -958,7 +958,7 @@
     "password": {
       "addIfMissing": true,
       "hideWhen": [ "com_type=Serial", "com_type=SPI" ],
-      "description": "Password in use while using a network connection that requires authentication. Paired with 'user' — see that key for how each connection sends it. Not carried by a Serial or SPI device."
+      "description": "Password in use while using a network connection that requires authentication. Paired with 'user' - see that key for how each connection sends it. Not carried by a Serial or SPI device."
     },
     "__group_keys_note": {
       "__comment": [
@@ -982,7 +982,7 @@
     },
     "spdevice*": {
       "helperText": "Blank = the alias is not in this room; the processor skips it",
-      "description": "Device alias for an Extron SP device (an SP bus expander, a NAVigator, an eBUS panel), matching the name in the room's Extron json file. A device names one of these in its 'host' to say which box its COM port is on — a share room's station displays are each on COM1 of their own SP device, which is why the aliases run past spdevice2. It is also the whole address of a com_type 'SPI' device. A blank alias is skipped by the processor rather than built, so the unused ones cost nothing.",
+      "description": "Device alias for an Extron SP device (an SP bus expander, a NAVigator, an eBUS panel), matching the name in the room's Extron json file. A device names one of these in its 'host' to say which box its COM port is on - a share room's station displays are each on COM1 of their own SP device, which is why the aliases run past spdevice2. It is also the whole address of a com_type 'SPI' device. A blank alias is skipped by the processor rather than built, so the unused ones cost nothing.",
       "__comment": "Wildcard fallback covering spdevice3 upward; the exact spdevice1/spdevice2 entries above still win."
     },
     "active_debug_server": {
@@ -991,7 +991,7 @@
     },
     "active_event_space": {
       "type": "bool",
-      "description": "Put the room on the EVENT inactivity timer — 6 hours before it shuts itself down, against the normal 3. For a room that regularly hosts long sessions with no touch panel activity. The room's Timer button cycles normal / event / disabled and writes the choice back into config.json on the processor; disable_inactivity_timer (25hrs) outranks this flag."
+      "description": "Put the room on the EVENT inactivity timer - 6 hours before it shuts itself down, against the normal 3. For a room that regularly hosts long sessions with no touch panel activity. The room's Timer button cycles normal / event / disabled and writes the choice back into config.json on the processor; disable_inactivity_timer (25hrs) outranks this flag."
     },
     "active_notifications": {
       "type": "bool",
@@ -1043,7 +1043,7 @@
       "type": "bool",
       "label": "Share Room (active_share_room)",
       "helperText": "Swaps the projector pages for one grid of up to 13 screens",
-      "description": "Drive the room's screens from a single grid page instead of the four projector detail pages. The screens are still PROJECTORDEVICE_n blocks counted by dev_projectors — what this changes is which manager runs them: the DisplayManager gives every slot one power button with a name under it (display_name_n) and polls one screen per 5s tick instead of all of them at once, which is what a wall of 8-13 panels needs. Slots 1-4 keep their detail page when they are projectors. Turn it on for a divisible/share space; leave it off and a normal room behaves exactly as before."
+      "description": "Drive the room's screens from a single grid page instead of the four projector detail pages. The screens are still PROJECTORDEVICE_n blocks counted by dev_projectors - what this changes is which manager runs them: the DisplayManager gives every slot one power button with a name under it (display_name_n) and polls one screen per 5s tick instead of all of them at once, which is what a wall of 8-13 panels needs. Slots 1-4 keep their detail page when they are projectors. Turn it on for a divisible/share space; leave it off and a normal room behaves exactly as before."
     },
     "share_room_default_mode": {
       "type": "dropdown",
@@ -1052,32 +1052,32 @@
         { "value": "combined", "label": "combined (every station shows the room's source)" },
         { "value": "individual", "label": "individual (every station shows its own local input)" }
       ],
-      "helperText": "Only read when a screen carries input_individual — see the projector tabs",
-      "description": "Which mode a share room comes up in. 'combined' (the default) puts every station on the room's source — the 'input' set on each PROJECTORDEVICE block; 'individual' puts each one on its own local input (input_individual). The panel's Combined/Individual toggle switches every station at once from then on. A room where no screen has an input_individual has no stations and ignores this."
+      "helperText": "Only read when a screen carries input_individual - see the projector tabs",
+      "description": "Which mode a share room comes up in. 'combined' (the default) puts every station on the room's source - the 'input' set on each PROJECTORDEVICE block; 'individual' puts each one on its own local input (input_individual). The panel's Combined/Individual toggle switches every station at once from then on. A room where no screen has an input_individual has no stations and ignores this."
     },
     "display_name_*": {
-      "helperText": "Share room grid button label — \\r starts a new line",
+      "helperText": "Share room grid button label - \\r starts a new line",
       "description": "Label under screen n's button on the share room grid page (display_name_1 ... display_name_13). Falls back to PROJECTORDEVICE_n's 'name' when it is absent, and then to 'Display n' / 'Projector n', so it only needs setting where the logger name is not what should be printed on the button. A \\r puts the rest on a second line.",
-      "__comment": "Share rooms only (active_share_room). Not in the template — absent means 'use the device name'."
+      "__comment": "Share rooms only (active_share_room). Not in the template - absent means 'use the device name'."
     },
     "input_sub_switcher": {
       "helperText": "The MAIN switcher input the sub switcher feeds",
-      "description": "Switcher input the sub switcher is plugged into on the MAIN switcher — the input the main switcher parks on while the sub switcher does the source picking. Required whenever sub_switch_sources names anything: without it the processor logs an error and turns sub-switching off, because there is no input to park on. Nothing to do with sub_switch_CC, which is a separate feature."
+      "description": "Switcher input the sub switcher is plugged into on the MAIN switcher - the input the main switcher parks on while the sub switcher does the source picking. Required whenever sub_switch_sources names anything: without it the processor logs an error and turns sub-switching off, because there is no input to park on. Nothing to do with sub_switch_CC, which is a separate feature."
     },
     "sub_switch_sources": {
       "helperText": "Comma-separated source names, e.g. \"pc,hdmi,usb\". Blank = off",
-      "description": "Sources that arrive through a SECOND switcher hanging off one input of the first (OCNL346's DTP T USW 333 feeding input 8 of an IN1608). For every source named here, the matching input_<name> is the SUB switcher's input number rather than the main one, and pressing that source drives both boxes: the sub switcher picks the source, the main switcher stays on input_sub_switcher. Names match the panel's own source names — pc, hdmi, usb, doc_cam and so on; an unrecognised name is logged and ignored. Blank or absent turns the whole feature off and every input_* means what it always did. Not the same as sub_switch_CC, which only diverts capture-card routing; the two can be used together.",
+      "description": "Sources that arrive through a SECOND switcher hanging off one input of the first (OCNL346's DTP T USW 333 feeding input 8 of an IN1608). For every source named here, the matching input_<name> is the SUB switcher's input number rather than the main one, and pressing that source drives both boxes: the sub switcher picks the source, the main switcher stays on input_sub_switcher. Names match the panel's own source names - pc, hdmi, usb, doc_cam and so on; an unrecognised name is logged and ignored. Blank or absent turns the whole feature off and every input_* means what it always did. Not the same as sub_switch_CC, which only diverts capture-card routing; the two can be used together.",
       "__comment": "The processor also accepts a JSON list here; the comma string is what this app writes."
     },
     "sub_switch_switcher": {
       "type": "dropdown",
       "label": "Sub Switcher Number (sub_switch_switcher)",
       "options": [
-        { "value": "2", "label": "2 — SWITCHERDEVICE_2" },
-        { "value": "3", "label": "3 — SWITCHERDEVICE_3" }
+        { "value": "2", "label": "2 - SWITCHERDEVICE_2" },
+        { "value": "3", "label": "3 - SWITCHERDEVICE_3" }
       ],
       "helperText": "Which switcher block is the sub switcher (default 2)",
-      "description": "Which switcher handler does the source picking for sub_switch_sources: SWITCHERDEVICE_2 or SWITCHERDEVICE_3. Defaults to 2. Only read when sub_switch_sources names at least one source, and the chosen block has to exist — check dev_switchers covers it."
+      "description": "Which switcher handler does the source picking for sub_switch_sources: SWITCHERDEVICE_2 or SWITCHERDEVICE_3. Defaults to 2. Only read when sub_switch_sources names at least one source, and the chosen block has to exist - check dev_switchers covers it."
     },
     "__nav_share_note": {
       "__comment": [
@@ -1106,11 +1106,11 @@
       "type": "dropdown",
       "label": "Share Room Type (share_room_type)",
       "options": [
-        { "value": "display", "label": "display — panels on a DA, combined/individual (DisplayManager)" },
-        { "value": "nav", "label": "nav — student stations over AV-over-IP (NavShareManager)" }
+        { "value": "display", "label": "display - panels on a DA, combined/individual (DisplayManager)" },
+        { "value": "nav", "label": "nav - student stations over AV-over-IP (NavShareManager)" }
       ],
       "helperText": "Only read while active_share_room is on. Absent = display",
-      "description": "Which of the two share rooms this is — see the note above. 'display' is the processor's default when the key is absent, so an existing OCNL346-style room keeps working untouched; 'nav' swaps in the whole station page and needs a NAVDEVICE block, a STATIONDEVICE block per station, and the share_* keys below. Anything else is logged and treated as 'display'."
+      "description": "Which of the two share rooms this is - see the note above. 'display' is the processor's default when the key is absent, so an existing OCNL346-style room keeps working untouched; 'nav' swaps in the whole station page and needs a NAVDEVICE block, a STATIONDEVICE block per station, and the share_* keys below. Anything else is logged and treated as 'display'."
     },
     "share_nav_device": {
       "helperText": "Which NAVDEVICE_n is the matrix (default 1)",
@@ -1118,19 +1118,19 @@
     },
     "input_station_*": {
       "helperText": "NAV encoder input for station n's room feed",
-      "description": "Encoder input carrying station n's normal picture — the room feed it shows when nothing is being shared. Read by NavShareManager when it ties a station onto the instructor's confidence monitor (Preview) or onto every screen (Share). NAV share rooms only."
+      "description": "Encoder input carrying station n's normal picture - the room feed it shows when nothing is being shared. Read by NavShareManager when it ties a station onto the instructor's confidence monitor (Preview) or onto every screen (Share). NAV share rooms only."
     },
     "input_station_*_laptop": {
-      "helperText": "The station's OWN laptop encoder input — blank means it has none",
-      "description": "Encoder input carrying the laptop plugged in AT station n. A station without one can never be switched to 'HDMI' on the share page and its signal lamp stays dark, which is the correct behaviour for a station with no plate — so leave it blank rather than pointing it at something else.",
+      "helperText": "The station's OWN laptop encoder input - blank means it has none",
+      "description": "Encoder input carrying the laptop plugged in AT station n. A station without one can never be switched to 'HDMI' on the share page and its signal lamp stays dark, which is the correct behaviour for a station with no plate - so leave it blank rather than pointing it at something else.",
       "__comment": "Listed after input_station_* so the more specific pattern wins (patterns match in reverse file order)."
     },
     "output_station_*": {
       "helperText": "NAV decoder output feeding station n's display",
-      "description": "Decoder output the station n display hangs off. Everything the share page does to a station — putting the room on it, putting it back on its own picture, handing its USB over — lands on this output. NAV share rooms only."
+      "description": "Decoder output the station n display hangs off. Everything the share page does to a station - putting the room on it, putting it back on its own picture, handing its USB over - lands on this output. NAV share rooms only."
     },
     "share_station_*_name": {
-      "helperText": "Panel button text — defaults to \"Station n\"",
+      "helperText": "Panel button text - defaults to \"Station n\"",
       "description": "What the share page calls station n. Only needs setting where the stations have real names (a pod letter, a table number) rather than being counted."
     },
     "share_instructor_name": {
@@ -1139,27 +1139,27 @@
     },
     "share_instructor_input": {
       "helperText": "The instructor's own encoder input",
-      "description": "Encoder input carrying the instructor position — what Share sends to the room when 'Instructor' is picked, and what the confidence monitor goes back to when Preview is left (unless share_preview_idle_input says otherwise)."
+      "description": "Encoder input carrying the instructor position - what Share sends to the room when 'Instructor' is picked, and what the confidence monitor goes back to when Preview is left (unless share_preview_idle_input says otherwise)."
     },
     "share_instructor_wireless_input": {
-      "helperText": "Optional — the encoder the wireless receiver arrives on",
+      "helperText": "Optional - the encoder the wireless receiver arrives on",
       "description": "Encoder carrying the wireless receiver. Sharing 'Instructor' while the room is on its wireless source shares THIS instead, because the instructor position is showing wireless and that is a different encoder. Leave it blank in a room whose wireless does not reach the NAV."
     },
     "share_room_outputs": {
       "helperText": "Comma-separated decoder outputs, e.g. \"201,202,205\"",
-      "description": "The decoder outputs that follow the shared source — the room's projectors and the instructor monitor. These are what a station lands on when it is shared, and what share_stop_ties puts back when sharing stops."
+      "description": "The decoder outputs that follow the shared source - the room's projectors and the instructor monitor. These are what a station lands on when it is shared, and what share_stop_ties puts back when sharing stops."
     },
     "share_stop_ties": {
-      "helperText": "\"output:input\" pairs, comma separated — e.g. \"201:1,202:2\"",
-      "description": "What to re-tie on the share_room_outputs when sharing stops. Sharing displaces whatever the room was showing, and an instructor who stops sharing expects the room back on its source, not black — so this is the room's normal picture written down. Every output named in share_room_outputs should appear here."
+      "helperText": "\"output:input\" pairs, comma separated - e.g. \"201:1,202:2\"",
+      "description": "What to re-tie on the share_room_outputs when sharing stops. Sharing displaces whatever the room was showing, and an instructor who stops sharing expects the room back on its source, not black - so this is the room's normal picture written down. Every output named in share_room_outputs should appear here."
     },
     "share_stop_ties_wireless": {
-      "helperText": "Optional — the same pairs, for when the room is on wireless",
+      "helperText": "Optional - the same pairs, for when the room is on wireless",
       "description": "share_stop_ties for a room whose selected source is wireless, which arrives on a different encoder. Optional: absent, the plain share_stop_ties are used and a wireless room comes back on the wrong input."
     },
     "share_preview_output": {
       "helperText": "Decoder output feeding the instructor's confidence monitor",
-      "description": "The output Preview mode puts a station on — the instructor sees that station and nobody else's screen changes. A room without this key has no Preview mode, and the processor says so in the log once rather than on every press."
+      "description": "The output Preview mode puts a station on - the instructor sees that station and nobody else's screen changes. A room without this key has no Preview mode, and the processor says so in the log once rather than on every press."
     },
     "share_preview_idle_input": {
       "helperText": "Defaults to share_instructor_input",
@@ -1167,15 +1167,15 @@
     },
     "share_usb_device_output": {
       "helperText": "The instructor's USB device number on the NAV",
-      "description": "USB device number the instructor's peripherals hang off. Control mode ties a station's USB — its touch overlay, mainly — to this, so the instructor can drive that station from the front of the room."
+      "description": "USB device number the instructor's peripherals hang off. Control mode ties a station's USB - its touch overlay, mainly - to this, so the instructor can drive that station from the front of the room."
     },
     "share_usb_station_offset": {
       "helperText": "Station n's USB device is offset + n. Default 100",
       "description": "How a station's USB device number is derived from its station number: device = offset + n. The default 100 gives 101, 102, ... which is also what each station's USB is tied back to when the instructor releases Control."
     },
     "share_audio_switcher": {
-      "helperText": "Optional — omit it and sharing makes no audio tie",
-      "description": "Which SWITCHERDEVICE_n carries room audio while a station is being shared. A station's audio only exists on the NAV, so it has to come back into the room through a switcher input — see share_audio_nav_input. Leave it blank in a room where sharing is video only."
+      "helperText": "Optional - omit it and sharing makes no audio tie",
+      "description": "Which SWITCHERDEVICE_n carries room audio while a station is being shared. A station's audio only exists on the NAV, so it has to come back into the room through a switcher input - see share_audio_nav_input. Leave it blank in a room where sharing is video only."
     },
     "share_audio_output": {
       "helperText": "That switcher's audio output",
@@ -1192,7 +1192,7 @@
       "description": "How many student stations a NAV share room has. Sets how many STATIONDEVICE_n blocks exist and how many station buttons the share page draws. Dropping it to 0 also clears the per-station input_station_*, output_station_* and share_station_* keys. Needs active_share_room on and share_room_type \"nav\" to mean anything."
     },
     "dev_nbps": {
-      "description": "How many Extron network button panels the room has. Sets how many NBPDEVICE_n blocks exist. A button panel is a wall plate in a space the touch panel does not cover — an annex, a divisible half, an overflow room — and it owns one display outright: power, source and volume, with no involvement from the room's switcher. Unlike every other family here the panels have no module and no connection to open; they are built as UI devices on the AV LAN alongside the touch panels."
+      "description": "How many Extron network button panels the room has. Sets how many NBPDEVICE_n blocks exist. A button panel is a wall plate in a space the touch panel does not cover - an annex, a divisible half, an overflow room - and it owns one display outright: power, source and volume, with no involvement from the room's switcher. Unlike every other family here the panels have no module and no connection to open; they are built as UI devices on the AV LAN alongside the touch panels."
     },
     "gui_presenter_mode_available": {
       "type": "dropdown",
@@ -1206,27 +1206,27 @@
       "label": "Annex Mute Button (gui_annex_mute_available)",
       "options": [ "Yes", "No" ],
       "helperText": "For BSS 375. Needs Btn_Annex_Mute (ID 20258) and a switcher whose module has AnalogMute",
-      "description": "Whether the panel offers the Annex Mute button — one switcher analog output muted on its own, so the instructor can drop the audio feeding an annex, an overflow room or a lobby without changing anything the room itself hears. Only linked when switcher 1's module exposes an AnalogMute command, which today is the DTP CrossPoint family; checked once at link time rather than on every press."
+      "description": "Whether the panel offers the Annex Mute button - one switcher analog output muted on its own, so the instructor can drop the audio feeding an annex, an overflow room or a lobby without changing anything the room itself hears. Only linked when switcher 1's module exposes an AnalogMute command, which today is the DTP CrossPoint family; checked once at link time rather than on every press."
     },
     "annex_mute_label": {
-      "helperText": "Panel button text — \"Annex\" reads \"Annex\\rMute\" / \"Annex\\rMuted\"",
+      "helperText": "Panel button text - \"Annex\" reads \"Annex\\rMute\" / \"Annex\\rMuted\"",
       "description": "What the space being muted is called on the button. The processor writes the button text itself as '<label>\\rMute' when it is open and '<label>\\rMuted' when it is muted, so this is the only half that needs setting. Defaults to 'Annex'."
     },
     "annex_mute_output": {
       "helperText": "A switcher ANALOG output number. Default 1",
-      "description": "Which of the switcher's analog audio outputs feeds the annex. This is the only output Annex Mute touches — program audio, the ALD feed and everything else are left alone, which is the whole point of having a separate button for it."
+      "description": "Which of the switcher's analog audio outputs feeds the annex. This is the only output Annex Mute touches - program audio, the ALD feed and everything else are left alone, which is the whole point of having a separate button for it."
     },
     "annex_mute_channels": {
-      "helperText": "Comma separated — \"Left,Right\" for a stereo feed",
+      "helperText": "Comma separated - \"Left,Right\" for a stereo feed",
       "description": "Which sides of the annex output are muted, comma separated. 'Left,Right' (the default) is a stereo feed; a mono feed names just the side it is actually wired to, so the mute does not report an error on a channel that carries nothing."
     },
     "dev_source_control": {
       "type": "dropdown",
       "label": "Where Source Selection Lands (dev_source_control)",
       "options": [
-        { "value": "Auto", "label": "Auto — decide from the room's device counts" },
-        { "value": "Switcher", "label": "Switcher — source buttons drive the matrix" },
-        { "value": "Display", "label": "Display — source buttons drive the display's own input" }
+        { "value": "Auto", "label": "Auto - decide from the room's device counts" },
+        { "value": "Switcher", "label": "Switcher - source buttons drive the matrix" },
+        { "value": "Display", "label": "Display - source buttons drive the display's own input" }
       ],
       "helperText": "Auto picks Display when dev_switchers is 0 and the room has a display",
       "description": "Where a source button press actually goes. Most rooms here route through a switcher, and that is what Auto picks whenever the room has one. A huddle space does not work that way: one flat panel with a couple of things plugged straight into it, no switcher and no DSP, so the source buttons have to pick the DISPLAY's input. Before this key existed such a room got dead source buttons and no error at all. Spell it out as 'Display' when the room keeps a switcher for something other than routing, because Auto would otherwise pick the switcher."
@@ -1235,19 +1235,19 @@
       "type": "dropdown",
       "label": "Where the Volume Slider Lands (dev_volume_control)",
       "options": [
-        { "value": "Auto", "label": "Auto — decide from the room's device counts" },
-        { "value": "DSP", "label": "DSP — levels go to the DSP's audio groups" },
-        { "value": "Switcher", "label": "Switcher — levels go to the switcher" },
-        { "value": "Display", "label": "Display — levels drive the display's own volume" }
+        { "value": "Auto", "label": "Auto - decide from the room's device counts" },
+        { "value": "DSP", "label": "DSP - levels go to the DSP's audio groups" },
+        { "value": "Switcher", "label": "Switcher - levels go to the switcher" },
+        { "value": "Display", "label": "Display - levels drive the display's own volume" }
       ],
       "helperText": "Auto picks DSP, then Switcher, then Display, by what the room has",
-      "description": "Where the program volume slider sends its levels. Auto resolves from the counts the room already declares — DSP when dev_dsps is above zero, else the switcher when dev_switchers is, else the display — so an existing room needs neither this nor dev_source_control. Set it explicitly when the room is wired against its own device list. A room whose sources route on the display but whose volume goes to a switcher that is not there is not a configuration, it is a bug, which is why both keys live together."
+      "description": "Where the program volume slider sends its levels. Auto resolves from the counts the room already declares - DSP when dev_dsps is above zero, else the switcher when dev_switchers is, else the display - so an existing room needs neither this nor dev_source_control. Set it explicitly when the room is wired against its own device list. A room whose sources route on the display but whose volume goes to a switcher that is not there is not a configuration, it is a bug, which is why both keys live together."
     },
     "display_min_volume": {
       "type": "int",
       "hideWhen": [ "dev_volume_control=DSP", "dev_volume_control=Switcher" ],
       "helperText": "Bottom of the slider in the DISPLAY's own scale (default 0)",
-      "description": "The quietest the program slider can reach in a room whose volume lands on the display (dev_volume_control 'Display'). In the display's own volume scale — usually 0-100 — not dB, which is what switch_min_volume and the DSP use. Ignored in a room whose volume goes to a switcher or a DSP."
+      "description": "The quietest the program slider can reach in a room whose volume lands on the display (dev_volume_control 'Display'). In the display's own volume scale - usually 0-100 - not dB, which is what switch_min_volume and the DSP use. Ignored in a room whose volume goes to a switcher or a DSP."
     },
     "display_max_volume": {
       "type": "int",
@@ -1310,7 +1310,7 @@
       "description": "How many switchers the room has. Sets how many SWITCHERDEVICE_n blocks exist. Switcher 1 is the main matrix/scaler every route goes through; switchers 2 and 3 are the sub-switchers used for capture-card routing (sub_switch_CC) and Conference mode (conf_display_1 / conf_display_2)."
     },
     "dev_usb_switchers": {
-      "description": "How many USB switchers the room has. Sets how many USBDEVICE_n blocks exist — the device that hands the room's USB camera/mic over to the laptop or the room PC."
+      "description": "How many USB switchers the room has. Sets how many USBDEVICE_n blocks exist - the device that hands the room's USB camera/mic over to the laptop or the room PC."
     },
     "dev_wireless": {
       "description": "How many wireless presentation devices (ShareLink, VIA) the room has. Sets how many WIRELESSDEVICE_n blocks exist; the wireless source button also needs input_wireless set."
@@ -1322,7 +1322,7 @@
       "description": "Room number as GVE knows it (e.g. '103'). Paired with gve_bldg it identifies the room to GVE, and the two together name the backup files this app writes (BSS103_old_config.json)."
     },
     "gve_id_processor": {
-      "description": "GVE device ID for the processor itself, copied from GVE after the room is created there. Carried in the config as the room's inventory record — device connection statuses are reported under each device block's own gve_id."
+      "description": "GVE device ID for the processor itself, copied from GVE after the room is created there. Carried in the config as the room's inventory record - device connection statuses are reported under each device block's own gve_id."
     },
     "gve_id_room_1": {
       "description": "GVE ROOM ID, copied from GVE after the room is created there. This is the one GVE sends room events to: a SystemOn or SystemOff addressed to this ID starts or shuts down the room, so a wrong value means GVE cannot power the room."
@@ -1348,7 +1348,7 @@
       ]
     },
     "input_aud_cam": {
-      "description": "Switcher input the audience camera is wired to. Routed to the second capture card (output_cc2) for the far end of a Zoom/Teams call. In a one-camera room, leave the camera you don't have blank — the panel keeps a single 'Camera' routing button and the processor falls back to whichever camera input IS set."
+      "description": "Switcher input the audience camera is wired to. Routed to the second capture card (output_cc2) for the far end of a Zoom/Teams call. In a one-camera room, leave the camera you don't have blank - the panel keeps a single 'Camera' routing button and the processor falls back to whichever camera input IS set."
     },
     "input_blu_ray": {
       "description": "Switcher input the Blu-ray player is wired to. Only reachable when the sources list (gui_inputs) includes BluRay."
@@ -1360,13 +1360,13 @@
       "description": "Switcher input the DVD player is wired to. Only reachable when the sources list (gui_inputs) includes DVD."
     },
     "input_hdmi": {
-      "description": "Switcher input for the room's HDMI connection — the laptop plate or cubby cable. Present on every sources layout."
+      "description": "Switcher input for the room's HDMI connection - the laptop plate or cubby cable. Present on every sources layout."
     },
     "input_inst_cam": {
       "description": "Switcher input the instructor camera is wired to. Routed to the capture card (output_cc) for a Zoom/Teams call, and sent to LoopOut on switchers that have one (IN1806/IN1808, DTP2 CrossPoint 82). In a one-camera room the audience camera button falls back to this input."
     },
     "input_pc": {
-      "description": "Switcher input the room PC is wired to — the input number to enter when the room has a PC. It is also the room's startup default: at power-on the processor ties it to program audio (output_audio), the ALD feed (output_audio_ald), the confidence monitor (output_monitor_1) and every projector output. Leave it blank in a room with no PC."
+      "description": "Switcher input the room PC is wired to - the input number to enter when the room has a PC. It is also the room's startup default: at power-on the processor ties it to program audio (output_audio), the ALD feed (output_audio_ald), the confidence monitor (output_monitor_1) and every projector output. Leave it blank in a room with no PC."
     },
     "input_pc_extended": {
       "description": "Switcher input carrying the PC's SECOND display output (extended desktop). Tied to output_monitor_2 at startup, so the lectern monitor can show a different picture from the projectors. Blank in a room whose PC has one output."
@@ -1375,7 +1375,7 @@
       "labelWhen": {
         "gui_usb_or_vga=VGA": "VGA"
       },
-      "description": "Switcher input for the room's USB-C plate — or the VGA plate in an older room, which is what gui_usb_or_vga selects. The key name stays input_usb either way; only the panel label and this field's label change."
+      "description": "Switcher input for the room's USB-C plate - or the VGA plate in an older room, which is what gui_usb_or_vga selects. The key name stays input_usb either way; only the panel label and this field's label change."
     },
     "input_wireless": {
       "description": "Switcher input the wireless presentation device (ShareLink, VIA) is wired to. Only reachable when the sources list (gui_inputs) includes Wireless."
@@ -1384,10 +1384,10 @@
       "description": "Switcher output feeding the room's program audio. Every source selection ties the chosen input here as an Audio-only tie (Audio/Video on a DTP2, which cannot break audio out), so this is the output the volume slider and program mute act on. On a DTP2 CrossPoint 82 the processor forces the audio breakaway to output 2 regardless of this value."
     },
     "output_cc": {
-      "description": "Switcher output feeding the capture card / USB interface used for Zoom and Teams — what the far end sees. The instructor camera routes here by default; on a switcher with a LoopOut (IN1806/IN1808, DTP2 CrossPoint 82) the processor uses that instead of a matrix tie."
+      "description": "Switcher output feeding the capture card / USB interface used for Zoom and Teams - what the far end sees. The instructor camera routes here by default; on a switcher with a LoopOut (IN1806/IN1808, DTP2 CrossPoint 82) the processor uses that instead of a matrix tie."
     },
     "output_cc2": {
-      "description": "Switcher output feeding a SECOND capture card, used by the audience camera. Setting it is what gives the panel its CC2 routing row — a room without a second capture path leaves it blank."
+      "description": "Switcher output feeding a SECOND capture card, used by the audience camera. Setting it is what gives the panel its CC2 routing row - a room without a second capture path leaves it blank."
     },
     "output_monitor_1": {
       "description": "Switcher output feeding the lectern / confidence monitor. The room PC (input_pc) is tied here at startup as a Video-only tie, so the monitor keeps showing the PC while the projectors follow the source buttons."
@@ -1399,23 +1399,23 @@
       "description": "Switcher output feeding projector/display 1. Every source selection ties the chosen input here, and video mute is sent to this output. Non-digits are stripped by the processor, so '5B' (a DTP output's B connector) reaches the switcher as output 5. The literal string 'None' skips the mute for a display the switcher does not drive."
     },
     "output_proj_2": {
-      "description": "Switcher output feeding projector/display 2 — see output_proj_1. Only read while dev_projectors is 2 or more."
+      "description": "Switcher output feeding projector/display 2 - see output_proj_1. Only read while dev_projectors is 2 or more."
     },
     "output_proj_3": {
-      "description": "Switcher output feeding projector/display 3 — see output_proj_1. Only read while dev_projectors is 3 or more."
+      "description": "Switcher output feeding projector/display 3 - see output_proj_1. Only read while dev_projectors is 3 or more."
     },
     "output_proj_4": {
-      "description": "Switcher output feeding projector/display 4 — see output_proj_1. Only read while dev_projectors is 4."
+      "description": "Switcher output feeding projector/display 4 - see output_proj_1. Only read while dev_projectors is 4."
     },
     "conf_display_1": {
       "hideWhen": ["gui_routing_mode!=Conference"],
       "helperText": "An INPUT on the conference switcher (Switcher 3), not an output",
-      "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 1' is pressed on the Conference routing page — the codec's first display feed. Read only while gui_routing_mode is Conference."
+      "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 1' is pressed on the Conference routing page - the codec's first display feed. Read only while gui_routing_mode is Conference."
     },
     "conf_display_2": {
       "hideWhen": ["gui_routing_mode!=Conference"],
       "helperText": "An INPUT on the conference switcher (Switcher 3), not an output",
-      "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 2' is pressed on the Conference routing page — the codec's second display feed. Read only while gui_routing_mode is Conference."
+      "description": "Input number the conference switcher (SWITCHERDEVICE_3) is set to when 'Display 2' is pressed on the Conference routing page - the codec's second display feed. Read only while gui_routing_mode is Conference."
     },
     "gui_huddle_space": {
       "type": "dropdown",
@@ -1424,8 +1424,8 @@
         "Yes",
         "No"
       ],
-      "helperText": "Yes for a small meeting room — one display, no rack, no matrix",
-      "description": "Whether this room is a huddle space: a small meeting room with one display and no rack, where the sources plug straight into the screen and a meeting bar handles the call. 'Yes' marks the room as one so the panel and the paperwork describe it as a huddle space rather than a classroom; the room still has to be wired that way by the other keys — dev_source_control 'Display' for a room with no switcher, and gui_routing_available 'No'."
+      "helperText": "Yes for a small meeting room - one display, no rack, no matrix",
+      "description": "Whether this room is a huddle space: a small meeting room with one display and no rack, where the sources plug straight into the screen and a meeting bar handles the call. 'Yes' marks the room as one so the panel and the paperwork describe it as a huddle space rather than a classroom; the room still has to be wired that way by the other keys - dev_source_control 'Display' for a room with no switcher, and gui_routing_available 'No'."
     },
     "gui_routing_mode": {
       "type": "dropdown",
@@ -1434,7 +1434,7 @@
         "Conference",
         "Extended"
       ],
-      "description": "How the room's displays are driven. 'Normal': every display follows the selected source. 'Extended': displays 2 and 4 show the PC's extended desktop (input_pc_extended) while 1 and 3 follow the source, and the routing pages switch to their Extended layouts. 'Conference': the room is built around a codec — the Conference routing page appears and drives the conference switcher with conf_display_1 / conf_display_2, and the camera pages change to match."
+      "description": "How the room's displays are driven. 'Normal': every display follows the selected source. 'Extended': displays 2 and 4 show the PC's extended desktop (input_pc_extended) while 1 and 3 follow the source, and the routing pages switch to their Extended layouts. 'Conference': the room is built around a codec - the Conference routing page appears and drives the conference switcher with conf_display_1 / conf_display_2, and the camera pages change to match."
     },
     "gui_tab": {
       "type": "dropdown",
@@ -1444,9 +1444,9 @@
         { "value": "3_Cam_Mic_Dev", "label": "Menu Tabs: 3 - Camera, Mic, & Devices" },
         { "value": "3_Cams_Dev", "label": "Menu Tabs: 3 - Cameras & Devices" },
         { "value": "4_Cams_Mic_Dev", "label": "Menu Tabs: 4 - Cameras, Mic, & Devices" },
-        { "value": "Conference", "label": "Menu Tabs: 2 - Camera & Devices (subs the Camera2Handler — no instructor camera)" }
+        { "value": "Conference", "label": "Menu Tabs: 2 - Camera & Devices (subs the Camera2Handler - no instructor camera)" }
       ],
-      "description": "Which menu tabs the panel shows down the side of the main page, so a room only carries the controls it has: cameras, microphone, devices, or a combination. Pick the entry matching the room's hardware — the count in each option is how many tabs appear. 'Conference' is the 2-tab camera layout for a codec room and also substitutes the second camera handler, so there is no instructor camera."
+      "description": "Which menu tabs the panel shows down the side of the main page, so a room only carries the controls it has: cameras, microphone, devices, or a combination. Pick the entry matching the room's hardware - the count in each option is how many tabs appear. 'Conference' is the 2-tab camera layout for a codec room and also substitutes the second camera handler, so there is no instructor camera."
     },
     "gui_routing_available": {
       "type": "dropdown",
@@ -1454,7 +1454,7 @@
         "Yes",
         "No"
       ],
-      "description": "Whether the panel offers the routing pages — the video matrix button and the per-destination source picking. 'No' leaves the room on the plain source buttons, which is what most teaching rooms want; 'Yes' suits a room where someone needs to send different sources to different displays."
+      "description": "Whether the panel offers the routing pages - the video matrix button and the per-destination source picking. 'No' leaves the room on the plain source buttons, which is what most teaching rooms want; 'Yes' suits a room where someone needs to send different sources to different displays."
     },
     "gui_inputs": {
       "type": "combo",
@@ -1603,20 +1603,20 @@
       "description": "Specify the Microphone sub page: 'Yes' (Single Mic w/ Ducking), 'No' (Single Mic w/ Mute), 'Ceiling' (Ceiling Mic w/ Voicelift)."
     },
     "gui_preset_name_aud_*": {
-      "helperText": "Panel button text — \\r starts a new line",
-      "description": "Button text for the audience camera's stored presets 1-4 (the camera holds the actual positions; this only names the buttons). Name them for what the shot is — 'Left', 'Wide', 'Whiteboard'. A \\r puts the rest on a second line, which is how a two-word name fits the button.",
+      "helperText": "Panel button text - \\r starts a new line",
+      "description": "Button text for the audience camera's stored presets 1-4 (the camera holds the actual positions; this only names the buttons). Name them for what the shot is - 'Left', 'Wide', 'Whiteboard'. A \\r puts the rest on a second line, which is how a two-word name fits the button.",
       "__comment": "One wildcard entry covers gui_preset_name_aud_1 through _4."
     },
     "gui_preset_name_inst_*": {
-      "helperText": "Panel button text — \\r starts a new line",
-      "description": "Button text for the instructor camera's stored presets 1-4 (the camera holds the actual positions; this only names the buttons). Name them for what the shot is — 'Lectern', 'Wide', 'Whiteboard'. A \\r puts the rest on a second line, which is how a two-word name fits the button.",
+      "helperText": "Panel button text - \\r starts a new line",
+      "description": "Button text for the instructor camera's stored presets 1-4 (the camera holds the actual positions; this only names the buttons). Name them for what the shot is - 'Lectern', 'Wide', 'Whiteboard'. A \\r puts the rest on a second line, which is how a two-word name fits the button.",
       "__comment": "One wildcard entry covers gui_preset_name_inst_1 through _4."
     },
     "gui_full_room_name": {
-      "description": "Room name printed across the panel's pages, e.g. 'Butte Hall 103'. Free text for people in the room to read — the Setup Wizard fills it in from the building name and room number, unlike gve_bldg/gve_room which are the codes GVE matches on."
+      "description": "Room name printed across the panel's pages, e.g. 'Butte Hall 103'. Free text for people in the room to read - the Setup Wizard fills it in from the building name and room number, unlike gve_bldg/gve_room which are the codes GVE matches on."
     },
     "mic_max_volume": {
-      "description": "Loudest the microphone slider can reach, in dB as the DSP/switcher reads it (processor default 0). With mic_min_volume it defines the range the panel's mic slider maps onto — so 0 to -10 means a full slider is 0 dB and the bottom is -10 dB, not 'off'.",
+      "description": "Loudest the microphone slider can reach, in dB as the DSP/switcher reads it (processor default 0). With mic_min_volume it defines the range the panel's mic slider maps onto - so 0 to -10 means a full slider is 0 dB and the bottom is -10 dB, not 'off'.",
       "helperText": "dB at the top of the mic slider (default 0)",
       "type": "int"
     },
@@ -1631,7 +1631,7 @@
       "type": "int"
     },
     "switch_min_volume": {
-      "description": "Quietest the program volume slider can reach, in dB (processor default -40). This is the floor a user can drag to, not a mute — muting is a separate command.",
+      "description": "Quietest the program volume slider can reach, in dB (processor default -40). This is the floor a user can drag to, not a mute - muting is a separate command.",
       "helperText": "dB at the bottom of the program slider (default -40)",
       "type": "int"
     },
@@ -1639,7 +1639,7 @@
       "description": "Power Automate webhook URL the room posts its Teams notifications to (device offline, errors). Only used while active_notifications is true; blank it and the room reports nothing."
     },
     "sub_switch_CC": {
-      "helperText": "The string \"true\" turns it on — anything else is off",
+      "helperText": "The string \"true\" turns it on - anything else is off",
       "description": "Route the capture-card destinations through the SECONDARY switchers instead of the main one: CC1 goes to Switcher 2 and CC2 to Switcher 3, each set by input number rather than a matrix tie. For a room where the capture feeds hang off their own small switcher. Leave it null/false and CC routing stays on switcher 1."
     },
     "tv_videomute": {
@@ -1648,7 +1648,7 @@
         "Yes",
         "No"
       ],
-      "description": "On a DTP2 CrossPoint 82 only: when video mute is pressed, DON'T mute switcher output 1 — the display on that output is muted by its own command instead, which keeps the HDBaseT link to the TV alive. Added for Arts 208; leave it 'No' in a room that doesn't need the exception (the other outputs mute normally either way)."
+      "description": "On a DTP2 CrossPoint 82 only: when video mute is pressed, DON'T mute switcher output 1 - the display on that output is muted by its own command instead, which keeps the HDBaseT link to the TV alive. Added for Arts 208; leave it 'No' in a room that doesn't need the exception (the other outputs mute normally either way)."
     },
     "power1_outlet_*": {
       "description": "Set the GUI names for the power controller (APC). 23 character limitation.",
@@ -1657,13 +1657,13 @@
     },
     "power1_outlet_*_supports_reboot": {
       "type": "bool",
-      "description": "Whether this outlet's hardware can power-cycle on command. Optional — a room without the key behaves as before. Set false for an outlet that must only be switched on or off (a screen relay, a device that dislikes a hard cycle).",
+      "description": "Whether this outlet's hardware can power-cycle on command. Optional - a room without the key behaves as before. Set false for an outlet that must only be switched on or off (a screen relay, a device that dislikes a hard cycle).",
       "helperText": "Optional. Leave unset for rooms that don't use reboot control.",
       "__comment": "Listed after the generic power1_outlet_* entry: patterns are matched in reverse file order, so the more specific one wins."
     },
     "power1_outlet_*_reboot_only": {
       "type": "bool",
-      "description": "Whether reboot is the ONLY action this outlet offers — the GUI hides plain on/off for it. Optional; needs power1_outlet_N_supports_reboot to be true to mean anything.",
+      "description": "Whether reboot is the ONLY action this outlet offers - the GUI hides plain on/off for it. Optional; needs power1_outlet_N_supports_reboot to be true to mean anything.",
       "helperText": "Optional. Reboot is the only action offered for this outlet.",
       "__comment": "Listed after the generic power1_outlet_* entry: patterns are matched in reverse file order, so the more specific one wins."
     },

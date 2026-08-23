@@ -82,7 +82,7 @@ void main() {
     expect(find.byType(ProcessorSftpDialog), findsNothing,
         reason: 'the dialog should be closed');
     expect(find.text('Home'), findsOneWidget,
-        reason: 'the page underneath must survive — its loss is the black screen');
+        reason: 'the page underneath must survive - its loss is the black screen');
   });
 
   testWidgets('left alone, the upload dialog still closes itself',

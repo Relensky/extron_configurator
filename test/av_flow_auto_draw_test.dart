@@ -550,7 +550,7 @@ void main() {
 
       expect(p.avNodeById(avAutoNodeId('input_doc_cam')), isNull,
           reason: 'dragging back a box somebody deleted every visit is not '
-              'helpful — the same rule the config seed follows');
+              'helpful - the same rule the config seed follows');
 
       // The button is the opposite instruction and brings it back.
       expect(planRoutingFromConfig(p).newNodes.map((n) => n.id),

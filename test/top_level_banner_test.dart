@@ -150,9 +150,9 @@ void main() {
 
     expect(inBanner('Bessey Hall'), findsOneWidget);
 
-    p.setProjectField(client: 'Facilities');
+    p.setProjectField(stakeholder: 'Facilities');
     await tester.pump();
-    expect(inBanner('Bessey Hall — unsaved'), findsOneWidget);
+    expect(inBanner('Bessey Hall - unsaved'), findsOneWidget);
   });
 
   testWidgets('the banner runs to the corner, not to the middle',

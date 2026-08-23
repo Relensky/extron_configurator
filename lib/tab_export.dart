@@ -248,7 +248,7 @@ Future<void> exportTabReport(
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          'Nothing on the $label tab to export yet — it has no tables until '
+          'Nothing on the $label tab to export yet - it has no tables until '
           'the room has something on it.',
         ),
       ),

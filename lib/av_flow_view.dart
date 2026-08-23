@@ -203,7 +203,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       contentKey: _diagramKey,
       viewportKey: _viewportKey,
     );
-    if (!fitted) _snack('The diagram is still drawing — try again.');
+    if (!fitted) _snack('The diagram is still drawing - try again.');
   }
 
   bool _editMode = false;
@@ -349,7 +349,7 @@ class _AvFlowViewState extends State<AvFlowView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'A picture behind the diagram — a title block, a riser '
+                  'A picture behind the diagram - a title block, a riser '
                   'sketch, the last revision to draw over. It is there to be '
                   'referred to, so the diagram has to stay readable on top of '
                   'it.',
@@ -570,7 +570,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       builder: (ctx) => AlertDialog(
         title: const Text('Recreate from config?'),
         content: Text(
-          'This clears the drawing and builds it again from the config — the '
+          'This clears the drawing and builds it again from the config - the '
           'devices it lists, and the leads its input and output numbers '
           'describe.\n\n'
           'You have ${provider.avNodes.length} box(es)'
@@ -676,7 +676,7 @@ class _AvFlowViewState extends State<AvFlowView> {
 
     if (match == PortMatch.invalid) {
       _snack(
-        'Can\'t connect ${fromPort.label} to ${port.label} — a cable runs '
+        'Can\'t connect ${fromPort.label} to ${port.label} - a cable runs '
         'from an output to an input.',
         error: true,
       );
@@ -865,13 +865,13 @@ class _AvFlowViewState extends State<AvFlowView> {
     // A wizard-built session has no file for the sidecar to sit beside yet.
     if (provider.avFlowSidecarPath.isEmpty) {
       _snack(
-        'No working config file yet — choose where to save the config, '
+        'No working config file yet - choose where to save the config, '
         'then the AV setup is saved beside it.',
       );
       final bool exported = await provider.exportRoomConfig();
       if (!exported) {
         _snack(
-          'AV setup not saved — the config save was canceled.',
+          'AV setup not saved - the config save was canceled.',
           error: true,
         );
         return;
@@ -1747,7 +1747,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                       ),
                       subtitle: Text(
                         d.dismissed
-                            ? 'Removed from the canvas — tap to put it back'
+                            ? 'Removed from the canvas - tap to put it back'
                             : (d.model.isEmpty ? d.key : d.model),
                         style: TextStyle(
                           fontSize: 11,
@@ -1952,7 +1952,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                               ),
                             ),
                       helperText:
-                          'Spaces and dashes are ignored — "dtpcross108" '
+                          'Spaces and dashes are ignored - "dtpcross108" '
                           'finds "DTP CrossPoint 108".',
                     ),
                     onChanged: (_) => setLocal(() {}),
@@ -1964,7 +1964,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                             child: Text(
                               searchController.text.trim().isEmpty
                                   ? 'The catalog is empty.'
-                                  : 'No model matches — add it on the Catalog '
+                                  : 'No model matches - add it on the Catalog '
                                         'tab, or leave the search blank and '
                                         'name the device by hand.',
                               textAlign: TextAlign.center,
@@ -2003,7 +2003,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                   const SizedBox(height: 4),
                   Text(
                     selectedModel == null
-                        ? 'Pick the closest model — the connectors it brings '
+                        ? 'Pick the closest model - the connectors it brings '
                               'can be edited on the device afterwards.'
                         : 'Selected: $selectedModel',
                     style: const TextStyle(fontSize: 12),
@@ -2390,7 +2390,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                     'The equipment, the cabling, the locations, the racks, the '
                     'screen runs and this room\'s switcher input and output '
                     'numbers are saved. The cost estimate, the floor plan, the '
-                    'addresses and this room\'s name and number are not — a '
+                    'addresses and this room\'s name and number are not - a '
                     'price belongs to a job and a drawing belongs to a '
                     'building.',
                     style: Theme.of(ctx).textTheme.bodySmall,
@@ -2405,7 +2405,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                       // A name that already exists overwrites that file. Said
                       // here rather than found out afterwards.
                       errorText: clash
-                          ? 'A room type called "$name" already exists — '
+                          ? 'A room type called "$name" already exists - '
                                 'saving replaces it'
                           : null,
                       errorStyle: TextStyle(
@@ -2458,7 +2458,7 @@ class _AvFlowViewState extends State<AvFlowView> {
       ),
     );
     if (written.isEmpty) {
-      _snack('Could not write the room type — see the log.', error: true);
+      _snack('Could not write the room type - see the log.', error: true);
       return;
     }
     _snack(
@@ -2828,7 +2828,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                                 ),
                               ),
                               TextSpan(
-                                text: '  — the building network switch, a '
+                                text: '  - the building network switch, a '
                                     'codec another department manages, a '
                                     'passive box. It stays drawn, cabled and '
                                     'quoted; it stops being reported as '
@@ -2874,7 +2874,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                                 ),
                               ),
                               TextSpan(
-                                text: '  — existing gear, owner-furnished, or '
+                                text: '  - existing gear, owner-furnished, or '
                                     'somebody else\'s contract. It stays on '
                                     'the diagram, the cable schedule, the rack '
                                     'and the power report; only the money '
@@ -3085,7 +3085,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                   ),
                   const SizedBox(height: 10),
                   for (final clash in clashes.take(8))
-                    Text('${clash.label} — also on ${clash.usedBy}'),
+                    Text('${clash.label} - also on ${clash.usedBy}'),
                   if (clashes.length > 8)
                     Text('…and ${clashes.length - 8} more'),
                 ],
@@ -3147,7 +3147,7 @@ class _AvFlowViewState extends State<AvFlowView> {
           ),
         );
         _snack(
-          'Catalog entry copied — paste it into the "devices" array of '
+          'Catalog entry copied - paste it into the "devices" array of '
           'av_devices.json.',
         );
       } else {
@@ -3225,7 +3225,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                   '${orphaned.length == 1 ? '' : 's'} removed with the '
                   'deleted connectors.'
               : '${orphaned.length} cable'
-                  '${orphaned.length == 1 ? '' : 's'} removed — '
+                  '${orphaned.length == 1 ? '' : 's'} removed - '
                   '${modelController.text.trim()} has no connector matching '
                   'the one ${orphaned.length == 1 ? 'it was' : 'they were'} '
                   'drawn to. Draw ${orphaned.length == 1 ? 'it' : 'them'} '
@@ -3514,7 +3514,7 @@ class _AvFlowViewState extends State<AvFlowView> {
                                     items: [
                                       const DropdownMenuItem(
                                         value: 0.0,
-                                        child: Text('—'),
+                                        child: Text('-'),
                                       ),
                                       for (final ft in kCableLengthsFt)
                                         DropdownMenuItem(
@@ -3785,7 +3785,7 @@ class _AvFlowViewState extends State<AvFlowView> {
             c.toNodeId == to.nodeId &&
             c.toPortId == to.portId)) {
       _snack(
-        'Those two connectors are already cabled together — the move was not '
+        'Those two connectors are already cabled together - the move was not '
         'made.',
         error: true,
       );
@@ -4014,7 +4014,7 @@ class _JackClashBanner extends StatelessWidget {
           const SizedBox(height: 4),
           for (final clash in shown)
             Text(
-              '${clash.label} — ${clash.usedBy}',
+              '${clash.label} - ${clash.usedBy}',
               style: theme.textTheme.bodySmall?.copyWith(color: bannerInk),
             ),
           if (clashes.length > shown.length)

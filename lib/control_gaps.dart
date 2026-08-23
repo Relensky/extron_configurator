@@ -162,7 +162,7 @@ List<ControlGap> controlGapsForRoom({
         qty: group.qty,
         fromConfig: true,
         kind: ControlGapKind.moduleUnset,
-        note: 'No module set on the device — $claimed matches this model',
+        note: 'No module set on the device - $claimed matches this model',
       ));
       continue;
     }

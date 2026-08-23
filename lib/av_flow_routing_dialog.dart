@@ -41,7 +41,7 @@ Future<bool> showRoutingDialog(
             plan.unresolved.isNotEmpty
                 ? plan.unresolved.first.reason
                 : plan.alreadyDrawn > 0
-                    ? 'Every tie the config states is already on the diagram — '
+                    ? 'Every tie the config states is already on the diagram - '
                         '${plan.alreadyDrawn} of them. Change a switcher input '
                         'or output number on the System tab and press this '
                         'again to draw the difference.'
@@ -80,7 +80,7 @@ Future<bool> showRoutingDialog(
             '${result.nodesAdded == 1 ? '' : 'es'} added'}'
         '${result.unresolved == 0 ? '.' : ', ${result.unresolved} tie'
             '${result.unresolved == 1 ? '' : 's'} the numbers did not '
-            'resolve — draw those by hand.'}',
+            'resolve - draw those by hand.'}',
       ),
     ),
   );
@@ -117,9 +117,9 @@ class _RoutingDialog extends StatelessWidget {
               'box on the canvas.'
               '${plan.newNodes.isEmpty ? '' : ' ${plan.newNodes.length} '
                   'box${plan.newNodes.length == 1 ? '' : 'es'} the config '
-                  'needs but has no device block for — the PC, the doc cam, '
+                  'needs but has no device block for - the PC, the doc cam, '
                   'the laptop plates, and the transmitter or receiver every '
-                  'DTP run needs at its HDMI end — will be added to the '
+                  'DTP run needs at its HDMI end - will be added to the '
                   'canvas.'}'
               '${plan.alreadyDrawn == 0 ? '' : ' ${plan.alreadyDrawn} tie'
                   '${plan.alreadyDrawn == 1 ? ' is' : 's are'} already drawn '
@@ -140,7 +140,7 @@ class _RoutingDialog extends StatelessWidget {
                 '${plan.unresolved.length} tie'
                     '${plan.unresolved.length == 1 ? '' : 's'} could not be '
                     'placed',
-                'Nothing is drawn for these. Each one says why — usually a '
+                'Nothing is drawn for these. Each one says why - usually a '
                     'connector this model\'s catalog entry spells differently '
                     'from the front panel, or a number left over from a room '
                     'that has since changed.',
@@ -196,7 +196,7 @@ class _RoutingDialog extends StatelessWidget {
 
   Widget _heading(ThemeData theme, String text, int count) => Padding(
         padding: const EdgeInsets.only(top: 12, bottom: 4),
-        child: Text('$text — $count', style: theme.textTheme.titleSmall),
+        child: Text('$text - $count', style: theme.textTheme.titleSmall),
       );
 
   Widget _cableTile(ThemeData theme, RoutedCable cable) => ListTile(

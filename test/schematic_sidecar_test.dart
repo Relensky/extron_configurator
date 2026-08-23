@@ -173,7 +173,7 @@ void main() {
       expect(p.schematicLinks.single['label'], 'old');
     });
 
-    test('loading one does NOT move it — a read leaves the folder alone', () {
+    test('loading one does NOT move it - a read leaves the folder alone', () {
       writeLegacy();
       openedOn(configPath).loadSchematicLayoutForCurrentConfig();
 

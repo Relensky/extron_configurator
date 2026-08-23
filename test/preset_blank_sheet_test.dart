@@ -148,7 +148,7 @@ void main() {
       final p = await emptyRoom();
       p.addFloorPlanSheet(name: 'Level 2');
       expect(sheetsWorthDrawing(p), isEmpty,
-          reason: 'nothing has been placed on it — there is nothing to print');
+          reason: 'nothing has been placed on it - there is nothing to print');
     });
   });
 }

@@ -168,7 +168,7 @@ Future<int> showModelDefaultsDialog(
                 Text(
                   onOriginal
                       ? 'Showing what the original file said before the '
-                          'conversion. Nothing is ticked — the converted value '
+                          'conversion. Nothing is ticked - the converted value '
                           'is usually the right one, so this is a list to read '
                           'before it is a list to take.'
                       : 'Connection and keep-alive settings are ticked; the '
@@ -239,7 +239,7 @@ Future<int> showModelDefaultsDialog(
                                   'connection above to see what the module says '
                                   'about that one.'
                               : 'Nothing to change for a $askingAbout '
-                                  'connection — the block already says what the '
+                                  'connection - the block already says what the '
                                   'module does.',
                       style: theme.textTheme.bodySmall,
                     ),

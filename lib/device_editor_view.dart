@@ -199,7 +199,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         .toList();
     if (family.isEmpty) {
       return 'Nothing else is stocked for this signal yet. Add one entry per '
-          'length — 3 ft, 6 ft, 25 ft — each with its own price, and the '
+          'length - 3 ft, 6 ft, 25 ft - each with its own price, and the '
           'estimate buys every run the shortest one that reaches it.';
     }
     final lengths = family
@@ -488,7 +488,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             [
               if (t.manufacturer.isNotEmpty) t.manufacturer,
               facts,
-            ].where((s) => s.isNotEmpty).join(' — '),
+            ].where((s) => s.isNotEmpty).join(' - '),
             style: const TextStyle(fontSize: 11),
             overflow: TextOverflow.ellipsis,
           ),
@@ -499,7 +499,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                t.price > 0 ? formatMoney(t.price) : '—',
+                t.price > 0 ? formatMoney(t.price) : '-',
                 style: TextStyle(
                   fontSize: 12,
                   color: t.price > 0 ? null : theme.disabledColor,
@@ -544,7 +544,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               const SizedBox(height: 16),
               Text(
                 'Pick a model on the left to edit its connectors, rack '
-                'height, power draw and price — or add one with "New '
+                'height, power draw and price - or add one with "New '
                 'device".',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium,
@@ -827,7 +827,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     entry.clearanceAboveU == 0 && entry.clearanceBelowU == 0
-                        ? 'Minimum space around this part in a frame — leave '
+                        ? 'Minimum space around this part in a frame - leave '
                               'blank when it does not need any. The rails are '
                               'shaded light red on the rack elevation as a '
                               'warning; nothing is ever refused.'
@@ -835,7 +835,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                               '${entry.clearanceAboveU} U above and '
                               '${entry.clearanceBelowU} U below every one of '
                               'these light red. A warning to whoever is '
-                              'planning the frame, not a lock — anything can '
+                              'planning the frame, not a lock - anything can '
                               'still be placed there.',
                     style: theme.textTheme.bodySmall,
                   ),
@@ -862,7 +862,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
           ),
           title: const Text('Never in the room config'),
           subtitle: const Text(
-            'Nothing can drive it — a USB interface, a passive splitter, a '
+            'Nothing can drive it - a USB interface, a passive splitter, a '
             'plate. It is still drawn, racked and quoted; it just stops being '
             'reported as a device waiting for a control module, and the '
             'config prefill leaves it alone.',
@@ -999,7 +999,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                   PowerInput.poe =>
                     'Fed off the network switch; kept out of the mains total.',
                   PowerInput.none =>
-                    'Passive — a speaker, a cable, a blanking plate.',
+                    'Passive - a speaker, a cable, a blanking plate.',
                 },
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.disabledColor,
@@ -1045,7 +1045,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         Row(
           children: [
             Text(
-              'Connectors — ${entry.inputCount} in / ${entry.outputCount} out',
+              'Connectors - ${entry.inputCount} in / ${entry.outputCount} out',
               style: theme.textTheme.titleSmall,
             ),
             const Spacer(),
@@ -1085,7 +1085,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
               'No connectors yet. A model with none can still be priced and '
-              'counted — it just cannot be cabled on the AV diagram.',
+              'counted - it just cannot be cabled on the AV diagram.',
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -1189,7 +1189,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         AvDeviceLibrary.normalizeModel(clash.model) !=
             AvDeviceLibrary.normalizeModel(entry.model)) {
       _snack(
-        '"$name" is already in the catalog — rename or remove that one '
+        '"$name" is already in the catalog - rename or remove that one '
         'first.',
         error: true,
       );
@@ -1279,7 +1279,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                         ? 'They become "$to", keeping their prices and their '
                               'places. Only the part of a name that WAS the '
                               'old model moves.'
-                        : 'They keep the name "$from" — which nothing in the '
+                        : 'They keep the name "$from" - which nothing in the '
                               'catalog answers to any more, so they lose their '
                               'connectors and their price until somebody '
                               'repoints them.',
@@ -1290,7 +1290,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Other rooms are not touched either way — they are not open, '
+                  'Other rooms are not touched either way - they are not open, '
                   'and each keeps its own record of what it was specified as.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
@@ -1320,7 +1320,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
         content: const Text(
           'It goes out of the catalog on the next save. If it started as one '
           "of the app's built-in models, the built-in version comes back the "
-          'next time the app starts — this only drops your edits to it.',
+          'next time the app starts - this only drops your edits to it.',
         ),
         actions: [
           TextButton(
@@ -1382,13 +1382,13 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               const SizedBox(height: 8),
               Text(
                 costItem
-                    ? 'A billable line rather than a box — a licence, a '
+                    ? 'A billable line rather than a box - a licence, a '
                           'mount, a rental, a trip charge. Filed under '
                           '"$kCategoryMisc" with a price and no connectors, '
                           'and offered on the estimate\'s Other items.'
                     : copyFrom == null
-                    ? 'Everything else — connectors, rack height, power, '
-                          'price — is filled in on the next screen.'
+                    ? 'Everything else - connectors, rack height, power, '
+                          'price - is filled in on the next screen.'
                     : 'Starts as a copy of ${copyFrom.model}, connectors '
                           'and all.',
                 style: const TextStyle(fontSize: 12),
@@ -1484,7 +1484,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                     'Works out each entry\'s education price as a discount off '
                     'its MSRP. Applies to the ${entries.length} priced '
                     'entr${entries.length == 1 ? 'y' : 'ies'} matching the '
-                    'current search and category filter — narrow those first '
+                    'current search and category filter - narrow those first '
                     'if your contract discounts families differently.',
                     style: Theme.of(ctx).textTheme.bodySmall,
                   ),
@@ -1615,7 +1615,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
             child: Text(
               'Part ${entry.partNumber.trim()} is also on '
               '${others.map((t) => t.model).join(', ')}. Two entries for one '
-              'box drift apart — one gets the price, the other the '
+              'box drift apart - one gets the price, the other the '
               'connectors.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.error,
@@ -1656,7 +1656,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     });
     provider.avDeviceLibraryChanged();
     _snack(
-      'Merged $merged entr${merged == 1 ? 'y' : 'ies'} away — Save catalog to '
+      'Merged $merged entr${merged == 1 ? 'y' : 'ies'} away - Save catalog to '
       'write it to disk.',
     );
   }
@@ -1682,7 +1682,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
 
     if (diffs.isEmpty) {
       _snack(
-        'Nothing to merge — ${path.basename(chosen)} says the same as your '
+        'Nothing to merge - ${path.basename(chosen)} says the same as your '
         'catalog.',
       );
       return;
@@ -1702,7 +1702,7 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
     provider.avDeviceLibraryChanged();
     _snack(
       'Merged $applied model${applied == 1 ? '' : 's'} from '
-      '${path.basename(chosen)} — Save catalog to write it to disk.',
+      '${path.basename(chosen)} - Save catalog to write it to disk.',
     );
   }
 
@@ -2114,7 +2114,7 @@ class _DuplicatePartsDialogState extends State<_DuplicatePartsDialog> {
                 child: Text(
                   _merged == 0
                       ? 'Every part number in the catalog is on one entry.'
-                      : 'All merged — every part number is on one entry now.',
+                      : 'All merged - every part number is on one entry now.',
                   style: theme.textTheme.bodyMedium,
                 ),
               )
@@ -2243,7 +2243,7 @@ class _DuplicatePartsDialogState extends State<_DuplicatePartsDialog> {
     if (!decisions.any((d) => d.fields.isNotEmpty)) {
       return [
         Text(
-          'The other entries say nothing this one does not — merging just '
+          'The other entries say nothing this one does not - merging just '
           'removes them.',
           style: theme.textTheme.bodySmall,
         ),

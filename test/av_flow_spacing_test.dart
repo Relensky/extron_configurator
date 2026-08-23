@@ -144,7 +144,7 @@ void main() {
     });
 
     test('a long name is cut rather than laid across the diagram', () {
-      const long = 'DTP receiver — Projector - PowerLite L630U';
+      const long = 'DTP receiver - Projector - PowerLite L630U';
       final short = shortNodeLabel(long);
       expect(short.length, lessThanOrEqualTo(24));
       expect(short, endsWith('…'));

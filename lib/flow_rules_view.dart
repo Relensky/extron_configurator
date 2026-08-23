@@ -34,7 +34,7 @@ import 'side_pane.dart';
 /// The families, in the order the routing pass uses them.
 enum _RuleSection {
   sourceBoxes('Source boxes', Icons.input,
-      'Boxes the config mentions but never describes — the room PC, the doc '
+      'Boxes the config mentions but never describes - the room PC, the doc '
           'cam, the laptop at a plate. Each rule says what one of them is.'),
   sourceDevices('Source devices', Icons.videocam,
       'An input the config already has a device block for. The box is on the '
@@ -45,7 +45,7 @@ enum _RuleSection {
       'The same idea at the other end of the matrix: a confidence monitor, '
           'the assisted-listening transmitter.'),
   captureDestinations('Capture', Icons.cameraswitch,
-      'Where the capture feed lands — whichever of these boxes this room was '
+      'Where the capture feed lands - whichever of these boxes this room was '
           'built with.'),
   extenders('Extenders', Icons.settings_ethernet,
       'When the two ends of a run do not take the same cable, this is the box '
@@ -111,7 +111,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
         content: const Text(
           'Every family goes back to the rules the app ships with, and '
           'anything you have added or changed here is lost.\n\n'
-          'Nothing is written to disk until you press Save — so if this turns '
+          'Nothing is written to disk until you press Save - so if this turns '
           'out to be the wrong idea, Reload from file brings your own rules '
           'back.',
         ),
@@ -199,7 +199,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
         children: [
           Text('AV Flow Rules', style: theme.textTheme.titleLarge),
           Text(
-            _dirty ? 'Edited — not saved yet' : rules.source,
+            _dirty ? 'Edited - not saved yet' : rules.source,
             style: theme.textTheme.bodySmall?.copyWith(
               color: _dirty ? theme.colorScheme.error : theme.disabledColor,
             ),
@@ -484,7 +484,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
   Widget _aliasTile(FlowRules rules, String name, String prefix) => _tile(
         key: ValueKey('flow_rule_alias_$name'),
         title: '"$name"',
-        subtitle: 'An outlet with this name is $prefix — no scoring, no tie.',
+        subtitle: 'An outlet with this name is $prefix - no scoring, no tie.',
         onEdit: () => _editAlias(rules, name, prefix),
         onDelete: () => _apply(rules.copyWith(
           outletAliases: {
@@ -550,7 +550,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                           'input_pc or output_monitor_1.'),
                   _field(label, 'Name on the drawing', ''),
                   _field(model, 'Catalog model',
-                      'The catalog entry to use — that is where its '
+                      'The catalog entry to use - that is where its '
                           'connectors, price and rack height come from.'),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
@@ -611,7 +611,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
     );
     if (saved != true || !mounted) return;
     if (key.text.trim().isEmpty) {
-      _snack('Give the rule a config key — without one it never does '
+      _snack('Give the rule a config key - without one it never does '
           'anything.', error: true);
       return;
     }
@@ -725,7 +725,7 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                   ),
                   const SizedBox(height: 12),
                   _field(id, 'Rule id',
-                      'Something short that will not change — the box this '
+                      'Something short that will not change - the box this '
                           'places is named after it (rx, tx).'),
                   _field(label, 'Name on the drawing', ''),
                   _field(model, 'Catalog model', ''),
@@ -780,10 +780,10 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                     items: const [
                       DropdownMenuItem(
                           value: true,
-                          child: Text('An output — a receiver at the display')),
+                          child: Text('An output - a receiver at the display')),
                       DropdownMenuItem(
                           value: false,
-                          child: Text('An input — a transmitter at the source')),
+                          child: Text('An input - a transmitter at the source')),
                     ],
                     onChanged: (v) => setLocal(() => onOutput = v ?? true),
                   ),
@@ -871,17 +871,17 @@ class _FlowRulesViewState extends State<FlowRulesView> {
                 Text(
                   'One line per port, in port order: the first line is '
                   'DEVICE 1 (or HOST 1), the second is DEVICE 2, and so on. '
-                  'Leave a line blank to leave that port empty — the ports '
+                  'Leave a line blank to leave that port empty - the ports '
                   'below it stay where they are.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
                 _field(switcher, 'The USB switcher', kFlowTargetHelp),
-                _field(devices, 'DEVICE ports — what feeds them',
+                _field(devices, 'DEVICE ports - what feeds them',
                     'The room’s peripherals: the DSP, the AV Bridge, the '
                         'doc cam.',
                     lines: 4),
-                _field(hosts, 'HOST ports — what they feed',
+                _field(hosts, 'HOST ports - what they feed',
                     'The machines that can take the room: the PC, or a laptop '
                         'at a plate.',
                     lines: 3),

@@ -59,7 +59,7 @@ class ControlSystemPlaceholder extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'This room was created as AV only, so $tabName is set aside — '
+                'This room was created as AV only, so $tabName is set aside - '
                 'it edits the processor\'s config, and nobody has committed to '
                 'one for this room.',
                 style: theme.textTheme.bodyMedium,
@@ -108,7 +108,7 @@ class ControlSystemPlaceholder extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Turns the System and Raw JSON tabs back on without creating '
-                'anything. Nothing is discarded either way — the mode is '
+                'anything. Nothing is discarded either way - the mode is '
                 'recorded with the room.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.disabledColor,
@@ -210,7 +210,7 @@ class MissingModulesBanner extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 'No python module chosen. The processor cannot talk to a '
-                'device without one — set it on the device\'s tab under '
+                'device without one - set it on the device\'s tab under '
                 'Devices.',
                 style: theme.textTheme.bodySmall?.copyWith(color: onError),
               ),

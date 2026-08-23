@@ -147,7 +147,7 @@ class SchemaFieldBuilder {
       decoration: InputDecoration(
         labelText: label,
         helperText: sources.isEmpty
-            ? 'This room has no sources filled in yet — set the input_ keys '
+            ? 'This room has no sources filled in yet - set the input_ keys '
                 'on the System tab'
             : spec?.helperText,
         helperMaxLines: 3,
@@ -155,7 +155,7 @@ class SchemaFieldBuilder {
       items: [
         const DropdownMenuItem(
           value: '',
-          child: Text('Not pinned — this screen is not routed'),
+          child: Text('Not pinned - this screen is not routed'),
         ),
         for (final name in sources)
           DropdownMenuItem(value: name, child: Text(name)),
@@ -254,7 +254,7 @@ class SchemaFieldBuilder {
         ),
         items: [
           if (value.isEmpty || markBlank)
-            const DropdownMenuItem(value: '', child: Text('— pick a source —')),
+            const DropdownMenuItem(value: '', child: Text('- pick a source -')),
           for (final name in options)
             DropdownMenuItem(value: name, child: Text(name)),
           if (stray)
@@ -275,7 +275,7 @@ class SchemaFieldBuilder {
             labelColor == null ? null : TextStyle(color: labelColor),
         floatingLabelBehavior: FloatingLabelBehavior.always,
         helperText: sources.isEmpty
-            ? 'This room has no sources filled in yet — set the input_ keys '
+            ? 'This room has no sources filled in yet - set the input_ keys '
                 'on the System tab'
             : incomplete
                 ? 'A substitution with no source on the right leaves this '
@@ -294,7 +294,7 @@ class SchemaFieldBuilder {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
-                'No substitutions — this screen shows whatever the room '
+                'No substitutions - this screen shows whatever the room '
                 'selected.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -432,7 +432,7 @@ class SchemaFieldBuilder {
       decoration: _decoration(label, spec.helperText,
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
-              ? 'Value "$current" is not in the schema options — pick a valid option'
+              ? 'Value "$current" is not in the schema options - pick a valid option'
               : conflict,
           labelColor: _originColor(context, provider, sectionKey, fieldKey)),
       items: options
@@ -543,13 +543,13 @@ class SchemaFieldBuilder {
         final List<String> states = snapshot.data ?? [];
         final String helper;
         if (moduleName.isEmpty) {
-          helper = "Select a Python module first — options come from its '$command' command";
+          helper = "Select a Python module first - options come from its '$command' command";
         } else if (states.isNotEmpty) {
           helper = "${states.length} states from '$command' in $moduleName.py";
         } else if (snapshot.connectionState == ConnectionState.waiting) {
           helper = 'Parsing $moduleName.py...';
         } else {
-          helper = "Command '$command' not found in $moduleName.py — type the value manually";
+          helper = "Command '$command' not found in $moduleName.py - type the value manually";
         }
 
         // MISMATCH: the value isn't a state this module implements — the state
@@ -590,7 +590,7 @@ class SchemaFieldBuilder {
               decoration: _decoration('$label (type or select)', helper,
                   mismatch: valueMismatch,
                   mismatchText: '"$current" is not a \'$command\' state in '
-                      '$moduleName.py — pick one of the '
+                      '$moduleName.py - pick one of the '
                       '${states.length} it supports, or add it to the module',
                   labelColor:
                       _originColor(context, provider, sectionKey, fieldKey)),
@@ -639,7 +639,7 @@ class SchemaFieldBuilder {
       decoration: _decoration(label, spec.helperText,
           mismatch: valueMismatch || conflict != null,
           mismatchText: valueMismatch
-              ? 'Combined value "$currentComboKey" (${writes.join(' + ')}) is not in the schema options — pick a valid option'
+              ? 'Combined value "$currentComboKey" (${writes.join(' + ')}) is not in the schema options - pick a valid option'
               : conflict,
           labelColor: _originColor(context, provider, sectionKey, fieldKey)),
       items: options
@@ -914,12 +914,12 @@ class _SyncedTextFieldState extends State<_SyncedTextField> {
 
     final String displayValue = _display(widget.value);
     String? helper = widget.isUnknown
-        ? 'Not in UI schema — add "${widget.fieldKey}" to ui_schema.json'
+        ? 'Not in UI schema - add "${widget.fieldKey}" to ui_schema.json'
         : widget.spec?.helperText;
     if (!widget.isUnknown && displayValue.contains('\n')) {
       helper = helper == null
           ? r'Line breaks are converted for the touch panel'
-          : '$helper — line breaks are saved as \\r';
+          : '$helper - line breaks are saved as \\r';
     }
 
     return TextFormField(

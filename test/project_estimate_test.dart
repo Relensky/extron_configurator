@@ -677,7 +677,7 @@ void main() {
         name: 'Bessey refresh',
         building: 'BSS',
         jobNumber: 'J-1001',
-        client: 'Facilities',
+        stakeholder: 'Facilities',
         currency: r'$',
       );
       project.rooms.add(ProjectRoomRef(

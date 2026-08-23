@@ -640,7 +640,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           child: Text(
                             '${estimate.unpricedDevices} device'
                             '${estimate.unpricedDevices == 1 ? ' has' : 's have'} '
-                            'no price — the total below is short by whatever '
+                            'no price - the total below is short by whatever '
                             '${estimate.unpricedDevices == 1 ? 'it costs' : 'they cost'}.',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.error,
@@ -777,7 +777,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'No devices on the AV diagram yet — place some on the '
+                  'No devices on the AV diagram yet - place some on the '
                   'Signal Flow page and they appear here, or add a line for '
                   'something being quoted that nobody has drawn.',
                 ),
@@ -825,7 +825,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       // Model
                       Text(
                         extra == null
-                            ? (line.model.isEmpty ? '—' : line.model)
+                            ? (line.model.isEmpty ? '-' : line.model)
                             : [
                                 if (line.model.isNotEmpty) line.model,
                                 if (extra.spare)
@@ -904,7 +904,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               ),
                             )
                           : const _CellText(
-                              '—',
+                              '-',
                               numeric: true,
                               stepper: true,
                             ),
@@ -972,7 +972,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           // WRONG BOX ON THE QUOTE. The commonest edit an
                           // estimate gets and the one that had to be made
                           // somewhere else: a display comes back at the wrong
-                          // size, a switcher is one input short, the customer
+                          // size, a switcher is one input short, the stakeholder
                           // asks what the cheaper matrix costs. Swapping here
                           // puts the new product under the drawn box — its
                           // connectors, its rack height, its power and its
@@ -1046,7 +1046,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     unlinkedNote: line.model.isEmpty
                                         ? 'This device has no model, so the '
                                               'row cannot pick the entry up on '
-                                              'its own — set the model on the '
+                                              'its own - set the model on the '
                                               'Devices tab to the name below '
                                               'and it will.'
                                         : null,
@@ -1126,7 +1126,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'None yet. A rack of gear also has blanks, vents and a shelf '
-                  'or two in it — add them on the Racks tab, or add one '
+                  'or two in it - add them on the Racks tab, or add one '
                   'here when it is bought without going in a frame.',
                   style: theme.textTheme.bodySmall,
                 ),
@@ -1177,7 +1177,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       // Kind
                       Text(
                         extra == null
-                            ? (line.category.isEmpty ? '—' : line.category)
+                            ? (line.category.isEmpty ? '-' : line.category)
                             : '${line.category.isEmpty ? 'Hardware'
                                   : line.category} · not racked',
                         overflow: TextOverflow.ellipsis,
@@ -1243,7 +1243,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         children: [
                           // THE WRONG PLATE. A vent where a blank should be, a
                           // 1U shelf that has to be 2U, a plate from the maker
-                          // the customer will not have: the same edit the
+                          // the stakeholder will not have: the same edit the
                           // equipment table has, made where the money is. It
                           // reaches every item in the frames the row counts,
                           // so the elevation and the quote move together.
@@ -1419,7 +1419,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   'No cables drawn yet. Draw the runs on the Signal Flow page '
                   'and they are counted and priced here; prices per cable type '
                   'live on the Catalog tab under "Cable". Cable that is not a '
-                  'run on the drawing — a spool, a bag of patch leads — '
+                  'run on the drawing - a spool, a bag of patch leads - '
                   'goes in with "Add cable".',
                   style: theme.textTheme.bodySmall,
                 ),
@@ -1530,7 +1530,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               // WHICH LEAD THIS LENGTH IS BOUGHT AS. The
                               // estimate picks the shortest stock lead that
                               // reaches the run, which is right until the job
-                              // is plenum, or the customer takes one brand
+                              // is plenum, or the stakeholder takes one brand
                               // only. The runs and the spares stay counted off
                               // the drawing — only the product changes.
                               KeyedSubtree(
@@ -1586,7 +1586,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               avRowIcon(
                                 Icons.price_change_outlined,
                                 line.source == PriceSource.baseCost
-                                    ? 'Priced off the base-cost card — edit '
+                                    ? 'Priced off the base-cost card - edit '
                                           'that figure'
                                     : 'Set a base cost for this cable length',
                                 () => _setCableBaseCost(
@@ -1810,14 +1810,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   Text(
                     switch (kind) {
                       _ExtraPart.equipment =>
-                        'A box on the quote that is not on the diagram — '
+                        'A box on the quote that is not on the diagram - '
                             'something somebody else is installing, a spare, '
                             'or a stand-in for a decision not yet made. It is '
                             'quoted with the drawn devices and marked as not '
                             'on the diagram. Pick nothing and it goes on as a '
                             'plain line at whatever price you type.',
                       _ExtraPart.cable =>
-                        'Cable that is not a run on the diagram — a spool, '
+                        'Cable that is not a run on the diagram - a spool, '
                             'a bag of patch leads, a drop somebody else is '
                             'pulling. Quoted with the counted runs and '
                             'marked as miscellaneous.',
@@ -1826,7 +1826,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             'frame here. Quoted with the racked hardware and '
                             'marked as not racked.',
                       _ExtraPart.misc =>
-                        'A billable line off the catalog — a licence, a '
+                        'A billable line off the catalog - a licence, a '
                             'mount, a rental, a trip charge. It keeps its '
                             'catalog price, so a revision reaches every '
                             'estimate that uses it. Add them on the Device '
@@ -1947,7 +1947,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   const SizedBox(height: 6),
                   Text(
                     selectedModel == null
-                        ? 'Nothing picked — it goes on by name, and you type '
+                        ? 'Nothing picked - it goes on by name, and you type '
                               'its price on the line.'
                         : 'Priced from the catalog: $selectedModel',
                     style: Theme.of(ctx).textTheme.bodySmall,
@@ -2128,7 +2128,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       width: kRowIconWidth,
       child: Tooltip(
       message: spare
-          ? 'A spare — quoted, and deliberately not part of the room config'
+          ? 'A spare - quoted, and deliberately not part of the room config'
           : uncontrolled
           ? 'In the room, and not driven by this control system'
           : 'Not in the room config. The processor has nothing to drive it.',
@@ -2188,7 +2188,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           'missing.'
                     : 'The building’s switch, somebody else’s codec, an '
                           'owner-furnished display. It stays on the quote, and '
-                          'on the diagram if it is drawn — it just stops being '
+                          'on the diagram if it is drawn - it just stops being '
                           'reported as missing a device block.',
               ),
             ),
@@ -2210,7 +2210,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
               subtitle: Text(
                 catalogModel.trim().isEmpty
-                    ? 'Only a line with a catalog model can be marked — add '
+                    ? 'Only a line with a catalog model can be marked - add '
                           'it to the catalog first.'
                     : neverControlled
                     ? 'Saved to the catalog: every room that draws a '
@@ -2218,7 +2218,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           'has no driver.'
                     // Said plainly, because it is the one choice on this menu
                     // that reaches outside the room in front of you.
-                    : 'A passive splitter, a plate, a USB stick — nothing can '
+                    : 'A passive splitter, a plate, a USB stick - nothing can '
                           'drive it anywhere. Saved to the CATALOG, so every '
                           'room that draws a $catalogModel stops asking for a '
                           'module, not just this one.',
@@ -2327,8 +2327,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           SnackBar(
             content: Text(
               '"${line.description}" was typed by hand, so there is no part to '
-              'build a device from. Add it to the catalog first — the '
-              'library button on this row — and it can go in.',
+              'build a device from. Add it to the catalog first - the '
+              'library button on this row - and it can go in.',
             ),
             duration: const Duration(seconds: 7),
           ),
@@ -2381,7 +2381,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 '${result.created == 1 ? '' : 's'} created '
                 '(${result.sectionKeys.join(', ')})',
             if (result.withoutModule > 0)
-              '${result.withoutModule} of them with no python module — the '
+              '${result.withoutModule} of them with no python module - the '
                   'Devices tab shows those in red',
             'fill in the address on the Devices tab',
           ].join('. '),
@@ -2442,7 +2442,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 lengthFt > 0
                     ? 'What a ${formatCableLength(lengthFt)} $signalName lead '
                           'typically costs. Saved to the base-cost card, so '
-                          'every room prices this length off it — not just '
+                          'every room prices this length off it - not just '
                           'this one.'
                     : 'What a $signalName lead typically costs, for any '
                           'length with no figure of its own. Saved to the '
@@ -2541,7 +2541,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       SnackBar(
         content: Text(
           saved.isEmpty
-              ? 'Could not write the base-cost file — the figure is in memory '
+              ? 'Could not write the base-cost file - the figure is in memory '
                     'for this session only.'
               : list <= 0 && education <= 0
               ? '$category removed from the base-cost card.'
@@ -2607,7 +2607,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       currentModel: line.model,
       only: provider.avDeviceLibrary.equipment,
       note: extra != null
-          ? 'This line is quoted but not drawn, so only the line changes — '
+          ? 'This line is quoted but not drawn, so only the line changes - '
                 'its name, its part number and its price.'
           : qty > 1
           ? 'All $qty of these are replaced, on the drawing and in the room '
@@ -2657,7 +2657,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         'Line now quotes ${picked.model}',
         if (hadOverride) 'the price typed on the old part was for the old part',
         if (module.isEmpty)
-          'no control module claims it — it can be quoted, but nothing can '
+          'no control module claims it - it can be quoted, but nothing can '
               'drive it yet',
       ].join('. ');
       messenger.showSnackBar(
@@ -2747,7 +2747,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           : '${line.description} is now a ${picked.model}',
       if (carried > 0) '$carried cable${carried == 1 ? '' : 's'} carried across',
       if (dropped > 0)
-        '$dropped cable${dropped == 1 ? '' : 's'} dropped — the new model has '
+        '$dropped cable${dropped == 1 ? '' : 's'} dropped - the new model has '
             'no matching connector, so draw '
             '${dropped == 1 ? 'it' : 'them'} again on the Signal Flow page',
       if (controlKeys.isNotEmpty && module.isNotEmpty)
@@ -2755,7 +2755,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             '${controlKeys.length == 1 ? '' : 's'} moved to $module'
             '${choice == _SwapControl.applyDefaults ? ' with its defaults' : ''}',
       if (controlKeys.isNotEmpty && module.isEmpty)
-        'no module claims ${picked.model}, so the module was cleared — the '
+        'no module claims ${picked.model}, so the module was cleared - the '
             'Devices tab is showing '
             '${controlKeys.length == 1 ? 'it' : 'them'} in red until one is '
             'picked',
@@ -2800,7 +2800,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         _ExtraPart.hardware => library.rackHardware,
         _ExtraPart.misc => library.miscItems,
       },
-      note: 'This line is quoted but not drawn, so only the line changes — '
+      note: 'This line is quoted but not drawn, so only the line changes - '
           'its name, its part number and its price.',
     );
     if (picked == null) return;
@@ -2877,7 +2877,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       currentModel: was,
       only: provider.avDeviceLibrary.rackHardware,
       note: items.length > 1
-          ? 'All ${items.length} of these in the racks become the new part — '
+          ? 'All ${items.length} of these in the racks become the new part - '
                 'its name, its category, its rack height and its price. Each '
                 'one keeps its rail if the new part still fits on it.'
           : 'It keeps its rail if the new part still fits on it, and comes '
@@ -2900,7 +2900,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           : '${line.description} is now a ${picked.model}',
       if (unracked > 0)
         '$unracked came off '
-            '${unracked == 1 ? 'its rail' : 'their rails'} — the new part does '
+            '${unracked == 1 ? 'its rail' : 'their rails'} - the new part does '
             'not fit where the old one was, so place '
             '${unracked == 1 ? 'it' : 'them'} on the Racks tab',
       if (hadOverride) 'the room price typed on the old part was cleared',
@@ -2953,10 +2953,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       note: lengthFt > 0
           ? 'Every ${formatCableLength(lengthFt)} run of this signal is quoted '
                 'as this lead from now on, in this room. The runs and the '
-                'spares stay as they are — they are counted off the drawing.'
+                'spares stay as they are - they are counted off the drawing.'
           : 'Runs of this signal with no length on them are quoted as this '
                 'lead from now on, in this room. The runs and the spares stay '
-                'as they are — they are counted off the drawing.',
+                'as they are - they are counted off the drawing.',
     );
     if (picked == null) return;
     if (picked.model.trim().toLowerCase() == line.model.trim().toLowerCase()) {
@@ -3119,7 +3119,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 controlKeys.isEmpty
                                     ? 'It can be quoted and drawn, but no '
                                           'Python driver under the modules '
-                                          'path drives it — so nothing can '
+                                          'path drives it - so nothing can '
                                           'control it until one does.'
                                     : 'The module on the block is cleared '
                                           'rather than left naming a driver '
@@ -3381,7 +3381,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     Text(
                       editing
                           ? 'Edits the catalog entry this line is priced from, '
-                                'and saves it back to the catalog file — so '
+                                'and saves it back to the catalog file - so '
                                 'the correction reaches every room that quotes '
                                 'this part, not just this one. The connectors '
                                 'on the entry are left alone; they are edited '
@@ -3389,7 +3389,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           : 'Writes a catalog entry and points this line at '
                                 'it, so the price comes from the catalog from '
                                 'now on and every other room can quote the '
-                                'same part. The quantity stays on the line — '
+                                'same part. The quantity stays on the line - '
                                 'it is about this job, not about the part.',
                       style: Theme.of(ctx).textTheme.bodySmall,
                     ),
@@ -3417,7 +3417,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     if (existing != null) ...[
                       const SizedBox(height: 6),
                       Text(
-                        'The catalog already has "${existing.model}" — saving '
+                        'The catalog already has "${existing.model}" - saving '
                         'replaces its entry.',
                         style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                               color: Theme.of(ctx).colorScheme.error,
@@ -3437,8 +3437,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         title: Text('Replace "${current.model}" with this'),
                         subtitle: Text(
                           '"${current.model}" comes out of the catalog, and '
-                          'everything in this room that uses it — this quote, '
-                          'the racks, the diagram and the config — becomes '
+                          'everything in this room that uses it - this quote, '
+                          'the racks, the diagram and the config - becomes '
                           'the new part. Untick to leave "${current.model}" '
                           'alone and add this as a second entry.',
                           style: Theme.of(ctx).textTheme.bodySmall,
@@ -3526,7 +3526,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'One entry per length — 3 ft, 6 ft, 25 ft — each '
+                              'One entry per length - 3 ft, 6 ft, 25 ft - each '
                               'with its own price. The estimate buys every '
                               'drawn run the shortest one that reaches it.',
                               style: Theme.of(ctx).textTheme.bodySmall,
@@ -3589,7 +3589,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Connectors, power draw and heat are left blank — fill '
+                      'Connectors, power draw and heat are left blank - fill '
                       'them in on the Device Editor tab if this part ends up '
                       'on a diagram.',
                       style: Theme.of(ctx).textTheme.bodySmall,
@@ -3736,7 +3736,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         content: Text(
           file.isEmpty
               ? '"$model" saved to the catalog in memory, but the catalog file '
-                    'could not be written — check the Device Editor tab.'
+                    'could not be written - check the Device Editor tab.'
               : renamedFrom.isNotEmpty
               ? '"$renamedFrom" is now "$model" ($file)'
                     '${followed.isEmpty ? ' — nothing in this room was using '
@@ -3786,7 +3786,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     if (priced.isEmpty) {
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Nothing priced yet — there is no estimate to export.'),
+          content: Text('Nothing priced yet - there is no estimate to export.'),
         ),
       );
       return;
@@ -3902,7 +3902,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'No job type has an hourly rate yet — open '
+                        'No job type has an hourly rate yet - open '
                         '"Labor rates" and set them once, and every room '
                         'costs from the same card.',
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -4036,7 +4036,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             _CardHeading(
               title: 'Other items',
               subtitle:
-                  'labor, cable, mounts — anything not a device on the canvas',
+                  'labor, cable, mounts - anything not a device on the canvas',
               actions: [
                 // Two ways on: off the catalog, so a price agreed once is not
                 // retyped per room and follows a revision; or a blank line for
@@ -4190,7 +4190,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'No fees. Add one for freight, installation, contingency or '
-                  'overhead — several are fine, and each is worked out on the '
+                  'overhead - several are fine, and each is worked out on the '
                   'same pre-tax subtotal rather than on top of each other.',
                   style: theme.textTheme.bodySmall,
                 ),
@@ -4373,7 +4373,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ),
             // A total built partly on category averages is a budget. Saying so
             // here is the difference between a planning figure and a number
-            // somebody quotes a customer.
+            // somebody quotes a stakeholder.
             if (estimate.otherTierLines > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -4382,7 +4382,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   '${estimate.otherTierLines == 1 ? '' : 's'} had no '
                   '${estimate.tierLabel} price in the catalog and '
                   '${estimate.otherTierLines == 1 ? 'was' : 'were'} costed at '
-                  'the other tier — worth a look before this goes on a quote.',
+                  'the other tier - worth a look before this goes on a quote.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.error,
                   ),
@@ -4835,7 +4835,7 @@ class _JobTypeField extends StatelessWidget {
     final tip = rate == null
         ? 'No job type picked'
         : [
-            if (rate.initialism.isNotEmpty) '${rate.initialism} — ${rate.name}'
+            if (rate.initialism.isNotEmpty) '${rate.initialism} - ${rate.name}'
             else rate.name,
             rate.isSet
                 ? '${formatMoney(rate.hourlyRate, currency)}/hr'
@@ -4917,7 +4917,7 @@ Future<String?> _pickJobType(
               children: [
                 Text(
                   'The rate this crew is billed at. Rates live on the shared '
-                  'card, so revising one re-costs every room that uses it — '
+                  'card, so revising one re-costs every room that uses it - '
                   'open "Labor rates" to edit them.',
                   style: theme.textTheme.bodySmall,
                 ),
@@ -4927,7 +4927,7 @@ Future<String?> _pickJobType(
                   autofocus: true,
                   decoration: const InputDecoration(
                     labelText: 'Search the rate card',
-                    hintText: 'name, class number, or shorthand — "tss", '
+                    hintText: 'name, class number, or shorthand - "tss", '
                         '"tssIII", "electrician"',
                     prefixIcon: Icon(Icons.search, size: 20),
                     isDense: true,

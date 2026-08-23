@@ -252,7 +252,7 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
   /// level, and — on the day grid only — the month arrows.
   Widget _navRow(ThemeData theme) {
     final label = switch (_step) {
-      DatePickerStep.year => '$_firstYear – $_lastYear',
+      DatePickerStep.year => '$_firstYear - $_lastYear',
       DatePickerStep.month => '${_selected.year}',
       DatePickerStep.day =>
         '${_monthFullNames[_selected.month - 1]} ${_selected.year}',

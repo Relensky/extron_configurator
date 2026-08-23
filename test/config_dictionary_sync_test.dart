@@ -34,7 +34,7 @@ void main() {
     });
 
     expect(compared, greaterThan(50),
-        reason: 'the schema should be describing most of these keys — a tiny '
+        reason: 'the schema should be describing most of these keys - a tiny '
             'number here means ui_schema.json failed to load');
     expect(drifted, isEmpty,
         reason: 'these descriptions no longer match ui_schema.json: $drifted');

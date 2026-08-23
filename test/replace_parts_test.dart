@@ -288,7 +288,7 @@ void main() {
 
       expect(p.avDeviceLibrary.templateForModel('1RU fan panel'), isNotNull);
       expect(p.avRackItems.every((i) => i.label == 'Vent plate'), isTrue,
-          reason: 'unticked means unticked — the room keeps the old name');
+          reason: 'unticked means unticked - the room keeps the old name');
     });
 
     testWidgets('cancel leaves the entry and the box alone', (tester) async {

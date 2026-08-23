@@ -56,7 +56,13 @@ final RegExp _kClassCode = RegExp(r'^\d[\dA-Za-z]*$');
 /// "TSS III" that does the work.
 String laborRateInitialism(String name, {bool dropSmallWords = true}) {
   var text = name.trim();
-  for (final separator in const [' — ', ' – ', ' - ']) {
+  // A HYPHEN FIRST, then the two dashes older rate cards were typed with.
+  // These are not display text: they are what a rate NAME on somebody's own
+  // labor_rates.json is split on, and a card written before the app stopped
+  // using em dashes still has to read. Written as escapes so the house rule
+  // against em dashes in app text can be checked by looking for the character
+  // itself - see app_language_test.dart.
+  for (final separator in const [' - ', ' \u2014 ', ' \u2013 ']) {
     final at = text.indexOf(separator);
     if (at > 0) {
       text = text.substring(0, at);
@@ -193,7 +199,7 @@ class LaborRateBook {
     LaborRate(
       id: 'cts4',
       name: 'CTS IV',
-      notes: 'Certified AV technician, level IV — lead / commissioning',
+      notes: 'Certified AV technician, level IV - lead / commissioning',
     ),
     LaborRate(
       id: 'tsrv',
@@ -203,7 +209,7 @@ class LaborRateBook {
     LaborRate(
       id: 'fms',
       name: 'FMS',
-      notes: 'Facilities — conduit, ceiling work, lifts. Placeholder: set a '
+      notes: 'Facilities - conduit, ceiling work, lifts. Placeholder: set a '
           'rate only when the job actually needs it.',
     ),
   ];

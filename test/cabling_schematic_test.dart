@@ -278,7 +278,7 @@ void main() {
       expect(drawingOf(p).bundles.every((b) => b.toBoxId != pull.id), isTrue);
     });
 
-    test('a derived box is hidden, not deleted — it would only come back', () {
+    test('a derived box is hidden, not deleted - it would only come back', () {
       final p = room();
       final id = drawingOf(p).boxes.first.id;
       p.removeCablingItem(id);

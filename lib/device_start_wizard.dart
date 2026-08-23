@@ -204,7 +204,7 @@ class _DeviceStartWizardState extends State<_DeviceStartWizard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'Models with no catalog price fall back to the base cost for '
-                  'their category — none are set yet, so those lines show as '
+                  'their category - none are set yet, so those lines show as '
                   'not priced. Set them once under "Base costs" on the Cost '
                   'tab.',
                   style: theme.textTheme.bodySmall,

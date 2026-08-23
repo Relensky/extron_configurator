@@ -134,7 +134,7 @@ void main() {
       expect(dragAnnotation(a, AnnotationGrip.none, delta).start, a.start);
     });
 
-    test('a click rather than a drag draws nothing — except text', () {
+    test('a click rather than a drag draws nothing - except text', () {
       const at = Offset(50, 50);
       expect(note(start: at, end: at).isDegenerate, isTrue);
       expect(

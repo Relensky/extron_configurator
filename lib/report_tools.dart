@@ -164,7 +164,7 @@ XlsxSheet drawingSheet(
   DateTime generated,
 ) {
   final rows = <List<dynamic>>[
-    ['$title — ${drawing.caption}', '', '', '', ''],
+    ['$title - ${drawing.caption}', '', '', '', ''],
     ['Generated ${reportTimestamp(generated)}'],
     [],
   ];

@@ -752,7 +752,7 @@ class FlowRules {
         return rules;
       } catch (e, stack) {
         AppLogger.logError(
-            'Failed to read $candidate — using the built-in flow rules.',
+            'Failed to read $candidate - using the built-in flow rules.',
             e,
             stack);
         return FlowRules.builtIn()

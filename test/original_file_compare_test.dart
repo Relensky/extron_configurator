@@ -56,7 +56,7 @@ void main() {
     expect(found.first.comType, kOriginalFileComparison);
   });
 
-  test('nothing is ticked — the converted value is the one to keep', () {
+  test('nothing is ticked - the converted value is the one to keep', () {
     provider.roomConfig = converted();
     provider.originalLoadedConfig = {
       'PROJECTORDEVICE_1': {'serial_port': 'COM1'},

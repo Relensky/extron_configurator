@@ -1,5 +1,5 @@
 {
-  "__readme": "Base costs for the Room Config Builder: one typical unit price per device category at each of the two published tiers — \"price\" is MSRP (list) and \"educationPrice\" is the education price — used when a room has a switcher on the diagram but no model chosen yet. A model with a catalog price, or a price typed on the room, always wins over the figure here. 0 means \"not set\" and is reported as an unpriced line rather than costed at nothing.",
+  "__readme": "Base costs for the Room Config Builder: one typical unit price per device category at each of the two published tiers - \"price\" is MSRP (list) and \"educationPrice\" is the education price - used when a room has a switcher on the diagram but no model chosen yet. A model with a catalog price, or a price typed on the room, always wins over the figure here. 0 means \"not set\" and is reported as an unpriced line rather than costed at nothing.",
   "costs": [
     {
       "category": "Switcher",

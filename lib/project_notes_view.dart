@@ -12,8 +12,9 @@ import 'project_estimate.dart';
 ///  a price, a vendor, a date. A job also accumulates facts that are not
 ///  answers to any question the app knows how to ask —
 ///
-///    "the customer has approved the 86in, not the 98in, get it in writing"
-///    "ceiling is asbestos above the grid, no drilling until abatement"
+///    "the stakeholder has approved the 86in, not the 98in, get it in writing"
+///    "ceiling is asbestos above the grid, contact facilities before any
+///     work above it"
 ///    "214 shares a wall with the recording studio — no fans on that side"
 ///
 ///  — and until there was somewhere to put them they lived in an email, which
@@ -57,7 +58,7 @@ List<Widget> notesSlivers(BuildContext context, ProjectEstimate estimate) {
             _SectionLabel(
               icon: Icons.apartment,
               text: 'THE JOB',
-              hint: 'True of the whole building — the contract, site access, '
+              hint: 'True of the whole building - the contract, site access, '
                   'who signs off.',
             ),
             const SizedBox(height: 6),
@@ -71,8 +72,7 @@ List<Widget> notesSlivers(BuildContext context, ProjectEstimate estimate) {
                   // job's notes on screen.
                   fieldId: 'project_notes_${provider.currentProjectPath}',
                   initial: project.notes,
-                  hint: 'e.g. Customer approved the 86in, not the 98in — get '
-                      'it in writing before the order goes in.',
+                  hint: 'e.g. Switched 55" for 65" by request.',
                   maxLines: 6,
                   onChanged: (v) => provider.setProjectField(notes: v),
                 ),
@@ -222,8 +222,8 @@ class _RoomNote extends StatelessWidget {
               key: ValueKey('room_notes_box_$roomId'),
               fieldId: 'room_notes_$roomId',
               initial: notes,
-              hint: 'e.g. Ceiling is asbestos above the grid — no drilling '
-                  'until abatement.',
+              hint: 'e.g. Ceiling is asbestos above the grid, contact '
+                  'facilities before any work above it.',
               maxLines: 3,
               onChanged: (v) =>
                   provider.updateProjectRoom(roomId, notes: v),

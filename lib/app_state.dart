@@ -113,7 +113,7 @@ RoomMode roomModeFromName(String? name) =>
 
 const Map<RoomMode, String> kRoomModeLabels = {
   RoomMode.full: 'Control system configured',
-  RoomMode.avOnly: 'AV only — no control system yet',
+  RoomMode.avOnly: 'AV only - no control system yet',
 };
 
 /// The config's live device blocks, in device-family order: for each dev_
@@ -428,7 +428,7 @@ class AppStateProvider extends ChangeNotifier {
       AppLogger.logInfo(moved
           ? 'Moved the saved processor password out of app_config.json into the '
               'OS keystore; the plain-text copy is dropped on the next save.'
-          : 'Could not move the saved processor password into the OS keystore — '
+          : 'Could not move the saved processor password into the OS keystore - '
               'it stays in app_config.json for now.');
       return;
     }
@@ -1236,7 +1236,7 @@ class AppStateProvider extends ChangeNotifier {
       _preloadModulesFromConfig();
       notifyListeners();
       AppLogger.logInfo(
-          "Load changes discarded — reloaded original file $currentConfigPath");
+          "Load changes discarded - reloaded original file $currentConfigPath");
       return true;
     } catch (e, stack) {
       AppLogger.logError(
@@ -5840,7 +5840,7 @@ class AppStateProvider extends ChangeNotifier {
         if (match == null) {
           systemLogs.add(
               "FLAGGED: '$sectionKey.module' is empty and no python module "
-              "claims model '$model' — set it by hand.");
+              "claims model '$model' - set it by hand.");
           return;
         }
         final String resolved = normalizeModuleName(match.module);
@@ -6011,7 +6011,7 @@ class AppStateProvider extends ChangeNotifier {
           // Broken JSON (hand-edit typo): keep a copy for inspection and
           // continue on defaults; the rewrite below recreates a valid file.
           AppLogger.logError(
-              'app_config.json is not valid JSON — starting with defaults '
+              'app_config.json is not valid JSON - starting with defaults '
               '(original kept as app_config.json.invalid)', e, stack);
           try {
             await file.copy('$settingsFilePath.invalid');
@@ -6686,7 +6686,7 @@ class AppStateProvider extends ChangeNotifier {
         systemLogs.add("-> Added missing property: '${t.countKey}' (Default: '0')");
       } else {
         systemLogs.add(
-            "COUNT RECOVERED: '${t.countKey}' was missing from the file — set to "
+            "COUNT RECOVERED: '${t.countKey}' was missing from the file - set to "
             "'$blocks' from the ${t.prefix}* block(s) already present, so the "
             "hardware isn't dropped on export.");
       }
@@ -7158,7 +7158,7 @@ class AppStateProvider extends ChangeNotifier {
       return (
         ok: false,
         message: '"$name" was changed in memory, but the catalog file could '
-            'not be written — check the Catalog tab.',
+            'not be written - check the Catalog tab.',
       );
     }
     return (
@@ -7494,7 +7494,7 @@ class AppStateProvider extends ChangeNotifier {
     selectedProcessor = null;
     AppLogger.logInfo(
       'Active Deployment Target cleared'
-      '${was.isEmpty ? '' : ' (was $was)'} — a different config is open.',
+      '${was.isEmpty ? '' : ' (was $was)'} - a different config is open.',
     );
     notifyListeners();
   }
@@ -7951,7 +7951,7 @@ class AppStateProvider extends ChangeNotifier {
       if (decoded is Map<String, dynamic>) return decoded;
     } catch (e) {
       AppLogger.logError(
-          "DEVICE_INFO in $fullPath is not a valid dict — use JSON-style values (strings, numbers, lists, dicts)", e);
+          "DEVICE_INFO in $fullPath is not a valid dict - use JSON-style values (strings, numbers, lists, dicts)", e);
     }
     return null;
   }
@@ -8746,7 +8746,11 @@ class AppStateProvider extends ChangeNotifier {
       // cost estimate, and the control schematic, both of which live in
       // sidecars beside this file. Leaving them to their own buttons meant a
       // careful save could still lose an afternoon of pricing.
-      await saveProjectSidecars();
+      final sidecars = await saveProjectSidecars();
+      // ON THE JOB'S HISTORY, not only in the app log. "Who saved this room,
+      // and when" is asked months later by somebody who was not here, and the
+      // app log is a developer's file on one machine.
+      _logRoomSaved(currentConfigPath, sidecars);
       // The room now matches its files, so the unsaved-work check — the dot on
       // the Save button, the prompt when a room is switched, and the warning
       // when the app is closed — has a fresh baseline. Without this the
@@ -9024,7 +9028,7 @@ class AppStateProvider extends ChangeNotifier {
     }
     AppLogger.logInfo(
         "No ${spec.label.toLowerCase()} in this room: removed ${doomed.length} "
-        "SYSTEM_SETUP key(s) that only configure them — ${doomed.join(', ')}");
+        "SYSTEM_SETUP key(s) that only configure them - ${doomed.join(', ')}");
     return doomed.length;
   }
 
@@ -9070,7 +9074,7 @@ class AppStateProvider extends ChangeNotifier {
     if (restored.isNotEmpty) {
       AppLogger.logInfo(
           "Sources changed: restored ${restored.length} input key(s) this room "
-          "has again — ${restored.join(', ')}");
+          "has again - ${restored.join(', ')}");
     }
 
     final doomed = rules.staleKeysIn(block);
@@ -9083,7 +9087,7 @@ class AppStateProvider extends ChangeNotifier {
     AppLogger.logInfo(
         "Sources are '${block['gui_tab_type'] ?? ''}' with "
         "${block['dev_cameras'] ?? '0'} camera(s): removed ${doomed.length} "
-        "input key(s) the room has no source for — ${doomed.join(', ')}");
+        "input key(s) the room has no source for - ${doomed.join(', ')}");
     return doomed.length;
   }
 
@@ -9382,7 +9386,7 @@ class AppStateProvider extends ChangeNotifier {
       final commands = await getCommandsForModule(moduleName);
       if (commands.isEmpty) {
         systemLogs.add(
-            "FLAGGED: '$sectionKey.keep_alive_command' could not be checked — "
+            "FLAGGED: '$sectionKey.keep_alive_command' could not be checked - "
             "no commands parsed from '$moduleName' (is the .py in the modules folder?).");
         continue;
       }
@@ -9396,7 +9400,7 @@ class AppStateProvider extends ChangeNotifier {
       systemLogs.add(
           "MODULE: '$sectionKey.keep_alive_command' "
           "${current.isEmpty ? 'was empty' : "'$current' is not a command in '$moduleName'"} "
-          "— set to '$chosen' from that module.");
+          "- set to '$chosen' from that module.");
     }
   }
 
@@ -9445,7 +9449,7 @@ class AppStateProvider extends ChangeNotifier {
         if (originalSection.containsKey(key)) continue; // the file asked for it
         final removed = section.remove(key);
         systemLogs.add(
-            "DEFAULTS: Removed '$sectionKey.$key' (was '$removed') — it is not "
+            "DEFAULTS: Removed '$sectionKey.$key' (was '$removed') - it is not "
             "in the loaded file and is opt-in per room, so the conversion "
             "leaves it off.");
       }
@@ -9513,7 +9517,7 @@ class AppStateProvider extends ChangeNotifier {
         if (declared != true) {
           systemLogs.add(
               "FLAGGED: '$rawKey' was 'Reboot' but the file also set "
-              "'$rebootOnlyKey' to '$declared' — kept '$rebootOnlyKey', which "
+              "'$rebootOnlyKey' to '$declared' - kept '$rebootOnlyKey', which "
               "is the key the processor reads. Removed '$rawKey'.");
         }
         continue;
@@ -9521,7 +9525,7 @@ class AppStateProvider extends ChangeNotifier {
 
       setup[rebootOnlyKey] = true;
       systemLogs.add(
-          "DEFAULTS: '$rawKey' was 'Reboot' — set '$rebootOnlyKey' to true and "
+          "DEFAULTS: '$rawKey' was 'Reboot' - set '$rebootOnlyKey' to true and "
           "removed '$rawKey'. Reboot-only is one key now, read by both the "
           "panel button and the reboot listener.");
     }
@@ -9562,7 +9566,7 @@ class AppStateProvider extends ChangeNotifier {
         if (!keyMatchesOmitPattern(key, patterns)) continue;
         final removed = device.remove(key);
         systemLogs.add(
-            "DEFAULTS: Removed '$sectionKey.$key' (was '$removed') — "
+            "DEFAULTS: Removed '$sectionKey.$key' (was '$removed') - "
             "'$moduleName' lists it as unused for this model.");
       }
     }
@@ -9610,7 +9614,7 @@ class AppStateProvider extends ChangeNotifier {
 
         systemLogs.add(
             "FLAGGED: '$sectionKey.$key' is '$current', which is not a "
-            "'$command' state in '$moduleName' — pick one of "
+            "'$command' state in '$moduleName' - pick one of "
             "${states.join(', ')}, or add '$current' to the module.");
       }
     }
@@ -9649,7 +9653,7 @@ class AppStateProvider extends ChangeNotifier {
       if (highest > count) {
         systemLogs.add(
             "COUNT WARNING: $highest ${prefix}x blocks exist but $countKey is '$raw'. "
-            "Blocks above $count are hidden in the tabs and PRUNED on export — "
+            "Blocks above $count are hidden in the tabs and PRUNED on export - "
             "raise the count in the Setup Wizard if this room really has them.");
         warned = true;
       }
@@ -9811,7 +9815,8 @@ class AppStateProvider extends ChangeNotifier {
   /// being wrong about a quote is not.
   ///
   /// What qualifies is narrower than it looks. The estimate holds the project
-  /// itself by reference, so the job's own name, client and notes are already
+  /// itself by reference, so the job's own name, stakeholder and notes are
+  /// already
   /// live in a cached answer — nothing is copied out of them. A room LABEL is
   /// not the same case: room refs are immutable and an edit replaces one, so a
   /// cached estimate would go on holding the old one. Neither is the currency,
@@ -9929,14 +9934,14 @@ class AppStateProvider extends ChangeNotifier {
     String? name,
     String? building,
     String? jobNumber,
-    String? client,
+    String? stakeholder,
     String? notes,
     String? currency,
   }) {
     if (name != null) project.name = name;
     if (building != null) project.building = building;
     if (jobNumber != null) project.jobNumber = jobNumber;
-    if (client != null) project.client = client;
+    if (stakeholder != null) project.stakeholder = stakeholder;
     if (notes != null && notes.trim() != project.notes.trim()) {
       project.notes = notes;
       _logProjectEdit(
@@ -10007,7 +10012,10 @@ class AppStateProvider extends ChangeNotifier {
     project.rooms.add(added);
     _logProjectEdit(
       itemKey: 'room:${added.id}',
-      itemName: added.fallbackName,
+      // Named by the code on the door rather than by the file stem — see
+      // [projectRoomLogName]. The room has not been read yet at this point, so
+      // this falls back to the stem until it has been.
+      itemName: projectRoomLogName(added.id),
       field: 'Room',
       summary: 'added to the job',
     );
@@ -10020,14 +10028,16 @@ class AppStateProvider extends ChangeNotifier {
   /// needs no file picker.
   String addCurrentRoomToProject() {
     if (currentConfigPath.isEmpty) {
-      return 'Save the room first — a project points at files, so a room that '
+      return 'Save the room first - a project points at files, so a room that '
           'has never been saved has nothing to point at.';
     }
     return addRoomToProject(currentConfigPath);
   }
 
   void removeRoomFromProject(String roomId) {
-    final was = project.roomById(roomId)?.fallbackName ?? '';
+    // Read BEFORE the room leaves the job: the name is resolved off the
+    // project, and a room that has already gone has no code to give.
+    final was = projectRoomLogName(roomId);
     _logProjectEdit(
       itemKey: 'room:$roomId',
       itemName: was,
@@ -10053,7 +10063,6 @@ class AppStateProvider extends ChangeNotifier {
       included: included,
       notes: notes,
     );
-    final after = project.rooms[index];
 
     // One line per DECISION. Typing a note is one decision however many
     // keystrokes it takes, so the note is logged as "written" rather than
@@ -10061,7 +10070,7 @@ class AppStateProvider extends ChangeNotifier {
     if (included != null && included != before.included) {
       _logProjectEdit(
         itemKey: 'room:$roomId',
-        itemName: after.fallbackName,
+        itemName: projectRoomLogName(roomId),
         field: 'Room',
         summary: included ? 'counted in the total' : 'taken out of the total',
       );
@@ -10069,7 +10078,7 @@ class AppStateProvider extends ChangeNotifier {
     if (notes != null && notes.trim() != before.notes.trim()) {
       _logProjectEdit(
         itemKey: 'room:$roomId',
-        itemName: after.fallbackName,
+        itemName: projectRoomLogName(roomId),
         field: 'Notes',
         summary: notes.trim().isEmpty ? 'cleared' : 'written',
         coalesce: true,
@@ -10078,7 +10087,7 @@ class AppStateProvider extends ChangeNotifier {
     if (label != null && label.trim() != before.label.trim()) {
       _logProjectEdit(
         itemKey: 'room:$roomId',
-        itemName: after.fallbackName,
+        itemName: projectRoomLogName(roomId),
         field: 'Room',
         summary: label.trim().isEmpty ? 'label cleared' : 'renamed',
         coalesce: true,
@@ -10100,9 +10109,24 @@ class AppStateProvider extends ChangeNotifier {
 
   // --- vendors -------------------------------------------------------------
 
+  /// Adds a vendor AT THE TOP of the list.
+  ///
+  /// Where it lands is not cosmetic: a part is tagged by the first vendor
+  /// whose rules claim it. Top is still the right place for a new one, for two
+  /// reasons that point the same way.
+  ///
+  /// A vendor with no rules yet claims nothing, so arriving first changes no
+  /// tag on the job the moment it appears. And the reason somebody presses Add
+  /// is almost always that this vendor is the one that should win: 'buy Extron
+  /// direct' is added to beat the reseller already on the list, and appended
+  /// at the bottom it would lose to it until somebody noticed and walked it
+  /// back up past six others.
+  ///
+  /// It is also simply where it can be seen. Appended to a list of nine, a new
+  /// vendor arrives below the fold on the card somebody is looking at.
   ProjectVendor addProjectVendor({String name = 'New vendor'}) {
     final vendor = ProjectVendor(id: project.nextVendorId(), name: name);
-    project.vendors.add(vendor);
+    project.vendors.insert(0, vendor);
     _projectChanged();
     return vendor;
   }
@@ -10163,6 +10187,118 @@ class AppStateProvider extends ChangeNotifier {
   /// The log key and display name for one master-list part.
   static String projectPartItemKey(String partKey) => 'part:$partKey';
 
+  // -------------------------------------------------------------------------
+  //  WHAT A ROOM IS CALLED IN THE HISTORY
+  // -------------------------------------------------------------------------
+  //  'BSS 103 - Config'. The code on the door, then the file that was touched.
+  //
+  //  The log used to name rooms by their FILE STEM — 'BSS_101_config' — which
+  //  is how the room is stored rather than what anybody calls it, and which
+  //  says nothing at all about which of a room's five files an entry is about.
+  //  A history is read months later by somebody who was not there, and it has
+  //  to name things the way the work order does.
+
+  /// The building code and room number for a room on the job, or its file
+  /// stem when the config carries neither.
+  ///
+  /// Read from whatever is already in memory — the open room's config, or the
+  /// project's cached read — and never off disk: this is called while a room
+  /// is being renamed and while one is being removed, and a log line is not
+  /// worth a file read.
+  String projectRoomCode(String roomId) {
+    final ref = project.roomById(roomId);
+    if (ref == null) return '';
+
+    final absolute = BuildingProject.resolvePath(
+      ref.configPath,
+      currentProjectPath,
+    );
+    final open = currentConfigPath.isNotEmpty &&
+        _samePath(absolute, currentConfigPath);
+    final code = open
+        ? roomCodeFromConfig(roomConfig)
+        : (_projectRooms[roomId]?.roomCode ?? '');
+    return code.isNotEmpty ? code : ref.fallbackName;
+  }
+
+  /// How one entry names its room: the code, then the file, when there is a
+  /// file to name. 'BSS 103 - Config', or plain 'BSS 103' for a decision about
+  /// the room itself rather than about one of its files.
+  String projectRoomLogName(String roomId, {String file = ''}) {
+    final code = projectRoomCode(roomId);
+    if (file.trim().isEmpty) return code;
+    return code.isEmpty ? file.trim() : '$code - ${file.trim()}';
+  }
+
+  /// The room on the job that a config path belongs to, or null when the file
+  /// open in the editor is not on this project at all.
+  ProjectRoomRef? projectRefForConfig(String configPath) {
+    if (configPath.trim().isEmpty) return null;
+    for (final ref in project.rooms) {
+      final absolute = BuildingProject.resolvePath(
+        ref.configPath,
+        currentProjectPath,
+      );
+      if (_samePath(absolute, configPath)) return ref;
+    }
+    return null;
+  }
+
+  /// What to call one of a room's files in the log: 'Config', 'AV flow',
+  /// 'Racks', 'Floor plans', 'Cabling', 'Cost', 'Schematic'.
+  ///
+  /// Worked out from the suffix the file was written with rather than passed
+  /// in by each caller, so a part renamed on disk cannot leave the log calling
+  /// it by a name that no longer exists.
+  static String roomFileLabel(String filePath) {
+    final base = path.basenameWithoutExtension(filePath).toLowerCase();
+    for (final part in RoomSidecarPart.values) {
+      final suffix = kRoomSidecarSuffix[part];
+      if (suffix != null && base.endsWith('_$suffix')) {
+        return kRoomSidecarFileLabels[part] ?? suffix;
+      }
+    }
+    if (base.endsWith('_schematic')) return 'Schematic';
+    // The pre-rename diagram file, still on disk in older rooms.
+    if (base.endsWith('_avflow')) return 'AV flow';
+    return 'Config';
+  }
+
+  /// Records that a room's files were written, as ONE entry naming the room,
+  /// the config, and whatever went with it.
+  ///
+  /// One entry per SAVE rather than one per file. Saving a room writes the
+  /// config and up to five sidecars, and six rows per press would bury every
+  /// decision on the job under the act of pressing Save.
+  ///
+  /// Silent when the saved room is not on the open project: there is no job
+  /// for it to be part of the history of.
+  void _logRoomSaved(String configPath, List<String> sidecars) {
+    final ref = projectRefForConfig(configPath);
+    if (ref == null) return;
+
+    final also = <String>[
+      for (final file in sidecars)
+        if (file.trim().isNotEmpty) roomFileLabel(file),
+    ]..sort();
+    _logProjectEdit(
+      itemKey: 'room:${ref.id}',
+      itemName: projectRoomLogName(ref.id, file: 'Config'),
+      field: 'Saved',
+      summary: also.isEmpty
+          ? 'to disk'
+          : 'to disk, with the ${_readAsList(also)}',
+    );
+  }
+
+  /// 'AV flow', 'AV flow and Cost', 'AV flow, Cost and Schematic' — a list a
+  /// person would say out loud rather than one joined with commas to the end.
+  static String _readAsList(List<String> items) {
+    if (items.length <= 1) return items.join();
+    return '${items.sublist(0, items.length - 1).join(', ')} and '
+        '${items.last}';
+  }
+
   /// Pins one master-list part to a vendor, or clears the pin (blank id) so it
   /// falls back to the rules.
   void pinProjectPart(String partKey, String vendorId, {String partName = ''}) {
@@ -10172,7 +10308,7 @@ class AppStateProvider extends ChangeNotifier {
       itemName: partName,
       field: 'Vendor',
       summary: vendorId.isEmpty
-          ? 'pin cleared — back to the vendor rules'
+          ? 'pin cleared - back to the vendor rules'
           : 'pinned to ${project.vendorById(vendorId)?.name ?? vendorId}',
     );
     _projectChanged();
@@ -10214,7 +10350,7 @@ class AppStateProvider extends ChangeNotifier {
         itemName: partName,
         field: 'Lead time',
         summary: after == null
-            ? 'cleared — nobody has asked the vendor'
+            ? 'cleared - nobody has asked the vendor'
             : 'set to $after day${after == 1 ? '' : 's'}',
       );
     }
@@ -10629,7 +10765,7 @@ class AppStateProvider extends ChangeNotifier {
     }
 
     final ok = await openConfigAtPath(absolute);
-    if (!ok) return 'Could not open $absolute — see the log.';
+    if (!ok) return 'Could not open $absolute - see the log.';
 
     loadAvFlowForCurrentConfig();
 
@@ -10921,14 +11057,14 @@ class AppStateProvider extends ChangeNotifier {
   List<String> get unsavedWorkSummary {
     final out = <String>[];
     if (roomNeverSaved) {
-      out.add('This room has never been saved — it has no file yet.');
+      out.add('This room has never been saved - it has no file yet.');
     } else if (roomHasUnsavedChanges) {
       out.add('${path.basename(currentConfigPath)} has edits that are not in '
-          'the file — a field, a box on a drawing, a price, or all three.');
+          'the file - a field, a box on a drawing, a price, or all three.');
     }
     if (projectDirty) {
       out.add('The project "$projectDisplayName" has edits that are not on '
-          'disk — the room list, the vendors or the tags.');
+          'disk - the room list, the vendors or the tags.');
     }
     return out;
   }
@@ -10994,8 +11130,8 @@ class AppStateProvider extends ChangeNotifier {
   /// Where the recovery copies live: `<settings folder>/recovery`.
   ///
   /// Beside app_config.json rather than beside the room, because a working
-  /// copy that lands in the customer's project folder is a file somebody
-  /// emails to the customer by mistake — and because a folder the app owns is
+  /// copy that lands in the stakeholder's project folder is a file somebody
+  /// emails to the stakeholder by mistake — and because a folder the app owns is
   /// one it can still find after the room has been moved or renamed.
   String get autosaveFolder =>
       _autosaveFolderOverride ?? path.join(_userSettingsDir(), 'recovery');
@@ -11657,11 +11793,11 @@ class ConversionChange {
 
     switch (kind) {
       case ConversionKind.added:
-        return 'Added — written as ${show(after)}';
+        return 'Added - written as ${show(after)}';
       case ConversionKind.removed:
         return conflictReason != null
-            ? 'Removed (${conflictReason!}) — was ${show(before)}'
-            : 'Removed — was ${show(before)}';
+            ? 'Removed (${conflictReason!}) - was ${show(before)}'
+            : 'Removed - was ${show(before)}';
       case ConversionKind.changed:
         return '${show(before)} → ${show(after)}';
     }
@@ -11770,11 +11906,11 @@ class ConfigDelta {
 
     switch (kind) {
       case DeltaKind.added:
-        return '$label — added by the save, would be removed: ${show(after)}';
+        return '$label - added by the save, would be removed: ${show(after)}';
       case DeltaKind.removed:
-        return '$label — removed by the save, would come back: ${show(before)}';
+        return '$label - removed by the save, would come back: ${show(before)}';
       case DeltaKind.changed:
-        return '$label — ${show(after)} would go back to ${show(before)}';
+        return '$label - ${show(after)} would go back to ${show(before)}';
     }
   }
 }

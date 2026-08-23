@@ -91,7 +91,7 @@ class _ConversionPreviewDialogState extends State<_ConversionPreviewDialog> {
                   ? 'Review what the conversion did. Reject anything you want '
                       'kept as it was in the loaded file.'
                   : '$conflictCount propert${conflictCount == 1 ? 'y was' : 'ies were'} '
-                      'dropped as invalid where they sat — those are struck '
+                      'dropped as invalid where they sat - those are struck '
                       'through on the left and flagged on the right.',
               style: Theme.of(context).textTheme.bodySmall,
             ),

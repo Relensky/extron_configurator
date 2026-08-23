@@ -104,7 +104,7 @@ Future<void> showCheckDefaultsDialog(BuildContext context,
           title: Row(children: [
             const Icon(Icons.playlist_add_check, color: Colors.orange),
             const SizedBox(width: 10),
-            Expanded(child: Text('Missing Defaults — $sectionKey')),
+            Expanded(child: Text('Missing Defaults - $sectionKey')),
           ]),
           content: SizedBox(
             width: 560,

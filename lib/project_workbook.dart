@@ -13,7 +13,7 @@ import 'xlsx_writer.dart';
 /// ============================================================================
 ///  Two documents, built from the same rollup so they cannot disagree:
 ///
-///  THE PROJECT WORKBOOK — everything, for the file and for the customer:
+///  THE PROJECT WORKBOOK — everything, for the file and for the stakeholder:
 ///
 ///    Summary       — what the building costs, and the same figure broken back
 ///                    down to one row per room
@@ -27,7 +27,7 @@ import 'xlsx_writer.dart';
 ///  This is the file that gets emailed, which is why it is a separate document
 ///  rather than "the workbook, tell them to look at tab six": sending the whole
 ///  book sends every other vendor's pricing to a competitor, and sends the
-///  customer's labor rates and margins to a supplier. A quote request contains
+///  stakeholder's labor rates and margins to a supplier. A quote request contains
 ///  what is being asked for and nothing else.
 ///
 ///  Both are dealt from [ProjectEstimate], and the room tabs from the SAME
@@ -76,7 +76,8 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
         if (project.building.trim().isNotEmpty) ['Building', project.building],
         if (project.jobNumber.trim().isNotEmpty)
           ['Job number', project.jobNumber],
-        if (project.client.trim().isNotEmpty) ['Client', project.client],
+        if (project.stakeholder.trim().isNotEmpty)
+          ['Stakeholder', project.stakeholder],
         ['Rooms quoted', estimate.costedRooms.length],
         if (project.deliveryDeadline != null)
           [
@@ -94,14 +95,14 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
                     '${estimate.spareUnits == 1 ? '' : 's'} across '
                     '${estimate.sparedParts.length} product'
                     '${estimate.sparedParts.length == 1 ? '' : 's'} '
-                    '(${formatMoney(estimate.sparesTotal, currency)}) — '
+                    '(${formatMoney(estimate.sparesTotal, currency)}) - '
                     'see the $kProjectSparesSheet sheet',
         ],
         if (project.rooms.length != estimate.costedRooms.length)
           [
             'Rooms not counted',
             '${project.rooms.length - estimate.costedRooms.length} '
-                '(excluded or unreadable — see Rooms below)',
+                '(excluded or unreadable - see Rooms below)',
           ],
         if (project.notes.trim().isNotEmpty) ['Notes', project.notes],
       ],
@@ -145,7 +146,7 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
               room.name,
               '', '', '', '', '', '', '', '',
               '',
-              'NOT COUNTED — ${room.room.error}',
+              'NOT COUNTED - ${room.room.error}',
             ],
       ],
     ),
@@ -180,7 +181,7 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
       rows: [
         for (final p in estimate.vendors)
           [
-            p.isUntagged ? 'UNTAGGED — no vendor rule matched' : p.name,
+            p.isUntagged ? 'UNTAGGED - no vendor rule matched' : p.name,
             p.lines.length,
             trimNumber(p.qty),
             cash(p.total),
@@ -210,7 +211,7 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
     // against a room means the room on the door.
     //
     // Only here. The tables above are a QUOTE, and a quote says "Behavioral
-    // And Social Science 103" because that is what the customer calls it; a
+    // And Social Science 103" because that is what the stakeholder calls it; a
     // job list is read by the people doing the work, who call it BSS 103.
     final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
     // Dated items first, soonest due at the top — the same order the tab
@@ -241,7 +242,7 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
                 // Late is spelled out rather than left to the reader to work
                 // out from a date and today's date.
                 : t.isOverdue()
-                    ? '${formatScheduleDate(t.due!)} — PAST ITS DATE'
+                    ? '${formatScheduleDate(t.due!)} - PAST ITS DATE'
                     : formatScheduleDate(t.due!),
             formatScheduleDate(t.created),
           ],
@@ -290,7 +291,7 @@ List<String> _projectWarnings(ProjectEstimate estimate) => [
         'they cost. See the Rooms table.',
   if (estimate.mixedCurrency)
     'Rooms in this project are quoted in different currencies. The totals '
-        'add them as though they were the same one — fix the room currencies '
+        'add them as though they were the same one - fix the room currencies '
         'before relying on any figure here.',
   if (estimate.unpricedParts > 0)
     '${estimate.unpricedParts} part${estimate.unpricedParts == 1 ? '' : 's'} '
@@ -311,7 +312,7 @@ List<String> _projectWarnings(ProjectEstimate estimate) => [
         '${estimate.undrivenDevices == 1 ? '' : 's'} across '
         '${estimate.controlGaps.map((g) => g.room.ref.id).toSet().length} '
         'room(s) have no control module. They are quoted and they will not '
-        'commission as they stand — see the $kProjectControlSheet sheet.',
+        'commission as they stand - see the $kProjectControlSheet sheet.',
   // Not a mistake, and not something the app should decide — but a building
   // where nothing at all is spared is a building where the first failure is
   // paid for out of a budget that has already closed, and nobody was ever
@@ -320,7 +321,7 @@ List<String> _projectWarnings(ProjectEstimate estimate) => [
     'Nothing on this job has a spare. '
         '${estimate.partsWithoutSpares.length} '
         'product${estimate.partsWithoutSpares.length == 1 ? '' : 's'} would '
-        'be replaced out of the next budget rather than off the shelf — see '
+        'be replaced out of the next budget rather than off the shelf - see '
         'the $kProjectSparesSheet sheet.',
   for (final c in estimate.project.vendorConflicts)
     '${c.kind} rule "${c.rule}" is claimed by '
@@ -361,7 +362,7 @@ List<ReportSection> masterPartsSections(
     // override in one of them. Printing either figure alone would look like
     // the answer, so it prints as the range it is.
     return '${formatMoney(line.unitPrice, currency)}'
-        '–${formatMoney(line.maxUnitPrice, currency)}';
+        '-${formatMoney(line.maxUnitPrice, currency)}';
   }
 
   final sections = <ReportSection>[];
@@ -456,13 +457,13 @@ List<ReportSection> projectTimelineSections(
       [
         'Delivery deadline',
         schedule.deadline == null
-            ? 'not set — nothing can be scheduled'
+            ? 'not set - nothing can be scheduled'
             : formatScheduleDate(schedule.deadline!),
       ],
       [
         'First order due',
         schedule.firstOrderDate == null
-            ? '—'
+            ? '-'
             : formatScheduleDate(schedule.firstOrderDate!),
       ],
       ['Past their order date', schedule.lateCount],
@@ -472,7 +473,7 @@ List<ReportSection> projectTimelineSections(
       if (schedule.arrivingLateCount > 0)
         [
           'On order but promised LATE',
-          '${schedule.arrivingLateCount} — bought, and the room will not have '
+          '${schedule.arrivingLateCount} - bought, and the room will not have '
               'them in time',
         ],
       ['Arrived', schedule.receivedCount],
@@ -508,7 +509,7 @@ List<ReportSection> projectTimelineSections(
                 if (d == null) continue;
                 if (first == null || d.isBefore(first)) first = d;
               }
-              return first == null ? '—' : formatScheduleDate(first);
+              return first == null ? '-' : formatScheduleDate(first);
             }(),
             entry.track?.notes ?? '',
           ],
@@ -552,7 +553,7 @@ List<ReportSection> projectTimelineSections(
             l.needByIsOwn
                 ? '${formatScheduleDate(l.needBy!)} (ahead of the job)'
                 : formatScheduleDate(l.needBy!),
-            '${kOrderStatusLabels[l.status]} — '
+            '${kOrderStatusLabels[l.status]} - '
                 '${formatDayGap(l.daysUntilOrder ?? 0)}',
           ],
       ],
@@ -596,7 +597,7 @@ List<ReportSection> projectTimelineSections(
             // an order placed on time against a promise that lands after the
             // room needs it is the thing this table exists to surface.
             l.status == OrderStatus.arrivingLate
-                ? 'ON ORDER — PROMISED AFTER IT IS NEEDED'
+                ? 'ON ORDER - PROMISED AFTER IT IS NEEDED'
                 : kOrderStatusLabels[l.status] ?? '',
           ],
       ],
@@ -895,13 +896,13 @@ List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
         if ((byKind[ControlGapKind.moduleUnset] ?? 0) > 0)
           [
             'Pick the module',
-            '${byKind[ControlGapKind.moduleUnset]} device(s) — a module '
+            '${byKind[ControlGapKind.moduleUnset]} device(s) - a module '
                 'already claims the model; the field is just empty.',
           ],
         if ((byKind[ControlGapKind.noModuleClaims] ?? 0) > 0)
           [
             'No driver exists',
-            '${byKind[ControlGapKind.noModuleClaims]} device(s) — write or '
+            '${byKind[ControlGapKind.noModuleClaims]} device(s) - write or '
                 'import a module, or mark the product as never controlled on '
                 'the Catalog tab if it genuinely has no interface.',
           ],
@@ -914,7 +915,7 @@ List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
         if ((byKind[ControlGapKind.notDrawn] ?? 0) > 0)
           [
             'In the config, not on the drawing',
-            '${byKind[ControlGapKind.notDrawn]} device(s) — undriven and not '
+            '${byKind[ControlGapKind.notDrawn]} device(s) - undriven and not '
                 'on the signal flow either.',
           ],
         ['Total', '${estimate.undrivenDevices} device(s)'],
@@ -928,7 +929,7 @@ List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
 ///
 /// Deliberately NOT a copy of the master list filtered down. It carries no
 /// labor, no fees, no tax, no other vendor's parts and no project total —
-/// those are the customer's numbers, and a quote request that leaks them is
+/// those are the stakeholder's numbers, and a quote request that leaks them is
 /// a negotiating position handed to a supplier.
 List<ReportSection> vendorPackageSections(
   ProjectEstimate estimate,
@@ -1041,7 +1042,7 @@ Uint8List buildProjectWorkbookBytes({
   if (master.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kProjectWorkbookSheets[1]),
-      title: '$title — core components list',
+      title: '$title - core components list',
       sections: master,
       generated: stamp,
     ));
@@ -1053,7 +1054,7 @@ Uint8List buildProjectWorkbookBytes({
   if (estimate.master.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kProjectTimelineSheet),
-      title: '$title — when to order',
+      title: '$title - when to order',
       sections: projectTimelineSections(estimate, asOf: stamp),
       generated: stamp,
     ));
@@ -1065,7 +1066,7 @@ Uint8List buildProjectWorkbookBytes({
   if (estimate.master.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kProjectSparesSheet),
-      title: '$title — spares',
+      title: '$title - spares',
       sections: projectSparesSections(estimate),
       generated: stamp,
     ));
@@ -1075,7 +1076,7 @@ Uint8List buildProjectWorkbookBytes({
   if (gaps.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kProjectControlSheet),
-      title: '$title — devices without a control module',
+      title: '$title - devices without a control module',
       sections: gaps,
       generated: stamp,
     ));
@@ -1088,7 +1089,7 @@ Uint8List buildProjectWorkbookBytes({
   if (changes.isNotEmpty) {
     sheets.add(buildStackedReportSheet(
       sheetName: tab(kProjectHistorySheet),
-      title: '$title — who changed what',
+      title: '$title - who changed what',
       sections: changes,
       generated: stamp,
     ));
@@ -1099,7 +1100,7 @@ Uint8List buildProjectWorkbookBytes({
       // The vendor's name is the tab, so the book is navigable by the thing
       // somebody is looking for.
       sheetName: tab(package.isUntagged ? 'Untagged' : package.name),
-      title: '$title — ${package.name}',
+      title: '$title - ${package.name}',
       sections: vendorPackageSections(estimate, package),
       generated: stamp,
     ));
@@ -1115,7 +1116,7 @@ Uint8List buildProjectWorkbookBytes({
       sheetName: tab(room.name),
       title: room.ref.included
           ? room.name
-          : '${room.name} — EXCLUDED from the project total',
+          : '${room.name} - EXCLUDED from the project total',
       sections: sections,
       generated: stamp,
     ));
@@ -1134,7 +1135,7 @@ Uint8List buildVendorRfqBytes({
     sheetName: xlsxSheetName(
       package.isUntagged ? 'Untagged' : package.name,
     ),
-    title: '${_projectTitle(estimate.project)} — quote request',
+    title: '${_projectTitle(estimate.project)} - quote request',
     sections: vendorPackageSections(estimate, package),
     generated: generated ?? DateTime.now(),
   ),
@@ -1146,7 +1147,7 @@ String _projectTitle(BuildingProject project) {
   final name = project.name.trim();
   final building = project.building.trim();
   if (name.isNotEmpty && building.isNotEmpty && name != building) {
-    return '$name — $building';
+    return '$name - $building';
   }
   if (name.isNotEmpty) return name;
   if (building.isNotEmpty) return building;

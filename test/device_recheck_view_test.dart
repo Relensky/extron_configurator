@@ -169,17 +169,17 @@ void main() {
         rates: const [
           LaborRate(
             id: 'tss3ns',
-            name: '0482 Technology Support Specialist III — Non-state',
+            name: '0482 Technology Support Specialist III - Non-state',
             hourlyRate: 83.76,
           ),
           LaborRate(
             id: 'tss4ns',
-            name: '0483 Technology Support Specialist IV — Non-state',
+            name: '0483 Technology Support Specialist IV - Non-state',
             hourlyRate: 93.97,
           ),
           LaborRate(
             id: 'elec',
-            name: '6533 Electrician — Non-state',
+            name: '6533 Electrician - Non-state',
             hourlyRate: 84.41,
           ),
         ],
@@ -197,12 +197,12 @@ void main() {
       // The closed cell is one ellipsized line — the clipped second line was
       // the original complaint.
       final cell = tester.widget<Text>(
-        find.text('0482 Technology Support Specialist III — Non-state').first,
+        find.text('0482 Technology Support Specialist III - Non-state').first,
       );
       expect(cell.maxLines, 1);
       expect(cell.overflow, TextOverflow.ellipsis);
 
-      await tester.tap(find.text('0482 Technology Support Specialist III — '
+      await tester.tap(find.text('0482 Technology Support Specialist III - '
           'Non-state'));
       await tester.pumpAndSettle();
 

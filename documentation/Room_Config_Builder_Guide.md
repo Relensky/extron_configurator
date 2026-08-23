@@ -1,6 +1,6 @@
 # Room Config Builder
 Operation guide for the Deployment Configurator
-Building rooms, drawing them, pricing them — and teaching the app your own rules.
+Building rooms, drawing them, pricing them - and teaching the app your own rules.
 ---
 
 # Start here
@@ -20,8 +20,8 @@ finished you can push it straight to the processor over SFTP.
 
 But it does more than edit the config now. The same room description drives:
 
-- a **control schematic** — what talks to the processor, and how
-- an **AV signal flow** — what plugs into what, drawn from the switcher numbers
+- a **control schematic** - what talks to the processor, and how
+- an **AV signal flow** - what plugs into what, drawn from the switcher numbers
   you already typed
 - **rack elevations**, **floor plans** and a **cable schedule**
 - a **cost estimate**, built from a device catalog you keep yourself
@@ -44,9 +44,9 @@ next to the program, and every one of them now has an editor inside the app:
 | `key_map.json` | How old files are translated to current key names on load | Text editor (reference in this guide) |
 | `labor_rates.json`, `base_costs.json` | What an hour costs, and the rate card the estimate falls back to | Dialogs on the **Cost** tab |
 
-If the app does something you don't want — puts the wrong receiver in a run,
+If the app does something you don't want - puts the wrong receiver in a run,
 calls a field by a name your team doesn't use, misses a key you just added to
-the template — the fix is usually a rule or a schema entry, not a phone call and
+the template - the fix is usually a rule or a schema entry, not a phone call and
 a wait for the next build.
 
 > Nothing in this guide requires you to edit JSON by hand. Everything described
@@ -61,17 +61,17 @@ They run down the left-hand rail in roughly the order you use them.
 |---|---|
 | **Project** | A whole building: several rooms quoted together, one master parts list, split into a quote request per vendor. |
 | **Cost** | The estimate for the room you're on: equipment, cable, labor, tax and fees. |
-| **Wizard** | The room's identity — building, room number, name — and how many of each device it has. |
+| **Wizard** | The room's identity - building, room number, name - and how many of each device it has. |
 | **Devices** | One sub-tab per device: model, IP, connection type, module, and whatever else the schema says that family has. |
 | **System** | Everything else in `SYSTEM_SETUP`: switcher inputs and outputs, panel behaviour, outlet names. |
 | **Raw JSON** | The whole config as text, for when you want to see or paste it. Apply writes it straight back to the working file. |
 | **Schematic** | The control topology: what the processor talks to, over what, drawn automatically. |
 | **AV Flow** | The signal flow: what plugs into what, also drawn automatically. |
 | **Floor Plan** | Where things physically are, with callouts on a sheet. |
-| **Cabling** | Low-voltage runs that aren't signal — screen triggers, shades, and a run schedule. |
+| **Cabling** | Low-voltage runs that aren't signal - screen triggers, shades, and a run schedule. |
 | **Racks** | Rack elevations, front and rear, with clearances and a parts list. |
 | **Catalog** | The device catalog every drawing and every price is built from. |
-| **Schema** | What the Devices and System tabs look like — labels, types, descriptions, device families. |
+| **Schema** | What the Devices and System tabs look like - labels, types, descriptions, device families. |
 | **Flow Rules** | How the AV Flow decides what to draw. |
 | **App Config** | Where the files live, the theme, the SFTP settings and the active deployment target. |
 
@@ -79,7 +79,7 @@ Project and Cost are at the top because that's the order the work goes in: open
 the job, see what the building costs, then go into the rooms that make it up.
 
 The **Catalog**, **Schema** and **Flow Rules** tabs work with no room open at
-all — they're about the app, not about one room. So does **Project**, for a
+all - they're about the app, not about one room. So does **Project**, for a
 different reason: it points at room *files* and prices them off disk, so
 reviewing a building's quote never means opening a room.
 
@@ -127,12 +127,12 @@ and so on. Nothing breaks because a file is missing.
 
 App Config also holds the things that are yours rather than the department's:
 the theme (Classic or the Auris HUD look), text size, SFTP username and port,
-and the **Active Deployment Target** — the room the next upload or download
+and the **Active Deployment Target** - the room the next upload or download
 talks to.
 
 That target now clears itself whenever you open or create a different config.
-It's the quietest mistake this app could make — BSS 103's config uploaded to SSC
-210's processor, with the tab that says so two screens away — so you're asked to
+It's the quietest mistake this app could make - BSS 103's config uploaded to SSC
+210's processor, with the tab that says so two screens away - so you're asked to
 pick the room again rather than inheriting the last one. Downloading from a
 processor keeps the target, because that config *came* from there.
 
@@ -157,7 +157,7 @@ later.
 4. **Fill in the system.** On **System**, the switcher input and output numbers,
    the panel options, the outlet names. This is the part the drawings read.
 5. **Look at the drawings.** **Schematic** and **AV Flow** have already drawn
-   themselves from what you typed. Fix anything that looks wrong — by dragging,
+   themselves from what you typed. Fix anything that looks wrong - by dragging,
    or by correcting the config, or by editing a rule.
 6. **Rack it and place it.** **Racks** for the elevations, **Floor Plan** for
    where things are in the room.
@@ -189,21 +189,21 @@ BSS103_old_config.json                the pristine original, from the first load
 Old configs don't look like new ones. Rather than making you fix them by hand,
 the app runs every load through the same pipeline, in this order:
 
-1. **Key mapping** — `key_map.json` renames legacy sections and properties
+1. **Key mapping** - `key_map.json` renames legacy sections and properties
    (`CAMERA1DEVICE.IPADDRESS` becomes `CAMERADEVICE_1.ip_address`). It runs
    first so everything after it sees current names.
-2. **Automatic backup** — the original text, untouched, is written next to the
+2. **Automatic backup** - the original text, untouched, is written next to the
    working file as `<ROOM>_old_config.json`. The name comes from the room
    identity, which is why mapping runs first.
-3. **Template migration** — baseline `SYSTEM_SETUP` values the file is missing
+3. **Template migration** - baseline `SYSTEM_SETUP` values the file is missing
    are added. Existing values are never overwritten.
-4. **Building code normalization** — a `gve_bldg` holding a full building name
+4. **Building code normalization** - a `gve_bldg` holding a full building name
    is converted to its code.
-5. **Device defaults fill** — device blocks missing their family's baseline
+5. **Device defaults fill** - device blocks missing their family's baseline
    properties get them (switch this off in App Config if you'd rather it
    didn't).
-6. **Auto room name** — `gui_full_room_name` is rebuilt in Title Case.
-7. **Audits** — more device blocks than the count allows, or keys that aren't in
+6. **Auto room name** - `gui_full_room_name` is rebuilt in Title Case.
+7. **Audits** - more device blocks than the count allows, or keys that aren't in
    the template, are reported. Nothing is changed.
 
 Everything the pipeline did shows up in the dialog afterwards, in the migration
@@ -212,12 +212,12 @@ did, the pristine original is right there.
 
 ## Getting the config back out
 
-- **Export Config Locally** — a save dialog, named from the building and room
+- **Export Config Locally** - a save dialog, named from the building and room
   (`BSS_103_config.json`).
-- **Upload to Processor (SFTP)** — pushes to `/config.json`, optionally with a
+- **Upload to Processor (SFTP)** - pushes to `/config.json`, optionally with a
   companion file such as `Whereused.csv`. The dialog has the same searchable
   room picker as the download.
-- **Apply Changes** on the Raw JSON tab — parses the text back into memory *and*
+- **Apply Changes** on the Raw JSON tab - parses the text back into memory *and*
   writes the working file, so Apply doubles as Save.
 
 Every path out writes keys sorted in natural order, so `PROJECTORDEVICE_2` comes
@@ -235,21 +235,21 @@ missing; *Check Module Defaults* tells you where it disagrees with the driver.
 A device block names a product and names the driver that talks to it, and
 nothing used to keep the two together. Retype the model, or swap the box from
 the **Cost** tab, and the module underneath went on naming a driver for the
-product that used to be there — with every field filled in, so the block read as
+product that used to be there - with every field filled in, so the block read as
 finished. That's the config nobody re-checks, and it commissions the room as a
 device the room doesn't contain.
 
 A red banner now sits at the top of the device, above the two fields that fix
 it, in two cases:
 
-- **no python module is set** for a model that has one — nothing can talk to the
+- **no python module is set** for a model that has one - nothing can talk to the
   device, so the room won't commission
 - **the module is set, says which models it covers, and this isn't one of them**
-  — the banner names what that driver actually drives
+  - the banner names what that driver actually drives
 
 Pick a module (or correct the model) and it clears. It's read from the config
 rather than remembered by the page, so it survives leaving the tab, saving, and
-reopening the room — and it's what a swap made on the Cost tab leaves behind.
+reopening the room - and it's what a swap made on the Cost tab leaves behind.
 
 It stays quiet where it can't know: a device with no model yet, a driver that
 never declared which models it covers, and a model the driver does list under a
@@ -269,13 +269,13 @@ connection has its own colour, and the legend under the drawing explains them.
 
 Things worth knowing:
 
-- **192.x drops** aren't on the building network — they're on the AV LAN. The
+- **192.x drops** aren't on the building network - they're on the AV LAN. The
   toolbar has a dropdown for where those actually land in your buildings: the
   IDF, the processor's own second NIC, or a switch you draw yourself. The touch
   panel has its own dropdown, because a panel on PoE off the building switch is
   as ordinary as one beside the processor.
 - **Add device** (in Edit mode) puts a box on the drawing for equipment the
-  control system doesn't talk to at all — the building switch, a UPS, the room
+  control system doesn't talk to at all - the building switch, a UPS, the room
   PC. They're drawn as related equipment, dashed rather than solid, so nobody
   reads them as controlled devices.
 - **Save Layout** keeps your dragging next to the config; **Reset Layout** puts
@@ -284,7 +284,7 @@ Things worth knowing:
 ### Recreate from config
 
 Sometimes the drawing has drifted far enough that tidying it costs more than
-starting again — a room got re-scoped, half the devices changed, and there are
+starting again - a room got re-scoped, half the devices changed, and there are
 hand-drawn lines to boxes that no longer exist.
 
 **Recreate from config** throws the layout away and lets the drawing rebuild
@@ -297,7 +297,7 @@ Two things it deliberately keeps: your line **colours** (they have their own
 *Reset all* on the Colors dialog) and the **192.x / touch panel landing**
 choices, because where the room's drops actually go is a fact somebody recorded,
 not drift. The one exception is a landing pointing at a hand-added box that's
-being removed — that goes back to the IDF, since the drops would otherwise land
+being removed - that goes back to the IDF, since the drops would otherwise land
 on nothing.
 
 ## AV Flow
@@ -317,13 +317,13 @@ there:
 
 - A **DTP receiver** behind a display whose matrix output is twisted pair and
   whose socket is HDMI. That run is two cables and a box, and a drawing that
-  joins them directly is drawing a cable that can't be bought — and an estimate
+  joins them directly is drawing a cable that can't be bought - and an estimate
   taken off it is missing a $600 box per display.
 - A **DTP transmitter** beside a camera on a DTP input, which is the same fact
   read the other way round.
 - The **expansion bus** between a switcher with a DSP in it and the DMP racked
   beside it, rather than an analog lead into a socket nobody patches.
-- The **USB chain** into a USB switcher — see below.
+- The **USB chain** into a USB switcher - see below.
 - **Power leads** from the controller, worked out from the outlet names you
   typed on the System tab. Outlet 1 says "PC", so it goes to the PC.
 
@@ -334,15 +334,15 @@ in this list is compiled in.
 
 A huddle space has no matrix: one panel with a couple of things plugged into
 the back of it, which is what `dev_source_control: Display` says. There the
-`input_` keys are not matrix ties — they're sockets on the display — so the
+`input_` keys are not matrix ties - they're sockets on the display - so the
 display stands in for the switcher and every source is drawn onto it.
 
 Write the value the way it's printed on the panel. `input_pc: "HDMI 1"`,
-`input_wireless: "HDMI 2"`, or just `"1"` and `"2"` — all of them resolve, and
+`input_wireless: "HDMI 2"`, or just `"1"` and `"2"` - all of them resolve, and
 so does `"HDBaseT"`. The kind and the number both have to match: `HDMI 2` never
 lands on `HDMI 1`, and never on the DisplayPort socket beside it. A socket the
 panel doesn't have is reported rather than guessed at, and a socket that
-already has a lead on it — the meeting bar, usually — is left alone and the
+already has a lead on it - the meeting bar, usually - is left alone and the
 disagreement reported.
 
 The `output_` keys mean nothing in such a room: the run stops at the panel, so
@@ -351,7 +351,7 @@ a box that can't answer them.
 
 ### The USB switcher
 
-Nothing in the config says what plugs into a USB switcher — `dev_usb_switchers`
+Nothing in the config says what plugs into a USB switcher - `dev_usb_switchers`
 is a count, and there's no input number for a USB lead anywhere in the file. So
 the drawing used to show a Toggle with nothing plugged into it, and the
 conferencing path stopped at the DSP.
@@ -360,8 +360,8 @@ It's now drawn from the way these rooms are actually wired:
 
 | Connector | What lands on it |
 |---|---|
-| USB DEVICE 1 | the DSP's USB output — the microphone mix |
-| USB DEVICE 2 | the AV Bridge's USB output — the room's picture |
+| USB DEVICE 1 | the DSP's USB output - the microphone mix |
+| USB DEVICE 2 | the AV Bridge's USB output - the room's picture |
 | USB DEVICE 3 | the document camera's USB output |
 | USB HOST 1 | the room PC |
 
@@ -375,14 +375,14 @@ table is four lines on the Flow Rules tab.
 
 - **Edit** mode lets you drag boxes, draw cables between ports, add bends to a
   run, and open any box to correct its connectors.
-- **Place all from config** adds every config device that isn't on the canvas —
+- **Place all from config** adds every config device that isn't on the canvas -
   including any you deleted earlier.
 - **Draw the routing from config** shows you what the config's numbers would
   draw, tie by tie, with a reason for anything that didn't resolve, before it
   draws it.
 - **Recreate from config** starts over: every box and every cable removed, then
   the room drawn again from the config and the current rules. It asks first, it
-  is one press of Undo, and it keeps the rack rails of devices that come back —
+  is one press of Undo, and it keeps the rack rails of devices that come back -
   re-reading the config is no reason to unrack the room.
 - **Room type presets** stamp a whole standard room onto the canvas, wiring and
   all, for the builds you do over and over.
@@ -391,14 +391,14 @@ table is four lines on the Flow Rules tab.
 
 Some ties can't be drawn, and the app would rather tell you than guess. Press
 *Draw the routing from config* and you get a line per tie: what the config said,
-what it resolved to, and — for the ones that didn't — why. Typical reasons:
+what it resolved to, and - for the ones that didn't - why. Typical reasons:
 
-- *"No input on the switcher is labelled 7"* — the number doesn't match any
+- *"No input on the switcher is labelled 7"* - the number doesn't match any
   connector on that model. Usually the catalog entry needs its connectors
   correcting.
-- *"output_proj_2 — this room has 1 display, so there is no PROJECTORDEVICE_2"*
-  — dead config left over from when the room was bigger.
-- *"Every input on the recorder that could take 2 is already fed"* — the box has
+- *"output_proj_2 - this room has 1 display, so there is no PROJECTORDEVICE_2"*
+  - dead config left over from when the room was bigger.
+- *"Every input on the recorder that could take 2 is already fed"* - the box has
   one socket and the config asks for two feeds.
 
 # Racks, plans, cabling and money
@@ -408,10 +408,10 @@ what it resolved to, and — for the ones that didn't — why. Typical reasons:
 Drag anything on the drawing into a frame and it takes the rails its catalog
 entry says it needs. The elevation shows front and rear, shades the rails a
 model wants left clear (the amp that vents upward, the drawer whose lid opens),
-and warns rather than refuses — the person in front of the frame knows things
+and warns rather than refuses - the person in front of the frame knows things
 the catalog doesn't.
 
-Rack hardware that isn't a device — vent plates, shelves, drawers, blanks — is
+Rack hardware that isn't a device - vent plates, shelves, drawers, blanks - is
 added from the parts list and counts on the estimate like anything else.
 
 ## Floor Plan
@@ -449,49 +449,49 @@ account for.
 
 Type it in the **Spares** box on the line itself rather than adding a second
 line. It's the same product at the same price, and splitting it out is how a
-quote ends up with two prices for one box — and how the spare gets left behind
+quote ends up with two prices for one box - and how the spare gets left behind
 when somebody swaps the model. The reports print the split ("3 drawn + 1
 spare") so the count never reads as a mistake.
 
 A line you added on this page already has an editable quantity of its own, so it
-has no spares box — two boxes meaning the same thing on one row is how a number
+has no spares box - two boxes meaning the same thing on one row is how a number
 gets typed into the wrong one.
 
 ### Editing a part without leaving the page
 
 A price rise, a part number somebody finally found, a rack height that was
-guessed — all of that gets noticed while looking at a quote. The **edit** button
+guessed - all of that gets noticed while looking at a quote. The **edit** button
 on a row that's priced from the catalog opens that entry, filled in, and saves
 it back to the catalog file, so the correction reaches every room that quotes the
 part rather than just this one. A row with no entry behind it still offers
-**add** instead. Connectors are left alone — those are edited on the **Catalog**
+**add** instead. Connectors are left alone - those are edited on the **Catalog**
 tab.
 
 ### Is it in the room config?
 
-The estimate is where a room gets specified — parts picked with quantities and
-a total — and the control side is usually built weeks later. A line that never
+The estimate is where a room gets specified - parts picked with quantities and
+a total - and the control side is usually built weeks later. A line that never
 becomes a device block is a box that gets ordered, delivered, racked, and then
 has nothing to drive it.
 
 So every equipment row carries a flag:
 
-- **orange flag** — quoted, and the room config has never heard of it. The flag
+- **orange flag** - quoted, and the room config has never heard of it. The flag
   is also the button: *Add to the room config* creates the device block for its
   family with this room's defaults and the driver that claims the model. A line
   typed here becomes boxes on the diagram first (one per unit), because a device
-  has to exist before it can have a block — so the cost line is replaced by the
+  has to exist before it can have a block - so the cost line is replaced by the
   drawn devices it was quoting.
-- **a tick** — it's in the config, and the tooltip names the block.
-- **a box icon** — marked as a **spare**: bought for the shelf on purpose, never
+- **a tick** - it's in the config, and the tooltip names the block.
+- **a box icon** - marked as a **spare**: bought for the shelf on purpose, never
   installed here at all. It stays on the quote and stops being flagged.
-- **a broken-link icon** — marked **not part of the room config**: it *is* in
+- **a broken-link icon** - marked **not part of the room config**: it *is* in
   the room, and the processor has no business talking to it. Available on a
   drawn box and on a line quoted here, because an owner-furnished display is
   usually quoted before anybody draws it.
   The building's network switch, a codec another department manages, an
-  owner-furnished display, a passive splitter. It stays exactly as it was —
-  drawn, selectable, cabled, racked and priced — and drops off every "missing
+  owner-furnished display, a passive splitter. It stays exactly as it was -
+  drawn, selectable, cabled, racked and priced - and drops off every "missing
   from the config" list: the flag here, the control-side prefill, and the
   missing-module report. The same checkbox is on the box's own editor on
   **Signal Flow**, next to *Not on the cost estimate*, and the box wears a small
@@ -502,7 +502,7 @@ has boxes whose honest answer to "why is this not in the config" is "it never
 will be", and a warning nobody can clear is a warning everybody learns to
 ignore.
 
-A hand-typed line with no catalog part behind it can't go in — there's nothing
+A hand-typed line with no catalog part behind it can't go in - there's nothing
 to build a device from. Add it to the catalog first with the library button on
 the same row.
 
@@ -513,7 +513,7 @@ exactly, then priced at nothing, because the catalog ships made-up leads for a
 handful of types while a real order is "a 25 ft HDMI and a 50 ft HDMI".
 
 The **price tag** button on a cabling row puts the shop's typical figure for
-that type and length on the base-cost card — `base_costs.json`, the same file
+that type and length on the base-cost card - `base_costs.json`, the same file
 the device figures live in, read by every room. Enter it once and every estimate
 prices that length off it. A price typed on the room still wins, and a line
 costed this way is marked *Base cost* and counts towards the estimate being a
@@ -524,22 +524,22 @@ length that hasn't got one of its own.
 
 ### Swapping a unit
 
-The wrong box usually gets noticed here — the total is what people look at — so
+The wrong box usually gets noticed here - the total is what people look at - so
 the fix is here too. The **replace** button on the right of an equipment row
 picks the new product out of the catalog and puts it everywhere the room
 records the old one:
 
 - **the cost line** reprices off the new catalog entry
-- **the signal flow** gets the new product under every box the line counts —
-  connectors, rack height, power and heat — and the runs already drawn move
+- **the signal flow** gets the new product under every box the line counts -
+  connectors, rack height, power and heat - and the runs already drawn move
   onto the matching connectors
 - **the cabling schematic and cable schedule** follow, because they're built
   from the flow rather than stored
-- **the control side** — the config block the box came from — gets the model
+- **the control side** - the config block the box came from - gets the model
   and the Python module that claims it
 - **the name**, where the name was the product: "Projector 1 - PowerLite L630U"
-  becomes "Projector 1 - PT-MZ682BU8". Only the model part moves — "Projector 1
-  - " is what the room calls that position, and the position hasn't changed —
+  becomes "Projector 1 - PT-MZ682BU8". Only the model part moves - "Projector 1
+  - " is what the room calls that position, and the position hasn't changed -
   and a name that never mentioned the model is left alone
 
 A line of quantity three swaps all three boxes and all three config blocks. Any
@@ -547,15 +547,15 @@ price you had typed against the old model is cleared, because a figure
 negotiated for one product isn't the price of another.
 
 **It works in both directions.** Picking a model on the **Devices** tab moves
-the same room: the drawn box becomes that product — connectors and all, where
-the AV catalog knows the model — the name follows, and the estimate reprices,
+the same room: the drawn box becomes that product - connectors and all, where
+the AV catalog knows the model - the name follows, and the estimate reprices,
 because the estimate counts the boxes on the diagram.
 
 It goes through silently when there's nothing to decide. It stops to ask when
 there is:
 
-- **no module claims the new model.** You can still go ahead — a part often
-  arrives before its driver does — but the module is cleared off the config
+- **no module claims the new model.** You can still go ahead - a part often
+  arrives before its driver does - but the module is cleared off the config
   block rather than left naming a driver for the old box, and the device shows
   a red banner on the **Devices** tab until somebody picks one. See *When the
   model and the driver don't match*.
@@ -564,7 +564,7 @@ there is:
   same two answers: keep the room's settings (the IP address and port are facts
   about the install) or apply the new module's defaults.
 
-Cancel means nothing happened — you're asked before the first write. A run the
+Cancel means nothing happened - you're asked before the first write. A run the
 new model has no connector for is removed rather than left pointing at nothing,
 and the message says how many, so you can draw them again on **Signal Flow**.
 
@@ -573,7 +573,7 @@ and the message says how many, so you can draw them again on **Signal Flow**.
 The Cost tab prices one room. The Project tab prices a **building**.
 
 A project is a list of rooms plus the vendors you buy from. It doesn't copy the
-rooms or take them over — they stay ordinary config files you open and edit
+rooms or take them over - they stay ordinary config files you open and edit
 exactly as before, and the same room can sit on two projects. Press **Refresh**
 after fixing a price in a room and the building total catches up.
 
@@ -581,7 +581,7 @@ after fixing a price in a room and the building total catches up.
 
 **New** starts a project; **Add rooms…** picks config files (several at once);
 **Add the open room** adds whatever you're working on. The tick beside a room
-decides whether it counts toward the total — untick it to price an alternate
+decides whether it counts toward the total - untick it to price an alternate
 without double-counting the building. Rooms can't be added twice, because a
 room listed twice doubles its cost and every one of its parts.
 
@@ -592,15 +592,15 @@ many rooms.
 ### The master parts list
 
 This is the reason the tab exists. Nine rooms with two transmitters each is
-eighteen transmitters — **one line**, not nine — and a vendor asked to quote one
+eighteen transmitters - **one line**, not nine - and a vendor asked to quote one
 line quotes better than one asked to quote nine rooms.
 
 Parts merge on part number where there is one, then on model, then on maker and
 description. Each line still says which rooms its units are for, so you can
 check a delivery or split a phase without unpicking the merge.
 
-Where two rooms hold different prices for the same part — one of them has a
-negotiated price typed on it — the line shows the **range** rather than picking
+Where two rooms hold different prices for the same part - one of them has a
+negotiated price typed on it - the line shows the **range** rather than picking
 one, and the extended total is what the rooms actually pay added up, not the
 quantity times either price.
 
@@ -610,8 +610,8 @@ Who sells you a part is a fact about the job, not about the part, so the tags
 live on the project.
 
 Give each vendor the **manufacturers** it quotes, the **categories** it sells,
-or both. A new project already has the usual split — everything Extron on the
-direct account, and cameras, screens, mounts and USB from a reseller — so most
+or both. A new project already has the usual split - everything Extron on the
+direct account, and cameras, screens, mounts and USB from a reseller - so most
 of the list tags itself the moment you add a room.
 
 Manufacturer rules win over category rules. That's what stops an Extron display
@@ -620,7 +620,7 @@ somewhere else, pick the vendor on that line: it's pinned, it beats the rules,
 and it stays pinned even if the room is re-drawn. Pick the vendor the rules
 already chose and the pin is simply removed.
 
-Anything nothing claims goes to **Untagged** — treat that as a to-do list. A
+Anything nothing claims goes to **Untagged** - treat that as a to-do list. A
 building isn't ready to go out for quotes while parts are sitting in it.
 
 ### Swapping a product everywhere at once
@@ -634,7 +634,7 @@ of the cables already drawn will carry across, how many have nowhere to go on
 the new box and will be **removed**, and whether the control blocks are about to
 lose their module. Nothing is written until you say so.
 
-Each room moves as a whole — the drawing and the control config together, so a
+Each room moves as a whole - the drawing and the control config together, so a
 room never ends up commissioning the old device off a drawing of the new one.
 The box keeps its position, its rack slot and everything about it that belongs
 to the room; what changes is what the product is. Names follow: "Projector 1 -
@@ -647,7 +647,7 @@ Two things worth knowing before you press it:
   the usual way; the others are written straight to their files. The preview is
   the safety net, so read it.
 - **The room you have open is not written.** It's changed in memory instead, so
-  the editor and the file can't disagree — save that room afterwards to keep it.
+  the editor and the file can't disagree - save that room afterwards to keep it.
 
 If a room's file has moved or can't be read, it's named in the preview and left
 on the old product rather than silently skipped.
@@ -655,7 +655,7 @@ on the old product rather than silently skipped.
 ### Devices that nothing can drive
 
 The same check the AV and Cost reports do for one room runs across the building.
-If no Python module claims a device's model, it says so — and swapping onto a
+If no Python module claims a device's model, it says so - and swapping onto a
 product whose driver doesn't exist yet is the most common way to create one,
 which is why the two live next to each other.
 
@@ -665,21 +665,21 @@ normal. It just makes sure nobody finds out on site.
 You'll see it in three places:
 
 - on the master parts list, on the line itself, naming the rooms that still need
-  doing — with a filter chip to show only those lines
+  doing - with a filter chip to show only those lines
 - in the project workbook, as a **Control Gaps** sheet listing every one of them
   by room, with a short "what needs doing" summary that splits them into pick the
   module / write the driver / choose a model / draw the device
 - in the warning count at the top of the tab and in the workbook's "check before
   this goes out" block
 
-Cable and rack hardware are never flagged — they were never going to have a
+Cable and rack hardware are never flagged - they were never going to have a
 driver. Neither is anything you've marked as never controlled on the Catalog tab.
 
 #### "Never needs one"
 
 Two different things land on that list. One is a driver nobody has written yet,
 which somebody will get to. The other is a thing that simply has no control
-interface — a passive splitter, a plate, a USB capture stick — and no amount of
+interface - a passive splitter, a plate, a USB capture stick - and no amount of
 work will ever change that.
 
 Leave the second kind on the list and it just grows, until the list is mostly
@@ -687,7 +687,7 @@ noise and the real ones get skipped. So you can retire it: press **Never needs
 one** on the row, right next to where it's complaining, and confirm.
 
 That's saved to the **catalog**, not to this project. Every room in every job
-that draws one stops asking about it from then on — which is what you want,
+that draws one stops asking about it from then on - which is what you want,
 because it's a fact about the product.
 
 The same choice is on the Cost tab, in the little flag menu on the row: **"This
@@ -695,24 +695,24 @@ product never needs a module"**.
 
 Be careful which of the two you want, because they look alike and aren't:
 
-- **"Not part of the room config"** — this box, in this room, isn't yours to
+- **"Not part of the room config"** - this box, in this room, isn't yours to
   drive. An owner-furnished display, the building's switch, another
   department's codec. The same product next door might well be driven.
-- **"This product never needs a module"** — nothing can drive one of these,
+- **"This product never needs a module"** - nothing can drive one of these,
   anywhere, ever.
 
 The product has to be in the catalog already. If it isn't, use **Add to
-catalog** first — the app won't invent an entry from a quote line, because one
+catalog** first - the app won't invent an entry from a quote line, because one
 built that way would have a name and nothing else and would get in the way of
 the real entry later.
 
 Changed your mind? Untick **Never in the room config** on the Catalog tab. (The
 Project tab's button only goes one way, because once a product is marked it
-stops appearing on that list — there'd be no row left to press.)
+stops appearing on that list - there'd be no row left to press.)
 
 ### Working through the rooms
 
-Once the project has rooms, there's a **room picker in the title bar** — on
+Once the project has rooms, there's a **room picker in the title bar** - on
 every tab, not just this one. Pick a room, or use the arrows to step through
 them, and the editor loads it. Everything: the config, the drawing, the racks,
 the estimate. Then go to whichever tab you want and you're looking at that
@@ -724,7 +724,7 @@ without losing the other. Sitting on Cost and stepping through eight rooms is a
 perfectly ordinary thing to want to do.
 
 **Your edits show up in the project straight away.** Type a price on the Cost
-tab and the building total moves — you don't have to save first and press
+tab and the building total moves - you don't have to save first and press
 Refresh. The project reads the room you're editing out of memory, and every
 other room off disk.
 
@@ -732,7 +732,7 @@ The catch, and the app says it in two places: what you've changed isn't in the
 room's *file* yet. The Rooms list marks the open room and says when it's being
 counted with unsaved changes, and a **Save room** button appears in the title bar
 whenever there's something to save. That button writes straight back over the
-room's own file — no dialog, no picking a folder.
+room's own file - no dialog, no picking a folder.
 
 Switch rooms with unsaved work and you'll be asked whether to save first, because
 switching reads the next room off disk and anything not saved would go.
@@ -745,7 +745,7 @@ each room's share, the master parts list, a tab per vendor and a tab per room.
 **Quote requests** writes one spreadsheet **per vendor** into a folder you pick.
 That's the file you email. It has that vendor's parts, the rooms they're for,
 your own estimate to compare a returned quote against, and empty columns for
-their price and lead time — and nothing else. No labor, no tax, no project
+their price and lead time - and nothing else. No labor, no tax, no project
 total, no other vendor's parts. Send the whole workbook instead and you've sent
 a supplier your margins and a competitor's pricing.
 
@@ -756,7 +756,7 @@ what sockets it has, how many rack units, what it draws, what it costs.
 
 **Searching** ignores spaces, dashes and case on both sides, so "dtpcross108"
 finds "DTP CrossPoint 108". Type more than one word and every word has to land
-somewhere on the entry — the model, the maker, the part number or the category —
+somewhere on the entry - the model, the maker, the part number or the category -
 in any order: "Epson PowerLite" finds the PowerLite projectors, even though no
 single field holds those two words next to each other. Adding words still
 narrows the list.
@@ -776,15 +776,15 @@ checkbox.
 every report, the workbook, and the config itself. It walks the drawing tabs to
 capture them, then puts you back where you started.
 
-**The room workbook** is one `.xlsx` with a sheet per document — devices,
-control, AV, racks, cabling, cost — for handing to somebody who doesn't have the
+**The room workbook** is one `.xlsx` with a sheet per document - devices,
+control, AV, racks, cabling, cost - for handing to somebody who doesn't have the
 app.
 
 **Per-tab exports** are on every tab's own menu: this page's tables as `.xlsx`,
 as plain text, or straight to the clipboard.
 
 **Screenshot & annotate** grabs the current tab, lets you draw on it, and copies
-or saves it — for the email that starts "the third output is wrong".
+or saves it - for the email that starts "the third output is wrong".
 
 
 # The Flow Rules builder
@@ -812,7 +812,7 @@ Every one of those used to be compiled into the program. Now they're rules in
 `av_flow_rules.json`, and the **Flow Rules** tab is where you read and change
 them.
 
-> With no rule file at all, the app uses its built-in rules — the same ones that
+> With no rule file at all, the app uses its built-in rules - the same ones that
 > used to be in the code. Nothing you have to do; the tab is there for when the
 > defaults are wrong for a room, a building or a whole campus.
 
@@ -825,7 +825,7 @@ above and edit and delete buttons on each card.
 Along the top: **Save** writes the file, **Reload from file** throws your edits
 away and re-reads it, and **Reset to built-in** puts back exactly what the app
 ships with. Next to the title you'll see either the file the rules came from or
-*"Edited — not saved yet"*.
+*"Edited - not saved yet"*.
 
 Edits take effect immediately, before you save. The file on disk is only touched
 by Save, so you can try a rule, look at a room, and decide.
@@ -841,7 +841,7 @@ syntax does that everywhere:
 
 | You type | It means |
 |---|---|
-| `DSPDEVICE_` | the family — the first numbered block of it that fits |
+| `DSPDEVICE_` | the family - the first numbered block of it that fits |
 | `RECORDERDEVICE_1` | exactly that config block |
 | `input_doc_cam` | the box the source rules place for that config key |
 | `AV Bridge 2x1` | a catalog model, matched against what's on the canvas |
@@ -849,7 +849,7 @@ syntax does that everywhere:
 
 The family form is the one you want most of the time. "The DSP" means the DSP
 this room has, whether it's block 1 or block 3, and the app skips blocks that
-can't do the job — a DSP with no USB socket isn't the DSP the USB rule means.
+can't do the job - a DSP with no USB socket isn't the DSP the USB rule means.
 
 ## The families, one by one
 
@@ -861,7 +861,7 @@ it's on; this rule says what the box actually is.
 
 Each one carries a name for the drawing, a catalog model (where its connectors,
 price and rack height come from), where in the room it lives, and whether the
-room is paying for it — the presenter's own laptop belongs on the drawing but
+room is paying for it - the presenter's own laptop belongs on the drawing but
 not on the quote.
 
 ### Source devices
@@ -879,7 +879,7 @@ finding rather than a mystery gap.
 ### Destination boxes
 
 Same idea as source boxes, at the other end: a confidence monitor, the
-assisted-listening transmitter. These carry one extra setting — which connectors
+assisted-listening transmitter. These carry one extra setting - which connectors
 the lead may land on. Assisted listening is line audio, and looking for a video
 socket on it finds nothing, which is why the rule says so rather than the
 program special-casing the key by name.
@@ -907,7 +907,7 @@ The shipped rules are the two directions of the same fact:
 | `hdbaset` | `hdmi` | an input | DTP HDMI 4K 230 Tx |
 
 Before it invents anything, the app checks whether the far end takes twisted
-pair itself — a projector with an HDBaseT socket needs no receiver, and putting
+pair itself - a projector with an HDBaseT socket needs no receiver, and putting
 one in quotes a box the room doesn't need.
 
 ### USB switchers
@@ -930,7 +930,7 @@ HOST ports         input_pc
 
 ### Expansion bus
 
-The words that identify an expansion-bus connector on a box — `EXP` and
+The words that identify an expansion-bus connector on a box - `EXP` and
 `EXPANSION` as shipped. Matched as whole words, so `EXP` doesn't also match
 `EXPO`. If a manufacturer spells theirs differently, add the word.
 
@@ -939,7 +939,7 @@ The words that identify an expansion-bus connector on a box — `EXP` and
 Outlet labels that name a device outright, whatever else on the canvas answers
 to the word. "Switch" is the one that needs saying: in a room built out of
 Extron gear it means the matrix, but scored on the word alone it ties with the
-USB switcher and every "Switcher 2" — and a tie draws nothing at all.
+USB switcher and every "Switcher 2" - and a tie draws nothing at all.
 
 Matched on the whole label, so this settles "Switch" and leaves "USB Switch"
 alone.
@@ -957,14 +957,14 @@ Say your template gained `input_cable_box`.
 4. Save the rule, then **Recreate from config** on the AV Flow tab.
 
 The box is placed and cabled to whatever input the config gives it. If the
-catalog doesn't carry that model yet, the card tells you so — the box still
+catalog doesn't carry that model yet, the card tells you so - the box still
 draws, with the generic family connectors, and costs nothing on the estimate
 until you add it.
 
 ### We use a different receiver
 
 Open **Extenders**, edit the receiver rule, and change the model to the one you
-actually buy — `DTP HDMI 4K 330 Rx` for the long runs, say. Every room you
+actually buy - `DTP HDMI 4K 330 Rx` for the long runs, say. Every room you
 redraw from then on puts that box in, on the drawing and on the quote.
 
 ### Our Toggles are wired the other way round
@@ -975,7 +975,7 @@ That's the whole change.
 
 ### This building's capture box is a MediaPort
 
-Nothing to do — the shipped capture rule already tries a MediaPort, then a
+Nothing to do - the shipped capture rule already tries a MediaPort, then a
 recorder, then a USB switcher. If you have a fourth kind of box, add it to the
 end of the list with a `|`.
 
@@ -988,8 +988,8 @@ instead of being reported as a tie.
 ## When a rule doesn't fire
 
 - **The card shows a red line about the catalog.** The model named in the rule
-  isn't in `av_devices.json`. Not fatal — the box draws with the generic
-  connectors for its family — but it's nearly always a typo, and it will cost
+  isn't in `av_devices.json`. Not fatal - the box draws with the generic
+  connectors for its family - but it's nearly always a typo, and it will cost
   nothing on the estimate.
 - **Nothing is drawn for a key.** Check the config actually has that key with a
   value. A blank or `none` means "there is no cable", and that's respected.
@@ -1006,9 +1006,9 @@ instead of being reported as a tie.
 
 ## What the schema decides
 
-Open the **Devices** or **System** tab and every field you see — its label, the
+Open the **Devices** or **System** tab and every field you see - its label, the
 description behind the info button, whether it's a switch or a dropdown, what
-that dropdown offers, whether it appears at all — comes from `ui_schema.json`.
+that dropdown offers, whether it appears at all - comes from `ui_schema.json`.
 So does the list of device families the Wizard manages, and what a new or newly
 loaded room is given when it's missing something.
 
@@ -1020,14 +1020,14 @@ open to see which keys you'd covered.
 
 **Coverage** is that second window, built in.
 
-Pick a block of your default config file — `SYSTEM_SETUP`, `PROJECTORDEVICE_1`,
-whatever the template has — and every key in it is listed against the schema
+Pick a block of your default config file - `SYSTEM_SETUP`, `PROJECTORDEVICE_1`,
+whatever the template has - and every key in it is listed against the schema
 entry that describes it, with a count at the top: *"38 of 120 keys described"*.
 Turn on **Not described yet** and you're looking at the list of fields that
 currently show up as a raw key with a plain text box.
 
 Press **Describe** beside one and the field editor opens with the key already
-filled in and its type guessed from what the file holds — a `true` becomes a
+filled in and its type guessed from what the file holds - a `true` becomes a
 switch, a number becomes a numeric field. Give it a label and a description,
 press Save, and go and look at the System tab: it's already there.
 
@@ -1046,7 +1046,7 @@ The field editor holds everything a schema entry can say:
 | **Description** | The text behind the info button. |
 | **Helper line** | Small grey text under the field. |
 | **Options** | For a dropdown: one per line, `value \| label`. The label is optional. |
-| **Keys this one field writes** | For a combo — one dropdown that sets several keys at once. |
+| **Keys this one field writes** | For a combo - one dropdown that sets several keys at once. |
 | **Command in the module** | For `module_states`: the entry in the driver's `self.Commands` whose states fill the dropdown. |
 | **Hide when** | Conditions that make the key irrelevant. Any one true and the field isn't drawn, isn't added to new devices, and isn't offered by Check Defaults. |
 | **Label when** | A different label under a condition, first match wins. |
@@ -1058,7 +1058,7 @@ Conditions are written the same way everywhere: `key=value`, `key!=value`, or
 ## The other sections
 
 **Fields** is the plain list of everything the document describes globally, with
-a search box — the same editor, reached from the other direction.
+a search box - the same editor, reached from the other direction.
 
 **Device fields** are entries scoped to one family or section, keyed by a
 pattern like `PROJECTORDEVICE_*`. A scoped entry wins over a global one on those
@@ -1081,14 +1081,14 @@ audits and a `"0"` default with no code change at all.
 - `SYSTEM_SETUP` defaults, added to a loaded room that's missing them
 - whole **section blocks** a room is given when it has none (a metrics block,
   say)
-- **device defaults**, merged into every new block of a family — projectors get
+- **device defaults**, merged into every new block of a family - projectors get
   their `input` and `relay_host`, DSPs get their audio group numbers
 
 Each is edited as `key = value` lines, one per line, with JSON values so `true`,
 `3` and `"text"` all keep their type.
 
 **Consistency** is the cross-check: *when this is true, that must be true too*.
-A violation never blocks an edit — it paints the red mismatch outline on the
+A violation never blocks an edit - it paints the red mismatch outline on the
 fields the rule names, with your message as the red helper line. `{key}` in the
 message is replaced with that key's live value.
 
@@ -1098,13 +1098,13 @@ changes nothing.
 
 ## Saving, and what's kept
 
-Save writes the document that was **read**, with your edits in it — not a
+Save writes the document that was **read**, with your edits in it - not a
 regenerated approximation. Two consequences worth having:
 
 - the `__comment` entries the file uses to explain itself survive
 - so does anything a later build understands and this one doesn't
 
-If nothing has ever been read — you're running on the app's built-in schema —
+If nothing has ever been read - you're running on the app's built-in schema -
 Save refuses, rather than replacing a schema somebody has with an empty
 document. Point App Config at a `ui_schema.json`, or start one from Raw JSON.
 
@@ -1131,7 +1131,7 @@ Ceiling | Ceiling (voicelift and mute)
 
 A serial port means nothing on a device connected over the network. Put
 `com_type=Network` in **Hide when** and it stops being drawn, stops being added
-to new devices, and stops being offered by Check Defaults — and the keys that
+to new devices, and stops being offered by Check Defaults - and the keys that
 just became irrelevant are removed when you change the gating value.
 
 ### Add a whole new device family
@@ -1146,7 +1146,7 @@ Give the family its fields under **Device fields** with the pattern
 # Reference: ui_schema.json
 
 Everything here can be done on the **Schema** tab. This chapter is for when you
-would rather look at the file — reviewing a change, or diffing two copies.
+would rather look at the file - reviewing a change, or diffing two copies.
 
 ## The shape of the file
 
@@ -1207,7 +1207,7 @@ optional, and a part you leave out keeps the app's built-in behaviour.
 | `bool` | An on/off switch. |
 | `dropdown` | A fixed list of options. |
 | `combo` | One dropdown that writes several keys together. |
-| `hidden` | Never drawn — for keys a combo or the Wizard manages. |
+| `hidden` | Never drawn - for keys a combo or the Wizard manages. |
 | `room_sources` | A dropdown of the sources *this* room has, read off its `input_*` keys. |
 | `module_states` | A dropdown filled from the device's own Python module. |
 
@@ -1270,7 +1270,7 @@ the Wizard offers (8 by default), `keepAlivePreference` is the command names
 tried in order when a new device picks a keep-alive off its module, `template`
 is a whole block to use for new devices when the config has no block 1 to copy,
 and `systemKeys` are the `SYSTEM_SETUP` keys that mean nothing without this
-hardware — setting the family's count to 0 removes them.
+hardware - setting the family's count to 0 removes them.
 
 > Defining `device_types` at all replaces the built-in list. Keep every family
 > you want, in the order you want them in the Wizard. The Schema tab does this
@@ -1278,12 +1278,12 @@ hardware — setting the family's count to 0 removes them.
 
 ## Defaults
 
-- `system_defaults` — `SYSTEM_SETUP` values injected into a loaded room that is
+- `system_defaults` - `SYSTEM_SETUP` values injected into a loaded room that is
   missing them. Defining any replaces the built-in set. The `dev_` counts are
   not listed here; they always come from `device_types` so the two can't
   disagree.
-- `section_defaults` — whole blocks a room is given when it has none.
-- `device_defaults` — merged into every newly created device block. Existing
+- `section_defaults` - whole blocks a room is given when it has none.
+- `device_defaults` - merged into every newly created device block. Existing
   values are never overwritten, and an exact section name beats a wildcard.
 
 ## Consistency rules
@@ -1363,7 +1363,7 @@ out keeps the app's built-in rules; a family it defines replaces them outright.
 | Field | Means |
 |---|---|
 | `label` | What the box is called on the drawing. |
-| `model` | Catalog model — connectors, rack units, price. |
+| `model` | Catalog model - connectors, rack units, price. |
 | `zone` | `lectern`, `rack` or `wall`. |
 | `excludeFromCost` | Draw it, don't quote it. |
 | `signals` | Which connectors a lead may land on: `video`, `lineAudio`, `speaker`, `usb`. |
@@ -1384,25 +1384,25 @@ did.
 
 ## The order it works in
 
-Each step depends on the ones before it — moves target already-renamed sections,
+Each step depends on the ones before it - moves target already-renamed sections,
 companions see converted key names:
 
-1. `sections` — rename top-level blocks
-2. `properties` — explicit per-property renames
-3. `auto_case_normalization` — automatic case and underscore fixes
-4. `value_map` — normalize stored values
-5. `moves` — relocate a property into another section
-6. `remove_unused_devices` — drop legacy blocks not in use
-7. `escape_carriage_returns` — turn control characters into the file's `\r`
+1. `sections` - rename top-level blocks
+2. `properties` - explicit per-property renames
+3. `auto_case_normalization` - automatic case and underscore fixes
+4. `value_map` - normalize stored values
+5. `moves` - relocate a property into another section
+6. `remove_unused_devices` - drop legacy blocks not in use
+7. `escape_carriage_returns` - turn control characters into the file's `\r`
    marker
-8. `device_labels` / `device_templates` — friendly names, buttons, labels,
+8. `device_labels` / `device_templates` - friendly names, buttons, labels,
    modules
-9. `companion_keys` — create partner keys
-10. `defaults` — inject anything still missing
+9. `companion_keys` - create partner keys
+10. `defaults` - inject anything still missing
 
 ## The rule groups
 
-**sections** — a list of `{ match, rename_to }`, where `match` is a whole-name
+**sections** - a list of `{ match, rename_to }`, where `match` is a whole-name
 regex and `$1`..`$9` insert capture groups. First match wins.
 
 ```
@@ -1413,15 +1413,15 @@ regex and `$1`..`$9` insert capture groups. First match wins.
 ]
 ```
 
-**properties** — a flat old-name to new-name map applied inside every section.
+**properties** - a flat old-name to new-name map applied inside every section.
 Always wins over automatic normalization.
 
-**auto_case_normalization** — when true, a legacy property whose lowercased,
+**auto_case_normalization** - when true, a legacy property whose lowercased,
 underscore-stripped form matches a known current key is renamed automatically,
 so `Output_Proj1`, `GVE_BLDG` and `COMTYPE` need no entries of their own. Only
 spellings that differ structurally need one.
 
-**value_map** — keyed by the *new* property name. Mapped values keep their JSON
+**value_map** - keyed by the *new* property name. Mapped values keep their JSON
 type, so a string can become a boolean.
 
 ```
@@ -1431,31 +1431,31 @@ type, so a string can become a boolean.
 }
 ```
 
-**moves** — relocate a property into another section, capture groups usable in
+**moves** - relocate a property into another section, capture groups usable in
 the target name. Legacy files kept per-device GVE IDs in `SYSTEM`; this is how
 they reach each device.
 
-**remove_unused_devices** + **device_counts** — legacy blocks whose family count
+**remove_unused_devices** + **device_counts** - legacy blocks whose family count
 says they aren't in use are removed rather than converted. Only blocks that were
 *renamed* in step 1 are eligible, so a current-style template that deliberately
 carries every block keeps them all.
 
-**escape_carriage_returns** — real control characters inside strings become the
+**escape_carriage_returns** - real control characters inside strings become the
 two-character marker the processor reads, so an outlet name arrives as
 `"Doc\\rCam"` and breaks over two lines on the panel button.
 
-**companion_keys** — guarantee a partner key exists for everything matching a
+**companion_keys** - guarantee a partner key exists for everything matching a
 pattern, with the number carried over. Every `power1_outlet_N` gets a
 `power1_outlet_N_action`, only for outlets that exist, and an existing value is
 never overwritten.
 
-**device_labels** / **device_templates** — friendly fill-in when converting:
+**device_labels** / **device_templates** - friendly fill-in when converting:
 `name` built as "Label - model", numbered only when the family has more than one
 unit; `btn_name` and `lbl_name` carried over by device number; `module` and
 `keep_alive_trigger` carried over when the legacy model matches a template
 block.
 
-**defaults** — after everything else, any listed key still missing is injected.
+**defaults** - after everything else, any listed key still missing is injected.
 `{n}` in a value becomes the device number.
 
 # When something looks wrong
@@ -1471,7 +1471,7 @@ block.
 | An outlet's mains lead isn't drawn | Two boxes answered to the name equally well, so nothing was drawn. Add an entry under **Flow Rules → Outlet names**. |
 | A box on the drawing that costs nothing | Its model isn't in the catalog. The Cost tab counts these for you. |
 | A drawing that no longer matches the room | **Recreate from config**, on either the AV Flow or the Schematic tab. |
-| The wrong room in the SFTP dialog | The active deployment target clears when you open a different config — pick the room again. |
+| The wrong room in the SFTP dialog | The active deployment target clears when you open a different config - pick the room again. |
 
 # Which file does what
 

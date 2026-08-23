@@ -221,7 +221,7 @@ List<DeviceFieldDiff> fieldDiffs(
     out.add(
       DeviceFieldDiff(
         field: field,
-        mine: a.trim().isEmpty ? '—' : a.trim(),
+        mine: a.trim().isEmpty ? '-' : a.trim(),
         theirs: b.trim(),
         mineIsBlank: a.trim().isEmpty,
       ),
@@ -231,7 +231,7 @@ List<DeviceFieldDiff> fieldDiffs(
   void number(DeviceField field, num a, num b, {int decimals = 0}) {
     if (b <= 0 || a == b) return;
     String show(num v) =>
-        v <= 0 ? '—' : (decimals == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(decimals));
+        v <= 0 ? '-' : (decimals == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(decimals));
     out.add(
       DeviceFieldDiff(
         field: field,
@@ -248,7 +248,7 @@ List<DeviceFieldDiff> fieldDiffs(
   number(DeviceField.rackUnits, mine.rackUnits, theirs.rackUnits);
   String clearance(AvDeviceTemplate t) =>
       t.clearanceAboveU == 0 && t.clearanceBelowU == 0
-          ? '—'
+          ? '-'
           : '${t.clearanceAboveU} above / ${t.clearanceBelowU} below';
   if ((theirs.clearanceAboveU > 0 || theirs.clearanceBelowU > 0) &&
       (mine.clearanceAboveU != theirs.clearanceAboveU ||

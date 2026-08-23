@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -252,6 +253,113 @@ void main() {
       await tester.tap(find.text('Core Components'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Spared ('), findsNothing);
+    });
+  });
+
+  group('what is flagged about a room', () {
+    /// A room whose only device has no price anywhere, so the row has
+    /// something to flag.
+    AppStateProvider withFlags() {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.avDeviceLibrary = AvDeviceLibrary.empty();
+      p.newProject(name: 'Bessey refresh', building: 'BSS');
+      p.addRoomToProject(writeRoom('a', 'Bessey 101', [
+        device('d1', 'Lectern TX', 'NO SUCH MODEL'),
+      ]));
+      return p;
+    }
+
+    testWidgets('the icon is big enough to read as a control',
+        (tester) async {
+      final p = withFlags();
+      await pump(tester, p);
+
+      final id = p.project.rooms.first.id;
+      final icon = find.descendant(
+        of: find.byKey(ValueKey('room_row_flags_$id')),
+        matching: find.byIcon(Icons.info_outline),
+      );
+      expect(icon, findsOneWidget);
+      // It used to be 18 in the quiet ink beside four buttons, where it read
+      // as decoration rather than as the one thing on the row that is not
+      // always there.
+      expect(tester.widget<Icon>(icon).size, 24);
+    });
+
+    testWidgets('pressing it copies what is flagged, named for the room',
+        (tester) async {
+      String? copied;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+
+      final p = withFlags();
+      await pump(tester, p);
+      await tester.tap(
+        find.byKey(ValueKey('room_row_flags_${p.project.rooms.first.id}')),
+      );
+      await tester.pump();
+
+      // The room leads: a bare "1 line(s) have no price" pasted into a message
+      // is a fact with no subject.
+      expect(copied, isNotNull);
+      expect(copied, contains('Bessey 101'));
+      expect(copied, contains('no price'));
+      expect(find.textContaining('Copied what is flagged'), findsOneWidget);
+
+      // Let the confirmation bar finish rather than leaving its timer running.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    });
+  });
+
+  group('vendors', () {
+    testWidgets('a new vendor lands at the top of the list', (tester) async {
+      final p = withProject();
+      final wasFirst = p.project.vendors.first.id;
+      await pump(tester, p);
+      await tester.tap(find.byIcon(Icons.local_shipping).first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add vendor'));
+      await tester.pumpAndSettle();
+
+      // Order decides which vendor claims a part, and the reason somebody
+      // presses Add is nearly always that this one should win. It also has to
+      // be somewhere they can see it.
+      expect(p.project.vendors.first.name, 'New vendor');
+      expect(p.project.vendors[1].id, wasFirst);
+    });
+
+    testWidgets('the add box survives adding a rule and keeps the focus',
+        (tester) async {
+      final p = withProject();
+      await pump(tester, p);
+      await tester.tap(find.byIcon(Icons.local_shipping).first);
+      await tester.pumpAndSettle();
+
+      final box = find.byKey(const ValueKey('rule_add_Categories')).first;
+      expect(box, findsOneWidget);
+      final field = find.descendant(of: box, matching: find.byType(TextField));
+
+      await tester.tap(field);
+      await tester.enterText(field, 'Ceiling speakers');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      // Adding rules is a run, not a single act: the box has to survive its
+      // own success, empty and still focused, ready for the next one.
+      expect(find.text('Ceiling speakers'), findsWidgets);
+      expect(tester.widget<TextField>(field).controller?.text, '');
+      expect(tester.widget<TextField>(field).focusNode?.hasFocus, isTrue);
     });
   });
 
@@ -530,7 +638,7 @@ void main() {
       ]) {
         await pump(tester, p, width: width);
         await tester.tap(
-          width < 920
+          width < kProjectHeaderCompactWidth
               ? find.byIcon(pane.icon).first
               : find.text(pane.label).first,
         );
@@ -556,23 +664,30 @@ void main() {
       expect(find.text('Quote requests'), findsOneWidget);
       expect(find.text('Where it stands'), findsOneWidget);
       expect(find.text('Core Components'), findsOneWidget);
-      // The three identity fields sit side by side, so the two short ones are
-      // still their own fixed width.
+      // All four identity fields sit side by side.
       final name = tester.getRect(find.byType(TextField).first);
-      final building = tester.getRect(find.byType(TextField).at(1));
-      expect(building.left, greaterThan(name.left));
+      final stakeholder = tester.getRect(find.byType(TextField).at(1));
+      final building = tester.getRect(find.byType(TextField).at(2));
+      expect(stakeholder.left, greaterThan(name.left));
+      expect(building.left, greaterThan(stakeholder.left));
       expect(building.top, name.top, reason: 'same line');
+      // The name takes the larger share of what is left over: it is the
+      // longest of the four and what every other screen refers back to.
+      expect(name.width, greaterThan(stakeholder.width));
     });
 
     testWidgets('a narrow window stacks the fields and keeps every button on '
         'screen', (tester) async {
       await pump(tester, withProject(), width: 800);
 
-      // The codes drop to a line of their own, leaving the name a field wide
-      // enough to read a project name in.
+      // The codes drop to a line of their own, leaving the two prose fields
+      // wide enough to read a project name and a department in.
       final name = tester.getRect(find.byType(TextField).first);
-      final building = tester.getRect(find.byType(TextField).at(1));
-      expect(building.top, greaterThan(name.top), reason: 'own line');
+      final stakeholder = tester.getRect(find.byType(TextField).at(1));
+      final building = tester.getRect(find.byType(TextField).at(2));
+      expect(stakeholder.top, greaterThan(name.top), reason: 'own line');
+      expect(building.top, greaterThan(stakeholder.top), reason: 'own line');
+      expect(name.width, stakeholder.width, reason: 'both full width');
 
       // Every action is still there, as an icon, and still inside the window.
       for (final icon in [
@@ -596,6 +711,20 @@ void main() {
       // The labels are gone, which is the whole point — they are what did not
       // fit.
       expect(find.text('Quote requests'), findsNothing);
+    });
+
+    testWidgets('who the job is for is a field on the header', (tester) async {
+      final p = withProject();
+      await pump(tester, p, width: 1600);
+
+      final field = find.widgetWithText(TextField, 'Stakeholder');
+      expect(field, findsOneWidget);
+
+      await tester.enterText(field, 'Physics department');
+      await tester.pump();
+      // It goes out on the workbook's first sheet and on every quote request,
+      // and until it was here the only way to set it was through the API.
+      expect(p.project.stakeholder, 'Physics department');
     });
 
     testWidgets('the collapsed buttons still do their job', (tester) async {

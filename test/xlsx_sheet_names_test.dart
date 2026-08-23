@@ -15,7 +15,7 @@ void main() {
     });
 
     test('stops at 31 characters', () {
-      final long = xlsxSheetName('Reflected ceiling plan — north wing runs');
+      final long = xlsxSheetName('Reflected ceiling plan - north wing runs');
       expect(long.length, 31);
     });
   });
@@ -28,7 +28,7 @@ void main() {
       expect(uniqueXlsxSheetName('All runs', taken), 'All runs (3)');
     });
 
-    test('case does not make two sheets — Excel says it does not', () {
+    test('case does not make two sheets - Excel says it does not', () {
       final taken = <String>{};
       expect(uniqueXlsxSheetName('Level 1', taken), 'Level 1');
       expect(uniqueXlsxSheetName('level 1', taken), 'level 1 (2)');
@@ -36,7 +36,7 @@ void main() {
 
     test('the number fits inside the 31 characters rather than past them', () {
       final taken = <String>{};
-      const name = 'Reflected ceiling plan — all runs';
+      const name = 'Reflected ceiling plan - all runs';
       final first = uniqueXlsxSheetName(name, taken);
       final second = uniqueXlsxSheetName(name, taken);
       expect(first.length, 31);

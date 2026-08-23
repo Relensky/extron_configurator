@@ -182,7 +182,7 @@ List<ReportSection> cablingSections(AvFlowModel model) {
       ],
     ),
     (
-      title: 'Cabling Drawing — Boxes',
+      title: 'Cabling Drawing - Boxes',
       header: ['Box', 'Kind', 'Runs on it', 'Notes'],
       rows: [
         for (final b in drawing.boxes)
@@ -252,7 +252,7 @@ ReportSection _roomSummary(AppStateProvider provider, AvFlowModel model) {
           model.nodes.any((n) => n.locationId.isEmpty))
         [
           'Devices with no location',
-          '${model.nodes.where((n) => n.locationId.isEmpty).length} — the '
+          '${model.nodes.where((n) => n.locationId.isEmpty).length} - the '
               'per-location counts below leave these out',
         ],
       if (model.screenSwitches.isNotEmpty)
@@ -363,7 +363,7 @@ ReportSection cableCountSection(AvFlowModel model) {
     if (here.isEmpty) continue;
 
     rows.add([
-      '— ${kCableFamilyLabels[family]} —',
+      '- ${kCableFamilyLabels[family]} -',
       '',
       here.length,
       ...lengthCells(lengths(here)),
@@ -542,7 +542,7 @@ ReportSection _jackCountsByLocation(AvFlowModel model) {
     }
 
     if (zoneRows.isEmpty) continue;
-    rows.add(['— ${kRoomZoneLabels[zone] ?? zone.name} —', '', zoneTotal, '', '']);
+    rows.add(['- ${kRoomZoneLabels[zone] ?? zone.name} -', '', zoneTotal, '', '']);
     rows.addAll(zoneRows);
   }
 
@@ -666,7 +666,7 @@ List<ReportSection> _lineCountsByLabel(AvFlowModel model) {
         '(no label)',
         unlabeled,
         '',
-        'These runs have no cable ID — they cannot be found from this sheet',
+        'These runs have no cable ID - they cannot be found from this sheet',
       ],
   ];
 
@@ -1054,7 +1054,7 @@ ReportSection _powerSummary(AvFlowModel model) {
     if (unmetered > 0)
       [
         'Devices with no power figure',
-        '$unmetered — the total above is short by whatever they draw',
+        '$unmetered - the total above is short by whatever they draw',
       ],
   ];
 
@@ -1070,7 +1070,7 @@ ReportSection _rackInventory(AvFlowModel model) {
 
   for (final rack in model.racks) {
     if (rack.kind.isNotEmpty) {
-      rows.add([rack.name, '', '', '', '— ${rack.kind} —', '']);
+      rows.add([rack.name, '', '', '', '- ${rack.kind} -', '']);
     }
     for (final face in RackFace.values) {
       final entries =

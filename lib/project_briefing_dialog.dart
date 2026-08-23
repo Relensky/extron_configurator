@@ -161,7 +161,7 @@ class _Overview extends StatelessWidget {
               phase.name,
               phase.deadline == null
                   ? '${phase.parts} part'
-                        '${phase.parts == 1 ? '' : 's'} — no date'
+                        '${phase.parts == 1 ? '' : 's'} - no date'
                   : '${formatScheduleDate(phase.deadline!)}'
                         '  ·  ${phase.parts} part'
                         '${phase.parts == 1 ? '' : 's'}',
@@ -280,7 +280,7 @@ class _Overview extends StatelessWidget {
       if (todo.scope.isNotEmpty) todo.scope,
       if (todo.due != null)
         todo.late
-            ? 'due ${formatScheduleDate(todo.due!)} — '
+            ? 'due ${formatScheduleDate(todo.due!)} - '
                   '${formatDayGap(daysBetween(asOf, todo.due!))}'
             : 'due ${formatScheduleDate(todo.due!)}',
       if (todo.blocked) 'waiting on somebody',

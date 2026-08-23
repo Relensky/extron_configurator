@@ -134,7 +134,7 @@ void main() {
     // stop checking anything.
     for (final key in exceptions.keys) {
       expect(provider.moduleDefaults, contains(key),
-          reason: '$key is gone — drop it from the exception list');
+          reason: '$key is gone - drop it from the exception list');
     }
   }, skip: !available);
 

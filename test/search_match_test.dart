@@ -22,7 +22,7 @@ void main() {
   group('searchMatches', () {
     test('the spacing of the room number does not matter', () {
       // The processor line the picker actually shows
-      const line = 'BSS 103 — Behavioral And Social Science (10.248.103.8)';
+      const line = 'BSS 103 - Behavioral And Social Science (10.248.103.8)';
       for (final query in const [
         'BSS103',
         'BSS 103',
@@ -36,7 +36,7 @@ void main() {
     });
 
     test('matches the full building name and the IP too', () {
-      const line = 'AGYM 129 — Acker Gymnasium (10.248.129.8)';
+      const line = 'AGYM 129 - Acker Gymnasium (10.248.129.8)';
       expect(searchMatches(line, 'acker gym'), isTrue);
       expect(searchMatches(line, 'ackergym'), isTrue);
       expect(searchMatches(line, '10.248.129'), isTrue);
@@ -44,7 +44,7 @@ void main() {
     });
 
     test('still excludes what genuinely does not match', () {
-      const line = 'BSS 103 — Behavioral And Social Science (10.248.103.8)';
+      const line = 'BSS 103 - Behavioral And Social Science (10.248.103.8)';
       expect(searchMatches(line, 'AJH'), isFalse);
       expect(searchMatches(line, 'BSS104'), isFalse);
       // Order still matters — this is a contains, not a fuzzy match

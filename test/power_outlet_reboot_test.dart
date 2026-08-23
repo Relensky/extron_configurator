@@ -55,7 +55,7 @@ void main() {
         final spec = s.specFor(key);
         expect(spec, isNotNull, reason: '$key should resolve to a definition');
         expect(spec!.type, 'bool',
-            reason: 'a checkbox, not free text — the values are JSON booleans');
+            reason: 'a checkbox, not free text - the values are JSON booleans');
         expect(spec.description, isNotNull);
       }
     });
@@ -71,7 +71,7 @@ void main() {
       expect(s.specFor('power1_outlet_2')!.helperText, contains('23'));
     });
 
-    test('neither key is required — absence is not flagged', () async {
+    test('neither key is required - absence is not flagged', () async {
       final p = AppStateProvider(autoLoadSettings: false)
         ..uiSchema = await schema()
         ..roomConfig = room(withReboot: false);

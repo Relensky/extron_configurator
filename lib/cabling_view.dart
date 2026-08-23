@@ -301,7 +301,7 @@ class _CablingViewState extends State<CablingView> {
         (at + (forward ? 1 : -1) + siblings.length) % siblings.length;
     setState(() => _selectedId = siblings[next].id);
     _snack(
-      '${siblings[next].label} — run ${next + 1} of ${siblings.length} '
+      '${siblings[next].label} - run ${next + 1} of ${siblings.length} '
       'between these two',
     );
     return KeyEventResult.handled;
@@ -324,7 +324,7 @@ class _CablingViewState extends State<CablingView> {
       _selectedId = '';
       if (_runFrom == id) _runFrom = '';
     });
-    _snack('$what taken off the drawing — Undo puts it back.');
+    _snack('$what taken off the drawing - Undo puts it back.');
   }
 
   Widget _emptyState(AppStateProvider provider) => Center(
@@ -346,7 +346,7 @@ class _CablingViewState extends State<CablingView> {
             'in the room on the Locations panel, say which place each device '
             'is in, and the boxes and the bundles between them appear here '
             'with the runs counted off the signal flow. Pull boxes are '
-            'locations too — add one with the zone set to Pull box, or drop a '
+            'locations too - add one with the zone set to Pull box, or drop a '
             'plain box on here and wire it up by hand.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
@@ -580,7 +580,7 @@ class _CablingViewState extends State<CablingView> {
               label: Text(
                 'Drawing a run from '
                 '${drawing.boxById(_runFrom)?.label ?? _runFrom}'
-                ' — click the other box',
+                ' - click the other box',
               ),
               onDeleted: () => setState(() => _runFrom = ''),
             ),
@@ -693,9 +693,9 @@ class _CablingViewState extends State<CablingView> {
     avRowIcon(
       Icons.delete_outline,
       box.isDerived
-          ? 'Take it off the drawing (the room keeps the location) — or press '
+          ? 'Take it off the drawing (the room keeps the location) - or press '
                 'Delete'
-          : 'Delete this box — or press Delete',
+          : 'Delete this box - or press Delete',
       () => _deleteSelection(provider, drawing),
       danger: true,
     ),
@@ -857,7 +857,7 @@ class _CablingViewState extends State<CablingView> {
         ),
       avRowIcon(
         Icons.delete_outline,
-        'Take this run off the drawing — or press Delete',
+        'Take this run off the drawing - or press Delete',
         () => _deleteSelection(provider, drawing),
         danger: true,
       ),
@@ -1095,7 +1095,7 @@ class _CablingViewState extends State<CablingView> {
                 Text(
                   'How much cable, what it is, and what it lands on at each '
                   'end. The end labels print beside their own end of the line '
-                  'on this drawing and on the floor plan — leave them blank on '
+                  'on this drawing and on the floor plan - leave them blank on '
                   'a run whose ends speak for themselves.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
@@ -1334,7 +1334,7 @@ class _CablingViewState extends State<CablingView> {
     final model = buildAvFlowModel(provider);
     final sections = cablingSections(model);
     if (sections.isEmpty) {
-      _snack('Nothing to report yet — the drawing is empty.');
+      _snack('Nothing to report yet - the drawing is empty.');
       return;
     }
     final title = model.roomTitle.isEmpty ? 'Cabling' : model.roomTitle;
@@ -1358,7 +1358,7 @@ class _CablingViewState extends State<CablingView> {
     final model = buildAvFlowModel(provider);
     final sections = cablingSections(model);
     if (sections.isEmpty) {
-      _snack('Nothing to report yet — the drawing is empty.');
+      _snack('Nothing to report yet - the drawing is empty.');
       return;
     }
     final title = model.roomTitle.isEmpty ? 'Cabling' : model.roomTitle;
@@ -1973,7 +1973,7 @@ class _CablingViewState extends State<CablingView> {
               // at: six lanes thirteen pixels apart, and the one you want in
               // the middle.
               if (siblings.length > 1)
-                '${siblings.length} runs between these two — arrow keys step '
+                '${siblings.length} runs between these two - arrow keys step '
                     'through them',
             ].join('\n'),
             child: const SizedBox.expand(),
@@ -2176,7 +2176,7 @@ class _CablingViewState extends State<CablingView> {
               List<Offset>.from(bends)..removeAt(i),
             ),
             child: Tooltip(
-              message: 'Drag to route this run — it snaps square with the '
+              message: 'Drag to route this run - it snaps square with the '
                   'bends either side · double-click to drop it',
               child: Container(
                 width: r * 2,
@@ -2257,7 +2257,7 @@ class _CablingViewState extends State<CablingView> {
             setState(() => _runFrom = '');
             _select(added?.id ?? '');
             if (added != null) {
-              _snack('Run added — its count and cable type are in the bar '
+              _snack('Run added - its count and cable type are in the bar '
                   'above the drawing.');
             }
             return;

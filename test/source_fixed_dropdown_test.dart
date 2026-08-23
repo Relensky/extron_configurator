@@ -139,12 +139,12 @@ void main() {
       final p = room(fixed: 'pc');
       await pump(tester, p);
 
-      expect(find.text('Not pinned — this screen is not routed'), findsNothing,
+      expect(find.text('Not pinned - this screen is not routed'), findsNothing,
           reason: 'it is an option, not the current value');
 
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Not pinned — this screen is not routed').last);
+      await tester.tap(find.text('Not pinned - this screen is not routed').last);
       await tester.pumpAndSettle();
 
       expect(p.roomConfig['PROJECTORDEVICE_2']['source_fixed'], '');

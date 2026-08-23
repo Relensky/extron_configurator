@@ -104,7 +104,7 @@ List<Widget> todoSlivers(BuildContext context, ProjectEstimate estimate) {
           child: Center(
             child: Text(
               'Nothing on the list.\n\n'
-              'This is the job\'s own notebook — the change the client asked '
+              'This is the job\'s own notebook - the change the client asked '
               'for, the vendor to chase, the room whose scope is not settled. '
               'It is saved with the project, so it is still here the next time '
               'somebody opens it.',
@@ -121,7 +121,7 @@ List<Widget> todoSlivers(BuildContext context, ProjectEstimate estimate) {
               final late = project.overdueTodos(now).length;
               return late == 0
                   ? 'TO DO (${open.length})'
-                  : 'TO DO (${open.length}) — $late PAST ITS DATE';
+                  : 'TO DO (${open.length}) - $late PAST ITS DATE';
             }(),
             warn: project.overdueTodos(now).isNotEmpty,
           ),
@@ -766,7 +766,7 @@ class _TodoRow extends StatelessWidget {
               IconButton(
                 key: ValueKey('todo_block_${todo.id}'),
                 tooltip: blocked
-                    ? 'Back on the list — this can be picked up again'
+                    ? 'Back on the list - this can be picked up again'
                     : 'Waiting on somebody else',
                 icon: Icon(
                   blocked ? Icons.play_circle_outline : Icons.pause_circle_outline,

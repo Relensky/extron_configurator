@@ -55,7 +55,7 @@ enum _SchemaSection {
   deviceFields('Device fields', Icons.devices,
       'The same thing, but only for one device family or section.'),
   deviceTypes('Device families', Icons.category,
-      'The families the Setup Wizard manages — a dev_ count key, the section '
+      'The families the Setup Wizard manages - a dev_ count key, the section '
           'prefix its blocks use, and a label.'),
   defaults('Defaults', Icons.playlist_add,
       'What a room is given when it is missing something.'),
@@ -114,7 +114,7 @@ const Map<String, ({String name, String blurb})> kSchemaFieldTypeInfo = {
   'text': (
     name: 'Text box',
     blurb: 'A plain text field. Use it to force text on a key that holds '
-        'something like "10.0.0.5" or "01" — values the automatic choice '
+        'something like "10.0.0.5" or "01" - values the automatic choice '
         'would read as a number and quietly reformat.',
   ),
   'int': (
@@ -124,7 +124,7 @@ const Map<String, ({String name, String blurb})> kSchemaFieldTypeInfo = {
   ),
   'double': (
     name: 'Decimal number',
-    blurb: 'A text field that stores a decimal — gains, delays, levels.',
+    blurb: 'A text field that stores a decimal - gains, delays, levels.',
   ),
   'bool': (
     name: 'On/off switch',
@@ -133,13 +133,13 @@ const Map<String, ({String name, String blurb})> kSchemaFieldTypeInfo = {
   ),
   'dropdown': (
     name: 'Pick one from a list',
-    blurb: 'A fixed list of choices. Fill in Options below — a dropdown with '
+    blurb: 'A fixed list of choices. Fill in Options below - a dropdown with '
         'none is a field nobody can set.',
   ),
   'combo': (
     name: 'One choice, several keys',
     blurb: 'ONE dropdown that writes to several config keys at once. Fill in '
-        'both Options and the keys it writes, in the same order — this is how '
+        'both Options and the keys it writes, in the same order - this is how '
         'a single "Which room mode?" sets four keys that must agree.',
   ),
   'hidden': (
@@ -151,18 +151,18 @@ const Map<String, ({String name, String blurb})> kSchemaFieldTypeInfo = {
   'room_sources': (
     name: 'Pick one of this room’s sources',
     blurb: 'A dropdown whose choices are the sources THIS room has, read off '
-        'its input_* keys — so it says HDMI 1 and Laptop rather than a list '
+        'its input_* keys - so it says HDMI 1 and Laptop rather than a list '
         'typed into the schema and gone stale.',
   ),
   'module_states': (
     name: 'Pick a state from the device’s module',
     blurb: 'A dropdown filled live from the device’s Python module: the '
-        'states of one of its commands. Name the command below — the list is '
+        'states of one of its commands. Name the command below - the list is '
         'empty until you do.',
   ),
   'source_map': (
     name: 'Pairs of sources',
-    blurb: 'Rows of two source dropdowns with add and remove — a display’s '
+    blurb: 'Rows of two source dropdowns with add and remove - a display’s '
         'source_overrides. The only structured editor here; every other '
         'object key belongs on the Raw JSON tab.',
   ),
@@ -181,7 +181,7 @@ String _fieldTypeName(String type) {
 /// the menu again to re-read an option they have already picked.
 String _fieldTypeBlurb(String type) =>
     kSchemaFieldTypeInfo[type]?.blurb ??
-    'No description for this type — see the comment block at the top of '
+    'No description for this type - see the comment block at the top of '
         'ui_schema.dart.';
 
 class SchemaEditorView extends StatefulWidget {
@@ -237,7 +237,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
   void _loadTemplate(String filePath) {
     if (filePath.trim().isEmpty) {
       setState(() {
-        _templateError = 'No default config file is set yet — pick one under '
+        _templateError = 'No default config file is set yet - pick one under '
             'App Config > Template config.json.';
         _template = {};
         _templatePath = '';
@@ -261,7 +261,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
       setState(() {
         _template = {};
         _templatePath = filePath;
-        _templateError = 'Could not read $filePath — $e';
+        _templateError = 'Could not read $filePath - $e';
       });
     }
   }
@@ -331,7 +331,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
             children: [
               Text('Schema Editor', style: theme.textTheme.titleLarge),
               Text(
-                _dirty ? 'Edited — not saved yet' : schema.source,
+                _dirty ? 'Edited - not saved yet' : schema.source,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: _dirty ? theme.colorScheme.error : theme.disabledColor,
                 ),
@@ -650,7 +650,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
               ? Center(
                   child: Text(
                     'This document does not describe any fields of its own '
-                    'yet. Coverage is the quickest way in — it lists the keys '
+                    'yet. Coverage is the quickest way in - it lists the keys '
                     'a real room has, and which of them nobody has described.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall,
@@ -798,7 +798,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               'These are the families the app ships with. Change any one of '
-              'them and the whole list is written into your file — a file '
+              'them and the whole list is written into your file - a file '
               'that lists families at all replaces the built-in list, so a '
               'half-list would quietly drop the rest.',
               style: theme.textTheme.bodySmall,
@@ -887,13 +887,13 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                     'The SYSTEM_SETUP key that says how many, like '
                         'dev_projectors.'),
                 _text(prefix, 'Section prefix',
-                    'The config blocks this family uses, numbered from 1 — '
+                    'The config blocks this family uses, numbered from 1 - '
                         'PROJECTORDEVICE_, for instance.'),
                 _text(label, 'Label', 'What the Setup Wizard calls it.'),
                 _text(max, 'Most the wizard offers', ''),
                 _text(systemKeys, 'SYSTEM_SETUP keys this family owns',
                     'One pattern per line. Setting the count to 0 takes them '
-                    'out — outlet names with no power controller behind them '
+                    'out - outlet names with no power controller behind them '
                     'are just something else to read past.',
                     lines: 3),
                 _text(keepAlive, 'Keep-alive commands, best first',
@@ -952,7 +952,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
         content: Text(
           'The Wizard stops offering ${family.countKey}, and ${family.prefix}n '
           'blocks stop being treated as devices. Nothing is deleted from any '
-          'room — the blocks are still in the config, just no longer shown as '
+          'room - the blocks are still in the config, just no longer shown as '
           'devices.\n\n'
           'Every other family is written into your file at the same time, '
           'because a file that lists families at all replaces the built-in '
@@ -974,7 +974,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
     final families = _familiesAsDoc(schema)..remove(family.countKey);
     if (families.isEmpty) {
       _snack('A schema with no device families would have no device tabs at '
-          'all — keep at least one.', error: true);
+          'all - keep at least one.', error: true);
       return;
     }
     _edit((doc) => doc['device_types'] = families);
@@ -1296,7 +1296,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
               children: [
                 Text(
                   'When the first condition is true, the second one has to be '
-                  'true as well. Breaking a rule never blocks an edit — it '
+                  'true as well. Breaking a rule never blocks an edit - it '
                   'paints the red mismatch outline on the fields you name '
                   'below, with your message underneath them.',
                   style: Theme.of(ctx).textTheme.bodySmall,
@@ -1311,7 +1311,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                     'What to say when they disagree. Put {some_key} in it and '
                         'that key’s current value is filled in.'),
                 _text(flag, 'Fields to flag',
-                    'Comma separated — the fields that get the red outline.'),
+                    'Comma separated - the fields that get the red outline.'),
               ],
             ),
           ),
@@ -1381,7 +1381,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                     _rawError = '';
                     _dirty = true;
                   });
-                  _snack('Applied — the rest of the app is using it now.');
+                  _snack('Applied - the rest of the app is using it now.');
                 } on FormatException catch (e) {
                   setState(() => _rawError = '$e');
                 }
@@ -1501,7 +1501,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _text(key, 'Config key',
-                      'One key, or a whole family with a star in it — '
+                      'One key, or a whole family with a star in it - '
                           'power1_outlet_*.'),
                   const SizedBox(height: 8),
                   // WHAT THIS FIELD BECOMES ON THE TAB. Every option names
@@ -1573,7 +1573,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                     _text(options, 'Options',
                         type == 'combo'
                             ? 'One per line: the label, then the values it '
-                                'writes to each key below, in order — '
+                                'writes to each key below, in order - '
                                 'separated by | characters.'
                             : 'One per line. Just the value, or value | label '
                                 'when the stored value is not what people '
@@ -1589,7 +1589,7 @@ class _SchemaEditorViewState extends State<SchemaEditorView> {
                             'states fill this dropdown.'),
                   _text(hideWhen, 'Hide when',
                       'One condition per line, like com_type=Network. If any '
-                          'of them is true the field is hidden — and not '
+                          'of them is true the field is hidden - and not '
                           'added to new devices either.',
                       lines: 3),
                   _text(labelWhen, 'Label when',

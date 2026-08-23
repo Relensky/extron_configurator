@@ -670,7 +670,7 @@ class _SchematicViewState extends State<SchematicView> {
       contentKey: _diagramKey,
       viewportKey: _viewportKey,
     );
-    if (!fitted) _snack('The schematic is still drawing — try again.');
+    if (!fitted) _snack('The schematic is still drawing - try again.');
   }
 
   bool _editMode = false;
@@ -1004,7 +1004,7 @@ class _SchematicViewState extends State<SchematicView> {
                 children: [
                   Text(
                     'A box for equipment the control system does not talk to '
-                    'but the room depends on — the building switch, a UPS, '
+                    'but the room depends on - the building switch, a UPS, '
                     'the room PC, a wall plate. It is drawn dashed, kept out '
                     'of the device report, and can be joined to anything on '
                     'the diagram with Draw Line.',
@@ -1290,11 +1290,11 @@ class _SchematicViewState extends State<SchematicView> {
                 // config first (which ties the file to the session), then
                 // write the layout sidecar next to it right after.
                 if (provider.schematicSidecarPath.isEmpty) {
-                  _snack('No working config file yet — choose where to save '
+                  _snack('No working config file yet - choose where to save '
                       'the config, then the layout is saved beside it.');
                   final bool exported = await provider.exportRoomConfig();
                   if (!exported) {
-                    _snack('Layout not saved — the config save was canceled.',
+                    _snack('Layout not saved - the config save was canceled.',
                         error: true);
                     return;
                   }
@@ -1426,8 +1426,8 @@ class _SchematicViewState extends State<SchematicView> {
           'That means letting go of $extras box(es) added by hand and $links '
           'line(s) drawn by hand, putting $hidden hidden line(s) back, and '
           'forgetting where anybody has dragged a box to.\n\n'
-          'Your line colours are kept — they have their own Reset all on the '
-          'Colors dialog — and Undo puts the layout back.',
+          'Your line colours are kept - they have their own Reset all on the '
+          'Colors dialog - and Undo puts the layout back.',
         ),
         actions: [
           TextButton(
@@ -1444,7 +1444,7 @@ class _SchematicViewState extends State<SchematicView> {
     if (confirmed != true || !mounted) return;
 
     provider.recreateSchematicFromConfig();
-    _snack('Done — the drawing is the one the config describes again.');
+    _snack('Done - the drawing is the one the config describes again.');
   }
 
   /// Recolors the connection categories for this room. Changing Network

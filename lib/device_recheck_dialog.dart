@@ -109,7 +109,7 @@ class _DeviceRecheckDialogState extends State<_DeviceRecheckDialog> {
                       blurb:
                           'A device copies its rack height, draw and heat off '
                           'the catalog when it goes on the diagram. Filling '
-                          'those in afterwards — which is the normal order — '
+                          'those in afterwards - which is the normal order - '
                           'leaves the copy behind, and a rack height of 0 is '
                           'what keeps a device out of the rack builder.',
                       children: [
@@ -150,7 +150,7 @@ class _DeviceRecheckDialogState extends State<_DeviceRecheckDialog> {
                       blurb:
                           'These lines are rack-mount gear the estimate is '
                           'already buying, but a cost line is a price and not '
-                          'a device — nothing on the diagram or in a frame '
+                          'a device - nothing on the diagram or in a frame '
                           'matches them. Putting one across moves it onto the '
                           'room and takes the cost line away, so the money is '
                           'counted once.',
@@ -268,7 +268,7 @@ class _DeviceRecheckDialogState extends State<_DeviceRecheckDialog> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  change.model.isEmpty ? '—' : change.model,
+                  change.model.isEmpty ? '-' : change.model,
                   style: TextStyle(fontSize: 11, color: theme.disabledColor),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -365,7 +365,7 @@ class _DeviceRecheckDialogState extends State<_DeviceRecheckDialog> {
                       _snack(
                         equipment
                             ? '$moved device${moved == 1 ? '' : 's'} added to '
-                                  'the diagram — place ${moved == 1 ? 'it' : 'them'} '
+                                  'the diagram - place ${moved == 1 ? 'it' : 'them'} '
                                   'on the Racks tab.'
                             : '$moved item${moved == 1 ? '' : 's'} added to '
                                   'the Racks tab, waiting to be placed.',

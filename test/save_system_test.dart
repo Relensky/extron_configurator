@@ -90,7 +90,7 @@ void main() {
       expect(saveScopeForTab(AppTab.flowRules), SaveScope.flowRules);
     });
 
-    test('a room with no file is still saveable — Save just asks where', () {
+    test('a room with no file is still saveable - Save just asks where', () {
       final p = AppStateProvider(autoLoadSettings: false)
         ..roomConfig = baseConfig();
       expect(saveBlockedReason(p, SaveScope.room), '');
@@ -321,7 +321,7 @@ void main() {
       p.newProject(name: 'Bessey Hall');
       await p.project.save(projectPath);
       p.currentProjectPath = projectPath;
-      p.setProjectField(client: 'Facilities');
+      p.setProjectField(stakeholder: 'Facilities');
 
       await p.writeAutosaveSnapshot(force: true);
 
@@ -329,7 +329,7 @@ void main() {
         File(path.join(p.projectRecoveryFolder, 'bessey_project.json'))
             .readAsStringSync(),
       );
-      expect(saved['client'], 'Facilities');
+      expect(saved['stakeholder'], 'Facilities');
     });
 
     test('a room with no file yet is still copied somewhere findable',
@@ -499,7 +499,7 @@ void main() {
       crashed.newProject(name: 'Bessey Hall');
       await crashed.project.save(projectPath);
       crashed.currentProjectPath = projectPath;
-      crashed.setProjectField(client: 'Facilities');
+      crashed.setProjectField(stakeholder: 'Facilities');
       await crashed.writeAutosaveSnapshot();
 
       final reopened = AppStateProvider(autoLoadSettings: false)
@@ -508,10 +508,10 @@ void main() {
 
       expect(reopened.pendingRecovery?.kind, 'project');
       expect(reopened.pendingRecovery!.deltas.map((d) => d.label),
-          contains('client'));
+          contains('stakeholder'));
 
       reopened.applyRecovery(reopened.pendingRecovery!);
-      expect(reopened.project.client, 'Facilities');
+      expect(reopened.project.stakeholder, 'Facilities');
       expect(reopened.projectDirty, isTrue);
     });
   });
@@ -577,7 +577,7 @@ void main() {
       // file write never completes, so the setup cannot use saveProject.
       File(projectPath).writeAsStringSync(jsonEncode(p.project.toJson()));
       p.currentProjectPath = projectPath;
-      p.setProjectField(client: 'Facilities');
+      p.setProjectField(stakeholder: 'Facilities');
       p.selectTab(AppTab.project.index);
       await pump(tester, p);
 
@@ -595,18 +595,20 @@ void main() {
       // Generous, because the whole suite runs these files in parallel and a
       // loaded machine can leave this isolate waiting a long time for a write
       // that takes no time at all on its own.
-      var client = '';
+      var stakeholder = '';
       final deadline = DateTime.now().add(const Duration(seconds: 60));
-      while (DateTime.now().isBefore(deadline) && client != 'Facilities') {
+      while (DateTime.now().isBefore(deadline) && stakeholder != 'Facilities') {
         await tester.pump();
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),
         );
-        client =
-            jsonDecode(File(projectPath).readAsStringSync())['client'] ?? '';
+        stakeholder = jsonDecode(
+              File(projectPath).readAsStringSync(),
+            )['stakeholder'] ??
+            '';
       }
 
-      expect(client, 'Facilities',
+      expect(stakeholder, 'Facilities',
           reason: 'the toolbar Save on the Project tab writes the project');
       expect(
         jsonDecode(File(p.currentConfigPath).readAsStringSync())

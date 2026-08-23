@@ -267,7 +267,7 @@ class RoomCostSettings {
   ///
   /// The estimate picks the shortest stock lead that reaches each run, which
   /// is right until it isn't: a room that is being cabled in plenum, or in the
-  /// one brand a customer will accept, buys a different lead for the same run
+  /// one brand a stakeholder will accept, buys a different lead for the same run
   /// and no length in the catalog says so. Keyed on the length rather than on
   /// the LINE key, because the line key is built out of the entry — it moves
   /// when this changes, and a decision that forgets itself the moment it is
@@ -621,7 +621,7 @@ enum PriceSource {
 const Map<PriceSource, String> kPriceSourceLabels = {
   PriceSource.override: 'Room price',
   PriceSource.catalog: 'Catalog',
-  PriceSource.catalogOtherTier: 'Catalog — other tier',
+  PriceSource.catalogOtherTier: 'Catalog - other tier',
   PriceSource.baseCost: 'Base cost',
   PriceSource.none: 'Not priced',
 };
@@ -1388,9 +1388,9 @@ CostEstimate computeRoomCost({
               // failing that the run length this line is for, which is the
               // only thing separating it from the type's other lines.
               if ((catalog?.cableLengthFt ?? 0) > 0)
-                '— ${formatCableLength(catalog!.cableLengthFt)}'
+                '- ${formatCableLength(catalog!.cableLengthFt)}'
               else if (runLengthFt > 0)
-                '— ${formatCableLength(runLengthFt)}',
+                '- ${formatCableLength(runLengthFt)}',
               if (showRuns) '[$drawnHere× ${formatCableLength(runLengthFt)}]',
               if (lineSpares > 0)
                 '(${trimNumber(qty - lineSpares)} drawn + '
@@ -1760,7 +1760,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
     ['TOTAL', cash(estimate.grandTotal)],
     if (estimate.unpricedLines > 0)
       [
-        'Not included — devices with no price',
+        'Not included - devices with no price',
         '${estimate.unpricedDevices} device'
             '${estimate.unpricedDevices == 1 ? '' : 's'} '
             'on ${estimate.unpricedLines} line'
@@ -1768,7 +1768,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       ],
     if (estimate.excludedDevices > 0)
       [
-        'Not quoted — on the drawing, not on this contract',
+        'Not quoted - on the drawing, not on this contract',
         '${estimate.excludedDevices} device'
             '${estimate.excludedDevices == 1 ? '' : 's'} '
             'on ${estimate.excludedLines} line'
@@ -1777,14 +1777,14 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
       ],
     if (estimate.unratedLabor > 0)
       [
-        'Not included — labor with no rate',
+        'Not included - labor with no rate',
         '${estimate.unratedLabor} line'
             '${estimate.unratedLabor == 1 ? '' : 's'} of hours whose job type '
             'has no rate set on the rate card',
       ],
     if (estimate.otherTierLines > 0)
       [
-        'Check before quoting — priced at the other tier',
+        'Check before quoting - priced at the other tier',
         '${estimate.otherTierLines} line'
             '${estimate.otherTierLines == 1 ? '' : 's'} had no '
             '${kPricingTierShort[estimate.tier]} price in the catalog and were '

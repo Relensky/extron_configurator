@@ -18,7 +18,7 @@ import 'package:extron_configurator/project_workbook.dart';
 /// nothing else.
 ///
 /// The second one is the one with teeth. It gets emailed to a supplier, so a
-/// figure that leaks into it — another vendor's pricing, the customer's labor
+/// figure that leaks into it — another vendor's pricing, the stakeholder's labor
 /// rate, the project total — is a real disclosure rather than an untidy sheet.
 void main() {
   late Directory dir;
@@ -381,7 +381,7 @@ void main() {
     });
 
     test('carries no labor, no fees, no tax and no project total', () {
-      // The customer's numbers. A supplier quoting three transmitters has no
+      // The stakeholder's numbers. A supplier quoting three transmitters has no
       // business seeing what the install is being billed at.
       final estimate = job(labor: [
         const LaborLine(

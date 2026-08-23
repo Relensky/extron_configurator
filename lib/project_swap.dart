@@ -288,7 +288,7 @@ ProjectSwapResult applyProjectSwap({
       dropped += done.dropped;
       blocks += done.blocks;
       AppLogger.logInfo(
-        'Project swap: ${room.roomName} — ${done.boxes} box(es) moved from '
+        'Project swap: ${room.roomName} - ${done.boxes} box(es) moved from '
         '"${plan.fromModel}" to "${plan.to.model}", ${done.carried} run(s) '
         'carried, ${done.dropped} dropped, ${done.blocks} control block(s) '
         'updated.',
@@ -299,7 +299,7 @@ ProjectSwapResult applyProjectSwap({
         e,
         stack,
       );
-      failures.add('${room.roomName} — $e');
+      failures.add('${room.roomName} - $e');
     }
   }
 

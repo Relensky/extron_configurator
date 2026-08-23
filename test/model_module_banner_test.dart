@@ -165,7 +165,7 @@ void main() {
       p.moduleModels['display_86'] = ['DISPLAY 86'];
       await pump(tester, p);
       expect(banner, findsNothing,
-          reason: 'the same forgiveness module resolution gives — people type '
+          reason: 'the same forgiveness module resolution gives - people type '
               "'tr311hw' for 'TR311HW'");
     });
   });

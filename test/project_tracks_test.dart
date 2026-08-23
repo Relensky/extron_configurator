@@ -368,7 +368,7 @@ void main() {
     });
 
     test('the file name says the job and the phase', () {
-      final project = BuildingProject(name: 'Bessey Hall — AV refresh');
+      final project = BuildingProject(name: 'Bessey Hall - AV refresh');
       expect(reminderFileStem(project), 'bessey-hall-av-refresh_order_dates');
       expect(
         reminderFileStem(project, trackName: 'Tech install'),

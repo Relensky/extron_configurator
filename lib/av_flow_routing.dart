@@ -730,7 +730,7 @@ RoutingPlan planRoutingFromConfig(
           'SWITCHERDEVICE_1',
           '',
           config.containsKey('SWITCHERDEVICE_1')
-              ? 'The main switcher is not on the canvas yet — press "Place all '
+              ? 'The main switcher is not on the canvas yet - press "Place all '
                   'from config" first, then draw the routing.'
               : 'This room has no SWITCHERDEVICE_1 and no display on the '
                   'canvas, and every input_ and output_ number is a number on '
@@ -1038,7 +1038,7 @@ RoutingPlan planRoutingFromConfig(
           _specOfExtender(rule),
           txId,
           onLeft: true,
-          label: '${rule.label} — ${source.label}',
+          label: '${rule.label} - ${source.label}',
         );
     return _extenderPorts(node, rule.farType!, rule.switcherType!);
   }
@@ -1063,7 +1063,7 @@ RoutingPlan planRoutingFromConfig(
           displayHub == null
               ? 'No input on ${switcher.label} is labelled $value.'
               : 'This room has no switcher, so $key is a socket on '
-                  '${switcher.label} — and it has no input called "$value". '
+                  '${switcher.label} - and it has no input called "$value". '
                   'Its inputs are '
                   '${_videoInputLabels(switcher).join(', ')}.'));
       return;
@@ -1104,7 +1104,7 @@ RoutingPlan planRoutingFromConfig(
           value,
           '${source.label} already has ${out.label} running to $far, which is '
           'not on ${switcher.label}, so it cannot also run to input $value. '
-          'The drawing is left as it is — check which of the two is right.'));
+          'The drawing is left as it is - check which of the two is right.'));
       return;
     }
     // A SOCKET ON THE DISPLAY TAKES ONE LEAD. On a matrix the input the
@@ -1126,7 +1126,7 @@ RoutingPlan planRoutingFromConfig(
             value,
             '${switcherPort.label} on ${switcher.label} already has '
             '${onHubSocket.join(', ')} on it, so ${source.label} cannot go '
-            'there too. The drawing is left as it is — check which of the two '
+            'there too. The drawing is left as it is - check which of the two '
             'is right.'));
         return;
       }
@@ -1154,7 +1154,7 @@ RoutingPlan planRoutingFromConfig(
             '${source.label} leaves by ${out.label} and '
             '${switcherPort.label} takes '
             '${kSignalLabels[switcherPort.signal] ?? switcherPort.signal.name}'
-            ', so the run needs a ${txRule.label} — and the catalog entry for '
+            ', so the run needs a ${txRule.label} - and the catalog entry for '
             '${txRule.model} has no matching input and output to cable it by. '
             'Draw this one by hand.'));
         return;
@@ -1337,7 +1337,7 @@ RoutingPlan planRoutingFromConfig(
             math.max(kAvAutoOriginX, dest.pos.dx - kAvAutoColumnPitch),
             dest.pos.dy,
           ),
-          label: '${rule.label} — ${dest.label}',
+          label: '${rule.label} - ${dest.label}',
         );
 
     return _extenderPorts(node, rule.switcherType!, rule.farType!);
@@ -1364,7 +1364,7 @@ RoutingPlan planRoutingFromConfig(
     if (switcherPort == null) {
       unresolved.add(UnroutedTie(key, value,
           'No output on ${switcher.label} is labelled $value. Extron spells '
-          'the same socket differently between models — check the connector '
+          'the same socket differently between models - check the connector '
           'names on the device tab and draw this one by hand.'));
       return;
     }
@@ -1454,7 +1454,7 @@ RoutingPlan planRoutingFromConfig(
             '${dest.label} is already cabled on '
             '${fedAlready.map((p) => p.label).join(', ')} from something '
             'other than ${switcher.label}, so $value would be a second feed '
-            'into the same box. The drawing is left as it is — check which of '
+            'into the same box. The drawing is left as it is - check which of '
             'the two is right.'));
         return;
       }
@@ -1474,7 +1474,7 @@ RoutingPlan planRoutingFromConfig(
           value,
           '${switcherPort.label} on ${switcher.label} already runs to '
           '${onSwitcherSocket.join(', ')}, so it cannot also feed '
-          '${dest.label}. The drawing is left as it is — check which of the '
+          '${dest.label}. The drawing is left as it is - check which of the '
           'two is right.'));
       return;
     }
@@ -1559,7 +1559,7 @@ RoutingPlan planRoutingFromConfig(
             '${switcherPort.label} carries '
             '${kSignalLabels[rxRule.switcherType!] ?? rxRule.switcherSignal} '
             'and ${dest.label} takes ${landing.label}, so the run needs a '
-            '${rxRule.label} — and the catalog entry for ${rxRule.model} has '
+            '${rxRule.label} - and the catalog entry for ${rxRule.model} has '
             'no matching input and output to cable it by. Draw this one by '
             'hand.'));
         return;
@@ -1626,7 +1626,7 @@ RoutingPlan planRoutingFromConfig(
               value,
               'This room has $projectorCount display'
               '${projectorCount == 1 ? '' : 's'} (dev_projectors), so there is '
-              'no ${rule.target} for output $value to feed — the key is left '
+              'no ${rule.target} for output $value to feed - the key is left '
               'over and nothing is drawn for it.'));
         } else {
           unresolved.add(UnroutedTie(rule.configKey, value,
@@ -1646,7 +1646,7 @@ RoutingPlan planRoutingFromConfig(
         unresolved.add(UnroutedTie(
             '${node.id}.input',
             declared,
-            '${node.label} has no connector called "$declared" — the cable is '
+            '${node.label} has no connector called "$declared" - the cable is '
             'drawn on its first video input instead.'));
       }
       routeDestination(rule.configKey, node, toPort: landing);
@@ -1944,7 +1944,7 @@ RoutingPlan planRoutingFromConfig(
         unresolved.add(UnroutedTie(
             entry.key.toString(),
             name,
-            '${winners.length} boxes answer to "$name" — '
+            '${winners.length} boxes answer to "$name" - '
             '${winners.map((n) => n.label).join(', ')}. Nothing is drawn '
             'rather than the wrong one; plug this outlet in by hand.'));
         continue;

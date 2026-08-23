@@ -469,13 +469,14 @@ List<ProjectTrack> starterTracks(BuildingProject project) => [
   ProjectTrack(
     id: project.nextTrackId(),
     name: 'Infrastructure',
-    notes: 'Conduit, backboxes, mounts, floor boxes — anything that goes in '
-        'while the walls are open.',
+    notes: 'Conduit, backboxes, mounts, floor boxes - contractor work, '
+        'arranged through facilities, that goes in while the walls are '
+        'open.',
   ),
   ProjectTrack(
     id: project.nextTrackId(),
     name: 'Tech install',
-    notes: 'Racks, switchers, displays, cameras — everything that lands after '
+    notes: 'Racks, switchers, displays, cameras - everything that lands after '
         'the room is closed up.',
   ),
 ];
@@ -922,7 +923,15 @@ class BuildingProject {
   String building;
 
   String jobNumber;
-  String client;
+
+  /// Who the job is FOR. A department, a dean, facilities - the people whose
+  /// room this is and who have to agree to what is on the quote.
+  ///
+  /// Called a stakeholder rather than a customer because this shop's work is
+  /// for the university: nobody on the other side of one of these quotes is
+  /// buying, and nobody could take their money elsewhere.
+  String stakeholder;
+
   String notes;
 
   /// The symbol every figure in the rollup is written in. Rooms carry their
@@ -1016,7 +1025,7 @@ class BuildingProject {
     this.name = '',
     this.building = '',
     this.jobNumber = '',
-    this.client = '',
+    this.stakeholder = '',
     this.notes = '',
     this.currency = r'$',
     List<ProjectRoomRef>? rooms,
@@ -1063,7 +1072,7 @@ class BuildingProject {
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       jobNumber.trim().isEmpty &&
-      client.trim().isEmpty &&
+      stakeholder.trim().isEmpty &&
       notes.trim().isEmpty;
 
   /// The rooms that count toward the total.
@@ -1571,14 +1580,14 @@ class BuildingProject {
   Map<String, dynamic> toJson() => {
     '__readme':
         'Room Config Builder project: a building quoted as one job. The '
-        'rooms are references to config.json files, not copies — editing a '
+        'rooms are references to config.json files, not copies - editing a '
         'room edits it here too. Paths are relative to this file when the '
         'room sits under the same folder.',
     'version': 1,
     'name': name,
     'building': building,
     if (jobNumber.isNotEmpty) 'jobNumber': jobNumber,
-    if (client.isNotEmpty) 'client': client,
+    if (stakeholder.isNotEmpty) 'stakeholder': stakeholder,
     if (notes.isNotEmpty) 'notes': notes,
     'currency': currency,
     'rooms': [for (final r in rooms) r.toJson()],
@@ -1706,7 +1715,11 @@ class BuildingProject {
       name: json['name']?.toString() ?? '',
       building: json['building']?.toString() ?? '',
       jobNumber: json['jobNumber']?.toString() ?? '',
-      client: json['client']?.toString() ?? '',
+      // 'client' is what this was called before, and a project file written
+      // then is still the one somebody opens this afternoon. Read under both
+      // names, written under the new one - so the old key retires as each
+      // project is saved rather than on a migration nobody asked for.
+      stakeholder: (json['stakeholder'] ?? json['client'])?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
       currency: json['currency']?.toString().isNotEmpty == true
           ? json['currency'].toString()
@@ -1752,7 +1765,7 @@ class BuildingProject {
     final doc = jsonDecode(text);
     if (doc is! Map) {
       throw const FormatException(
-        'That file is not a project — its root is not an object.',
+        'That file is not a project - its root is not an object.',
       );
     }
     final map = Map<String, dynamic>.from(doc);
@@ -1777,7 +1790,7 @@ class BuildingProject {
     name: name,
     building: building,
     jobNumber: jobNumber,
-    client: client,
+    stakeholder: stakeholder,
     notes: notes,
     currency: currency,
     rooms: List<ProjectRoomRef>.from(rooms),

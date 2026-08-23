@@ -52,6 +52,30 @@ import 'room_sidecar.dart';
 //  READING A ROOM WITHOUT OPENING IT
 // ---------------------------------------------------------------------------
 
+/// The building code and room number off a room config — 'BSS 103'. '' when
+/// the config carries neither.
+///
+/// This is the name written on the door, on the work order and in the job's
+/// history, and it is the one to show anywhere a room has to be picked out of
+/// a list of rooms in the same building. The FILE name is right nowhere:
+/// 'BSS_101_config' is an artefact of how the room is stored, not what anybody
+/// calls it.
+///
+/// A plain function on the config rather than a method on a loaded room,
+/// because the two callers have the config at different moments: the rollup
+/// has read a room off disk, and the app has one open in the editor and no
+/// LoadedRoom anywhere.
+String roomCodeFromConfig(Map<String, dynamic> config) {
+  final setup = config['SYSTEM_SETUP'];
+  if (setup is! Map) return '';
+  final building = setup['gve_bldg']?.toString().trim() ?? '';
+  final number = setup['gve_room']?.toString().trim() ?? '';
+  return [
+    building,
+    number,
+  ].where((part) => part.isNotEmpty).join(' ');
+}
+
 /// One room, read off disk and ready to price.
 class LoadedRoom {
   /// The config that was read.
@@ -96,16 +120,7 @@ class LoadedRoom {
   /// the code on anything recent, and a legacy config that still holds a full
   /// building name yields that plus the number, which is still the room rather
   /// than the file.
-  String get roomCode {
-    final setup = config['SYSTEM_SETUP'];
-    if (setup is! Map) return '';
-    final building = setup['gve_bldg']?.toString().trim() ?? '';
-    final number = setup['gve_room']?.toString().trim() ?? '';
-    return [
-      building,
-      number,
-    ].where((part) => part.isNotEmpty).join(' ');
-  }
+  String get roomCode => roomCodeFromConfig(config);
 
   /// Why this room could not be read, or '' when it was.
   ///

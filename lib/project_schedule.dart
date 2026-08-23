@@ -78,7 +78,7 @@ const Map<OrderStatus, String> kOrderStatusLabels = {
   OrderStatus.onTrack: 'On track',
   OrderStatus.unknown: 'No lead time',
   OrderStatus.noDeadline: 'No date set',
-  OrderStatus.arrivingLate: 'Ordered — arriving late',
+  OrderStatus.arrivingLate: 'Ordered - arriving late',
   OrderStatus.ordered: 'On order',
   OrderStatus.received: 'Received',
 };

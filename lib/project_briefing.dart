@@ -280,7 +280,7 @@ ProjectBriefing buildProjectBriefing({
       pane: BriefingPane.timeline,
       detail: _some([
         for (final p in lateParts)
-          '${p.line.description} — order date was '
+          '${p.line.description} - order date was '
               '${formatScheduleDate(p.orderBy!)}'
               ' (${formatDayGap(p.daysUntilOrder ?? 0)})',
       ]),
@@ -302,7 +302,7 @@ ProjectBriefing buildProjectBriefing({
       pane: BriefingPane.timeline,
       detail: _some([
         for (final p in arrivingLate)
-          '${p.line.description} — promised '
+          '${p.line.description} - promised '
               '${formatScheduleDate(p.order!.expectedOn!)}, needed '
               '${formatScheduleDate(p.needBy!)}',
       ]),
@@ -319,7 +319,7 @@ ProjectBriefing buildProjectBriefing({
       pane: BriefingPane.todo,
       detail: _some([
         for (final t in overdue)
-          '${t.text} — due ${formatScheduleDate(t.due!)}'
+          '${t.text} - due ${formatScheduleDate(t.due!)}'
               ' (${formatDayGap(t.daysUntilDue(now) ?? 0)})',
       ]),
     ));
@@ -350,7 +350,7 @@ ProjectBriefing buildProjectBriefing({
       pane: BriefingPane.timeline,
       detail: _some([
         for (final p in dueSoon)
-          '${p.line.description} — order by '
+          '${p.line.description} - order by '
               '${formatScheduleDate(p.orderBy!)}'
               ' (${formatDayGap(p.daysUntilOrder ?? 0)})',
       ]),
@@ -367,7 +367,7 @@ ProjectBriefing buildProjectBriefing({
       pane: BriefingPane.todo,
       detail: _some([
         for (final t in todosSoon)
-          '${t.text} — ${formatDayGap(t.daysUntilDue(now) ?? 0)}',
+          '${t.text} - ${formatDayGap(t.daysUntilDue(now) ?? 0)}',
       ]),
     ));
   }
@@ -412,7 +412,7 @@ ProjectBriefing buildProjectBriefing({
       pane: BriefingPane.rooms,
       detail: _some([
         for (final r in estimate.rooms)
-          if (!r.ok) '${r.name} — ${r.room.error}',
+          if (!r.ok) '${r.name} - ${r.room.error}',
       ]),
     ));
   }
@@ -451,7 +451,7 @@ ProjectBriefing buildProjectBriefing({
       urgency: BriefingUrgency.open,
       message: '${estimate.undrivenDevices} device'
           '${estimate.undrivenDevices == 1 ? '' : 's'} on this job have no '
-          'control module — quoted, and they will not commission as they '
+          'control module - quoted, and they will not commission as they '
           'stand',
       pane: BriefingPane.parts,
       detail: _some([
@@ -650,7 +650,7 @@ String renderBriefingText(ProjectBriefing briefing, {required String title}) {
     fact(
       phase.name,
       phase.deadline == null
-          ? '${phase.parts} ${_parts(phase.parts)} — no date'
+          ? '${phase.parts} ${_parts(phase.parts)} - no date'
           : '${formatScheduleDate(phase.deadline!)} · ${phase.parts} '
                 '${_parts(phase.parts)}',
     );
@@ -669,7 +669,7 @@ String renderBriefingText(ProjectBriefing briefing, {required String title}) {
     out.writeln('ORDER BY');
     for (final day in o.nextOrders) {
       out.writeln(
-        '  ${formatScheduleDate(day.date)} — ${day.parts} '
+        '  ${formatScheduleDate(day.date)} - ${day.parts} '
         '${_parts(day.parts)} · '
         '${formatDayGap(daysBetween(briefing.asOf, day.date))}',
       );
@@ -684,7 +684,7 @@ String renderBriefingText(ProjectBriefing briefing, {required String title}) {
         if (todo.scope.isNotEmpty) todo.scope,
         if (todo.due != null)
           todo.late
-              ? 'due ${formatScheduleDate(todo.due!)} — '
+              ? 'due ${formatScheduleDate(todo.due!)} - '
                     '${formatDayGap(daysBetween(briefing.asOf, todo.due!))}'
               : 'due ${formatScheduleDate(todo.due!)}',
         if (todo.blocked) 'waiting on somebody',
