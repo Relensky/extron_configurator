@@ -216,9 +216,11 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
         for (final t in ordered)
           [
             t.text,
-            t.roomId.isEmpty
+            t.isWholeJob
                 ? 'the job'
-                : roomNames[t.roomId] ?? t.roomId,
+                : t.roomId.isNotEmpty
+                    ? roomNames[t.roomId] ?? t.roomId
+                    : t.scopeLabel,
             kProjectTodoStateLabels[t.state] ?? '',
             t.due == null
                 ? ''
@@ -456,6 +458,42 @@ List<ReportSection> projectTimelineSections(
     ],
   ));
 
+  // The phases, when a job has split into them: each one's delivery date is
+  // what its parts are worked back from, so a reader checking a date needs to
+  // see them.
+  if (estimate.project.tracks.isNotEmpty) {
+    sections.add((
+      title: 'Delivery phases',
+      header: const ['Phase', 'On site by', 'Parts', 'First order', 'Notes'],
+      rows: [
+        for (final entry in schedule.byTrack(estimate.project))
+          [
+            entry.track?.name ?? 'With the job',
+            // A phase with no date of its own falls back to the job's, and
+            // says so — otherwise two phases print the same date and nothing
+            // explains why.
+            entry.track?.deadline != null
+                ? formatScheduleDate(entry.track!.deadline!)
+                : estimate.project.deliveryDeadline == null
+                ? 'not set'
+                : '${formatScheduleDate(estimate.project.deliveryDeadline!)}'
+                      ' (from the job)',
+            entry.parts.length,
+            () {
+              DateTime? first;
+              for (final p in entry.parts) {
+                final d = p.orderBy;
+                if (d == null) continue;
+                if (first == null || d.isBefore(first)) first = d;
+              }
+              return first == null ? '—' : formatScheduleDate(first);
+            }(),
+            entry.track?.notes ?? '',
+          ],
+      ],
+    ));
+  }
+
   final dated = [for (final l in schedule.lines) if (l.orderBy != null) l];
   if (dated.isNotEmpty) {
     sections.add((
@@ -465,6 +503,7 @@ List<ReportSection> projectTimelineSections(
         'Part',
         'Qty',
         'Vendor',
+        'Phase',
         'Lead time',
         'On site by',
         'Status',
@@ -476,6 +515,7 @@ List<ReportSection> projectTimelineSections(
             l.line.description,
             l.line.qty,
             l.line.vendor?.name ?? 'UNTAGGED',
+            l.trackName,
             formatLeadTime(l.leadDays),
             // The early ones are called out: a part wanted ahead of the job is
             // the thing somebody has to remember.

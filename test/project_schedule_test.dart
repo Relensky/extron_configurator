@@ -134,6 +134,27 @@ void main() {
       );
     });
 
+    test('a lead time that STRADDLES the clock change keeps its day', () {
+      // The case the test below missed and a real export got wrong: both of
+      // ITS endpoints were on the same side of the switch, so nothing moved.
+      // Here the need-by date is in summer time and the order date is not, and
+      // subtracting a fixed number of HOURS lands at 23:00 the day before —
+      // which, reduced to a date, silently eats a day of lead time in the
+      // direction that misses the delivery.
+      final screen = part('Projection screen');
+      final project = BuildingProject(
+        deliveryDeadline: DateTime(2026, 4, 1),
+        partLeadTimes: {screen.key: 30},
+      );
+      final line = buildProjectSchedule(
+        estimate: estimateOf(project, [screen]),
+        asOf: DateTime(2026, 1, 1),
+      ).lines.single;
+
+      expect(line.orderBy, DateTime(2026, 3, 2));
+      expect(daysBetween(line.orderBy!, DateTime(2026, 4, 1)), 30);
+    });
+
     test('a lead time crossing a daylight-saving boundary keeps its day', () {
       // Northern-hemisphere clocks move in March, and subtracting local
       // DateTimes across that boundary yields 23 hours for one of the days.

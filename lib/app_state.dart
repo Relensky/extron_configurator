@@ -10045,11 +10045,76 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  // --- the phases a job delivers in -----------------------------------------
+  //  A building is not finished on one date: the conduit and the mounts go in
+  //  while the walls are open, the racks months later. See [ProjectTrack].
+
+  /// Adds a delivery phase and hands it back.
+  ProjectTrack addProjectTrack(String name, {DateTime? deadline}) {
+    final track = project.addTrack(name, deadline: deadline);
+    _projectChanged();
+    return track;
+  }
+
+  /// Puts the usual two phases on a job that has none yet, and says how many
+  /// it added — nothing when the job already has its own.
+  int addStarterProjectTracks() {
+    if (project.tracks.isNotEmpty) return 0;
+    project.tracks.addAll(starterTracks(project));
+    _projectChanged();
+    return project.tracks.length;
+  }
+
+  void updateProjectTrack(ProjectTrack track) {
+    project.updateTrack(track);
+    _projectChanged();
+  }
+
+  void setProjectTrackDeadline(String id, DateTime? date) {
+    project.setTrackDeadline(id, date);
+    _projectChanged();
+  }
+
+  void removeProjectTrack(String id) {
+    project.removeTrack(id);
+    _projectChanged();
+  }
+
+  /// Puts one master-list part on a phase, or back with the job when blank.
+  void setProjectPartTrack(String partKey, String trackId) {
+    project.setPartTrack(partKey, trackId);
+    _projectChanged();
+  }
+
+  /// How many calendar exports this session has produced, incremented.
+  ///
+  /// Goes into the ICS SEQUENCE field, which is how a calendar recognises a
+  /// re-exported file as a REVISION of the events it already imported rather
+  /// than as a second set of them. Without a rising number, moving a deadline
+  /// and exporting again leaves the old dates sitting in somebody's calendar
+  /// beside the new ones — worse than having exported nothing.
+  ///
+  /// Session-scoped rather than saved: the events are matched by uid, and the
+  /// only requirement on the sequence is that it rises within a run of
+  /// exports. Persisting it would put a counter in the project file that
+  /// nothing else has any use for.
+  int _reminderSequence = 0;
+
+  int nextReminderSequence() => ++_reminderSequence;
+
   // --- the job's to-do list -------------------------------------------------
 
   /// Adds a note to the job's list. Blank text does nothing.
-  void addProjectTodo(String text, {String roomId = ''}) {
-    final id = project.addTodo(text, roomId: roomId);
+  ///
+  /// A note is about the job, or about one room, or about something somebody
+  /// typed — [roomId] and [scopeLabel] are the second and third, and naming a
+  /// room wins over a label.
+  void addProjectTodo(
+    String text, {
+    String roomId = '',
+    String scopeLabel = '',
+  }) {
+    final id = project.addTodo(text, roomId: roomId, scopeLabel: scopeLabel);
     if (id.isEmpty) return;
     _projectChanged();
   }
@@ -10066,6 +10131,12 @@ class AppStateProvider extends ChangeNotifier {
 
   void setProjectTodoRoom(String id, String roomId) {
     project.setTodoRoom(id, roomId);
+    _projectChanged();
+  }
+
+  /// Files one note under a typed scope, or blank to put it back on the job.
+  void setProjectTodoScopeLabel(String id, String label) {
+    project.setTodoScopeLabel(id, label);
     _projectChanged();
   }
 

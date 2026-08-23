@@ -1,0 +1,206 @@
+"""Draw the Room Config Builder icon artwork.
+
+    python tools/draw_app_icon.py            # writes design/icon.png
+    python tools/make_app_icon.py design/icon.png   # then push it everywhere
+
+This produces the ARTWORK only. Getting it onto every platform is
+make_app_icon.py's job, which already knows each platform's rules — the Apple
+sets driven from their own Contents.json, iOS flattened because it may not
+carry alpha, the maskable web icons inset to the safe zone.
+
+THE DRAWING. A construction helmet over a gear, arranged so the whole thing
+reads as a face: the helmet is the head, the gear is a beard around the jaw,
+and the gear's inner arc is the smile. Three flat colours and one charcoal
+outline weight, matching the icon this replaced.
+
+Everything is drawn at SUPERSAMPLE times the final size and reduced with
+LANCZOS. There is no vector rasteriser in this project's toolchain, and that
+is what keeps the gear teeth and the helmet's dome clean at 1024 without one.
+"""
+
+import math
+import os
+from PIL import Image, ImageDraw
+
+ORANGE = (246, 146, 30, 255)     # #F6921E, off the icon this replaced
+BLUE = (63, 169, 245, 255)       # #3FA9F5
+CHARCOAL = (64, 64, 65, 255)     # #404041
+NOTHING = (0, 0, 0, 0)
+
+SIZE = 1024
+SUPERSAMPLE = 4
+S = SIZE * SUPERSAMPLE
+STROKE = 13                       # in final pixels
+
+
+def px(v):
+    """A final-pixel measurement in supersampled pixels."""
+    return int(round(v * SUPERSAMPLE))
+
+
+def polar(cx, cy, r, deg):
+    a = math.radians(deg)
+    return (cx + r * math.cos(a), cy + r * math.sin(a))
+
+
+def arc_points(cx, cy, r, deg0, deg1, steps=48):
+    return [
+        polar(cx, cy, r, deg0 + (deg1 - deg0) * i / steps)
+        for i in range(steps + 1)
+    ]
+
+
+def gear_points(cx, cy, r_tip, r_root, teeth):
+    """A gear outline: chunky trapezoidal teeth, arcs at root and tip.
+
+    The teeth are what make the ring read as a beard rather than as a washer,
+    so they are wide and shallow. Narrow ones read as spikes at icon size — the
+    first attempt looked like a sun, not a chin.
+    """
+    pts = []
+    step = 360.0 / teeth
+    for i in range(teeth):
+        base = i * step
+        pts += arc_points(cx, cy, r_root, base, base + step * 0.20, steps=5)
+        pts.append(polar(cx, cy, r_tip, base + step * 0.30))
+        pts += arc_points(
+            cx, cy, r_tip, base + step * 0.30, base + step * 0.70, steps=7
+        )
+        pts.append(polar(cx, cy, r_root, base + step * 0.80))
+    return pts
+
+
+def crescent(cx, cy, r_out, r_in, deg0, deg1):
+    """A filled arc band — the shape a smile actually is.
+
+    Stroking a sampled curve at this weight breaks into scallops wherever the
+    samples sit closer together than the line is wide, which is what the smile
+    looked like drawn as a polyline. A closed band has no such problem.
+    """
+    return arc_points(cx, cy, r_out, deg0, deg1, steps=64) + arc_points(
+        cx, cy, r_in, deg1, deg0, steps=64
+    )
+
+
+def build():
+    img = Image.new("RGBA", (S, S), NOTHING)
+    d = ImageDraw.Draw(img)
+    w = px(STROKE)
+    cx = S / 2
+
+    # ---- the gear: the beard, and the smile it closes around ---------------
+    # Drawn first so the helmet's brim sits over its top, the way the two
+    # overlapped in the icon this replaces.
+    gear_cy = px(672)
+    r_tip = px(345)
+    r_root = px(272)
+    r_hole = px(186)
+
+    d.polygon(
+        gear_points(cx, gear_cy, r_tip, r_root, 12),
+        fill=BLUE,
+        outline=CHARCOAL,
+        width=w,
+    )
+
+    # Punch the face out of the middle. ImageDraw writes raw pixels rather than
+    # compositing, so filling with a transparent colour genuinely erases.
+    #
+    # The opening sits ABOVE the gear's own centre, which is what turns a ring
+    # into a beard: the blue is left thick under the chin and thin at the
+    # temples, the way a beard sits on a face. Concentric, it read as a washer
+    # with a face in it.
+    face_cy = gear_cy - px(40)
+    d.ellipse(
+        [cx - r_hole, face_cy - r_hole, cx + r_hole, face_cy + r_hole],
+        fill=NOTHING,
+        outline=CHARCOAL,
+        width=w,
+    )
+
+    # ---- the helmet --------------------------------------------------------
+    brim_top = px(524)
+    brim_bottom = px(624)
+    dome_bottom = brim_top + px(12)
+    dome_rx = px(382)
+    dome_ry = px(388)
+
+    # Crown: the top half of an ellipse, closed along the brim line.
+    crown = [
+        (cx + (x - cx) * dome_rx, dome_bottom + (y - dome_bottom) * dome_ry)
+        for (x, y) in arc_points(cx, dome_bottom, 1.0, 180, 360, steps=180)
+    ]
+    d.polygon(crown, fill=ORANGE, outline=CHARCOAL, width=w)
+
+    # The ridge along the crown, standing proud of it.
+    d.rounded_rectangle(
+        [cx - px(88), px(96), cx + px(88), px(330)],
+        radius=px(44),
+        fill=ORANGE,
+        outline=CHARCOAL,
+        width=w,
+    )
+
+    # The two vents either side of the ridge, erased through to the ground.
+    for sign in (-1, 1):
+        x0 = cx + sign * px(112)
+        x1 = cx + sign * px(170)
+        d.rounded_rectangle(
+            [min(x0, x1), px(150), max(x0, x1), px(430)],
+            radius=px(29),
+            fill=NOTHING,
+            outline=CHARCOAL,
+            width=w,
+        )
+
+    # The brim, wider than the crown and sitting across it.
+    d.rounded_rectangle(
+        [px(30), brim_top, S - px(30), brim_bottom],
+        radius=px(52),
+        fill=ORANGE,
+        outline=CHARCOAL,
+        width=w,
+    )
+
+    # The slot the original carries on the right of its brim.
+    d.rounded_rectangle(
+        [S - px(390), brim_top + px(18), S - px(60), brim_top + px(72)],
+        radius=px(27),
+        fill=NOTHING,
+        outline=CHARCOAL,
+        width=w,
+    )
+
+    # ---- the face ----------------------------------------------------------
+    # Solid charcoal, no outline: at 32 px an outlined eye fills in and turns
+    # into a blob.
+    eye_y = face_cy + px(52)
+    eye_rx = px(31)
+    eye_ry = px(37)
+    for sign in (-1, 1):
+        ex = cx + sign * px(103)
+        d.ellipse(
+            [ex - eye_rx, eye_y - eye_ry, ex + eye_rx, eye_y + eye_ry],
+            fill=CHARCOAL,
+        )
+
+    # The smile: concentric with the gear's inner edge, so the beard reads as
+    # closing around it rather than sitting behind it.
+    r_smile = px(128)
+    half = px(16)
+    d.polygon(
+        crescent(cx, face_cy, r_smile + half, r_smile - half, 22, 158),
+        fill=CHARCOAL,
+    )
+    for deg in (22, 158):
+        ex, ey = polar(cx, face_cy, r_smile, deg)
+        d.ellipse([ex - half, ey - half, ex + half, ey + half], fill=CHARCOAL)
+
+    return img.resize((SIZE, SIZE), Image.LANCZOS)
+
+
+if __name__ == "__main__":
+    out = os.path.join("design", "icon.png")
+    build().save(out)
+    print("wrote", out)
+    print("now: python tools/make_app_icon.py", out)

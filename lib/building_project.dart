@@ -133,6 +133,111 @@ int daysBetween(DateTime from, DateTime to) {
   return b.difference(a).inDays;
 }
 
+/// [when] moved by [days] calendar days — negative to go back.
+///
+/// NOT `subtract(Duration(days: n))`, which is the same trap [daysBetween]
+/// avoids from the other side. A Duration is a fixed number of HOURS, so
+/// stepping back thirty days across the spring clock change lands at 23:00 on
+/// the day before the one wanted, and reducing that to a date silently loses a
+/// whole day — of lead time, in the direction that misses the delivery. This
+/// was live: a part needed on 1 April 2026 with a thirty-day lead came back
+/// with an order date of 1 March instead of 2 March.
+///
+/// `DateTime(y, m, d + n)` normalizes the day-of-month itself, over month and
+/// year ends, with no hours involved for the clock change to eat.
+DateTime addDays(DateTime when, int days) =>
+    DateTime(when.year, when.month, when.day + days);
+
+// ---------------------------------------------------------------------------
+//  TRACKS: THE JOB HAS MORE THAN ONE DEADLINE
+// ---------------------------------------------------------------------------
+//  A building does not get finished on one date. The conduit, the backboxes and
+//  the screen mounts go in while the walls are open; the racks, the switchers
+//  and the cameras go in months later, after the ceiling is closed and the room
+//  is painted. Those are two different deliveries with two different dates, and
+//  a single project deadline can only ever be right for one of them.
+//
+//  So a job carries TRACKS: named phases, each with its own delivery date. A
+//  part belongs to one, and its order-by date is worked back from that track's
+//  date rather than from the job's. Laid out together they are the thing this
+//  exists for — you can see the infrastructure order going in three months
+//  before the tech order, and whether the two line up.
+//
+//  THE LIST IS NOT FIXED. Two are offered on a new job because they are the
+//  split nearly every job has, but they are ordinary rows: rename them, delete
+//  them, add "Phase 2" or "Furniture" or whatever this job is actually divided
+//  into. A track a job does not use costs nothing, and a job that never adds
+//  one behaves exactly as it did before tracks existed — everything falls back
+//  to the project deadline.
+
+/// One phase of a job, with the date its equipment has to be on site by.
+class ProjectTrack {
+  final String id;
+
+  /// What this phase is called on the timeline — 'Infrastructure', 'Tech
+  /// install', 'Phase 2'.
+  final String name;
+
+  /// When this phase's equipment has to be delivered, or null when nobody has
+  /// said and it should fall back to the job's own deadline.
+  final DateTime? deadline;
+
+  /// A line of explanation for the people reading the timeline — what belongs
+  /// in this phase and why it is separate.
+  final String notes;
+
+  const ProjectTrack({
+    required this.id,
+    required this.name,
+    this.deadline,
+    this.notes = '',
+  });
+
+  ProjectTrack copyWith({
+    String? name,
+    DateTime? deadline,
+    bool clearDeadline = false,
+    String? notes,
+  }) => ProjectTrack(
+    id: id,
+    name: name ?? this.name,
+    deadline: clearDeadline ? null : (deadline ?? this.deadline),
+    notes: notes ?? this.notes,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    if (deadline != null) 'deadline': formatIsoDate(deadline!),
+    if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+  };
+
+  factory ProjectTrack.fromJson(Map<String, dynamic> json) => ProjectTrack(
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    deadline: parseIsoDate(json['deadline']),
+    notes: json['notes']?.toString() ?? '',
+  );
+}
+
+/// The split nearly every job has, offered on a new project the way
+/// [starterVendors] offers the usual vendor split — as a starting point to
+/// edit, not a structure to work around.
+List<ProjectTrack> starterTracks(BuildingProject project) => [
+  ProjectTrack(
+    id: project.nextTrackId(),
+    name: 'Infrastructure',
+    notes: 'Conduit, backboxes, mounts, floor boxes — anything that goes in '
+        'while the walls are open.',
+  ),
+  ProjectTrack(
+    id: project.nextTrackId(),
+    name: 'Tech install',
+    notes: 'Racks, switchers, displays, cameras — everything that lands after '
+        'the room is closed up.',
+  ),
+];
+
 // ---------------------------------------------------------------------------
 //  THE JOB'S OWN TO-DO LIST
 // ---------------------------------------------------------------------------
@@ -211,11 +316,26 @@ class ProjectTodo {
   /// is what makes [isOverdue] worth surfacing on its own.
   final DateTime? due;
 
-  /// The room this is about, by [ProjectRoomRef.id], or '' for the job as a
-  /// whole. Optional on purpose: half of these are about a specific room and
-  /// half are about the job, and forcing a room onto the second kind would
-  /// make them all get filed against whichever room came first.
+  /// The room this is about, by [ProjectRoomRef.id], or '' when it is not
+  /// about one room.
+  ///
+  /// Optional on purpose: forcing a room onto a note about the job would file
+  /// them all against whichever room happened to come first.
   final String roomId;
+
+  /// A scope somebody typed, for the notes that are about neither the whole
+  /// job nor one room.
+  ///
+  /// A real job does not divide cleanly into those two. "Extron", "the punch
+  /// list", "phase 2", "the AV closet", "whoever is doing the conduit" — these
+  /// are all things a handful of notes belong to, and a dropdown of rooms can
+  /// name none of them. Rather than guess at a taxonomy, the third option is a
+  /// box: whatever is typed becomes the label, and notes sharing a label read
+  /// as a group.
+  ///
+  /// [roomId] wins when both are set, because a room is a thing the project
+  /// actually knows about and a typed label is not.
+  final String scopeLabel;
 
   const ProjectTodo({
     required this.id,
@@ -225,7 +345,16 @@ class ProjectTodo {
     this.completed,
     this.due,
     this.roomId = '',
+    this.scopeLabel = '',
   });
+
+  /// True when this note is about the job as a whole — neither a room nor a
+  /// typed scope.
+  bool get isWholeJob => roomId.isEmpty && scopeLabel.trim().isEmpty;
+
+  /// What the note is filed under, for a caller that cannot resolve a room id.
+  /// Returns '' for a whole-job note; [roomId] wins over [scopeLabel].
+  String scopeKey() => roomId.isNotEmpty ? roomId : scopeLabel.trim();
 
   bool get isDone => state == ProjectTodoState.done;
 
@@ -253,6 +382,7 @@ class ProjectTodo {
     DateTime? due,
     bool clearDue = false,
     String? roomId,
+    String? scopeLabel,
   }) => ProjectTodo(
     id: id,
     text: text ?? this.text,
@@ -261,6 +391,7 @@ class ProjectTodo {
     completed: clearCompleted ? null : (completed ?? this.completed),
     due: clearDue ? null : (due ?? this.due),
     roomId: roomId ?? this.roomId,
+    scopeLabel: scopeLabel ?? this.scopeLabel,
   );
 
   Map<String, dynamic> toJson() => {
@@ -271,6 +402,7 @@ class ProjectTodo {
     if (completed != null) 'completed': formatIsoDate(completed!),
     if (due != null) 'due': formatIsoDate(due!),
     if (roomId.isNotEmpty) 'roomId': roomId,
+    if (scopeLabel.trim().isNotEmpty) 'scopeLabel': scopeLabel.trim(),
   };
 
   factory ProjectTodo.fromJson(Map<String, dynamic> json) => ProjectTodo(
@@ -283,6 +415,7 @@ class ProjectTodo {
     completed: parseIsoDate(json['completed']),
     due: parseIsoDate(json['due']),
     roomId: json['roomId']?.toString() ?? '',
+    scopeLabel: json['scopeLabel']?.toString().trim() ?? '',
   );
 }
 
@@ -611,12 +744,22 @@ class BuildingProject {
   /// on screen never rewrites the file.
   final List<ProjectTodo> todos;
 
+  /// The phases this job delivers in, in timeline order — see [ProjectTrack].
+  /// Empty on a job that has never used them, which behaves exactly as it did
+  /// before tracks existed.
+  final List<ProjectTrack> tracks;
+
+  /// Core component key -> track id. A part with no entry is delivered with
+  /// the job as a whole, against [deliveryDeadline].
+  final Map<String, String> partTracks;
+
   /// Counters behind [nextRoomId] / [nextVendorId], persisted so ids stay
   /// unique across sessions — a reused id would re-point somebody's hand
   /// vendor tags at a different room.
   int _roomCounter;
   int _vendorCounter;
   int _todoCounter;
+  int _trackCounter;
 
   BuildingProject({
     this.name = '',
@@ -632,18 +775,24 @@ class BuildingProject {
     Map<String, int>? partLeadTimes,
     Map<String, DateTime>? partNeedBy,
     List<ProjectTodo>? todos,
+    List<ProjectTrack>? tracks,
+    Map<String, String>? partTracks,
     int roomCounter = 0,
     int vendorCounter = 0,
     int todoCounter = 0,
+    int trackCounter = 0,
   }) : rooms = rooms ?? [],
        vendors = vendors ?? [],
        partVendors = partVendors ?? {},
        partLeadTimes = partLeadTimes ?? {},
        partNeedBy = partNeedBy ?? {},
        todos = todos ?? [],
+       tracks = tracks ?? [],
+       partTracks = partTracks ?? {},
        _roomCounter = roomCounter,
        _vendorCounter = vendorCounter,
-       _todoCounter = todoCounter;
+       _todoCounter = todoCounter,
+       _trackCounter = trackCounter;
 
   bool get isEmpty =>
       rooms.isEmpty &&
@@ -653,6 +802,8 @@ class BuildingProject {
       partLeadTimes.isEmpty &&
       partNeedBy.isEmpty &&
       todos.isEmpty &&
+      tracks.isEmpty &&
+      partTracks.isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       jobNumber.trim().isEmpty &&
@@ -666,6 +817,7 @@ class BuildingProject {
   String nextRoomId() => 'room${++_roomCounter}';
   String nextVendorId() => 'vendor${++_vendorCounter}';
   String nextTodoId() => 'todo${++_todoCounter}';
+  String nextTrackId() => 'track${++_trackCounter}';
 
   // -------------------------------------------------------------------------
   //  THE TO-DO LIST
@@ -698,6 +850,7 @@ class BuildingProject {
   String addTodo(
     String text, {
     String roomId = '',
+    String scopeLabel = '',
     DateTime? created,
     DateTime? due,
   }) {
@@ -711,9 +864,30 @@ class BuildingProject {
         created: dateOnly(created ?? DateTime.now()),
         due: due == null ? null : dateOnly(due),
         roomId: roomId,
+        // A room and a typed label are alternatives, not both: the room is the
+        // stronger statement, so naming one clears the other rather than
+        // leaving a note filed under two things at once.
+        scopeLabel: roomId.isNotEmpty ? '' : scopeLabel.trim(),
       ),
     );
     return id;
+  }
+
+  /// Every scope somebody has typed on this job, in use order, deduplicated
+  /// case-insensitively.
+  ///
+  /// What the scope box offers as suggestions: a label is only useful when
+  /// more than one note carries it, and retyping "punch list" with a capital P
+  /// would quietly split the group in two.
+  List<String> get todoScopeLabels {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final t in todos) {
+      final label = t.scopeLabel.trim();
+      if (label.isEmpty) continue;
+      if (seen.add(label.toLowerCase())) out.add(label);
+    }
+    return out;
   }
 
   /// Sets the date one note has to be done by, or clears it so it is simply on
@@ -752,10 +926,30 @@ class BuildingProject {
     if (i >= 0) todos[i] = todos[i].copyWith(text: trimmed);
   }
 
-  /// Files one note against a room, or against the job when [roomId] is blank.
+  /// Files one note against a room. Naming a room clears any typed scope — the
+  /// two are alternatives.
   void setTodoRoom(String id, String roomId) {
     final i = todos.indexWhere((t) => t.id == id);
-    if (i >= 0) todos[i] = todos[i].copyWith(roomId: roomId);
+    if (i < 0) return;
+    todos[i] = todos[i].copyWith(
+      roomId: roomId,
+      scopeLabel: roomId.isEmpty ? todos[i].scopeLabel : '',
+    );
+  }
+
+  /// Files one note under a scope somebody typed — "Extron", "punch list",
+  /// "phase 2". Blank puts it back on the job as a whole.
+  ///
+  /// Clears [ProjectTodo.roomId] for the same reason [setTodoRoom] clears this:
+  /// a note belongs to one thing.
+  void setTodoScopeLabel(String id, String label) {
+    final i = todos.indexWhere((t) => t.id == id);
+    if (i < 0) return;
+    final trimmed = label.trim();
+    todos[i] = todos[i].copyWith(
+      scopeLabel: trimmed,
+      roomId: trimmed.isEmpty ? todos[i].roomId : '',
+    );
   }
 
   void removeTodo(String id) => todos.removeWhere((t) => t.id == id);
@@ -873,6 +1067,74 @@ class BuildingProject {
     }
   }
 
+  // -------------------------------------------------------------------------
+  //  TRACKS
+  // -------------------------------------------------------------------------
+
+  ProjectTrack? trackById(String id) {
+    if (id.isEmpty) return null;
+    for (final t in tracks) {
+      if (t.id == id) return t;
+    }
+    return null;
+  }
+
+  /// The track [partKey] is delivered on, or null when it goes with the job.
+  ///
+  /// A pin naming a track that has since been deleted resolves to null rather
+  /// than to a dangling id, the same way a deleted vendor does.
+  ProjectTrack? trackForPart(String partKey) =>
+      trackById(partTracks[partKey] ?? '');
+
+  /// The date [partKey] has to be on site by, before its own date is taken
+  /// into account: its track's deadline, or the job's.
+  DateTime? trackDeadlineForPart(String partKey) =>
+      trackForPart(partKey)?.deadline ?? deliveryDeadline;
+
+  ProjectTrack addTrack(String name, {DateTime? deadline, String notes = ''}) {
+    final track = ProjectTrack(
+      id: nextTrackId(),
+      name: name.trim().isEmpty ? 'Phase ${tracks.length + 1}' : name.trim(),
+      deadline: deadline == null ? null : dateOnly(deadline),
+      notes: notes,
+    );
+    tracks.add(track);
+    return track;
+  }
+
+  void updateTrack(ProjectTrack track) {
+    final i = tracks.indexWhere((t) => t.id == track.id);
+    if (i >= 0) tracks[i] = track;
+  }
+
+  /// Sets one track's delivery date, or clears it so the track falls back to
+  /// the job's own deadline.
+  void setTrackDeadline(String id, DateTime? date) {
+    final i = tracks.indexWhere((t) => t.id == id);
+    if (i < 0) return;
+    tracks[i] = tracks[i].copyWith(
+      deadline: date == null ? null : dateOnly(date),
+      clearDeadline: date == null,
+    );
+  }
+
+  /// Drops a track and every part pinned to it. Leaving the pins would file
+  /// parts against a phase with no row to click, which is how a part
+  /// disappears off a timeline nobody can find it on.
+  void removeTrack(String id) {
+    tracks.removeWhere((t) => t.id == id);
+    partTracks.removeWhere((_, v) => v == id);
+  }
+
+  /// Puts [partKey] on [trackId], or back with the job when it is blank.
+  void setPartTrack(String partKey, String trackId) {
+    if (trackId.isEmpty) {
+      partTracks.remove(partKey);
+    } else {
+      partTracks[partKey] = trackId;
+    }
+  }
+
   /// Records how many calendar days [partKey] takes to arrive, or forgets the
   /// figure when [days] is null or negative.
   ///
@@ -968,9 +1230,12 @@ class BuildingProject {
         for (final e in partNeedBy.entries) e.key: formatIsoDate(e.value),
       },
     if (todos.isNotEmpty) 'todos': [for (final t in todos) t.toJson()],
+    if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
+    if (partTracks.isNotEmpty) 'partTracks': partTracks,
     'roomCounter': _roomCounter,
     'vendorCounter': _vendorCounter,
     if (_todoCounter > 0) 'todoCounter': _todoCounter,
+    if (_trackCounter > 0) 'trackCounter': _trackCounter,
   };
 
   factory BuildingProject.fromJson(Map<String, dynamic> json) {
@@ -1013,6 +1278,19 @@ class BuildingProject {
     // A note with no words on it is not a note. Everything else about a to-do
     // is recoverable — a missing date becomes today, an unreadable state
     // becomes open — but there is nothing to show for an empty one.
+    // A track with no name cannot be picked or read, so it is dropped the way
+    // an empty note is.
+    final tracks = [
+      for (final t in (json['tracks'] as List? ?? []))
+        if (t is Map && t['name']?.toString().trim().isNotEmpty == true)
+          ProjectTrack.fromJson(Map<String, dynamic>.from(t)),
+    ];
+    final trackPins = <String, String>{};
+    final rawTracks = json['partTracks'];
+    if (rawTracks is Map) {
+      rawTracks.forEach((k, v) => trackPins[k.toString()] = v.toString());
+    }
+
     final todos = [
       for (final t in (json['todos'] as List? ?? []))
         if (t is Map && t['text']?.toString().trim().isNotEmpty == true)
@@ -1049,6 +1327,12 @@ class BuildingProject {
       partLeadTimes: leadTimes,
       partNeedBy: needBy,
       todos: todos,
+      tracks: tracks,
+      partTracks: trackPins,
+      trackCounter: [
+        (json['trackCounter'] as num?)?.toInt() ?? 0,
+        highest(tracks.map((t) => t.id), 'track'),
+      ].reduce((a, b) => a > b ? a : b),
       // Rebuilt from the ids present as well as read, for the same reason the
       // room and vendor counters are: a reused id would make two notes the
       // same note, and ticking one would tick the other.
@@ -1110,9 +1394,12 @@ class BuildingProject {
     partLeadTimes: Map<String, int>.from(partLeadTimes),
     partNeedBy: Map<String, DateTime>.from(partNeedBy),
     todos: List<ProjectTodo>.from(todos),
+    tracks: List<ProjectTrack>.from(tracks),
+    partTracks: Map<String, String>.from(partTracks),
     roomCounter: _roomCounter,
     vendorCounter: _vendorCounter,
     todoCounter: _todoCounter,
+    trackCounter: _trackCounter,
   );
 }
 

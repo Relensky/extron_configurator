@@ -1942,10 +1942,11 @@ class _ScheduleCells extends StatelessWidget {
                           color: color,
                         ),
                       ),
-                    // The early-delivery flag lives here rather than in a
-                    // column of its own: it is rare, and a whole column that
-                    // is blank on ninety-five rows out of a hundred costs
-                    // every row width to say nothing.
+                    // WHY the date is what it is, under the date itself. Both
+                    // of these live here rather than in columns of their own:
+                    // each is blank on most rows, and a column that says
+                    // nothing on ninety rows in a hundred costs every row the
+                    // width anyway.
                     if (part.needByIsOwn && part.needBy != null)
                       Text(
                         'on site ${formatScheduleDate(part.needBy!)}',
@@ -1954,6 +1955,18 @@ class _ScheduleCells extends StatelessWidget {
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           fontStyle: FontStyle.italic,
+                        ),
+                      )
+                    // The phase it rides, when the job has split into them —
+                    // otherwise two parts with the same lead time and
+                    // different order dates look like an error.
+                    else if (part.track != null)
+                      Text(
+                        part.track!.name,
+                        textAlign: TextAlign.right,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                   ],

@@ -193,23 +193,42 @@ class _AddTodoBar extends StatefulWidget {
   State<_AddTodoBar> createState() => _AddTodoBarState();
 }
 
+/// The sentinel the scope dropdown uses for "something I will type".
+///
+/// Not a room id — those are always `room<n>` — so it can never collide with
+/// one, the same trick the parts list's filters use.
+const String _kCustomScope = '<custom>';
+
 class _AddTodoBarState extends State<_AddTodoBar> {
   final TextEditingController _text = TextEditingController();
+  final TextEditingController _scope = TextEditingController();
   final FocusNode _focus = FocusNode();
-  String _roomId = '';
+  final FocusNode _scopeFocus = FocusNode();
+
+  /// '' for the job, a room id, or [_kCustomScope] when the scope is typed.
+  String _scopeChoice = '';
 
   @override
   void dispose() {
     _text.dispose();
+    _scope.dispose();
     _focus.dispose();
+    _scopeFocus.dispose();
     super.dispose();
   }
 
   void _add() {
     if (_text.text.trim().isEmpty) return;
-    widget.provider.addProjectTodo(_text.text, roomId: _roomId);
+    final custom = _scopeChoice == _kCustomScope;
+    widget.provider.addProjectTodo(
+      _text.text,
+      roomId: custom ? '' : _scopeChoice,
+      scopeLabel: custom ? _scope.text : '',
+    );
     _text.clear();
-    // Focus stays in the field: these arrive in threes, off one phone call.
+    // The SCOPE is deliberately left as it was. Notes arrive in batches about
+    // the same thing — three about Extron, four about the punch list — and
+    // resetting the picker after every one would mean setting it every time.
     _focus.requestFocus();
     setState(() {});
   }
@@ -236,31 +255,91 @@ class _AddTodoBarState extends State<_AddTodoBar> {
               onSubmitted: (_) => _add(),
             ),
           ),
-          if (rooms.isNotEmpty) ...[
+          // What the note is ABOUT: the job, one room, or something typed.
+          // The third exists because a job does not divide cleanly into the
+          // first two — "Extron", "the punch list", "phase 2" are each a
+          // handful of notes and a room dropdown can name none of them.
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 180,
+            child: DropdownButtonFormField<String>(
+              key: const ValueKey('todo_new_room'),
+              initialValue: _scopeChoice,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'About',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem(value: '', child: Text('The job')),
+                for (final r in rooms)
+                  DropdownMenuItem(
+                    value: r.id,
+                    child: Text(
+                      r.label.trim().isEmpty ? r.fallbackName : r.label,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                const DropdownMenuItem(
+                  value: _kCustomScope,
+                  child: Text('Something else…'),
+                ),
+              ],
+              onChanged: (v) => setState(() => _scopeChoice = v ?? ''),
+            ),
+          ),
+          if (_scopeChoice == _kCustomScope) ...[
             const SizedBox(width: 8),
             SizedBox(
-              width: 190,
-              child: DropdownButtonFormField<String>(
-                key: const ValueKey('todo_new_room'),
-                initialValue: _roomId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'About',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+              width: 170,
+              // An Autocomplete over the labels already in use, because a
+              // second "Punch List" beside an existing "punch list" splits the
+              // group in two and nothing would ever say so.
+              child: RawAutocomplete<String>(
+                textEditingController: _scope,
+                focusNode: _scopeFocus,
+                optionsBuilder: (value) {
+                  final typed = value.text.trim().toLowerCase();
+                  return [
+                    for (final label in widget.provider.project.todoScopeLabels)
+                      if (typed.isEmpty || label.toLowerCase().contains(typed))
+                        label,
+                  ];
+                },
+                fieldViewBuilder: (_, controller, focus, onSubmit) => TextField(
+                  key: const ValueKey('todo_new_scope'),
+                  controller: controller,
+                  focusNode: focus,
+                  decoration: const InputDecoration(
+                    labelText: 'Called',
+                    hintText: 'punch list',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _add(),
                 ),
-                items: [
-                  const DropdownMenuItem(value: '', child: Text('The job')),
-                  for (final r in rooms)
-                    DropdownMenuItem(
-                      value: r.id,
-                      child: Text(
-                        r.label.trim().isEmpty ? r.fallbackName : r.label,
-                        overflow: TextOverflow.ellipsis,
+                optionsViewBuilder: (context, onSelected, options) => Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 4,
+                    child: SizedBox(
+                      width: 170,
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        children: [
+                          for (final o in options)
+                            ListTile(
+                              dense: true,
+                              title: Text(o),
+                              onTap: () => onSelected(o),
+                            ),
+                        ],
                       ),
                     ),
-                ],
-                onChanged: (v) => setState(() => _roomId = v ?? ''),
+                  ),
+                ),
               ),
             ),
           ],
@@ -367,6 +446,148 @@ class _DueButton extends StatelessWidget {
   }
 }
 
+/// What a note is filed under, as a control that changes it.
+///
+/// Three answers, which is what a real job needs: the whole job, one room, or
+/// something somebody types. The third is not a fallback — "Extron", "the
+/// punch list", "phase 2" are each a handful of notes, and no list of rooms
+/// can name any of them.
+class _ScopeButton extends StatelessWidget {
+  final ProjectTodo todo;
+  final AppStateProvider provider;
+
+  /// The resolved name, or '' when the note is about the job as a whole.
+  final String label;
+  final IconData icon;
+
+  const _ScopeButton({
+    required this.todo,
+    required this.provider,
+    required this.label,
+    required this.icon,
+  });
+
+  static const String _job = '<job>';
+  static const String _custom = '<custom>';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final rooms = provider.project.rooms;
+
+    return PopupMenuButton<String>(
+      key: ValueKey('todo_scope_${todo.id}'),
+      tooltip: 'What this note is about',
+      padding: EdgeInsets.zero,
+      position: PopupMenuPosition.under,
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: _job, child: Text('The job')),
+        for (final r in rooms)
+          PopupMenuItem(
+            value: r.id,
+            child: Text(r.label.trim().isEmpty ? r.fallbackName : r.label),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: _custom, child: Text('Something else…')),
+      ],
+      onSelected: (value) async {
+        if (value == _job) {
+          provider.setProjectTodoRoom(todo.id, '');
+          provider.setProjectTodoScopeLabel(todo.id, '');
+          return;
+        }
+        if (value != _custom) {
+          provider.setProjectTodoRoom(todo.id, value);
+          return;
+        }
+        final typed = await _askForScope(context, provider, todo.scopeLabel);
+        if (typed == null) return;
+        provider.setProjectTodoScopeLabel(todo.id, typed);
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            label.isEmpty ? Icons.work_outline : icon,
+            size: 12,
+            color: muted,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            label.isEmpty ? 'the job' : label,
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          Icon(Icons.arrow_drop_down, size: 14, color: muted),
+        ],
+      ),
+    );
+  }
+}
+
+/// Asks for a scope to file a note under. Null when the user backed out;
+/// blank is a real answer and means "back on the job".
+Future<String?> _askForScope(
+  BuildContext context,
+  AppStateProvider provider,
+  String initial,
+) {
+  final controller = TextEditingController(text: initial);
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('File this note under'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              key: const ValueKey('todo_scope_text'),
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Called',
+                hintText: 'punch list',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (v) => Navigator.of(ctx).pop(v),
+            ),
+            const SizedBox(height: 8),
+            // The labels already in use, as one tap each. A second "Punch
+            // List" beside an existing "punch list" splits the group in two
+            // and nothing would ever say so.
+            if (provider.project.todoScopeLabels.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final label in provider.project.todoScopeLabels)
+                    ActionChip(
+                      label: Text(label),
+                      onPressed: () => Navigator.of(ctx).pop(label),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('todo_scope_save'),
+          onPressed: () => Navigator.of(ctx).pop(controller.text),
+          child: const Text('File it'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// One note: tick it, park it, edit it, or throw it away.
 class _TodoRow extends StatelessWidget {
   final ProjectTodo todo;
@@ -401,7 +622,14 @@ class _TodoRow extends StatelessWidget {
                 ? 'added yesterday'
                 : 'open $age days';
 
+    // What this note is filed under, and the icon that says which KIND of
+    // scope it is — a room the project knows about, or a label somebody typed.
+    // Without the distinction a scope called "Bessey 103" would be
+    // indistinguishable from the actual room.
     final room = todo.roomId.isEmpty ? '' : roomNames[todo.roomId] ?? '';
+    final custom = todo.scopeLabel.trim();
+    final scopeText = room.isNotEmpty ? room : custom;
+    final scopeIcon = room.isNotEmpty ? Icons.meeting_room : Icons.sell_outlined;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 4),
@@ -453,16 +681,17 @@ class _TodoRow extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 12, bottom: 4),
                     child: Row(
                       children: [
-                        if (room.isNotEmpty) ...[
-                          Icon(Icons.meeting_room, size: 12, color: muted),
-                          const SizedBox(width: 3),
-                          Text(
-                            room,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: muted),
-                          ),
-                          const SizedBox(width: 10),
-                        ],
+                        // Editable in place, and on a done note too — filing
+                        // something correctly after the fact is exactly what
+                        // somebody does when they come back to a finished
+                        // list looking for one thing.
+                        _ScopeButton(
+                          todo: todo,
+                          provider: provider,
+                          label: scopeText,
+                          icon: scopeIcon,
+                        ),
+                        const SizedBox(width: 10),
                         Text(
                           ageText,
                           style: theme.textTheme.bodySmall?.copyWith(

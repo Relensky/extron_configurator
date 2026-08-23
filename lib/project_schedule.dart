@@ -87,9 +87,16 @@ class PartScheduleLine {
   /// otherwise the project's deadline, otherwise null.
   final DateTime? needBy;
 
-  /// True when [needBy] came from the part rather than from the project — the
-  /// screen that has to be in before the walls close.
+  /// True when [needBy] came from the part rather than from its track or the
+  /// job — the screen that has to be in before the walls close.
   final bool needByIsOwn;
+
+  /// The phase this part is delivered in, or null when it goes with the job as
+  /// a whole. See [ProjectTrack].
+  final ProjectTrack? track;
+
+  /// What the timeline calls this part's phase.
+  String get trackName => track?.name ?? 'The job';
 
   /// [needBy] minus [leadDays], and null when either is missing.
   final DateTime? orderBy;
@@ -109,6 +116,7 @@ class PartScheduleLine {
     required this.orderBy,
     required this.status,
     required this.daysUntilOrder,
+    this.track,
   });
 
   /// True when this row is something to act on rather than something to read.
@@ -180,11 +188,44 @@ class ProjectSchedule {
     return last;
   }
 
+  /// The parts on one phase, or the ones going with the job when [id] is ''.
+  List<PartScheduleLine> linesForTrack(String id) => [
+    for (final l in lines)
+      if ((l.track?.id ?? '') == id) l,
+  ];
+
+  /// Every phase that has parts on it, in the project's own track order, plus
+  /// the job itself when anything is delivered against the job's own deadline.
+  ///
+  /// The reading the timeline is for: two phases side by side, each with its
+  /// own delivery date and its own first order, so it is visible whether the
+  /// infrastructure order going in three months before the tech order actually
+  /// lines up with when the walls close.
+  List<({ProjectTrack? track, List<PartScheduleLine> parts})> byTrack(
+    BuildingProject project,
+  ) {
+    final out = <({ProjectTrack? track, List<PartScheduleLine> parts})>[];
+    for (final t in project.tracks) {
+      final parts = linesForTrack(t.id);
+      if (parts.isEmpty) continue;
+      out.add((track: t, parts: parts));
+    }
+    final loose = linesForTrack('');
+    if (loose.isNotEmpty) out.add((track: null, parts: loose));
+    return out;
+  }
+
   /// The distinct order-by dates, earliest first, with the parts due on each.
   ///
   /// What the timeline draws: an order date is a trip to the purchasing office,
   /// and eleven parts sharing one is one trip, not eleven rows.
-  List<({DateTime date, List<PartScheduleLine> parts})> get orderDays {
+  List<({DateTime date, List<PartScheduleLine> parts})> get orderDays =>
+      orderDaysOf(lines);
+
+  /// [orderDays] over any subset — what one track's own strip is drawn from.
+  static List<({DateTime date, List<PartScheduleLine> parts})> orderDaysOf(
+    List<PartScheduleLine> lines,
+  ) {
     final byDate = <String, List<PartScheduleLine>>{};
     final dates = <String, DateTime>{};
     for (final l in lines) {
@@ -248,13 +289,22 @@ PartScheduleLine schedulePart({
   DateTime? asOf,
 }) {
   final now = dateOnly(asOf ?? DateTime.now());
+
+  // THREE DATES, MOST SPECIFIC FIRST. The part's own date is somebody saying
+  // "this one, earlier"; the track's is the phase it is delivered in; the
+  // job's is the fallback for a project that never split into phases. Each
+  // level only ever narrows, so a job with no tracks behaves exactly as it did
+  // before they existed.
   final own = project.partNeedBy[line.key];
-  final needBy = own ?? project.deliveryDeadline;
+  final track = project.trackForPart(line.key);
+  final needBy = own ?? track?.deadline ?? project.deliveryDeadline;
   final leadDays = project.partLeadTimes[line.key];
 
   DateTime? orderBy;
   if (needBy != null && leadDays != null) {
-    orderBy = dateOnly(needBy.subtract(Duration(days: leadDays)));
+    // Calendar days, not a Duration — see [addDays]. A Duration loses a
+    // day across the clock change, which is a day of lead time.
+    orderBy = addDays(needBy, -leadDays);
   }
 
   final OrderStatus status;
@@ -278,6 +328,7 @@ PartScheduleLine schedulePart({
     orderBy: orderBy,
     status: status,
     daysUntilOrder: orderBy == null ? null : daysBetween(now, orderBy),
+    track: track,
   );
 }
 

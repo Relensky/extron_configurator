@@ -1,11 +1,16 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show trimNumber;
 import 'project_estimate.dart';
+import 'project_reminders.dart';
 import 'project_schedule.dart';
 
 /// ============================================================================
@@ -241,6 +246,13 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
     SliverToBoxAdapter(
       child: _TimelineSummary(schedule: schedule, provider: provider),
     ),
+    SliverToBoxAdapter(
+      child: _ReminderBar(estimate: estimate, schedule: schedule),
+    ),
+    // The phases, each with its own delivery date, laid out one after the
+    // other — the reading this exists for: whether the infrastructure order
+    // going in months before the tech order actually lines up.
+    SliverToBoxAdapter(child: _TrackStrip(schedule: schedule)),
     if (schedule.hasNoDates)
       SliverToBoxAdapter(
         child: Padding(
@@ -296,6 +308,424 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
       ),
     const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
+}
+
+/// Getting the order dates out of this app and into the calendar that will
+/// actually remind somebody.
+///
+/// The timeline is read by whoever is building the job; the purchase order is
+/// raised by somebody who lives in Outlook and will never open this. A date
+/// that is not in their calendar is a date that gets missed, so the schedule
+/// exports as an ICS: one all-day event per order date, with an alarm a week
+/// before. See project_reminders.dart.
+class _ReminderBar extends StatelessWidget {
+  final ProjectEstimate estimate;
+  final ProjectSchedule schedule;
+
+  const _ReminderBar({required this.estimate, required this.schedule});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
+    final tracks = provider.project.tracks;
+    final dated = schedule.orderDays.length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          FilledButton.tonalIcon(
+            key: const ValueKey('timeline_export_ics'),
+            icon: const Icon(Icons.event_available, size: 18),
+            label: Text(
+              dated == 0
+                  ? 'Calendar reminders'
+                  : 'Calendar reminders ($dated dates)',
+            ),
+            onPressed: dated == 0
+                ? null
+                : () => exportOrderReminders(context, provider, estimate),
+          ),
+          // A purchasing office running the infrastructure order and the tech
+          // order as two jobs wants two calendars, not one with both in it.
+          for (final t in tracks)
+            if (schedule.linesForTrack(t.id).any((l) => l.orderBy != null))
+              OutlinedButton.icon(
+                key: ValueKey('timeline_export_ics_${t.id}'),
+                icon: const Icon(Icons.alt_route, size: 16),
+                label: Text('${t.name} only'),
+                onPressed: () => exportOrderReminders(
+                  context,
+                  provider,
+                  estimate,
+                  trackId: t.id,
+                  trackName: t.name,
+                ),
+              ),
+          Text(
+            'Imports into Outlook, Gmail or Apple Calendar. Each date reminds '
+            '$kReminderLeadDays days ahead.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Writes the order dates out as a calendar file.
+///
+/// Re-exporting the same project UPDATES the events already imported rather
+/// than duplicating them — the uids are stable and the sequence number rises —
+/// so moving a deadline and exporting again is a supported thing to do rather
+/// than something that leaves two sets of dates in somebody's calendar.
+Future<void> exportOrderReminders(
+  BuildContext context,
+  AppStateProvider provider,
+  ProjectEstimate estimate, {
+  String trackId = '',
+  String trackName = '',
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final export = buildOrderReminders(
+    estimate: estimate,
+    sequence: provider.nextReminderSequence(),
+    trackId: trackId,
+  );
+  if (export.isEmpty) {
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(
+        content: Text(
+          'Nothing has an order date yet — set a delivery deadline and some '
+          'lead times first.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  final picked = await FilePicker.saveFile(
+    dialogTitle: 'Save the order reminders',
+    fileName:
+        '${reminderFileStem(provider.project, trackName: trackName)}.ics',
+    type: FileType.custom,
+    allowedExtensions: const ['ics'],
+  );
+  if (picked == null) return;
+  final target = picked.toLowerCase().endsWith('.ics') ? picked : '$picked.ics';
+
+  try {
+    await File(target).writeAsString(export.ics);
+  } catch (e) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text('The calendar could not be written: $e'),
+        backgroundColor: snackErrorFillOn(messenger),
+      ),
+    );
+    return;
+  }
+  if (!context.mounted) return;
+
+  // What could not be scheduled is said out loud rather than left out: a
+  // calendar quietly missing the parts nobody has a lead time for reads as a
+  // complete schedule, which is the one thing it must not do.
+  showSavedFileSnack(
+    context,
+    provider,
+    export.skipped.isEmpty
+        ? '${export.events} order date'
+              '${export.events == 1 ? '' : 's'}'
+        : '${export.events} order date'
+              '${export.events == 1 ? '' : 's'} '
+              '(${export.skipped.length} part'
+              '${export.skipped.length == 1 ? '' : 's'} could not be dated)',
+    target,
+  );
+}
+
+/// The job's delivery phases, side by side.
+///
+/// A building is not finished on one date — the conduit and the mounts go in
+/// while the walls are open, the racks months later — and until a job says so,
+/// every order date is worked back from one deadline that can only be right for
+/// one of them. See [ProjectTrack].
+class _TrackStrip extends StatelessWidget {
+  final ProjectSchedule schedule;
+  const _TrackStrip({required this.schedule});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
+    final project = provider.project;
+
+    if (project.tracks.isEmpty) {
+      // Offered rather than imposed: a job delivered in one go is a real job
+      // and should not have to dismiss a structure it does not want.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'This job delivers on one date. If the infrastructure goes in '
+                'before the tech does, split it into phases and each gets its '
+                'own delivery date.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              key: const ValueKey('timeline_add_starter_tracks'),
+              icon: const Icon(Icons.alt_route, size: 18),
+              label: const Text('Split into phases'),
+              onPressed: provider.addStarterProjectTracks,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final byTrack = {
+      for (final entry in schedule.byTrack(project))
+        entry.track?.id ?? '': entry.parts,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final track in project.tracks)
+            _TrackCard(
+              track: track,
+              parts: byTrack[track.id] ?? const [],
+              asOf: schedule.asOf,
+            ),
+          if ((byTrack[''] ?? const []).isNotEmpty)
+            _TrackCard(track: null, parts: byTrack['']!, asOf: schedule.asOf),
+          // Whatever this job is actually divided into — "Phase 2",
+          // "Furniture", "Owner-furnished".
+          ActionChip(
+            key: const ValueKey('timeline_add_track'),
+            avatar: const Icon(Icons.add, size: 18),
+            label: const Text('Add a phase'),
+            onPressed: () => _addTrack(context, provider),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addTrack(
+    BuildContext context,
+    AppStateProvider provider,
+  ) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add a delivery phase'),
+        content: SizedBox(
+          width: 380,
+          child: TextField(
+            key: const ValueKey('track_name'),
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Called',
+              hintText: 'Phase 2',
+              helperText: 'Give it a delivery date once it exists.',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (v) => Navigator.of(ctx).pop(v),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('track_add'),
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (name == null) return;
+    provider.addProjectTrack(name);
+  }
+}
+
+/// One phase: its date, what is on it, and when its first order goes in.
+class _TrackCard extends StatelessWidget {
+  /// Null for the parts delivered with the job rather than on a phase — they
+  /// still have to be shown, or they vanish off the timeline.
+  final ProjectTrack? track;
+  final List<PartScheduleLine> parts;
+  final DateTime asOf;
+
+  const _TrackCard({
+    required this.track,
+    required this.parts,
+    required this.asOf,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
+    final t = track;
+
+    DateTime? firstOrder;
+    var late = 0;
+    for (final p in parts) {
+      if (p.status == OrderStatus.late) late++;
+      final d = p.orderBy;
+      if (d == null) continue;
+      if (firstOrder == null || d.isBefore(firstOrder)) firstOrder = d;
+    }
+    final deadline = t?.deadline ?? provider.project.deliveryDeadline;
+    final warn = late > 0;
+    final ink = warn
+        ? errorTextOn(theme.colorScheme, theme.cardColor)
+        : theme.colorScheme.onSurface;
+
+    return SizedBox(
+      width: 252,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    t == null ? Icons.work_outline : Icons.alt_route,
+                    size: 15,
+                    color: ink,
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      t?.name ?? 'With the job',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: ink,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (t != null)
+                    PopupMenuButton<String>(
+                      key: ValueKey('track_menu_${t.id}'),
+                      tooltip: 'This phase',
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.more_vert, size: 16),
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'date',
+                          child: Text('Set the delivery date…'),
+                        ),
+                        if (t.deadline != null)
+                          const PopupMenuItem(
+                            value: 'cleardate',
+                            child: Text('Use the job deadline'),
+                          ),
+                        const PopupMenuItem(
+                          value: 'remove',
+                          child: Text('Remove this phase'),
+                        ),
+                      ],
+                      onSelected: (v) async {
+                        if (v == 'remove') {
+                          provider.removeProjectTrack(t.id);
+                          return;
+                        }
+                        if (v == 'cleardate') {
+                          provider.setProjectTrackDeadline(t.id, null);
+                          return;
+                        }
+                        final picked = await showProjectDatePicker(
+                          context,
+                          initial: t.deadline,
+                          title: '${t.name} — on site by',
+                        );
+                        if (picked == null) return;
+                        provider.setProjectTrackDeadline(t.id, picked.date);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              _line(
+                theme,
+                Icons.event,
+                deadline == null
+                    ? 'no delivery date'
+                    : 'on site ${formatScheduleDate(deadline)}'
+                          '${t?.deadline == null ? ' (job)' : ''}',
+              ),
+              _line(
+                theme,
+                Icons.play_arrow,
+                firstOrder == null
+                    ? 'nothing scheduled yet'
+                    : 'first order ${formatScheduleDate(firstOrder)}',
+              ),
+              _line(
+                theme,
+                Icons.inventory_2_outlined,
+                '${parts.length} part${parts.length == 1 ? '' : 's'}'
+                '${late > 0 ? '  ·  $late late' : ''}',
+                colour: warn ? ink : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _line(ThemeData theme, IconData icon, String text, {Color? colour}) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 12,
+              color: colour ?? theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                text,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colour ?? theme.colorScheme.onSurfaceVariant,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 /// The three counts the timeline exists to surface, above the dates.
@@ -676,6 +1106,8 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
         '',
   );
   late DateTime? _needBy = widget.provider.project.partNeedBy[widget.line.key];
+  late String _trackId =
+      widget.provider.project.partTracks[widget.line.key] ?? '';
 
   @override
   void dispose() {
@@ -690,17 +1122,22 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
     final days = text.isEmpty ? null : int.tryParse(text);
     widget.provider.setProjectPartLeadTime(widget.line.key, days);
     widget.provider.setProjectPartNeedBy(widget.line.key, _needBy);
+    widget.provider.setProjectPartTrack(widget.line.key, _trackId);
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final deadline = widget.provider.project.deliveryDeadline;
+    // The date this part actually works back from, in the same order the
+    // schedule resolves it: its own, then its phase's, then the job's.
+    final track = widget.provider.project.trackById(_trackId);
+    final deadline =
+        track?.deadline ?? widget.provider.project.deliveryDeadline;
     final typed = int.tryParse(_days.text.trim());
     final effectiveNeed = _needBy ?? deadline;
     final preview = (typed != null && effectiveNeed != null)
-        ? dateOnly(effectiveNeed.subtract(Duration(days: typed)))
+        ? addDays(effectiveNeed, -typed)
         : null;
 
     return AlertDialog(
@@ -746,6 +1183,38 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _save(),
             ),
+            // Which delivery phase this part rides on. Above the date,
+            // because picking a phase usually ANSWERS the date question —
+            // most parts want their phase's date, not one of their own.
+            if (widget.provider.project.tracks.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: const ValueKey('part_track'),
+                initialValue: _trackId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Delivered in',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('With the job'),
+                  ),
+                  for (final t in widget.provider.project.tracks)
+                    DropdownMenuItem(
+                      value: t.id,
+                      child: Text(
+                        t.deadline == null
+                            ? t.name
+                            : '${t.name} — ${formatScheduleDate(t.deadline!)}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: (v) => setState(() => _trackId = v ?? ''),
+              ),
+            ],
             const SizedBox(height: 16),
             Text(
               'Has to be on site by',
@@ -762,9 +1231,10 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
                       _needBy != null
                           ? formatScheduleDate(_needBy!)
                           : deadline != null
-                              ? 'With the job — '
-                                  '${formatScheduleDate(deadline)}'
-                              : 'With the job (no deadline set)',
+                          ? 'With ${track?.name ?? 'the job'} — '
+                                '${formatScheduleDate(deadline)}'
+                          : 'With ${track?.name ?? 'the job'} '
+                                '(no deadline set)',
                     ),
                     onPressed: () async {
                       final picked = await showProjectDatePicker(
