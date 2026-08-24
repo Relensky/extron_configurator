@@ -712,11 +712,9 @@ void main() {
       expect(name.width, stakeholder.width, reason: 'both full width');
 
       // Every action is still there, as an icon, and still inside the window.
+      // The file actions are NOT among them any more - New, Open, Save and
+      // Close live on the title bar, and Close on the banner beside it.
       for (final icon in [
-        Icons.note_add_outlined,
-        Icons.folder_open,
-        Icons.save_outlined,
-        Icons.close,
         Icons.refresh,
         Icons.flag_outlined,
         Icons.table_view,
@@ -735,24 +733,43 @@ void main() {
       expect(find.text('Quote requests'), findsNothing);
     });
 
-    testWidgets('the file actions sit above the project name', (tester) async {
-      // What you do to the FILE goes at the top of the tab the file is inside
-      // of, the way New/Open/Save sit at the top of every other application.
+    testWidgets('the actions sit above the project name, split left and right',
+        (tester) async {
       await pump(tester, withProject(), width: 1600);
 
-      final save = tester.getRect(find.text('Save'));
+      final refresh = tester.getRect(find.text('Refresh'));
+      final stands = tester.getRect(find.text('Where it stands'));
+      final workbook = tester.getRect(find.text('Workbook'));
+      final rfq = tester.getRect(find.text('Quote requests'));
       final name = tester.getRect(find.byType(TextField).first);
       final panes = tester.getRect(find.byKey(const ValueKey(
           'project_pane_rooms')));
 
-      expect(save.bottom, lessThanOrEqualTo(name.top),
-          reason: 'the actions are on a row of their own, above the name');
+      // One row of its own, above the name and the totals.
+      for (final r in [refresh, stands, workbook, rfq]) {
+        expect(r.top, refresh.top, reason: 'all four on the same row');
+        expect(r.bottom, lessThanOrEqualTo(name.top),
+            reason: 'the row sits above the project name');
+      }
       expect(name.bottom, lessThanOrEqualTo(panes.top),
           reason: 'the pane switcher is still below the name');
-      for (final label in ['New', 'Open', 'Close', 'Quote requests']) {
-        expect(tester.getRect(find.text(label)).top, save.top,
-            reason: '$label is on the same top row as Save');
+
+      // WHAT YOU DO TO THE JOB ON THE LEFT, what you get OUT of it on the
+      // right. Refresh is hard against the header's own left edge.
+      expect(refresh.left, lessThan(stands.left));
+      expect(stands.right, lessThan(workbook.left));
+      expect(workbook.left, lessThan(rfq.left));
+      final refreshButton =
+          tester.getRect(find.byKey(const ValueKey('project_refresh')));
+      expect(refreshButton.left, lessThanOrEqualTo(name.left),
+          reason: 'Refresh is at the far left, under the name it re-reads');
+
+      // THE FILE ACTIONS ARE GONE FROM THIS TAB. They are on the title bar,
+      // and two Saves on one screen is one Save too many.
+      for (final label in ['New', 'Open', 'Save', 'Close']) {
+        expect(find.text(label), findsNothing, reason: '$label moved out');
       }
+      expect(find.byKey(const ValueKey('project_close')), findsNothing);
     });
 
     testWidgets('who the job is for is a field on the header', (tester) async {

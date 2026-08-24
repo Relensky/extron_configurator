@@ -17,6 +17,7 @@ import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
 import 'project_history_view.dart';
 import 'project_notes_view.dart';
+import 'project_plans_view.dart';
 import 'project_pricing.dart';
 import 'project_room_picker.dart';
 import 'project_schedule.dart';
@@ -25,7 +26,6 @@ import 'project_swap.dart';
 import 'project_todo_view.dart';
 import 'project_timeline_view.dart';
 import 'project_workbook.dart';
-import 'save_actions.dart';
 
 /// ============================================================================
 ///  THE PROJECT TAB
@@ -57,6 +57,10 @@ import 'save_actions.dart';
 enum _ProjectPane {
   rooms('Rooms', Icons.meeting_room),
   parts('Core Components', Icons.inventory_2),
+  // The drawings the job is quoted against - next to the rooms because that
+  // is what they are about, and before the money because they are what the
+  // money was worked out from.
+  plans('Plans', Icons.architecture),
   timeline('Timeline', Icons.event_available),
   vendors('Vendors', Icons.local_shipping),
   todo('To do', Icons.checklist),
@@ -163,25 +167,13 @@ class _ProjectViewState extends State<ProjectView> {
   //  FILE ACTIONS
   // -------------------------------------------------------------------------
 
-  // New / Open / Save all live in save_actions.dart, because the start screen
-  // and the toolbar offer the same three actions and a project opened from one
-  // of them must be a project opened exactly like the other — same prompt about
-  // unsaved edits, same file dialog, same message afterwards.
-  Future<void> _newProject(AppStateProvider provider) =>
-      startNewProject(context, provider);
-
-  Future<void> _openProject(AppStateProvider provider) =>
-      openProjectFromFile(context, provider);
-
-  Future<void> _closeProject(AppStateProvider provider) =>
-      closeProjectFile(context, provider);
-
-  /// Returns true when the project ended up on disk.
-  Future<bool> _saveProject(
-    AppStateProvider provider, {
-    bool as = false,
-  }) =>
-      runSave(context, provider, SaveScope.project, saveAs: as);
+  // NEW / OPEN / SAVE / CLOSE ARE NOT ON THIS TAB.
+  //
+  // They live in save_actions.dart, driven from the title bar's New menu, its
+  // Open button and its Save, and from the banner's Close. This tab used to
+  // offer its own four beside them, which meant two Saves on one screen — and
+  // the one here could only ever write the job, while the one up there writes
+  // whichever document the tab you are standing on belongs to.
 
   String _fileStem(BuildingProject project) {
     final raw = project.name.trim().isNotEmpty
@@ -337,6 +329,7 @@ class _ProjectViewState extends State<ProjectView> {
               onSpareRoom: (id) => setState(() => _spareRoom = id),
               onSearch: (s) => setState(() => _search = s),
             ),
+            _ProjectPane.plans => plansSlivers(context, estimate),
             _ProjectPane.timeline => timelineSlivers(context, estimate),
             _ProjectPane.vendors => vendorsSlivers(context, estimate),
             _ProjectPane.todo => todoSlivers(context, estimate),
@@ -359,9 +352,6 @@ class _ProjectViewState extends State<ProjectView> {
         estimate.unpricedParts +
         (estimate.mixedCurrency ? 1 : 0);
     final openTodos = provider.project.openTodos.length;
-    final hasProject = provider.project.rooms.isNotEmpty ||
-        provider.currentProjectPath.isNotEmpty ||
-        provider.project.name.trim().isNotEmpty;
 
     // THE HEADER GIVES WAY BEFORE THE CONTROLS DO. On a window narrow enough
     // that the title strip and the buttons cannot both have their full size,
@@ -379,83 +369,76 @@ class _ProjectViewState extends State<ProjectView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // NEW, OPEN, SAVE AND THE EXPORTS SIT ABOVE EVERYTHING ELSE.
+          // THE TOP ROW IS WHAT YOU DO TO THE JOB, SPLIT BY WHICH WAY IT
+          // FACES.
           //
-          // They are what you do to the FILE, and the file is the thing this
-          // tab is inside of - so they belong at the top of it, the way the
-          // same three words sit at the top of every other application on the
-          // machine. Below the name and the totals they read as one more
-          // thing to do to the project's contents, and Save in particular was
-          // three rows down from the name it saves.
+          // New, Open, Save and Close are gone from here. They are file
+          // actions, and file actions now live in one place - the title bar,
+          // where New, Open and Save sit together on every other application
+          // on the machine. Two Saves on one screen is one Save too many, and
+          // the one that was here could only ever write the job while the one
+          // up there writes whatever tab you are standing on.
+          //
+          // What is left is the two things you do TO the job (re-read it, ask
+          // where it stands) on the LEFT, under the name they are about, and
+          // the two things you get OUT of it on the right. Reading order:
+          // check it, then send it.
           Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 4,
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _action(
-                compact: compact,
-                icon: Icons.note_add_outlined,
-                label: 'New',
-                onPressed: () => _newProject(provider),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _action(
+                    compact: compact,
+                    buttonKey: const ValueKey('project_refresh'),
+                    icon: Icons.refresh,
+                    label: 'Refresh',
+                    onPressed: () {
+                      provider.refreshProjectRooms();
+                      _snack('Re-read every room from disk.');
+                    },
+                  ),
+                  // The same summary a project shows on the way in. Reachable
+                  // on purpose: it is shown once on open and only when
+                  // something is time-critical, and "what was that list again"
+                  // is asked five minutes later.
+                  _action(
+                    compact: compact,
+                    buttonKey: const ValueKey('project_briefing_button'),
+                    icon: Icons.flag_outlined,
+                    label: 'Where it stands',
+                    onPressed: () =>
+                        showProjectBriefing(context, provider, force: true),
+                  ),
+                ],
               ),
-              _action(
-                compact: compact,
-                icon: Icons.folder_open,
-                label: 'Open',
-                onPressed: () => _openProject(provider),
-              ),
-              _action(
-                compact: compact,
-                icon: Icons.save_outlined,
-                label: 'Save',
-                onPressed: () => _saveProject(provider),
-              ),
-              // Beside New and Open, because it is the third thing you do
-              // to a FILE. Disabled when there is no job to put away —
-              // pressing Close on nothing should not clear the starter
-              // vendors out from under somebody who has just pressed New.
-              _action(
-                compact: compact,
-                buttonKey: const ValueKey('project_close'),
-                icon: Icons.close,
-                label: 'Close',
-                onPressed:
-                    hasProject ? () => _closeProject(provider) : null,
-              ),
-              _action(
-                compact: compact,
-                icon: Icons.refresh,
-                label: 'Refresh',
-                onPressed: () {
-                  provider.refreshProjectRooms();
-                  _snack('Re-read every room from disk.');
-                },
-              ),
-              // The same summary a project shows on the way in. Reachable
-              // on purpose: it is shown once on open and only when
-              // something is time-critical, and "what was that list again"
-              // is asked five minutes later.
-              _action(
-                compact: compact,
-                buttonKey: const ValueKey('project_briefing_button'),
-                icon: Icons.flag_outlined,
-                label: 'Where it stands',
-                onPressed: () =>
-                    showProjectBriefing(context, provider, force: true),
-              ),
-              _action(
-                compact: compact,
-                icon: Icons.table_view,
-                label: 'Workbook',
-                emphasis: _ActionEmphasis.tonal,
-                onPressed: () => _exportWorkbook(provider, estimate),
-              ),
-              _action(
-                compact: compact,
-                icon: Icons.send_outlined,
-                label: 'Quote requests',
-                emphasis: _ActionEmphasis.filled,
-                onPressed: () => _exportRfqs(provider, estimate),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _action(
+                    compact: compact,
+                    icon: Icons.table_view,
+                    label: 'Workbook',
+                    emphasis: _ActionEmphasis.tonal,
+                    onPressed: () => _exportWorkbook(provider, estimate),
+                  ),
+                  _action(
+                    compact: compact,
+                    icon: Icons.send_outlined,
+                    label: 'Quote requests',
+                    emphasis: _ActionEmphasis.filled,
+                    onPressed: () => _exportRfqs(provider, estimate),
+                  ),
+                ],
               ),
             ],
           ),
@@ -555,7 +538,7 @@ class _ProjectViewState extends State<ProjectView> {
           // The pane switcher on its own line now that the file actions have
           // gone up to the top of the tab. Still a Wrap rather than a bare
           // button: it keeps its natural width instead of being stretched to
-          // the header's, and a switcher that has grown a seventh pane drops
+          // the header's, and a switcher that has grown an eighth pane drops
           // onto a second line on a narrow window rather than overflowing it.
           Wrap(
             spacing: 12,
@@ -568,10 +551,10 @@ class _ProjectViewState extends State<ProjectView> {
                     ButtonSegment(
                       value: pane,
                       icon: Icon(pane.icon, size: 18),
-                      // The label goes when the window cannot hold seven of
-                      // them. Seven labelled segments are wider than a narrow
+                      // The label goes when the window cannot hold all of
+                      // them. Eight labelled segments are wider than a narrow
                       // window on their own, and a switcher that overflows is
-                      // a pane nobody can reach — the icons are the same seven
+                      // a pane nobody can reach — the icons are the same eight
                       // targets, in the same order, with the name on a
                       // tooltip.
                       tooltip: compact
@@ -3259,9 +3242,9 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
               child: Text(
                 'A part is tagged by the FIRST vendor whose rules claim it. '
                 'Manufacturer rules are checked before category rules, so '
-                '“buy Extron direct” beats “the reseller does screens” for an '
-                'Extron screen. Order matters - move a vendor up to give it '
-                'priority.',
+                'Extron direct” beats “reseller for speakers” for an '
+                'Extron speaker. Order matters in the list below - move  '
+                'a vendor up to give it priority.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

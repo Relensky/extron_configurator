@@ -273,6 +273,8 @@ void main() {
     await tester.pump();
 
     final wasOn = p.selectedTabIndex;
+    await tester.tap(find.byKey(const ValueKey('new_menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('new_project')));
     await tester.pumpAndSettle();
 
@@ -309,6 +311,8 @@ void main() {
     );
     await tester.pump();
 
+    await tester.tap(find.byKey(const ValueKey('new_menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('new_project')));
     await tester.pumpAndSettle();
     await tester.enterText(

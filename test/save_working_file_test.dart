@@ -78,12 +78,13 @@ void main() {
   /// The toolbar's save button — Icons.save also names the schematic's "Save
   /// Layout", so the finder is scoped to the bar it lives on.
   ///
-  /// That bar is the BANNER: every button that acts on the open document sits
-  /// beside the job, Save at the end of them, and the title bar keeps the ones
-  /// that are about the application — New Project, New Config, Open, the
-  /// screenshot, the theme and the gear.
+  /// That bar is the TITLE BAR: Save stands with New and Open, the three every
+  /// other application on the machine keeps together. The banner below it
+  /// keeps the buttons that do something OTHER than write to the open
+  /// document — convert it, fetch it from a processor, send it to one, put
+  /// back the last save, export it.
   final saveButton = find.descendant(
-    of: find.byType(TopLevelBar),
+    of: find.byType(AppBar),
     matching: find.widgetWithIcon(IconButton, Icons.save),
   );
 

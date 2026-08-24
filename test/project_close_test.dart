@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/building_project.dart';
-import 'package:extron_configurator/project_view.dart';
+import 'package:extron_configurator/main.dart';
 
 /// Putting a job away.
 ///
@@ -33,6 +33,12 @@ void main() {
     return p;
   }
 
+  /// THE BANNER, not the Project tab.
+  ///
+  /// Close used to be one of four file buttons on the tab itself. Those went
+  /// when New/Open/Save moved to the title bar - two Saves on one screen is
+  /// one too many - and the way out of a job is now the X beside the Project
+  /// button on the banner, which is the mode indicator it takes you out of.
   Future<void> pump(WidgetTester tester, AppStateProvider p) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1.0;
@@ -40,13 +46,17 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<AppStateProvider>.value(
         value: p,
-        child: const MaterialApp(home: Scaffold(body: ProjectView())),
+        child: MaterialApp(
+          home: Scaffold(
+            body: TopLevelBar(selectedIndex: 0, onSelect: (_) {}),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
   }
 
-  final closeButton = find.byKey(const ValueKey('project_close'));
+  final closeButton = find.byKey(const ValueKey('banner_project_close'));
 
   /// Lets the "Closed ..." bar run out.
   ///
@@ -153,13 +163,14 @@ void main() {
       await letTheSnackBarGo(tester);
     });
 
-    testWidgets('is dead when there is no job to put away', (tester) async {
+    testWidgets('is not offered when there is no job to put away',
+        (tester) async {
       final p = AppStateProvider(autoLoadSettings: false);
       await pump(tester, p);
 
       expect(
-        tester.widget<TextButton>(closeButton).onPressed,
-        isNull,
+        closeButton,
+        findsNothing,
         reason: 'Close on nothing must not clear a job somebody just started',
       );
     });

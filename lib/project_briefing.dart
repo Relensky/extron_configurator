@@ -53,11 +53,12 @@ enum BriefingUrgency {
 
 /// Which pane answers a briefing line, so the reader is pointed at the fix
 /// rather than left to hunt for it.
-enum BriefingPane { rooms, parts, timeline, vendors, todo }
+enum BriefingPane { rooms, parts, plans, timeline, vendors, todo }
 
 const Map<BriefingPane, String> kBriefingPaneLabels = {
   BriefingPane.rooms: 'Rooms',
   BriefingPane.parts: 'Core Components',
+  BriefingPane.plans: 'Plans',
   BriefingPane.timeline: 'Timeline',
   BriefingPane.vendors: 'Vendors',
   BriefingPane.todo: 'To do',
@@ -143,6 +144,17 @@ class BriefingOverview {
   final int partsOnOrder;
   final int partsReceived;
 
+  /// The drawings the job is quoted against, and how many of them are not
+  /// where the project says they are.
+  ///
+  /// A COUNT AND A BREAKAGE, like the rooms above. Which sheets a job came
+  /// with is part of what the job IS - somebody picking it up after three
+  /// weeks wants to know whether there is a plan set at all before they go
+  /// looking for one - and a link that has quietly broken is worth saying
+  /// before the day somebody needs the drawing.
+  final int plans;
+  final int plansMissing;
+
   /// The job's own delivery deadline, null when nobody has set one.
   final DateTime? deadline;
 
@@ -179,6 +191,8 @@ class BriefingOverview {
     required this.partsWithoutLeadTime,
     required this.partsOnOrder,
     required this.partsReceived,
+    required this.plans,
+    required this.plansMissing,
     required this.deadline,
     required this.phases,
     required this.firstOrder,
@@ -483,6 +497,27 @@ ProjectBriefing buildProjectBriefing({
     ));
   }
 
+  // A DRAWING THAT IS NOT THERE ANY MORE. The plan list points at files rather
+  // than copying them - see [ProjectPlan] for why - and the cost of that is a
+  // link that breaks silently when somebody tidies a folder. Silently is the
+  // problem: it is discovered on the day the drawing is wanted, which is never
+  // a day with time in it.
+  final missingPlans = missingProjectPlans(estimate);
+  if (missingPlans.isNotEmpty) {
+    lines.add(BriefingLine(
+      urgency: BriefingUrgency.open,
+      message: missingPlans.length == 1
+          ? '1 building plan is not where the project says it is'
+          : '${missingPlans.length} building plans are not where the project '
+              'says they are',
+      pane: BriefingPane.plans,
+      detail: _some([
+        for (final plan in missingPlans)
+          '${plan.displayName} - ${plan.filePath}',
+      ]),
+    ));
+  }
+
   if (lines.isEmpty) {
     lines.add(const BriefingLine(
       urgency: BriefingUrgency.clear,
@@ -549,6 +584,8 @@ BriefingOverview _overviewOf(
     partsWithoutLeadTime: schedule.unknownCount,
     partsOnOrder: schedule.onOrderCount,
     partsReceived: schedule.receivedCount,
+    plans: project.plans.length,
+    plansMissing: missingProjectPlans(estimate).length,
     deadline: project.deliveryDeadline,
     phases: [
       for (final entry in schedule.byTrack(project))
@@ -637,6 +674,16 @@ String renderBriefingText(ProjectBriefing briefing, {required String title}) {
         if (o.partsOnOrder > 0) '${o.partsOnOrder} on order',
         if (o.partsReceived > 0) '${o.partsReceived} arrived',
       ].join(' · '),
+    );
+  }
+  // Same fact, same place as the dialog's - see the note above about the two
+  // never being allowed to disagree.
+  if (o.plans > 0) {
+    fact(
+      'Plans',
+      o.plansMissing == 0
+          ? '${o.plans}'
+          : '${o.plans} · ${o.plansMissing} not where the project says',
     );
   }
   fact(

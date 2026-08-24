@@ -200,6 +200,41 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
     ));
   }
 
+  // THE DRAWINGS THE JOB WAS QUOTED AGAINST.
+  //
+  // On the summary rather than a sheet of its own, for the same reason the job
+  // list below is: a drawing set is a handful of rows, and a tab nobody clicks
+  // is a tab nobody reads.
+  //
+  // It is here at all because a quote is an answer to a QUESTION, and the
+  // drawings are the question. "Which set was this priced from" is asked every
+  // time a plan is reissued and a number stops matching, and up to now the
+  // only answer was somebody's memory of an email.
+  //
+  // THE PATH AS STORED, not as resolved: it is what the project file says, so
+  // a reader with the folder in front of them can follow it, and a reader
+  // without it is not handed the absolute layout of somebody else's machine.
+  // A file that has gone says so in the status column, exactly as an unreadable
+  // room does in the Rooms table above.
+  if (project.plans.isNotEmpty) {
+    final missing = {for (final p in missingProjectPlans(estimate)) p.id};
+    sections.add((
+      title: 'Plans this job is quoted against (${project.plans.length})',
+      header: const ['Sheet', 'File', 'Notes', 'Status'],
+      rows: [
+        for (final plan in project.plans)
+          [
+            plan.displayName,
+            plan.filePath,
+            plan.notes,
+            missing.contains(plan.id)
+                ? 'NOT FOUND - the file is not where the project says it is'
+                : '',
+          ],
+      ],
+    ));
+  }
+
   // The job's own list, on the summary rather than a sheet of its own: it is
   // short, it is the thing somebody wants to see when they pick the job back
   // up, and a tab nobody clicks is a tab nobody reads. Open items only —
@@ -284,7 +319,11 @@ String _roomStatus(ProjectRoomCost room) {
 }
 
 /// The things that should stop a quote going out, in the order they matter.
-List<String> _projectWarnings(ProjectEstimate estimate) => [
+List<String> _projectWarnings(ProjectEstimate estimate) {
+  // Worked out once: every entry costs a stat of a file, and the list below
+  // asks about it three times.
+  final missingPlans = missingProjectPlans(estimate);
+  return [
   if (estimate.failedRooms > 0)
     '${estimate.failedRooms} room${estimate.failedRooms == 1 ? '' : 's'} '
         'could not be read, so the project total is short by whatever '
@@ -332,11 +371,20 @@ List<String> _projectWarnings(ProjectEstimate estimate) => [
         'below this job\'s own '
         '${trimNumber(estimate.spareTargetPercent)}% spares target - see the '
         '$kProjectSparesSheet sheet.',
+  // Not a pricing problem either, and the last chance to catch it: the
+  // workbook is usually built when the job is about to go somewhere, and a
+  // drawing that has moved is found on the day it is wanted otherwise.
+  if (missingPlans.isNotEmpty)
+    '${missingPlans.length} building plan'
+        '${missingPlans.length == 1 ? ' is' : 's are'} not where the project '
+        'says ${missingPlans.length == 1 ? 'it is' : 'they are'} - see the '
+        'Plans table above.',
   for (final c in estimate.project.vendorConflicts)
     '${c.kind} rule "${c.rule}" is claimed by '
         '${c.vendors.map((v) => v.name).join(' and ')}. '
         '${c.vendors.first.name} wins; the others never see those parts.',
-];
+  ];
+}
 
 /// Every part on the job, once, with the rooms it is for.
 ///

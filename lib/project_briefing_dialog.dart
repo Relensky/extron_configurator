@@ -144,6 +144,22 @@ class _Overview extends StatelessWidget {
                 if (o.partsReceived > 0) '${o.partsReceived} arrived',
               ].join('  ·  '),
             ),
+          // THE DRAWING SET. Part of what the job IS rather than what is
+          // wrong with it - "is there a plan set at all" is asked before
+          // anybody goes looking for one. A broken link is coloured, because
+          // it is the half of this line that needs doing something about.
+          if (o.plans > 0)
+            fact(
+              Icons.architecture,
+              'Plans',
+              o.plansMissing == 0
+                  ? '${o.plans}'
+                  : '${o.plans}  ·  ${o.plansMissing} not where the project '
+                      'says',
+              colour: o.plansMissing == 0
+                  ? null
+                  : errorTextOn(theme.colorScheme, theme.cardColor),
+            ),
           fact(
             Icons.event,
             'Delivery',

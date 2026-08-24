@@ -782,6 +782,107 @@ class ProjectVendor {
 }
 
 // ---------------------------------------------------------------------------
+//  THE BUILDING'S OWN DRAWINGS
+// ---------------------------------------------------------------------------
+
+/// One drawing the whole JOB refers to: an architectural floor plan, a
+/// reflected ceiling plan, a riser diagram, the electrical sheet somebody was
+/// sent as a PDF.
+///
+/// NOT the room's floor plan. That one is a picture you drag locations and
+/// call-outs onto and it belongs to one config - see floor_plan_view.dart.
+/// This is the set of sheets the BUILDING came with: they are read, pointed
+/// at and argued over, and they are the same sheets for every room on the job.
+/// Until there was somewhere to put them they lived in an email, which means
+/// the person who picks the job up next does not have them.
+///
+/// A REFERENCE, exactly like a room. The project does not copy the file, own
+/// it, or lock it: a plan set is hundreds of megabytes and gets reissued
+/// halfway through a job, and a copy taken in March is the drawing somebody
+/// installs the wrong thing from in June. Stored relative to the project file
+/// when it sits under the same folder tree, so the job travels onto a laptop
+/// or into a backup with its drawings still attached.
+class ProjectPlan {
+  final String id;
+
+  /// The drawing itself, stored the same way a room's config is - see
+  /// [BuildingProject.storePath] and [BuildingProject.resolvePath].
+  final String filePath;
+
+  /// What the sheet is called on the job - 'Level 2 RCP', 'A-101 as-built'.
+  /// Blank falls back to the file's own name, which is usually already the
+  /// sheet number.
+  final String label;
+
+  /// Free text on the row - 'issued 3 Feb, supersedes the December set'.
+  final String notes;
+
+  const ProjectPlan({
+    required this.id,
+    required this.filePath,
+    this.label = '',
+    this.notes = '',
+  });
+
+  ProjectPlan copyWith({String? filePath, String? label, String? notes}) =>
+      ProjectPlan(
+        id: id,
+        filePath: filePath ?? this.filePath,
+        label: label ?? this.label,
+        notes: notes ?? this.notes,
+      );
+
+  /// What to call this sheet: the label if there is one, otherwise the file
+  /// name, which on a drawing set is nearly always the sheet number.
+  String get displayName {
+    if (label.trim().isNotEmpty) return label.trim();
+    final base = path.basename(filePath);
+    return base.isEmpty ? filePath : base;
+  }
+
+  /// Lower-case extension with no dot - 'pdf', 'png'. What decides which
+  /// viewer opens it.
+  String get extension {
+    final ext = path.extension(filePath);
+    return ext.isEmpty ? '' : ext.substring(1).toLowerCase();
+  }
+
+  /// Whether the app can show this sheet itself rather than handing it to
+  /// whatever the machine opens the file type with.
+  bool get isViewable => kViewablePlanExtensions.contains(extension);
+
+  bool get isPdf => extension == 'pdf';
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'filePath': filePath,
+        if (label.isNotEmpty) 'label': label,
+        if (notes.isNotEmpty) 'notes': notes,
+      };
+
+  factory ProjectPlan.fromJson(Map<String, dynamic> json) => ProjectPlan(
+        id: json['id']?.toString() ?? '',
+        filePath: json['filePath']?.toString() ?? '',
+        label: json['label']?.toString() ?? '',
+        notes: json['notes']?.toString() ?? '',
+      );
+}
+
+/// The sheets the app opens in its own viewer: PDFs through the same pdfium
+/// the module manuals use, and the ordinary image formats Flutter decodes.
+/// Anything else - a DWG, a Revit model - is still worth listing and is handed
+/// to the machine's own opener.
+const Set<String> kViewablePlanExtensions = {
+  'pdf',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'bmp',
+  'webp',
+};
+
+// ---------------------------------------------------------------------------
 //  ROOMS IN THE PROJECT
 // ---------------------------------------------------------------------------
 
@@ -1135,6 +1236,11 @@ class BuildingProject {
   /// schedule's warnings about it worth reading.
   final Map<String, PartOrder> partOrders;
 
+  /// The building's own drawings - see [ProjectPlan]. References, not copies,
+  /// and in the order they were added, which on a drawing set is the order
+  /// somebody wants to read them in.
+  final List<ProjectPlan> plans;
+
   /// Spares the JOB is buying, for a room or for the building. See
   /// [ProjectSpare]. Empty on a job that only uses the rooms' own spares,
   /// which behaves exactly as it did before this existed.
@@ -1160,6 +1266,7 @@ class BuildingProject {
   int _todoCounter;
   int _trackCounter;
   int _spareCounter;
+  int _planCounter;
 
   BuildingProject({
     this.name = '',
@@ -1179,6 +1286,7 @@ class BuildingProject {
     Map<String, String>? partTracks,
     Map<String, PartOrder>? partOrders,
     List<ProjectSpare>? spares,
+    List<ProjectPlan>? plans,
     this.spareTargetPercent = 0,
     List<ProjectEdit>? history,
     int roomCounter = 0,
@@ -1186,6 +1294,7 @@ class BuildingProject {
     int todoCounter = 0,
     int trackCounter = 0,
     int spareCounter = 0,
+    int planCounter = 0,
   }) : rooms = rooms ?? [],
        vendors = vendors ?? [],
        partVendors = partVendors ?? {},
@@ -1196,12 +1305,14 @@ class BuildingProject {
        partTracks = partTracks ?? {},
        partOrders = partOrders ?? {},
        spares = spares ?? [],
+       plans = plans ?? [],
        history = history ?? [],
        _roomCounter = roomCounter,
        _vendorCounter = vendorCounter,
        _todoCounter = todoCounter,
        _trackCounter = trackCounter,
-       _spareCounter = spareCounter;
+       _spareCounter = spareCounter,
+       _planCounter = planCounter;
 
   bool get isEmpty =>
       rooms.isEmpty &&
@@ -1215,6 +1326,7 @@ class BuildingProject {
       partTracks.isEmpty &&
       partOrders.isEmpty &&
       spares.isEmpty &&
+      plans.isEmpty &&
       spareTargetPercent <= 0 &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
@@ -1231,6 +1343,7 @@ class BuildingProject {
   String nextTodoId() => 'todo${++_todoCounter}';
   String nextTrackId() => 'track${++_trackCounter}';
   String nextSpareId() => 'spare${++_spareCounter}';
+  String nextPlanId() => 'plan${++_planCounter}';
 
   // -------------------------------------------------------------------------
   //  SPARES THE JOB BUYS
@@ -1828,6 +1941,7 @@ class BuildingProject {
         for (final e in partOrders.entries) e.key: e.value.toJson(),
       },
     if (spares.isNotEmpty) 'spares': [for (final s in spares) s.toJson()],
+    if (plans.isNotEmpty) 'plans': [for (final p in plans) p.toJson()],
     if (spareTargetPercent > 0) 'spareTargetPercent': spareTargetPercent,
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
@@ -1836,6 +1950,7 @@ class BuildingProject {
     if (_todoCounter > 0) 'todoCounter': _todoCounter,
     if (_trackCounter > 0) 'trackCounter': _trackCounter,
     if (_spareCounter > 0) 'spareCounter': _spareCounter,
+    if (_planCounter > 0) 'planCounter': _planCounter,
   };
 
   factory BuildingProject.fromJson(Map<String, dynamic> json) {
@@ -1890,6 +2005,15 @@ class BuildingProject {
       for (final entry in (json['spares'] as List? ?? []))
         if (entry is Map)
           ProjectSpare.fromJson(Map<String, dynamic>.from(entry)),
+    ];
+
+    // A drawing with no path is not a drawing: there is nothing to open and
+    // nothing to say is missing, so it is dropped the way an empty note is.
+    final plans = [
+      for (final entry in (json['plans'] as List? ?? []))
+        if (entry is Map &&
+            entry['filePath']?.toString().trim().isNotEmpty == true)
+          ProjectPlan.fromJson(Map<String, dynamic>.from(entry)),
     ];
     final trackPins = <String, String>{};
     final rawTracks = json['partTracks'];
@@ -1964,6 +2088,7 @@ class BuildingProject {
       partTracks: trackPins,
       partOrders: orders,
       spares: spares,
+      plans: plans,
       // A target that is not a number, or one outside nought to a hundred, is
       // read as no policy rather than clamped: "we hold 200%" in a
       // hand-edited file is a typo, and honouring it would flag every part on
@@ -1973,6 +2098,10 @@ class BuildingProject {
       spareCounter: [
         (json['spareCounter'] as num?)?.toInt() ?? 0,
         highest(spares.map((s) => s.id), 'spare'),
+      ].reduce((a, b) => a > b ? a : b),
+      planCounter: [
+        (json['planCounter'] as num?)?.toInt() ?? 0,
+        highest(plans.map((p) => p.id), 'plan'),
       ].reduce((a, b) => a > b ? a : b),
       trackCounter: [
         (json['trackCounter'] as num?)?.toInt() ?? 0,
@@ -2043,6 +2172,7 @@ class BuildingProject {
     partTracks: Map<String, String>.from(partTracks),
     partOrders: Map<String, PartOrder>.from(partOrders),
     spares: List<ProjectSpare>.from(spares),
+    plans: List<ProjectPlan>.from(plans),
     spareTargetPercent: spareTargetPercent,
     history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,
@@ -2050,6 +2180,7 @@ class BuildingProject {
     todoCounter: _todoCounter,
     trackCounter: _trackCounter,
     spareCounter: _spareCounter,
+    planCounter: _planCounter,
   );
 }
 

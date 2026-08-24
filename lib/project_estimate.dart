@@ -696,6 +696,16 @@ class ProjectEstimate {
   final BuildingProject project;
   final String currency;
 
+  /// The project file this rollup was priced from, or '' on a job that has
+  /// never been saved.
+  ///
+  /// Carried because the things a project POINTS AT - its rooms, its building
+  /// plans - are stored relative to it, so anything downstream that has to
+  /// resolve one of those paths (the workbook saying which drawing is missing,
+  /// for instance) would otherwise have to be handed the same string a second
+  /// time and could be handed a different one by mistake.
+  final String projectPath;
+
   /// Every room in the project, in project order — including the ones that
   /// failed to read and the ones excluded from the total, each flagged. A
   /// rollup that silently dropped them would be a number nobody can audit.
@@ -746,6 +756,7 @@ class ProjectEstimate {
   const ProjectEstimate({
     required this.project,
     required this.currency,
+    this.projectPath = '',
     required this.rooms,
     required this.costedRooms,
     required this.master,
@@ -1028,6 +1039,31 @@ class ProjectEstimate {
   }
 }
 
+// ---------------------------------------------------------------------------
+//  THE JOB'S DRAWINGS
+// ---------------------------------------------------------------------------
+
+/// Whether the file behind [plan] is where the project says it is.
+///
+/// The plan list points at drawings rather than copying them - see
+/// [ProjectPlan] for why - and the cost of that is a link that breaks silently
+/// when somebody tidies a folder. This is the check that stops it being
+/// silent.
+bool projectPlanIsPresent(ProjectPlan plan, String projectPath) {
+  final resolved = BuildingProject.resolvePath(plan.filePath, projectPath);
+  return resolved.isNotEmpty && File(resolved).existsSync();
+}
+
+/// The job's drawings whose file is not there any more, in project order.
+///
+/// Its own function because three things ask it - the briefing's count, the
+/// briefing line that names them, and the workbook's plan table - and three
+/// answers that could disagree would be worse than any one of them.
+List<ProjectPlan> missingProjectPlans(ProjectEstimate estimate) => [
+      for (final plan in estimate.project.plans)
+        if (!projectPlanIsPresent(plan, estimate.projectPath)) plan,
+    ];
+
 /// Prices every room in [project] and rolls the result up.
 ///
 /// [rooms] lets a caller supply rooms it has already read — the view re-prices
@@ -1305,6 +1341,7 @@ ProjectEstimate computeProjectEstimate({
   return ProjectEstimate(
     project: project,
     currency: currency,
+    projectPath: projectPath,
     rooms: costed,
     costedRooms: included,
     master: master,

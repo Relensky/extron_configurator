@@ -73,39 +73,10 @@ void main() {
 
     // The banner: the job, and the buttons that act on the open document.
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
-    // Save acts on the DOCUMENT — the room, the job or the catalog, whichever
-    // the tab belongs to — so it is on the document row, in its corner,
-    // beside the exports.
-    expect(
-      find.descendant(
-        of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('save_context')),
-      ),
-      findsOneWidget,
-      reason: 'Save sits at the end of the document row',
-    );
-    expect(
-      find.descendant(
-        of: find.byType(AppBar),
-        matching: find.byKey(const ValueKey('save_context')),
-      ),
-      findsNothing,
-      reason: 'and not also on the title bar',
-    );
-    for (final key in ['new_project', 'new_config', 'open_config']) {
-      expect(
-        find.descendant(
-          of: find.byType(TopLevelBar),
-          matching: find.byKey(ValueKey(key)),
-        ),
-        findsNothing,
-        reason: '$key starts a session, so it is not on the document row',
-      );
-    }
 
     // The exports act on the DOCUMENT — "give me this as a spreadsheet" is
-    // the same kind of question as "save this" — so they sit on the document
-    // row beside Save rather than up beside the theme toggle.
+    // the same kind of question as "convert this" — so they sit on the
+    // document row rather than up beside the theme toggle.
     for (final key in ['export_workbook', 'export_tab_menu']) {
       expect(
         find.descendant(
@@ -117,13 +88,13 @@ void main() {
       );
     }
 
-    // The title bar: the things that are about the application, and the three
-    // that START a session rather than acting on the one in progress — a new
-    // job, a new room, and opening one that exists.
+    // The title bar: the things that are about the application, plus the
+    // three that begin or write a file — New (a menu over the two things
+    // there are to start), Open, and Save.
     for (final key in [
-      'new_project',
-      'new_config',
+      'new_menu',
       'open_config',
+      'save_context',
       'banner_app_config',
     ]) {
       expect(
@@ -132,9 +103,30 @@ void main() {
           matching: find.byKey(ValueKey(key)),
         ),
         findsOneWidget,
-        reason: '$key is about the app, so it belongs in the title bar',
+        reason: '$key belongs in the title bar',
+      );
+      expect(
+        find.descendant(
+          of: find.byType(TopLevelBar),
+          matching: find.byKey(ValueKey(key)),
+        ),
+        findsNothing,
+        reason: '$key is not also on the document row',
       );
     }
+
+    // ONE "NEW", NOT TWO ICONS THAT BOTH MEAN NEW. The two things there are
+    // to start are named under it rather than left to a hover.
+    await tester.tap(find.byKey(const ValueKey('new_menu')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('new_project')), findsOneWidget);
+    expect(find.byKey(const ValueKey('new_config')), findsOneWidget);
+    expect(find.text('New Project'), findsOneWidget);
+    expect(find.text('New Config'), findsOneWidget);
+    // ...and it is a menu: nothing is started by opening it.
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('new_project')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('banner_project')));
     await tester.pumpAndSettle();
@@ -180,12 +172,12 @@ void main() {
     // over to the RIGHT of the buttons, parking the corner control 600 pixels
     // from the corner.
     final banner = tester.getRect(find.byType(TopLevelBar));
-    // The LAST control on the banner — the menu beside Save, which is the end
-    // of the document row.
+    // The LAST control on the banner — the per-tab export menu, which is the
+    // end of the document row now that Save has gone up to the title bar.
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('save_menu')),
+        matching: find.byKey(const ValueKey('export_tab_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1),
@@ -207,7 +199,7 @@ void main() {
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('save_menu')),
+        matching: find.byKey(const ValueKey('export_tab_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1));
@@ -247,7 +239,7 @@ void main() {
     expect(find.byKey(const ValueKey('banner_room')), findsNothing);
     // The way to start one is in the title bar, where the things that BEGIN a
     // session live.
-    expect(find.byKey(const ValueKey('new_project')), findsOneWidget);
+    expect(find.byKey(const ValueKey('new_menu')), findsOneWidget);
   });
 
   testWidgets('one room and no job says Room, and goes nowhere',

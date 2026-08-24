@@ -232,6 +232,58 @@ void main() {
       expect(names.last, endsWith(' (2)'));
     });
 
+    test('the drawing set the job was quoted against is on the summary', () {
+      // "Which set was this priced from" is asked every time a plan is
+      // reissued and a number stops matching.
+      final estimate = job();
+      final drawing = path.join(dir.path, 'A-101.pdf');
+      File(drawing).writeAsStringSync('%PDF-1.4');
+      estimate.project.plans.add(ProjectPlan(
+        id: estimate.project.nextPlanId(),
+        filePath: BuildingProject.storePath(drawing, estimate.projectPath),
+        label: 'Level 1 floor plan',
+        notes: 'issued 3 Feb',
+      ));
+
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: estimate));
+      final summary = sheetNamed(archive, 'Summary');
+
+      expect(summary, contains('Plans this job is quoted against (1)'));
+      expect(summary, contains('Level 1 floor plan'));
+      expect(summary, contains('issued 3 Feb'));
+      // The path AS STORED - what the project file says, so a reader with the
+      // folder in front of them can follow it.
+      expect(summary, contains('A-101.pdf'));
+      expect(summary, isNot(contains('NOT FOUND')));
+    });
+
+    test('a drawing that has moved is flagged, not quietly listed', () {
+      final estimate = job();
+      estimate.project.plans.add(ProjectPlan(
+        id: estimate.project.nextPlanId(),
+        filePath: 'A-999.pdf',
+        label: 'Riser diagram',
+      ));
+
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: estimate));
+      final summary = sheetNamed(archive, 'Summary');
+
+      expect(summary, contains('Riser diagram'));
+      expect(summary, contains('NOT FOUND'));
+      // ...and again in the block somebody reads before the book goes out.
+      expect(summary, contains('Check before this goes out'));
+      expect(summary, contains('1 building plan is not where the project'));
+    });
+
+    test('a job with no plans says nothing about them', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: job()));
+      expect(sheetNamed(archive, 'Summary'),
+          isNot(contains('Plans this job is quoted against')));
+    });
+
     test('an unreadable room is named in the summary rather than dropped', () {
       final estimate = job();
       estimate.project.rooms.add(ProjectRoomRef(

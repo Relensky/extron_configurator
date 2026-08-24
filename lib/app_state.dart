@@ -10144,6 +10144,133 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  // --- building plans ------------------------------------------------------
+  //
+  //  The drawings the whole job refers to - see [ProjectPlan]. References,
+  //  never copies: a plan set is reissued halfway through a job, and a copy
+  //  taken in March is the drawing somebody installs the wrong thing from in
+  //  June. Everything here works the way the room list does, for the same
+  //  reasons, so a project travels with its drawings still attached.
+
+  /// Where a plan actually is on this machine, resolved against the project
+  /// file the same way a room's config path is. '' when the row has no path.
+  String resolveProjectPlanPath(ProjectPlan plan) =>
+      BuildingProject.resolvePath(plan.filePath, currentProjectPath);
+
+  /// Whether the file behind a plan row is there. A drawing that has been
+  /// moved or renamed is SAID to be missing rather than opening onto an
+  /// error - "the file is gone" and "the viewer failed" are different
+  /// problems with different fixes.
+  bool projectPlanExists(ProjectPlan plan) {
+    final resolved = resolveProjectPlanPath(plan);
+    return resolved.isNotEmpty && File(resolved).existsSync();
+  }
+
+  /// Adds a drawing to the job. Returns the message to show - '' when it went
+  /// in.
+  ///
+  /// The same file twice is refused: two rows onto one drawing is two places
+  /// to write the note about it, and the second one is the one nobody reads.
+  String addPlanToProject(String filePath, {String label = ''}) {
+    if (filePath.isEmpty) return 'No file chosen.';
+    final absolute = path.normalize(filePath);
+    if (!File(absolute).existsSync()) {
+      return 'There is no file at $absolute.';
+    }
+    for (final existing in project.plans) {
+      if (path.equals(resolveProjectPlanPath(existing), absolute)) {
+        return '${path.basename(absolute)} is already on this project.';
+      }
+    }
+
+    final added = ProjectPlan(
+      id: project.nextPlanId(),
+      filePath: BuildingProject.storePath(absolute, currentProjectPath),
+      label: label,
+    );
+    project.plans.add(added);
+    _logProjectEdit(
+      itemKey: 'plan:${added.id}',
+      itemName: added.displayName,
+      field: 'Plan',
+      summary: 'added to the job',
+    );
+    AppLogger.logInfo('Building plan $absolute added to the project.');
+    _projectChanged();
+    return '';
+  }
+
+  /// Takes a drawing off the job. THE FILE IS UNTOUCHED - this list is a set
+  /// of references, and deleting somebody's drawing set because they tidied a
+  /// row off a list is not a thing this app is going to do.
+  void removePlanFromProject(String planId) {
+    final index = project.plans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    _logProjectEdit(
+      itemKey: 'plan:$planId',
+      itemName: project.plans[index].displayName,
+      field: 'Plan',
+      summary: 'removed from the job (its file is untouched)',
+    );
+    project.plans.removeAt(index);
+    _projectChanged();
+  }
+
+  void updateProjectPlan(String planId, {String? label, String? notes}) {
+    final index = project.plans.indexWhere((p) => p.id == planId);
+    if (index < 0) return;
+    final before = project.plans[index];
+    project.plans[index] = before.copyWith(label: label, notes: notes);
+
+    // One line per DECISION, not per keystroke - the same rule the room rows
+    // are logged under.
+    if (label != null && label.trim() != before.label.trim()) {
+      _logProjectEdit(
+        itemKey: 'plan:$planId',
+        itemName: project.plans[index].displayName,
+        field: 'Plan',
+        summary: label.trim().isEmpty ? 'label cleared' : 'renamed',
+        coalesce: true,
+      );
+    }
+    if (notes != null && notes.trim() != before.notes.trim()) {
+      _logProjectEdit(
+        itemKey: 'plan:$planId',
+        itemName: project.plans[index].displayName,
+        field: 'Notes',
+        summary: notes.trim().isEmpty ? 'cleared' : 'written',
+        coalesce: true,
+      );
+    }
+    _projectChanged();
+  }
+
+  /// Moves a drawing up or down the list - the order the set reads in.
+  void moveProjectPlan(String planId, int delta) {
+    final from = project.plans.indexWhere((p) => p.id == planId);
+    if (from < 0) return;
+    final to = from + delta;
+    if (to < 0 || to >= project.plans.length) return;
+    final plan = project.plans.removeAt(from);
+    project.plans.insert(to, plan);
+    _projectChanged();
+  }
+
+  /// Hands a plan to whatever the machine opens its file type with. Returns
+  /// the message to show, or null when it opened.
+  ///
+  /// The way out for the formats the app cannot draw - a DWG, a Revit model -
+  /// and the second opinion for the ones it can: a full CAD viewer has tools
+  /// this one never will.
+  Future<String?> openProjectPlanExternally(ProjectPlan plan) async {
+    final resolved = resolveProjectPlanPath(plan);
+    if (resolved.isEmpty || !File(resolved).existsSync()) {
+      return '${plan.displayName} is not where the project says it is'
+          '${resolved.isEmpty ? '' : ' ($resolved)'}.';
+    }
+    return openInDesktop(resolved);
+  }
+
   // --- spares --------------------------------------------------------------
   //
   //  The spares the JOB buys, as opposed to the ones a room asks for on its own

@@ -586,24 +586,19 @@ class _MainDashboardState extends State<MainDashboard> {
     //
     // Built here because they need this State's methods, but they live on the
     // banner, beside the job, where the rest of "which document am I working
-    // on" lives — the conversion, the processor transfers, undo-last-save, the
-    // EXPORTS and SAVE. The title bar keeps what is about the APPLICATION or
-    // STARTS a session: New Project, New Config, Open, the screenshot, the
-    // theme and the gear.
+    // on" lives — the conversion, the processor transfers, undo-last-save and
+    // the EXPORTS. The title bar keeps what is about the APPLICATION and what
+    // begins or writes a file: New, Open, Save, the screenshot, the theme and
+    // the gear.
     //
     // The exports moved down here because they are about the DOCUMENT, not
     // the app: "give me this as a spreadsheet" is the same kind of question
-    // as "save this" and "convert this", and it was the odd one out sitting
-    // up beside the theme toggle.
+    // as "convert this", and it was the odd one out sitting up beside the
+    // theme toggle.
     //
-    // SAVE FOLLOWED THEM, for the same reason and one more. It is the control
-    // that acts on the document in front of you — the room, the job or the
-    // catalog, whichever the tab belongs to — so it belongs on the row that
-    // names that document rather than on the row that names the app. It is
-    // still the last thing in its row and still in the corner: what mattered
-    // about the corner was that its position never depends on how many other
-    // buttons happen to be showing, and that is as true of this row as of the
-    // one above it.
+    // SAVE IS NOT AMONG THEM. It went back up to the title bar to stand with
+    // New and Open — the three that every other application on the machine
+    // keeps together, and the three a hand reaches for without reading.
     final documentActions = <Widget>[
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
@@ -733,16 +728,6 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         ],
       ),
-      // SAVE, AND EVERY OTHER WAY OF SAVING — last, in the corner.
-      //
-      // One button that writes whatever document the tab on screen belongs
-      // to: the room on the room tabs, the job on the Project tab, the
-      // catalog on the Catalog tab. It carries a dot when that document is
-      // behind its file, and a menu beside it holding Save As, the other
-      // document, Save All to a room folder, and an on-demand backup. See
-      // save_actions.dart for why the three buttons that used to be here were
-      // not enough.
-      const SaveToolbar(),
     ];
 
     // The bar the app-level buttons are painted on, so their ink can be
@@ -779,22 +764,44 @@ class _MainDashboardState extends State<MainDashboard> {
           // They start a session rather than acting on the one in progress, so
           // they sit with the application's own controls rather than with the
           // buttons that write, convert and transfer whatever is already open.
-          // A JOB IS A BUILDING AND A ROOM IS A FILE, and both are started
-          // from here. The project one is first because that is the order the
-          // work happens in: the building comes before the room, and somebody
-          // who started with the room had no way of knowing there was a job to
-          // put it on without going looking for the Project tab first.
-          IconButton(
-            key: const ValueKey('new_project'),
-            icon: const Icon(Icons.create_new_folder),
-            tooltip: 'New Project - a building, its rooms, and when it is due',
-            onPressed: () => startNewProject(context, provider),
-          ),
-          IconButton(
-            key: const ValueKey('new_config'),
-            icon: const Icon(Icons.note_add),
-            tooltip: 'New Config (from template)',
-            onPressed: () => _createNewConfig(context, provider),
+          //
+          // ONE "NEW", WITH THE TWO THINGS THERE ARE TO START UNDER IT. A job
+          // is a building and a room is a file, and both begin here — but as
+          // two adjacent icons they were two unlabelled pictures that both
+          // meant "new", which is a choice somebody makes by hovering. A menu
+          // names them: the project first, because that is the order the work
+          // happens in — the building comes before the room, and somebody who
+          // started with the room had no way of knowing there was a job to put
+          // it on without going looking for the Project tab first.
+          PopupMenuButton<String>(
+            key: const ValueKey('new_menu'),
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'New - a project, or a room config',
+            onSelected: (v) => v == 'project'
+                ? startNewProject(context, provider)
+                : _createNewConfig(context, provider),
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                key: ValueKey('new_project'),
+                value: 'project',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.create_new_folder),
+                  title: Text('New Project'),
+                  subtitle: Text('A building, its rooms, and when it is due'),
+                ),
+              ),
+              PopupMenuItem(
+                key: ValueKey('new_config'),
+                value: 'config',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.note_add),
+                  title: Text('New Config'),
+                  subtitle: Text('One room, from the template'),
+                ),
+              ),
+            ],
           ),
           IconButton(
             key: const ValueKey('open_config'),
@@ -812,6 +819,24 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'Toggle Theme',
             onPressed: () => provider.toggleTheme(),
           ),
+          // SAVE, AND EVERY OTHER WAY OF SAVING — on the top row.
+          //
+          // One button that writes whatever document the tab on screen belongs
+          // to: the room on the room tabs, the job on the Project tab, the
+          // catalog on the Catalog tab. It carries a dot when that document is
+          // behind its file, and a menu beside it holding Save As, the other
+          // document, Save All to a room folder, and an on-demand backup. See
+          // save_actions.dart for why the three buttons that used to be here
+          // were not enough.
+          //
+          // Up here beside New and Open rather than down on the document row,
+          // because those three are what every other application on the
+          // machine puts together and what a hand goes to without reading:
+          // the file you start, the file you open, the file you write. Its
+          // place in the row is fixed — the buttons to its left are the same
+          // three on every tab — so it is still where it was a moment ago
+          // whatever is on screen.
+          const SaveToolbar(),
           // App Config, at the end of the row that is about the app itself.
           IconButton(
             key: const ValueKey('banner_app_config'),
@@ -841,9 +866,10 @@ class _MainDashboardState extends State<MainDashboard> {
             tooltip: 'App Config - file locations, theme, pricing, autosave',
             onPressed: () => provider.selectTab(AppTab.appConfig.index),
           ),
-          // Save is NOT here: it acts on the document rather than on the
-          // app, so it sits at the end of the banner below with the rest of
-          // the document's own buttons.
+          // The gear stays last. Save sits before it rather than after,
+          // because the corner of this row has been the way into App Config
+          // for as long as the row has existed, and a settings button that
+          // moves is one somebody hunts for.
         ],
       ),
       body: Column(

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
 
 import 'package:extron_configurator/building_project.dart';
 import 'package:extron_configurator/project_briefing.dart';
@@ -41,9 +44,11 @@ void main() {
     List<MasterPartLine> master = const [],
     int untagged = 0,
     int unpriced = 0,
+    String projectPath = '',
   }) => ProjectEstimate(
     project: project,
     currency: r'$',
+    projectPath: projectPath,
     rooms: const [],
     costedRooms: const [],
     master: master,
@@ -219,6 +224,95 @@ void main() {
     for (final line in briefing.lines) {
       expect(kBriefingPaneLabels[line.pane], isNotNull);
     }
+  });
+
+  group('the building plans', () {
+    late Directory dir;
+
+    setUp(() => dir = Directory.systemTemp.createTempSync('rcb_briefing_plans'));
+    tearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+
+    String projectPath() => path.join(dir.path, 'bss_project.json');
+
+    ProjectPlan attach(BuildingProject project, String file,
+        {String label = ''}) {
+      final plan = ProjectPlan(
+        id: project.nextPlanId(),
+        filePath: file,
+        label: label,
+      );
+      project.plans.add(plan);
+      return plan;
+    }
+
+    test('the drawing set is part of what the job IS', () {
+      final project = BuildingProject();
+      File(path.join(dir.path, 'A-101.pdf')).writeAsStringSync('%PDF-1.4');
+      attach(project, 'A-101.pdf');
+
+      final o = buildProjectBriefing(
+        estimate: estimateOf(project, projectPath: projectPath()),
+        asOf: march,
+      ).overview;
+
+      expect(o.plans, 1);
+      expect(o.plansMissing, 0);
+    });
+
+    test('a drawing that has moved is counted and named', () {
+      final project = BuildingProject();
+      File(path.join(dir.path, 'A-101.pdf')).writeAsStringSync('%PDF-1.4');
+      attach(project, 'A-101.pdf');
+      attach(project, 'A-999.pdf', label: 'Riser diagram');
+
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(project, projectPath: projectPath()),
+        asOf: march,
+      );
+
+      expect(briefing.overview.plans, 2);
+      expect(briefing.overview.plansMissing, 1);
+
+      // Named, not just counted: which sheet went missing is the whole
+      // question, and it is asked on the day the drawing is wanted.
+      final line = briefing.openLines.singleWhere(
+          (l) => l.pane == BriefingPane.plans);
+      expect(line.message, '1 building plan is not where the project says it '
+          'is');
+      expect(line.detail.single, contains('Riser diagram'));
+      expect(line.detail.single, contains('A-999.pdf'));
+    });
+
+    test('a broken drawing link is not a reason to interrupt', () {
+      // An open question, not something time-critical: the briefing appears on
+      // the way in only when something cannot wait, and a job always has open
+      // questions.
+      final project = BuildingProject();
+      attach(project, 'A-999.pdf');
+
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(project, projectPath: projectPath()),
+        asOf: march,
+      );
+
+      expect(briefing.isQuiet, isTrue);
+      expect(briefing.openLines.map((l) => l.pane),
+          contains(BriefingPane.plans));
+    });
+
+    test('a job with no plans says nothing about them', () {
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(BuildingProject(), projectPath: projectPath()),
+        asOf: march,
+      );
+
+      expect(briefing.overview.plans, 0);
+      expect(briefing.overview.plansMissing, 0);
+      expect(briefing.lines.map((l) => l.pane),
+          isNot(contains(BriefingPane.plans)));
+    });
   });
 
   group('where it stands, overall', () {
@@ -493,6 +587,36 @@ void main() {
       // message body with text underneath it.
       expect(text.endsWith('\n'), isTrue);
       expect(text.endsWith('\n\n'), isFalse);
+    });
+
+    test('the drawing set is on the copy the same way it is on screen', () {
+      final dir = Directory.systemTemp.createTempSync('rcb_briefing_copy');
+      addTearDown(() {
+        if (dir.existsSync()) dir.deleteSync(recursive: true);
+      });
+      File(path.join(dir.path, 'A-101.pdf')).writeAsStringSync('%PDF-1.4');
+
+      final project = BuildingProject();
+      project.plans.add(
+          ProjectPlan(id: project.nextPlanId(), filePath: 'A-101.pdf'));
+      project.plans.add(
+          ProjectPlan(id: project.nextPlanId(), filePath: 'A-999.pdf'));
+
+      final text = renderBriefingText(
+        buildProjectBriefing(
+          estimate: estimateOf(project,
+              projectPath: path.join(dir.path, 'bss_project.json')),
+          asOf: march,
+        ),
+        title: 'Bessey refresh',
+      );
+
+      // The dialog and the copy are never allowed to disagree: the moment they
+      // do, the written one is the one that gets believed.
+      expect(text, contains('Plans'));
+      expect(text, contains('2 · 1 not where the project says'));
+      expect(text, contains('building plan is not where the project says'));
+      expect(text, contains('Fixed on Plans'));
     });
 
     test('an untitled job still says what it is', () {
