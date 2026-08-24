@@ -395,22 +395,25 @@ Future<bool> startNewProject(
   final roomSetup = provider.roomConfig['SYSTEM_SETUP'];
   final building =
       (roomSetup is Map ? roomSetup['gve_bldg']?.toString() : '') ?? '';
+
+  // THE QUESTIONS COME FIRST, AND BACKING OUT OF THEM CHANGES NOTHING.
+  //
+  // The job used to be created and the app switched into project mode before
+  // the setup screen opened, so cancelling out of it left somebody who had
+  // been working on a room standing in an empty project they never started.
+  // Room mode and project mode are the two states this app is ever in, and
+  // nothing may move between them except a decision somebody actually made.
+  final answers = await showProjectSetupDialog(context, building: building);
+  if (answers == null || !context.mounted) return false;
+
   provider.newProject(building: building);
   provider.selectTab(AppTab.project.index);
-
-  if (!context.mounted) return true;
-  final answers = await showProjectSetupDialog(context, building: building);
-  if (!context.mounted) return true;
 
   showTimedSnackBar(
     ScaffoldMessenger.of(context),
     SnackBar(
       duration: const Duration(seconds: 6),
-      content: Text(
-        answers == null
-            ? 'New project started. Add the rooms it covers.'
-            : applyProjectSetup(provider, answers),
-      ),
+      content: Text(applyProjectSetup(provider, answers)),
     ),
   );
   return true;
@@ -590,6 +593,13 @@ Future<bool> closeProjectFile(
   final hadRoom = provider.currentConfigPath.isNotEmpty;
   provider.closeProject();
 
+  // AND OUT OF PROJECT MODE. Closing a job while standing on the Project tab
+  // used to leave the user looking at the empty room list of the job they had
+  // just put away, which reads as a close that did not work. The session goes
+  // back to where the room work was - see [AppStateProvider.lastRoomTabIndex]
+  // - or, with no room open, to the start screen that offers both documents.
+  provider.selectTab(provider.lastRoomTabIndex);
+
   showTimedSnackBar(
     ScaffoldMessenger.of(context),
     SnackBar(
@@ -597,7 +607,7 @@ Future<bool> closeProjectFile(
         hadRoom
             // Said out loud, because the room staying open is the part that
             // would otherwise look like the close only half worked.
-            ? 'Closed $was. The open room is still open.'
+            ? 'Closed $was. Back to the room, which is still open.'
             : 'Closed $was.',
       ),
     ),

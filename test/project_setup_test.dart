@@ -243,8 +243,7 @@ void main() {
       expect(answer.todos, isNot(contains(kStarterProjectTodos.first)));
     });
 
-    testWidgets('skipping leaves the empty project it used to give',
-        (tester) async {
+    testWidgets('backing out comes back with nothing', (tester) async {
       final answer = await run(tester, (t) async {
         await t.tap(find.byKey(const ValueKey('setup_skip')));
         await t.pumpAndSettle();
@@ -273,17 +272,56 @@ void main() {
     );
     await tester.pump();
 
+    final wasOn = p.selectedTabIndex;
     await tester.tap(find.byKey(const ValueKey('new_project')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('project_setup_dialog')), findsOneWidget);
-    // The job itself has already been started by the time the questions are
-    // asked, which is why the way out is called Skip rather than Cancel.
-    expect(p.selectedTabIndex, AppTab.project.index);
+    // NOTHING HAS BEEN STARTED YET. The questions come before the job, so a
+    // session that is in room mode is still in room mode while they are on
+    // screen — and stays there if the answer is no.
+    expect(p.hasOpenProject, isFalse);
+    expect(p.selectedTabIndex, wasOn);
 
     await tester.tap(find.byKey(const ValueKey('setup_skip')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('project_setup_dialog')), findsNothing);
+    expect(p.hasOpenProject, isFalse,
+        reason: 'backing out of the questions must not start a job');
+    expect(p.selectedTabIndex, wasOn);
+    expect(find.byKey(const ValueKey('banner_project')), findsNothing);
+  });
+
+  testWidgets('confirming the questions is what starts the job',
+      (tester) async {
+    final p = AppStateProvider(autoLoadSettings: false)
+      ..settingsLoaded = true
+      ..firstRunSetupNeeded = false;
+    tester.view.physicalSize = const Size(1600, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: const RoomConfigApp(),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('new_project')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('setup_name')),
+      'Bessey refresh',
+    );
+    await tester.tap(find.byKey(const ValueKey('setup_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(p.hasOpenProject, isTrue);
+    expect(p.project.name, 'Bessey refresh');
+    expect(p.selectedTabIndex, AppTab.project.index);
+    expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
 
     // The snack bar that follows keeps its timer outside the widget tree (see
     // showTimedSnackBar), so it has to be allowed to expire before the tree

@@ -1288,7 +1288,23 @@ class TopLevelBar extends StatelessWidget {
     final hasRoom = provider.roomConfig.isNotEmpty ||
         provider.currentConfigPath.isNotEmpty;
 
-    final bannerFill = theme.colorScheme.surfaceContainerHighest;
+    // THE STRIP IS A DIFFERENT COLOUR IN EACH MODE.
+    //
+    // Room and project are the two states this app is ever in, and until now
+    // the only thing that said which was a button somebody had to read. A
+    // tint is read without being looked at - it is the same trick as a
+    // terminal that changes colour when you are root, and it is worth more
+    // than the label, because the mistake it prevents (working on a room
+    // believing it is on the job, or the other way round) is one nobody makes
+    // deliberately.
+    //
+    // Blended rather than picked: the accent is a colour somebody chose out of
+    // a wheel, so a tint of it is a hint of THIS theme rather than a colour
+    // that could clash with it. Everything painted on it is measured against
+    // whichever fill is in use - see the ink below.
+    final bannerFill = hasProject
+        ? theme.colorScheme.surfaceContainerHighest
+        : roomModeBannerFill(theme);
 
     return Material(
       color: bannerFill,
@@ -1317,7 +1333,28 @@ class TopLevelBar extends StatelessWidget {
                 ),
                 onPressed: () => onSelect(AppTab.project.index),
               ),
-              const SizedBox(width: 12),
+              // THE WAY BACK OUT, beside the way in. Closing a job is the only
+              // thing that returns this session to room mode, and it used to
+              // be a button on the Project tab - which is to say, inside the
+              // mode you were trying to leave.
+              IconButton(
+                key: const ValueKey('banner_project_close'),
+                icon: const Icon(Icons.close, size: 18),
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Close the project and go back to the room',
+                color: readableOn(
+                  bannerFill,
+                  prefer: [
+                    theme.textTheme.bodySmall?.color ??
+                        theme.colorScheme.onSurfaceVariant,
+                    theme.colorScheme.onSurface,
+                  ],
+                  minRatio: kContrastLarge,
+                ),
+                onPressed: () => closeProjectFile(context, provider),
+              ),
+              const SizedBox(width: 8),
             ] else if (hasRoom) ...[
               // A ROOM ON ITS OWN. Said, not offered: there is nothing to
               // press, because the only thing that could be pressed would be a
@@ -1395,6 +1432,21 @@ String _roomFileName(AppStateProvider provider) {
   if (file.isEmpty) return 'Unsaved room';
   return file.split(Platform.pathSeparator).last;
 }
+
+/// The banner's fill while the session is on a ROOM rather than a job.
+///
+/// A tint of the theme's own tertiary over the strip's ordinary colour, at an
+/// alpha low enough to stay a background and high enough to be seen without
+/// being looked for. Tertiary because it is the role this app already uses for
+/// "a fact about this document" and the one least likely to be read as a
+/// warning.
+///
+/// Its own function so the contrast test can measure what the banner paints
+/// rather than a colour written down twice.
+Color roomModeBannerFill(ThemeData theme) => Color.alphaBlend(
+      theme.colorScheme.tertiary.withValues(alpha: 0.14),
+      theme.colorScheme.surfaceContainerHighest,
+    );
 
 // A quiet nudge that the file needed migrating, pointing at the Convert
 /// button rather than opening it. The whole point of the change is that the

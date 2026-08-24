@@ -421,6 +421,39 @@ void main() {
             min: kContrastLarge);
       });
 
+      test('the top-level banner in room mode - ${t.name}', () {
+        // The strip takes a tint of the accent while the session is on a room
+        // rather than a job, so everything on it is measured against THAT
+        // fill as well - a tint that made the job name unreadable would be a
+        // cure worse than the disease.
+        final bg = roomModeBannerFill(t.theme);
+        expectReadable(
+          'room name',
+          readableOn(bg, prefer: [
+            t.theme.textTheme.bodySmall?.color ?? s.onSurfaceVariant,
+            s.onSurface,
+          ]),
+          bg,
+          t.name,
+        );
+        expectReadable(
+          'the close button',
+          readableOn(bg,
+              prefer: [s.onSurfaceVariant, s.onSurface],
+              minRatio: kContrastLarge),
+          bg,
+          t.name,
+          min: kContrastLarge,
+        );
+        // And it has to be TELLABLE from the other one, which is the whole
+        // point of tinting it.
+        expect(
+          contrastRatio(bg, s.surfaceContainerHighest),
+          greaterThan(1.02),
+          reason: 'the two modes must not paint the same strip - ${t.name}',
+        );
+      });
+
       test('the top-level banner - ${t.name}', () {
         final bg = s.surfaceContainerHighest;
         expectReadable(

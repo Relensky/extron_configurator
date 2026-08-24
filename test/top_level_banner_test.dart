@@ -10,7 +10,8 @@ import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/building_project.dart'
     show kProjectFileSuffix;
 import 'package:extron_configurator/save_actions.dart' show isProjectFile;
-import 'package:extron_configurator/main.dart';
+import 'package:extron_configurator/main.dart'
+    show RoomConfigApp, TopLevelBar, roomModeBannerFill;
 import 'package:extron_configurator/nav_rail.dart';
 
 /// ============================================================================
@@ -300,6 +301,63 @@ void main() {
     p.closeProject();
     await tester.pump();
     expect(find.byKey(const ValueKey('banner_project')), findsNothing);
+  });
+
+  testWidgets('closing the job from the banner goes back to the room',
+      (tester) async {
+    final p = fresh();
+    p.roomConfig = {
+      'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '101'},
+    };
+    p.currentConfigPath = path.join(dir.path, 'BSS_101_config.json');
+    // Standing in the middle of room work, then up to the job and back.
+    p.selectTab(AppTab.cabling.index);
+    p.newProject(name: 'Bessey Hall');
+    p.selectTab(AppTab.project.index);
+    await pump(tester, p);
+
+    expect(find.byKey(const ValueKey('banner_project_close')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('banner_project_close')));
+    await tester.pumpAndSettle();
+
+    expect(p.hasOpenProject, isFalse);
+    // BACK WHERE THE ROOM WORK WAS, not on a tab the app picked: somebody who
+    // closed a project from the middle of cabling a room lands in cabling.
+    expect(p.selectedTabIndex, AppTab.cabling.index);
+    expect(find.byKey(const ValueKey('banner_project')), findsNothing);
+    expect(find.byKey(const ValueKey('banner_room')), findsOneWidget);
+
+    await tester.pumpAndSettle(const Duration(seconds: 8));
+  });
+
+  testWidgets('the strip is a different colour in each mode', (tester) async {
+    // Read without being looked at: the mistake this prevents - working on a
+    // room believing it is on the job - is not one anybody makes on purpose.
+    final p = fresh();
+    p.roomConfig = {'SYSTEM_SETUP': {'gve_bldg': 'BSS'}};
+    p.currentConfigPath = path.join(dir.path, 'BSS_101_config.json');
+    await pump(tester, p);
+
+    // The bar's OWN Material — the buttons on it build Materials of their own,
+    // so the first one under the bar is the strip and the rest are its
+    // contents.
+    Color fillNow() => tester
+        .widgetList<Material>(find.descendant(
+          of: find.byType(TopLevelBar),
+          matching: find.byType(Material),
+        ))
+        .firstWhere((m) => m.color != null)
+        .color!;
+
+    final inRoom = fillNow();
+    expect(inRoom, roomModeBannerFill(Theme.of(tester.element(
+      find.byType(TopLevelBar),
+    ))));
+
+    p.newProject(name: 'Bessey Hall');
+    await tester.pump();
+    final inProject = fillNow();
+    expect(inProject, isNot(inRoom));
   });
 
   group('Open File takes either document', () {

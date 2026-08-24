@@ -1260,9 +1260,23 @@ class AppStateProvider extends ChangeNotifier {
   int selectedTabIndex = AppTab.cost.index;
 
   void selectTab(int index) {
+    // WHERE THE ROOM WORK WAS. Closing a job puts the user back in room mode,
+    // and "back" has to mean the tab they were actually on rather than a tab
+    // the app picked - somebody who closed a project from the middle of
+    // cabling a room should land in cabling.
+    if (index != AppTab.project.index &&
+        index >= 0 &&
+        index < AppTab.values.length) {
+      _lastRoomTabIndex = index;
+    }
     selectedTabIndex = index;
     notifyListeners();
   }
+
+  /// The last tab that was not the Project tab — where [closeProject] hands
+  /// the session back to. Starts at the tab a cold session opens on.
+  int get lastRoomTabIndex => _lastRoomTabIndex;
+  int _lastRoomTabIndex = AppTab.cost.index;
 
   // ---------------------------------------------------------------------
   //  SCHEMATIC TAB STATE
