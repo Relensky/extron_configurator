@@ -127,9 +127,15 @@ void main() {
     // when the config file changed was letting go of the real clock three
     // writes early, so whether the message had appeared by the time the test
     // looked came down to how busy the machine was.
+    // Scoped to the snack bar. With no job open the BANNER names the room's
+    // own file, so an unscoped search matched before the save had started and
+    // the file was read back three writes early.
     final reported = await pumpUntilFound(
       tester,
-      find.textContaining('BSS103_config.json'),
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.textContaining('BSS103_config.json'),
+      ),
     );
     expect(reported, isTrue,
         reason: 'the snackbar names the file that was written');

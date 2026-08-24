@@ -9797,6 +9797,23 @@ class AppStateProvider extends ChangeNotifier {
   /// alter a price. See [_projectChanged].
   bool _keepEstimate = false;
 
+  /// True once this session actually has a JOB in front of it.
+  ///
+  /// Not the same question as "is the project object empty". A job started
+  /// from New Project has no file and no rooms yet and is still the thing the
+  /// user is working on; a session that has only ever opened one room has a
+  /// perfectly valid empty project object and is NOT working on a job. The two
+  /// are told apart by whether somebody asked for one - see [newProject],
+  /// [openProject] and [closeProject].
+  ///
+  /// What it decides: whether the banner offers the way in to the Project tab
+  /// at all. A button that led to an empty job list was the app's answer to
+  /// "what am I working on" on a session where the answer was "one room".
+  bool get hasOpenProject =>
+      _projectStarted || currentProjectPath.isNotEmpty || project.rooms.isNotEmpty;
+
+  bool _projectStarted = false;
+
   String get projectDisplayName {
     final name = project.name.trim();
     if (name.isNotEmpty) return name;
@@ -9840,6 +9857,7 @@ class AppStateProvider extends ChangeNotifier {
     project.vendors.addAll(starterVendors(project));
     currentProjectPath = '';
     projectDirty = false;
+    _projectStarted = true;
     _projectRooms.clear();
     AppLogger.logInfo('New project started.');
     notifyListeners();
@@ -9851,6 +9869,7 @@ class AppStateProvider extends ChangeNotifier {
       project = await BuildingProject.load(file);
       currentProjectPath = file;
       projectDirty = false;
+      _projectStarted = true;
       _projectRooms.clear();
       AppLogger.logInfo(
         'Project "${project.name}" opened from $file '
@@ -9886,6 +9905,7 @@ class AppStateProvider extends ChangeNotifier {
     project = BuildingProject(currency: currencySymbol);
     currentProjectPath = '';
     projectDirty = false;
+    _projectStarted = false;
     _projectRooms.clear();
     AppLogger.logInfo('Project "$was" closed.');
     notifyListeners();

@@ -634,7 +634,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('exit_unsaved_dialog')), findsOneWidget);
-      expect(find.textContaining('BSS103_config.json'), findsOneWidget);
+      // Scoped to the dialog: with no job open the banner names the room's own
+      // file too, so a bare search for it would pass without the dialog ever
+      // having said which file is at stake.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('exit_unsaved_dialog')),
+          matching: find.textContaining('BSS103_config.json'),
+        ),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byKey(const ValueKey('exit_cancel')));
       await tester.pumpAndSettle();

@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:extron_configurator/app_snack.dart';
 import 'package:extron_configurator/contrast.dart';
 import 'package:extron_configurator/main.dart';
+import 'package:extron_configurator/project_spares_view.dart'
+    show spareSectionFill;
 
 /// Text somebody can actually read, in every theme this app can be set to.
 ///
@@ -188,22 +190,136 @@ void main() {
               '${failures.length} fill/theme combinations');
     });
 
-    test('the schemes own pairings are NOT safe - which is why the helpers '
-        'exist', () {
+    test('the GENERATED schemes are not safe - which is why the pass exists',
+        () {
       // Not a complaint about Material: a scheme's on-colours are generated
       // for its own generated palette, and this app hands it a colour a user
-      // picked. This test is here so that anybody tempted to write
-      // `colorScheme.onPrimaryContainer` can see the number first.
+      // picked. Measured on the theme as its generator hands it over, before
+      // legibleTheme has been near it — so the repair pass has to keep
+      // proving it is repairing something.
       var bad = 0;
-      for (final t in everyAccent()) {
-        final s = t.theme.colorScheme;
-        if (contrastRatio(s.onPrimaryContainer, s.primaryContainer) <
-            kContrastBody) {
-          bad++;
+      for (final accent in ['2196F3', '4CAF50', 'FFC107', '607D8B']) {
+        for (final style in ['classic', 'auris']) {
+          for (final dark in [false, true]) {
+            final s = RoomConfigApp.rawThemeFor(
+              style,
+              dark,
+              accent,
+              accent,
+              '',
+            ).colorScheme;
+            for (final pair in [
+              (s.onPrimary, s.primary),
+              (s.onPrimaryContainer, s.primaryContainer),
+              (s.onSecondaryContainer, s.secondaryContainer),
+            ]) {
+              if (contrastRatio(pair.$1, pair.$2) < kContrastBody) bad++;
+            }
+          }
         }
       }
       expect(bad, greaterThan(0),
-          reason: 'if this ever reaches zero the helpers could be retired');
+          reason: 'if this ever reaches zero the pass could be retired');
+    });
+
+    test('...and the finished schemes are', () {
+      // The other half, and the one that matters: after legibleTheme, every
+      // pairing Material's own defaults reach for reads on every accent.
+      final failures = <String>[];
+      for (final t in everyAccent()) {
+        final s = t.theme.colorScheme;
+        for (final pair in {
+          'onPrimary': (s.onPrimary, s.primary),
+          'onSecondary': (s.onSecondary, s.secondary),
+          'onTertiary': (s.onTertiary, s.tertiary),
+          'onPrimaryContainer': (s.onPrimaryContainer, s.primaryContainer),
+          'onSecondaryContainer': (
+            s.onSecondaryContainer,
+            s.secondaryContainer,
+          ),
+          'onTertiaryContainer': (s.onTertiaryContainer, s.tertiaryContainer),
+          'onError': (s.onError, s.error),
+          'onErrorContainer': (s.onErrorContainer, s.errorContainer),
+          'onInverseSurface': (s.onInverseSurface, s.inverseSurface),
+          'onSurface': (s.onSurface, s.surface),
+        }.entries) {
+          final r = contrastRatio(pair.value.$1, pair.value.$2);
+          if (r < kContrastBody) {
+            failures.add('${pair.key} - ${t.name} - ${r.toStringAsFixed(2)}:1');
+          }
+        }
+      }
+      expect(failures, isEmpty,
+          reason: 'the scheme pairs Material paints without asking are '
+              'unreadable on ${failures.length} combinations');
+    });
+
+    test('every button variant reads, on every accent', () {
+      // The five the app uses, each measured the way the widget resolves it:
+      // the theme's own foreground if it names one, Material's default role if
+      // it does not, against the theme's own fill or - for a transparent
+      // button - against the page, the card and a dialog.
+      //
+      // Before the pass this failed on 26 of the 60 pairings tried, all of
+      // them on Classic: text, outlined and elevated buttons down at 1.5:1 in
+      // light mode, tonal buttons at 2.7:1 in dark.
+      const empty = <WidgetState>{};
+      final failures = <String>[];
+      for (final t in everyAccent()) {
+        final s = t.theme.colorScheme;
+        final theme = t.theme;
+
+        Color? declared(ButtonStyle? style) =>
+            style?.foregroundColor?.resolve(empty);
+        Color? declaredFill(ButtonStyle? style) =>
+            style?.backgroundColor?.resolve(empty);
+
+        void check(String what, Color ink, List<Color> grounds) {
+          for (final ground in grounds) {
+            final r = contrastRatio(ink, ground);
+            if (r < kContrastBody) {
+              failures.add('$what - ${t.name} - ${r.toStringAsFixed(2)}:1');
+            }
+          }
+        }
+
+        final behind = [
+          theme.scaffoldBackgroundColor,
+          theme.cardColor,
+          theme.dialogTheme.backgroundColor ?? s.surface,
+        ];
+
+        // Filled and tonal read their own scheme roles unless the theme names
+        // a foreground for both of them.
+        final filledStyle = theme.filledButtonTheme.style;
+        check(
+          'filled',
+          declared(filledStyle) ?? s.onPrimary,
+          [declaredFill(filledStyle) ?? s.primary],
+        );
+        check(
+          'tonal',
+          declared(filledStyle) ?? s.onSecondaryContainer,
+          [declaredFill(filledStyle) ?? s.secondaryContainer],
+        );
+        check(
+          'elevated',
+          declared(theme.elevatedButtonTheme.style) ?? s.primary,
+          [
+            declaredFill(theme.elevatedButtonTheme.style) ??
+                s.surfaceContainerLow,
+          ],
+        );
+        for (final entry in {
+          'text': theme.textButtonTheme.style,
+          'outlined': theme.outlinedButtonTheme.style,
+        }.entries) {
+          check(entry.key, declared(entry.value) ?? s.primary, behind);
+        }
+      }
+      expect(failures, isEmpty,
+          reason: 'button labels are unreadable on ${failures.length} '
+              'combinations');
     });
   });
 
@@ -346,6 +462,78 @@ void main() {
             s.onInverseSurface;
         final bg = t.theme.snackBarTheme.backgroundColor ?? s.inverseSurface;
         expectReadable('snack bar text', ink, bg, t.name);
+      });
+
+      test('the spares figures - ${t.name}', () {
+        // Small coloured text, and the colour is TERTIARY — derived from an
+        // accent somebody picked out of a wheel, with no promise about the
+        // panels this app paints it on. Plain tertiary measured 2.2:1 on the
+        // spares card with the Classic blue accent and 1.3:1 with cyan or
+        // amber, all of them in light mode, which is what accentTextOn exists
+        // to stop.
+        for (final bg in [
+          spareSectionFill(t.theme),
+          t.theme.cardColor,
+          s.surface,
+        ]) {
+          expectReadable('accentTextOn', accentTextOn(s, bg), bg, t.name,
+              min: kContrastStrong);
+        }
+      });
+
+      test('the spares accent is still the spares accent - ${t.name}', () {
+        // The same bargain errorTextOn makes: legible, and still the colour it
+        // started as. A spares figure that turned grey would stop being the
+        // spares figure.
+        final bg = spareSectionFill(t.theme);
+        expect(
+          (HSLColor.fromColor(accentTextOn(s, bg)).hue -
+                  HSLColor.fromColor(s.tertiary).hue)
+              .abs(),
+          lessThan(1.0),
+          reason: 'the spares colour must not drift off its own hue',
+        );
+      });
+
+      test('a chip label survives being pressed - ${t.name}', () {
+        // A selected chip DROPS whatever fill it was handed and paints the
+        // theme's own, with the theme's own label on it. The master list's
+        // warning chips carry a label coloured for their error fill, and that
+        // colour must not follow them onto the selected fill — it measured
+        // 3.7:1 on a light Classic blue and 1.7:1 on a dark amber when it did.
+        //
+        // Unselected: the app's own choice, on the fill the app set.
+        expectReadable('warning chip', foregroundOn(s, s.errorContainer),
+            s.errorContainer, t.name);
+
+        // And the theme's own, in both states, resolved the way the widget
+        // resolves it: the theme's label colour FOR THAT STATE where it names
+        // one - Auris hands over a state-aware colour - and the scheme role
+        // where it does not. Checked against what a real chip renders before
+        // it was written down here.
+        final chip = t.theme.chipTheme;
+        Color labelFor(Set<WidgetState> states, Color fallback) {
+          final declared = chip.labelStyle?.color;
+          return declared == null
+              ? fallback
+              : WidgetStateProperty.resolveAs<Color>(declared, states);
+        }
+
+        expectReadable(
+          'chip label',
+          labelFor(const <WidgetState>{}, s.onSurfaceVariant),
+          chip.backgroundColor ?? s.surfaceContainerLow,
+          t.name,
+        );
+        expectReadable(
+          'selected chip label',
+          labelFor(
+            const <WidgetState>{WidgetState.selected},
+            s.onSecondaryContainer,
+          ),
+          chip.selectedColor ?? s.secondaryContainer,
+          t.name,
+        );
       });
 
       test('icons that carry meaning - ${t.name}', () {

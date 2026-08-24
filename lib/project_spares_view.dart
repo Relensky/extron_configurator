@@ -39,6 +39,20 @@ import 'project_estimate.dart';
 ///  back.
 /// ============================================================================
 
+/// The colour the spares panels actually paint, rather than the one they ask
+/// for.
+///
+/// Both of them fill with `surfaceContainerHighest` at HALF ALPHA, so what a
+/// reader's eye is measuring against is that colour blended over the page
+/// behind it — and every foreground on these panels has to be checked against
+/// the blend rather than against either ingredient. Checking against
+/// `theme.cardColor`, which is what the rest of the app's cards use, would be
+/// measuring text on a card these panels are not.
+Color spareSectionFill(ThemeData theme) => Color.alphaBlend(
+      theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      theme.scaffoldBackgroundColor,
+    );
+
 /// The spares section, as slivers for the project tab's one scroll view.
 List<Widget> spareSectionSlivers(
   BuildContext context,
@@ -175,12 +189,20 @@ class _SectionHeader extends StatelessWidget {
     final parts = estimate.sparedParts.length;
     final forBuilding = estimate.buildingSpareUnits;
 
+    final fill = spareSectionFill(theme);
+
     return Row(
       children: [
         Icon(
           Icons.inventory_outlined,
           size: 18,
-          color: theme.colorScheme.tertiary,
+          // 3:1 rather than 7:1 — the bar a graphic has to clear, not the one
+          // small text does.
+          color: accentTextOn(
+            theme.colorScheme,
+            fill,
+            minRatio: kContrastLarge,
+          ),
         ),
         const SizedBox(width: 6),
         Expanded(
@@ -198,7 +220,7 @@ class _SectionHeader extends StatelessWidget {
                   '${trimNumber(forBuilding)} for the building',
               ].join('  ·  '),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.tertiary,
+                color: accentTextOn(theme.colorScheme, fill),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -352,7 +374,7 @@ class _CoverageLine extends StatelessWidget {
       '${trimNumber(shelf.qty)} on the shelf for '
       '${trimNumber(shelf.installed)} installed  ·  $text% coverage',
       style: theme.textTheme.bodySmall?.copyWith(
-        color: theme.colorScheme.tertiary,
+        color: accentTextOn(theme.colorScheme, spareSectionFill(theme)),
         fontWeight: FontWeight.w600,
       ),
     );
@@ -404,7 +426,13 @@ class _ProjectSpareRow extends StatelessWidget {
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: unit > 0
                       ? null
-                      : errorTextOn(theme.colorScheme, theme.cardColor),
+                      // Measured against what this panel paints, not against
+                      // the card colour it is not using — see
+                      // [spareSectionFill].
+                      : errorTextOn(
+                          theme.colorScheme,
+                          spareSectionFill(theme),
+                        ),
                 ),
               ),
             ],
@@ -737,11 +765,12 @@ class _CoverSummary extends StatelessWidget {
     }
 
     final target = trimNumber(estimate.spareTargetPercent);
+    final fill = spareSectionFill(theme);
     if (short == 0) {
       return Text(
         'All $parts ${parts == 1 ? 'part' : 'parts'} meet the $target% target.',
         style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.tertiary,
+          color: accentTextOn(theme.colorScheme, fill),
           fontWeight: FontWeight.w600,
         ),
       );
@@ -751,7 +780,7 @@ class _CoverSummary extends StatelessWidget {
       '$short of $parts ${parts == 1 ? 'part' : 'parts'} '
       '${short == 1 ? 'is' : 'are'} below the $target% target.',
       style: theme.textTheme.bodySmall?.copyWith(
-        color: errorTextOn(theme.colorScheme, theme.cardColor),
+        color: errorTextOn(theme.colorScheme, fill),
         fontWeight: FontWeight.w600,
       ),
     );
@@ -769,9 +798,10 @@ class _CoverRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final line = cover.line;
+    final fill = spareSectionFill(theme);
     final flag = cover.short
-        ? errorTextOn(theme.colorScheme, theme.cardColor)
-        : theme.colorScheme.tertiary;
+        ? errorTextOn(theme.colorScheme, fill)
+        : accentTextOn(theme.colorScheme, fill);
 
     return Padding(
       padding: const EdgeInsets.only(top: 4),

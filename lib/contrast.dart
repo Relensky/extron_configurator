@@ -129,6 +129,27 @@ Color legibleTone(
 Color errorTextOn(ColorScheme scheme, Color background) =>
     legibleTone(scheme.error, background);
 
+/// The scheme's TERTIARY accent, held legible on [background].
+///
+/// The sibling of [errorTextOn], for the app's other coloured text: the spares
+/// figures, the coverage percentages, the "n spare" under a quantity. Tertiary
+/// is the one scheme role this app sets small text in that is not an error,
+/// and on a LIGHT Classic theme it is routinely unreadable — 2.2:1 on the
+/// spares card with the blue accent, 1.3:1 with cyan or amber. That is not a
+/// bug in the scheme: the accent is a colour somebody picked out of a wheel,
+/// and tertiary is derived from it with no promise about the surfaces this app
+/// paints it on.
+///
+/// Keeps the hue, the same bargain [errorTextOn] makes. A spares figure that
+/// turned grey would stop being the spares figure; darkened, it is the same
+/// colour that can now be read.
+Color accentTextOn(
+  ColorScheme scheme,
+  Color background, {
+  double minRatio = kContrastStrong,
+}) =>
+    legibleTone(scheme.tertiary, background, minRatio: minRatio);
+
 /// The error colour to paint ON a container fill.
 ///
 /// The obvious `colorScheme.error` is the wrong answer on a container and it

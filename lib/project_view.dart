@@ -1714,26 +1714,32 @@ List<Widget> partsSlivers(
         .contains(needle);
   }
 
-  Widget filterChip(String label, String value, {bool warn = false}) =>
-      FilterChip(
-        label: Text(
-          label,
-          // Chosen against the chip's own background rather than left to the
-          // default, which is picked for the surface the chip normally sits
-          // on and is not readable on an error fill.
-          style: warn
-              ? TextStyle(
-                  color: foregroundOn(
-                    theme.colorScheme,
-                    theme.colorScheme.errorContainer,
-                  ),
-                )
-              : null,
-        ),
-        selected: vendorFilter == value,
-        onSelected: (_) => onVendorFilter(value),
-        backgroundColor: warn ? theme.colorScheme.errorContainer : null,
-      );
+  Widget filterChip(String label, String value, {bool warn = false}) {
+    final selected = vendorFilter == value;
+
+    return FilterChip(
+      label: Text(
+        label,
+        // ONLY WHILE IT IS UNSELECTED does this chip paint a fill of its own.
+        // Pressed, it drops the error fill and takes the theme's - so a label
+        // coloured for the error fill would be carried onto one it was never
+        // measured against (3.7:1 on a light Classic blue). The selected
+        // colours are the theme's own, and legible_theme.dart is what makes
+        // that a promise rather than a hope.
+        style: warn && !selected
+            ? TextStyle(
+                color: foregroundOn(
+                  theme.colorScheme,
+                  theme.colorScheme.errorContainer,
+                ),
+              )
+            : null,
+      ),
+      selected: selected,
+      onSelected: (_) => onVendorFilter(value),
+      backgroundColor: warn ? theme.colorScheme.errorContainer : null,
+    );
+  }
 
   final lines = [
     for (final l in estimate.master)
@@ -1942,11 +1948,12 @@ class _SparesPanel extends StatelessWidget {
     final parts = shown?.parts ?? estimate.sparedParts.length;
 
     Widget roomChip(String label, String value, {String? tooltip}) {
+      final picked = selectedRoom == value;
       final chip = FilterChip(
         key: ValueKey('spare_room_$value'),
         label: Text(label),
-        selected: selectedRoom == value,
-        onSelected: (_) => onRoom(selectedRoom == value ? '' : value),
+        selected: picked,
+        onSelected: (_) => onRoom(picked ? '' : value),
       );
       return tooltip == null ? chip : Tooltip(message: tooltip, child: chip);
     }
@@ -1970,7 +1977,15 @@ class _SparesPanel extends StatelessWidget {
                   Icon(
                     Icons.inventory_outlined,
                     size: 16,
-                    color: theme.colorScheme.tertiary,
+                    // The accent, measured against what this panel actually
+                    // paints — see [spareSectionFill]. Plain tertiary is
+                    // 2.2:1 here on a light Classic theme with the blue
+                    // accent, and 1.3:1 with cyan.
+                    color: accentTextOn(
+                      theme.colorScheme,
+                      spareSectionFill(theme),
+                      minRatio: kContrastLarge,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -1988,7 +2003,10 @@ class _SparesPanel extends StatelessWidget {
                     '${formatMoney(cash, currency)}',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.tertiary,
+                      color: accentTextOn(
+                        theme.colorScheme,
+                        spareSectionFill(theme),
+                      ),
                     ),
                   ),
                 ],
@@ -2207,14 +2225,21 @@ class _PartRow extends StatelessWidget {
                           Icon(
                             Icons.inventory_outlined,
                             size: 13,
-                            color: theme.colorScheme.tertiary,
+                            color: accentTextOn(
+                              theme.colorScheme,
+                              theme.cardColor,
+                              minRatio: kContrastLarge,
+                            ),
                           ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               'Spare for $sparedBy',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.tertiary,
+                                color: accentTextOn(
+                                  theme.colorScheme,
+                                  theme.cardColor,
+                                ),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2232,7 +2257,10 @@ class _PartRow extends StatelessWidget {
                                 currency,
                               ),
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.tertiary,
+                                color: accentTextOn(
+                                  theme.colorScheme,
+                                  theme.cardColor,
+                                ),
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -2398,7 +2426,10 @@ class _PartRow extends StatelessWidget {
                         '${trimNumber(roomSpare)} spare',
                         textAlign: TextAlign.right,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.tertiary,
+                          color: accentTextOn(
+                            theme.colorScheme,
+                            theme.cardColor,
+                          ),
                         ),
                       ),
                     ),

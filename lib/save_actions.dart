@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -615,7 +618,40 @@ Future<bool> openProjectFromFile(
   );
   final file = picked?.files.single.path;
   if (file == null || !context.mounted) return false;
+  return openProjectAtPath(context, provider, file);
+}
 
+/// True when [file] is a JOB rather than a room.
+///
+/// Two checks, cheapest first. The suffix this app writes projects under
+/// answers it without touching the disk; a file that has been renamed is
+/// settled by looking for the one key a project cannot be without and a room
+/// never has. Anything unreadable is NOT a project — the room loader gives a
+/// better message about a broken file than the project loader would.
+bool isProjectFile(String file) {
+  if (file.toLowerCase().endsWith(kProjectFileSuffix.toLowerCase())) {
+    return true;
+  }
+  try {
+    final doc = jsonDecode(File(file).readAsStringSync());
+    return doc is Map && doc['rooms'] is List;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Opens the project at [file] — everything [openProjectFromFile] does once
+/// the picker has closed.
+///
+/// Its own function because opening a job is no longer always the Open Project
+/// button: Open File takes whichever of the two documents it is handed, and a
+/// project opened that way has to be a project opened exactly like the other —
+/// same prompt about unsaved edits, same briefing, same message afterwards.
+Future<bool> openProjectAtPath(
+  BuildContext context,
+  AppStateProvider provider,
+  String file,
+) async {
   final messenger = ScaffoldMessenger.of(context);
   final error = await provider.openProject(file);
   if (error.isNotEmpty) {

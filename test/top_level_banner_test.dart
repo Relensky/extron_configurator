@@ -7,6 +7,9 @@ import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/building_project.dart'
+    show kProjectFileSuffix;
+import 'package:extron_configurator/save_actions.dart' show isProjectFile;
 import 'package:extron_configurator/main.dart';
 import 'package:extron_configurator/nav_rail.dart';
 
@@ -61,7 +64,10 @@ void main() {
   });
 
   testWidgets('the two rows carry the two kinds of thing', (tester) async {
+    // With a job open: the banner's own button is only offered once there is
+    // a job to go to — see the group at the end of this file.
     final p = fresh();
+    p.newProject(name: 'Bessey Hall');
     await pump(tester, p);
 
     // The banner: the job, and the buttons that act on the open document.
@@ -210,6 +216,7 @@ void main() {
   testWidgets('the banner survives the rail being folded away',
       (tester) async {
     final p = fresh();
+    p.newProject(name: 'Bessey Hall');
     await pump(tester, p);
 
     await tester.tap(find.byKey(const ValueKey('pane_fold_nav_rail')));
@@ -219,6 +226,115 @@ void main() {
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget,
         reason: 'the way back to the job must not fold away with the rail');
     expect(find.byKey(const ValueKey('banner_app_config')), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  //  WHAT THE BANNER IS ABOUT
+  // ---------------------------------------------------------------------------
+  //  A session that has only ever opened one room has no job in front of it.
+  //  The way in to the Project tab used to be offered anyway, which led to an
+  //  empty room list answering a question nobody asked — and worse, said
+  //  "Project" beside a room, which is the app telling somebody they are
+  //  working on something they are not.
+
+  testWidgets('a cold start offers neither - there is nothing open yet',
+      (tester) async {
+    final p = fresh();
+    await pump(tester, p);
+
+    expect(find.byKey(const ValueKey('banner_project')), findsNothing);
+    expect(find.byKey(const ValueKey('banner_room')), findsNothing);
+    // The way to start one is in the title bar, where the things that BEGIN a
+    // session live.
+    expect(find.byKey(const ValueKey('new_project')), findsOneWidget);
+  });
+
+  testWidgets('one room and no job says Room, and goes nowhere',
+      (tester) async {
+    final p = fresh();
+    // The state a room load leaves behind, set directly: the loader itself is
+    // real file I/O, which a widget test's fake clock never lets finish.
+    final roomPath = path.join(dir.path, 'BSS_101_config.json');
+    p.roomConfig = {
+      'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '101'},
+    };
+    p.currentConfigPath = roomPath;
+    await pump(tester, p);
+
+    expect(find.byKey(const ValueKey('banner_room')), findsOneWidget);
+    expect(find.text('Room'), findsOneWidget);
+    expect(find.byKey(const ValueKey('banner_project')), findsNothing);
+    // It names the document that IS open rather than a project that is not.
+    expect(
+      find.descendant(
+        of: find.byType(TopLevelBar),
+        matching: find.text('BSS_101_config.json'),
+      ),
+      findsOneWidget,
+    );
+
+    // Said, not offered: there is nothing here to press, because the only
+    // thing it could do is lead to a job that does not exist.
+    await tester.tap(find.byKey(const ValueKey('banner_room')));
+    await tester.pumpAndSettle();
+    expect(p.selectedTabIndex, isNot(AppTab.project.index));
+  });
+
+  testWidgets('starting a job puts the way back on the banner',
+      (tester) async {
+    final p = fresh();
+    await pump(tester, p);
+    expect(find.byKey(const ValueKey('banner_project')), findsNothing);
+
+    // What New Project does to the state, without the setup dialog in the way.
+    p.newProject(name: 'Bessey Hall');
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
+    expect(find.byKey(const ValueKey('banner_room')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('banner_project')));
+    await tester.pumpAndSettle();
+    expect(p.selectedTabIndex, AppTab.project.index);
+
+    // ...and closing it takes the way back off again.
+    p.closeProject();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('banner_project')), findsNothing);
+  });
+
+  group('Open File takes either document', () {
+    // A room and a job are both a .json in the same folder, and somebody who
+    // picks the job out of that folder means to open the job. Being told it
+    // is not a room config would be the app refusing to do the obvious thing.
+
+    test('a project is recognised by the name this app writes', () {
+      final file = path.join(dir.path, 'bessey$kProjectFileSuffix');
+      File(file).writeAsStringSync('{}');
+      expect(isProjectFile(file), isTrue);
+    });
+
+    test('...and by what is inside it when it has been renamed', () {
+      final file = path.join(dir.path, 'the_job.json');
+      File(file).writeAsStringSync(jsonEncode({'rooms': [], 'name': 'Job'}));
+      expect(isProjectFile(file), isTrue);
+    });
+
+    test('a room config is not a project', () {
+      final file = path.join(dir.path, 'BSS_101_config.json');
+      File(file).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {'gve_bldg': 'BSS'},
+      }));
+      expect(isProjectFile(file), isFalse);
+    });
+
+    test('and neither is something unreadable', () {
+      // The room loader gives a better message about a broken file than the
+      // project loader would, so a file nothing can parse goes that way.
+      final file = path.join(dir.path, 'broken.json');
+      File(file).writeAsStringSync('{ not json');
+      expect(isProjectFile(file), isFalse);
+      expect(isProjectFile(path.join(dir.path, 'missing.json')), isFalse);
+    });
   });
 
   testWidgets('a job already open means only the file half is offered',

@@ -34,6 +34,7 @@ import 'dynamic_devices_view.dart';
 import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
+import 'legible_theme.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
 import 'side_pane.dart';
@@ -100,8 +101,25 @@ class RoomConfigApp extends StatelessWidget {
   /// user's chosen accent color; 'auris' is the sci-fi HUD look built around
   /// its own accent swatch. Classic also takes an optional secondary
   /// element color ('' = Auto, let the theme derive it).
+  ///
+  /// Whatever comes back is put through [legibleTheme] before it is used.
+  /// Both families are generated around a colour somebody picked out of a
+  /// wheel and neither measures the result — see legible_theme.dart for what
+  /// that costs and which pairings it repairs.
   static ThemeData themeFor(String style, bool isDark, String classicColor,
-      String aurisColor, String classicSecondary) {
+          String aurisColor, String classicSecondary) =>
+      legibleTheme(
+        rawThemeFor(style, isDark, classicColor, aurisColor,
+            classicSecondary),
+      );
+
+  /// The theme as its generator hands it over, BEFORE it is measured.
+  ///
+  /// Public for one reason: the contrast test measures this as well as the
+  /// finished theme, so the repair pass has to keep proving it is repairing
+  /// something. Nothing in the app should paint from it.
+  static ThemeData rawThemeFor(String style, bool isDark,
+      String classicColor, String aurisColor, String classicSecondary) {
     switch (style) {
       case 'auris':
         // The canonical amber look comes from the package default (null
@@ -781,7 +799,7 @@ class _MainDashboardState extends State<MainDashboard> {
           IconButton(
             key: const ValueKey('open_config'),
             icon: const Icon(Icons.folder_open),
-            tooltip: 'Open Existing Config',
+            tooltip: 'Open a room config or a project',
             onPressed: () => _openExistingConfig(context, provider),
           ),
           IconButton(
@@ -941,8 +959,10 @@ class _MainDashboardState extends State<MainDashboard> {
     final theme = Theme.of(context);
     // A project counts as open once it has a file or any rooms on it — the two
     // ways somebody ends up with a job in front of them.
-    final projectOpen = provider.currentProjectPath.isNotEmpty ||
-        provider.project.rooms.isNotEmpty;
+    // The same question the banner asks, asked the same way — a start screen
+    // that thought a job was open while the banner did not (or the other way
+    // round) would be two answers to "what am I working on".
+    final projectOpen = provider.hasOpenProject;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -1027,7 +1047,26 @@ class _MainDashboardState extends State<MainDashboard> {
   /// button was pressed cannot change what a room comes back as.
   Future<void> _openExistingConfig(
       BuildContext context, AppStateProvider provider) async {
-    final bool loaded = await provider.loadExistingConfig();
+    // ONE OPEN BUTTON, EITHER DOCUMENT. Both a room and a job are a .json in
+    // the same folder, and somebody who picks the job out of that folder means
+    // to open the job — being told it is not a room config would be the app
+    // refusing to do the obvious thing.
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: 'Open a room config or a project',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+    final file = picked?.files.single.path;
+    if (file == null || !context.mounted) return;
+
+    if (isProjectFile(file)) {
+      if (!await confirmLeavingProject(context, provider)) return;
+      if (!context.mounted) return;
+      await openProjectAtPath(context, provider, file);
+      return;
+    }
+
+    final bool loaded = await provider.openConfigAtPath(file);
     if (!loaded || !context.mounted) return;
     await _syncDiagramsAfterLoad(context, provider);
     // The conversion is NOT shown here. Opening a file should open the file; a
@@ -1233,6 +1272,22 @@ class TopLevelBar extends StatelessWidget {
     final provider = context.watch<AppStateProvider>();
     final onProject = selectedIndex == AppTab.project.index;
 
+    // WHICH DOCUMENT THIS STRIP IS ABOUT, which is not always a job.
+    //
+    // A session that has only ever opened one room has no job in front of it,
+    // and the way in to the Project tab used to be offered anyway - leading to
+    // an empty room list that answered a question nobody had asked. Worse, it
+    // said "Project" beside a room, which is the app telling somebody they are
+    // working on something they are not.
+    //
+    // So the strip names what is actually open: the JOB when there is one, the
+    // ROOM when there is only a room, and nothing at all on a cold start. A
+    // job is started from New Project or Open Project - see the title bar -
+    // and never by pressing something that was already on screen.
+    final hasProject = provider.hasOpenProject;
+    final hasRoom = provider.roomConfig.isNotEmpty ||
+        provider.currentConfigPath.isNotEmpty;
+
     final bannerFill = theme.colorScheme.surfaceContainerHighest;
 
     return Material(
@@ -1247,21 +1302,36 @@ class TopLevelBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 4, 0, 4),
         child: Row(
           children: [
-            // Pushed out rather than flat: this is the way up and out of the
-            // room, and it should read as a different kind of control from the
-            // tabs below it.
-            (onProject ? FilledButton.icon : FilledButton.tonalIcon)(
-              key: const ValueKey('banner_project'),
-              icon: const Icon(Icons.apartment, size: 18),
-              label: const Text('Project'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                minimumSize: const Size(0, 34),
+            // THE WAY UP AND OUT OF THE ROOM — only when there is somewhere to
+            // go. Pushed out rather than flat: it should read as a different
+            // kind of control from the tabs below it.
+            if (hasProject) ...[
+              (onProject ? FilledButton.icon : FilledButton.tonalIcon)(
+                key: const ValueKey('banner_project'),
+                icon: const Icon(Icons.apartment, size: 18),
+                label: const Text('Project'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  minimumSize: const Size(0, 34),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () => onSelect(AppTab.project.index),
+              ),
+              const SizedBox(width: 12),
+            ] else if (hasRoom) ...[
+              // A ROOM ON ITS OWN. Said, not offered: there is nothing to
+              // press, because the only thing that could be pressed would be a
+              // way into a job that does not exist. Starting one is New
+              // Project in the title bar, and opening one is Open File - which
+              // takes a project as readily as a room.
+              Chip(
+                key: const ValueKey('banner_room'),
+                avatar: const Icon(Icons.meeting_room_outlined, size: 16),
+                label: const Text('Room'),
                 visualDensity: VisualDensity.compact,
               ),
-              onPressed: () => onSelect(AppTab.project.index),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
+            ],
             // Which job, and whether it is on disk. Flexible so a long job name
             // ellipsises instead of pushing the gear off the end.
             //
@@ -1279,12 +1349,17 @@ class TopLevelBar extends StatelessWidget {
             // corner, and the name still ellipsises when it is long.
             Expanded(
               child: Text(
-                provider.projectDirty
-                    ? '${provider.projectDisplayName} - unsaved'
-                    : provider.projectDisplayName,
+                // The name of whatever this strip is about. With no job open
+                // that is the room's file - naming a project that does not
+                // exist is how somebody ends up believing their room is on one.
+                !hasProject
+                    ? (hasRoom ? _roomFileName(provider) : '')
+                    : provider.projectDirty
+                        ? '${provider.projectDisplayName} - unsaved'
+                        : provider.projectDisplayName,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: provider.projectDirty
+                  color: hasProject && provider.projectDirty
                       // The banner is a fill, so the container answer — but
                       // held to the small-text bar, because "— unsaved" is
                       // the smallest and most important red on the page.
@@ -1307,6 +1382,18 @@ class TopLevelBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What the banner calls the open room when there is no job to name.
+///
+/// The file rather than the room code: this line answers "which document am I
+/// looking at", and on a room that has been created but never saved there is
+/// no file to answer with - so it says so rather than going blank, which would
+/// read as nothing being open.
+String _roomFileName(AppStateProvider provider) {
+  final file = provider.currentConfigPath;
+  if (file.isEmpty) return 'Unsaved room';
+  return file.split(Platform.pathSeparator).last;
 }
 
 // A quiet nudge that the file needed migrating, pointing at the Convert
