@@ -83,6 +83,36 @@ void main() {
       expect(found.single, isNot(contains('old')));
     });
 
+    test('a deeper share is reached by raising the depth, not by default', () {
+      // The layout a processor export leaves behind: the room number, a code
+      // folder, and the config inside upload_to_root. Four folders down, so
+      // the default scan cannot see it — and must not, because the depth that
+      // reaches it is also the depth that reaches an archive copy. It is
+      // reached by somebody setting the depth in App Config once.
+      final deep = writeRoom(
+        path.join('BSS 101', 'code', 'upload_to_root', 'config.json'),
+      );
+
+      expect(findRoomConfigs(dir.path), isEmpty);
+      expect(findRoomConfigs(dir.path, maxDepth: 4), [deep]);
+    });
+
+    test('the depth setting is remembered and kept sane', () async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      expect(p.roomScanDepth, AppStateProvider.kDefaultRoomScanDepth);
+
+      await p.setRoomScanDepth(4);
+      expect(p.roomScanDepth, 4);
+      expect(p.settingsAsJson()['roomScanDepth'], 4);
+
+      // A hand-edited app_config.json cannot ask for a scan of the whole
+      // share, or for no scan at all.
+      await p.setRoomScanDepth(0);
+      expect(p.roomScanDepth, 1);
+      await p.setRoomScanDepth(99);
+      expect(p.roomScanDepth, 8);
+    });
+
     test('a folder that is not there is not an error', () {
       expect(findRoomConfigs(path.join(dir.path, 'nowhere')), isEmpty);
     });

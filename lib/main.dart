@@ -2220,6 +2220,51 @@ class AppSettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
+        // --- HOW DEEP A ROOM SCAN LOOKS ---
+        // "Find rooms in a folder…" on the new-project screen walks down from
+        // the folder it is pointed at. Two levels is what this app writes; a
+        // site whose configs come off the processor keeps them further down
+        // (BSS 101/code/upload_to_root/config.json is four), and there is no
+        // depth that is right for both — too shallow finds nothing, too deep
+        // starts returning archived copies as if they were rooms.
+        Text('Finding rooms in a folder',
+            style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: 320,
+          child: DropdownButtonFormField<int>(
+            key: const ValueKey('room_scan_depth'),
+            initialValue: AppStateProvider.kRoomScanDepths
+                    .contains(provider.roomScanDepth)
+                ? provider.roomScanDepth
+                : null,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'How deep to look for room configs',
+              helperText:
+                  'Sub-folders under the folder you point at. Raise it if '
+                  'each room keeps its config further down (e.g. '
+                  '101/code/upload_to_root); lower it if a scan comes back '
+                  'with backup copies.',
+              helperMaxLines: 4,
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final d in AppStateProvider.kRoomScanDepths)
+                DropdownMenuItem(
+                  value: d,
+                  child: Text(d == 1
+                      ? 'The folder itself only'
+                      : '$d folders down'),
+                ),
+            ],
+            onChanged: (val) {
+              if (val != null) provider.setRoomScanDepth(val);
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+
         // --- AUTOSAVE ---
         // Recovery copies on a timer. Read the header comment on
         // AppStateProvider.writeAutosaveSnapshot for why this never writes

@@ -403,7 +403,14 @@ Future<bool> startNewProject(
   // been working on a room standing in an empty project they never started.
   // Room mode and project mode are the two states this app is ever in, and
   // nothing may move between them except a decision somebody actually made.
-  final answers = await showProjectSetupDialog(context, building: building);
+  final answers = await showProjectSetupDialog(
+    context,
+    building: building,
+    // How far down the share to look for room configs — set once in App
+    // Config, because it is a fact about how a site lays its files out and
+    // not a decision anybody wants to make again on every new job.
+    scanDepth: provider.roomScanDepth,
+  );
   if (answers == null || !context.mounted) return false;
 
   provider.newProject(building: building);

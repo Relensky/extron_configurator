@@ -70,16 +70,24 @@ typedef NewProjectSetup = ({
 /// in `config.json`.
 ///
 /// [maxDepth] is how many folders down to look. Two by default, which covers
-/// the two ways a share is laid out: every room's files loose in one folder,
-/// and a folder per room inside a folder for the building. Going deeper finds
-/// backup copies and old revisions, which is worse than missing a room —
-/// a room that was missed can be added, and a room added twice doubles its cost
-/// on the quote.
+/// the two ways THIS APP lays a share out: every room's files loose in one
+/// folder, and a folder per room inside a folder for the building. Going
+/// deeper finds backup copies and old revisions, which is worse than missing a
+/// room — a room that was missed can be added, and a room added twice doubles
+/// its cost on the quote.
+///
+/// A share that keeps its configs further down — a processor export lands as
+/// `BSS 101/code/upload_to_root/config.json`, which is four folders down — is
+/// covered by raising [AppStateProvider.roomScanDepth] in App Config once,
+/// rather than by deepening the default for everybody.
 ///
 /// [skipAppConfig] keeps the app's OWN `app_config.json` out of the list. It
 /// ends in `config.json` and it is not a room, and somebody who points this at
 /// their working folder should not have it offered.
-List<String> findRoomConfigs(String folder, {int maxDepth = 2}) {
+List<String> findRoomConfigs(
+  String folder, {
+  int maxDepth = AppStateProvider.kDefaultRoomScanDepth,
+}) {
   final out = <String>[];
 
   void walk(Directory dir, int depth) {
@@ -169,24 +177,38 @@ String applyProjectSetup(AppStateProvider provider, NewProjectSetup setup) {
 }
 
 /// Asks the questions. Null when the user skipped.
+///
+/// [scanDepth] is how many folders down "Find rooms in a folder…" looks —
+/// passed in rather than read off the provider here so the form stays a form,
+/// and so a test can open it without an app around it.
 Future<NewProjectSetup?> showProjectSetupDialog(
   BuildContext context, {
   String name = '',
   String building = '',
+  int scanDepth = AppStateProvider.kDefaultRoomScanDepth,
 }) => showDialog<NewProjectSetup>(
   context: context,
   // Not dismissible on a tap outside: this is a form somebody is halfway
   // through typing into, and a stray click on the scrim would throw away four
   // answers with no way back.
   barrierDismissible: false,
-  builder: (_) => _ProjectSetupDialog(name: name, building: building),
+  builder: (_) => _ProjectSetupDialog(
+    name: name,
+    building: building,
+    scanDepth: scanDepth,
+  ),
 );
 
 class _ProjectSetupDialog extends StatefulWidget {
   final String name;
   final String building;
+  final int scanDepth;
 
-  const _ProjectSetupDialog({required this.name, required this.building});
+  const _ProjectSetupDialog({
+    required this.name,
+    required this.building,
+    required this.scanDepth,
+  });
 
   @override
   State<_ProjectSetupDialog> createState() => _ProjectSetupDialogState();
@@ -248,7 +270,9 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
     setState(() => _scanning = true);
     // Off the UI thread: a share with a few hundred folders on it takes long
     // enough that a scan on the frame would drop one.
-    final found = await Future(() => findRoomConfigs(folder));
+    final found = await Future(
+      () => findRoomConfigs(folder, maxDepth: widget.scanDepth),
+    );
     if (!mounted) return;
     setState(() {
       _scanning = false;
@@ -259,6 +283,23 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
         _rooms.putIfAbsent(room, () => true);
       }
     });
+  }
+
+  /// What to show under a room's file name.
+  ///
+  /// The folder RELATIVE to the one that was scanned, because on a nested
+  /// share every config is called `config.json` and every full path starts
+  /// with the same forty characters of share name — which is exactly the part
+  /// an ellipsis keeps. `BSS 101/code/upload_to_root` says which room it is;
+  /// the full path to it, cut off after the share name, does not.
+  String _folderLabel(String room) {
+    final dir = path.dirname(room);
+    for (final root in _scanned) {
+      if (!path.isWithin(root, room)) continue;
+      final rel = path.relative(dir, from: root);
+      return rel == '.' ? path.basename(root) : rel;
+    }
+    return dir;
   }
 
   void _addTypedTodo() {
@@ -313,7 +354,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                       autofocus: true,
                       decoration: const InputDecoration(
                         labelText: 'Project name',
-                        hintText: 'Bessey Hall refresh',
+  /// the full path to it, cut off after the share name, does not.
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -386,7 +427,13 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                                   ? 'Point at the folder the room configs are '
                                       'in. Rooms can also be added later on '
                                       'the Project tab.'
-                                  : 'No room configs under that folder.'
+                                  : 'No room configs within '
+                                      '${widget.scanDepth} folder'
+                                      '${widget.scanDepth == 1 ? '' : 's'} of '
+                                      'that one. If they sit deeper - in a '
+                                      'code/upload_to_root under each room, '
+                                      'say - raise "How deep to look for room '
+                                      'configs" in App Config.'
                               : '$chosen of ${_rooms.length} going on the job',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
@@ -421,7 +468,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                           // config.json and the folder is the only thing that
                           // says which room it is.
                           subtitle: Text(
-                            path.dirname(room),
+                            _folderLabel(room),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),

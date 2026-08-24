@@ -680,6 +680,7 @@ class AppStateProvider extends ChangeNotifier {
       'showDiagramGrid': showDiagramGrid,
       'autosaveEnabled': autosaveEnabled,
       'autosaveMinutes': autosaveMinutes,
+      'roomScanDepth': roomScanDepth,
     };
 
   /// Serializes every setting to app_config.json. Failures are logged but
@@ -961,6 +962,45 @@ class AppStateProvider extends ChangeNotifier {
 
   Future<void> setShowDiagramGrid(bool value) async {
     showDiagramGrid = value;
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  // --- Finding rooms on a share --------------------------------------------
+
+  /// How many folders down "Find rooms in a folder…" looks for room configs.
+  ///
+  /// Two is the layout this app writes: a room's files loose in one folder, or
+  /// a folder per room inside a folder for the building. It is NOT the only
+  /// layout a share has — a processor export lands as
+  /// `BSS 101/code/upload_to_root/config.json`, which is four down, and a
+  /// scan that stops at two finds none of it.
+  ///
+  /// A setting rather than "just go deeper by default" because depth is the
+  /// only thing separating a room from a backup of one: the further down this
+  /// goes, the more old revisions and archive copies come back with the real
+  /// rooms, and a room added twice doubles its cost on the quote. Somebody who
+  /// knows their share is nested sets it once; everybody else keeps the
+  /// shallow scan that cannot pick up a copy.
+  int roomScanDepth = kDefaultRoomScanDepth;
+
+  /// The depths the App Config dropdown offers.
+  static const List<int> kRoomScanDepths = [1, 2, 3, 4, 5, 6];
+
+  /// What a scan looks under when nobody has changed it.
+  static const int kDefaultRoomScanDepth = 2;
+
+  static int _sanitizeRoomScanDepth(dynamic raw) {
+    final n = raw is int
+        ? raw
+        : (int.tryParse(raw?.toString() ?? '') ?? kDefaultRoomScanDepth);
+    return n < 1 ? 1 : (n > 8 ? 8 : n);
+  }
+
+  Future<void> setRoomScanDepth(int value) async {
+    final depth = _sanitizeRoomScanDepth(value);
+    if (depth == roomScanDepth) return;
+    roomScanDepth = depth;
     notifyListeners();
     await _persistSettings();
   }
@@ -6083,6 +6123,7 @@ class AppStateProvider extends ChangeNotifier {
       autosaveEnabled =
           saved['autosaveEnabled'] is bool ? saved['autosaveEnabled'] : true;
       autosaveMinutes = _sanitizeAutosaveMinutes(saved['autosaveMinutes']);
+      roomScanDepth = _sanitizeRoomScanDepth(saved['roomScanDepth']);
 
       // MIGRATION: the Auris style used to be stored as one value per accent
       // ('amber' | 'teal' | 'magenta'); it is now 'auris' + aurisColor.
