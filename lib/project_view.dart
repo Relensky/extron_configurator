@@ -379,6 +379,87 @@ class _ProjectViewState extends State<ProjectView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // NEW, OPEN, SAVE AND THE EXPORTS SIT ABOVE EVERYTHING ELSE.
+          //
+          // They are what you do to the FILE, and the file is the thing this
+          // tab is inside of - so they belong at the top of it, the way the
+          // same three words sit at the top of every other application on the
+          // machine. Below the name and the totals they read as one more
+          // thing to do to the project's contents, and Save in particular was
+          // three rows down from the name it saves.
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _action(
+                compact: compact,
+                icon: Icons.note_add_outlined,
+                label: 'New',
+                onPressed: () => _newProject(provider),
+              ),
+              _action(
+                compact: compact,
+                icon: Icons.folder_open,
+                label: 'Open',
+                onPressed: () => _openProject(provider),
+              ),
+              _action(
+                compact: compact,
+                icon: Icons.save_outlined,
+                label: 'Save',
+                onPressed: () => _saveProject(provider),
+              ),
+              // Beside New and Open, because it is the third thing you do
+              // to a FILE. Disabled when there is no job to put away —
+              // pressing Close on nothing should not clear the starter
+              // vendors out from under somebody who has just pressed New.
+              _action(
+                compact: compact,
+                buttonKey: const ValueKey('project_close'),
+                icon: Icons.close,
+                label: 'Close',
+                onPressed:
+                    hasProject ? () => _closeProject(provider) : null,
+              ),
+              _action(
+                compact: compact,
+                icon: Icons.refresh,
+                label: 'Refresh',
+                onPressed: () {
+                  provider.refreshProjectRooms();
+                  _snack('Re-read every room from disk.');
+                },
+              ),
+              // The same summary a project shows on the way in. Reachable
+              // on purpose: it is shown once on open and only when
+              // something is time-critical, and "what was that list again"
+              // is asked five minutes later.
+              _action(
+                compact: compact,
+                buttonKey: const ValueKey('project_briefing_button'),
+                icon: Icons.flag_outlined,
+                label: 'Where it stands',
+                onPressed: () =>
+                    showProjectBriefing(context, provider, force: true),
+              ),
+              _action(
+                compact: compact,
+                icon: Icons.table_view,
+                label: 'Workbook',
+                emphasis: _ActionEmphasis.tonal,
+                onPressed: () => _exportWorkbook(provider, estimate),
+              ),
+              _action(
+                compact: compact,
+                icon: Icons.send_outlined,
+                label: 'Quote requests',
+                emphasis: _ActionEmphasis.filled,
+                onPressed: () => _exportRfqs(provider, estimate),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           _identity(provider, compact: compact),
           const SizedBox(height: 10),
           // A Wrap rather than a Row: the strip is five items of text whose
@@ -471,20 +552,14 @@ class _ProjectViewState extends State<ProjectView> {
             ],
           ),
           const SizedBox(height: 10),
-          // A Wrap rather than a Row, so the pane switcher and the file
-          // actions BOTH keep their natural width and the actions drop to
-          // their own line when the two together do not fit.
-          //
-          // This was a Row with the actions in an Expanded, which wrapped the
-          // actions but gave the switcher whatever was left over — and a
-          // switcher that has grown a fourth pane overflows a 1100-pixel
-          // window by a few pixels rather than shrinking. Neither of these is
-          // a thing that can usefully be squeezed: they are both rows of
-          // labelled buttons.
+          // The pane switcher on its own line now that the file actions have
+          // gone up to the top of the tab. Still a Wrap rather than a bare
+          // button: it keeps its natural width instead of being stretched to
+          // the header's, and a switcher that has grown a seventh pane drops
+          // onto a second line on a narrow window rather than overflowing it.
           Wrap(
             spacing: 12,
             runSpacing: 8,
-            alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SegmentedButton<_ProjectPane>(
@@ -528,78 +603,6 @@ class _ProjectViewState extends State<ProjectView> {
                 // labelled switcher marks the choice and on this one erases
                 // the only thing naming it.
                 showSelectedIcon: !compact,
-              ),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  _action(
-                    compact: compact,
-                    icon: Icons.note_add_outlined,
-                    label: 'New',
-                    onPressed: () => _newProject(provider),
-                  ),
-                  _action(
-                    compact: compact,
-                    icon: Icons.folder_open,
-                    label: 'Open',
-                    onPressed: () => _openProject(provider),
-                  ),
-                  _action(
-                    compact: compact,
-                    icon: Icons.save_outlined,
-                    label: 'Save',
-                    onPressed: () => _saveProject(provider),
-                  ),
-                  // Beside New and Open, because it is the third thing you do
-                  // to a FILE. Disabled when there is no job to put away —
-                  // pressing Close on nothing should not clear the starter
-                  // vendors out from under somebody who has just pressed New.
-                  _action(
-                    compact: compact,
-                    buttonKey: const ValueKey('project_close'),
-                    icon: Icons.close,
-                    label: 'Close',
-                    onPressed:
-                        hasProject ? () => _closeProject(provider) : null,
-                  ),
-                  _action(
-                    compact: compact,
-                    icon: Icons.refresh,
-                    label: 'Refresh',
-                    onPressed: () {
-                      provider.refreshProjectRooms();
-                      _snack('Re-read every room from disk.');
-                    },
-                  ),
-                  // The same summary a project shows on the way in. Reachable
-                  // on purpose: it is shown once on open and only when
-                  // something is time-critical, and "what was that list again"
-                  // is asked five minutes later.
-                  _action(
-                    compact: compact,
-                    buttonKey: const ValueKey('project_briefing_button'),
-                    icon: Icons.flag_outlined,
-                    label: 'Where it stands',
-                    onPressed: () =>
-                        showProjectBriefing(context, provider, force: true),
-                  ),
-                  _action(
-                    compact: compact,
-                    icon: Icons.table_view,
-                    label: 'Workbook',
-                    emphasis: _ActionEmphasis.tonal,
-                    onPressed: () => _exportWorkbook(provider, estimate),
-                  ),
-                  _action(
-                    compact: compact,
-                    icon: Icons.send_outlined,
-                    label: 'Quote requests',
-                    emphasis: _ActionEmphasis.filled,
-                    onPressed: () => _exportRfqs(provider, estimate),
-                  ),
-                ],
               ),
             ],
           ),

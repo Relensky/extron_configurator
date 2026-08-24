@@ -281,6 +281,84 @@ void main() {
     expect(p.selectedTabIndex, isNot(AppTab.project.index));
   });
 
+  //  A ROOM THAT HAS BEEN NAMED IS CALLED BY ITS NAME.
+  //
+  //  Every room on the site is a file called config.json, so the file name on
+  //  its own is the one thing that cannot say WHICH room this window is on.
+  //  The wizard's generated full room name goes first, the file stays after it.
+
+  testWidgets('a named room says the room name and then the file',
+      (tester) async {
+    final p = fresh();
+    p.roomConfig = {
+      'SYSTEM_SETUP': {
+        'gve_bldg': 'BSS',
+        'gve_room': '101',
+        'gui_full_room_name': 'Behavioral and Social Science 101',
+      },
+    };
+    p.currentConfigPath = path.join(dir.path, 'config.json');
+    await pump(tester, p);
+
+    expect(
+      find.descendant(
+        of: find.byType(TopLevelBar),
+        matching: find.text('Behavioral and Social Science 101 - config.json'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a named room that was never saved still says its name',
+      (tester) async {
+    final p = fresh();
+    p.roomConfig = {
+      'SYSTEM_SETUP': {'gui_full_room_name': 'Bessey Hall 103'},
+    };
+    await pump(tester, p);
+
+    expect(
+      find.descendant(
+        of: find.byType(TopLevelBar),
+        matching: find.text('Bessey Hall 103 - Unsaved room'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  //  THE MODE IS SAID AT A SIZE SOMEBODY READS WITHOUT LOOKING FOR IT.
+  //
+  //  Which of the two modes this session is in is the thing on the strip that
+  //  is worth getting wrong the least, and the button that changes it is the
+  //  only control up there that does. Both are bigger than the small buttons
+  //  they sit among.
+
+  testWidgets('the mode controls are bigger than the buttons beside them',
+      (tester) async {
+    final p = fresh();
+    p.newProject(name: 'Bessey Hall');
+    await pump(tester, p);
+
+    final project = tester.getRect(find.byKey(const ValueKey('banner_project')));
+    expect(project.height, greaterThanOrEqualTo(44));
+    // Taller than the close button that sits next to it.
+    final close =
+        tester.getRect(find.byKey(const ValueKey('banner_project_close')));
+    expect(project.height, greaterThan(close.height));
+
+    // ...and the room label matches it rather than whispering in small print.
+    p.closeProject();
+    p.roomConfig = {
+      'SYSTEM_SETUP': {'gve_bldg': 'BSS'},
+    };
+    p.currentConfigPath = path.join(dir.path, 'BSS_101_config.json');
+    await tester.pump();
+    final room = tester.getRect(find.byKey(const ValueKey('banner_room')));
+    expect(room.height, greaterThanOrEqualTo(40));
+
+    await tester.pumpAndSettle(const Duration(seconds: 8));
+  });
+
   testWidgets('starting a job puts the way back on the banner',
       (tester) async {
     final p = fresh();

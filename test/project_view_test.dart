@@ -735,6 +735,26 @@ void main() {
       expect(find.text('Quote requests'), findsNothing);
     });
 
+    testWidgets('the file actions sit above the project name', (tester) async {
+      // What you do to the FILE goes at the top of the tab the file is inside
+      // of, the way New/Open/Save sit at the top of every other application.
+      await pump(tester, withProject(), width: 1600);
+
+      final save = tester.getRect(find.text('Save'));
+      final name = tester.getRect(find.byType(TextField).first);
+      final panes = tester.getRect(find.byKey(const ValueKey(
+          'project_pane_rooms')));
+
+      expect(save.bottom, lessThanOrEqualTo(name.top),
+          reason: 'the actions are on a row of their own, above the name');
+      expect(name.bottom, lessThanOrEqualTo(panes.top),
+          reason: 'the pane switcher is still below the name');
+      for (final label in ['New', 'Open', 'Close', 'Quote requests']) {
+        expect(tester.getRect(find.text(label)).top, save.top,
+            reason: '$label is on the same top row as Save');
+      }
+    });
+
     testWidgets('who the job is for is a field on the header', (tester) async {
       final p = withProject();
       await pump(tester, p, width: 1600);

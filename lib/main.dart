@@ -1322,14 +1322,22 @@ class TopLevelBar extends StatelessWidget {
             // go. Pushed out rather than flat: it should read as a different
             // kind of control from the tabs below it.
             if (hasProject) ...[
+              // BIGGER THAN THE BUTTONS IT SITS AMONG, on purpose. This is
+              // the way out of a room and back to the job, and it is the one
+              // control on the strip that changes which of the two modes the
+              // session is in - so it should be the first thing the eye lands
+              // on in the corner rather than one more small button in a row
+              // of them. Its own text style rather than the default label
+              // size, because a button that is only taller reads as a
+              // mis-sized button rather than a more important one.
               (onProject ? FilledButton.icon : FilledButton.tonalIcon)(
                 key: const ValueKey('banner_project'),
-                icon: const Icon(Icons.apartment, size: 18),
+                icon: const Icon(Icons.apartment, size: 22),
                 label: const Text('Project'),
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  minimumSize: const Size(0, 34),
-                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  minimumSize: const Size(0, 44),
+                  textStyle: theme.textTheme.titleMedium,
                 ),
                 onPressed: () => onSelect(AppTab.project.index),
               ),
@@ -1361,11 +1369,15 @@ class TopLevelBar extends StatelessWidget {
               // way into a job that does not exist. Starting one is New
               // Project in the title bar, and opening one is Open File - which
               // takes a project as readily as a room.
+              // Sized to match the Project button opposite it, because the
+              // two of them say the same kind of thing - which mode this
+              // session is in - and a mode that is announced in small print
+              // is one somebody reads only after getting it wrong.
               Chip(
                 key: const ValueKey('banner_room'),
-                avatar: const Icon(Icons.meeting_room_outlined, size: 16),
-                label: const Text('Room'),
-                visualDensity: VisualDensity.compact,
+                avatar: const Icon(Icons.meeting_room_outlined, size: 22),
+                label: Text('Room', style: theme.textTheme.titleMedium),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               ),
               const SizedBox(width: 12),
             ],
@@ -1423,14 +1435,29 @@ class TopLevelBar extends StatelessWidget {
 
 /// What the banner calls the open room when there is no job to name.
 ///
-/// The file rather than the room code: this line answers "which document am I
-/// looking at", and on a room that has been created but never saved there is
-/// no file to answer with - so it says so rather than going blank, which would
-/// read as nothing being open.
+/// THE ROOM'S NAME FIRST, THEN ITS FILE. The file alone answers "which
+/// document am I looking at" and nothing else - and a folder full of rooms is
+/// a folder full of files called config.json, so the one thing the line was
+/// for is the one thing it could not do. The wizard's generated full room name
+/// is what the room is CALLED ("Bessey Hall 103"), which is how somebody knows
+/// at a glance which room this window is on; the file name stays after it,
+/// because it is still the thing they will look for on disk.
+///
+/// The name is dropped when the wizard has not filled it in yet rather than
+/// leaving a dangling separator, and on a room that has been created but never
+/// saved there is no file to name - so it says so rather than going blank,
+/// which would read as nothing being open.
 String _roomFileName(AppStateProvider provider) {
   final file = provider.currentConfigPath;
-  if (file.isEmpty) return 'Unsaved room';
-  return file.split(Platform.pathSeparator).last;
+  final String fileLabel =
+      file.isEmpty ? 'Unsaved room' : file.split(Platform.pathSeparator).last;
+
+  final setup = provider.roomConfig['SYSTEM_SETUP'];
+  final String roomName =
+      (setup is Map ? setup['gui_full_room_name']?.toString() : '')?.trim() ??
+          '';
+  if (roomName.isEmpty) return fileLabel;
+  return '$roomName - $fileLabel';
 }
 
 /// The banner's fill while the session is on a ROOM rather than a job.
