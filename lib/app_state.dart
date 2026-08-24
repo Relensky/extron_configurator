@@ -10222,6 +10222,28 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  /// Sets the share of each part the job wants held spare, as a percentage.
+  ///
+  /// Nought, or anything outside nought to a hundred, is NO POLICY rather than
+  /// a clamped figure - see [BuildingProject.spareTargetPercent]. Nothing on
+  /// the job is flagged until this is set, which is why it is a decision worth
+  /// logging: "why is everything suddenly short" is answered by the history.
+  void setProjectSpareTarget(double percent) {
+    final wanted = percent <= 0 || percent > 100 ? 0.0 : percent;
+    if (project.spareTargetPercent == wanted) return;
+    project.spareTargetPercent = wanted;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Spares target',
+      summary: wanted <= 0
+          ? 'cleared'
+          : 'set to ${trimNumber(wanted)}% of what is installed',
+      coalesce: true,
+    );
+    _projectChanged();
+  }
+
   // --- vendors -------------------------------------------------------------
 
   /// Adds a vendor AT THE TOP of the list.

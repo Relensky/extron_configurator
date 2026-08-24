@@ -71,8 +71,9 @@ void main() {
   ProjectEstimate estimateOf(
     List<MasterPartLine> master, {
     List<ProjectRoomCost> rooms = const [],
+    double target = 0,
   }) => ProjectEstimate(
-    project: BuildingProject(),
+    project: BuildingProject(spareTargetPercent: target),
     currency: r'$',
     rooms: rooms,
     costedRooms: const [],
@@ -347,7 +348,7 @@ void main() {
       final sections = projectSparesSections(estimate);
       final titles = [for (final s in sections) s.title];
       expect(titles.first, 'Spares on this job');
-      expect(titles[1], contains('NO spare'));
+      expect(titles.any((t) => t.contains('NO spare')), isTrue);
       expect(titles.last, 'Spares total');
 
       // The spared row carries both halves of the quantity.
@@ -356,7 +357,11 @@ void main() {
       expect(spared.contains(1.0), isTrue); // spares
       expect(spared.contains(3.0), isTrue); // for install
 
-      expect(sections[1].rows.single.first, 'Switcher');
+      // Found by title rather than by position: sections get added between
+      // these two, and a test that counted them would fail for the wrong
+      // reason every time one does.
+      final without = sections.firstWhere((x) => x.title.contains('NO spare'));
+      expect(without.rows.single.first, 'Switcher');
     });
 
     test('a job with nothing spared still produces both tables', () {
@@ -366,14 +371,168 @@ void main() {
       // Saying "nothing is spared" is the whole point — an empty sheet would
       // read as a question nobody was asked.
       expect(sections.first.rows.single.first, contains('Nothing on this job'));
-      expect(sections[1].rows.single.first, 'Switcher');
+      expect(
+        sections
+            .firstWhere((s) => s.title.contains('NO spare'))
+            .rows
+            .single
+            .first,
+        'Switcher',
+      );
     });
 
     test('a job where everything is spared says that too', () {
       final sections = projectSparesSections(
         estimateOf([line(description: 'Display', spareQty: 1)]),
       );
-      expect(sections[1].rows.single.first, contains('Every product'));
+      expect(
+        sections
+            .firstWhere((s) => s.title.contains('NO spare'))
+            .rows
+            .single
+            .first,
+        contains('Every product'),
+      );
+    });
+
+    test('the cover table prices every installed part as a percentage', () {
+      final sections = projectSparesSections(
+        // 42 bought, 2 of them spare: 40 installed, five per cent covered.
+        estimateOf([
+          line(description: 'Display', qty: 42, spareQty: 2),
+        ], target: 10),
+      );
+      final cover = sections.firstWhere((s) => s.title.contains('Spare cover'));
+      // The title carries the rule and how many break it, so the sheet says
+      // what it found before anybody reads a row.
+      expect(cover.title, contains('10%'));
+      expect(cover.title, contains('1 short'));
+
+      final row = cover.rows.single;
+      expect(row.first, 'Display');
+      expect(row.contains(40.0), isTrue); // installed
+      expect(row.contains('5.0%'), isTrue);
+      // 10% of 40 is four boxes, and two are held: two short.
+      expect(row.last, 2.0);
+    });
+
+    test('a job with no target still gets the percentages', () {
+      final sections = projectSparesSections(
+        estimateOf([line(description: 'Display', qty: 42, spareQty: 2)]),
+      );
+      final cover = sections.firstWhere((s) => s.title.contains('Spare cover'));
+      expect(cover.title, isNot(contains('target')));
+      expect(cover.rows.single.contains('5.0%'), isTrue);
+      // Nothing to be short of, so the last two columns are blank rather than
+      // nought — a nought there would read as a part that meets a rule nobody
+      // set.
+      expect(cover.rows.single.last, '');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE JOB'S OWN RULE
+  // -------------------------------------------------------------------------
+  //  A target is what turns "these parts have no spare" — which on a real job
+  //  is two hundred rows nobody reads — into "these six are held under what we
+  //  said we hold". Nothing is flagged until somebody sets one.
+
+  group('the spares target', () {
+    test('nothing is short until a target is set', () {
+      final estimate = estimateOf([
+        line(description: 'Display', qty: 40, spareQty: 0),
+      ]);
+      expect(estimate.hasSpareTarget, isFalse);
+      expect(estimate.partsBelowSpareTarget, isEmpty);
+      // The percentages are still worked out — the table is worth reading
+      // without a policy, it just flags nothing.
+      expect(estimate.spareCover.single.coverage, 0);
+      expect(estimate.spareCover.single.short, isFalse);
+    });
+
+    test('a part held under the target is short by whole boxes', () {
+      final estimate = estimateOf([
+        line(description: 'Display', qty: 27, spareQty: 2),
+      ], target: 10);
+      final cover = estimate.spareCover.single;
+      expect(cover.installed, 25);
+      expect(cover.spares, 2);
+      expect(cover.short, isTrue);
+      // 10% of 25 is 2.5, and half a spare cannot be bought: three, so one
+      // short. Rounding the shortfall down is how a job ends up one under its
+      // own rule.
+      expect(cover.shortfall, 1);
+    });
+
+    test('a part that exactly meets the target is not short', () {
+      final estimate = estimateOf([
+        // 40 installed, 4 spare: exactly ten per cent.
+        line(description: 'Display', qty: 44, spareQty: 4),
+      ], target: 10);
+      expect(estimate.spareCover.single.short, isFalse);
+      expect(estimate.partsBelowSpareTarget, isEmpty);
+    });
+
+    test('the short parts come first, thinnest cover at the top', () {
+      final estimate = estimateOf([
+        line(description: 'Fine', qty: 12, spareQty: 2),
+        line(description: 'Thin', qty: 40, spareQty: 1),
+        line(description: 'Bare', qty: 20, spareQty: 0),
+      ], target: 10);
+      expect(
+        [for (final c in estimate.spareCover) c.line.description],
+        ['Bare', 'Thin', 'Fine'],
+      );
+      expect(
+        [for (final c in estimate.partsBelowSpareTarget) c.line.description],
+        ['Bare', 'Thin'],
+      );
+    });
+
+    test('a part nothing installs is left off the table', () {
+      // A spare kept for a model every room has since been swapped off. Its
+      // cover is not nought per cent, it is undefined — and a row saying 0%
+      // would be a part somebody went and bought a spare for.
+      final estimate = estimateOf([
+        line(description: 'Orphan', qty: 2, spareQty: 2),
+      ], target: 10);
+      expect(estimate.spareCover, isEmpty);
+      expect(estimate.partsBelowSpareTarget, isEmpty);
+    });
+
+    test('cable and hardware are never asked about', () {
+      // The same rule the "no spare" list follows: nobody wants to be told a
+      // blanking plate is one short.
+      final estimate = estimateOf([
+        line(
+          description: 'Patch lead',
+          qty: 40,
+          kind: MasterPartKind.cabling,
+        ),
+      ], target: 10);
+      expect(estimate.spareCover, isEmpty);
+    });
+
+    test('the target survives a save and a reload', () {
+      final project = BuildingProject(name: 'Job', spareTargetPercent: 12.5);
+      final read = BuildingProject.fromJson(project.toJson());
+      expect(read.spareTargetPercent, 12.5);
+      expect(read.clone().spareTargetPercent, 12.5);
+    });
+
+    test('a figure that is not a percentage reads as no policy', () {
+      // A hand-edited file with "200" in it is a typo, and honouring it would
+      // flag every part on the job as short for ever.
+      for (final bad in ['200', '-1', 'ten per cent', '']) {
+        final read = BuildingProject.fromJson({
+          'rooms': const [],
+          'spareTargetPercent': bad,
+        });
+        expect(read.spareTargetPercent, 0, reason: bad);
+      }
+      // And a job that never set one writes nothing at all.
+      expect(BuildingProject().toJson().containsKey('spareTargetPercent'),
+          isFalse);
     });
   });
 }

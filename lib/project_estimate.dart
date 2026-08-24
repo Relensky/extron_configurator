@@ -651,6 +651,46 @@ typedef BuildingSpareLine = ({
   double installed,
 });
 
+/// A cover fraction as a percentage to read: '12%', '5.3%', '0%'.
+///
+/// Whole points at ten and above and one place below, so a thin cover reads as
+/// the small number it is rather than rounding to the '0%' that means nothing
+/// is spared at all. Shared by the screen and the workbook so the two documents
+/// cannot print the same part differently.
+String formatSpareCover(double? coverage) {
+  final percent = (coverage ?? 0) * 100;
+  return percent >= 10 || percent == 0
+      ? '${percent.toStringAsFixed(0)}%'
+      : '${percent.toStringAsFixed(1)}%';
+}
+
+/// One part's spare cover: how many are spared against how many go in.
+///
+/// A record rather than a class for the same reason [SpareRoomTally] is - it
+/// is a row on a summary, rebuilt from the master list every time it is asked
+/// for, and nothing stores it.
+typedef SparePartCover = ({
+  /// The part being measured.
+  MasterPartLine line,
+
+  /// Units held on the shelf for it, whoever asked for them.
+  double spares,
+
+  /// Units the rooms are actually installing.
+  double installed,
+
+  /// [spares] / [installed] - 0.05 for two against forty. Null only when
+  /// nothing is installed, which [ProjectEstimate.spareCover] filters out.
+  double? coverage,
+
+  /// True when the job set a target and this part does not meet it.
+  bool short,
+
+  /// Whole units that would have to be added to meet the target, 0 when it is
+  /// met or when there is no target.
+  double shortfall,
+});
+
 /// A building, priced.
 class ProjectEstimate {
   final BuildingProject project;
@@ -775,6 +815,86 @@ class ProjectEstimate {
   /// Units bought for the shelf across the whole job.
   double get spareUnits =>
       master.fold(0.0, (sum, l) => sum + l.spareQty);
+
+  // -------------------------------------------------------------------------
+  //  HOW WELL THE JOB IS SPARED, PART BY PART
+  // -------------------------------------------------------------------------
+  //  "Two spare projectors" is a figure nobody can weigh. Two out of forty is
+  //  a decision. So the job reports every part it installs as a PERCENTAGE
+  //  covered, and - when the job has said what it wants held - which of them
+  //  fall short of it.
+  //
+  //  A target turns the list of parts with no spare into a list of parts that
+  //  are SHORT, which is a different and much shorter list: a job that holds
+  //  ten per cent does not want to be told about the part it has one spare of
+  //  out of four.
+
+  /// The percentage of installed units this job wants spared, 0 for no policy.
+  double get spareTargetPercent => project.spareTargetPercent;
+
+  /// True when the job has set a policy at all.
+  bool get hasSpareTarget => spareTargetPercent > 0;
+
+  /// Every EQUIPMENT part the job installs, with the share of it that is
+  /// spared - worst covered first, so the list is read from the top.
+  ///
+  /// Equipment only, for the same reason [partsWithoutSpares] is: nobody wants
+  /// to be asked about a spare blanking plate.
+  ///
+  /// A part nothing installs is left off. Its coverage is not zero, it is
+  /// undefined - a spare kept for a model every room has since been swapped
+  /// off is a row for the shelf list, not a row on a percentage table.
+  List<SparePartCover> get spareCover {
+    final out = <SparePartCover>[
+      for (final l in master)
+        if (l.kind == MasterPartKind.equipment && l.drawnQty > 0)
+          _coverOf(l),
+    ];
+    // Thinnest cover first, and the short ones above everything that meets the
+    // target regardless of percentage: this list is read to find what to fix.
+    out.sort((a, b) {
+      if (a.short != b.short) return a.short ? -1 : 1;
+      final byCover = (a.coverage ?? 0).compareTo(b.coverage ?? 0);
+      if (byCover != 0) return byCover;
+      // More installed is more exposure at the same percentage.
+      final byQty = b.installed.compareTo(a.installed);
+      return byQty != 0
+          ? byQty
+          : a.line.description.toLowerCase().compareTo(
+              b.line.description.toLowerCase(),
+            );
+    });
+    return out;
+  }
+
+  /// The parts that do not meet the job's target, worst first. Always empty
+  /// when no target is set - with no policy there is nothing to fall short of.
+  List<SparePartCover> get partsBelowSpareTarget =>
+      [for (final c in spareCover) if (c.short) c];
+
+  /// One part measured against the job's target.
+  SparePartCover _coverOf(MasterPartLine line) {
+    final installed = line.drawnQty;
+    final spares = line.spareQty;
+    final coverage = installed > 0 ? spares / installed : null;
+    // What the policy asks for, in whole boxes: 10% of 25 installed is 2.5,
+    // and half a spare cannot be bought. Rounded UP, because rounding a
+    // shortfall down is how a job ends up one short of its own rule.
+    final wanted = hasSpareTarget
+        ? (installed * spareTargetPercent / 100).ceilToDouble()
+        : 0.0;
+    // The epsilon is doubles, not slack: 3 * 0.1 is not 0.3, and a part that
+    // exactly meets the target must never read as short.
+    final short = hasSpareTarget && spares + 1e-9 < wanted;
+    return (
+      line: line,
+      spares: spares,
+      installed: installed,
+      coverage: coverage,
+      short: short,
+      shortfall: short ? wanted - spares : 0.0,
+    );
+  }
 
   /// What the spares come to. Priced at the line's own unit price — the same
   /// figure the rest of the job pays, which is the point of a spare being part

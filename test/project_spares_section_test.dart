@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
+import 'package:extron_configurator/live_text_field.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// The spares section on Core Components.
@@ -256,5 +257,113 @@ void main() {
     // selection, which is the same number said twice on purpose.
     expect(find.textContaining('3 units'), findsWidgets);
     expect(find.textContaining('1 for the building'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  //  HOW MUCH OF THE JOB IS SPARED, AND THE JOB'S OWN RULE
+  // ---------------------------------------------------------------------------
+  //  "Two spare projectors" is a row nobody can approve. "2 of 40, 5%, against
+  //  a 10% policy" is an instruction — and the instruction is only worth
+  //  printing where it can be carried out, which is why every flagged row has
+  //  the way to fix it on it.
+
+  testWidgets('the cover table prices every part as a share of what goes in',
+      (tester) async {
+    final p = withRooms(4);
+    final line = p.priceProject().master.first;
+    p.addProjectSpare(
+      partKey: line.key,
+      description: line.description,
+      model: line.model,
+    );
+    await openSpares(tester, p);
+
+    expect(find.text('HOW MUCH OF THIS JOB IS SPARED'), findsOneWidget);
+    expect(
+      find.textContaining('1 spare of 4 installed  ·  25%'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a part held under the target is flagged, and fixed on the row',
+      (tester) async {
+    final p = withRooms(4);
+    p.setProjectSpareTarget(10);
+    final line = p.priceProject().master.first;
+    await openSpares(tester, p);
+
+    // Four installed at ten per cent is one box, and none are held.
+    expect(find.textContaining('below the 10% target'), findsOneWidget);
+    expect(find.textContaining('0 spare of 4 installed'), findsOneWidget);
+
+    // THE FIX IS ON THE ROW. A table that says a part is one short and sends
+    // somebody somewhere else to add it is a table that gets ignored.
+    await tester.tap(find.byKey(ValueKey('spare_cover_add_${line.key}')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('add_spare_dialog')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('add_spare_confirm')));
+    await tester.pumpAndSettle();
+
+    // Opened with the part picked and the shortfall already typed in.
+    expect(p.project.spares.single.qty, 1);
+    expect(p.project.spares.single.partKey, line.key);
+    expect(p.priceProject().partsBelowSpareTarget, isEmpty);
+  });
+
+  testWidgets('the target is set on the table it governs', (tester) async {
+    final p = withRooms(4);
+    await openSpares(tester, p);
+
+    final target = find.byWidgetPredicate(
+      (w) => w is LiveTextField && w.fieldId == 'project_spare_target',
+    );
+    expect(find.textContaining('Set a target'), findsOneWidget);
+
+    await tester.enterText(target, '25');
+    await tester.pumpAndSettle();
+    expect(p.project.spareTargetPercent, 25);
+    expect(find.textContaining('below the 25% target'), findsOneWidget);
+
+    // Emptied is no policy rather than nought per cent, and nothing is short
+    // of a rule nobody set.
+    await tester.enterText(target, '');
+    await tester.pumpAndSettle();
+    expect(p.project.spareTargetPercent, 0);
+    expect(find.textContaining('below the'), findsNothing);
+    expect(find.textContaining('Set a target'), findsOneWidget);
+  });
+
+  testWidgets('a spare is added from the no-spare check', (tester) async {
+    final p = withRooms(2);
+    final line = p.priceProject().master.first;
+
+    tester.view.physicalSize = const Size(1700, 1500);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: const MaterialApp(home: Scaffold(body: ProjectView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Core Components'));
+    await tester.pumpAndSettle();
+
+    // The list of parts with no spare used to be a list to read and then go
+    // and do something about somewhere else, which is why it was read and then
+    // ignored.
+    await tester.tap(find.textContaining('No spare ('));
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing spared of this'), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey('part_add_spare_${line.key}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('add_spare_qty')), '2');
+    await tester.tap(find.byKey(const ValueKey('add_spare_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(p.project.spares.single.partKey, line.key);
+    expect(p.project.spares.single.qty, 2);
   });
 }

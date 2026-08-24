@@ -323,6 +323,15 @@ List<String> _projectWarnings(ProjectEstimate estimate) => [
         'product${estimate.partsWithoutSpares.length == 1 ? '' : 's'} would '
         'be replaced out of the next budget rather than off the shelf - see '
         'the $kProjectSparesSheet sheet.',
+  // The job's OWN rule, broken. Not a judgement the app is making: somebody
+  // set the figure, and these are the parts held under it.
+  if (estimate.partsBelowSpareTarget.isNotEmpty)
+    '${estimate.partsBelowSpareTarget.length} '
+        'product${estimate.partsBelowSpareTarget.length == 1 ? '' : 's'} '
+        '${estimate.partsBelowSpareTarget.length == 1 ? 'is' : 'are'} held '
+        'below this job\'s own '
+        '${trimNumber(estimate.spareTargetPercent)}% spares target - see the '
+        '$kProjectSparesSheet sheet.',
   for (final c in estimate.project.vendorConflicts)
     '${c.kind} rule "${c.rule}" is claimed by '
         '${c.vendors.map((v) => v.name).join(' and ')}. '
@@ -751,6 +760,51 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
                 l.unpriced ? 'not priced' : formatMoney(l.unitPrice, currency),
                 cash(l.spareQty * l.unitPrice),
                 askedBy(l),
+              ],
+          ],
+  ));
+
+  // HOW MUCH OF THE JOB IS SPARED, part by part. The table above says what
+  // was asked for; this one says whether it is enough, which is the question
+  // the first table cannot be read for - "two spare projectors" is a row
+  // nobody can approve until they know two out of how many.
+  final cover = estimate.spareCover;
+  sections.add((
+    title: estimate.hasSpareTarget
+        ? 'Spare cover against a '
+              '${trimNumber(estimate.spareTargetPercent)}% target '
+              '(${estimate.partsBelowSpareTarget.length} short)'
+        : 'Spare cover, part by part',
+    header: const [
+      'Part',
+      'Manufacturer',
+      'Model',
+      'Installed',
+      'Spares',
+      'Cover',
+      'Target',
+      'Short by',
+    ],
+    rows: cover.isEmpty
+        ? [
+            ['Nothing on this job is installed yet.', '', '', '', '', '', '', ''],
+          ]
+        : [
+            for (final c in cover)
+              [
+                c.line.description,
+                c.line.manufacturer,
+                c.line.model,
+                c.installed,
+                c.spares,
+                // A percentage as text rather than as a number: the column
+                // holds "5%" beside "0%", and a spreadsheet that formatted one
+                // of them as 0.05 would be read as five units.
+                formatSpareCover(c.coverage),
+                estimate.hasSpareTarget
+                    ? '${trimNumber(estimate.spareTargetPercent)}%'
+                    : '',
+                c.short ? c.shortfall : '',
               ],
           ],
   ));

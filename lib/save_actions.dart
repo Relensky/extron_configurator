@@ -11,6 +11,7 @@ import 'building_project.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'project_briefing_dialog.dart';
+import 'project_setup_dialog.dart';
 
 /// ============================================================================
 ///  ONE SAVE BUTTON THAT KNOWS WHAT YOU ARE LOOKING AT
@@ -373,6 +374,14 @@ Future<bool> confirmLeavingProject(
 /// Starts a fresh job, pre-filled with the open room's building when there is
 /// one — the commonest new project is the building you are already standing in.
 ///
+/// Then asks the questions a job is set up with: which rooms, when it is due,
+/// what it holds spare, and what has to happen first — see
+/// project_setup_dialog.dart. Every route to a new project comes through here
+/// (the start screen, the toolbar and the Project tab all call it), so the
+/// setup screen cannot be something that only appears on one of them.
+///
+/// Skipping the setup leaves exactly the empty project this used to give.
+///
 /// Returns true when a new project was actually started.
 Future<bool> startNewProject(
   BuildContext context,
@@ -380,15 +389,25 @@ Future<bool> startNewProject(
 ) async {
   if (!await confirmLeavingProject(context, provider)) return false;
   if (!context.mounted) return false;
-  final setup = provider.roomConfig['SYSTEM_SETUP'];
-  provider.newProject(
-    building: (setup is Map ? setup['gve_bldg']?.toString() : '') ?? '',
-  );
+  final roomSetup = provider.roomConfig['SYSTEM_SETUP'];
+  final building =
+      (roomSetup is Map ? roomSetup['gve_bldg']?.toString() : '') ?? '';
+  provider.newProject(building: building);
   provider.selectTab(AppTab.project.index);
+
+  if (!context.mounted) return true;
+  final answers = await showProjectSetupDialog(context, building: building);
+  if (!context.mounted) return true;
+
   showTimedSnackBar(
     ScaffoldMessenger.of(context),
-    const SnackBar(
-      content: Text('New project started. Add the rooms it covers.'),
+    SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text(
+        answers == null
+            ? 'New project started. Add the rooms it covers.'
+            : applyProjectSetup(provider, answers),
+      ),
     ),
   );
   return true;

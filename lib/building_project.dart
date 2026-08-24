@@ -953,8 +953,8 @@ class ProjectSpare {
   /// not what it cost.
   final String roomId;
 
-  /// Why, in the words of whoever asked for it. 'For the store', 'the dean
-  /// wants one on the shelf'.
+  /// Why, in the words of whoever asked for it. 'To cover a repair', 'the
+  /// dean wants one on the shelf'.
   final String note;
 
   const ProjectSpare({
@@ -1016,6 +1016,18 @@ class ProjectSpare {
     roomId: json['roomId']?.toString() ?? '',
     note: json['note']?.toString() ?? '',
   );
+}
+
+/// Reads a spares target off a project file.
+///
+/// Anything that is not a number, and anything outside nought to a hundred,
+/// reads as NO POLICY rather than as a clamped figure. A hand-edited file with
+/// "10%" or "200" in it is a typo either way, and honouring the second would
+/// flag every part on the job as short for ever.
+double _readSpareTarget(Object? raw) {
+  final value = raw is num ? raw.toDouble() : double.tryParse('$raw'.trim());
+  if (value == null || value <= 0 || value > 100) return 0;
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -1128,6 +1140,18 @@ class BuildingProject {
   /// which behaves exactly as it did before this existed.
   final List<ProjectSpare> spares;
 
+  /// The share of each equipment part this job wants on the shelf, as a
+  /// PERCENTAGE of the units being installed. 10 is "one spare per ten".
+  ///
+  /// The figure a spares policy is actually written in - "we hold ten per
+  /// cent" - and the only thing that turns a list of parts with no spare into
+  /// a list of parts that are SHORT. Without it every part with nothing spared
+  /// is equally flagged, which on a job with two hundred parts is a list
+  /// nobody reads.
+  ///
+  /// Zero means the job has no policy, which is the default and flags nothing.
+  double spareTargetPercent;
+
   /// Counters behind [nextRoomId] / [nextVendorId], persisted so ids stay
   /// unique across sessions — a reused id would re-point somebody's hand
   /// vendor tags at a different room.
@@ -1155,6 +1179,7 @@ class BuildingProject {
     Map<String, String>? partTracks,
     Map<String, PartOrder>? partOrders,
     List<ProjectSpare>? spares,
+    this.spareTargetPercent = 0,
     List<ProjectEdit>? history,
     int roomCounter = 0,
     int vendorCounter = 0,
@@ -1190,6 +1215,7 @@ class BuildingProject {
       partTracks.isEmpty &&
       partOrders.isEmpty &&
       spares.isEmpty &&
+      spareTargetPercent <= 0 &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       jobNumber.trim().isEmpty &&
@@ -1802,6 +1828,7 @@ class BuildingProject {
         for (final e in partOrders.entries) e.key: e.value.toJson(),
       },
     if (spares.isNotEmpty) 'spares': [for (final s in spares) s.toJson()],
+    if (spareTargetPercent > 0) 'spareTargetPercent': spareTargetPercent,
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
     'roomCounter': _roomCounter,
@@ -1937,6 +1964,11 @@ class BuildingProject {
       partTracks: trackPins,
       partOrders: orders,
       spares: spares,
+      // A target that is not a number, or one outside nought to a hundred, is
+      // read as no policy rather than clamped: "we hold 200%" in a
+      // hand-edited file is a typo, and honouring it would flag every part on
+      // the job as short for ever.
+      spareTargetPercent: _readSpareTarget(json['spareTargetPercent']),
       history: history,
       spareCounter: [
         (json['spareCounter'] as num?)?.toInt() ?? 0,
@@ -2011,6 +2043,7 @@ class BuildingProject {
     partTracks: Map<String, String>.from(partTracks),
     partOrders: Map<String, PartOrder>.from(partOrders),
     spares: List<ProjectSpare>.from(spares),
+    spareTargetPercent: spareTargetPercent,
     history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,
     vendorCounter: _vendorCounter,

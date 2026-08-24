@@ -66,26 +66,26 @@ void main() {
 
     // The banner: the job, and the buttons that act on the open document.
     expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
-    // Save is the exception to the split: it acts on the document, but it
-    // lives in the far corner of the TITLE bar because it is the control
-    // reached for most and the one that must never be hunted for.
-    expect(
-      find.descendant(
-        of: find.byType(AppBar),
-        matching: find.byKey(const ValueKey('save_context')),
-      ),
-      findsOneWidget,
-      reason: 'Save sits in the title bar corner',
-    );
+    // Save acts on the DOCUMENT — the room, the job or the catalog, whichever
+    // the tab belongs to — so it is on the document row, in its corner,
+    // beside the exports.
     expect(
       find.descendant(
         of: find.byType(TopLevelBar),
         matching: find.byKey(const ValueKey('save_context')),
       ),
-      findsNothing,
-      reason: 'and not also on the document row',
+      findsOneWidget,
+      reason: 'Save sits at the end of the document row',
     );
-    for (final key in ['new_config', 'open_config']) {
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byKey(const ValueKey('save_context')),
+      ),
+      findsNothing,
+      reason: 'and not also on the title bar',
+    );
+    for (final key in ['new_project', 'new_config', 'open_config']) {
       expect(
         find.descendant(
           of: find.byType(TopLevelBar),
@@ -110,9 +110,15 @@ void main() {
       );
     }
 
-    // The title bar: the things that are about the application, and the two
-    // that START a session rather than acting on the one in progress.
-    for (final key in ['new_config', 'open_config', 'banner_app_config']) {
+    // The title bar: the things that are about the application, and the three
+    // that START a session rather than acting on the one in progress — a new
+    // job, a new room, and opening one that exists.
+    for (final key in [
+      'new_project',
+      'new_config',
+      'open_config',
+      'banner_app_config',
+    ]) {
       expect(
         find.descendant(
           of: find.byType(AppBar),
@@ -167,12 +173,12 @@ void main() {
     // over to the RIGHT of the buttons, parking the corner control 600 pixels
     // from the corner.
     final banner = tester.getRect(find.byType(TopLevelBar));
-    // The LAST control on the banner — Save moved to the title bar's corner,
-    // so the exports are now what has to reach this one.
+    // The LAST control on the banner — the menu beside Save, which is the end
+    // of the document row.
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('export_tab_menu')),
+        matching: find.byKey(const ValueKey('save_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1),
@@ -194,7 +200,7 @@ void main() {
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('export_tab_menu')),
+        matching: find.byKey(const ValueKey('save_menu')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1));

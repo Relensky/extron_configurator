@@ -69,6 +69,11 @@ List<Widget> spareSectionSlivers(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _SectionHeader(estimate: estimate),
+                // HOW WELL THE JOB IS SPARED, before what it has spared. The
+                // shelf list below answers "what did we ask for"; this answers
+                // "is it enough", which is the question the shelf list cannot
+                // be read for and the only one a target can settle.
+                _SpareCoverCard(estimate: estimate),
                 if (buildingSpares.isEmpty && byRoom.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -454,7 +459,7 @@ class _SpareControls extends StatelessWidget {
               fieldId: 'spare_note_${spare.id}',
               initial: spare.note,
               label: 'Why',
-              hint: 'for the store',
+              hint: 'to cover a repair',
               onChanged: (v) => provider.setProjectSpareNote(spare.id, v),
             ),
           ),
@@ -577,15 +582,275 @@ class _RoomOwnSpareRow extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+//  HOW MUCH OF THE JOB IS SPARED
+// ---------------------------------------------------------------------------
+//  Every part the job installs, as a PERCENTAGE of it held on the shelf, and -
+//  once the job has said what it wants held - which of them fall short.
+//
+//  The percentage is the whole point. "Two spare projectors" is a row nobody
+//  can approve or cut; "2 of 40, 5%" is a decision, and "5% against a 10%
+//  policy, two short" is an instruction. The target is what turns a list of
+//  two hundred parts into the six that need doing something about.
+
+/// The percentage table, its target, and the way to fix a row that is short.
+class _SpareCoverCard extends StatefulWidget {
+  final ProjectEstimate estimate;
+
+  const _SpareCoverCard({required this.estimate});
+
+  @override
+  State<_SpareCoverCard> createState() => _SpareCoverCardState();
+}
+
+class _SpareCoverCardState extends State<_SpareCoverCard> {
+  /// Whether every installed part is listed, or only the ones worth acting on.
+  ///
+  /// Off by default and deliberately: on a real job this table is two hundred
+  /// rows, and two hundred rows above the shelf list would bury the shelf
+  /// list. What shows without asking is what somebody would DO something
+  /// about - the short ones when there is a target, the thinnest covered when
+  /// there is not.
+  bool _showAll = false;
+
+  /// How many rows show before the table is opened up.
+  static const int _preview = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final estimate = widget.estimate;
+    final cover = estimate.spareCover;
+
+    // Nothing installed is not "nothing spared" - it is a job with no rooms on
+    // it yet, and a percentage table of no parts says nothing.
+    if (cover.isEmpty) return const SizedBox.shrink();
+
+    final short = [for (final c in cover) if (c.short) c];
+    final shown = _showAll
+        ? cover
+        : short.isNotEmpty
+            ? short
+            : cover.take(_preview).toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.percent,
+                size: 15,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'HOW MUCH OF THIS JOB IS SPARED',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              // THE POLICY, ON THE TABLE IT GOVERNS. A target set three
+              // screens away would be a rule nobody could check against the
+              // rows it is flagging.
+              SizedBox(
+                width: 128,
+                child: LiveTextField(
+                  fieldId: 'project_spare_target',
+                  initial: estimate.hasSpareTarget
+                      ? trimNumber(estimate.spareTargetPercent)
+                      : '',
+                  label: 'Target',
+                  hint: 'none',
+                  suffix: '%',
+                  numeric: true,
+                  onChanged: (v) {
+                    final text = v.trim();
+                    // An empty box is "no policy" rather than nought per cent,
+                    // which here is the same thing: both stop the flagging
+                    // instead of flagging everything.
+                    context.read<AppStateProvider>().setProjectSpareTarget(
+                      text.isEmpty ? 0 : (double.tryParse(text) ?? 0),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 2),
+            child: _CoverSummary(
+              estimate: estimate,
+              parts: cover.length,
+              short: short.length,
+            ),
+          ),
+          for (final c in shown) _CoverRow(cover: c, estimate: estimate),
+          if (cover.length > shown.length || _showAll)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('spare_cover_show_all'),
+                onPressed: () => setState(() => _showAll = !_showAll),
+                child: Text(
+                  _showAll
+                      ? 'Show only what needs doing'
+                      : 'Show every part (${cover.length})',
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One line saying whether the job meets its own rule.
+class _CoverSummary extends StatelessWidget {
+  final ProjectEstimate estimate;
+  final int parts;
+  final int short;
+
+  const _CoverSummary({
+    required this.estimate,
+    required this.parts,
+    required this.short,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (!estimate.hasSpareTarget) {
+      return Text(
+        'Every part below is what the job installs and what it holds spare of '
+        'it. Set a target and anything held below that share is flagged.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    final target = trimNumber(estimate.spareTargetPercent);
+    if (short == 0) {
+      return Text(
+        'All $parts ${parts == 1 ? 'part' : 'parts'} meet the $target% target.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.tertiary,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+
+    return Text(
+      '$short of $parts ${parts == 1 ? 'part' : 'parts'} '
+      '${short == 1 ? 'is' : 'are'} below the $target% target.',
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: errorTextOn(theme.colorScheme, theme.cardColor),
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+/// One part's cover, and - when it is short - the way to fix it.
+class _CoverRow extends StatelessWidget {
+  final SparePartCover cover;
+  final ProjectEstimate estimate;
+
+  const _CoverRow({required this.cover, required this.estimate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final line = cover.line;
+    final flag = cover.short
+        ? errorTextOn(theme.colorScheme, theme.cardColor)
+        : theme.colorScheme.tertiary;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  line.description,
+                  style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${trimNumber(cover.spares)} spare of '
+                  '${trimNumber(cover.installed)} installed  ·  '
+                  '${formatSpareCover(cover.coverage)}'
+                  '${cover.short ? '  ·  '
+                      '${trimNumber(cover.shortfall)} short' : ''}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: flag,
+                    fontWeight: cover.short ? FontWeight.w600 : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // THE FIX, ON THE ROW THAT IS WRONG. A table that says a part is two
+          // short and then sends somebody to a control somewhere else to add
+          // them is a table that gets read and then ignored. A short row
+          // offers the shortfall itself; every other row can still be topped
+          // up by one.
+          if (cover.short)
+            FilledButton.tonal(
+              key: ValueKey('spare_cover_add_${line.key}'),
+              onPressed: () => showAddSpareDialog(
+                context,
+                estimate,
+                partKey: line.key,
+                qty: cover.shortfall,
+              ),
+              child: Text('Add ${trimNumber(cover.shortfall)}'),
+            )
+          else
+            IconButton(
+              key: ValueKey('spare_cover_add_${line.key}'),
+              tooltip: 'Add a spare of this part',
+              icon: const Icon(Icons.add, size: 18),
+              color: theme.colorScheme.onSurfaceVariant,
+              onPressed: () => showAddSpareDialog(
+                context,
+                estimate,
+                partKey: line.key,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Adds a spare: which part, how many, and who it is for.
 ///
 /// THE PART IS PICKED FROM THE JOB, not typed. A spare typed by hand would
 /// merge onto no line, price at nothing, and read as a different product from
 /// the one it is a spare for the moment anybody swapped the model.
+///
+/// [partKey] and [qty] prefill it, for the places that already know the
+/// answer - a part flagged as short opens with itself picked and the shortfall
+/// typed in, so the fix is one press rather than a part hunted out of a list
+/// of two hundred.
 Future<void> showAddSpareDialog(
   BuildContext context,
-  ProjectEstimate estimate,
-) async {
+  ProjectEstimate estimate, {
+  String partKey = '',
+  double qty = 1,
+}) async {
   final provider = context.read<AppStateProvider>();
   final messenger = ScaffoldMessenger.of(context);
   final parts = [
@@ -609,7 +874,15 @@ Future<void> showAddSpareDialog(
 
   final answer = await showDialog<_NewSpare>(
     context: context,
-    builder: (_) => _AddSpareDialog(parts: parts, estimate: estimate),
+    builder: (_) => _AddSpareDialog(
+      parts: parts,
+      estimate: estimate,
+      // A key that no longer resolves - a part flagged short on a list built
+      // before somebody swapped the model - falls back to the first rather
+      // than throwing. The dialog is a way in, not an assertion.
+      initialPartKey: parts.any((l) => l.key == partKey) ? partKey : '',
+      initialQty: qty,
+    ),
   );
   if (answer == null) return;
 
@@ -646,21 +919,37 @@ class _AddSpareDialog extends StatefulWidget {
   final List<MasterPartLine> parts;
   final ProjectEstimate estimate;
 
-  const _AddSpareDialog({required this.parts, required this.estimate});
+  /// The part to open with, or '' to open on the first in the list.
+  final String initialPartKey;
+
+  /// How many to open with. The shortfall, when this was opened off a part
+  /// flagged as below the job's target.
+  final double initialQty;
+
+  const _AddSpareDialog({
+    required this.parts,
+    required this.estimate,
+    this.initialPartKey = '',
+    this.initialQty = 1,
+  });
 
   @override
   State<_AddSpareDialog> createState() => _AddSpareDialogState();
 }
 
 class _AddSpareDialogState extends State<_AddSpareDialog> {
-  late String _partKey = widget.parts.first.key;
+  late String _partKey = widget.initialPartKey.isNotEmpty
+      ? widget.initialPartKey
+      : widget.parts.first.key;
 
   /// '' is the building, and is the default: a spare added from the JOB is
   /// more often the shelf unit for the campus than a fourth display for one
   /// room, which is a decision that gets made on that room's own page.
   String _roomId = '';
 
-  final TextEditingController _qty = TextEditingController(text: '1');
+  late final TextEditingController _qty = TextEditingController(
+    text: trimNumber(widget.initialQty <= 0 ? 1 : widget.initialQty),
+  );
   final TextEditingController _note = TextEditingController();
 
   @override
@@ -749,7 +1038,7 @@ class _AddSpareDialogState extends State<_AddSpareDialog> {
                   controller: _note,
                   decoration: const InputDecoration(
                     labelText: 'Why',
-                    hintText: 'for the store',
+                    hintText: 'to cover a repair',
                     border: OutlineInputBorder(),
                   ),
                 ),

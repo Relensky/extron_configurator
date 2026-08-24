@@ -1644,6 +1644,11 @@ class _BuildingTotals extends StatelessWidget {
 const String kSparedFilter = '<spared>';
 const String kNoSpareFilter = '<no-spare>';
 
+/// Parts held below the share of them the job says it wants spared — see
+/// [BuildingProject.spareTargetPercent]. Only ever offered on a job that has
+/// set a target: with no policy there is nothing to fall short of.
+const String kBelowSpareTargetFilter = '<spare-short>';
+
 /// The core components list, as slivers for the tab's one scroll view.
 List<Widget> partsSlivers(
   BuildContext context, {
@@ -1664,6 +1669,16 @@ List<Widget> partsSlivers(
   final sparesOnly = vendorFilter == kSparedFilter;
   final room = sparesOnly ? spareRoom : '';
 
+  // WHAT EACH PART IS SHORT BY, built once for the whole list rather than per
+  // row: every row asks, and working it out on the row would walk the master
+  // list once per row while somebody drags the scrollbar.
+  //
+  // Empty on a job with no target, which is what makes the flag mean
+  // something — a warning on every row is a warning on none.
+  final shortBy = {
+    for (final c in estimate.partsBelowSpareTarget) c.line.key: c.shortfall,
+  };
+
   bool matchesVendor(MasterPartLine line) {
     if (vendorFilter.isEmpty) return true;
     if (vendorFilter == untaggedFilter) return line.vendor == null;
@@ -1681,6 +1696,12 @@ List<Widget> partsSlivers(
     // to be asked about a spare blanking plate.
     if (vendorFilter == kNoSpareFilter) {
       return line.kind == MasterPartKind.equipment && !line.hasSpares;
+    }
+    // Short of the job's own rule, which is a different and much shorter list
+    // than "has no spare": a job that holds ten per cent does not want to be
+    // told about the part it has one spare of out of four.
+    if (vendorFilter == kBelowSpareTargetFilter) {
+      return shortBy.containsKey(line.key);
     }
     return line.vendor?.id == vendorFilter;
   }
@@ -1801,6 +1822,16 @@ List<Widget> partsSlivers(
                       'No spare (${estimate.partsWithoutSpares.length})',
                       kNoSpareFilter,
                     ),
+                  // The job's own rule, and the only spares chip that is a
+                  // FAULT rather than a question: these are parts the job has
+                  // already said it wants more of.
+                  if (shortBy.isNotEmpty)
+                    filterChip(
+                      'Below ${trimNumber(estimate.spareTargetPercent)}% '
+                      'target (${shortBy.length})',
+                      kBelowSpareTargetFilter,
+                      warn: true,
+                    ),
                 ],
               ),
             ),
@@ -1854,6 +1885,10 @@ List<Widget> partsSlivers(
             roomNames: roomNames,
             spareRoom: room,
             sparesOnly: sparesOnly,
+            shortfall: shortBy[lines[index].key] ?? 0,
+            askingAboutSpares:
+                vendorFilter == kNoSpareFilter ||
+                vendorFilter == kBelowSpareTargetFilter,
           ),
         ),
       ),
@@ -2076,12 +2111,24 @@ class _PartRow extends StatelessWidget {
   /// and for whom".
   final bool sparesOnly;
 
+  /// Units this part would need to meet the job's spares target, 0 when it
+  /// meets it or when the job has set no target.
+  final double shortfall;
+
+  /// True while the list is answering a question ABOUT SPARES — the parts with
+  /// none, or the ones below the target. What it changes is that the row
+  /// offers the fix: this is the list somebody is looking at when they decide
+  /// to spare something, and the only reason to open it is to act on it.
+  final bool askingAboutSpares;
+
   const _PartRow({
     required this.line,
     required this.estimate,
     required this.roomNames,
     this.spareRoom = '',
     this.sparesOnly = false,
+    this.shortfall = 0,
+    this.askingAboutSpares = false,
   });
 
   @override
@@ -2190,6 +2237,83 @@ class _PartRow extends StatelessWidget {
                               ),
                             ),
                           ],
+                        ],
+                      ),
+                    ),
+                  // SHORT OF THE JOB'S OWN RULE, and the way to fix it. The
+                  // percentage table on the spares section says the same thing
+                  // about the whole job; this says it on the row somebody is
+                  // already reading, which is where the decision to buy one
+                  // more actually gets made.
+                  if (shortfall > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.inventory_outlined,
+                            size: 13,
+                            color: errorTextOn(
+                              theme.colorScheme,
+                              theme.cardColor,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              '${trimNumber(shortfall)} short of the '
+                              '${trimNumber(estimate.spareTargetPercent)}% '
+                              'spares target',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: errorTextOn(
+                                  theme.colorScheme,
+                                  theme.cardColor,
+                                ),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _AddSpareButton(
+                            estimate: estimate,
+                            line: line,
+                            qty: shortfall,
+                            label: 'Add ${trimNumber(shortfall)}',
+                          ),
+                        ],
+                      ),
+                    )
+                  // NOTHING SPARED, while that is the question being asked.
+                  // The list of parts with no spare used to be a list to read
+                  // and then go and do something about somewhere else, which
+                  // is why it was read and then ignored.
+                  else if (askingAboutSpares && !line.hasSpares)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.inventory_outlined,
+                            size: 13,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Nothing spared of this',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _AddSpareButton(
+                            estimate: estimate,
+                            line: line,
+                            qty: 1,
+                            label: 'Add a spare',
+                          ),
                         ],
                       ),
                     ),
@@ -2390,6 +2514,44 @@ class _PartRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Spares this part from the list that is asking about it.
+///
+/// Opens the same dialog the spares section does, with the part already picked
+/// and the quantity already typed — so a row flagged as two short is fixed
+/// with one press and one confirmation, rather than by finding the part again
+/// in a list of two hundred.
+class _AddSpareButton extends StatelessWidget {
+  final ProjectEstimate estimate;
+  final MasterPartLine line;
+  final double qty;
+  final String label;
+
+  const _AddSpareButton({
+    required this.estimate,
+    required this.line,
+    required this.qty,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    key: ValueKey('part_add_spare_${line.key}'),
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      minimumSize: const Size(0, 28),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: Theme.of(context).textTheme.bodySmall,
+    ),
+    onPressed: () => showAddSpareDialog(
+      context,
+      estimate,
+      partKey: line.key,
+      qty: qty,
+    ),
+    child: Text(label),
+  );
 }
 
 /// The lead time and the order-by date, on the part row.
