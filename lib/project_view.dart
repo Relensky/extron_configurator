@@ -3242,7 +3242,7 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
               child: Text(
                 'A part is tagged by the FIRST vendor whose rules claim it. '
                 'Manufacturer rules are checked before category rules, so '
-                'Extron direct” beats “reseller for speakers” for an '
+                'Extron beats “AV Reseller for Speakers” for an '
                 'Extron speaker. Order matters in the list below - move  '
                 'a vendor up to give it priority.',
                 style: theme.textTheme.bodySmall?.copyWith(
