@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_flow_view.dart' show buildAvFlowModel;
 import 'package:extron_configurator/cable_colors_dialog.dart';
+import 'package:extron_configurator/color_wheel_picker.dart';
 import 'package:extron_configurator/room_locations.dart';
 
 /// The Schematic tab has had a one-dialog "Colors" button for as long as it has
@@ -58,7 +59,6 @@ void main() {
   testWidgets('picking a swatch recolours every run of that type',
       (tester) async {
     final p = room();
-    final drawing = p.cablingSchematic(buildAvFlowModel(p));
 
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1.0;
@@ -70,7 +70,7 @@ void main() {
           home: Scaffold(
             body: Builder(
               builder: (ctx) => TextButton(
-                onPressed: () => showCableColorsDialog(ctx, p, drawing),
+                onPressed: () => showCableColorsDialog(ctx, p),
                 child: const Text('open'),
               ),
             ),
@@ -94,6 +94,12 @@ void main() {
     expect(swatch, findsWidgets);
     await tester.tap(swatch.first);
     await tester.pumpAndSettle();
+
+    // The tick lands on the swatch that was clicked straight away — the rows
+    // are built off the drawing as it now is, not off a snapshot taken when
+    // the dialog opened, which used to leave the tick on the old colour until
+    // the dialog was closed and opened again.
+    expect(tester.widget<ColorSwatchButton>(swatch.first).selected, isTrue);
 
     // Written as a TYPE colour, which is what every sheet reads.
     expect(p.avCabling.typeColors, isNotEmpty);

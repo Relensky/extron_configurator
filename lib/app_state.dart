@@ -3313,6 +3313,15 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Hands every cable type back the colour the key gives it, in one go —
+  /// the way the signal flow's palette dialog resets its own colours.
+  void resetCablingTypeColors() {
+    if (avCabling.typeColors.isEmpty) return;
+    _pushAvUndo("Back to the key's colours", _cablingScope);
+    avCabling.typeColors.clear();
+    notifyListeners();
+  }
+
   /// Moves a run's caption on the cabling drawing, as a nudge from where the
   /// sheet put it. [Offset.zero] hands it back to the automatic placement.
   ///

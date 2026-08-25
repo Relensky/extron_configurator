@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'av_flow_model.dart' show kCableSwatches;
+import 'av_flow_view.dart' show buildAvFlowModel;
 import 'cabling_schematic.dart';
 import 'color_wheel_picker.dart';
 
@@ -21,6 +24,10 @@ import 'color_wheel_picker.dart';
 ///  So both pages get the same button, and it writes what the drawing reads:
 ///  a colour per cable type ([AppStateProvider.setCablingTypeColor]), which
 ///  every run of that type on every sheet then follows.
+///
+///  Laid out like the signal flow's "Signal colors" dialog, down to the swatch
+///  spacing, the reset icons and the "Reset all": the same job on a different
+///  sheet should not be a different-looking dialog.
 /// ============================================================================
 
 /// The cable types on [drawing], each with the colour its runs are drawn in
@@ -46,31 +53,40 @@ List<({String type, Color color, Set<String> keys})> cablingTypesIn(
   ];
 }
 
-/// Sets the colour of every cable type on [drawing].
+/// Sets the colour of every cable type in the room.
 ///
 /// Shared by the Cabling and Floor Plan tabs so the button does the same thing
 /// on both, and so a colour set on one sheet is the colour on the other — they
 /// are two drawings of one room's cable, and a network run that is blue on the
 /// plan and green on the cabling sheet is two drawings nobody can read
 /// together.
+///
+/// The drawing is re-derived on every rebuild rather than handed in once when
+/// the dialog opens. A snapshot went stale the moment a swatch was picked: the
+/// tick stayed on the old colour until the dialog was closed and opened again,
+/// even though the sheet underneath had already changed. Rebuilding is what
+/// the signal-flow palette does, and it is why that one moves as it is
+/// clicked.
 Future<void> showCableColorsDialog(
   BuildContext context,
   AppStateProvider provider,
-  CablingSchematic drawing,
 ) async {
   await showDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) {
         final theme = Theme.of(ctx);
-        // Re-read every rebuild: setting a colour changes what the drawing
-        // says the runs are drawn in, and the swatches have to follow.
-        final types = cablingTypesIn(drawing);
+        final types = cablingTypesIn(
+          provider.cablingSchematic(buildAvFlowModel(provider)),
+        );
 
         return AlertDialog(
           title: const Text('Cable colours'),
           content: SizedBox(
-            width: 620,
+            width: 520,
+            height: types.isEmpty
+                ? null
+                : math.min(560, MediaQuery.of(ctx).size.height - 220),
             child: types.isEmpty
                 ? Text(
                     'No cable runs on this drawing yet. Name the places in the '
@@ -78,99 +94,99 @@ Future<void> showCableColorsDialog(
                     'between them are counted off the signal flow.',
                     style: theme.textTheme.bodySmall,
                   )
-                : SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'One colour per cable type, used by every run of it '
-                          'on the cabling sheet and the floor plan. A run with '
-                          'a colour of its own keeps it.',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 12),
-                        for (final t in types)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 3),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 150,
-                                  child: Text(
-                                    t.type,
-                                    style: const TextStyle(fontSize: 12),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                : ListView(
+                    children: [
+                      Text(
+                        'One colour per cable type, used by every run of it on '
+                        'the cabling sheet and the floor plan. A run with a '
+                        'colour of its own keeps it.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      for (final t in types)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 168,
+                                child: Text(
+                                  t.type,
+                                  style: const TextStyle(fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                Expanded(
-                                  child: Wrap(
-                                    spacing: 2,
-                                    runSpacing: 2,
-                                    children: [
-                                      for (final c in kCableSwatches)
-                                        ColorSwatchButton(
-                                          key: ValueKey(
-                                            'cable_type_color_${t.type}_'
-                                            '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
-                                          ),
-                                          color: c,
-                                          width: 24,
-                                          height: 20,
-                                          selected: t.color.toARGB32() ==
-                                              c.toARGB32(),
-                                          onTap: () => setLocal(
-                                            () => provider.setCablingTypeColor(
-                                              t.keys,
-                                              c.toARGB32(),
-                                            ),
+                              ),
+                              Expanded(
+                                child: Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  children: [
+                                    for (final c in kCableSwatches)
+                                      ColorSwatchButton(
+                                        key: ValueKey(
+                                          'cable_type_color_${t.type}_'
+                                          '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
+                                        ),
+                                        color: c,
+                                        width: 24,
+                                        height: 20,
+                                        selected:
+                                            t.color.toARGB32() == c.toARGB32(),
+                                        onTap: () => setLocal(
+                                          () => provider.setCablingTypeColor(
+                                            t.keys,
+                                            c.toARGB32(),
                                           ),
                                         ),
-                                    ],
-                                  ),
+                                      ),
+                                  ],
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.colorize, size: 16),
-                                  tooltip: 'Any other colour',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: () async {
-                                    final picked = await showColorWheelDialog(
-                                      ctx,
-                                      initial: t.color,
-                                      title: 'Colour for ${t.type}',
-                                    );
-                                    if (picked == null) return;
-                                    setLocal(() => provider.setCablingTypeColor(
-                                          t.keys,
-                                          picked.toARGB32(),
-                                        ));
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.format_color_reset,
-                                    size: 16,
-                                  ),
-                                  tooltip: 'Back to the colour the key gives '
-                                      'this cable',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed:
-                                      provider.hasCablingTypeColor(t.keys)
-                                          ? () => setLocal(
-                                                () => provider
-                                                    .setCablingTypeColor(
-                                                        t.keys, null),
-                                              )
-                                          : null,
-                                ),
-                              ],
-                            ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.colorize, size: 16),
+                                tooltip: 'Pick a custom colour',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () async {
+                                  final picked = await showColorWheelDialog(
+                                    ctx,
+                                    initial: t.color,
+                                    title: 'Colour for ${t.type}',
+                                  );
+                                  if (picked == null) return;
+                                  setLocal(
+                                    () => provider.setCablingTypeColor(
+                                      t.keys,
+                                      picked.toARGB32(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.restart_alt, size: 16),
+                                tooltip: 'Back to the colour the key gives '
+                                    'this cable',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: provider.hasCablingTypeColor(t.keys)
+                                    ? () => setLocal(
+                                          () => provider.setCablingTypeColor(
+                                            t.keys,
+                                            null,
+                                          ),
+                                        )
+                                    : null,
+                              ),
+                            ],
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
           ),
           actions: [
+            TextButton(
+              onPressed: () =>
+                  setLocal(() => provider.resetCablingTypeColors()),
+              child: const Text('Reset all'),
+            ),
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('Done'),

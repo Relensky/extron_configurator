@@ -475,7 +475,7 @@ class _CablingViewState extends State<CablingView> {
             key: const ValueKey('cabling_colors'),
             icon: const Icon(Icons.palette_outlined, size: 18),
             label: const Text('Cable colours'),
-            onPressed: () => showCableColorsDialog(context, provider, drawing),
+            onPressed: () => showCableColorsDialog(context, provider),
           ),
           OutlinedButton.icon(
             icon: const Icon(Icons.fit_screen, size: 18),

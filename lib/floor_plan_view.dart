@@ -1367,11 +1367,7 @@ class _FloorPlanViewState extends State<FloorPlanView> {
             key: const ValueKey('plan_cable_colors'),
             icon: const Icon(Icons.palette_outlined, size: 18),
             label: const Text('Cable colours'),
-            onPressed: () => showCableColorsDialog(
-              context,
-              provider,
-              provider.cablingSchematic(buildAvFlowModel(provider)),
-            ),
+            onPressed: () => showCableColorsDialog(context, provider),
           ),
           // How the writing on this sheet is printed. On the toolbar rather
           // than buried in a settings page: a plan is recoloured while looking

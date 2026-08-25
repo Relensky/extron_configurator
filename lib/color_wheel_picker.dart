@@ -256,22 +256,22 @@ class _WheelPainter extends CustomPainter {
   bool shouldRepaint(covariant _WheelPainter old) => old.hsv != hsv;
 }
 
-/// The mark on the chosen swatch: a filled checkbox, not a bare tick.
+/// The mark on the chosen swatch: a checkbox drawn ON the colour.
 ///
-/// A tick drawn straight onto the colour is only ever as visible as the
-/// contrast between that colour and the ink — which on a row of sixteen
-/// swatches is fine on the navy and nearly invisible on the mustard, so
-/// "which one is set" became a question about the border instead. A checkbox
-/// brings its own ground: a solid square in the colour that reads on the
-/// swatch, with the tick in the opposite one. Two colours that always contrast
-/// with each other, on top of anything.
+/// It used to sit in a solid square of its own — a little white or black tile
+/// laid over the swatch — which read clearly enough but hid the very thing
+/// the row is for: on a 24x20 chip the tile covered most of the colour, so
+/// the selected swatch was the one you could no longer see. The checkbox
+/// keeps its outline and its tick, both in whichever of white/near-black
+/// reads on that swatch, and the swatch's own colour stays its ground.
 ///
 /// Sized off the swatch so the small chips on the cable and signal dialogs
 /// (24x20) get one that fits, and the full-size ones get one that is worth
 /// seeing.
 class _SelectedTick extends StatelessWidget {
   /// The colour that reads on the swatch — white on a dark one, near-black on
-  /// a light one. This is the checkbox's FILL; the tick takes its opposite.
+  /// a light one. The checkbox outline AND the tick are both drawn in it; the
+  /// ground behind them is the swatch.
   final Color onColor;
 
   final double width;
@@ -287,17 +287,15 @@ class _SelectedTick extends StatelessWidget {
   Widget build(BuildContext context) {
     final side = math.min(width, height).clamp(0.0, 40.0) - 6;
     final box = side.clamp(11.0, 18.0);
-    final ink = onColor == Colors.white ? Colors.black87 : Colors.white;
     return Container(
       width: box,
       height: box,
       decoration: BoxDecoration(
-        color: onColor,
         borderRadius: BorderRadius.circular(3),
-        border: Border.all(color: ink.withValues(alpha: 0.65), width: 0.8),
+        border: Border.all(color: onColor.withValues(alpha: 0.9), width: 1.2),
       ),
       alignment: Alignment.center,
-      child: Icon(Icons.check, size: box - 3, color: ink),
+      child: Icon(Icons.check, size: box - 3, color: onColor),
     );
   }
 }
