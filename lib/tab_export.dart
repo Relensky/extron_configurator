@@ -11,7 +11,9 @@ import 'av_flow_report.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'cost_estimate.dart';
 import 'diagram_capture.dart';
+import 'equipment_lifecycle.dart';
 import 'export_tools.dart';
+import 'project_estimate.dart' show roomCodeFromConfig;
 import 'report_tools.dart';
 import 'schematic_view.dart' show SchematicModel, reportSections;
 import 'xlsx_writer.dart';
@@ -64,6 +66,7 @@ bool tabCanExport(AppTab tab) => switch (tab) {
 
 /// What the export button calls this tab's document.
 String tabExportLabel(AppTab tab) => switch (tab) {
+  AppTab.lifecycle => 'Replacement plan',
   AppTab.devices => 'Devices',
   AppTab.system => 'System',
   AppTab.rawJson => 'Config JSON',
@@ -84,6 +87,7 @@ String tabExportLabel(AppTab tab) => switch (tab) {
 
 /// The file-name stem, under the room's own name.
 String _stem(AppTab tab) => switch (tab) {
+  AppTab.lifecycle => 'replacement_plan',
   AppTab.devices => 'devices',
   AppTab.system => 'system',
   AppTab.rawJson => 'config',
@@ -131,6 +135,16 @@ List<ReportSection> tabReportSections(
       ];
     case AppTab.avFlow:
       return avReportSections(provider, av);
+    case AppTab.lifecycle:
+      return roomLifecycleSections(
+        buildRoomLifecycle(
+          model: av,
+          roomName: roomCodeFromConfig(provider.roomConfig),
+          library: provider.avDeviceLibrary,
+          tier: provider.pricingTier,
+        ),
+        currency: provider.currencySymbol,
+      );
     case AppTab.floorPlan:
       return locationSections(av);
     case AppTab.cabling:

@@ -63,6 +63,7 @@ class NavTab {
 
 const List<NavTab> kNavTabs = [
   NavTab(AppTab.cost, Icons.request_quote, 'Cost'),
+  NavTab(AppTab.lifecycle, Icons.history_toggle_off, 'Lifecycle'),
   NavTab(AppTab.wizard, Icons.auto_awesome, 'Wizard'),
   NavTab(AppTab.devices, Icons.router, 'Devices'),
   NavTab(AppTab.system, Icons.settings, 'System'),

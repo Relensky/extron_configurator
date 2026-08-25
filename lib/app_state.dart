@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'responsibility_matrix.dart';
 import 'base_costs.dart';
 import 'config_dictionary.dart';
 import 'config_key_mapper.dart';
@@ -53,6 +54,10 @@ enum AppTab {
   // follow — which is the order the work is actually done in.
   project('project'),
   cost('cost'),
+  // What the room already HAS, and how old it is. Beside the cost of building
+  // it because the two are the same question at two ends of the room's life —
+  // what it costs to put in, and what year it has to be put in again.
+  lifecycle('lifecycle'),
   wizard('wizard'),
   devices('devices'),
   system('system'),
@@ -4388,6 +4393,37 @@ class AppStateProvider extends ChangeNotifier {
     if (index < 0) return;
     if (recordUndo) _pushAvUndo('Edit ${node.label}', _flowScope);
     avNodes[index] = node;
+    notifyListeners();
+  }
+
+  /// Records when the unit in one position went in, or takes the date off.
+  ///
+  /// Its own setter rather than a [updateAvNode] from the caller because the
+  /// Lifecycle tab edits ONE field on a list of eleven boxes: a survey is
+  /// eleven dates typed in a row, and each of them has to be its own undo
+  /// entry named after the box it changed rather than a generic "Edit".
+  void setAvNodeInstalledOn(String nodeId, DateTime? when) {
+    final index = avNodes.indexWhere((n) => n.id == nodeId);
+    if (index < 0) return;
+    final node = avNodes[index];
+    _pushAvUndo(
+      when == null
+          ? 'Clear install date on ${node.label}'
+          : 'Install date on ${node.label}',
+      _flowScope,
+    );
+    avNodes[index] = node.copyWith(
+      installedOn: when == null
+          ? null
+          : DateTime(when.year, when.month, when.day),
+      clearInstalledOn: when == null,
+    );
+    AppLogger.logInfo(
+      when == null
+          ? 'Install date cleared on ${node.label}.'
+          : 'Install date on ${node.label} set to '
+              '${formatEquipmentDate(when)}.',
+    );
     notifyListeners();
   }
 
@@ -10651,6 +10687,98 @@ class AppStateProvider extends ChangeNotifier {
           : 'pinned to ${project.vendorById(vendorId)?.name ?? vendorId}',
     );
     _projectChanged();
+  }
+
+  // --- whose job each piece of it is ----------------------------------------
+  //  The roles and responsibilities matrix. See responsibility_matrix.dart for
+  //  what it is and why it is not derived from the rooms.
+
+  /// Adds a line to the matrix and hands it back so the caller can open it for
+  /// editing without looking it up again.
+  ResponsibilityItem addResponsibilityItem([
+    String scope = '',
+    ({String furnishedBy, String installedBy, String work})? preset,
+  ]) {
+    final item = project.addResponsibilityItem(
+      scope,
+      furnishedBy: preset?.furnishedBy ?? '',
+      installedBy: preset?.installedBy ?? '',
+      work: preset?.work ?? '',
+    );
+    _logProjectEdit(
+      itemKey: 'responsibility:${item.id}',
+      itemName: item.scope,
+      field: 'Responsibility matrix',
+      summary: 'added',
+    );
+    _projectChanged(repricing: false);
+    return item;
+  }
+
+  /// Replaces one line. The whole item rather than a field at a time, because
+  /// the editor is a dialog that collects every field and commits once.
+  void updateResponsibilityItem(ResponsibilityItem item) {
+    final before = project.responsibilityById(item.id);
+    project.updateResponsibilityItem(item);
+    if (before != null) {
+      // Said in terms of the two answers the document exists to record. A
+      // history line reading "edited" would be true of every change and useful
+      // for none of them.
+      final parties = before.furnishedBy != item.furnishedBy ||
+          before.installedBy != item.installedBy;
+      _logProjectEdit(
+        itemKey: 'responsibility:${item.id}',
+        itemName: item.scope,
+        field: 'Responsibility matrix',
+        summary: parties
+            ? 'furnished by ${item.furnishedBy.isEmpty ? 'nobody yet' : item.furnishedBy}, '
+                'installed by ${item.installedBy.isEmpty ? 'nobody yet' : item.installedBy}'
+            : 'updated',
+      );
+    }
+    _projectChanged(repricing: false);
+  }
+
+  /// Sets how many of [itemId] one room needs, or takes the room off that line
+  /// when [qty] is not positive.
+  void setResponsibilityQty(String itemId, String roomId, double qty) {
+    final item = project.responsibilityById(itemId);
+    if (item == null) return;
+    project.updateResponsibilityItem(item.withRoomQty(roomId, qty));
+    _projectChanged(repricing: false);
+  }
+
+  void removeResponsibilityItem(String id) {
+    final item = project.responsibilityById(id);
+    if (item == null) return;
+    project.removeResponsibilityItem(id);
+    _logProjectEdit(
+      itemKey: 'responsibility:$id',
+      itemName: item.scope,
+      field: 'Responsibility matrix',
+      summary: 'removed',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  void moveResponsibilityItem(String id, int delta) {
+    project.moveResponsibilityItem(id, delta);
+    _projectChanged(repricing: false);
+  }
+
+  /// Puts the usual lines on the matrix. Returns how many were added, so the
+  /// caller can say "nothing to add" rather than appearing to do nothing.
+  int addStarterResponsibilityItems() {
+    final added = project.addStarterResponsibilityItems();
+    if (added == 0) return 0;
+    _logProjectEdit(
+      itemKey: 'responsibility',
+      itemName: project.name,
+      field: 'Responsibility matrix',
+      summary: '$added starter line${added == 1 ? '' : 's'} added',
+    );
+    _projectChanged(repricing: false);
+    return added;
   }
 
   // --- when the order has to go in ------------------------------------------

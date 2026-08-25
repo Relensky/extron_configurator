@@ -199,6 +199,42 @@ void main() {
       expect(find.text('12 Jun 2026'), findsOneWidget);
     });
 
+    testWidgets('a year with no selectable month in it is not offered',
+        (tester) async {
+      // `DateTime(y)` is the 1st of January, so a range that ends there has a
+      // final year holding exactly one day. Offering it puts somebody on a
+      // month grid with eleven months greyed out and no reason given, which is
+      // the state that makes a picker feel broken.
+      await open(
+        tester,
+        initial: DateTime(2026, 8, 23),
+        first: DateTime(2026),
+        last: DateTime(2028),
+      );
+      await stepUp(tester);
+      await stepUp(tester);
+
+      expect(find.byKey(const ValueKey('stepped_date_year_2027')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('stepped_date_year_2028')),
+          findsOneWidget,
+          reason: '1 January 2028 is a real day in the range');
+
+    });
+
+    testWidgets('and a year past the range is not offered at all',
+        (tester) async {
+      await open(
+        tester,
+        initial: DateTime(2026, 8, 23),
+        first: DateTime(2026),
+        last: DateTime(2027, 12, 31),
+      );
+      await stepUp(tester);
+      await stepUp(tester);
+      expect(find.byKey(const ValueKey('stepped_date_year_2028')), findsNothing);
+    });
+
     testWidgets('an initial date outside the range is pulled into it',
         (tester) async {
       await open(

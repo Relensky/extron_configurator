@@ -18,8 +18,10 @@ import 'av_flow_routing.dart' show withOutletNames;
 ///  only the model-shaped part of the label, carries the power inlet and the
 ///  outlet names across, re-derives the power source only when the product
 ///  decides it, remaps every run onto its counterpart connector and drops the
-///  ones with nowhere to go. Two copies of that drift, and the drift shows up
-///  as a room whose cables quietly went missing.
+///  ones with nowhere to go, and files the unit coming out in the position's
+///  age record so the room can still say how old its equipment is. Two copies
+///  of that drift, and the drift shows up as a room whose cables quietly went
+///  missing.
 ///
 ///  So the arithmetic is here and both callers use it: `applyModelSwap` writes
 ///  the result through the provider so the room on screen gets one undo entry,
@@ -68,6 +70,15 @@ ModelSwapPlan planModelSwap({
   required Iterable<AvCable> cables,
   required AvDeviceTemplate template,
   required Map<String, dynamic> config,
+
+  /// The day the box was physically changed, for the age record. Defaults to
+  /// today, which is right whenever the swap is being entered as it happens;
+  /// a swap being recorded after the fact passes the day it actually went in.
+  DateTime? swappedOn,
+
+  /// Why the unit came out — 'failed', 'end of life', 'room refresh'. Kept
+  /// with the outgoing unit; see [EquipmentSwap].
+  String swapReason = '',
 }) {
   final swapped = withOutletNames(
     withPowerInlet(template.ports, template.powerInput),
@@ -80,7 +91,26 @@ ModelSwapPlan planModelSwap({
   // room plugs it in, and that is not the catalog's business.
   final implied = powerSourceForInput(template.powerInput);
 
-  final after = node.copyWith(
+  // THE POSITION'S AGE RECORD, BEFORE THE MODEL MOVES.
+  //
+  // A swap is the only moment the app can know that the unit in a position has
+  // been replaced, so it is the only moment the previous one can be written
+  // down. Doing it here rather than in each of the five callers means the
+  // Signal Flow tab's swap, the Devices tab's, the rack's, the cost estimate's
+  // and the project's swap-across-nine-rooms all keep the same record.
+  //
+  // A "swap" onto the model already under the box is a correction, not a
+  // replacement — nothing was unplugged — so it leaves the dates alone.
+  final sameModel = node.model.trim().toLowerCase() ==
+      template.model.trim().toLowerCase();
+  final aged = sameModel
+      ? node
+      : node.withSwapRecorded(
+          on: swappedOn ?? DateTime.now(),
+          reason: swapReason,
+        );
+
+  final after = aged.copyWith(
     model: template.model,
     // A box named after the product it is — "Projector 1 - PowerLite L630U" —
     // is named after the wrong product the moment the product changes, and

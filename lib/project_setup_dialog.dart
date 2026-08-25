@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
@@ -117,6 +118,15 @@ List<String> findRoomConfigs(
   walk(root, 1);
   return out;
 }
+
+/// [findRoomConfigs] in the shape [compute] can hand to a background isolate:
+/// one positional argument, and a return value that can cross between them.
+///
+/// Top-level rather than a closure because that is the only kind of function
+/// an isolate can be started on — a closure captures the widget it was written
+/// inside, and none of that can be sent.
+List<String> scanRoomConfigs(({String folder, int maxDepth}) args) =>
+    findRoomConfigs(args.folder, maxDepth: args.maxDepth);
 
 /// The notes nearly every job starts with, offered rather than typed.
 ///
@@ -268,11 +278,34 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
     if (folder == null || !mounted) return;
 
     setState(() => _scanning = true);
-    // Off the UI thread: a share with a few hundred folders on it takes long
-    // enough that a scan on the frame would drop one.
-    final found = await Future(
-      () => findRoomConfigs(folder, maxDepth: widget.scanDepth),
-    );
+    // OFF THE UI THREAD FOR REAL — a background isolate, not a later turn of
+    // this one.
+    //
+    // This used to be `Future(() => findRoomConfigs(...))`, which schedules the
+    // work as its own event and then runs every synchronous `listSync` of it on
+    // the same thread that draws the window. On a local folder nobody noticed.
+    // On a departmental share with a few hundred room folders on it, walking
+    // the tree is seconds of blocking I/O with no frames in between, and an app
+    // that paints nothing and answers no clicks for seconds is an app somebody
+    // reports as frozen.
+    //
+    // A share that has gone away is worse still: an SMB path waiting on a dead
+    // host blocks until the network stack gives up, which is tens of seconds.
+    // Both of those now happen somewhere else, and the dialog keeps saying
+    // "Looking…" and keeps responding while they do.
+    final List<String> found;
+    try {
+      found = await compute(scanRoomConfigs, (
+        folder: folder,
+        maxDepth: widget.scanDepth,
+      ));
+    } catch (_) {
+      // An isolate that could not be started or died mid-walk leaves the form
+      // exactly as it was, minus the spinner. Nothing has been added, and the
+      // button can simply be pressed again.
+      if (mounted) setState(() => _scanning = false);
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _scanning = false;
@@ -354,7 +387,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                       autofocus: true,
                       decoration: const InputDecoration(
                         labelText: 'Project name',
-  /// the full path to it, cut off after the share name, does not.
+                        hintText: 'Bessey Hall refresh',
                         border: OutlineInputBorder(),
                       ),
                     ),

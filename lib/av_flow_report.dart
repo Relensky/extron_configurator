@@ -139,6 +139,9 @@ List<ReportSection> cablingSections(AvFlowModel model) {
 
   final sections = <ReportSection>[
     cableCountSection(model),
+    // Straight under the room's total, because the two answer the same
+    // question at two scales and the second is the one a rough-in is bid off.
+    cableCountByLocationSection(model),
     (
       title: 'Cabling Runs',
       header: [
@@ -398,6 +401,145 @@ ReportSection cableCountSection(AvFlowModel model) {
       'Cable type',
       'Signal',
       'Runs',
+      for (final ft in used) formatCableLength(ft),
+      if (anyUnset) 'No length set',
+    ],
+    rows: rows,
+  );
+}
+
+/// The same count, broken out BY THE PLACE IN THE ROOM each run lands in.
+///
+/// [cableCountSection] answers "how much cable does this room need", which is
+/// the question a purchase order asks. This answers the one the rough-in
+/// estimate asks and the one the person on site asks: HOW MANY LINES COME UP
+/// IN THE FLOOR BOX, how many land on the ceiling plate, how many terminate on
+/// the patch panel in the closet. A room total of thirty-four AV lines does not
+/// tell an electrician how big a back box to set or how many ports to punch
+/// down, and those are the numbers a bid is priced against.
+///
+/// COUNTED AT EACH END, not once per run. A cable from the lectern floor box to
+/// the closet is a termination in the floor box AND a termination in the
+/// closet — two pieces of work, two ports, two patch leads — so it appears
+/// under both. A run with both ends in the same place counts once there,
+/// because it never leaves the box. Same rule as [_lineCountsByLocation], and
+/// it is why the column is 'Ends here' rather than 'Runs': the location column
+/// deliberately adds up to more than the room's cable count, and a column
+/// called 'Runs' that did that would look like an error.
+///
+/// Each location totals under itself and the room totals at the foot, so the
+/// sheet reads the way the CHIL estimate it is modelled on reads: a block per
+/// place, its own subtotal, and the building's figure at the bottom.
+ReportSection cableCountByLocationSection(AvFlowModel model) {
+  final byId = model.nodesById;
+  final runs = model.cables
+      .where((c) => AvFlowModel.cableIsResolvable(c, byId))
+      .toList();
+
+  // location id -> the runs terminating there. A run spanning two places is in
+  // both lists; one that starts and ends in the same place is in that one list
+  // once.
+  final atLocation = <String, List<AvCable>>{};
+  for (final c in runs) {
+    final from = byId[c.fromNodeId]?.locationId ?? kNoLocationId;
+    final to = byId[c.toNodeId]?.locationId ?? kNoLocationId;
+    atLocation.putIfAbsent(from, () => []).add(c);
+    if (to != from) atLocation.putIfAbsent(to, () => []).add(c);
+  }
+  if (atLocation.isEmpty) {
+    return (title: 'Cable Counts by Location', header: const [], rows: const []);
+  }
+
+  /// The lengths in use anywhere, so every location block has the same columns
+  /// and the blocks can be read down as well as across.
+  final used = <double>{
+    for (final c in runs)
+      if (c.lengthFt > 0) c.lengthFt,
+  }.toList()..sort();
+  final anyUnset = runs.any((c) => c.lengthFt <= 0);
+
+  List<dynamic> lengthCells(Iterable<AvCable> cables) {
+    final counts = <double, int>{};
+    for (final c in cables) {
+      final ft = c.lengthFt <= 0 ? 0.0 : c.lengthFt;
+      counts[ft] = (counts[ft] ?? 0) + 1;
+    }
+    return [
+      for (final ft in used) counts[ft] ?? '',
+      if (anyUnset) counts[0] ?? '',
+    ];
+  }
+
+  final rows = <List<dynamic>>[];
+
+  void block(String name, String zone, List<AvCable> here) {
+    if (here.isEmpty) return;
+    for (final family in CableFamily.values) {
+      final ofFamily =
+          here.where((c) => cableFamilyFor(c.signal) == family).toList();
+      if (ofFamily.isEmpty) continue;
+      // One row per signal under the family, in enum order, so the same room
+      // lists its types in the same order every time it is exported.
+      for (final signal in SignalType.values) {
+        final ofType = ofFamily.where((c) => c.signal == signal).toList();
+        if (ofType.isEmpty) continue;
+        rows.add([
+          name,
+          zone,
+          cableTypeLabel(signal),
+          cableSignalSubLabel(signal),
+          ofType.length,
+          ...lengthCells(ofType),
+        ]);
+      }
+    }
+    rows.add([
+      name,
+      zone,
+      'All cabling at this location',
+      '',
+      here.length,
+      ...lengthCells(here),
+    ]);
+  }
+
+  // Zone order rather than insertion order, for the same reason the locations
+  // summary uses it: a rough-in is read one mounting surface at a time.
+  for (final zone in RoomZone.values) {
+    for (final location in model.locations.where((l) => l.zone == zone)) {
+      block(
+        location.displayName,
+        kRoomZoneCodes[location.zone] ?? '-',
+        atLocation[location.id] ?? const [],
+      );
+    }
+  }
+  // Runs on boxes nobody has placed yet. Named rather than dropped: a count
+  // that silently omits them is a count that does not add up to the room's,
+  // and the gap is exactly the list of devices still needing a location.
+  block('(no location recorded)', '', atLocation[kNoLocationId] ?? const []);
+
+  if (rows.isNotEmpty) {
+    // The room's own figure, which is the cable count rather than the sum of
+    // the blocks above it - see the note on double-counting in the doc.
+    rows.add([
+      'Whole room',
+      '',
+      'All cabling (each run once)',
+      '',
+      runs.length,
+      ...lengthCells(runs),
+    ]);
+  }
+
+  return (
+    title: 'Cable Counts by Location',
+    header: [
+      'Location',
+      'Zone',
+      'Cable type',
+      'Signal',
+      'Ends here',
       for (final ft in used) formatCableLength(ft),
       if (anyUnset) 'No length set',
     ],

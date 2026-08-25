@@ -16,9 +16,11 @@ import 'live_text_field.dart';
 import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
 import 'project_history_view.dart';
+import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
 import 'project_pricing.dart';
+import 'project_responsibility_view.dart';
 import 'project_room_picker.dart';
 import 'project_schedule.dart';
 import 'project_spares_view.dart';
@@ -62,6 +64,13 @@ enum _ProjectPane {
   // money was worked out from.
   plans('Plans', Icons.architecture),
   timeline('Timeline', Icons.event_available),
+  // What the building already HAS and when it falls due - next to the
+  // timeline, because both are the job read as a calendar: one for the work
+  // being quoted, one for the work after it.
+  lifecycle('Lifecycle', Icons.history_toggle_off),
+  // Whose job each piece of scope is. After the money and the calendar,
+  // because it is the document that gets agreed once the job is real.
+  responsibility('Responsibility', Icons.handshake_outlined),
   vendors('Vendors', Icons.local_shipping),
   todo('To do', Icons.checklist),
   notes('Notes', Icons.sticky_note_2_outlined),
@@ -212,7 +221,13 @@ class _ProjectViewState extends State<ProjectView> {
     try {
       await File(
         target,
-      ).writeAsBytes(buildProjectWorkbookBytes(estimate: estimate));
+      ).writeAsBytes(buildProjectWorkbookBytes(
+        estimate: estimate,
+        // The catalog prices the replacement plan's sheet. The estimate does
+        // not carry one, so it is handed over here where there is a provider.
+        library: provider.avDeviceLibrary,
+        tier: provider.pricingTier,
+      ));
       if (mounted) {
         showSavedFileSnack(context, provider, 'The project workbook', target);
       }
@@ -331,6 +346,9 @@ class _ProjectViewState extends State<ProjectView> {
             ),
             _ProjectPane.plans => plansSlivers(context, estimate),
             _ProjectPane.timeline => timelineSlivers(context, estimate),
+            _ProjectPane.lifecycle => lifecycleSlivers(context, estimate),
+            _ProjectPane.responsibility =>
+              responsibilitySlivers(context, estimate),
             _ProjectPane.vendors => vendorsSlivers(context, estimate),
             _ProjectPane.todo => todoSlivers(context, estimate),
             _ProjectPane.notes => notesSlivers(context, estimate),

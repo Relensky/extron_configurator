@@ -173,6 +173,21 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
   bool _inRange(DateTime when) =>
       !when.isBefore(widget.firstDate) && !when.isAfter(widget.lastDate);
 
+  /// True when any day of [year] can be chosen.
+  ///
+  /// The first and last years of a range are usually PARTIAL — a range that
+  /// ends on 31 December 2036 has a whole 2036 in it, one that ends on 1
+  /// January 2036 has a single day — so the year grid has to ask the same
+  /// question the month grid does rather than assume every year in the span is
+  /// open. Without this, picking the last year drops onto a month grid with
+  /// eleven months greyed out and no reason given.
+  bool _yearSelectable(int year) {
+    for (var month = 1; month <= 12; month++) {
+      if (_monthSelectable(year, month)) return true;
+    }
+    return false;
+  }
+
   /// True when any day of [month] in [year] can be chosen. A month with no
   /// selectable day is not offered at all — a grid that lets somebody in and
   /// then refuses every cell reads as a broken picker.
@@ -375,7 +390,13 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
   }
 
   Widget _yearGrid(ThemeData theme) {
-    final years = [for (var y = _firstYear; y <= _lastYear; y++) y];
+    // Only years with a day in them. See [_yearSelectable] — offering a year
+    // whose every month is refused is the state that makes a picker feel
+    // broken, which is the whole argument of this file.
+    final years = [
+      for (var y = _firstYear; y <= _lastYear; y++)
+        if (_yearSelectable(y)) y,
+    ];
     final thisYear = today().year;
     return GridView.count(
       crossAxisCount: 4,
@@ -383,7 +404,7 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
       // Opens on the chosen year rather than at the top of the list: on a range
       // of sixteen years the one somebody is working in is usually off screen.
       controller: _yearScroll ??= ScrollController(
-        initialScrollOffset: _yearScrollOffset(years.length),
+        initialScrollOffset: _yearScrollOffset(years),
       ),
       children: [
         for (final year in years)
@@ -393,6 +414,9 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
             label: '$year',
             selected: year == _selected.year,
             outlined: year == thisYear,
+            // Every year still on the grid has a day in it - the list above
+            // dropped the ones that do not - so there is nothing left to
+            // disable here.
             enabled: true,
             onTap: () {
               // A year is not a date. Picking one narrows to its months and
@@ -409,11 +433,17 @@ class _SteppedDatePickerDialogState extends State<_SteppedDatePickerDialog> {
   }
 
   /// Roughly where the chosen year sits in the list, so it opens near it.
-  double _yearScrollOffset(int count) {
-    final row = ((_selected.year - _firstYear) / 4).floor();
+  ///
+  /// Measured against the years actually ON the grid rather than against the
+  /// span of the range: with partial years dropped the two are not the same
+  /// list, and an offset counted off the wrong one lands on the wrong row.
+  double _yearScrollOffset(List<int> years) {
+    final index = years.indexOf(_selected.year);
+    if (index < 0) return 0;
+    final row = (index / 4).floor();
     // Two rows of head-room, so the chosen year is in view rather than pinned
     // to the very top edge where it reads as the first year in the range.
-    return ((row - 2) * 52).clamp(0, (count / 4).ceil() * 52).toDouble();
+    return ((row - 2) * 52).clamp(0, (years.length / 4).ceil() * 52).toDouble();
   }
 
   Widget _monthGrid(ThemeData theme) {

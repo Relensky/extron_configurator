@@ -23,6 +23,8 @@ import 'color_wheel_picker.dart';
 import 'cost_estimate.dart';
 import 'device_recheck_dialog.dart';
 import 'diagram_capture.dart';
+import 'equipment_lifecycle.dart'
+    show formatEquipmentAge, kDefaultEquipmentLifeYears;
 import 'dynamic_devices_view.dart' show getActiveDeviceKeys;
 import 'view_zoom.dart';
 import 'diagram_grid.dart';
@@ -35,6 +37,7 @@ import 'room_locations_view.dart';
 import 'room_presets.dart';
 import 'screenshot_tools.dart';
 import 'side_pane.dart';
+import 'stepped_date_picker.dart';
 import 'workbook_export.dart';
 import 'xlsx_writer.dart';
 
@@ -2693,6 +2696,14 @@ class _AvFlowViewState extends State<AvFlowView>
       text: node.btuPerHour <= 0 ? '' : trimNumber(node.btuPerHour),
     );
     final ports = List<AvPort>.from(node.ports);
+    final lifeYearsController = TextEditingController(
+      text: node.lifeYears <= 0 ? '' : node.lifeYears.toString(),
+    );
+    // The age record for this position: when the unit in it went in, and every
+    // unit that was in it before. Held in the dialog rather than written on
+    // each change so backing out changes nothing, like every other field here.
+    DateTime? installedOn = node.installedOn;
+    List<EquipmentSwap> swaps = node.swaps;
     PowerSource powerSource = node.powerSource;
     bool excludeFromCost = node.excludeFromCost;
     bool excludeFromControl = node.excludeFromControl;
@@ -2715,7 +2726,12 @@ class _AvFlowViewState extends State<AvFlowView>
             // Wide enough for a whole port row, but never wider than the
             // window — the port rows shrink to fit whatever is left.
             width: math.min(820, MediaQuery.of(ctx).size.width - 120),
-            height: math.min(560, MediaQuery.of(ctx).size.height - 200),
+            // Sixty taller than it was, which is exactly the row the install
+            // date and life added above the connector list. The list lives in
+            // an Expanded, so anything added over it comes straight out of the
+            // connectors — and a dialog that shows one fewer port than it used
+            // to is a dialog somebody has to scroll to do what they came for.
+            height: math.min(620, MediaQuery.of(ctx).size.height - 200),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2784,6 +2800,26 @@ class _AvFlowViewState extends State<AvFlowView>
                                 if (implied != PowerSource.unspecified) {
                                   powerSource = implied;
                                 }
+                                // THE AGE RECORD MOVES WITH THE BOX. A
+                                // different product in this position means the
+                                // unit that was here came out, so it is filed
+                                // and the clock starts again - the same
+                                // bookkeeping planModelSwap does for every
+                                // other route to a swap.
+                                //
+                                // Derived from the box AS IT WAS OPENED rather
+                                // than from whatever the last press left
+                                // behind, so trying three models before
+                                // pressing Save files one replacement instead
+                                // of three.
+                                final replaced =
+                                    picked.model.trim().toLowerCase() !=
+                                        node.model.trim().toLowerCase();
+                                final aged = replaced
+                                    ? node.withSwapRecorded(on: DateTime.now())
+                                    : node;
+                                swaps = aged.swaps;
+                                installedOn = aged.installedOn;
                               });
                             },
                           ),
@@ -2857,6 +2893,77 @@ class _AvFlowViewState extends State<AvFlowView>
                   provider: provider,
                   value: locationId,
                   onChanged: (v) => setLocal(() => locationId = v),
+                ),
+                const SizedBox(height: 8),
+                // WHEN THIS ONE WENT IN. The whole refresh plan - this room's
+                // Lifecycle tab and the building's - is derived from this
+                // field and nothing else, so it sits with the box's other
+                // physical facts rather than on a survey screen somebody
+                // visits once.
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('node_installed_on'),
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showSteppedDatePicker(
+                          ctx,
+                          initialDate: installedOn ?? now,
+                          // Twenty-five years back covers anything still
+                          // running; a year forward covers gear specified now
+                          // and going in next summer.
+                          firstDate: DateTime(now.year - 25, 1, 1),
+                          lastDate: DateTime(now.year + 1, 12, 31),
+                          helpText: 'When did this go in?',
+                        );
+                        if (picked == null) return;
+                        setLocal(() => installedOn = picked);
+                      },
+                      icon: const Icon(Icons.event_available, size: 18),
+                      label: Text(
+                        installedOn == null
+                            ? 'Install date not recorded'
+                            : 'Installed ${formatEquipmentDate(installedOn!)}',
+                      ),
+                    ),
+                    if (installedOn != null)
+                      IconButton(
+                        key: const ValueKey('node_installed_on_clear'),
+                        tooltip: 'Nobody knows when this went in',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setLocal(() => installedOn = null),
+                      ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 130,
+                      child: TextField(
+                        key: const ValueKey('node_life_years'),
+                        controller: lifeYearsController,
+                        decoration: const InputDecoration(
+                          labelText: 'Life (years)',
+                          helperText: 'blank = $kDefaultEquipmentLifeYears',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    if (swaps.isNotEmpty)
+                      Expanded(
+                        child: Text(
+                          'Replaced ${swaps.length} time'
+                          '${swaps.length == 1 ? '' : 's'} before; the last '
+                          'one lasted '
+                          '${formatEquipmentAge(swaps.last.servedYears)}.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(ctx).hintColor,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -3224,6 +3331,10 @@ class _AvFlowViewState extends State<AvFlowView>
       excludeFromCost: excludeFromCost,
       excludeFromControl: excludeFromControl,
       locationId: locationId,
+      installedOn: installedOn,
+      clearInstalledOn: installedOn == null,
+      lifeYears: int.tryParse(lifeYearsController.text.trim()) ?? 0,
+      swaps: swaps,
       ports: ports,
     );
 

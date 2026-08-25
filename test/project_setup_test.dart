@@ -192,6 +192,28 @@ void main() {
     });
   });
 
+  test('the background scan is the same walk, arguments and all', () {
+    // findRoomConfigs runs on a BACKGROUND ISOLATE now - a departmental share
+    // with a few hundred room folders on it is seconds of blocking I/O, and
+    // doing that on the thread that draws the window is an app somebody
+    // reports as frozen. scanRoomConfigs is the shape an isolate can be
+    // started on; it must still be the same walk.
+    final dir = Directory.systemTemp.createTempSync('rcb_scan_shape');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    Directory('${dir.path}/BSS 101').createSync();
+    File('${dir.path}/BSS 101/config.json').writeAsStringSync('{}');
+    Directory('${dir.path}/BSS 101/code').createSync();
+    File('${dir.path}/BSS 101/code/config.json').writeAsStringSync('{}');
+
+    expect(
+      scanRoomConfigs((folder: dir.path, maxDepth: 2)),
+      findRoomConfigs(dir.path, maxDepth: 2),
+    );
+    // And the depth really is carried across rather than defaulted.
+    expect(scanRoomConfigs((folder: dir.path, maxDepth: 2)), hasLength(1));
+    expect(scanRoomConfigs((folder: dir.path, maxDepth: 3)), hasLength(2));
+  });
+
   group('the setup screen', () {
     Future<NewProjectSetup?> run(
       WidgetTester tester,
@@ -271,6 +293,61 @@ void main() {
 
       expect(answer!.todos, hasLength(kStarterProjectTodos.length - 1));
       expect(answer.todos, isNot(contains(kStarterProjectTodos.first)));
+    });
+
+    testWidgets('the deadline comes back off the date picker', (tester) async {
+      // The one field on this form that is not typed. It opens a picker, and
+      // what the picker settles on has to survive both dialogs closing.
+      final answer = await run(tester, (t) async {
+        await t.tap(find.byKey(const ValueKey('setup_deadline')));
+        await t.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('stepped_date_picker')),
+          findsOneWidget,
+        );
+
+        await t.tap(find.byKey(const ValueKey('stepped_date_day_14')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const ValueKey('stepped_date_confirm')));
+        await t.pumpAndSettle();
+
+        // The picker is gone and the form is still there, showing the date.
+        expect(find.byKey(const ValueKey('stepped_date_picker')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('project_setup_dialog')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Due '), findsWidgets);
+
+        await t.tap(find.byKey(const ValueKey('setup_confirm')));
+        await t.pumpAndSettle();
+      });
+
+      expect(answer, isNotNull);
+      expect(answer!.deadline, isNotNull);
+      expect(answer.deadline!.day, 14);
+      // Date only. A deadline that carried a clock reading would drift across
+      // midnight into the day before on the next reader's machine.
+      expect(answer.deadline!.hour, 0);
+      expect(answer.deadline!.minute, 0);
+    });
+
+    testWidgets('the deadline can be taken back off', (tester) async {
+      final answer = await run(tester, (t) async {
+        await t.tap(find.byKey(const ValueKey('setup_deadline')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const ValueKey('stepped_date_day_14')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const ValueKey('stepped_date_confirm')));
+        await t.pumpAndSettle();
+
+        await t.tap(find.byKey(const ValueKey('setup_deadline_clear')));
+        await t.pumpAndSettle();
+
+        await t.tap(find.byKey(const ValueKey('setup_confirm')));
+        await t.pumpAndSettle();
+      });
+      expect(answer!.deadline, isNull);
     });
 
     testWidgets('backing out comes back with nothing', (tester) async {

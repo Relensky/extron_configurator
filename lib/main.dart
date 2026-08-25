@@ -35,6 +35,7 @@ import 'schematic_view.dart';
 import 'setup_wizard_view.dart';
 import 'json_editor_view.dart';
 import 'legible_theme.dart';
+import 'lifecycle_view.dart';
 import 'screenshot_tools.dart';
 import 'search_match.dart';
 import 'side_pane.dart';
@@ -1140,6 +1141,8 @@ class _MainDashboardState extends State<MainDashboard> {
         return RackTabView(key: key);
       case AppTab.cost:
         return CostEstimateView(key: key);
+      case AppTab.lifecycle:
+        return LifecycleView(key: key);
       case AppTab.project:
         // Unkeyed, like the catalog: a project spans rooms, so opening a
         // different room must not throw away the job somebody is quoting.

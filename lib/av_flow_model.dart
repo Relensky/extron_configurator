@@ -713,6 +713,91 @@ const double kAvPatchPanelBodyHeight = 34;
 /// numbers are still on every outlet's tooltip.
 const double kAvPatchLabelMinPitch = 26;
 
+// ---------------------------------------------------------------------------
+//  HOW OLD THE GEAR IS
+// ---------------------------------------------------------------------------
+
+/// One unit that used to be in a position, and is not any more.
+///
+/// A room's equipment list says what is in it TODAY. The question a refresh
+/// plan is built from is a different one — how long has that been true — and
+/// nothing in the drawing answered it: swap the projector and the room simply
+/// starts claiming the new model has always been there, which makes the age of
+/// everything in the building unknowable the first time anything is replaced.
+///
+/// So a swap does not overwrite the position's history, it ADDS to it. The unit
+/// coming out is written down with the day it went in and the day it came out,
+/// and the position starts a fresh life for the unit going in. That is the
+/// whole record a replacement cycle needs: how long the last one lasted, and
+/// how long this one has been in.
+class EquipmentSwap {
+  /// The model that came out. Blank when the position was never given one,
+  /// which is worth recording as blank rather than guessing.
+  final String model;
+
+  /// When that unit was installed, or null when nobody ever recorded it.
+  final DateTime? installedOn;
+
+  /// The day it came out — which is the day the replacement went in.
+  final DateTime removedOn;
+
+  /// Why: 'failed', 'end of life', 'room refresh'. Free text, because the
+  /// reason is the part somebody actually wants to read back in five years.
+  final String reason;
+
+  const EquipmentSwap({
+    required this.model,
+    required this.removedOn,
+    this.installedOn,
+    this.reason = '',
+  });
+
+  /// How long that unit lasted, in whole years, or null when it went in on a
+  /// day nobody wrote down.
+  double? get servedYears => installedOn == null
+      ? null
+      : removedOn.difference(installedOn!).inDays / 365.2425;
+
+  Map<String, dynamic> toJson() => {
+    if (model.isNotEmpty) 'model': model,
+    if (installedOn != null) 'installedOn': formatEquipmentDate(installedOn!),
+    'removedOn': formatEquipmentDate(removedOn),
+    if (reason.isNotEmpty) 'reason': reason,
+  };
+
+  factory EquipmentSwap.fromJson(Map<String, dynamic> json) => EquipmentSwap(
+    model: json['model']?.toString() ?? '',
+    installedOn: parseEquipmentDate(json['installedOn']),
+    // A record with no removal date is not a swap at all; today is the only
+    // honest fallback and it keeps a hand-edited file loadable.
+    removedOn: parseEquipmentDate(json['removedOn']) ?? DateTime.now(),
+    reason: json['reason']?.toString() ?? '',
+  );
+}
+
+/// `YYYY-MM-DD`, which is how every date in this app's files is written.
+///
+/// Its own pair here rather than the project's [formatIsoDate] so the drawing
+/// model stays free of the project layer — av_flow_model.dart is imported by
+/// the headless report code and by tests that never build a project.
+String formatEquipmentDate(DateTime when) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${when.year}-${two(when.month)}-${two(when.day)}';
+}
+
+/// The date in [value], with any time of day dropped, or null.
+///
+/// Midnight local, because an install date is a DAY. Carrying a clock reading
+/// around is what turns "installed on the 3rd" into "installed on the 2nd"
+/// for anybody east of the person who typed it.
+DateTime? parseEquipmentDate(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  if (text.isEmpty) return null;
+  final parsed = DateTime.tryParse(text);
+  if (parsed == null) return null;
+  return DateTime(parsed.year, parsed.month, parsed.day);
+}
+
 /// One piece of equipment on the AV canvas.
 class AvNode {
   /// Config section key ('SWITCHERDEVICE_1') for seeded devices, or
@@ -798,6 +883,42 @@ class AvNode {
   /// which is exactly what makes a per-location count untrustworthy.
   final String locationId;
 
+  /// The day the unit currently in this position went in, or null when nobody
+  /// has recorded one.
+  ///
+  /// THE POSITION'S DATE, NOT THE PRODUCT'S. "Projector 1" is a place in the
+  /// room that has held three projectors over twelve years; this is when the
+  /// one in it now was hung. Swapping the model under the box moves the old
+  /// date into [swaps] and starts this one again — see [withSwapRecorded] —
+  /// because the whole point of the figure is to answer "how long has THIS
+  /// unit been running", and a date that survived the swap would answer it
+  /// wrongly and confidently.
+  ///
+  /// Null is a real answer and reads as one everywhere: a room whose install
+  /// dates were never entered is reported as unknown rather than as new, which
+  /// is the difference between a refresh plan that is incomplete and one that
+  /// is wrong.
+  final DateTime? installedOn;
+
+  /// How many years this position's equipment is expected to last, or 0 to use
+  /// the default for its kind.
+  ///
+  /// Per-position rather than per-product because that is where the answer
+  /// actually varies: the same display lasts twice as long on a boardroom wall
+  /// as it does in a lecture hall running eight hours a day, and a lectern PC
+  /// in a lab is replaced on a schedule that has nothing to do with the model
+  /// number. Left at 0 for nearly everything, which takes
+  /// [kDefaultEquipmentLifeYears].
+  final int lifeYears;
+
+  /// Every unit that has been in this position before the one in it now,
+  /// oldest first.
+  ///
+  /// See [EquipmentSwap]. Empty for the overwhelming majority of boxes, which
+  /// is why it costs nothing to carry: an empty list is not written to the
+  /// file at all.
+  final List<EquipmentSwap> swaps;
+
   const AvNode({
     required this.id,
     required this.label,
@@ -814,6 +935,9 @@ class AvNode {
     this.excludeFromCost = false,
     this.excludeFromControl = false,
     this.locationId = kNoLocationId,
+    this.installedOn,
+    this.lifeYears = 0,
+    this.swaps = const [],
   });
 
   /// Numbered jacks rather than a device's connectors — a wall box OR a patch
@@ -854,6 +978,9 @@ class AvNode {
     excludeFromCost: excludeFromCost,
     excludeFromControl: excludeFromControl,
     locationId: locationId,
+    installedOn: installedOn,
+    lifeYears: lifeYears,
+    swaps: swaps,
   );
 
   AvNode copyWith({
@@ -871,6 +998,15 @@ class AvNode {
     bool? excludeFromCost,
     bool? excludeFromControl,
     String? locationId,
+    DateTime? installedOn,
+    int? lifeYears,
+    List<EquipmentSwap>? swaps,
+
+    /// Takes the install date OFF, which `installedOn: null` cannot say —
+    /// a null there means "leave it alone", the same as every other field
+    /// here. Clearing it is a real edit: somebody who typed the wrong year has
+    /// to be able to get back to "nobody knows".
+    bool clearInstalledOn = false,
   }) => AvNode(
     id: id,
     label: label ?? this.label,
@@ -887,7 +1023,49 @@ class AvNode {
     excludeFromCost: excludeFromCost ?? this.excludeFromCost,
     excludeFromControl: excludeFromControl ?? this.excludeFromControl,
     locationId: locationId ?? this.locationId,
+    installedOn:
+        clearInstalledOn ? null : (installedOn ?? this.installedOn),
+    lifeYears: lifeYears ?? this.lifeYears,
+    swaps: swaps ?? this.swaps,
   );
+
+  /// This position with [model] swapped in on [on]: the outgoing unit filed in
+  /// [swaps] and the clock started again for the new one.
+  ///
+  /// The one place a swap's bookkeeping happens, so the Signal Flow tab's
+  /// swap, the Devices tab's, the rack's, the cost estimate's and the project's
+  /// swap-across-every-room all record it the same way. Everything else about
+  /// the box — its connectors, height, watts — is the caller's business; this
+  /// only moves the dates.
+  ///
+  /// A position that was never given a model and never given a date has nothing
+  /// to file, so nothing is filed: a box somebody drew this morning and
+  /// immediately re-pointed at a different product should not grow a history
+  /// entry saying a blank was removed.
+  AvNode withSwapRecorded({
+    required DateTime on,
+    String reason = '',
+  }) {
+    final day = DateTime(on.year, on.month, on.day);
+    final nothingToRecord = model.trim().isEmpty && installedOn == null;
+    return copyWith(
+      swaps: nothingToRecord
+          ? swaps
+          : [
+              ...swaps,
+              EquipmentSwap(
+                model: model,
+                installedOn: installedOn,
+                removedOn: day,
+                reason: reason,
+              ),
+            ],
+      // The new unit went in today, which is the only date anybody knows at
+      // the moment of the swap. It is editable afterwards like any other, for
+      // the case where the swap is being recorded weeks after the van left.
+      installedOn: day,
+    );
+  }
 
   List<AvPort> get leftPorts =>
       ports.where((p) => p.side == PortSide.left).toList();
@@ -1015,6 +1193,9 @@ class AvNode {
     if (excludeFromCost) 'excludeFromCost': true,
     if (excludeFromControl) 'excludeFromControl': true,
     if (locationId.isNotEmpty) 'location': locationId,
+    if (installedOn != null) 'installedOn': formatEquipmentDate(installedOn!),
+    if (lifeYears > 0) 'lifeYears': lifeYears,
+    if (swaps.isNotEmpty) 'swaps': [for (final s in swaps) s.toJson()],
     'ports': ports.map((p) => p.toJson()).toList(),
   };
 
@@ -1036,6 +1217,12 @@ class AvNode {
     excludeFromCost: json['excludeFromCost'] == true,
     excludeFromControl: json['excludeFromControl'] == true,
     locationId: json['location']?.toString() ?? kNoLocationId,
+    installedOn: parseEquipmentDate(json['installedOn']),
+    lifeYears: (json['lifeYears'] as num?)?.toInt() ?? 0,
+    swaps: [
+      for (final s in (json['swaps'] as List? ?? []))
+        if (s is Map) EquipmentSwap.fromJson(Map<String, dynamic>.from(s)),
+    ],
     ports: [
       for (final p in (json['ports'] as List? ?? []))
         if (p is Map) AvPort.fromJson(Map<String, dynamic>.from(p)),

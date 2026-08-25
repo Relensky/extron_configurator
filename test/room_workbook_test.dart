@@ -108,6 +108,9 @@ void main() {
       'Cabling',
       'Racks',
       'Cost Estimate',
+      // Last, and about the room after this job rather than this one: how old
+      // what is already installed is, and the year it falls due.
+      'Replacement Plan',
     ]);
   });
 
@@ -264,6 +267,7 @@ void main() {
       'Cabling',
       'Racks',
       'Cost Estimate',
+      'Replacement Plan',
     ]);
     // Each drawing tab says which drawing it is and carries the picture.
     expect(sheetText(archive, 4), contains('Ceiling'));

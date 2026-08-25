@@ -163,8 +163,15 @@ Future<PickedDate?> showProjectDatePicker(
     // A job can be scheduled against a date that has already gone — a project
     // picked up halfway through is the ordinary case, and a picker that
     // refuses last month makes recording what actually happened impossible.
-    firstDate: DateTime(now.year - 5),
-    lastDate: DateTime(now.year + 10),
+    firstDate: DateTime(now.year - 5, 1, 1),
+    // THE LAST DAY OF THE LAST YEAR, not the first.
+    //
+    // `DateTime(y)` is the 1st of January, so a range ending at
+    // `DateTime(now.year + 10)` offered a final year in which exactly one day
+    // — New Year's Day — could be picked, and eleven months that the grid
+    // greyed out with no explanation. A picker whose last year refuses almost
+    // every cell in it reads as a picker that has stopped working.
+    lastDate: DateTime(now.year + 10, 12, 31),
     helpText: title,
     confirmText: 'Set',
   );

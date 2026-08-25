@@ -380,6 +380,63 @@ Saved with the diagram in `<config>_av_flow.json` - and **every config save
 writes that sidecar**, so saving the project saves the estimate. It is not a
 separate button to forget.
 
+## Equipment age and replacement (the `Lifecycle` tab)
+
+Every other tab is about the room being **built**. This one is about the room
+**as it stands**: how old what is in it is, and the year each piece of it has to
+be replaced. It is the RYG spreadsheet a refresh budget is written from, except
+that it derives itself from the rooms instead of being maintained by hand
+beside them.
+
+It runs off **one field per box**: when the unit currently in that position went
+in. Record it on the Lifecycle tab - each row has its own date button, so
+walking a room is eleven presses rather than eleven device dialogs - or on the
+device dialog itself, beside the connectors and the watts.
+
+The bands are the ones the spreadsheet has always used, counted from the install
+year, which is **year one**:
+
+| Band | Years | What it means |
+|---|---|---|
+| Green | 1 to 5 | in service, nothing to plan |
+| Amber | 6 to 8 | inside the planning window - budget it now |
+| Red | 9 onward | past its life, running on borrowed time |
+
+Eight years is the default cycle. A position that genuinely differs - a lectern
+PC in a teaching lab, a display in a boardroom nobody uses - carries its own
+**Life (years)**, and bands the same way: amber for its last three years, red
+past the end.
+
+**No install date is `No install date`, not "new".** A room whose dates were
+never entered has to read as unanswered, because "unsurveyed" and "brand new"
+lead to opposite decisions. The number of undated items is on the room and on
+the building, so the survey has a to-do list.
+
+Replacement cost comes off the catalog at the job's pricing tier. A model the
+catalog does not price is reported as unpriced rather than as free.
+
+### Swapping a box out
+
+A swap does not overwrite the position's history, it **adds** to it. The unit
+coming out is filed with the day it went in and the day it came out, and the
+position starts a fresh life for the unit going in. That happens wherever a
+swap happens - the Signal Flow tab, the Devices tab, the rack, the cost
+estimate, and the project's swap-across-every-room - because the bookkeeping is
+in the one function all of them go through. Re-picking the model already under
+a box is a **correction**, not a replacement, and leaves the dates alone.
+
+What that buys is the question a refresh policy is actually argued over: how
+long the last one lasted. It is on the room's `Equipment Replaced Before`
+table.
+
+### The building's plan
+
+The Project tab's **Lifecycle** pane rolls every room up into one sheet: a row
+per room, a column per year, counting up through the room's life and carrying
+the replacement figure in the year it falls due. A room reads as its **worst**
+item - not its average, because a room with one dead projector and nine new
+speakers is a room that does not work.
+
 ## Building projects (the `Project` tab)
 
 A room is one config. A **job** is usually a building - eight classrooms, two
@@ -623,12 +680,48 @@ tab's menu toggles both ways; the Project tab's button does not, because a marke
 product no longer appears on the gap list at all - there would be no row to press
 - and the confirm text says where to go instead.
 
+### Who furnishes it, who installs it
+
+A quote says what a building costs. It does not say **whose job** each part of
+it is, and that is the document every one of these projects argues over: the
+screens are bought by the owner and hung by the electrical contractor, the
+projector boxes are both the contractor's, the speaker wire is pulled by the
+contractor and the speakers are ours, and the PC monitors are nobody's to
+install because they sit on a desk. Get one wrong and the day the trades arrive
+is the day it is found.
+
+The **Responsibility** pane is that matrix. One row per piece of scope, one
+column per room:
+
+| Column | What it holds |
+|---|---|
+| Scope | the piece of work, as it is named to the contractor |
+| Furnished by / Installed by | free text, with Owner / Contractor / Integrator / Vendor / N/A / TBD one press away - a real matrix names actual parties |
+| Equipment needed by | when the contractor needs it on site, which is usually earlier than the job's own delivery deadline |
+| One column per room | how many, typed once; the totals row is the number a bid is written against |
+| What the work is | the words it gets read in on site - the field that settles arguments |
+| Product, Notes | the cutsheet, and whatever is still open |
+
+**Add the usual lines** starts it from the ten that are true of nearly every
+job in this shop; edit and delete from there. Nothing is derived from the
+rooms - the app knows what equipment is on the drawing, it cannot know whose
+contract covers pulling the cable to it, and inventing an answer to that is
+worse than an empty cell. A line with nobody named on it is called out on the
+pane and on its own table in the export, because a matrix issued with blanks
+reads as agreed.
+
+Two ways out, for two audiences: a **spreadsheet**, which is what a contractor
+types a price into, and a **picture**, for a submittal or an email. The picture
+is produced from a preview you look at first - on white, with the totals row and
+none of the pane's own buttons on it.
+
 ### What comes out
 
 **Workbook** writes one `.xlsx`: a Summary (building total, a row per room, a
 vendor breakdown, and the list of things to check before it goes out), a Master
-Parts sheet, a tab per vendor, and a tab per room carrying that room's estimate
-in full. The room tabs are dealt from the same `costReportSections` the room's
+Parts sheet, a Responsibility sheet when the matrix has lines on it, a
+Replacement Plan sheet when anything on the job has been dated, a tab per
+vendor, and a tab per room carrying that room's estimate in full. The room tabs are dealt from the same `costReportSections` the room's
 own Cost tab uses, so a room's numbers are identical in both books.
 
 **Quote requests** writes one `.xlsx` **per vendor** into a folder - the file
@@ -1106,6 +1199,26 @@ a straight line between two pieces of gear:
   somebody has to install, instead of both being implied by a line straight
   through the middle of the room.
 
+### Counting the cable per place
+
+"How much cable does this room need" is the purchase order. "How many lines come
+up in the floor box" is what a rough-in is bid against, and they are different
+numbers - so the run schedule carries both. **Cable Counts by Type and Length**
+is the room's order; **Cable Counts by Location** is the same runs broken out by
+the place each end lands in, each location totalling under itself and the room
+totalling at the foot.
+
+A run is counted at **each end** when its ends are in different places, because
+both ends are a termination somebody has to make - two ports, two patch leads,
+two pieces of work. A run with both ends in one place counts once there, since
+it never leaves the box. That is why the column is `Ends here` and not `Runs`:
+the location column deliberately adds up to more than the room's cable count,
+and a column called `Runs` that did that would look like an error.
+
+Runs on boxes nobody has placed yet are listed under `(no location recorded)`
+rather than dropped - the gap is exactly the list of devices still needing a
+location.
+
 ### Jack numbering
 
 A jack number is the room's addressing scheme: an installer at the plate finds
@@ -1187,8 +1300,10 @@ question:
 | Control | the control system as configured, plus the room's estimated power draw, current at 120/208 V, heat load and per-device power schedule |
 | AV Flow | cable schedule (every run with its source, destination and the location of each end), pack list (with rack U, in/out, watts and location), jack schedule, connector utilization |
 | Locations | what is where, jacks and runs counted per location and grouped by mounting surface, runs per cable label, the screen and shade runs, and the floor plan's callouts |
+| Cabling | the cabling drawing's run schedule, the cable counts by type and length, and the same counts broken out per location |
 | Racks | how full and how hot each frame is, and what sits on which U |
 | Cost Estimate | equipment, other items, fees, tax, total |
+| Replacement Plan | how old everything already in the room is, the year each piece falls due, and what has been replaced before |
 
 Every sheet is dealt from the same section builders the single-sheet exports
 use, so a figure cannot differ between the two buttons. The diagram image can

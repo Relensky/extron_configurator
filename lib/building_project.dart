@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import 'av_device_library.dart' show AvDeviceLibrary;
+import 'responsibility_matrix.dart';
 
 /// ============================================================================
 ///  THE BUILDING PROJECT
@@ -1166,6 +1167,14 @@ class BuildingProject {
   final List<ProjectRoomRef> rooms;
   final List<ProjectVendor> vendors;
 
+  /// Whose job each piece of scope is - see [ResponsibilityItem].
+  ///
+  /// On the PROJECT rather than on each room because that is the level it is
+  /// agreed at: one matrix is issued for the building and the contractor bids
+  /// the totals off it. A per-room copy would be fourteen documents that have
+  /// to agree with each other.
+  final List<ResponsibilityItem> responsibility;
+
   /// Core component key (see [masterPartKey]) -> vendor id, for the parts
   /// somebody has pinned by hand. Beats the manufacturer rules; an entry whose
   /// vendor has since been deleted resolves to untagged rather than to a
@@ -1267,6 +1276,7 @@ class BuildingProject {
   int _trackCounter;
   int _spareCounter;
   int _planCounter;
+  int _responsibilityCounter;
 
   BuildingProject({
     this.name = '',
@@ -1277,6 +1287,7 @@ class BuildingProject {
     this.currency = r'$',
     List<ProjectRoomRef>? rooms,
     List<ProjectVendor>? vendors,
+    List<ResponsibilityItem>? responsibility,
     Map<String, String>? partVendors,
     this.deliveryDeadline,
     Map<String, int>? partLeadTimes,
@@ -1295,8 +1306,10 @@ class BuildingProject {
     int trackCounter = 0,
     int spareCounter = 0,
     int planCounter = 0,
+    int responsibilityCounter = 0,
   }) : rooms = rooms ?? [],
        vendors = vendors ?? [],
+       responsibility = responsibility ?? [],
        partVendors = partVendors ?? {},
        partLeadTimes = partLeadTimes ?? {},
        partNeedBy = partNeedBy ?? {},
@@ -1312,7 +1325,8 @@ class BuildingProject {
        _todoCounter = todoCounter,
        _trackCounter = trackCounter,
        _spareCounter = spareCounter,
-       _planCounter = planCounter;
+       _planCounter = planCounter,
+       _responsibilityCounter = responsibilityCounter;
 
   bool get isEmpty =>
       rooms.isEmpty &&
@@ -1344,6 +1358,7 @@ class BuildingProject {
   String nextTrackId() => 'track${++_trackCounter}';
   String nextSpareId() => 'spare${++_spareCounter}';
   String nextPlanId() => 'plan${++_planCounter}';
+  String nextResponsibilityId() => 'resp${++_responsibilityCounter}';
 
   // -------------------------------------------------------------------------
   //  SPARES THE JOB BUYS
@@ -1689,6 +1704,111 @@ class BuildingProject {
   DateTime? trackDeadlineForPart(String partKey) =>
       trackForPart(partKey)?.deadline ?? deliveryDeadline;
 
+  // -------------------------------------------------------------------------
+  //  WHOSE JOB EACH PIECE OF IT IS
+  // -------------------------------------------------------------------------
+  //  See responsibility_matrix.dart. The list is edited the way the vendors
+  //  and the phases are — add, replace, remove — so the pane stays a form and
+  //  the rules about ids stay here with the ids.
+
+  ResponsibilityItem? responsibilityById(String id) {
+    for (final item in responsibility) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
+  /// Adds a line to the matrix. A blank scope is named for its position rather
+  /// than refused, so a row added by mistake is a row somebody can see and
+  /// delete instead of a press that appeared to do nothing.
+  ResponsibilityItem addResponsibilityItem(
+    String scope, {
+    String furnishedBy = '',
+    String installedBy = '',
+    String neededBy = '',
+    String work = '',
+    String productLink = '',
+    String notes = '',
+  }) {
+    final item = ResponsibilityItem(
+      id: nextResponsibilityId(),
+      scope: scope.trim().isEmpty
+          ? 'Scope item ${responsibility.length + 1}'
+          : scope.trim(),
+      furnishedBy: furnishedBy,
+      installedBy: installedBy,
+      neededBy: neededBy,
+      work: work,
+      productLink: productLink,
+      notes: notes,
+    );
+    responsibility.add(item);
+    return item;
+  }
+
+  void updateResponsibilityItem(ResponsibilityItem item) {
+    final i = responsibility.indexWhere((r) => r.id == item.id);
+    if (i >= 0) responsibility[i] = item;
+  }
+
+  void removeResponsibilityItem(String id) {
+    responsibility.removeWhere((r) => r.id == id);
+  }
+
+  /// Moves a line up or down the sheet by [delta] places.
+  ///
+  /// The ORDER IS CONTENT on a document like this: it is read top to bottom on
+  /// site and it is grouped the way the work is sequenced — everything in the
+  /// ceiling together, everything in the rack together — so it has to be
+  /// arrangeable rather than left in the order somebody happened to type.
+  void moveResponsibilityItem(String id, int delta) {
+    final from = responsibility.indexWhere((r) => r.id == id);
+    if (from < 0) return;
+    final to = (from + delta).clamp(0, responsibility.length - 1);
+    if (to == from) return;
+    responsibility.insert(to, responsibility.removeAt(from));
+  }
+
+  /// Puts the usual lines on an empty matrix, skipping any scope already
+  /// there. Returns how many were added.
+  ///
+  /// Skipping by name rather than refusing outright so this can be pressed on
+  /// a half-filled matrix to top it up — which is what somebody does after
+  /// deleting the four lines that did not apply and wondering what else there
+  /// was.
+  int addStarterResponsibilityItems() {
+    final have = {
+      for (final item in responsibility) item.scope.trim().toLowerCase(),
+    };
+    var added = 0;
+    for (final starter in kStarterResponsibilityItems) {
+      if (have.contains(starter.scope.toLowerCase())) continue;
+      addResponsibilityItem(
+        starter.scope,
+        furnishedBy: starter.furnishedBy,
+        installedBy: starter.installedBy,
+        neededBy: 'TBD',
+        work: starter.work,
+      );
+      added++;
+    }
+    return added;
+  }
+
+  /// The room columns the matrix is drawn with, in project order.
+  ///
+  /// Named from the room reference alone rather than from a loaded config: the
+  /// matrix is edited on a job whose rooms may not all read, and a column that
+  /// vanished because a share was offline would take the quantities under it
+  /// out of view.
+  List<({String id, String name})> responsibilityRoomColumns() => [
+    for (final room in rooms)
+      (
+        id: room.id,
+        name: room.label.trim().isEmpty ? room.fallbackName : room.label.trim(),
+      ),
+  ];
+
   ProjectTrack addTrack(String name, {DateTime? deadline, String notes = ''}) {
     final track = ProjectTrack(
       id: nextTrackId(),
@@ -1925,6 +2045,8 @@ class BuildingProject {
     'currency': currency,
     'rooms': [for (final r in rooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
+    if (responsibility.isNotEmpty)
+      'responsibility': [for (final r in responsibility) r.toJson()],
     if (partVendors.isNotEmpty) 'partVendors': partVendors,
     if (deliveryDeadline != null)
       'deliveryDeadline': formatIsoDate(deliveryDeadline!),
@@ -1951,6 +2073,8 @@ class BuildingProject {
     if (_trackCounter > 0) 'trackCounter': _trackCounter,
     if (_spareCounter > 0) 'spareCounter': _spareCounter,
     if (_planCounter > 0) 'planCounter': _planCounter,
+    if (_responsibilityCounter > 0)
+      'responsibilityCounter': _responsibilityCounter,
   };
 
   factory BuildingProject.fromJson(Map<String, dynamic> json) {
@@ -1962,6 +2086,14 @@ class BuildingProject {
       for (final v in (json['vendors'] as List? ?? []))
         if (v is Map) ProjectVendor.fromJson(Map<String, dynamic>.from(v)),
     ];
+    // A line with no scope on it names nothing and can be neither agreed nor
+    // bid, so it is dropped the way an empty note is.
+    final responsibility = [
+      for (final r in (json['responsibility'] as List? ?? []))
+        if (r is Map && r['scope']?.toString().trim().isNotEmpty == true)
+          ResponsibilityItem.fromJson(Map<String, dynamic>.from(r)),
+    ];
+
     final pins = <String, String>{};
     final rawPins = json['partVendors'];
     if (rawPins is Map) {
@@ -2079,6 +2211,7 @@ class BuildingProject {
           : r'$',
       rooms: rooms,
       vendors: vendors,
+      responsibility: responsibility,
       partVendors: pins,
       deliveryDeadline: parseIsoDate(json['deliveryDeadline']),
       partLeadTimes: leadTimes,
@@ -2102,6 +2235,10 @@ class BuildingProject {
       planCounter: [
         (json['planCounter'] as num?)?.toInt() ?? 0,
         highest(plans.map((p) => p.id), 'plan'),
+      ].reduce((a, b) => a > b ? a : b),
+      responsibilityCounter: [
+        (json['responsibilityCounter'] as num?)?.toInt() ?? 0,
+        highest(responsibility.map((r) => r.id), 'resp'),
       ].reduce((a, b) => a > b ? a : b),
       trackCounter: [
         (json['trackCounter'] as num?)?.toInt() ?? 0,
@@ -2163,6 +2300,7 @@ class BuildingProject {
     currency: currency,
     rooms: List<ProjectRoomRef>.from(rooms),
     vendors: List<ProjectVendor>.from(vendors),
+    responsibility: List<ResponsibilityItem>.from(responsibility),
     partVendors: Map<String, String>.from(partVendors),
     deliveryDeadline: deliveryDeadline,
     partLeadTimes: Map<String, int>.from(partLeadTimes),
@@ -2181,6 +2319,7 @@ class BuildingProject {
     trackCounter: _trackCounter,
     spareCounter: _spareCounter,
     planCounter: _planCounter,
+    responsibilityCounter: _responsibilityCounter,
   );
 }
 

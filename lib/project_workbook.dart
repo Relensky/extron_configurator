@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 
+import 'av_device_library.dart';
 import 'building_project.dart';
 import 'control_gaps.dart';
 import 'cost_estimate.dart';
+import 'equipment_lifecycle.dart';
 import 'project_estimate.dart';
 import 'project_schedule.dart';
 import 'report_tools.dart';
+import 'responsibility_matrix.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -47,6 +50,16 @@ const String kProjectSparesSheet = 'Spares';
 
 /// The tab purchasing works down: what to order, in the order to order it.
 const String kProjectTimelineSheet = 'Order Timeline';
+
+/// Whose job each piece of scope is. Added only when the matrix has lines on
+/// it — a blank sheet headed "Roles and Responsibilities" in an issued
+/// workbook reads as "nothing is anybody's job".
+const String kProjectResponsibilitySheet = 'Responsibility';
+
+/// The building's replacement plan: how old every room's equipment is and the
+/// year each of it falls due. Added only when something on the job has been
+/// dated.
+const String kProjectLifecycleSheet = 'Replacement Plan';
 
 /// Who changed what, and when. Added only when there is something on it.
 ///
@@ -1172,6 +1185,13 @@ List<ReportSection> vendorPackageSections(
 Uint8List buildProjectWorkbookBytes({
   required ProjectEstimate estimate,
   DateTime? generated,
+
+  /// The catalog, for pricing the replacement plan. Optional because the
+  /// estimate does not carry one and a caller that only wants the quote should
+  /// not have to find one — without it the plan still says WHEN each room
+  /// falls due, and simply prices nothing.
+  AvDeviceLibrary? library,
+  PricingTier tier = PricingTier.msrp,
 }) {
   final stamp = generated ?? DateTime.now();
   final title = _projectTitle(estimate.project);
@@ -1233,6 +1253,44 @@ Uint8List buildProjectWorkbookBytes({
       sheetName: tab(kProjectControlSheet),
       title: '$title - devices without a control module',
       sections: gaps,
+      generated: stamp,
+    ));
+  }
+
+  // Whose job each piece of scope is. On the workbook because it is agreed
+  // with the contractor off the same document the quantities are read from,
+  // and a matrix that only exists as a separate file is one that goes out of
+  // step with the rooms the moment either changes.
+  final matrix = responsibilityMatrixSections(
+    estimate.project.responsibility,
+    roomNames: estimate.project.responsibilityRoomColumns(),
+  );
+  if (matrix.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectResponsibilitySheet),
+      title: '$title - roles and responsibilities',
+      sections: matrix,
+      generated: stamp,
+    ));
+  }
+
+  // The job AFTER this one: what is already in the building, and the year it
+  // has to come out. On the workbook because that is the document a budget
+  // request is assembled from, and beside the order timeline because the two
+  // are the same calendar read forward and back.
+  final lifecycle = buildingLifecycleSections(
+    buildProjectLifecycle(
+      estimate: estimate,
+      library: library,
+      tier: tier,
+      asOf: stamp,
+    ),
+  );
+  if (lifecycle.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectLifecycleSheet),
+      title: '$title - when it has to be replaced',
+      sections: lifecycle,
       generated: stamp,
     ));
   }

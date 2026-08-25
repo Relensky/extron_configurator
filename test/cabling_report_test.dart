@@ -56,6 +56,138 @@ void main() {
   ReportSection sectionNamed(List<ReportSection> all, String title) =>
       all.firstWhere((s) => s.title == title);
 
+  // ---------------------------------------------------------------------
+  //  THE COUNT PER PLACE IN THE ROOM
+  // ---------------------------------------------------------------------
+  //  "How much cable does this room need" is the purchase order. "How many
+  //  lines come up in the floor box" is what a rough-in is bid against, and
+  //  they are different numbers because a run is a termination at BOTH ends.
+
+  group('the cable count per location', () {
+    test('counts a run at each end, and totals the room once', () {
+      final p = room(runs: 3);
+      final section = sectionNamed(
+        cablingSections(buildAvFlowModel(p)),
+        'Cable Counts by Location',
+      );
+
+      final lectern = section.rows.firstWhere(
+        (r) => r[0] == 'Lectern' && r[2] == 'All cabling at this location',
+      );
+      final rack = section.rows.firstWhere(
+        (r) => r[0] == 'Rack' && r[2] == 'All cabling at this location',
+      );
+      // Three runs, both ends of each in a different place: three at each.
+      expect(lectern[4], 3);
+      expect(rack[4], 3);
+
+      // The room's own figure is the cable count, NOT the sum of the blocks -
+      // which is the whole reason the column is called 'Ends here'.
+      final whole = section.rows.last;
+      expect(whole[0], 'Whole room');
+      expect(whole[4], 3);
+      expect(section.header[4], 'Ends here');
+    });
+
+    test('a run with both ends in one place is counted there once', () {
+      final p = room(runs: 0);
+      p.addAvLocation(const RoomLocation(id: 'LOC_1', name: 'Lectern'));
+      p.addAvNode(device('A', 'LOC_1'));
+      p.addAvNode(device('B', 'LOC_1'));
+      p.addAvCable(
+        fromNodeId: 'A',
+        fromPortId: 'p1',
+        toNodeId: 'B',
+        toPortId: 'p1',
+        signal: SignalType.network,
+      );
+
+      final section = sectionNamed(
+        cablingSections(buildAvFlowModel(p)),
+        'Cable Counts by Location',
+      );
+      final lectern = section.rows.firstWhere(
+        (r) => r[0] == 'Lectern' && r[2] == 'All cabling at this location',
+      );
+      expect(lectern[4], 1);
+    });
+
+    test('breaks each location down by cable type, and says which surface', () {
+      final p = room(runs: 0);
+      // Zoned deliberately: the surface is on every ROW rather than only in a
+      // heading, because a spreadsheet gets sorted and a heading does not
+      // survive that.
+      // Fresh ids: the helper above already made an unzoned LOC_1 and LOC_2,
+      // and re-adding those would leave the unzoned pair in place.
+      p.addAvLocation(
+        const RoomLocation(
+          id: 'LOC_3',
+          name: 'Lectern box',
+          zone: RoomZone.lectern,
+        ),
+      );
+      p.addAvLocation(
+        const RoomLocation(id: 'LOC_4', name: 'Closet rack', zone: RoomZone.rack),
+      );
+      for (var i = 0; i < 2; i++) {
+        p.addAvNode(device('A$i', 'LOC_3'));
+        p.addAvNode(device('B$i', 'LOC_4'));
+        p.addAvCable(
+          fromNodeId: 'A$i',
+          fromPortId: 'p1',
+          toNodeId: 'B$i',
+          toPortId: 'p1',
+          signal: SignalType.network,
+        );
+      }
+
+      final section = sectionNamed(
+        cablingSections(buildAvFlowModel(p)),
+        'Cable Counts by Location',
+      );
+      final typed = section.rows.firstWhere(
+        (r) => r[0] == 'Lectern box' && r[2] == 'Network',
+      );
+      expect(typed[1], 'LECT');
+      expect(typed[4], 2);
+      // Zone order, not insertion order - a rough-in is read one mounting
+      // surface at a time, and RoomZone puts the rack ahead of the lectern.
+      final rack = section.rows.indexWhere((r) => r[0] == 'Closet rack');
+      final lectern = section.rows.indexWhere((r) => r[0] == 'Lectern box');
+      expect(rack, isNonNegative);
+      expect(rack, lessThan(lectern));
+    });
+
+    test('runs on unplaced boxes are named rather than dropped', () {
+      final p = room(runs: 0);
+      p.addAvNode(device('A', ''));
+      p.addAvNode(device('B', ''));
+      p.addAvCable(
+        fromNodeId: 'A',
+        fromPortId: 'p1',
+        toNodeId: 'B',
+        toPortId: 'p1',
+        signal: SignalType.network,
+      );
+
+      final section = sectionNamed(
+        cablingSections(buildAvFlowModel(p)),
+        'Cable Counts by Location',
+      );
+      expect(
+        section.rows.any((r) => r[0] == '(no location recorded)'),
+        isTrue,
+        reason: 'a count that silently omits them does not add up to the room',
+      );
+    });
+
+    test('a room with no cabling grows no table', () {
+      final p = room(runs: 0);
+      final titles = cablingSections(buildAvFlowModel(p)).map((s) => s.title);
+      expect(titles, isNot(contains('Cable Counts by Location')));
+    });
+  });
+
   group('the cable run schedule', () {
     test('lists the runs with the counts read off the room', () {
       final p = room(runs: 3);
@@ -342,6 +474,9 @@ void main() {
         'Cabling',
         'Racks',
         'Cost Estimate',
+        // Last, and about the room AFTER this job: how old what is already
+        // installed is, and the year each piece of it falls due.
+        'Replacement Plan',
       ]);
     });
 

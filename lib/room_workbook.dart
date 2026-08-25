@@ -4,6 +4,8 @@ import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'av_flow_report.dart';
 import 'cost_estimate.dart';
+import 'equipment_lifecycle.dart';
+import 'project_estimate.dart' show roomCodeFromConfig;
 import 'report_tools.dart';
 import 'schematic_view.dart' show SchematicModel, reportSections;
 import 'xlsx_writer.dart';
@@ -50,6 +52,10 @@ const List<String> kRoomWorkbookSheets = [
   'Cabling',
   'Racks',
   'Cost Estimate',
+  // What is already in the room and when it has to come out again. Last
+  // because it is the only sheet that is not about the job being quoted — it
+  // is about the job after this one.
+  'Replacement Plan',
 ];
 
 /// Builds the workbook. [av] is the resolved AV diagram (buildAvFlowModel);
@@ -175,6 +181,26 @@ Uint8List buildRoomWorkbookBytes({
         // that cannot be commissioned when it arrives.
         ...driverGapSections(provider, av),
       ],
+      generated: stamp,
+    ),
+    buildStackedReportSheet(
+      sheetName: kRoomWorkbookSheets[6],
+      title: title,
+      sections: _orPlaceholder(
+        roomLifecycleSections(
+          buildRoomLifecycle(
+            model: av,
+            roomName: roomCodeFromConfig(provider.roomConfig),
+            library: provider.avDeviceLibrary,
+            tier: provider.pricingTier,
+            asOf: stamp,
+          ),
+          currency: provider.currencySymbol,
+        ),
+        'Replacement Plan',
+        'Nothing to age. The replacement plan is built from the equipment on '
+            'the signal flow and the date each piece of it went in.',
+      ),
       generated: stamp,
     ),
   ]);
