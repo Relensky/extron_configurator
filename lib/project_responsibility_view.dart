@@ -575,24 +575,19 @@ class _MatrixGrid extends StatelessWidget {
 
     // WHAT THE LINE SAYS, WHERE THE LINE IS. The prose lives in a dialog, so
     // the sheet itself used to be the one place it could not be read.
+    //
+    // A PLAIN MESSAGE, and never a styled one. Flutter's tooltip paints itself
+    // WHITE on a dark theme and dark grey on a light one, and picks its text
+    // colour to match; a colour chosen here instead was light text on the
+    // white box - a tooltip that opened as an empty white rectangle. The
+    // default is the only thing that is right on both themes.
     final described = Tooltip(
-      richMessage: WidgetSpan(
-        alignment: PlaceholderAlignment.baseline,
-        baseline: TextBaseline.alphabetic,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Text(
-            [
-              item.scope,
-              if (item.work.trim().isNotEmpty) item.work.trim(),
-              if (item.notes.trim().isNotEmpty) 'Notes: ${item.notes.trim()}',
-              if (item.productName.isNotEmpty)
-                'Cutsheet: ${item.productName}',
-            ].join('\n\n'),
-            style: TextStyle(color: theme.colorScheme.onInverseSurface),
-          ),
-        ),
-      ),
+      message: [
+        item.scope,
+        if (item.work.trim().isNotEmpty) item.work.trim(),
+        if (item.notes.trim().isNotEmpty) 'Notes: ${item.notes.trim()}',
+        if (item.productName.isNotEmpty) 'Cutsheet: ${item.productName}',
+      ].join('\n\n'),
       child: head,
     );
 

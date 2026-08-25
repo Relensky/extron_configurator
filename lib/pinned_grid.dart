@@ -62,11 +62,39 @@ class PinnedGrid extends StatefulWidget {
   final Widget header;
 
   /// The frozen column's body, [frozenWidth] wide. Moves up and down only.
-  final Widget frozen;
+  ///
+  /// Null on a grid built row at a time - see [rowCount].
+  final Widget? frozen;
 
   /// The cells, [bodyWidth] by [bodyHeight]. Moves both ways, and is the one
-  /// the reader actually drags.
-  final Widget body;
+  /// the reader actually drags. Null on a grid built row at a time.
+  final Widget? body;
+
+  // ---------------------------------------------------------------------------
+  //  THE LAZY HALF
+  // ---------------------------------------------------------------------------
+  //  A grid laid out as two finished widgets builds every cell it has, whether
+  //  or not any of them are on screen. That is fine for a sheet of a dozen
+  //  rows and it is not fine for the replacement plan, where a building of
+  //  twenty-four rooms with several replacement dates each is two hundred rows
+  //  of fourteen cells - three thousand tooltips and containers built to show
+  //  the eight rows that fit in the frame.
+  //
+  //  So a caller that can produce its rows ONE AT A TIME says so, and gets a
+  //  pair of builders instead. Every row is the same height, which is what
+  //  lets both halves scroll in step with no measuring.
+
+  /// How many rows the body has, or null to pass [frozen] and [body] whole.
+  final int? rowCount;
+
+  /// The height of every row. Required with [rowCount].
+  final double rowExtent;
+
+  /// One row of the frozen column, [frozenWidth] wide by [rowExtent] tall.
+  final IndexedWidgetBuilder? frozenRowBuilder;
+
+  /// One row of the cells, [bodyWidth] wide by [rowExtent] tall.
+  final IndexedWidgetBuilder? bodyRowBuilder;
 
   const PinnedGrid({
     super.key,
@@ -76,10 +104,21 @@ class PinnedGrid extends StatefulWidget {
     required this.bodyHeight,
     required this.corner,
     required this.header,
-    required this.frozen,
-    required this.body,
+    this.frozen,
+    this.body,
+    this.rowCount,
+    this.rowExtent = 0,
+    this.frozenRowBuilder,
+    this.bodyRowBuilder,
     this.maxHeight,
-  });
+  }) : assert(
+         (frozen != null && body != null) ||
+             (rowCount != null &&
+                 rowExtent > 0 &&
+                 frozenRowBuilder != null &&
+                 bodyRowBuilder != null),
+         'Give PinnedGrid either finished halves or row builders',
+       );
 
   @override
   State<PinnedGrid> createState() => _PinnedGridState();
@@ -160,6 +199,91 @@ class _PinnedGridState extends State<PinnedGrid> {
             ? const ClampingScrollPhysics()
             : const NeverScrollableScrollPhysics();
 
+        final lazy = widget.rowCount != null;
+
+        // THE FROZEN COLUMN'S BODY. Lazily, a list of fixed-height rows with
+        // its own scrolling turned off - it is dragged along by the cells.
+        final Widget frozenBody = lazy
+            ? ListView.builder(
+                controller: _frozen,
+                physics: const NeverScrollableScrollPhysics(),
+                itemExtent: widget.rowExtent,
+                itemCount: widget.rowCount,
+                padding: EdgeInsets.only(bottom: scrollsX ? _kBar : 0),
+                itemBuilder: widget.frozenRowBuilder!,
+              )
+            : SingleChildScrollView(
+                controller: _frozen,
+                physics: const NeverScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    widget.frozen!,
+                    if (scrollsX) const SizedBox(height: _kBar),
+                  ],
+                ),
+              );
+
+        // THE CELLS. Both bars are hung outside both scroll views, so each one
+        // is drawn against the frame the reader sees rather than against the
+        // far edge of a sheet that is mostly off screen. Which of the two
+        // scroll views is on the outside differs between the shapes, so the
+        // notification depths do too.
+        final Widget cells = lazy
+            ? Scrollbar(
+                controller: _rows,
+                thumbVisibility: scrollsY,
+                notificationPredicate: (n) => n.depth == 1,
+                child: Scrollbar(
+                  controller: _cells,
+                  thumbVisibility: scrollsX,
+                  notificationPredicate: (n) => n.depth == 0,
+                  child: SingleChildScrollView(
+                    controller: _cells,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: bodyWidth,
+                      child: ListView.builder(
+                        controller: _rows,
+                        physics: rowPhysics,
+                        itemExtent: widget.rowExtent,
+                        itemCount: widget.rowCount,
+                        padding: EdgeInsets.only(bottom: scrollsX ? _kBar : 0),
+                        itemBuilder: widget.bodyRowBuilder!,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : Scrollbar(
+                controller: _rows,
+                thumbVisibility: scrollsY,
+                notificationPredicate: (n) => n.depth == 0,
+                child: Scrollbar(
+                  controller: _cells,
+                  thumbVisibility: scrollsX,
+                  notificationPredicate: (n) => n.depth == 1,
+                  child: SingleChildScrollView(
+                    controller: _rows,
+                    physics: rowPhysics,
+                    child: SingleChildScrollView(
+                      controller: _cells,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: bodyWidth,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            widget.body!,
+                            if (scrollsX) const SizedBox(height: _kBar),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+
         return SizedBox(
           height: widget.headerHeight + viewHeight,
           child: Row(
@@ -171,20 +295,7 @@ class _PinnedGridState extends State<PinnedGrid> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SizedBox(height: widget.headerHeight, child: widget.corner),
-                    SizedBox(
-                      height: viewHeight,
-                      child: SingleChildScrollView(
-                        controller: _frozen,
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            widget.frozen,
-                            if (scrollsX) const SizedBox(height: _kBar),
-                          ],
-                        ),
-                      ),
-                    ),
+                    SizedBox(height: viewHeight, child: frozenBody),
                   ],
                 ),
               ),
@@ -204,42 +315,7 @@ class _PinnedGridState extends State<PinnedGrid> {
                         ),
                       ),
                     ),
-                    SizedBox(
-                      height: viewHeight,
-                      // Both bars are hung outside both scroll views, so each
-                      // one is drawn against the frame the reader sees rather
-                      // than against the far edge of a sheet that is mostly
-                      // off screen.
-                      child: Scrollbar(
-                        controller: _rows,
-                        thumbVisibility: scrollsY,
-                        notificationPredicate: (n) => n.depth == 0,
-                        child: Scrollbar(
-                          controller: _cells,
-                          thumbVisibility: scrollsX,
-                          notificationPredicate: (n) => n.depth == 1,
-                          child: SingleChildScrollView(
-                            controller: _rows,
-                            physics: rowPhysics,
-                            child: SingleChildScrollView(
-                              controller: _cells,
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: bodyWidth,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    widget.body,
-                                    if (scrollsX) const SizedBox(height: _kBar),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    SizedBox(height: viewHeight, child: cells),
                   ],
                 ),
               ),

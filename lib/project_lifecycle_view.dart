@@ -364,65 +364,60 @@ class _YearGrid extends StatelessWidget {
                   ),
               ],
             ),
-            frozen: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final line in lines)
-                  SizedBox(
-                    height: rowHeight,
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        // A date line is indented under the room it belongs
-                        // to, so the eye reads the block as one room rather
-                        // than as four.
-                        left: line.group == null ? 0 : gap * 1.5,
-                        right: gap,
-                        bottom: 2,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: line.group == null
-                            ? Text(
-                                line.room.roomName,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
-                              )
-                            : Text(
-                                '${line.group!.items.length} item'
-                                '${line.group!.items.length == 1 ? '' : 's'} '
-                                'due ${line.group!.dueYear}',
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            body: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final line in lines)
-                  line.group == null
-                      ? _GridRow(
-                          room: line.room,
-                          years: years,
-                          currency: building.currency,
-                          columnWidth: yearColumn,
-                          rowHeight: rowHeight,
+            // ROW AT A TIME. A building with several replacement dates per
+            // room is two hundred rows of fourteen cells, and the frame shows
+            // eight of them - see [PinnedGrid].
+            rowCount: lines.length,
+            rowExtent: rowHeight,
+            frozenRowBuilder: (context, i) {
+              final line = lines[i];
+              return Padding(
+                padding: EdgeInsets.only(
+                  // A date line is indented under the room it belongs to, so
+                  // the eye reads the block as one room rather than as four.
+                  left: line.group == null ? 0 : gap * 1.5,
+                  right: gap,
+                  bottom: 2,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: line.group == null
+                      ? Text(
+                          line.room.roomName,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
                         )
-                      : _TimelineRow(
-                          room: line.room,
-                          group: line.group!,
-                          years: years,
-                          currency: building.currency,
-                          columnWidth: yearColumn,
-                          rowHeight: rowHeight,
+                      : Text(
+                          '${line.group!.items.length} item'
+                          '${line.group!.items.length == 1 ? '' : 's'} '
+                          'due ${line.group!.dueYear}',
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-              ],
-            ),
+                ),
+              );
+            },
+            bodyRowBuilder: (context, i) {
+              final line = lines[i];
+              return line.group == null
+                  ? _GridRow(
+                      room: line.room,
+                      years: years,
+                      currency: building.currency,
+                      columnWidth: yearColumn,
+                      rowHeight: rowHeight,
+                    )
+                  : _TimelineRow(
+                      room: line.room,
+                      group: line.group!,
+                      years: years,
+                      currency: building.currency,
+                      columnWidth: yearColumn,
+                      rowHeight: rowHeight,
+                    );
+            },
           ),
         ],
       ),
@@ -505,53 +500,58 @@ class _GridRow extends StatelessWidget {
       height: rowHeight,
       child: Row(
         children: [
-          for (final year in years)
-            Builder(
-              builder: (context) {
-                // THE ROW WARMS UP ACROSS THE SHEET. Green while the room is
-                // young, yellow the year it enters the planning window, amber,
-                // orange, then red the year it falls due — which is the thing
-                // the hand-coloured sheet did with six pencils and the thing a
-                // single amber band could not say.
-                final timing = room.timingIn(year);
-                final text = _label(year);
-                final color = equipmentTimingColor(context, timing);
-                return Tooltip(
-                  message: equipmentDueTooltip(
-                    roomName: room.roomName,
-                    year: year,
-                    due: room.dueIn(year),
-                    currency: currency,
-                    fallback: '${room.roomName} in $year: '
-                        '${kEquipmentTimingLabels[timing]!}',
-                  ),
-                  child: Container(
-                    key: ValueKey('lifecycle_cell_${room.roomName}_$year'),
-                    width: columnWidth - 2,
-                    height: rowHeight - 2,
-                    margin: const EdgeInsets.only(right: 2, bottom: 2),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      // Filled only where there is something to say. An empty
-                      // cell is a year outside the room's life, and painting
-                      // it would put colour on the sheet that means nothing.
-                      color: text.isEmpty
-                          ? null
-                          : equipmentTimingFill(context, timing),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(
-                      text,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: color,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                );
-              },
-            ),
+          for (final year in years) _cell(context, theme, year),
         ],
+      ),
+    );
+  }
+
+  /// One year of one room.
+  ///
+  /// A YEAR OUTSIDE THE ROOM'S LIFE IS BLANK SPACE, and blank space is built
+  /// as blank space: no fill, no tooltip, no message string. Every cell used
+  /// to carry all three whether it had anything to say or not, which on a
+  /// sheet of a few thousand cells is a few thousand strings composed to
+  /// describe nothing.
+  Widget _cell(BuildContext context, ThemeData theme, int year) {
+    final text = _label(year);
+    if (text.isEmpty) {
+      return SizedBox(width: columnWidth, height: rowHeight);
+    }
+
+    // THE ROW WARMS UP ACROSS THE SHEET. Green while the room is young, yellow
+    // the year it enters the planning window, amber, orange, then red the year
+    // it falls due — which is the thing the hand-coloured sheet did with six
+    // pencils and the thing a single amber band could not say.
+    final timing = room.timingIn(year);
+    final due = room.dueIn(year);
+
+    return Tooltip(
+      message: equipmentDueTooltip(
+        roomName: room.roomName,
+        year: year,
+        due: due,
+        currency: currency,
+        fallback: '${room.roomName} in $year: '
+            '${kEquipmentTimingLabels[timing]!}',
+      ),
+      child: Container(
+        key: ValueKey('lifecycle_cell_${room.roomName}_$year'),
+        width: columnWidth - 2,
+        height: rowHeight - 2,
+        margin: const EdgeInsets.only(right: 2, bottom: 2),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: equipmentTimingFill(context, timing),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          text,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: equipmentTimingColor(context, timing),
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }
@@ -595,73 +595,64 @@ class _TimelineRow extends StatelessWidget {
       height: rowHeight,
       child: Row(
         children: [
-          for (final year in years)
-            Builder(
-              builder: (context) {
-                final inSpan =
-                    year >= group.startYear && year <= group.dueYear;
-                // Banded on the tranche's OWN life, so this line warms up
-                // against its own due date rather than against the room's
-                // first one.
-                final timing = timingFor(
-                  yearsRemaining: (group.dueYear - year).toDouble(),
-                  lifeYears: group.lifeYears,
-                );
-                final isDue = year == group.dueYear;
-                final isStart = year == group.startYear;
-
-                // A year outside the run is blank space that keeps the
-                // column in step - no key, and nothing to hover: a tooltip on
-                // empty sheet is a tooltip that goes off under the pointer on
-                // the way somewhere else.
-                if (!inSpan) {
-                  return SizedBox(width: columnWidth, height: rowHeight);
-                }
-
-                return Tooltip(
-                  message: message,
-                  child: SizedBox(
-                    key: ValueKey(
-                      'lifecycle_span_${room.roomName}_'
-                      '${group.dueYear}_$year',
-                    ),
-                    width: columnWidth,
-                    height: rowHeight,
-                    child: isDue
-                        ? Container(
-                            margin: const EdgeInsets.only(
-                              right: 2,
-                              top: 3,
-                              bottom: 5,
-                            ),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: equipmentTimingFill(context, timing),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: Text(
-                              group.cost > 0
-                                  ? formatLifecycleMoney(group.cost, currency)
-                                  : 'due',
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: equipmentTimingColor(context, timing),
-                              ),
-                            ),
-                          )
-                        : _SpanSegment(
-                            color: equipmentTimingFill(
-                              context,
-                              timing,
-                              alpha: 0.9,
-                            ),
-                            leading: isStart,
-                          ),
-                  ),
-                );
-              },
-            ),
+          for (final year in years) _cell(context, theme, message, year),
         ],
+      ),
+    );
+  }
+
+  /// One year of the run.
+  ///
+  /// A year outside it is blank space that keeps the column in step - no
+  /// tooltip and nothing to paint: a tooltip on empty sheet is one that opens
+  /// under the pointer on its way somewhere else.
+  Widget _cell(
+    BuildContext context,
+    ThemeData theme,
+    String message,
+    int year,
+  ) {
+    if (year < group.startYear || year > group.dueYear) {
+      return SizedBox(width: columnWidth, height: rowHeight);
+    }
+
+    // Banded on the tranche's OWN life, so this line warms up against its own
+    // due date rather than against the room's first one.
+    final timing = timingFor(
+      yearsRemaining: (group.dueYear - year).toDouble(),
+      lifeYears: group.lifeYears,
+    );
+
+    return Tooltip(
+      message: message,
+      child: SizedBox(
+        key: ValueKey(
+          'lifecycle_span_${room.roomName}_${group.dueYear}_$year',
+        ),
+        width: columnWidth,
+        height: rowHeight,
+        child: year == group.dueYear
+            ? Container(
+                margin: const EdgeInsets.only(right: 2, top: 3, bottom: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: equipmentTimingFill(context, timing),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  group.cost > 0
+                      ? formatLifecycleMoney(group.cost, currency)
+                      : 'due',
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: equipmentTimingColor(context, timing),
+                  ),
+                ),
+              )
+            : _SpanSegment(
+                color: equipmentTimingFill(context, timing, alpha: 0.9),
+                leading: year == group.startYear,
+              ),
       ),
     );
   }

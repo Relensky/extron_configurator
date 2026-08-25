@@ -154,6 +154,52 @@ void main() {
     });
   });
 
+  group('hovering a column head', () {
+    /// The head's own tooltip, found by the key on the cell inside it.
+    Tooltip headTip(WidgetTester tester, String id) => tester.widget<Tooltip>(
+      find
+          .ancestor(
+            of: find.byKey(ValueKey('matrix_head_$id')),
+            matching: find.byType(Tooltip),
+          )
+          .first,
+    );
+
+    testWidgets('says the scope, the work, the notes and the cutsheet',
+        (tester) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Screens');
+      p.updateResponsibilityItem(
+        item.copyWith(
+          work: 'Install 120V motorised screens.',
+          notes: 'Sizes still TBD',
+          productLink: 'https://www.extron.com/product/x',
+        ),
+      );
+      await pumpPane(tester, p);
+
+      final tip = headTip(tester, 'resp1');
+      expect(tip.message, contains('Screens'));
+      expect(tip.message, contains('motorised'));
+      expect(tip.message, contains('Sizes still TBD'));
+      expect(tip.message, contains('www.extron.com'));
+    });
+
+    testWidgets('is a plain message, so it is never an empty white box',
+        (tester) async {
+      // Flutter paints the tooltip WHITE on a dark theme and picks its text
+      // colour to match. A rich message carrying a colour chosen here instead
+      // was light text on that white box - a tooltip that opened blank.
+      final p = withProject();
+      p.addResponsibilityItem('Screens');
+      await pumpPane(tester, p);
+
+      final tip = headTip(tester, 'resp1');
+      expect(tip.message, isNotNull);
+      expect(tip.richMessage, isNull);
+    });
+  });
+
   testWidgets('what is still open is on the row, not only in the editor',
       (tester) async {
     final p = withProject();

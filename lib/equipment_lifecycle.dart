@@ -388,7 +388,7 @@ class EquipmentLife {
   /// typical price presented as a quote is how a budget goes wrong quietly.
   final bool costIsEstimate;
 
-  const EquipmentLife({
+  EquipmentLife({
     required this.node,
     required this.locationName,
     required this.zone,
@@ -400,13 +400,27 @@ class EquipmentLife {
     this.costIsEstimate = false,
   });
 
+  // -------------------------------------------------------------------------
+  //  WORKED OUT ONCE
+  // -------------------------------------------------------------------------
+  //  Everything below is derived from the fields above, which never change
+  //  once this is built - so it is computed on first use and kept, rather than
+  //  recomputed by every caller.
+  //
+  //  IT WAS A GETTER CHAIN, AND THE GRID PAID FOR IT. The building sheet asks
+  //  each room what it costs, what is due and what colour it is in every one
+  //  of a dozen year columns; each of those walked the room's items, and each
+  //  item worked its due date out from scratch - two DateTime allocations,
+  //  every time, several hundred times per cell. A twenty-four room job spent
+  //  most of a second building the grid before it drew a pixel.
+
   /// How long it has been in, in years and fractions of one. Null with no
   /// install date.
   ///
   /// Negative for a date in the future, which is a real thing to record — gear
   /// specified now and going in next summer — and reads as "not yet installed"
   /// rather than as an error.
-  double? get ageYears => installedOn == null
+  late final double? ageYears = installedOn == null
       ? null
       : asOf.difference(installedOn!).inDays / kDaysPerYear;
 
@@ -428,7 +442,9 @@ class EquipmentLife {
   /// [equipmentNeverReplaced].
   bool get neverReplaced => lifeYears == kNeverReplacedLife;
 
-  DateTime? get dueOn {
+  late final DateTime? dueOn = _dueOn();
+
+  DateTime? _dueOn() {
     final from = installedOn;
     // Never on a cycle, so never due. Everything downstream of a due date —
     // the years remaining, the step on the ramp, the colour — falls out of
@@ -440,22 +456,22 @@ class EquipmentLife {
   }
 
   /// The budget year the replacement belongs in — the RYG sheet's red cell.
-  int? get dueYear => dueOn?.year;
+  late final int? dueYear = dueOn?.year;
 
   /// Years left before it falls due; negative once it is past.
-  double? get yearsRemaining {
-    final due = dueOn;
-    if (due == null) return null;
-    return due.difference(asOf).inDays / kDaysPerYear;
-  }
+  late final double? yearsRemaining = dueOn == null
+      ? null
+      : dueOn!.difference(asOf).inDays / kDaysPerYear;
 
   /// Where this position sits on the colour ramp — see [EquipmentTiming].
-  EquipmentTiming get timing =>
-      timingFor(yearsRemaining: yearsRemaining, lifeYears: lifeYears);
+  late final EquipmentTiming timing = timingFor(
+    yearsRemaining: yearsRemaining,
+    lifeYears: lifeYears,
+  );
 
   /// The words for [timing]. Derived rather than computed alongside it, so a
   /// row's colour and its label can never disagree.
-  EquipmentCondition get condition => conditionOfTiming(timing);
+  late final EquipmentCondition condition = conditionOfTiming(timing);
 
   /// True when this position has been through at least one swap, so the room
   /// report can say how long the last unit lasted.
@@ -523,20 +539,33 @@ class RoomLifecycle {
 
   final DateTime asOf;
 
-  const RoomLifecycle({
+  RoomLifecycle({
     required this.roomName,
     required this.items,
     required this.asOf,
     this.neverReplaced = const [],
   });
 
+  // -------------------------------------------------------------------------
+  //  INDEXED ONCE
+  // -------------------------------------------------------------------------
+  //  The year grid asks a room the same handful of questions once per column,
+  //  and the summary strip asks it once per band. Every one of those used to
+  //  walk the item list; a building of twenty-four rooms across fourteen
+  //  columns was tens of thousands of scans before a pixel was drawn.
+  //
+  //  So the room is INDEXED on first use and answered from the index after
+  //  that. The items are fixed once this is built - it is derived wholesale
+  //  from the drawing on every rebuild - so there is nothing to invalidate.
+
+  late final _RoomIndex _index = _RoomIndex.of(items);
+
   /// How many positions are being held back from the plan. What the toggle on
   /// the screen counts, and what the sheet says out loud so a plan with four
   /// items hidden cannot read as a room with four items fewer.
   int get neverCount => neverReplaced.length;
 
-  int countOf(EquipmentCondition c) =>
-      items.where((i) => i.condition == c).length;
+  int countOf(EquipmentCondition c) => _index.countByCondition[c] ?? 0;
 
   /// What the items in [c] cost to replace.
   ///
@@ -544,27 +573,22 @@ class RoomLifecycle {
   /// on; 'four items, 18,000 dollars' is a budget line. Every band on this screen
   /// carries both for that reason, and both move the moment a date or a life
   /// is changed on one item.
-  double costOf(EquipmentCondition c) => items
-      .where((i) => i.condition == c)
-      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+  double costOf(EquipmentCondition c) => _index.costByCondition[c] ?? 0;
 
-  int countOfTiming(EquipmentTiming t) =>
-      items.where((i) => i.timing == t).length;
+  int countOfTiming(EquipmentTiming t) => _index.countByTiming[t] ?? 0;
 
-  double costOfTiming(EquipmentTiming t) => items
-      .where((i) => i.timing == t)
-      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+  double costOfTiming(EquipmentTiming t) => _index.costByTiming[t] ?? 0;
 
   /// The room reads as its WORST item.
   ///
   /// Not as its average and not as its oldest: a room with one dead projector
   /// and nine new speakers is a room that does not work, and averaging it into
   /// green is how a sheet like this stops being believed.
-  EquipmentTiming get timing => items.isEmpty
+  late final EquipmentTiming timing = items.isEmpty
       ? EquipmentTiming.unknown
       : items.map((i) => i.timing).reduce(worstTiming);
 
-  EquipmentCondition get condition => conditionOfTiming(timing);
+  late final EquipmentCondition condition = conditionOfTiming(timing);
 
   /// How many items are past their life or inside the planning window — the
   /// count a refresh is written for.
@@ -583,14 +607,14 @@ class RoomLifecycle {
   /// The life driving [firstDueYear], so the year grid bands its columns on
   /// the same window the item itself is banded on. Falls back to the blanket
   /// cycle on a room with nothing dated.
-  int get _drivingLifeYears {
+  late final int _drivingLifeYears = () {
     final first = firstDueYear;
     if (first == null) return kDefaultEquipmentLifeYears;
     for (final i in items) {
       if (i.dueYear == first) return i.lifeYears;
     }
     return kDefaultEquipmentLifeYears;
-  }
+  }();
 
   /// Where the room sits in [year] — the ramp, read across a column of the
   /// year grid rather than measured against today.
@@ -614,14 +638,8 @@ class RoomLifecycle {
   /// Undated items are left off: a position nobody has surveyed has no span to
   /// draw, and inventing one would put a line on the sheet that says a year
   /// nobody recorded. They are counted where they belong, on the undated band.
-  List<RoomDueGroup> get dueGroups {
-    final byYear = <int, List<EquipmentLife>>{};
-    for (final i in items) {
-      final due = i.dueYear;
-      if (due == null) continue;
-      (byYear[due] ??= []).add(i);
-    }
-
+  late final List<RoomDueGroup> dueGroups = () {
+    final byYear = _index.byDueYear;
     final years = byYear.keys.toList()..sort();
     return [
       for (final year in years)
@@ -647,53 +665,117 @@ class RoomLifecycle {
           );
         }(),
     ];
-  }
+  }();
 
   /// The earliest year anything in the room falls due, or null when nothing in
   /// it has a date. This is the room's row on the building sheet.
-  int? get firstDueYear {
-    int? out;
-    for (final i in items) {
-      final year = i.dueYear;
-      if (year == null) continue;
-      if (out == null || year < out) out = year;
-    }
-    return out;
-  }
+  late final int? firstDueYear = _index.firstDueYear;
 
   /// The oldest install date in the room — when the room itself was last done.
-  DateTime? get oldestInstall {
-    DateTime? out;
-    for (final i in items) {
-      final when = i.installedOn;
-      if (when == null) continue;
-      if (out == null || when.isBefore(out)) out = when;
-    }
-    return out;
-  }
+  late final DateTime? oldestInstall = _index.oldestInstall;
 
   /// What it costs to replace everything past its life today.
-  double get overdueCost => items
-      .where((i) => i.condition == EquipmentCondition.overdue)
-      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+  double get overdueCost => costOf(EquipmentCondition.overdue);
 
   /// What it costs to replace everything in the room, whatever its age — the
   /// figure a full refresh is budgeted at.
-  double get refreshCost =>
-      items.fold<double>(0, (sum, i) => sum + i.replacementCost);
+  late final double refreshCost = _index.totalCost;
 
   /// Replacement cost falling in [year], from the items due that year. This is
   /// the number the RYG sheet writes into the red cell.
-  double costDueIn(int year) => items
-      .where((i) => i.dueYear == year)
-      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+  double costDueIn(int year) => _index.costByDueYear[year] ?? 0;
 
   /// Items due in [year].
   List<EquipmentLife> dueIn(int year) =>
-      items.where((i) => i.dueYear == year).toList();
+      _index.byDueYear[year] ?? const <EquipmentLife>[];
 
   /// How many items carry no install date. The survey's to-do list.
   int get undated => countOf(EquipmentCondition.unknown);
+}
+
+/// Everything a room gets asked about its own items, worked out in one pass.
+///
+/// A ROOM IS ASKED THE SAME QUESTIONS DOZENS OF TIMES. The year grid wants the
+/// cost due, the items due and the colour for each of a dozen year columns;
+/// the summary strip wants a count and a figure for each of six bands; the
+/// room list wants the tranches. Every one of those walked the item list, and
+/// every item worked its own due date out from scratch on the way past.
+///
+/// Built once, lazily, per [RoomLifecycle] - which is itself rebuilt from the
+/// drawing whenever anything changes, so there is no stale state to worry
+/// about and nothing to invalidate.
+class _RoomIndex {
+  final Map<int, List<EquipmentLife>> byDueYear;
+  final Map<int, double> costByDueYear;
+  final Map<EquipmentCondition, int> countByCondition;
+  final Map<EquipmentCondition, double> costByCondition;
+  final Map<EquipmentTiming, int> countByTiming;
+  final Map<EquipmentTiming, double> costByTiming;
+  final int? firstDueYear;
+  final DateTime? oldestInstall;
+  final double totalCost;
+
+  const _RoomIndex({
+    required this.byDueYear,
+    required this.costByDueYear,
+    required this.countByCondition,
+    required this.costByCondition,
+    required this.countByTiming,
+    required this.costByTiming,
+    required this.firstDueYear,
+    required this.oldestInstall,
+    required this.totalCost,
+  });
+
+  factory _RoomIndex.of(List<EquipmentLife> items) {
+    final byDueYear = <int, List<EquipmentLife>>{};
+    final costByDueYear = <int, double>{};
+    final countByCondition = <EquipmentCondition, int>{};
+    final costByCondition = <EquipmentCondition, double>{};
+    final countByTiming = <EquipmentTiming, int>{};
+    final costByTiming = <EquipmentTiming, double>{};
+    int? firstDue;
+    DateTime? oldest;
+    var total = 0.0;
+
+    for (final i in items) {
+      final cost = i.replacementCost;
+      total += cost;
+
+      final due = i.dueYear;
+      if (due != null) {
+        (byDueYear[due] ??= []).add(i);
+        costByDueYear[due] = (costByDueYear[due] ?? 0) + cost;
+        if (firstDue == null || due < firstDue) firstDue = due;
+      }
+
+      final installed = i.installedOn;
+      if (installed != null &&
+          (oldest == null || installed.isBefore(oldest))) {
+        oldest = installed;
+      }
+
+      final condition = i.condition;
+      countByCondition[condition] = (countByCondition[condition] ?? 0) + 1;
+      costByCondition[condition] = (costByCondition[condition] ?? 0) + cost;
+
+      final timing = i.timing;
+      countByTiming[timing] = (countByTiming[timing] ?? 0) + 1;
+      costByTiming[timing] = (costByTiming[timing] ?? 0) + cost;
+    }
+
+    return _RoomIndex(
+      byDueYear: byDueYear,
+      costByDueYear: costByDueYear,
+      countByCondition: countByCondition,
+      costByCondition: costByCondition,
+      countByTiming: countByTiming,
+      costByTiming: costByTiming,
+      firstDueYear: firstDue,
+      oldestInstall: oldest,
+      totalCost: total,
+    );
+  }
 }
 
 /// Ages every box in [model].
@@ -841,26 +923,31 @@ class BuildingLifecycle {
   /// The currency the replacement figures are in, for the report headings.
   final String currency;
 
-  const BuildingLifecycle({
+  BuildingLifecycle({
     required this.rooms,
     required this.asOf,
     this.currency = '\$',
   });
 
-  List<EquipmentLife> get items => [for (final r in rooms) ...r.items];
+  /// Every position on the job, flattened ONCE.
+  ///
+  /// This was rebuilt on every read, and it is read by every band on the
+  /// summary strip, by the year span and by [anyDated] - eighteen flattenings
+  /// of a two-hundred-item list to draw one header.
+  late final List<EquipmentLife> items = [for (final r in rooms) ...r.items];
+
+  /// The same counting the rooms do, done once across all of them.
+  late final _RoomIndex _index = _RoomIndex.of(items);
 
   /// How many positions across the job are held off the plan.
   int get neverCount =>
       rooms.fold<int>(0, (sum, r) => sum + r.neverCount);
 
-  int countOf(EquipmentCondition c) =>
-      items.where((i) => i.condition == c).length;
+  int countOf(EquipmentCondition c) => _index.countByCondition[c] ?? 0;
 
   /// What the items in [c] cost to replace across the job — the figure a band
   /// on the summary strip is only half of without.
-  double costOf(EquipmentCondition c) => items
-      .where((i) => i.condition == c)
-      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+  double costOf(EquipmentCondition c) => _index.costByCondition[c] ?? 0;
 
   int roomsOf(EquipmentCondition c) =>
       rooms.where((r) => r.condition == c).length;
@@ -875,8 +962,7 @@ class BuildingLifecycle {
   double get overdueCost =>
       rooms.fold<double>(0, (sum, r) => sum + r.overdueCost);
 
-  double costDueIn(int year) =>
-      rooms.fold<double>(0, (sum, r) => sum + r.costDueIn(year));
+  double costDueIn(int year) => _index.costByDueYear[year] ?? 0;
 
   /// True when anything on the job has an install date on it.
   ///
@@ -884,7 +970,23 @@ class BuildingLifecycle {
   /// is new": with no dates anywhere there is no plan to draw, only a list of
   /// rooms with blank rows, and a sheet of those in an issued workbook says
   /// less than no sheet at all.
-  bool get anyDated => items.any((i) => i.installedOn != null);
+  bool get anyDated => _index.oldestInstall != null;
+
+  /// The raw span the sheet would cover uncapped, worked out once: the
+  /// earliest install year on the job and the last year anything falls due,
+  /// both bounded below by today so a building with nothing recorded still has
+  /// a column.
+  late final ({int first, int last}) _span = () {
+    var first = asOf.year;
+    var last = asOf.year;
+    for (final i in items) {
+      final installed = i.installedOn?.year;
+      if (installed != null && installed < first) first = installed;
+      final due = i.dueYear;
+      if (due != null && due > last) last = due;
+    }
+    return (first: first, last: last);
+  }();
 
   /// The span of years the sheet has to cover: from the earliest install year
   /// on the job to the last year anything falls due, and always including the
@@ -894,14 +996,8 @@ class BuildingLifecycle {
   /// Capped at [maxColumns] years from today, because a single unit installed
   /// in 1998 should not stretch the grid across thirty columns of nothing.
   List<int> years({int maxColumns = 12}) {
-    var first = asOf.year;
-    var last = asOf.year;
-    for (final i in items) {
-      final installed = i.installedOn?.year;
-      if (installed != null && installed < first) first = installed;
-      final due = i.dueYear;
-      if (due != null && due > last) last = due;
-    }
+    var first = _span.first;
+    var last = _span.last;
     if (first < asOf.year - maxColumns) first = asOf.year - maxColumns;
     if (last > asOf.year + maxColumns) last = asOf.year + maxColumns;
     return [for (var y = first; y <= last; y++) y];

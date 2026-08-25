@@ -482,6 +482,29 @@ void main() {
       );
     });
 
+    testWidgets('builds the rows on screen and not the rest', (tester) async {
+      // THE SHEET IS BUILT A ROW AT A TIME. A building with several
+      // replacement dates per room is hundreds of rows of a dozen cells, and
+      // the frame shows eight of them - building the other two hundred is what
+      // made this tab take a second to open.
+      const size = Size(1000, 900);
+      await pumpPlan(tester, building(30), size: size);
+
+      final cells = find.byWidgetPredicate((w) {
+        final key = w.key;
+        return key is ValueKey<String> &&
+            key.value.startsWith('lifecycle_cell_');
+      });
+      // Thirty rooms across a thirteen-year span is getting on for four
+      // hundred cells; the frame holds a fraction of them.
+      expect(cells, findsWidgets);
+      expect(
+        cells.evaluate().length,
+        lessThan(30 * 13 ~/ 2),
+        reason: 'only the rows in the frame should have been built',
+      );
+    });
+
     testWidgets('at 150% the cells grow rather than clip', (tester) async {
       await pumpPlan(tester, building(2));
       final plain = tester.getSize(
