@@ -131,7 +131,6 @@ void main() {
         stakeholder: 'Facilities',
         roomPaths: [room],
         deadline: DateTime(2026, 9, 14),
-        spareTargetPercent: 10,
         todos: const ['Ring the vendors'],
       ));
 
@@ -141,7 +140,6 @@ void main() {
       expect(p.project.stakeholder, 'Facilities');
       expect(p.project.rooms, hasLength(1));
       expect(p.project.deliveryDeadline, DateTime(2026, 9, 14));
-      expect(p.project.spareTargetPercent, 10);
       expect(p.project.todos.single.text, 'Ring the vendors');
       expect(message, contains('1 room added'));
     });
@@ -157,12 +155,10 @@ void main() {
         stakeholder: '',
         roomPaths: const [],
         deadline: null,
-        spareTargetPercent: 0,
         todos: const [],
       ));
 
       expect(p.project.deliveryDeadline, isNull);
-      expect(p.project.spareTargetPercent, 0);
       expect(p.project.todos, isEmpty);
       expect(p.project.rooms, isEmpty);
     });
@@ -182,7 +178,6 @@ void main() {
         stakeholder: '',
         roomPaths: [room, room],
         deadline: null,
-        spareTargetPercent: 0,
         todos: const [],
       ));
 
@@ -259,10 +254,6 @@ void main() {
           'Bessey refresh',
         );
         await t.enterText(
-          find.byKey(const ValueKey('setup_spare_target')),
-          '10',
-        );
-        await t.enterText(
           find.byKey(const ValueKey('setup_todo_text')),
           'Ring the dean',
         );
@@ -277,7 +268,6 @@ void main() {
       // The building comes pre-filled from the room that was open — the
       // commonest new project is the building you are already standing in.
       expect(answer.building, 'BSS');
-      expect(answer.spareTargetPercent, 10);
       // The starters are on by default, and the typed one is last.
       expect(answer.todos, hasLength(kStarterProjectTodos.length + 1));
       expect(answer.todos.last, 'Ring the dean');

@@ -683,11 +683,12 @@ typedef SparePartCover = ({
   /// nothing is installed, which [ProjectEstimate.spareCover] filters out.
   double? coverage,
 
-  /// True when the job set a target and this part does not meet it.
+  /// True when the job installs this part and holds none of it spare.
   bool short,
 
-  /// Whole units that would have to be added to meet the target, 0 when it is
-  /// met or when there is no target.
+  /// Whole units that would have to be added to cover it - always 1, and 0 on
+  /// a part that already has a spare. Kept as a figure rather than a flag
+  /// because the button that fixes the row is labelled with it.
   double shortfall,
 });
 
@@ -841,24 +842,25 @@ class ProjectEstimate {
   // -------------------------------------------------------------------------
   //  HOW WELL THE JOB IS SPARED, PART BY PART
   // -------------------------------------------------------------------------
-  //  "Two spare projectors" is a figure nobody can weigh. Two out of forty is
-  //  a decision. So the job reports every part it installs as a PERCENTAGE
-  //  covered, and - when the job has said what it wants held - which of them
-  //  fall short of it.
+  //  ONE SPARE, OR NONE. That is the whole rule: a part the job installs and
+  //  holds nothing spare of is the row worth doing something about, and the
+  //  second spare of a part that already has one is a judgement call nobody
+  //  needs a table to make.
   //
-  //  A target turns the list of parts with no spare into a list of parts that
-  //  are SHORT, which is a different and much shorter list: a job that holds
-  //  ten per cent does not want to be told about the part it has one spare of
-  //  out of four.
-
-  /// The percentage of installed units this job wants spared, 0 for no policy.
-  double get spareTargetPercent => project.spareTargetPercent;
-
-  /// True when the job has set a policy at all.
-  bool get hasSpareTarget => spareTargetPercent > 0;
+  //  This replaced a percentage policy - "hold 10% of everything" - which
+  //  measured the wrong thing on both ends. It asked for four spare wall
+  //  plates on a job with forty and said nothing at all about the one switcher
+  //  the whole building runs through, and every job had to be told the policy
+  //  before the table would say anything.
+  //
+  //  THE PERCENTAGE IS STILL THE REPORTING. "Two spare projectors" is a figure
+  //  nobody can weigh and "2 of 40, 5%" is a decision, so every row carries
+  //  what its spares actually cover - see [MasterPartLine.spareCoverage]. It
+  //  is what the row SAYS, not what decides whether the row is flagged.
 
   /// Every EQUIPMENT part the job installs, with the share of it that is
-  /// spared - worst covered first, so the list is read from the top.
+  /// spared - the unspared first, then thinnest cover, so the list is read
+  /// from the top.
   ///
   /// Equipment only, for the same reason [partsWithoutSpares] is: nobody wants
   /// to be asked about a spare blanking plate.
@@ -872,8 +874,8 @@ class ProjectEstimate {
         if (l.kind == MasterPartKind.equipment && l.drawnQty > 0)
           _coverOf(l),
     ];
-    // Thinnest cover first, and the short ones above everything that meets the
-    // target regardless of percentage: this list is read to find what to fix.
+    // The parts with no spare at all first, then thinnest cover: this list is
+    // read to find what to fix.
     out.sort((a, b) {
       if (a.short != b.short) return a.short ? -1 : 1;
       final byCover = (a.coverage ?? 0).compareTo(b.coverage ?? 0);
@@ -889,32 +891,25 @@ class ProjectEstimate {
     return out;
   }
 
-  /// The parts that do not meet the job's target, worst first. Always empty
-  /// when no target is set - with no policy there is nothing to fall short of.
-  List<SparePartCover> get partsBelowSpareTarget =>
+  /// The parts the job installs and holds nothing spare of, worst first.
+  List<SparePartCover> get unsparedParts =>
       [for (final c in spareCover) if (c.short) c];
 
-  /// One part measured against the job's target.
+  /// One part, and whether the order holds any of it spare.
   SparePartCover _coverOf(MasterPartLine line) {
     final installed = line.drawnQty;
     final spares = line.spareQty;
     final coverage = installed > 0 ? spares / installed : null;
-    // What the policy asks for, in whole boxes: 10% of 25 installed is 2.5,
-    // and half a spare cannot be bought. Rounded UP, because rounding a
-    // shortfall down is how a job ends up one short of its own rule.
-    final wanted = hasSpareTarget
-        ? (installed * spareTargetPercent / 100).ceilToDouble()
-        : 0.0;
-    // The epsilon is doubles, not slack: 3 * 0.1 is not 0.3, and a part that
-    // exactly meets the target must never read as short.
-    final short = hasSpareTarget && spares + 1e-9 < wanted;
+    // At least one on the shelf. The epsilon is doubles, not slack: a spare
+    // qty that came out of arithmetic must not read as none.
+    final short = spares < 1 - 1e-9;
     return (
       line: line,
       spares: spares,
       installed: installed,
       coverage: coverage,
       short: short,
-      shortfall: short ? wanted - spares : 0.0,
+      shortfall: short ? 1 - spares : 0.0,
     );
   }
 

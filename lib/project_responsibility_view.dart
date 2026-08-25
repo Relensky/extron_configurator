@@ -9,6 +9,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'name_colors.dart';
+import 'pinned_grid.dart';
 import 'project_estimate.dart';
 import 'report_tools.dart';
 import 'responsibility_matrix.dart';
@@ -227,23 +228,38 @@ List<String> partiesOn(List<ResponsibilityItem> items) {
 /// The two halves are laid out with the SAME fixed row heights rather than
 /// with intrinsic ones, because that is the only way two independent columns
 /// stay on the same line as each other. Every height here is shared by both.
+/// The five sizes the two halves of the matrix are both laid out on.
+typedef _Metrics = ({
+  double headRow,
+  double partyRow,
+  double bodyRow,
+  double roomColumn,
+  double itemColumn,
+});
+
 class _MatrixGrid extends StatelessWidget {
   final BuildingProject project;
   final List<({String id, String name})> columns;
 
   const _MatrixGrid({required this.project, required this.columns});
 
-  /// Room names, and the scope name over each column.
-  static const double _headRow = 58;
-
-  /// The two party rows under each scope name.
-  static const double _partyRow = 20;
-
-  /// One room, and the totals row.
-  static const double _bodyRow = 26;
-
-  static const double _roomColumn = 168;
-  static const double _itemColumn = 104;
+  /// EVERY MEASUREMENT ON THE SHEET IS THE READER'S MEASUREMENT.
+  ///
+  /// These were fixed pixels, which on a display at 150% left a 20-pixel party
+  /// row with a chip in it that no longer fitted and a 104-pixel column whose
+  /// scope name had been ellipsised down to two words. The base numbers are
+  /// unchanged; what is new is that they grow with the type. See [gridMetric].
+  ///
+  /// The frozen half and the scrolling half are two independent Columns laid
+  /// out on the SAME heights, so every one of these is read once and passed to
+  /// both - a metric computed twice is two halves that drift apart.
+  static _Metrics _metrics(BuildContext context) => (
+    headRow: gridMetric(context, 60),
+    partyRow: gridMetric(context, 24),
+    bodyRow: gridMetric(context, 28),
+    roomColumn: gridMetric(context, 176),
+    itemColumn: gridMetric(context, 116),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -253,89 +269,106 @@ class _MatrixGrid extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final m = _metrics(context);
+
+    // Rooms, and then the totals line under them.
+    final bodyRows = columns.length + 1;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _frozenColumn(theme),
-          Expanded(
-            child: Scrollbar(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final item in items) _itemColumnFor(context, item),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+      // ITS OWN FRAME, SCROLLING BOTH WAYS. A job with thirty scope items and
+      // forty rooms is wider and taller than any window it is read in, and
+      // laid out at full size inside the tab's scroll view it pushed the item
+      // list under it off the bottom and gave no bar to say the columns
+      // carried on past the right edge. What is pinned is what says a cell's
+      // meaning: the room down the side, the scope and the two parties across
+      // the top.
+      child: PinnedGrid(
+        frozenWidth: m.roomColumn,
+        headerHeight: m.headRow + m.partyRow * 2,
+        bodyWidth: m.itemColumn * items.length,
+        bodyHeight: m.bodyRow * bodyRows,
+        corner: _frozenHead(theme, m),
+        header: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final item in items) _itemHead(context, item, m)],
+        ),
+        frozen: _frozenBody(theme, m),
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final item in items) _itemBody(context, item, m)],
+        ),
       ),
+    );
+  }
+
+  /// The corner: what the frozen column is, and what the two rows under every
+  /// scope name are.
+  Widget _frozenHead(ThemeData theme, _Metrics m) {
+    final line = _line(theme);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _cell(
+          height: m.headRow,
+          align: Alignment.bottomLeft,
+          line: line,
+          strongRight: true,
+          child: Text('ROOM', style: _headStyle(theme)),
+        ),
+        _cell(
+          height: m.partyRow,
+          line: line,
+          strongRight: true,
+          child: Text('Furnished by', style: _metaStyle(theme)),
+        ),
+        _cell(
+          height: m.partyRow,
+          line: line,
+          strongRight: true,
+          strongBottom: true,
+          child: Text('Installed by', style: _metaStyle(theme)),
+        ),
+      ],
     );
   }
 
   /// The half that stays put: what each row IS.
-  Widget _frozenColumn(ThemeData theme) {
+  Widget _frozenBody(ThemeData theme, _Metrics m) {
     final line = _line(theme);
-    return SizedBox(
-      width: _roomColumn,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (i, room) in columns.indexed)
           _cell(
-            height: _headRow,
-            align: Alignment.bottomLeft,
+            height: m.bodyRow,
             line: line,
+            fill: _band(theme, i),
             strongRight: true,
-            child: Text('ROOM', style: _headStyle(theme)),
-          ),
-          _cell(
-            height: _partyRow,
-            line: line,
-            strongRight: true,
-            child: Text('Furnished by', style: _metaStyle(theme)),
-          ),
-          _cell(
-            height: _partyRow,
-            line: line,
-            strongRight: true,
-            strongBottom: true,
-            child: Text('Installed by', style: _metaStyle(theme)),
-          ),
-          for (final (i, room) in columns.indexed)
-            _cell(
-              height: _bodyRow,
-              line: line,
-              fill: _band(theme, i),
-              strongRight: true,
-              strongBottom: i == columns.length - 1,
-              child: Text(
-                room.name,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
-              ),
+            strongBottom: i == columns.length - 1,
+            child: Text(
+              room.name,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium,
             ),
-          _cell(
-            height: _bodyRow,
-            line: line,
-            strongRight: true,
-            child: Text('Totals', style: _headStyle(theme)),
           ),
-        ],
-      ),
+        _cell(
+          height: m.bodyRow,
+          line: line,
+          strongRight: true,
+          child: Text('Totals', style: _headStyle(theme)),
+        ),
+      ],
     );
   }
 
-  /// One scope item, top to bottom.
-  Widget _itemColumnFor(BuildContext context, ResponsibilityItem item) {
+  /// One scope item's heading: its name, and whose job it is.
+  Widget _itemHead(BuildContext context, ResponsibilityItem item, _Metrics m) {
     final theme = Theme.of(context);
     final line = _line(theme);
 
     return SizedBox(
-      width: _itemColumn,
+      width: m.itemColumn,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -345,14 +378,14 @@ class _MatrixGrid extends StatelessWidget {
             key: ValueKey('matrix_head_${item.id}'),
             onTap: () => showResponsibilityEditor(context, item.id, columns),
             child: _cell(
-              height: _headRow,
+              height: m.headRow,
               align: Alignment.bottomLeft,
               line: line,
               child: Text(
                 item.scope,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
+                style: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -361,7 +394,7 @@ class _MatrixGrid extends StatelessWidget {
           // WHOSE JOB IT IS, IN ITS OWN COLOUR. Two rows under every scope
           // name, and the pair of them is what the sheet is read for.
           _cell(
-            height: _partyRow,
+            height: m.partyRow,
             line: line,
             child: _PartyCell(
               party: item.furnishedBy,
@@ -369,7 +402,7 @@ class _MatrixGrid extends StatelessWidget {
             ),
           ),
           _cell(
-            height: _partyRow,
+            height: m.partyRow,
             line: line,
             strongBottom: true,
             child: _PartyCell(
@@ -377,12 +410,27 @@ class _MatrixGrid extends StatelessWidget {
               missing: item.installedBy.trim().isEmpty,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// One scope item's quantities, room by room, and its total.
+  Widget _itemBody(BuildContext context, ResponsibilityItem item, _Metrics m) {
+    final theme = Theme.of(context);
+    final line = _line(theme);
+
+    return SizedBox(
+      width: m.itemColumn,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           for (final (i, room) in columns.indexed)
             InkWell(
               key: ValueKey('matrix_cell_${item.id}_${room.id}'),
               onTap: () => _editQty(context, item, room),
               child: _cell(
-                height: _bodyRow,
+                height: m.bodyRow,
                 align: Alignment.center,
                 line: line,
                 // The band runs across the whole row, frozen half included,
@@ -392,17 +440,17 @@ class _MatrixGrid extends StatelessWidget {
                 strongBottom: i == columns.length - 1,
                 child: Text(
                   formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
-                  style: theme.textTheme.bodySmall,
+                  style: theme.textTheme.bodyMedium,
                 ),
               ),
             ),
           _cell(
-            height: _bodyRow,
+            height: m.bodyRow,
             align: Alignment.center,
             line: line,
             child: Text(
               formatResponsibilityQty(item.total),
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -433,13 +481,13 @@ class _MatrixGrid extends StatelessWidget {
   }
 
   static TextStyle? _headStyle(ThemeData theme) =>
-      theme.textTheme.labelSmall?.copyWith(
+      theme.textTheme.labelMedium?.copyWith(
         fontWeight: FontWeight.bold,
         color: theme.colorScheme.onSurfaceVariant,
       );
 
   static TextStyle _metaStyle(ThemeData theme) =>
-      theme.textTheme.labelSmall?.copyWith(
+      theme.textTheme.labelMedium?.copyWith(
         color: theme.colorScheme.onSurfaceVariant,
       ) ??
       const TextStyle(fontSize: 11);

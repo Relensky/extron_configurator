@@ -29,11 +29,13 @@ import 'project_timeline_view.dart' show showProjectDatePicker;
 ///       coming back for the rest next week.
 ///    3. WHEN IT IS DUE. One date, and every order-by date on the job derives
 ///       from it.
-///    4. WHAT IT HOLDS SPARE. A percentage, which is the only thing that turns
-///       "these parts have no spare" into "these are held under what we said
-///       we hold" - see [AppStateProvider.setProjectSpareTarget].
-///    5. WHAT HAS TO BE DONE FIRST. The four or five things that are true of
+///    4. WHAT HAS TO BE DONE FIRST. The four or five things that are true of
 ///       every job, offered rather than typed.
+///
+///  WHAT IT HOLDS SPARE IS NOT ASKED. It used to be - a percentage, typed
+///  before the job had any parts on it - and the rule it fed has been replaced
+///  by one that needs no policy: one spare of everything a room installs. See
+///  [ProjectEstimate.unsparedParts].
 ///
 ///  NOTHING HERE IS COMPULSORY. Skip leaves exactly the empty project this
 ///  screen replaced, and every field on it is editable afterwards on the tab it
@@ -53,9 +55,6 @@ typedef NewProjectSetup = ({
 
   /// The date the job needs everything by, or null when nobody has said.
   DateTime? deadline,
-
-  /// The share of each part the job wants held spare, 0 for no policy.
-  double spareTargetPercent,
 
   /// The notes to start the job's list with.
   List<String> todos,
@@ -167,9 +166,6 @@ String applyProjectSetup(AppStateProvider provider, NewProjectSetup setup) {
   }
 
   if (setup.deadline != null) provider.setProjectDeadline(setup.deadline);
-  if (setup.spareTargetPercent > 0) {
-    provider.setProjectSpareTarget(setup.spareTargetPercent);
-  }
   for (final todo in setup.todos) {
     provider.addProjectTodo(todo);
   }
@@ -233,7 +229,6 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
   );
   final TextEditingController _jobNumber = TextEditingController();
   final TextEditingController _stakeholder = TextEditingController();
-  final TextEditingController _target = TextEditingController();
   final TextEditingController _todo = TextEditingController();
 
   /// Every room found so far, and whether it is going on the job.
@@ -266,7 +261,6 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
     _building.dispose();
     _jobNumber.dispose();
     _stakeholder.dispose();
-    _target.dispose();
     _todo.dispose();
     super.dispose();
   }
@@ -557,38 +551,6 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                 ],
               ),
 
-              // WHAT IT HOLDS SPARE. The one number that turns a list of parts
-              // with no spare into a list of parts that are short.
-              const _SetupHeading('WHAT IT HOLDS SPARE'),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 140,
-                    child: TextField(
-                      key: const ValueKey('setup_spare_target'),
-                      controller: _target,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Spares target',
-                        hintText: '10',
-                        suffixText: '%',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'The share of each product to keep on the shelf. Any '
-                      'part held under it is flagged on the Equipment list.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
               // WHAT HAS TO BE DONE FIRST.
               const _SetupHeading('WHAT HAS TO BE DONE FIRST'),
               for (final starter in kStarterProjectTodos)
@@ -666,7 +628,6 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
             stakeholder: _stakeholder.text,
             roomPaths: _chosenRooms,
             deadline: _deadline,
-            spareTargetPercent: double.tryParse(_target.text.trim()) ?? 0,
             todos: _chosenTodos,
           )),
           child: const Text('Start the project'),

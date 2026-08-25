@@ -141,6 +141,7 @@ List<ReportSection> tabReportSections(
           model: av,
           roomName: roomCodeFromConfig(provider.roomConfig),
           library: provider.avDeviceLibrary,
+          baseCosts: provider.baseCosts,
           tier: provider.pricingTier,
         ),
         currency: provider.currencySymbol,

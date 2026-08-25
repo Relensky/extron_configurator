@@ -5,9 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/equipment_lifecycle.dart';
 import 'package:extron_configurator/lifecycle_view.dart';
+import 'package:extron_configurator/pinned_grid.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// The two screens the replacement plan is read and filled in on.
@@ -286,6 +288,246 @@ void main() {
     );
     // And the grid carries a cell for the year it fell due.
     expect(find.textContaining('first due 2022'), findsNWidgets(2));
+  });
+
+  // -------------------------------------------------------------------------
+  //  HOW LONG IT LASTS
+  // -------------------------------------------------------------------------
+  //  The due date is the install date plus the life, and until now only the
+  //  date could be edited from the list: the life lived on the catalog page,
+  //  which is a different screen and a trip nobody makes while walking a room.
+
+  group('the life a position is held to', () {
+    Future<void> openLife(WidgetTester tester) async {
+      await tester.tap(
+        find.byKey(const ValueKey('lifecycle_life_PROJECTORDEVICE_1')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('equipment_life_dialog')),
+        findsOneWidget,
+      );
+    }
+
+    testWidgets('a life typed on the row is held against that position only',
+        (tester) async {
+      final p = room();
+      p.setAvNodeInstalledOn('PROJECTORDEVICE_1', DateTime(2018, 4, 1));
+      await pumpRoom(tester, p);
+      await openLife(tester);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('equipment_life_years')),
+        '5',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('equipment_life_apply')));
+      await tester.pumpAndSettle();
+
+      expect(p.avNodeById('PROJECTORDEVICE_1')!.lifeYears, 5);
+      // The box beside it is untouched: this is a fact about one position.
+      expect(p.avNodeById('DISPLAYDEVICE_1')!.lifeYears, 0);
+      await tester.pumpAndSettle(const Duration(seconds: 8));
+    });
+
+    testWidgets('a life kept with the model is written into the catalog',
+        (tester) async {
+      final p = room();
+      p.avDeviceLibrary.upsert(
+        AvDeviceTemplate(model: 'PROJ-1', ports: const []),
+      );
+      await pumpRoom(tester, p);
+      await openLife(tester);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('equipment_life_years')),
+        '6',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('equipment_life_scope_catalog')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('equipment_life_apply')));
+      await tester.pumpAndSettle();
+
+      // On the PRODUCT, so every other position of it follows - including the
+      // other box in this room, which nobody touched.
+      expect(p.avDeviceLibrary.templateForModel('PROJ-1')!.lifeYears, 6);
+      expect(p.avNodeById('PROJECTORDEVICE_1')!.lifeYears, 0);
+      expect(p.avNodeById('DISPLAYDEVICE_1')!.lifeYears, 0);
+      await tester.pumpAndSettle(const Duration(seconds: 8));
+    });
+
+    testWidgets('a model the catalog has never heard of says so rather than '
+        'failing when it is pressed', (tester) async {
+      final p = room();
+      await pumpRoom(tester, p);
+      await openLife(tester);
+
+      final tile = tester.widget<RadioListTile<EquipmentLifeScope>>(
+        find.byKey(const ValueKey('equipment_life_scope_catalog')),
+      );
+      expect(tile.enabled, isFalse);
+      expect(find.textContaining('is not in the catalog yet'), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE SHEET IS A SHEET, NOT A BLOCK OF THE PAGE
+  // -------------------------------------------------------------------------
+  //  The replacement grid is wider and taller than the window it is read in.
+  //  Laid out at full size it pushed the room list off the bottom and took the
+  //  room names off the left edge as soon as anybody read across it, and on a
+  //  display at 150% every cell on it clipped. It scrolls in its own frame now,
+  //  with the names and the years pinned.
+
+  group('the replacement grid', () {
+    /// A job of [rooms] rooms, each with one box that went in in 2014 - which
+    /// is a room years past its life, and a grid that spans from 2014 to the
+    /// year it falls due.
+    AppStateProvider building(int rooms) {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Bessey Hall');
+      for (var i = 0; i < rooms; i++) {
+        final stem = 'bss${101 + i}';
+        final file = '${dir.path}/${stem}_config.json';
+        File(file).writeAsStringSync(
+          '{"SYSTEM_SETUP":{"gve_bldg":"BSS","gve_room":"${101 + i}"}}',
+        );
+        File('${dir.path}/${stem}_config_av_flow.json').writeAsStringSync(
+          '{"nodes":[{"id":"PROJECTORDEVICE_1","label":"Projector 1",'
+          '"model":"PROJ-1","installedOn":"2014-05-01","ports":[]}],'
+          '"cables":[]}',
+        );
+        p.addRoomToProject(file);
+      }
+      return p;
+    }
+
+    Future<void> pumpPlan(
+      WidgetTester tester,
+      AppStateProvider p, {
+      Size size = const Size(1000, 900),
+      double textScale = 1,
+    }) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(
+                size: size,
+                textScaler: TextScaler.linear(textScale),
+              ),
+              child: const Scaffold(body: ProjectView()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // By icon, not by label: the pane rail drops its labels on a window
+      // this narrow and the key rides on the label.
+      await tester.tap(find.byIcon(Icons.history_toggle_off));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the room names stay put while the years scroll', (
+      tester,
+    ) async {
+      // Narrow enough that thirteen years of columns run well past the edge.
+      await pumpPlan(tester, building(2), size: const Size(760, 900));
+
+      final name = find.text('BSS 101').first;
+      final before = tester.getTopLeft(name);
+      final yearBefore = tester.getTopLeft(find.text('2014').first);
+
+      await tester.drag(find.byType(PinnedGrid), const Offset(-240, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getTopLeft(name),
+        before,
+        reason: 'the room a cell is about has to stay beside the cell',
+      );
+      expect(
+        tester.getTopLeft(find.text('2014').first).dx,
+        lessThan(yearBefore.dx),
+        reason: 'the year headings move with the cells under them',
+      );
+    });
+
+    testWidgets('a tall plan scrolls inside the grid rather than pushing the '
+        'room list off the page', (tester) async {
+      const size = Size(1000, 900);
+      await pumpPlan(tester, building(14), size: size);
+
+      // Fourteen rooms at full size would be most of the window. The frame is
+      // capped instead, and the rows move inside it.
+      expect(
+        tester.getSize(find.byType(PinnedGrid)).height,
+        lessThan(size.height * 0.6),
+      );
+
+      final before = tester.getTopLeft(find.text('BSS 101').first);
+      await tester.drag(find.byType(PinnedGrid), const Offset(0, -120));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(find.text('BSS 101').first).dy,
+        lessThan(before.dy),
+        reason: 'the rows scroll inside the frame',
+      );
+    });
+
+    testWidgets('at 150% the cells grow rather than clip', (tester) async {
+      await pumpPlan(tester, building(2));
+      final plain = tester.getSize(
+        find.byKey(const ValueKey('lifecycle_cell_BSS 101_2014')),
+      );
+
+      await pumpPlan(tester, building(2), textScale: 1.5);
+      final scaled = tester.getSize(
+        find.byKey(const ValueKey('lifecycle_cell_BSS 101_2014')),
+      );
+
+      expect(scaled.width, greaterThan(plain.width));
+      expect(scaled.height, greaterThan(plain.height));
+    });
+  });
+
+  testWidgets('the room tab lays out at 150% without overflowing', (
+    tester,
+  ) async {
+    final p = room();
+    p.setAvNodeInstalledOn('PROJECTORDEVICE_1', DateTime(2018, 4, 1));
+    const size = Size(1000, 720);
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: size,
+              textScaler: TextScaler.linear(1.5),
+            ),
+            child: const Scaffold(body: LifecycleView()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The strip at the top is no longer nailed above the list: everything on
+    // the tab is in one scroll region, which is what makes the list reachable
+    // on a window this size at this type size.
+    expect(find.byType(CustomScrollView), findsOneWidget);
+    expect(find.byKey(const ValueKey('lifecycle_date_room')), findsOneWidget);
   });
 
   testWidgets('a bracket taken off the cycle leaves the plan, and comes back',

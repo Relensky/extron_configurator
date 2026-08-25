@@ -11,6 +11,7 @@ import 'lifecycle_view.dart'
         equipmentTimingColor,
         equipmentTimingFill,
         equipmentTimingIcon;
+import 'pinned_grid.dart';
 import 'project_estimate.dart';
 
 /// ============================================================================
@@ -26,9 +27,11 @@ import 'project_estimate.dart';
 ///  the install dates recorded on the equipment, so it cannot drift from the
 ///  rooms it describes the way a hand-maintained sheet does.
 ///
-///  THE GRID IS THE POINT, so it scrolls sideways on its own rather than
-///  forcing the whole tab to. A building with a twenty-year span is a wide
-///  document, and the room names have to stay readable while it is read across.
+///  THE GRID IS THE POINT, so it scrolls BOTH WAYS on its own rather than
+///  forcing the whole tab to, and the room names and the year headings stay
+///  pinned while it moves. A building with a twenty-year span is a wide
+///  document and a building with forty rooms is a tall one; either way the
+///  thing a cell is about has to still be on screen next to the cell.
 /// ============================================================================
 
 /// The building's replacement plan, as slivers for the project tab's one
@@ -38,6 +41,7 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
   final building = buildProjectLifecycle(
     estimate: estimate,
     library: provider.avDeviceLibrary,
+    baseCosts: provider.baseCosts,
     tier: provider.pricingTier,
   );
 
@@ -152,7 +156,7 @@ class _Summary extends StatelessWidget {
                 '$undated item${undated == 1 ? '' : 's'} across the job have '
                 'no install date, so nothing can be said about when they fall '
                 'due. Record them on each room\'s Lifecycle tab.',
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -188,7 +192,11 @@ class _Band extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(equipmentConditionIcon(condition), size: 20, color: color),
+        Icon(
+          equipmentConditionIcon(condition),
+          size: gridMetric(context, 22),
+          color: color,
+        ),
         const SizedBox(width: 8),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,7 +204,7 @@ class _Band extends StatelessWidget {
           children: [
             Text(
               kEquipmentConditionLabels[condition]!.toUpperCase(),
-              style: theme.textTheme.labelSmall?.copyWith(
+              style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
@@ -204,7 +212,7 @@ class _Band extends StatelessWidget {
               '$rooms room${rooms == 1 ? '' : 's'} · '
               '${formatEquipmentBand(items, cost, currency)}',
               key: ValueKey('lifecycle_band_${condition.name}'),
-              style: theme.textTheme.titleSmall?.copyWith(color: color),
+              style: theme.textTheme.titleMedium?.copyWith(color: color),
             ),
           ],
         ),
@@ -229,17 +237,25 @@ class _Figure extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
+          style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        Text(value, style: theme.textTheme.titleSmall?.copyWith(color: color)),
+        Text(value, style: theme.textTheme.titleMedium?.copyWith(color: color)),
       ],
     );
   }
 }
 
 /// The RYG grid itself: rooms down, years across.
+///
+/// IT SCROLLS IN ITS OWN FRAME, both ways, with the room names and the year
+/// headings pinned — see [PinnedGrid]. Before this it was laid out at full
+/// size inside the tab's one scroll view, which meant a building with forty
+/// rooms pushed the room list under it clean off the bottom of the window, and
+/// reading across a twenty-year span took the room names off the left edge
+/// with it. A cell that says '2031' against a room you can no longer see is a
+/// cell that says nothing.
 class _YearGrid extends StatelessWidget {
   final BuildingLifecycle building;
 
@@ -250,57 +266,97 @@ class _YearGrid extends StatelessWidget {
     final theme = Theme.of(context);
     final years = building.years();
     final thisYear = building.asOf.year;
+    if (years.isEmpty || building.rooms.isEmpty) return const SizedBox.shrink();
+
+    // EVERY BOX ON THE SHEET IS THE READER'S SIZE. These were fixed pixels,
+    // which on a machine at 150% gave the same 62-wide cell with a larger
+    // figure clipped inside it. See [gridMetric].
+    final yearColumn = gridMetric(context, 72);
+    final rowHeight = gridMetric(context, 28);
+    final roomColumn = gridMetric(context, 168);
+    final headHeight = gridMetric(context, 26);
+    final gap = gridMetric(context, 8);
+
+    final headStyle = theme.textTheme.labelMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, gap * 0.5, 16, gap * 1.5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'REPLACEMENT YEAR',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+            style: headStyle?.copyWith(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: gap * 0.5),
           // Six shades across a row are only readable against a key. The same
           // one the room's own tab carries, so a reader who learned it there
           // does not have to learn it again here.
           const EquipmentTimingKey(),
-          const SizedBox(height: 6),
-          // Its own horizontal scroller. The tab scrolls vertically as one
-          // document; a grid twenty years wide has to move sideways without
-          // dragging the header and the room list with it.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          SizedBox(height: gap * 0.75),
+          PinnedGrid(
+            frozenWidth: roomColumn,
+            headerHeight: headHeight,
+            bodyWidth: yearColumn * years.length,
+            bodyHeight: rowHeight * building.rooms.length,
+            corner: Align(
+              alignment: Alignment.bottomLeft,
+              child: Text('ROOM', style: headStyle),
+            ),
+            header: Row(
               children: [
-                Row(
-                  children: [
-                    const SizedBox(width: _kRoomColumn),
-                    for (final y in years)
-                      SizedBox(
-                        width: _kYearColumn,
-                        child: Text(
-                          '$y',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontWeight: y == thisYear
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                for (final y in years)
+                  SizedBox(
+                    width: yearColumn,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Text(
+                        '$y',
+                        style: headStyle?.copyWith(
+                          fontWeight: y == thisYear
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: y == thisYear
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 2),
+                    ),
+                  ),
+              ],
+            ),
+            frozen: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final room in building.rooms)
+                  SizedBox(
+                    height: rowHeight,
+                    child: Padding(
+                      padding: EdgeInsets.only(right: gap, bottom: 2),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          room.roomName,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                 for (final room in building.rooms)
                   _GridRow(
                     room: room,
                     years: years,
                     currency: building.currency,
+                    columnWidth: yearColumn,
+                    rowHeight: rowHeight,
                   ),
               ],
             ),
@@ -311,18 +367,21 @@ class _YearGrid extends StatelessWidget {
   }
 }
 
-const double _kRoomColumn = 150;
-const double _kYearColumn = 62;
-
+/// One room's years, as cells. The room's NAME is not here: it is in the
+/// frozen half, laid out on the same [rowHeight] so the two line up.
 class _GridRow extends StatelessWidget {
   final RoomLifecycle room;
   final List<int> years;
   final String currency;
+  final double columnWidth;
+  final double rowHeight;
 
   const _GridRow({
     required this.room,
     required this.years,
     required this.currency,
+    required this.columnWidth,
+    required this.rowHeight,
   });
 
   String _label(int year) {
@@ -339,18 +398,10 @@ class _GridRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+    return SizedBox(
+      height: rowHeight,
       child: Row(
         children: [
-          SizedBox(
-            width: _kRoomColumn,
-            child: Text(
-              room.roomName,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
           for (final year in years)
             Builder(
               builder: (context) {
@@ -367,9 +418,9 @@ class _GridRow extends StatelessWidget {
                       '${kEquipmentTimingLabels[timing]!}',
                   child: Container(
                     key: ValueKey('lifecycle_cell_${room.roomName}_$year'),
-                    width: _kYearColumn - 2,
-                    height: 22,
-                    margin: const EdgeInsets.only(right: 2),
+                    width: columnWidth - 2,
+                    height: rowHeight - 2,
+                    margin: const EdgeInsets.only(right: 2, bottom: 2),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       // Filled only where there is something to say. An empty
@@ -382,7 +433,9 @@ class _GridRow extends StatelessWidget {
                     ),
                     child: Text(
                       text,
-                      style: theme.textTheme.labelSmall?.copyWith(color: color),
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: color,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -409,12 +462,15 @@ class _RoomRow extends StatelessWidget {
     final color = equipmentTimingColor(context, timing);
     return ListTile(
       key: ValueKey('lifecycle_room_${room.roomName}'),
-      dense: true,
       leading: Tooltip(
         message: kEquipmentTimingLabels[timing]!,
-        child: Icon(equipmentTimingIcon(timing), color: color),
+        child: Icon(
+          equipmentTimingIcon(timing),
+          size: gridMetric(context, 24),
+          color: color,
+        ),
       ),
-      title: Text(room.roomName, style: theme.textTheme.titleSmall),
+      title: Text(room.roomName, style: theme.textTheme.titleMedium),
       subtitle: Text(
         [
           '${room.items.length} item${room.items.length == 1 ? '' : 's'}',
@@ -435,21 +491,22 @@ class _RoomRow extends StatelessWidget {
             )}',
           if (room.undated > 0) '${room.undated} without a date',
         ].join('  ·  '),
-        style: theme.textTheme.bodySmall,
+        style: theme.textTheme.bodyMedium,
       ),
       trailing: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (room.overdueCost > 0)
             Text(
               '${formatLifecycleMoney(room.overdueCost, currency)} overdue',
-              style: theme.textTheme.bodySmall?.copyWith(color: color),
+              style: theme.textTheme.bodyMedium?.copyWith(color: color),
             ),
           if (room.refreshCost > 0)
             Text(
               '${formatLifecycleMoney(room.refreshCost, currency)} to refresh',
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),

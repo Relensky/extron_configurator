@@ -1,4 +1,5 @@
 import 'av_device_library.dart';
+import 'base_costs.dart';
 import 'av_flow_model.dart';
 import 'project_estimate.dart';
 import 'report_tools.dart';
@@ -370,10 +371,22 @@ class EquipmentLife {
   /// render time, so every figure on one sheet is as of the same day.
   final DateTime asOf;
 
-  /// What it costs to replace, from the catalog at the job's tier. 0 when the
-  /// model is not in the catalog or carries no price — reported as unpriced
-  /// rather than as free.
+  /// What it costs to replace, at the job's tier.
+  ///
+  /// THE CATALOG FIRST, THEN THE BASE CARD. A refresh plan is read years
+  /// before the models are chosen and half the boxes on an old drawing are
+  /// positions nobody has ever catalogued, so pricing only what the catalog
+  /// knows left the plan reporting most of a building as free. The category
+  /// figure - what a camera costs, roughly - is the same rung the estimate
+  /// falls back to, and it is a far better answer to "what will this refresh
+  /// cost" than a hole. 0 only when neither has anything, and reported as
+  /// unpriced rather than as free.
   final double replacementCost;
+
+  /// True when [replacementCost] came off the base card rather than off a
+  /// price for this actual model. Said out loud wherever the figure is - a
+  /// typical price presented as a quote is how a budget goes wrong quietly.
+  final bool costIsEstimate;
 
   const EquipmentLife({
     required this.node,
@@ -384,6 +397,7 @@ class EquipmentLife {
     this.lifeSource = EquipmentLifeSource.fallback,
     required this.asOf,
     required this.replacementCost,
+    this.costIsEstimate = false,
   });
 
   /// How long it has been in, in years and fractions of one. Null with no
@@ -614,17 +628,55 @@ class RoomLifecycle {
 
 /// Ages every box in [model].
 ///
-/// [library] and [tier] price the replacement; without a library every item
-/// simply comes back unpriced, which is right for a caller that only wants the
-/// ages.
+/// [library], [baseCosts] and [tier] price the replacement: the catalog's
+/// figure for the model, and failing that the base card's figure for its
+/// category. Without either, every item simply comes back unpriced, which is
+/// right for a caller that only wants the ages.
 ///
 /// [asOf] is the day it is measured on and defaults to today. Passed explicitly
 /// by the reports and by every test, because a figure that changes with the
 /// clock cannot be checked.
+/// What one position costs to replace, and whether that figure is a typical
+/// one rather than this model's own.
+///
+/// THE SAME LADDER THE ESTIMATE CLIMBS, minus the rung that does not apply: a
+/// room's quoted price is what THIS job pays for a box being bought now, and a
+/// replacement five years out is not that. So the catalog's price for the
+/// model, then the base card for the category the catalog files it under, then
+/// the base card for what the device DOES in the room - which is the only
+/// category a position with no model at all has.
+({double cost, bool estimated}) equipmentReplacementPrice({
+  required AvNode node,
+  AvDeviceTemplate? template,
+  BaseCostBook? baseCosts,
+  PricingTier tier = PricingTier.msrp,
+}) {
+  final catalog = template?.priceForTier(tier).price ?? 0;
+  if (catalog > 0) return (cost: catalog, estimated: false);
+  if (baseCosts == null) return (cost: 0, estimated: false);
+
+  // Two goes at the card, for the reason set out in the estimate's own
+  // ladder: 'Matrix' is what Extron calls a switcher, and the card is written
+  // in this app's words.
+  final byRole = categoryForConfigKey(node.id);
+  final category = (template?.category.trim().isNotEmpty ?? false)
+      ? template!.category.trim()
+      : byRole;
+
+  var base = baseCosts.priceFor(category, tier);
+  if (base.price <= 0 && byRole.isNotEmpty && byRole != category) {
+    base = baseCosts.priceFor(byRole, tier);
+  }
+  return base.price > 0
+      ? (cost: base.price, estimated: true)
+      : (cost: 0.0, estimated: false);
+}
+
 RoomLifecycle buildRoomLifecycle({
   required AvFlowModel model,
   String roomName = '',
   AvDeviceLibrary? library,
+  BaseCostBook? baseCosts,
   PricingTier tier = PricingTier.msrp,
   DateTime? asOf,
   int defaultLifeYears = kDefaultEquipmentLifeYears,
@@ -658,6 +710,13 @@ RoomLifecycle buildRoomLifecycle({
       source = EquipmentLifeSource.fallback;
     }
 
+    final price = equipmentReplacementPrice(
+      node: node,
+      template: template,
+      baseCosts: baseCosts,
+      tier: tier,
+    );
+
     final entry = EquipmentLife(
       node: node,
       locationName: model.locationNameOf(node.id),
@@ -666,7 +725,8 @@ RoomLifecycle buildRoomLifecycle({
       lifeYears: life,
       lifeSource: source,
       asOf: day,
-      replacementCost: template?.priceForTier(tier).price ?? 0,
+      replacementCost: price.cost,
+      costIsEstimate: price.estimated,
     );
     // Off the cycle entirely, and out of everything derived from the list —
     // the counts, the colours, the money and the year grid.
@@ -791,6 +851,7 @@ class BuildingLifecycle {
 BuildingLifecycle buildProjectLifecycle({
   required ProjectEstimate estimate,
   AvDeviceLibrary? library,
+  BaseCostBook? baseCosts,
   PricingTier tier = PricingTier.msrp,
   DateTime? asOf,
   int defaultLifeYears = kDefaultEquipmentLifeYears,
@@ -805,6 +866,7 @@ BuildingLifecycle buildProjectLifecycle({
             model: room.room.model,
             roomName: room.codeName,
             library: library,
+            baseCosts: baseCosts,
             tier: tier,
             asOf: day,
             defaultLifeYears: defaultLifeYears,

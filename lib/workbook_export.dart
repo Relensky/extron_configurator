@@ -233,9 +233,11 @@ Future<void> exportProjectWorkbook(
     await File(target).writeAsBytes(
       buildProjectWorkbookBytes(
         estimate: estimate,
-        // The catalog prices the replacement plan's sheet. The estimate does
-        // not carry one, so it is handed over here where there is a provider.
+        // The catalog and the base card price the replacement plan's sheet.
+        // The estimate carries neither, so they are handed over here where
+        // there is a provider.
         library: provider.avDeviceLibrary,
+        baseCosts: provider.baseCosts,
         tier: provider.pricingTier,
       ),
     );

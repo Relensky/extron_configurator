@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'av_device_library.dart';
+import 'base_costs.dart';
 import 'building_project.dart';
 import 'control_gaps.dart';
 import 'cost_estimate.dart';
@@ -375,15 +376,14 @@ List<String> _projectWarnings(ProjectEstimate estimate) {
         'product${estimate.partsWithoutSpares.length == 1 ? '' : 's'} would '
         'be replaced out of the next budget rather than off the shelf - see '
         'the $kProjectSparesSheet sheet.',
-  // The job's OWN rule, broken. Not a judgement the app is making: somebody
-  // set the figure, and these are the parts held under it.
-  if (estimate.partsBelowSpareTarget.isNotEmpty)
-    '${estimate.partsBelowSpareTarget.length} '
-        'product${estimate.partsBelowSpareTarget.length == 1 ? '' : 's'} '
-        '${estimate.partsBelowSpareTarget.length == 1 ? 'is' : 'are'} held '
-        'below this job\'s own '
-        '${trimNumber(estimate.spareTargetPercent)}% spares target - see the '
-        '$kProjectSparesSheet sheet.',
+  // The job's rule, broken: one spare of everything a room installs. Said as
+  // a count of PARTS rather than as a percentage of the job, because it is the
+  // parts somebody has to go and decide about.
+  if (estimate.unsparedParts.isNotEmpty)
+    '${estimate.unsparedParts.length} '
+        'product${estimate.unsparedParts.length == 1 ? '' : 's'} '
+        '${estimate.unsparedParts.length == 1 ? 'is' : 'are'} installed with '
+        'nothing held spare - see the $kProjectSparesSheet sheet.',
   // Not a pricing problem either, and the last chance to catch it: the
   // workbook is usually built when the job is about to go somewhere, and a
   // drawing that has moved is found on the day it is wanted otherwise.
@@ -831,11 +831,10 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
   // nobody can approve until they know two out of how many.
   final cover = estimate.spareCover;
   sections.add((
-    title: estimate.hasSpareTarget
-        ? 'Spare cover against a '
-              '${trimNumber(estimate.spareTargetPercent)}% target '
-              '(${estimate.partsBelowSpareTarget.length} short)'
-        : 'Spare cover, part by part',
+    title: estimate.unsparedParts.isEmpty
+        ? 'Spare cover, part by part'
+        : 'Spare cover, part by part '
+              '(${estimate.unsparedParts.length} with no spare)',
     header: const [
       'Part',
       'Manufacturer',
@@ -843,12 +842,11 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
       'Installed',
       'Spares',
       'Cover',
-      'Target',
-      'Short by',
+      'Any spare',
     ],
     rows: cover.isEmpty
         ? [
-            ['Nothing on this job is installed yet.', '', '', '', '', '', '', ''],
+            ['Nothing on this job is installed yet.', '', '', '', '', '', ''],
           ]
         : [
             for (final c in cover)
@@ -862,10 +860,7 @@ List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
                 // holds "5%" beside "0%", and a spreadsheet that formatted one
                 // of them as 0.05 would be read as five units.
                 formatSpareCover(c.coverage),
-                estimate.hasSpareTarget
-                    ? '${trimNumber(estimate.spareTargetPercent)}%'
-                    : '',
-                c.short ? c.shortfall : '',
+                c.short ? 'none' : 'yes',
               ],
           ],
   ));
@@ -1186,11 +1181,12 @@ Uint8List buildProjectWorkbookBytes({
   required ProjectEstimate estimate,
   DateTime? generated,
 
-  /// The catalog, for pricing the replacement plan. Optional because the
-  /// estimate does not carry one and a caller that only wants the quote should
-  /// not have to find one — without it the plan still says WHEN each room
-  /// falls due, and simply prices nothing.
+  /// The catalog and the base card, for pricing the replacement plan. Both
+  /// optional because the estimate does not carry either and a caller that
+  /// only wants the quote should not have to find them — without them the plan
+  /// still says WHEN each room falls due, and simply prices nothing.
   AvDeviceLibrary? library,
+  BaseCostBook? baseCosts,
   PricingTier tier = PricingTier.msrp,
 }) {
   final stamp = generated ?? DateTime.now();
@@ -1284,6 +1280,7 @@ Uint8List buildProjectWorkbookBytes({
     buildProjectLifecycle(
       estimate: estimate,
       library: library,
+      baseCosts: baseCosts,
       tier: tier,
       asOf: stamp,
     ),

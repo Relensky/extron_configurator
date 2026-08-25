@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
+import 'package:extron_configurator/base_costs.dart';
 import 'package:extron_configurator/equipment_lifecycle.dart';
 import 'package:extron_configurator/model_swap.dart';
 import 'package:extron_configurator/room_locations.dart';
@@ -428,6 +429,93 @@ void main() {
       final wild = Map<String, dynamic>.from(node.toJson())
         ..['lifeYears'] = -8;
       expect(AvNode.fromJson(wild).lifeYears, 0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  WHAT REPLACING IT COSTS
+  // -------------------------------------------------------------------------
+  //  A refresh plan is read years before the models are chosen, and half the
+  //  boxes on an old drawing are positions nobody ever catalogued. Pricing
+  //  only what the catalog knows left the plan reporting most of a building as
+  //  free, which is the one direction a budget must not be wrong in.
+
+  group('what a replacement costs', () {
+    BaseCostBook cardWith(String category, double price) => BaseCostBook(
+      costs: [BaseCost(category: category, price: price)],
+    );
+
+    EquipmentLife priced({
+      AvDeviceLibrary? library,
+      BaseCostBook? baseCosts,
+      String id = 'PROJECTORDEVICE_1',
+      String model = 'PROJ-1',
+    }) => buildRoomLifecycle(
+      model: roomOf([box(id, model: model, installedOn: DateTime(2018, 6, 1))]),
+      library: library,
+      baseCosts: baseCosts,
+      asOf: asOf,
+    ).items.single;
+
+    test('the catalog price wins, and is not an estimate', () {
+      final library = AvDeviceLibrary.empty()
+        ..upsert(
+          AvDeviceTemplate(model: 'PROJ-1', price: 4200, ports: const []),
+        );
+      final item = priced(
+        library: library,
+        baseCosts: cardWith('Projector', 3000),
+      );
+      expect(item.replacementCost, 4200);
+      expect(item.costIsEstimate, isFalse);
+    });
+
+    test('a model the catalog cannot price falls back to the base card', () {
+      // The rung the estimate itself falls back to. Better than a hole in the
+      // total, as long as the figure says what it is.
+      final item = priced(baseCosts: cardWith('Projector', 3000));
+      expect(item.replacementCost, 3000);
+      expect(item.costIsEstimate, isTrue);
+    });
+
+    test('the card is read in the catalog category first', () {
+      // 'Matrix' is what a switcher is filed under when the entry was imported
+      // from the manufacturer; the card is written in this app's words, and
+      // [BaseCostBook.priceFor] translates the families that mean one thing.
+      final library = AvDeviceLibrary.empty()
+        ..upsert(
+          AvDeviceTemplate(
+            model: 'DTP-CP',
+            category: 'Matrix',
+            ports: const [],
+          ),
+        );
+      final item = priced(
+        library: library,
+        baseCosts: cardWith('Switcher', 5500),
+        id: 'PROJECTORDEVICE_1',
+        model: 'DTP-CP',
+      );
+      expect(item.replacementCost, 5500);
+      expect(item.costIsEstimate, isTrue);
+    });
+
+    test('a position with no model at all is priced by what it does', () {
+      // The only category such a position has is the one its config section
+      // key makes it - which is exactly the case the plan used to report free.
+      final item = priced(
+        baseCosts: cardWith('Camera', 1800),
+        id: 'CAMERADEVICE_1',
+        model: '',
+      );
+      expect(item.replacementCost, 1800);
+      expect(item.costIsEstimate, isTrue);
+    });
+
+    test('neither is unpriced, not free', () {
+      final item = priced();
+      expect(item.replacementCost, 0);
+      expect(item.costIsEstimate, isFalse);
     });
   });
 

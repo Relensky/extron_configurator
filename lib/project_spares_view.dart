@@ -613,15 +613,19 @@ class _RoomOwnSpareRow extends StatelessWidget {
 // ---------------------------------------------------------------------------
 //  HOW MUCH OF THE JOB IS SPARED
 // ---------------------------------------------------------------------------
-//  Every part the job installs, as a PERCENTAGE of it held on the shelf, and -
-//  once the job has said what it wants held - which of them fall short.
+//  Every part the job installs, as a PERCENTAGE of it held on the shelf, and
+//  which of them have nothing held at all.
 //
-//  The percentage is the whole point. "Two spare projectors" is a row nobody
-//  can approve or cut; "2 of 40, 5%" is a decision, and "5% against a 10%
-//  policy, two short" is an instruction. The target is what turns a list of
-//  two hundred parts into the six that need doing something about.
+//  ONE SPARE OR NONE is the rule, and it is the rule because it is the only
+//  one that needs no policy typed before the table will say anything. This
+//  used to measure every part against a percentage the job had to be told -
+//  which asked for four spare wall plates on a job with forty and said nothing
+//  about the one switcher the whole building runs through.
+//
+//  The percentage is still what every row SAYS. "Two spare projectors" is a
+//  row nobody can approve or cut; "2 of 40, 5%" is a decision.
 
-/// The percentage table, its target, and the way to fix a row that is short.
+/// The percentage table, and the way to fix a row with nothing spared.
 class _SpareCoverCard extends StatefulWidget {
   final ProjectEstimate estimate;
 
@@ -683,31 +687,6 @@ class _SpareCoverCardState extends State<_SpareCoverCard> {
                   ),
                 ),
               ),
-              // THE POLICY, ON THE TABLE IT GOVERNS. A target set three
-              // screens away would be a rule nobody could check against the
-              // rows it is flagging.
-              SizedBox(
-                width: 128,
-                child: LiveTextField(
-                  fieldId: 'project_spare_target',
-                  initial: estimate.hasSpareTarget
-                      ? trimNumber(estimate.spareTargetPercent)
-                      : '',
-                  label: 'Target',
-                  hint: 'none',
-                  suffix: '%',
-                  numeric: true,
-                  onChanged: (v) {
-                    final text = v.trim();
-                    // An empty box is "no policy" rather than nought per cent,
-                    // which here is the same thing: both stop the flagging
-                    // instead of flagging everything.
-                    context.read<AppStateProvider>().setProjectSpareTarget(
-                      text.isEmpty ? 0 : (double.tryParse(text) ?? 0),
-                    );
-                  },
-                ),
-              ),
             ],
           ),
           Padding(
@@ -754,21 +733,11 @@ class _CoverSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (!estimate.hasSpareTarget) {
-      return Text(
-        'Every part below is what the job installs and what it holds spare of '
-        'it. Set a target and anything held below that share is flagged.',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-
-    final target = trimNumber(estimate.spareTargetPercent);
     final fill = spareSectionFill(theme);
     if (short == 0) {
       return Text(
-        'All $parts ${parts == 1 ? 'part' : 'parts'} meet the $target% target.',
+        'All $parts ${parts == 1 ? 'part' : 'parts'} have at least one spare. '
+        'The share each one covers is on its row.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: accentTextOn(theme.colorScheme, fill),
           fontWeight: FontWeight.w600,
@@ -778,7 +747,7 @@ class _CoverSummary extends StatelessWidget {
 
     return Text(
       '$short of $parts ${parts == 1 ? 'part' : 'parts'} '
-      '${short == 1 ? 'is' : 'are'} below the $target% target.',
+      '${short == 1 ? 'has' : 'have'} no spare on the order.',
       style: theme.textTheme.bodySmall?.copyWith(
         color: errorTextOn(theme.colorScheme, fill),
         fontWeight: FontWeight.w600,
@@ -820,8 +789,7 @@ class _CoverRow extends StatelessWidget {
                   '${trimNumber(cover.spares)} spare of '
                   '${trimNumber(cover.installed)} installed  ·  '
                   '${formatSpareCover(cover.coverage)}'
-                  '${cover.short ? '  ·  '
-                      '${trimNumber(cover.shortfall)} short' : ''}',
+                  '${cover.short ? '  ·  no spare' : ''}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: flag,
                     fontWeight: cover.short ? FontWeight.w600 : null,
@@ -831,11 +799,11 @@ class _CoverRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // THE FIX, ON THE ROW THAT IS WRONG. A table that says a part is two
-          // short and then sends somebody to a control somewhere else to add
-          // them is a table that gets read and then ignored. A short row
-          // offers the shortfall itself; every other row can still be topped
-          // up by one.
+          // THE FIX, ON THE ROW THAT IS WRONG. A table that says a part has
+          // nothing spared and then sends somebody to a control somewhere else
+          // to add one is a table that gets read and then ignored. A row with
+          // nothing on the shelf offers the first one; every other row can
+          // still be topped up.
           if (cover.short)
             FilledButton.tonal(
               key: ValueKey('spare_cover_add_${line.key}'),

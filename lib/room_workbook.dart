@@ -192,6 +192,7 @@ Uint8List buildRoomWorkbookBytes({
             model: av,
             roomName: roomCodeFromConfig(provider.roomConfig),
             library: provider.avDeviceLibrary,
+            baseCosts: provider.baseCosts,
             tier: provider.pricingTier,
             asOf: stamp,
           ),

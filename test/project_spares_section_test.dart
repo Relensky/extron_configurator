@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
-import 'package:extron_configurator/live_text_field.dart';
 import 'package:extron_configurator/project_view.dart';
 
 /// The spares section on the Equipment list.
@@ -285,52 +284,50 @@ void main() {
     );
   });
 
-  testWidgets('a part held under the target is flagged, and fixed on the row',
+  testWidgets('a part with nothing spared is flagged, and fixed on the row',
       (tester) async {
     final p = withRooms(4);
-    p.setProjectSpareTarget(10);
     final line = p.priceProject().master.first;
     await openSpares(tester, p);
 
-    // Four installed at ten per cent is one box, and none are held.
-    expect(find.textContaining('below the 10% target'), findsOneWidget);
+    // ONE SPARE OR NONE is the whole rule - no policy has to be set for the
+    // table to say something, which is what the percentage target got wrong.
+    expect(find.textContaining('has no spare on the order'), findsOneWidget);
     expect(find.textContaining('0 spare of 4 installed'), findsOneWidget);
 
-    // THE FIX IS ON THE ROW. A table that says a part is one short and sends
-    // somebody somewhere else to add it is a table that gets ignored.
+    // THE FIX IS ON THE ROW. A table that says a part has none and sends
+    // somebody somewhere else to add one is a table that gets ignored.
     await tester.tap(find.byKey(ValueKey('spare_cover_add_${line.key}')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('add_spare_dialog')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('add_spare_confirm')));
     await tester.pumpAndSettle();
 
-    // Opened with the part picked and the shortfall already typed in.
+    // Opened with the part picked and the one it is short already typed in.
     expect(p.project.spares.single.qty, 1);
     expect(p.project.spares.single.partKey, line.key);
-    expect(p.priceProject().partsBelowSpareTarget, isEmpty);
+    expect(p.priceProject().unsparedParts, isEmpty);
   });
 
-  testWidgets('the target is set on the table it governs', (tester) async {
+  testWidgets('one spare is enough however many are installed', (tester) async {
     final p = withRooms(4);
+    final line = p.priceProject().master.first;
+    p.addProjectSpare(
+      partKey: line.key,
+      description: line.description,
+      model: line.model,
+      qty: 1,
+    );
     await openSpares(tester, p);
 
-    final target = find.byWidgetPredicate(
-      (w) => w is LiveTextField && w.fieldId == 'project_spare_target',
+    // 25% cover is not a fault - somebody looked at this part and bought one.
+    // The percentage is what the row SAYS, not what flags it.
+    expect(find.textContaining('no spare on the order'), findsNothing);
+    expect(
+      find.textContaining('have at least one spare'),
+      findsOneWidget,
     );
-    expect(find.textContaining('Set a target'), findsOneWidget);
-
-    await tester.enterText(target, '25');
-    await tester.pumpAndSettle();
-    expect(p.project.spareTargetPercent, 25);
-    expect(find.textContaining('below the 25% target'), findsOneWidget);
-
-    // Emptied is no policy rather than nought per cent, and nothing is short
-    // of a rule nobody set.
-    await tester.enterText(target, '');
-    await tester.pumpAndSettle();
-    expect(p.project.spareTargetPercent, 0);
-    expect(find.textContaining('below the'), findsNothing);
-    expect(find.textContaining('Set a target'), findsOneWidget);
+    expect(find.textContaining('1 spare of 4 installed  ·  25%'), findsWidgets);
   });
 
   testWidgets('a spare is added from the no-spare check', (tester) async {
@@ -355,7 +352,9 @@ void main() {
     // ignored.
     await tester.tap(find.textContaining('No spare ('));
     await tester.pumpAndSettle();
-    expect(find.text('Nothing spared of this'), findsOneWidget);
+    // The note carries what it is short AGAINST. "No spare" on its own is a
+    // row somebody has to go and research before they can weigh it.
+    expect(find.text('No spare for 2 installed'), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey('part_add_spare_${line.key}')));
     await tester.pumpAndSettle();

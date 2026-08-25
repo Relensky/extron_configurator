@@ -1757,11 +1757,6 @@ class _BuildingTotals extends StatelessWidget {
 const String kSparedFilter = '<spared>';
 const String kNoSpareFilter = '<no-spare>';
 
-/// Parts held below the share of them the job says it wants spared — see
-/// [BuildingProject.spareTargetPercent]. Only ever offered on a job that has
-/// set a target: with no policy there is nothing to fall short of.
-const String kBelowSpareTargetFilter = '<spare-short>';
-
 /// The core components list, as slivers for the tab's one scroll view.
 List<Widget> partsSlivers(
   BuildContext context, {
@@ -1782,14 +1777,11 @@ List<Widget> partsSlivers(
   final sparesOnly = vendorFilter == kSparedFilter;
   final room = sparesOnly ? spareRoom : '';
 
-  // WHAT EACH PART IS SHORT BY, built once for the whole list rather than per
-  // row: every row asks, and working it out on the row would walk the master
-  // list once per row while somebody drags the scrollbar.
-  //
-  // Empty on a job with no target, which is what makes the flag mean
-  // something — a warning on every row is a warning on none.
-  final shortBy = {
-    for (final c in estimate.partsBelowSpareTarget) c.line.key: c.shortfall,
+  // WHAT EACH UNSPARED PART COVERS, built once for the whole list rather than
+  // per row: every row asks, and working it out on the row would walk the
+  // master list once per row while somebody drags the scrollbar.
+  final unspared = {
+    for (final c in estimate.unsparedParts) c.line.key: c.installed,
   };
 
   bool matchesVendor(MasterPartLine line) {
@@ -1809,12 +1801,6 @@ List<Widget> partsSlivers(
     // to be asked about a spare blanking plate.
     if (vendorFilter == kNoSpareFilter) {
       return line.kind == MasterPartKind.equipment && !line.hasSpares;
-    }
-    // Short of the job's own rule, which is a different and much shorter list
-    // than "has no spare": a job that holds ten per cent does not want to be
-    // told about the part it has one spare of out of four.
-    if (vendorFilter == kBelowSpareTargetFilter) {
-      return shortBy.containsKey(line.key);
     }
     return line.vendor?.id == vendorFilter;
   }
@@ -1949,19 +1935,14 @@ List<Widget> partsSlivers(
                         : 'Spares (${estimate.sparedParts.length})',
                     kSparedFilter,
                   ),
+                  // THE JOB'S RULE, AND THE ONLY SPARES CHIP THAT IS A
+                  // FAULT: one spare of everything the job installs, so a part
+                  // with none is a part somebody has to decide about rather
+                  // than a question to browse.
                   if (estimate.partsWithoutSpares.isNotEmpty)
                     filterChip(
                       'No spare (${estimate.partsWithoutSpares.length})',
                       kNoSpareFilter,
-                    ),
-                  // The job's own rule, and the only spares chip that is a
-                  // FAULT rather than a question: these are parts the job has
-                  // already said it wants more of.
-                  if (shortBy.isNotEmpty)
-                    filterChip(
-                      'Below ${trimNumber(estimate.spareTargetPercent)}% '
-                      'target (${shortBy.length})',
-                      kBelowSpareTargetFilter,
                       warn: true,
                     ),
                 ],
@@ -2017,10 +1998,8 @@ List<Widget> partsSlivers(
             roomNames: roomNames,
             spareRoom: room,
             sparesOnly: sparesOnly,
-            shortfall: shortBy[lines[index].key] ?? 0,
-            askingAboutSpares:
-                vendorFilter == kNoSpareFilter ||
-                vendorFilter == kBelowSpareTargetFilter,
+            installedUnspared: unspared[lines[index].key] ?? 0,
+            askingAboutSpares: vendorFilter == kNoSpareFilter,
           ),
         ),
       ),
@@ -2255,14 +2234,18 @@ class _PartRow extends StatelessWidget {
   /// and for whom".
   final bool sparesOnly;
 
-  /// Units this part would need to meet the job's spares target, 0 when it
-  /// meets it or when the job has set no target.
-  final double shortfall;
+  /// How many of this part the job installs, on a part with NOTHING spared —
+  /// 0 on a part that has a spare, or that no room installs.
+  ///
+  /// The figure the note is written from: "no spare for 12 installed" is a
+  /// decision, and "no spare" on its own is a row somebody has to go and
+  /// research before they can weigh it.
+  final double installedUnspared;
 
-  /// True while the list is answering a question ABOUT SPARES — the parts with
-  /// none, or the ones below the target. What it changes is that the row
-  /// offers the fix: this is the list somebody is looking at when they decide
-  /// to spare something, and the only reason to open it is to act on it.
+  /// True while the list is answering a question ABOUT SPARES. What it changes
+  /// is that the row offers the fix: this is the list somebody is looking at
+  /// when they decide to spare something, and the only reason to open it is to
+  /// act on it.
   final bool askingAboutSpares;
 
   const _PartRow({
@@ -2271,7 +2254,7 @@ class _PartRow extends StatelessWidget {
     required this.roomNames,
     this.spareRoom = '',
     this.sparesOnly = false,
-    this.shortfall = 0,
+    this.installedUnspared = 0,
     this.askingAboutSpares = false,
   });
 
@@ -2417,12 +2400,17 @@ class _PartRow extends StatelessWidget {
                         ],
                       ),
                     ),
-                  // SHORT OF THE JOB'S OWN RULE, and the way to fix it. The
-                  // percentage table on the spares section says the same thing
-                  // about the whole job; this says it on the row somebody is
-                  // already reading, which is where the decision to buy one
+                  // NOTHING SPARED, AND THE WAY TO FIX IT. One spare of
+                  // everything the job installs is the whole rule, so a part
+                  // with none is the row worth acting on - and the percentage
+                  // table on the spares section says the same thing about the
+                  // job as a whole. This says it where the decision to buy one
                   // more actually gets made.
-                  if (shortfall > 0)
+                  //
+                  // FLAGGED ONLY WHILE SPARES ARE THE QUESTION. A red note on
+                  // every unspared row of a two-hundred-part list is a warning
+                  // on none of them.
+                  if (askingAboutSpares && installedUnspared > 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Row(
@@ -2438,9 +2426,8 @@ class _PartRow extends StatelessWidget {
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              '${trimNumber(shortfall)} short of the '
-                              '${trimNumber(estimate.spareTargetPercent)}% '
-                              'spares target',
+                              'No spare for '
+                              '${trimNumber(installedUnspared)} installed',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: errorTextOn(
                                   theme.colorScheme,
@@ -2454,16 +2441,15 @@ class _PartRow extends StatelessWidget {
                           _AddSpareButton(
                             estimate: estimate,
                             line: line,
-                            qty: shortfall,
-                            label: 'Add ${trimNumber(shortfall)}',
+                            qty: 1,
+                            label: 'Add a spare',
                           ),
                         ],
                       ),
                     )
-                  // NOTHING SPARED, while that is the question being asked.
-                  // The list of parts with no spare used to be a list to read
-                  // and then go and do something about somewhere else, which
-                  // is why it was read and then ignored.
+                  // The same question about a part no room installs - a quoted
+                  // extra, a shelf item. Not a fault: there is nothing to be
+                  // a percentage of.
                   else if (askingAboutSpares && !line.hasSpares)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),

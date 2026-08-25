@@ -29,6 +29,10 @@ Future<void> showLaborRatesDialog(
   builder: (ctx) => const _LaborRatesDialog(),
 );
 
+/// How much room the rate list's scrollbar is given beside the rows, so the
+/// thumb never lands on the Remove button at the end of one.
+const double _kScrollGutter = 14;
+
 class _LaborRatesDialog extends StatefulWidget {
   const _LaborRatesDialog();
 
@@ -45,9 +49,18 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
   /// [LaborRate.matches].
   final TextEditingController _search = TextEditingController();
 
+  /// The rate list's own bar, given a gutter of its own to sit in.
+  ///
+  /// It used to be the scroll view's default one, drawn over the right-hand
+  /// edge of the rows - which on this dialog is the Remove button and the tail
+  /// of the notes field. A thumb on top of a delete icon is a thumb you press
+  /// the delete icon through.
+  final ScrollController _rows = ScrollController();
+
   @override
   void dispose() {
     _search.dispose();
+    _rows.dispose();
     super.dispose();
   }
 
@@ -114,142 +127,151 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                SizedBox(
-                  width: 62,
-                  child: Text('Short', style: theme.textTheme.labelSmall),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 200,
-                  child: Text('Job type', style: theme.textTheme.labelSmall),
-                ),
-                SizedBox(
-                  width: 130,
-                  child: Text(
-                    'Rate (per hour)',
-                    style: theme.textTheme.labelSmall,
+            Padding(
+              padding: const EdgeInsets.only(right: _kScrollGutter),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 62,
+                    child: Text('Short', style: theme.textTheme.labelSmall),
                   ),
-                ),
-                SizedBox(
-                  width: 90,
-                  child: Text('Taxable', style: theme.textTheme.labelSmall),
-                ),
-                Expanded(
-                  child: Text('Notes', style: theme.textTheme.labelSmall),
-                ),
-                const SizedBox(width: 34),
-              ],
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 200,
+                    child: Text('Job type', style: theme.textTheme.labelSmall),
+                  ),
+                  SizedBox(
+                    width: 130,
+                    child: Text(
+                      'Rate (per hour)',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 90,
+                    child: Text('Taxable', style: theme.textTheme.labelSmall),
+                  ),
+                  Expanded(
+                    child: Text('Notes', style: theme.textTheme.labelSmall),
+                  ),
+                  const SizedBox(width: 34),
+                ],
+              ),
             ),
             const Divider(),
             Expanded(
-              child: ListView(
-                children: [
-                  for (final rate in book.rates)
-                    if (rate.matches(_search.text))
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Row(
-                        children: [
-                          // Derived from the name, so it follows a rename
-                          // rather than going stale beside it.
-                          SizedBox(
-                            width: 62,
-                            child: Text(
-                              rate.initialism,
-                              textAlign: TextAlign.right,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 200,
-                            child: LiveTextField(
-                              fieldId: 'name_${rate.id}',
-                              initial: rate.name,
-                              onChanged: (v) => _update(
-                                provider,
-                                rate.copyWith(name: v),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 130,
-                            child: LiveTextField(
-                              fieldId: 'rate_${rate.id}',
-                              initial: rate.hourlyRate == 0
-                                  ? ''
-                                  : trimNumber(rate.hourlyRate),
-                              prefix: provider.avCost.currency,
-                              hint: 'not set',
-                              numeric: true,
-                              onChanged: (v) => _update(
-                                provider,
-                                rate.copyWith(
-                                  hourlyRate: double.tryParse(v.trim()) ?? 0,
+              child: Scrollbar(
+                controller: _rows,
+                thumbVisibility: true,
+                child: ListView(
+                  controller: _rows,
+                  padding: const EdgeInsets.only(right: _kScrollGutter),
+                  children: [
+                    for (final rate in book.rates)
+                      if (rate.matches(_search.text))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            // Derived from the name, so it follows a rename
+                            // rather than going stale beside it.
+                            SizedBox(
+                              width: 62,
+                              child: Text(
+                                rate.initialism,
+                                textAlign: TextAlign.right,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.primary,
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 90,
-                            child: Checkbox(
-                              value: rate.taxable,
-                              onChanged: (v) => _update(
-                                provider,
-                                rate.copyWith(taxable: v ?? false),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 200,
+                              child: LiveTextField(
+                                fieldId: 'name_${rate.id}',
+                                initial: rate.name,
+                                onChanged: (v) => _update(
+                                  provider,
+                                  rate.copyWith(name: v),
+                                ),
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: LiveTextField(
-                              fieldId: 'notes_${rate.id}',
-                              initial: rate.notes,
-                              onChanged: (v) => _update(
-                                provider,
-                                rate.copyWith(notes: v),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 130,
+                              child: LiveTextField(
+                                fieldId: 'rate_${rate.id}',
+                                initial: rate.hourlyRate == 0
+                                    ? ''
+                                    : trimNumber(rate.hourlyRate),
+                                prefix: provider.avCost.currency,
+                                hint: 'not set',
+                                numeric: true,
+                                onChanged: (v) => _update(
+                                  provider,
+                                  rate.copyWith(
+                                    hourlyRate: double.tryParse(v.trim()) ?? 0,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          avRowIcon(
-                            Icons.delete_outline,
-                            'Remove job type',
-                            () {
-                              provider.laborRates.remove(rate.id);
-                              setState(() => _dirty = true);
-                              provider.laborRatesChanged();
-                            },
-                            danger: true,
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 90,
+                              child: Checkbox(
+                                value: rate.taxable,
+                                onChanged: (v) => _update(
+                                  provider,
+                                  rate.copyWith(taxable: v ?? false),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: LiveTextField(
+                                fieldId: 'notes_${rate.id}',
+                                initial: rate.notes,
+                                onChanged: (v) => _update(
+                                  provider,
+                                  rate.copyWith(notes: v),
+                                ),
+                              ),
+                            ),
+                            avRowIcon(
+                              Icons.delete_outline,
+                              'Remove job type',
+                              () {
+                                provider.laborRates.remove(rate.id);
+                                setState(() => _dirty = true);
+                                provider.laborRatesChanged();
+                              },
+                              danger: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add job type'),
+                        onPressed: () {
+                          final book = provider.laborRates;
+                          book.upsert(
+                            LaborRate(id: book.newId('rate'), name: 'New role'),
+                          );
+                          setState(() => _dirty = true);
+                          provider.laborRatesChanged();
+                        },
                       ),
                     ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add job type'),
-                      onPressed: () {
-                        final book = provider.laborRates;
-                        book.upsert(
-                          LaborRate(id: book.newId('rate'), name: 'New role'),
-                        );
-                        setState(() => _dirty = true);
-                        provider.laborRatesChanged();
-                      },
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const Divider(),

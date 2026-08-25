@@ -7,6 +7,7 @@ import 'av_flow_model.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
+import 'pinned_grid.dart' show gridMetric;
 import 'project_estimate.dart' show roomCodeFromConfig;
 import 'stepped_date_picker.dart';
 
@@ -50,6 +51,22 @@ class _LifecycleViewState extends State<LifecycleView> {
   /// be a plan that reads differently for two people.
   bool _showNever = false;
 
+  /// ONE SCROLL REGION FOR THE WHOLE TAB, and the bar that says so.
+  ///
+  /// The strip at the top used to be nailed in place above a list that
+  /// scrolled under it. On a machine at 150% that strip is half the window -
+  /// six bands, a bar and a key, all at the reader's type size - and the list
+  /// it was pinned above had nothing left to stand in. It scrolls away with
+  /// everything else now, and there is one thumb on the screen rather than a
+  /// list that moves under a header that cannot.
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppStateProvider>();
@@ -58,6 +75,7 @@ class _LifecycleViewState extends State<LifecycleView> {
       model: model,
       roomName: roomCodeFromConfig(provider.roomConfig),
       library: provider.avDeviceLibrary,
+      baseCosts: provider.baseCosts,
       tier: provider.pricingTier,
     );
 
@@ -82,45 +100,287 @@ class _LifecycleViewState extends State<LifecycleView> {
         for (final i in room.neverReplaced) (item: i, never: true),
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _Summary(room: room, currency: provider.currencySymbol),
-        _RoomActions(
-          room: room,
-          showNever: _showNever,
-          onShowNever: () => setState(() => _showNever = !_showNever),
+    return Scrollbar(
+      controller: _scroll,
+      child: CustomScrollView(
+        controller: _scroll,
+        slivers: [
+          SliverToBoxAdapter(
+            child: _Summary(room: room, currency: provider.currencySymbol),
+          ),
+          SliverToBoxAdapter(
+            child: _RoomActions(
+              room: room,
+              showNever: _showNever,
+              onShowNever: () => setState(() => _showNever = !_showNever),
+            ),
+          ),
+          const SliverToBoxAdapter(child: Divider(height: 1)),
+          if (rows.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Every item in this room is off the refresh cycle.\n\n'
+                  'Nothing here falls due, which is a real answer for a '
+                  'room of brackets and plates - and the toggle above '
+                  'shows them.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+            )
+          else
+            SliverList.separated(
+              itemCount: rows.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, i) => _ItemRow(
+                item: rows[i].item,
+                currency: provider.currencySymbol,
+                never: rows[i].never,
+              ),
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Which record a life is written onto.
+enum EquipmentLifeScope {
+  /// This box, in this room. Somebody looked at THIS projector.
+  position,
+
+  /// The product, in the catalog. Follows the model into every other room and
+  /// into next year's job.
+  catalog,
+}
+
+/// Asks how long a position lasts, and which record to keep the answer on.
+///
+/// THE SECOND HALF OF THE DUE DATE. The plan is the install date plus the
+/// life, and until now only the date could be edited from the list: the life
+/// came off the catalog page, which is a different screen, a different
+/// document, and a trip nobody makes while walking a room. A five-year life on
+/// a projector that runs eight hours a day is exactly the sort of thing that
+/// gets noticed standing in front of it.
+Future<void> showEquipmentLifeDialog(
+  BuildContext context,
+  EquipmentLife item,
+) => showDialog<void>(
+  context: context,
+  builder: (_) => _EquipmentLifeDialog(item: item),
+);
+
+class _EquipmentLifeDialog extends StatefulWidget {
+  final EquipmentLife item;
+
+  const _EquipmentLifeDialog({required this.item});
+
+  @override
+  State<_EquipmentLifeDialog> createState() => _EquipmentLifeDialogState();
+}
+
+class _EquipmentLifeDialogState extends State<_EquipmentLifeDialog> {
+  late final TextEditingController _years = TextEditingController(
+    text: '${widget.item.lifeYears}',
+  );
+  EquipmentLifeScope _scope = EquipmentLifeScope.position;
+
+  @override
+  void dispose() {
+    _years.dispose();
+    super.dispose();
+  }
+
+  String get _model => widget.item.node.model.trim();
+
+  /// What was typed, or null when it is not a life.
+  int? get _typed {
+    final text = _years.text.trim();
+    if (text.isEmpty) return 0;
+    final years = int.tryParse(text);
+    if (years == null || years < 0 || years > 100) return null;
+    return years;
+  }
+
+  Future<void> _apply() async {
+    final years = _typed;
+    if (years == null) return;
+    final provider = context.read<AppStateProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final id = widget.item.node.id;
+
+    if (_scope == EquipmentLifeScope.position) {
+      provider.setAvNodeLifeYears(id, years);
+      if (mounted) Navigator.of(context).pop();
+      showTimedSnackBar(
+        messenger,
+        SnackBar(
+          content: Text(
+            years == 0
+                ? '${widget.item.node.label} follows the catalog again.'
+                : '${widget.item.node.label} is held to $years years.',
+          ),
         ),
-        const Divider(height: 1),
-        Expanded(
-          child: rows.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'Every item in this room is off the refresh cycle.\n\n'
-                      'Nothing here falls due, which is a real answer for a '
-                      'room of brackets and plates - and the toggle above '
-                      'shows them.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
+      );
+      return;
+    }
+
+    final result = await provider.setModelLifeYears(_model, years);
+    // A life typed on THIS box would shadow the one just written onto the
+    // product, which is the opposite of what "keep it with the model" means.
+    if (result.ok) provider.setAvNodeLifeYears(id, 0);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : snackErrorFill(context),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.watch<AppStateProvider>();
+    final item = widget.item;
+    final typed = _typed;
+
+    // The catalog rung is only offered when there is an entry to write onto.
+    // Creating one from here would put a model and a life in the catalog with
+    // no maker, no part number and no price behind them - see
+    // [AppStateProvider.setModelLifeYears].
+    final catalogEntry = _model.isEmpty
+        ? null
+        : provider.avDeviceLibrary.templateForModel(_model);
+
+    return AlertDialog(
+      key: const ValueKey('equipment_life_dialog'),
+      title: const Text('How long does this last?'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${item.node.label} is on a ${item.lifeYears}-year life '
+              '(${kEquipmentLifeSourceLabels[item.lifeSource]}). The date it '
+              'falls due is the day it went in plus this.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('equipment_life_years'),
+              controller: _years,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Life',
+                suffixText: 'yrs',
+                border: const OutlineInputBorder(),
+                helperText: 'blank or 0 = follow the catalog '
+                    '($kDefaultEquipmentLifeYears by default)',
+                errorText: typed == null ? 'A whole number of years, up to 100'
+                    : null,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 16),
+            RadioGroup<EquipmentLifeScope>(
+              groupValue: _scope,
+              onChanged: (v) =>
+                  setState(() => _scope = v ?? EquipmentLifeScope.position),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<EquipmentLifeScope>(
+                    key: const ValueKey('equipment_life_scope_position'),
+                    value: EquipmentLifeScope.position,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'This one only',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    subtitle: Text(
+                      'A fact about this box in this room - it runs longer '
+                      'hours, or it is already tired.',
+                      style: theme.textTheme.bodySmall,
                     ),
                   ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) => _ItemRow(
-                    item: rows[i].item,
-                    currency: provider.currencySymbol,
-                    never: rows[i].never,
+                  RadioListTile<EquipmentLifeScope>(
+                    key: const ValueKey('equipment_life_scope_catalog'),
+                    value: EquipmentLifeScope.catalog,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    // Nothing to write onto is a disabled choice with the
+                    // reason under it, rather than a choice that fails when it
+                    // is pressed.
+                    enabled: catalogEntry != null,
+                    title: Text(
+                      catalogEntry == null
+                          ? 'Keep it with the model'
+                          : 'Keep it with $_model',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    subtitle: Text(
+                      catalogEntry == null
+                          ? (_model.isEmpty
+                                ? 'This position has no model on it yet.'
+                                : '"$_model" is not in the catalog yet - add '
+                                      'it there first.')
+                          : 'Saved into the catalog, so every one of these on '
+                                'this job and the next follows it.',
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ),
-                ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('equipment_life_cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('equipment_life_apply'),
+          onPressed: typed == null ? null : _apply,
+          child: Text(
+            _scope == EquipmentLifeScope.catalog ? 'Save to catalog' : 'Set',
+          ),
         ),
       ],
     );
   }
+}
+
+/// THE SIZE EVERY BUTTON ON THIS SCREEN IS.
+///
+/// Material's default is sized for a phone's thumb against a phone's type. On
+/// a desktop at 150% the type inside the button grew and the button did not,
+/// which left labels touching both edges of a control that had stopped looking
+/// pressable. This grows the box with the words in it - see [gridMetric] - and
+/// keeps a minimum height a mouse can hit without aiming.
+ButtonStyle lifecycleButtonStyle(BuildContext context) {
+  final unit = gridMetric(context, 12);
+  return ButtonStyle(
+    padding: WidgetStatePropertyAll(
+      EdgeInsets.symmetric(horizontal: unit * 1.4, vertical: unit * 0.9),
+    ),
+    minimumSize: WidgetStatePropertyAll(Size(0, gridMetric(context, 44))),
+    textStyle: WidgetStatePropertyAll(Theme.of(context).textTheme.titleSmall),
+  );
 }
 
 /// The one thing this screen does to the whole room at once.
@@ -147,56 +407,88 @@ class _RoomActions extends StatelessWidget {
     final theme = Theme.of(context);
     final undated = room.undated;
     final never = room.neverCount;
+    final gap = gridMetric(context, 12);
 
+    final date = FilledButton.tonalIcon(
+      key: const ValueKey('lifecycle_date_room'),
+      style: lifecycleButtonStyle(context),
+      onPressed: () => showRoomInstallDateDialog(context),
+      icon: Icon(Icons.event_repeat, size: gridMetric(context, 20)),
+      label: const Text('Date the whole room…'),
+    );
+
+    final note = Text(
+      undated == 0
+          ? 'Every item has a date. Use this to move them all to a new one '
+                'after a refresh.'
+          : '$undated of ${room.items.length} item'
+                '${room.items.length == 1 ? '' : 's'} still have no date. '
+                'One press sets them all.',
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: undated == 0
+            ? theme.colorScheme.onSurfaceVariant
+            : theme.colorScheme.tertiary,
+      ),
+    );
+
+    // WHAT IS BEING HELD BACK, AND THE WAY TO SEE IT. Only once there is
+    // something: a toggle for a thing that has never happened is one more
+    // control to read past. It says the COUNT rather than 'show hidden',
+    // because a plan that is quietly shorter than the room is exactly what
+    // this had to avoid.
+    final reveal = never == 0
+        ? null
+        : TextButton.icon(
+            key: const ValueKey('lifecycle_show_never'),
+            style: lifecycleButtonStyle(context),
+            onPressed: onShowNever,
+            icon: Icon(
+              showNever ? Icons.visibility_off : Icons.visibility,
+              size: gridMetric(context, 20),
+            ),
+            label: Text(
+              showNever
+                  ? 'Hide the $never that never need replacing'
+                  : 'Show $never that never need replacing',
+            ),
+          );
+
+    // THE SENTENCE GIVES WAY BEFORE THE BUTTONS DO. On a narrow window - or a
+    // display at 150%, which is the same thing - a row of two buttons with a
+    // paragraph wedged between them squeezes both buttons until neither of
+    // them reads. Below a threshold the note drops to its own line and the
+    // controls keep their full size.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Row(
-        children: [
-          FilledButton.tonalIcon(
-            key: const ValueKey('lifecycle_date_room'),
-            onPressed: () => showRoomInstallDateDialog(context),
-            icon: const Icon(Icons.event_repeat, size: 18),
-            label: const Text('Date the whole room…'),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              undated == 0
-                  ? 'Every item has a date. Use this to move them all to a new '
-                      'one after a refresh.'
-                  : '$undated of ${room.items.length} item'
-                      '${room.items.length == 1 ? '' : 's'} still have no '
-                      'date. One press sets them all.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: undated == 0
-                    ? theme.colorScheme.onSurfaceVariant
-                    : theme.colorScheme.tertiary,
-              ),
-            ),
-          ),
-          // WHAT IS BEING HELD BACK, AND THE WAY TO SEE IT. Only once there is
-          // something: a toggle for a thing that has never happened is one
-          // more control to read past. It says the COUNT rather than 'show
-          // hidden', because a plan that is quietly shorter than the room is
-          // exactly what this had to avoid.
-          if (never > 0)
-            TextButton.icon(
-              key: const ValueKey('lifecycle_show_never'),
-              onPressed: onShowNever,
-              icon: Icon(
-                showNever ? Icons.visibility_off : Icons.visibility,
-                size: 18,
-              ),
-              label: Text(
-                showNever
-                    ? 'Hide the $never that never need replacing'
-                    : 'Show $never that never need replacing',
-              ),
-            ),
-        ],
+      padding: EdgeInsets.fromLTRB(16, 0, 16, gap * 0.8),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          if (box.maxWidth < gridMetric(context, 720)) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: gap,
+                  runSpacing: gap * 0.5,
+                  children: [date, ?reveal],
+                ),
+                SizedBox(height: gap * 0.6),
+                note,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              date,
+              SizedBox(width: gap),
+              Expanded(child: note),
+              if (reveal != null) ...[SizedBox(width: gap), reveal],
+            ],
+          );
+        },
       ),
     );
   }
+
 }
 
 /// Which boxes a room-wide date lands on.
@@ -492,25 +784,25 @@ class EquipmentTimingKey extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Wrap(
-      spacing: 12,
-      runSpacing: 6,
+      spacing: gridMetric(context, 14),
+      runSpacing: gridMetric(context, 6),
       children: [
         for (final timing in ramp)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 12,
-                height: 12,
+                width: gridMetric(context, 14),
+                height: gridMetric(context, 14),
                 decoration: BoxDecoration(
                   color: equipmentTimingFill(context, timing, alpha: 0.85),
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
-              const SizedBox(width: 5),
+              SizedBox(width: gridMetric(context, 6)),
               Text(
                 kEquipmentTimingLabels[timing]!,
-                style: theme.textTheme.labelSmall?.copyWith(
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -542,25 +834,31 @@ class _Summary extends StatelessWidget {
     final headline = equipmentTimingColor(context, timing);
     final overdue = room.countOf(EquipmentCondition.overdue) > 0;
 
+    final gap = gridMetric(context, 12);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, gap, 16, gap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Wrap(
-            spacing: 20,
-            runSpacing: 10,
+            spacing: gap * 1.6,
+            runSpacing: gap * 0.9,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(equipmentTimingIcon(timing), color: headline),
-                  const SizedBox(width: 8),
+                  Icon(
+                    equipmentTimingIcon(timing),
+                    size: gridMetric(context, 26),
+                    color: headline,
+                  ),
+                  SizedBox(width: gap * 0.7),
                   Text(
                     kEquipmentTimingLabels[timing]!,
                     key: const ValueKey('lifecycle_room_condition'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: headline,
                     ),
                   ),
@@ -617,9 +915,9 @@ class _Summary extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: gap * 0.9),
           _TimingBar(room: room, currency: currency),
-          const SizedBox(height: 8),
+          SizedBox(height: gap * 0.7),
           const EquipmentTimingKey(),
         ],
       ),
@@ -661,7 +959,7 @@ class _TimingBar extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: SizedBox(
-            height: 12,
+            height: gridMetric(context, 16),
             child: Row(
               children: [
                 for (final band in bands)
@@ -689,7 +987,7 @@ class _TimingBar extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: gridMetric(context, 5)),
         Text(
           [
             for (final band in bands)
@@ -697,7 +995,7 @@ class _TimingBar extends StatelessWidget {
                   '${formatEquipmentBand(band.count, band.cost, currency)}',
           ].join('  ·  '),
           key: const ValueKey('lifecycle_bar_summary'),
-          style: theme.textTheme.bodySmall?.copyWith(
+          style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
@@ -727,13 +1025,13 @@ class _Stat extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
+          style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         Text(
           value,
-          style: theme.textTheme.titleSmall?.copyWith(color: color),
+          style: theme.textTheme.titleMedium?.copyWith(color: color),
         ),
       ],
     );
@@ -789,6 +1087,141 @@ class _ItemRow extends StatelessWidget {
       if (item.hasHistory) 'replaced ${item.node.swaps.length}x before',
     ].join('  ·  ');
 
+    final gap = gridMetric(context, 12);
+
+    // The row's controls, built once and then placed by how much room there
+    // is. A price, the date - the one fact this screen exists to collect - and
+    // the two judgements about the position itself.
+    final controls = <Widget>[
+      if (item.replacementCost > 0)
+        Padding(
+          padding: EdgeInsets.only(right: gap * 0.5),
+          // A TYPICAL PRICE SAYS SO. When the catalog has no figure for this
+          // model the plan falls back to the base card's figure for its
+          // category, which is the right number to budget from and the wrong
+          // one to quote from - so it is marked, not quietly mixed in with the
+          // prices that are this box's own.
+          child: Tooltip(
+            message: item.costIsEstimate
+                ? 'Typical price for its category - the catalog has no price '
+                      'for this model'
+                : 'Catalog price for this model',
+            child: Text(
+              item.costIsEstimate
+                  ? '~${formatLifecycleMoney(item.replacementCost, currency)}'
+                  : formatLifecycleMoney(item.replacementCost, currency),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontStyle: item.costIsEstimate
+                    ? FontStyle.italic
+                    : FontStyle.normal,
+                color: item.costIsEstimate
+                    ? theme.colorScheme.onSurfaceVariant
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      // The one control on the row, because the date is the one fact this
+      // screen exists to collect. Everything else about the box is edited
+      // where the box is drawn.
+      OutlinedButton.icon(
+        key: ValueKey('lifecycle_install_${item.node.id}'),
+        style: lifecycleButtonStyle(context),
+        onPressed: () => _pickInstall(context),
+        icon: Icon(Icons.event_available, size: gridMetric(context, 18)),
+        label: Text(
+          item.installedOn == null
+              ? 'Set install date'
+              : formatEquipmentDate(item.installedOn!),
+        ),
+      ),
+      // HOW LONG IT LASTS, beside WHEN IT WENT IN. The two together are the
+      // whole of the due date, and before this only one of them could be
+      // edited from the list - the other was a field on the catalog page,
+      // which is a different screen and a different document.
+      if (!never)
+        IconButton(
+          key: ValueKey('lifecycle_life_${item.node.id}'),
+          tooltip: 'How long this lasts (${item.lifeYears} yrs, '
+              '${kEquipmentLifeSourceLabels[item.lifeSource]})',
+          iconSize: gridMetric(context, 20),
+          constraints: BoxConstraints.tightFor(
+            width: gridMetric(context, 40),
+            height: gridMetric(context, 40),
+          ),
+          icon: const Icon(Icons.hourglass_bottom),
+          onPressed: () => showEquipmentLifeDialog(context, item),
+        ),
+      if (item.installedOn != null && !never)
+        IconButton(
+          key: ValueKey('lifecycle_install_clear_${item.node.id}'),
+          tooltip: 'Nobody knows when this went in',
+          iconSize: gridMetric(context, 20),
+          constraints: BoxConstraints.tightFor(
+            width: gridMetric(context, 40),
+            height: gridMetric(context, 40),
+          ),
+          icon: const Icon(Icons.close),
+          onPressed: () => context
+              .read<AppStateProvider>()
+              .setAvNodeInstalledOn(item.node.id, null),
+        ),
+      // ON OR OFF THE CYCLE, on the row itself. It is a judgement about one
+      // position - this bracket, this pole - made while looking at the list it
+      // is cluttering, and a screen somewhere else to make it in is a screen
+      // nobody goes to.
+      IconButton(
+        key: ValueKey('lifecycle_never_${item.node.id}'),
+        tooltip: never
+            ? 'Put this back on the refresh cycle'
+            : 'This never needs replacing - take it off the plan',
+        iconSize: gridMetric(context, 20),
+        constraints: BoxConstraints.tightFor(
+          width: gridMetric(context, 40),
+          height: gridMetric(context, 40),
+        ),
+        icon: Icon(
+          never ? Icons.restart_alt : Icons.do_not_disturb_on_outlined,
+        ),
+        onPressed: () => context
+            .read<AppStateProvider>()
+            .setAvNodeNeverReplaced(item.node.id, !never),
+      ),
+    ];
+
+    final leading = Tooltip(
+      message: never ? kEquipmentNeverLabel : kEquipmentTimingLabels[timing]!,
+      child: Icon(
+        never ? Icons.do_not_disturb_on_outlined : equipmentTimingIcon(timing),
+        size: gridMetric(context, 24),
+        color: color,
+      ),
+    );
+
+    final title = Text(item.node.label, style: theme.textTheme.titleMedium);
+
+    final subtitle = Text.rich(
+      TextSpan(
+        children: [
+          // The step in words, in its own colour, at the front of the line:
+          // the colour says which of the six it is at a glance and the word
+          // says it to a mono print and to a reader who cannot tell the amber
+          // from the orange.
+          TextSpan(
+            text: never
+                ? kEquipmentNeverLabel
+                : kEquipmentTimingLabels[timing]!,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          TextSpan(text: '  ·  $detail'),
+        ],
+      ),
+      style: theme.textTheme.bodyMedium,
+    );
+
     return Container(
       // The row's own band, down the edge a list is scanned along. The wash
       // behind it is faint enough that the text on top of it is the text
@@ -806,97 +1239,57 @@ class _ItemRow extends StatelessWidget {
           ),
         ),
       ),
-      child: ListTile(
-        key: ValueKey('lifecycle_item_${item.node.id}'),
-        leading: Tooltip(
-          message: never
-              ? kEquipmentNeverLabel
-              : kEquipmentTimingLabels[timing]!,
-          child: Icon(
-            never ? Icons.do_not_disturb_on_outlined
-                : equipmentTimingIcon(timing),
-            color: color,
-          ),
-        ),
-        title: Text(
-          item.node.label,
-          style: theme.textTheme.titleSmall,
-        ),
-        subtitle: Text.rich(
-          TextSpan(
-            children: [
-              // The step in words, in its own colour, at the front of the
-              // line: the colour says which of the six it is at a glance and
-              // the word says it to a mono print and to a reader who cannot
-              // tell the amber from the orange.
-              TextSpan(
-                text: never
-                    ? kEquipmentNeverLabel
-                    : kEquipmentTimingLabels[timing]!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
+      // THE CONTROLS DROP UNDER THE NAME RATHER THAN SHRINK BESIDE IT. A
+      // device name, a line of detail and four controls do not fit on one line
+      // of a narrow window - and at 150% no window is wide - so below a
+      // threshold the row becomes two rows instead of squeezing 'Set install
+      // date' down to an ellipsis.
+      child: LayoutBuilder(
+        builder: (context, box) {
+          if (box.maxWidth >= gridMetric(context, 760)) {
+            return ListTile(
+              key: ValueKey('lifecycle_item_${item.node.id}'),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: gap * 1.3,
+                vertical: gap * 0.5,
+              ),
+              leading: leading,
+              title: title,
+              subtitle: subtitle,
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: controls),
+            );
+          }
+          return Padding(
+            key: ValueKey('lifecycle_item_${item.node.id}'),
+            padding: EdgeInsets.fromLTRB(gap * 1.3, gap, gap, gap),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    leading,
+                    SizedBox(width: gap),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [title, SizedBox(height: gap * 0.3), subtitle],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              TextSpan(text: '  ·  $detail'),
-            ],
-          ),
-          style: theme.textTheme.bodySmall,
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (item.replacementCost > 0)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  formatLifecycleMoney(item.replacementCost, currency),
-                  style: theme.textTheme.bodyMedium,
+                SizedBox(height: gap * 0.5),
+                Wrap(
+                  spacing: gap * 0.5,
+                  runSpacing: gap * 0.5,
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: controls,
                 ),
-              ),
-            // The one control on the row, because the date is the one fact
-            // this screen exists to collect. Everything else about the box is
-            // edited where the box is drawn.
-            OutlinedButton.icon(
-              key: ValueKey('lifecycle_install_${item.node.id}'),
-              onPressed: () => _pickInstall(context),
-              icon: const Icon(Icons.event_available, size: 16),
-              label: Text(
-                item.installedOn == null
-                    ? 'Set install date'
-                    : formatEquipmentDate(item.installedOn!),
-              ),
+              ],
             ),
-            if (item.installedOn != null && !never)
-              IconButton(
-                key: ValueKey('lifecycle_install_clear_${item.node.id}'),
-                tooltip: 'Nobody knows when this went in',
-                icon: const Icon(Icons.close, size: 16),
-                onPressed: () => context
-                    .read<AppStateProvider>()
-                    .setAvNodeInstalledOn(item.node.id, null),
-              ),
-            // ON OR OFF THE CYCLE, on the row itself. It is a judgement about
-            // one position — this bracket, this pole — made while looking at
-            // the list it is cluttering, and a screen somewhere else to make
-            // it in is a screen nobody goes to.
-            IconButton(
-              key: ValueKey('lifecycle_never_${item.node.id}'),
-              tooltip: never
-                  ? 'Put this back on the refresh cycle'
-                  : 'This never needs replacing - take it off the plan',
-              icon: Icon(
-                never
-                    ? Icons.restart_alt
-                    : Icons.do_not_disturb_on_outlined,
-                size: 16,
-              ),
-              onPressed: () => context
-                  .read<AppStateProvider>()
-                  .setAvNodeNeverReplaced(item.node.id, !never),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

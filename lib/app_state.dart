@@ -4579,6 +4579,121 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// How long ONE position is held to, in years.
+  ///
+  /// The narrowest of the three rungs the plan reads - see
+  /// [EquipmentLife.lifeYears]. Somebody looked at this projector, in this
+  /// lecture theatre, running eight hours a day, and said five rather than the
+  /// eight the product gets in general.
+  ///
+  /// 0 CLEARS IT rather than meaning "replace it immediately": zero years is
+  /// not a life anybody types on purpose, and the field it is typed in is
+  /// emptied far more often than it is set to nothing. A cleared position goes
+  /// back to inheriting the catalog's figure, which is what it did before
+  /// anybody touched it.
+  ///
+  /// A position that has been taken off the cycle entirely is left alone -
+  /// [setAvNodeNeverReplaced] owns that sentinel, and a life typed over it
+  /// would put a bracket back on the plan by a side door.
+  void setAvNodeLifeYears(String nodeId, int years) {
+    final index = avNodes.indexWhere((n) => n.id == nodeId);
+    if (index < 0) return;
+    final node = avNodes[index];
+    if (node.lifeYears == kNeverReplacedLife) return;
+
+    // Out of range reads as cleared, the same rule the catalog's own field
+    // uses: a 600-year life would sit green on the plan for ever, which is the
+    // one direction this must not be wrong in.
+    final wanted = (years <= 0 || years > 100) ? 0 : years;
+    if (node.lifeYears == wanted) return;
+
+    _pushAvUndo(
+      wanted == 0
+          ? 'Life cleared on ${node.label}'
+          : 'Life on ${node.label} set to $wanted yrs',
+      _flowScope,
+    );
+    avNodes[index] = node.copyWith(lifeYears: wanted);
+    AppLogger.logInfo(
+      wanted == 0
+          ? 'Life cleared on ${node.label}; it follows the catalog again.'
+          : 'Life on ${node.label} set to $wanted years.',
+    );
+    notifyListeners();
+  }
+
+  /// Writes a life into the CATALOG, for every position of [model].
+  ///
+  /// THE OTHER HALF OF THE SAME EDIT. A life recorded on one position is a
+  /// fact about that box in that room; a life recorded here is a fact about
+  /// the PRODUCT, and it is the one worth keeping - it follows the model into
+  /// every other room on the job and into next year's job, instead of being
+  /// retyped in eleven places and drifting between them.
+  ///
+  /// Saved immediately, for the reason [setModelNeverControlled] is: the tab
+  /// this is edited from has no Save button of its own, and an edit that lives
+  /// in memory until something else happens to write the file is an edit
+  /// somebody loses.
+  ///
+  /// Returns whether anything was written and the sentence to show.
+  Future<({bool ok, String message})> setModelLifeYears(
+    String model,
+    int years,
+  ) async {
+    final name = model.trim();
+    if (name.isEmpty) {
+      return (
+        ok: false,
+        message: 'This position has no model on it, so there is no catalog '
+            'entry to write a life onto. Give the device a model first.',
+      );
+    }
+
+    final entry = avDeviceLibrary.templateForModel(name);
+    if (entry == null) {
+      // Not conjured here, for the same reason a never-controlled mark is not
+      // - see [setModelNeverControlled]. An entry with a model and a life and
+      // nothing else would shadow the real one when it was imported.
+      return (
+        ok: false,
+        message: '"$name" is not in the catalog yet. Add it to the catalog '
+            'first, then its life can be kept with it.',
+      );
+    }
+
+    final wanted = (years <= 0 || years > 100) ? 0 : years;
+    if (entry.lifeYears == wanted) {
+      return (
+        ok: true,
+        message: wanted == 0
+            ? '"$name" already carries no life in the catalog.'
+            : '"$name" is already $wanted years in the catalog.',
+      );
+    }
+
+    avDeviceLibrary.upsert(entry.copyWith(lifeYears: wanted));
+    final file = await saveAvDeviceLibrary();
+    // The catalog is a plain object rather than a listenable, so the pages
+    // reading it have to be told.
+    avDeviceLibraryChanged();
+
+    AppLogger.logInfo(
+      wanted == 0
+          ? 'Catalog: life cleared on "$name".'
+          : 'Catalog: "$name" set to $wanted years.',
+    );
+
+    final where = file.isEmpty
+        ? ' (in memory only - the catalog file could not be written)'
+        : ' and saved to $file';
+    return (
+      ok: file.isNotEmpty,
+      message: wanted == 0
+          ? 'Life cleared on "$name"$where.'
+          : '"$name" set to $wanted years in the catalog$where.',
+    );
+  }
+
   /// How many boxes [setRoomInstalledOn] would touch, without touching any.
   ///
   /// Asked BEFORE the dialog commits, so the button can say "date 11 items"
@@ -10708,28 +10823,6 @@ class AppStateProvider extends ChangeNotifier {
       itemName: _spareLogName(spare),
       field: 'Spare',
       summary: 'taken off the job',
-    );
-    _projectChanged();
-  }
-
-  /// Sets the share of each part the job wants held spare, as a percentage.
-  ///
-  /// Nought, or anything outside nought to a hundred, is NO POLICY rather than
-  /// a clamped figure - see [BuildingProject.spareTargetPercent]. Nothing on
-  /// the job is flagged until this is set, which is why it is a decision worth
-  /// logging: "why is everything suddenly short" is answered by the history.
-  void setProjectSpareTarget(double percent) {
-    final wanted = percent <= 0 || percent > 100 ? 0.0 : percent;
-    if (project.spareTargetPercent == wanted) return;
-    project.spareTargetPercent = wanted;
-    _logProjectEdit(
-      itemKey: 'project',
-      itemName: project.name,
-      field: 'Spares target',
-      summary: wanted <= 0
-          ? 'cleared'
-          : 'set to ${trimNumber(wanted)}% of what is installed',
-      coalesce: true,
     );
     _projectChanged();
   }
