@@ -134,8 +134,10 @@ void main() {
       expect(tester.takeException(), isNull);
       // The Model column names the product and never its maker, so a table
       // silently grouped by vendor would look like one in no order at all.
-      expect(find.text('Extron'), findsOneWidget);
-      expect(find.text('Sony'), findsOneWidget);
+      // Twice each: once as the heading over that vendor's block, once in the
+      // key that decodes the shade its rows are washed in.
+      expect(find.text('Extron'), findsNWidgets(2));
+      expect(find.text('Sony'), findsNWidgets(2));
       expect(
         find.text('No manufacturer on the catalog entry'),
         findsOneWidget,

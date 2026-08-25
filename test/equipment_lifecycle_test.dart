@@ -151,6 +151,92 @@ void main() {
   //  THE ROOM
   // -------------------------------------------------------------------------
 
+  // -------------------------------------------------------------------------
+  //  THE GRADED WARNING BAND
+  // -------------------------------------------------------------------------
+
+  group('the ramp inside the amber band', () {
+    test('the three warning years are three different colours', () {
+      // An eight-year cycle read in 2026: year six is yellow, seven amber,
+      // eight orange. One amber for all three is what this replaces.
+      final steps = {
+        2021: EquipmentTiming.watch,
+        2020: EquipmentTiming.approaching,
+        2019: EquipmentTiming.imminent,
+      };
+      steps.forEach((year, expected) {
+        final item = lifeOf(box('a', installedOn: DateTime(year, 6, 1)));
+        expect(
+          item.timing,
+          expected,
+          reason: 'installed $year should read as ${expected.name} in 2026',
+        );
+        // The words never come apart from the colour: all three are still
+        // 'due soon' on any sheet that only has the four bands.
+        expect(item.condition, EquipmentCondition.ageing);
+      });
+    });
+
+    test('past its life goes deeper red once it is two years past', () {
+      final justPast = lifeOf(box('a', installedOn: DateTime(2018, 1, 1)));
+      expect(justPast.timing, EquipmentTiming.overdue);
+      final longPast = lifeOf(box('b', installedOn: DateTime(2015, 1, 1)));
+      expect(longPast.timing, EquipmentTiming.wellOverdue);
+      // Both are red on the four-band reading.
+      expect(justPast.condition, EquipmentCondition.overdue);
+      expect(longPast.condition, EquipmentCondition.overdue);
+    });
+
+    test('a short life still gets a green year rather than opening amber', () {
+      // Two years, installed today: the window would be the whole life if it
+      // were not clamped, and a position that reads amber the day it goes in
+      // is one nobody believes.
+      final item = lifeOf(
+        box('a', installedOn: DateTime(2026, 6, 1), lifeYears: 2),
+      );
+      expect(item.timing, EquipmentTiming.inService);
+    });
+
+    test('no install date is not a step on the ramp', () {
+      expect(lifeOf(box('a')).timing, EquipmentTiming.unknown);
+      expect(
+        timingFor(yearsRemaining: null, lifeYears: 8),
+        EquipmentTiming.unknown,
+      );
+    });
+
+    test('the worse of two steps wins, and unknown is not the worst', () {
+      expect(
+        worstTiming(EquipmentTiming.watch, EquipmentTiming.imminent),
+        EquipmentTiming.imminent,
+      );
+      expect(
+        worstTiming(EquipmentTiming.unknown, EquipmentTiming.inService),
+        EquipmentTiming.unknown,
+      );
+      expect(
+        worstTiming(EquipmentTiming.unknown, EquipmentTiming.overdue),
+        EquipmentTiming.overdue,
+      );
+    });
+
+    test('a room row warms up across the year grid', () {
+      final room = buildRoomLifecycle(
+        model: roomOf([box('a', installedOn: DateTime(2020, 6, 1))]),
+        asOf: asOf,
+      );
+      // Due 2028 on the default cycle: green until 2024, then one year each of
+      // yellow, amber and orange, then red.
+      expect(room.timingIn(2019), EquipmentTiming.unknown);
+      expect(room.timingIn(2021), EquipmentTiming.inService);
+      expect(room.timingIn(2025), EquipmentTiming.watch);
+      expect(room.timingIn(2026), EquipmentTiming.approaching);
+      expect(room.timingIn(2027), EquipmentTiming.imminent);
+      expect(room.timingIn(2028), EquipmentTiming.overdue);
+      expect(room.timingIn(2030), EquipmentTiming.wellOverdue);
+    });
+  });
+
   group('a room', () {
     test('reads as its worst item, not its average', () {
       final room = buildRoomLifecycle(
@@ -227,6 +313,55 @@ void main() {
   //  WHERE THE LIFE COMES FROM
   // -------------------------------------------------------------------------
   //  Three answers, most specific first, and every row says which it used.
+
+  group('how many, and what it costs', () {
+    AvDeviceLibrary catalog(double price) => AvDeviceLibrary.empty()
+      ..upsert(AvDeviceTemplate(model: 'PROJ-1', price: price, ports: const []));
+
+    RoomLifecycle roomWith(List<AvNode> nodes) => buildRoomLifecycle(
+      model: roomOf(nodes),
+      library: catalog(4000),
+      asOf: asOf,
+    );
+
+    test('a band carries its count and its money together', () {
+      final room = roomWith([
+        // Past its life, inside the window, and fine.
+        box('old', installedOn: DateTime(2010, 6, 1)),
+        box('soon', installedOn: DateTime(2020, 6, 1)),
+        box('new', installedOn: DateTime(2025, 6, 1)),
+      ]);
+      expect(room.countOf(EquipmentCondition.overdue), 1);
+      expect(room.costOf(EquipmentCondition.overdue), 4000);
+      expect(room.countOf(EquipmentCondition.ageing), 1);
+      expect(room.costOf(EquipmentCondition.ageing), 4000);
+      // The one figure a refresh is asked for: past its life plus the window.
+      expect(room.toReplaceCount, 2);
+      expect(room.toReplaceCost, 8000);
+      // And the room that is fine is not in it.
+      expect(room.refreshCost, 12000);
+    });
+
+    test('the count follows a life changed on one item', () {
+      // The same room, with the middle position put on a short cycle: it
+      // crosses out of the window and into red, and the money moves with it.
+      final before = roomWith([box('a', installedOn: DateTime(2020, 6, 1))]);
+      expect(before.toReplaceCount, 1);
+      expect(before.costOf(EquipmentCondition.overdue), 0);
+
+      final after = roomWith([
+        box('a', installedOn: DateTime(2020, 6, 1), lifeYears: 4),
+      ]);
+      expect(after.costOf(EquipmentCondition.overdue), 4000);
+      expect(after.toReplaceCost, 4000);
+    });
+
+    test('a band says it is unpriced rather than reading as free', () {
+      expect(formatEquipmentBand(0, 0, r'$'), '0 items');
+      expect(formatEquipmentBand(1, 0, r'$'), '1 item, not priced');
+      expect(formatEquipmentBand(3, 12000, r'$'), r'3 items, $12,000');
+    });
+  });
 
   group('the life a position is held to', () {
     AvDeviceLibrary catalogWith(int life) => AvDeviceLibrary.empty()

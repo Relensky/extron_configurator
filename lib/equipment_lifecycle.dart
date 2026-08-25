@@ -35,6 +35,13 @@ import 'room_locations.dart';
 ///
 ///  Generalised so a position on a different life bands the same way: amber for
 ///  the last three years of whatever life it was given, red past the end of it.
+///
+///  THE AMBER BAND IS GRADED, because three years of it are not one state. It
+///  runs yellow the year a position enters the window, amber the year it should
+///  be quoted and orange the last year before it is due — and red goes deeper
+///  once something is two years past its life and still in the room. Six steps,
+///  in [EquipmentTiming]; the four words a document is written in are derived
+///  from them, so the colour and the label cannot come apart.
 ///  WHERE THAT LIFE COMES FROM IS THREE ANSWERS, most specific first — what
 ///  somebody said about this position, what the catalog says the product does
 ///  in general, and the blanket cycle for a product nobody has recorded one
@@ -165,6 +172,144 @@ EquipmentCondition worstCondition(EquipmentCondition a, EquipmentCondition b) =>
     _severity(a) <= _severity(b) ? a : b;
 
 // ---------------------------------------------------------------------------
+//  THE RAMP
+// ---------------------------------------------------------------------------
+
+/// How close to due a position is, in finer steps than [EquipmentCondition].
+///
+/// WHY BOTH. The four conditions are what a document SAYS — 'Due soon', 'Past
+/// its life' — and they are the right words for a table and for a count. They
+/// are the wrong resolution for a colour, because 'due soon' covers the item
+/// that has to be quoted this month and the one that has three budget cycles
+/// left, and painting those the same amber tells a reader looking at the sheet
+/// that they are the same problem.
+///
+/// So the warning window is split three ways and the ramp runs the way the
+/// colours do: green while it is in service, YELLOW the year it enters the
+/// planning window, amber the year it should be quoted, orange the last year
+/// before it is due, red the day it is past, and a deeper red once it is two
+/// years past and nobody has done anything about it.
+///
+/// [EquipmentCondition] is DERIVED from this rather than computed beside it,
+/// so the words and the colour cannot come apart.
+enum EquipmentTiming {
+  /// No install date recorded.
+  unknown,
+
+  /// In service, still outside the planning window.
+  inService,
+
+  /// Just inside the window: the first year it belongs on a list.
+  watch,
+
+  /// Inside the window and close enough to price.
+  approaching,
+
+  /// The last year before it falls due.
+  imminent,
+
+  /// Past its life.
+  overdue,
+
+  /// Well past it — two years or more.
+  wellOverdue,
+}
+
+const Map<EquipmentTiming, String> kEquipmentTimingLabels = {
+  EquipmentTiming.unknown: 'No install date',
+  EquipmentTiming.inService: 'In service',
+  EquipmentTiming.watch: 'Coming up',
+  EquipmentTiming.approaching: 'Budget it',
+  EquipmentTiming.imminent: 'Due next',
+  EquipmentTiming.overdue: 'Past its life',
+  EquipmentTiming.wellOverdue: 'Years past its life',
+};
+
+/// The colour each step reads as, for the key beside the sheet and for the
+/// mono copy somebody prints.
+const Map<EquipmentTiming, String> kEquipmentTimingCodes = {
+  EquipmentTiming.unknown: '-',
+  EquipmentTiming.inService: 'Green',
+  EquipmentTiming.watch: 'Yellow',
+  EquipmentTiming.approaching: 'Amber',
+  EquipmentTiming.imminent: 'Orange',
+  EquipmentTiming.overdue: 'Red',
+  EquipmentTiming.wellOverdue: 'Deep red',
+};
+
+/// Worst first, the same ordering rule [kEquipmentConditionSeverity] uses, and
+/// unknown sits in the same place in it — between the warning band and green,
+/// because a room nobody has surveyed is neither a crisis nor fine.
+const List<EquipmentTiming> kEquipmentTimingSeverity = [
+  EquipmentTiming.wellOverdue,
+  EquipmentTiming.overdue,
+  EquipmentTiming.imminent,
+  EquipmentTiming.approaching,
+  EquipmentTiming.watch,
+  EquipmentTiming.unknown,
+  EquipmentTiming.inService,
+];
+
+int _timingSeverity(EquipmentTiming t) => kEquipmentTimingSeverity.indexOf(t);
+
+/// The worse of two steps on the ramp.
+EquipmentTiming worstTiming(EquipmentTiming a, EquipmentTiming b) =>
+    _timingSeverity(a) <= _timingSeverity(b) ? a : b;
+
+/// The words [timing] belongs to.
+EquipmentCondition conditionOfTiming(EquipmentTiming timing) =>
+    switch (timing) {
+      EquipmentTiming.unknown => EquipmentCondition.unknown,
+      EquipmentTiming.inService => EquipmentCondition.good,
+      EquipmentTiming.watch ||
+      EquipmentTiming.approaching ||
+      EquipmentTiming.imminent => EquipmentCondition.ageing,
+      EquipmentTiming.overdue ||
+      EquipmentTiming.wellOverdue => EquipmentCondition.overdue,
+    };
+
+/// How long before the end of [lifeYears] the warning window opens.
+///
+/// [kEquipmentWarningYears] on any normal life. Clamped on a short one so a
+/// position on a two-year cycle still gets a green year rather than reading
+/// amber from the day it goes in.
+int equipmentWarningWindow(int lifeYears) =>
+    lifeYears <= kEquipmentWarningYears
+        ? (lifeYears - 1).clamp(0, kEquipmentWarningYears)
+        : kEquipmentWarningYears;
+
+/// How many years past due a position has to be before it reads as WELL past
+/// it. Two, which is one whole budget cycle of nothing having been done.
+const double kEquipmentWellOverdueYears = 2;
+
+/// Where [yearsRemaining] sits on the ramp, for a position on [lifeYears].
+///
+/// Top-level and pure, because three readers need the same arithmetic on
+/// different inputs: an item measured against today, a room measured against a
+/// column on the year grid, and the tests.
+EquipmentTiming timingFor({
+  required double? yearsRemaining,
+  required int lifeYears,
+}) {
+  final remaining = yearsRemaining;
+  if (remaining == null) return EquipmentTiming.unknown;
+  if (remaining <= -kEquipmentWellOverdueYears) {
+    return EquipmentTiming.wellOverdue;
+  }
+  if (remaining <= 0) return EquipmentTiming.overdue;
+
+  final window = equipmentWarningWindow(lifeYears);
+  if (window <= 0 || remaining > window) return EquipmentTiming.inService;
+
+  // The window in three. On the eight-year cycle the sheet is modelled on
+  // that is one year per step: year six yellow, seven amber, eight orange.
+  final step = window / 3;
+  if (remaining <= step) return EquipmentTiming.imminent;
+  if (remaining <= step * 2) return EquipmentTiming.approaching;
+  return EquipmentTiming.watch;
+}
+
+// ---------------------------------------------------------------------------
 //  ONE POSITION
 // ---------------------------------------------------------------------------
 
@@ -258,20 +403,13 @@ class EquipmentLife {
     return due.difference(asOf).inDays / kDaysPerYear;
   }
 
-  EquipmentCondition get condition {
-    final remaining = yearsRemaining;
-    if (remaining == null) return EquipmentCondition.unknown;
-    if (remaining <= 0) return EquipmentCondition.overdue;
-    // The last three years of whatever life this position was given. Clamped
-    // so a position on a two-year cycle still gets a green year rather than
-    // being amber from the day it is installed.
-    final warn = lifeYears <= kEquipmentWarningYears
-        ? lifeYears - 1
-        : kEquipmentWarningYears;
-    return remaining <= warn
-        ? EquipmentCondition.ageing
-        : EquipmentCondition.good;
-  }
+  /// Where this position sits on the colour ramp — see [EquipmentTiming].
+  EquipmentTiming get timing =>
+      timingFor(yearsRemaining: yearsRemaining, lifeYears: lifeYears);
+
+  /// The words for [timing]. Derived rather than computed alongside it, so a
+  /// row's colour and its label can never disagree.
+  EquipmentCondition get condition => conditionOfTiming(timing);
 
   /// True when this position has been through at least one swap, so the room
   /// report can say how long the last unit lasted.
@@ -308,16 +446,76 @@ class RoomLifecycle {
   int countOf(EquipmentCondition c) =>
       items.where((i) => i.condition == c).length;
 
+  /// What the items in [c] cost to replace.
+  ///
+  /// COUNTS ARE HALF AN ANSWER. 'Four items due soon' is a fact nobody can act
+  /// on; 'four items, 18,000 dollars' is a budget line. Every band on this screen
+  /// carries both for that reason, and both move the moment a date or a life
+  /// is changed on one item.
+  double costOf(EquipmentCondition c) => items
+      .where((i) => i.condition == c)
+      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+
+  int countOfTiming(EquipmentTiming t) =>
+      items.where((i) => i.timing == t).length;
+
+  double costOfTiming(EquipmentTiming t) => items
+      .where((i) => i.timing == t)
+      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+
   /// The room reads as its WORST item.
   ///
   /// Not as its average and not as its oldest: a room with one dead projector
   /// and nine new speakers is a room that does not work, and averaging it into
   /// green is how a sheet like this stops being believed.
-  EquipmentCondition get condition => items.isEmpty
-      ? EquipmentCondition.unknown
-      : items
-          .map((i) => i.condition)
-          .reduce(worstCondition);
+  EquipmentTiming get timing => items.isEmpty
+      ? EquipmentTiming.unknown
+      : items.map((i) => i.timing).reduce(worstTiming);
+
+  EquipmentCondition get condition => conditionOfTiming(timing);
+
+  /// How many items are past their life or inside the planning window — the
+  /// count a refresh is written for.
+  int get toReplaceCount =>
+      countOf(EquipmentCondition.overdue) + countOf(EquipmentCondition.ageing);
+
+  /// What those items cost. [overdueCost] is the part of it that is already
+  /// late; this is the whole ask.
+  double get toReplaceCost =>
+      costOf(EquipmentCondition.overdue) + costOf(EquipmentCondition.ageing);
+
+  /// How many items are due soon but not yet late, and what they cost.
+  int get dueSoonCount => countOf(EquipmentCondition.ageing);
+  double get dueSoonCost => costOf(EquipmentCondition.ageing);
+
+  /// The life driving [firstDueYear], so the year grid bands its columns on
+  /// the same window the item itself is banded on. Falls back to the blanket
+  /// cycle on a room with nothing dated.
+  int get _drivingLifeYears {
+    final first = firstDueYear;
+    if (first == null) return kDefaultEquipmentLifeYears;
+    for (final i in items) {
+      if (i.dueYear == first) return i.lifeYears;
+    }
+    return kDefaultEquipmentLifeYears;
+  }
+
+  /// Where the room sits in [year] — the ramp, read across a column of the
+  /// year grid rather than measured against today.
+  ///
+  /// The room's own first due year is what the column counts down to, so a row
+  /// runs green, yellow, amber, orange and then red across the sheet the way
+  /// the hand-coloured one did.
+  EquipmentTiming timingIn(int year) {
+    final installed = oldestInstall?.year;
+    final due = firstDueYear;
+    if (installed == null || due == null) return EquipmentTiming.unknown;
+    if (year < installed) return EquipmentTiming.unknown;
+    return timingFor(
+      yearsRemaining: (due - year).toDouble(),
+      lifeYears: _drivingLifeYears,
+    );
+  }
 
   /// The earliest year anything in the room falls due, or null when nothing in
   /// it has a date. This is the room's row on the building sheet.
@@ -458,8 +656,21 @@ class BuildingLifecycle {
   int countOf(EquipmentCondition c) =>
       items.where((i) => i.condition == c).length;
 
+  /// What the items in [c] cost to replace across the job — the figure a band
+  /// on the summary strip is only half of without.
+  double costOf(EquipmentCondition c) => items
+      .where((i) => i.condition == c)
+      .fold<double>(0, (sum, i) => sum + i.replacementCost);
+
   int roomsOf(EquipmentCondition c) =>
       rooms.where((r) => r.condition == c).length;
+
+  /// Everything past its life or inside the planning window, and its cost.
+  int get toReplaceCount =>
+      countOf(EquipmentCondition.overdue) + countOf(EquipmentCondition.ageing);
+
+  double get toReplaceCost =>
+      costOf(EquipmentCondition.overdue) + costOf(EquipmentCondition.ageing);
 
   double get overdueCost =>
       rooms.fold<double>(0, (sum, r) => sum + r.overdueCost);
@@ -575,6 +786,19 @@ String formatEquipmentDue(EquipmentLife item) {
       : 'due $year';
 }
 
+/// A band as both halves of the answer: 'four items, $18,000'.
+///
+/// The count on its own is not something anybody can act on and the money on
+/// its own does not say how big a job it is, so every band on these sheets and
+/// on the screen carries the pair. An unpriced band says so rather than
+/// reading as free.
+String formatEquipmentBand(int count, double cost, String currency) {
+  final items = '$count item${count == 1 ? '' : 's'}';
+  if (count == 0) return items;
+  if (cost <= 0) return '$items, not priced';
+  return '$items, ${formatLifecycleMoney(cost, currency)}';
+}
+
 /// A money figure as the lifecycle sheets write one: no decimals, because a
 /// replacement budget five years out is not accurate to the cent and printing
 /// it to the cent implies it is.
@@ -608,8 +832,14 @@ List<ReportSection> roomLifecycleSections(
       rows: [
         ['As of', formatEquipmentDate(room.asOf)],
         ['Items tracked', room.items.length],
+        // Count AND cost on the same line. Which items and how much is one
+        // question in a budget meeting, and answering half of it sends
+        // somebody back to the spreadsheet for the other half.
         for (final c in kEquipmentConditionSeverity)
-          [kEquipmentConditionLabels[c]!, room.countOf(c)],
+          [
+            kEquipmentConditionLabels[c]!,
+            formatEquipmentBand(room.countOf(c), room.costOf(c), currency),
+          ],
         [
           'Room reads as',
           '${kEquipmentConditionCodes[room.condition]} - '
@@ -625,6 +855,18 @@ List<ReportSection> roomLifecycleSections(
         [
           'Past its life today',
           formatLifecycleMoney(room.overdueCost, currency),
+        ],
+        [
+          'Due soon, to budget',
+          formatLifecycleMoney(room.dueSoonCost, currency),
+        ],
+        [
+          'To replace, past and due',
+          formatEquipmentBand(
+            room.toReplaceCount,
+            room.toReplaceCost,
+            currency,
+          ),
         ],
         [
           'Full refresh at catalog price',
@@ -644,6 +886,7 @@ List<ReportSection> roomLifecycleSections(
         'Life from',
         'Due',
         'Status',
+        'Timing',
         'Replacement',
       ],
       rows: [
@@ -658,6 +901,11 @@ List<ReportSection> roomLifecycleSections(
             kEquipmentLifeSourceLabels[i.lifeSource]!,
             i.dueYear ?? '',
             kEquipmentConditionCodes[i.condition]!,
+            // The finer step, so a printed sheet carries the same six-step
+            // ramp the screen paints — a mono copy of a colour-coded sheet
+            // that only says 'Amber' has lost the half of it that says which
+            // of the three amber years it is in.
+            kEquipmentTimingCodes[i.timing]!,
             formatLifecycleMoney(i.replacementCost, currency),
           ],
       ],
@@ -746,12 +994,23 @@ List<ReportSection> buildingLifecycleSections(
             kEquipmentConditionLabels[c]!,
             '${building.roomsOf(c)} room'
                 '${building.roomsOf(c) == 1 ? '' : 's'}, '
-                '${building.countOf(c)} item'
-                '${building.countOf(c) == 1 ? '' : 's'}',
+                '${formatEquipmentBand(
+                  building.countOf(c),
+                  building.costOf(c),
+                  currency,
+                )}',
           ],
         [
           'Past its life today',
           formatLifecycleMoney(building.overdueCost, currency),
+        ],
+        [
+          'To replace, past and due',
+          formatEquipmentBand(
+            building.toReplaceCount,
+            building.toReplaceCost,
+            currency,
+          ),
         ],
       ],
     ),

@@ -302,7 +302,90 @@ class _RoomInstallDateDialogState extends State<_RoomInstallDateDialog> {
   }
 }
 
-/// The colour one condition reads in, against [surface].
+/// THE RAMP, AS COLOUR.
+///
+/// Green, yellow, amber, orange, red, deeper red — the six steps of
+/// [EquipmentTiming], which is the whole point of grading the warning band: a
+/// projector with three years left and one with three months left are both
+/// "due soon", and painting them the same amber says they are the same
+/// problem.
+///
+/// FIXED HUES, NOT SCHEME ROLES. These mean what a traffic light means, and
+/// this app's accent is a colour somebody picked out of a wheel — a warning
+/// band that turned violet with the theme would stop being a warning band and
+/// would stop matching the key beside it and the sheet it is printed on. Only
+/// "past its life" defers to the scheme, whose error colour is red on every
+/// theme here, so the sheet's red and the app's red are one red.
+const Map<EquipmentTiming, Color> kEquipmentTimingHues = {
+  EquipmentTiming.inService: Color(0xFF2E9E4F),
+  EquipmentTiming.watch: Color(0xFFF2C200),
+  EquipmentTiming.approaching: Color(0xFFF29D00),
+  EquipmentTiming.imminent: Color(0xFFEF6C00),
+  EquipmentTiming.overdue: Color(0xFFD93025),
+  EquipmentTiming.wellOverdue: Color(0xFFA31515),
+};
+
+/// The colour one step of the ramp reads in, as TEXT or as an icon.
+///
+/// Moved along its own lightness until it clears [kContrastStrong] on the
+/// surface it is painted on — so yellow on a white card is a darkened yellow
+/// rather than an unreadable one, and the same yellow on a dark card is
+/// lightened instead. It stays yellow either way, which is what [legibleTone]
+/// is for.
+Color equipmentTimingColor(BuildContext context, EquipmentTiming timing) {
+  final theme = Theme.of(context);
+  final ground = theme.cardColor;
+  if (timing == EquipmentTiming.unknown) {
+    return theme.colorScheme.onSurfaceVariant;
+  }
+  if (timing == EquipmentTiming.overdue) {
+    return errorTextOn(theme.colorScheme, ground);
+  }
+  return legibleTone(kEquipmentTimingHues[timing]!, ground);
+}
+
+/// The same step as a FILL — a cell on the year grid, the band down the side
+/// of a row, a swatch in the key.
+///
+/// The raw hue at low alpha rather than [equipmentTimingColor]: a fill carries
+/// no text of its own, so it keeps the pure colour the key names, and the
+/// legible tone goes on top of it.
+Color equipmentTimingFill(
+  BuildContext context,
+  EquipmentTiming timing, {
+  double alpha = 0.20,
+}) {
+  if (timing == EquipmentTiming.unknown) {
+    return Theme.of(context)
+        .colorScheme
+        .onSurfaceVariant
+        .withValues(alpha: alpha * 0.5);
+  }
+  return kEquipmentTimingHues[timing]!.withValues(alpha: alpha);
+}
+
+IconData equipmentTimingIcon(EquipmentTiming timing) => switch (timing) {
+      EquipmentTiming.wellOverdue => Icons.report_gmailerrorred,
+      EquipmentTiming.overdue => Icons.error_outline,
+      EquipmentTiming.imminent => Icons.alarm,
+      EquipmentTiming.approaching => Icons.schedule,
+      EquipmentTiming.watch => Icons.hourglass_bottom,
+      EquipmentTiming.inService => Icons.check_circle_outline,
+      EquipmentTiming.unknown => Icons.help_outline,
+    };
+
+/// The step a whole CONDITION reads as, for the places that only have the
+/// coarse answer: a count of "due soon" items has no single position on the
+/// ramp, so it takes the middle of the band.
+EquipmentTiming timingOfCondition(EquipmentCondition condition) =>
+    switch (condition) {
+      EquipmentCondition.overdue => EquipmentTiming.overdue,
+      EquipmentCondition.ageing => EquipmentTiming.approaching,
+      EquipmentCondition.good => EquipmentTiming.inService,
+      EquipmentCondition.unknown => EquipmentTiming.unknown,
+    };
+
+/// The colour one condition reads in.
 ///
 /// Kept in one place because the chip on a row, the band in the header and the
 /// project's own roll-up all have to agree — three shades of "past its life"
@@ -310,29 +393,73 @@ class _RoomInstallDateDialogState extends State<_RoomInstallDateDialog> {
 Color equipmentConditionColor(
   BuildContext context,
   EquipmentCondition condition,
-) {
-  final theme = Theme.of(context);
-  switch (condition) {
-    case EquipmentCondition.overdue:
-      return errorTextOn(theme.colorScheme, theme.cardColor);
-    case EquipmentCondition.ageing:
-      return theme.colorScheme.tertiary;
-    case EquipmentCondition.good:
-      return theme.colorScheme.primary;
-    case EquipmentCondition.unknown:
-      return theme.colorScheme.onSurfaceVariant;
+) => equipmentTimingColor(context, timingOfCondition(condition));
+
+IconData equipmentConditionIcon(EquipmentCondition condition) =>
+    equipmentTimingIcon(timingOfCondition(condition));
+
+/// The key to the ramp, which is what makes six shades readable as anything
+/// other than decoration.
+///
+/// Every step is a swatch AND a word, because a colour on its own says nothing
+/// to somebody printing in mono or reading with a colour deficiency — the same
+/// bargain every coloured thing on this screen makes.
+class EquipmentTimingKey extends StatelessWidget {
+  const EquipmentTimingKey({super.key});
+
+  /// The ramp in order, greenest first. Unknown is left off: it is not a step
+  /// on the way to anything, it is a date nobody has entered.
+  static const List<EquipmentTiming> ramp = [
+    EquipmentTiming.inService,
+    EquipmentTiming.watch,
+    EquipmentTiming.approaching,
+    EquipmentTiming.imminent,
+    EquipmentTiming.overdue,
+    EquipmentTiming.wellOverdue,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 12,
+      runSpacing: 6,
+      children: [
+        for (final timing in ramp)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: equipmentTimingFill(context, timing, alpha: 0.85),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                kEquipmentTimingLabels[timing]!,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
   }
 }
 
-IconData equipmentConditionIcon(EquipmentCondition condition) =>
-    switch (condition) {
-      EquipmentCondition.overdue => Icons.error_outline,
-      EquipmentCondition.ageing => Icons.schedule,
-      EquipmentCondition.good => Icons.check_circle_outline,
-      EquipmentCondition.unknown => Icons.help_outline,
-    };
-
-/// The header strip: what the room reads as, and the money behind it.
+/// The header strip: what the room reads as, HOW MANY ITEMS have to be
+/// replaced, and what they cost.
+///
+/// THE COUNT AND THE MONEY TOGETHER, on every band. This strip is read while
+/// the dates below it are being edited — a life shortened on the projector, a
+/// date corrected on a display — and the question being asked on every one of
+/// those edits is what it does to the job. 'Two items' does not answer that
+/// and a bare figure does not either; the pair does, and it moves with the
+/// list because it is derived from the same items the list is.
 class _Summary extends StatelessWidget {
   final RoomLifecycle room;
   final String currency;
@@ -341,67 +468,170 @@ class _Summary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final timing = room.timing;
+    final headline = equipmentTimingColor(context, timing);
+    final overdue = room.countOf(EquipmentCondition.overdue) > 0;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Wrap(
-        spacing: 20,
-        runSpacing: 10,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          Wrap(
+            spacing: 20,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(
-                equipmentConditionIcon(room.condition),
-                color: equipmentConditionColor(context, room.condition),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(equipmentTimingIcon(timing), color: headline),
+                  const SizedBox(width: 8),
+                  Text(
+                    kEquipmentTimingLabels[timing]!,
+                    key: const ValueKey('lifecycle_room_condition'),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: headline,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                kEquipmentConditionLabels[room.condition]!,
-                key: const ValueKey('lifecycle_room_condition'),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: equipmentConditionColor(context, room.condition),
+              // The figure a refresh request is written from: everything past
+              // its life plus everything inside the planning window, counted
+              // and priced in one place.
+              if (room.toReplaceCount > 0)
+                _Stat(
+                  key: const ValueKey('lifecycle_to_replace'),
+                  label: 'To replace',
+                  value: formatEquipmentBand(
+                    room.toReplaceCount,
+                    room.toReplaceCost,
+                    currency,
+                  ),
+                  color: equipmentConditionColor(
+                    context,
+                    overdue
+                        ? EquipmentCondition.overdue
+                        : EquipmentCondition.ageing,
+                  ),
                 ),
+              for (final c in kEquipmentConditionSeverity)
+                if (room.countOf(c) > 0)
+                  _Stat(
+                    key: ValueKey('lifecycle_room_band_${c.name}'),
+                    label: kEquipmentConditionLabels[c]!,
+                    value: formatEquipmentBand(
+                      room.countOf(c),
+                      room.costOf(c),
+                      currency,
+                    ),
+                    color: equipmentConditionColor(context, c),
+                  ),
+              _Stat(
+                label: 'Room last done',
+                value: room.oldestInstall == null
+                    ? 'not recorded'
+                    : '${room.oldestInstall!.year}',
+              ),
+              _Stat(
+                label: 'First replacement due',
+                value: room.firstDueYear == null
+                    ? 'not recorded'
+                    : '${room.firstDueYear}',
+              ),
+              _Stat(
+                label: 'Full refresh',
+                value: room.refreshCost <= 0
+                    ? 'nothing priced'
+                    : formatLifecycleMoney(room.refreshCost, currency),
               ),
             ],
           ),
-          for (final c in kEquipmentConditionSeverity)
-            if (room.countOf(c) > 0)
-              _Stat(
-                label: kEquipmentConditionLabels[c]!,
-                value: '${room.countOf(c)}',
-                color: equipmentConditionColor(context, c),
-              ),
-          _Stat(
-            label: 'Room last done',
-            value: room.oldestInstall == null
-                ? 'not recorded'
-                : '${room.oldestInstall!.year}',
-          ),
-          _Stat(
-            label: 'First replacement due',
-            value: room.firstDueYear == null
-                ? 'not recorded'
-                : '${room.firstDueYear}',
-          ),
-          if (room.overdueCost > 0)
-            _Stat(
-              label: 'Past its life today',
-              value: formatLifecycleMoney(room.overdueCost, currency),
-              color: equipmentConditionColor(
-                context,
-                EquipmentCondition.overdue,
-              ),
-            ),
-          _Stat(
-            label: 'Full refresh',
-            value: room.refreshCost <= 0
-                ? 'nothing priced'
-                : formatLifecycleMoney(room.refreshCost, currency),
-          ),
+          const SizedBox(height: 10),
+          _TimingBar(room: room, currency: currency),
+          const SizedBox(height: 8),
+          const EquipmentTimingKey(),
         ],
       ),
+    );
+  }
+}
+
+/// The room as one bar: a slice per band, coloured by where it sits on the
+/// ramp, worst first.
+///
+/// BANDS, NOT A GRADIENT. Each slice is a real set of items and says how many
+/// and how much when it is hovered, so the bar is a picture of the list under
+/// it rather than an impression of one. The line of words below it says the
+/// same thing for the print and for anybody who would rather read it than
+/// hover it — which is the same bargain the colours themselves make.
+class _TimingBar extends StatelessWidget {
+  final RoomLifecycle room;
+  final String currency;
+
+  const _TimingBar({required this.room, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bands = [
+      for (final t in kEquipmentTimingSeverity)
+        if (room.countOfTiming(t) > 0)
+          (
+            timing: t,
+            count: room.countOfTiming(t),
+            cost: room.costOfTiming(t),
+          ),
+    ];
+    if (bands.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            height: 12,
+            child: Row(
+              children: [
+                for (final band in bands)
+                  Expanded(
+                    flex: band.count,
+                    child: Tooltip(
+                      message: '${kEquipmentTimingLabels[band.timing]!}: '
+                          '${formatEquipmentBand(
+                        band.count,
+                        band.cost,
+                        currency,
+                      )}',
+                      child: Container(
+                        key: ValueKey('lifecycle_bar_${band.timing.name}'),
+                        margin: const EdgeInsets.only(right: 1),
+                        color: equipmentTimingFill(
+                          context,
+                          band.timing,
+                          alpha: 0.85,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          [
+            for (final band in bands)
+              '${kEquipmentTimingLabels[band.timing]!} '
+                  '${formatEquipmentBand(band.count, band.cost, currency)}',
+          ].join('  ·  '),
+          key: const ValueKey('lifecycle_bar_summary'),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -411,7 +641,12 @@ class _Stat extends StatelessWidget {
   final String value;
   final Color? color;
 
-  const _Stat({required this.label, required this.value, this.color});
+  const _Stat({
+    super.key,
+    required this.label,
+    required this.value,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -459,64 +694,94 @@ class _ItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = equipmentConditionColor(context, item.condition);
+    final timing = item.timing;
+    final color = equipmentTimingColor(context, timing);
+    final detail = [
+      if (item.node.model.isNotEmpty) item.node.model,
+      if (item.locationName.isNotEmpty) item.locationName,
+      '${formatEquipmentAge(item.ageYears)} old',
+      formatEquipmentDue(item),
+      'life ${item.lifeYears} yrs',
+      if (item.hasHistory) 'replaced ${item.node.swaps.length}x before',
+    ].join('  ·  ');
 
-    return ListTile(
-      key: ValueKey('lifecycle_item_${item.node.id}'),
-      leading: Tooltip(
-        message: kEquipmentConditionLabels[item.condition]!,
-        child: Icon(equipmentConditionIcon(item.condition), color: color),
+    return Container(
+      // The row's own band, down the edge a list is scanned along. The wash
+      // behind it is faint enough that the text on top of it is the text
+      // everywhere else on this screen; the edge is where the colour is.
+      decoration: BoxDecoration(
+        color: equipmentTimingFill(context, timing, alpha: 0.10),
+        border: Border(
+          left: BorderSide(
+            color: equipmentTimingFill(context, timing, alpha: 0.9),
+            width: 4,
+          ),
+        ),
       ),
-      title: Text(
-        item.node.label,
-        style: theme.textTheme.titleSmall,
-      ),
-      subtitle: Text(
-        [
-          if (item.node.model.isNotEmpty) item.node.model,
-          if (item.locationName.isNotEmpty) item.locationName,
-          '${formatEquipmentAge(item.ageYears)} old',
-          formatEquipmentDue(item),
-          'life ${item.lifeYears} yrs',
-          if (item.hasHistory)
-            'replaced ${item.node.swaps.length}x before',
-        ].join('  ·  '),
-        style: theme.textTheme.bodySmall,
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (item.replacementCost > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                formatLifecycleMoney(item.replacementCost, currency),
-                style: theme.textTheme.bodyMedium,
+      child: ListTile(
+        key: ValueKey('lifecycle_item_${item.node.id}'),
+        leading: Tooltip(
+          message: kEquipmentTimingLabels[timing]!,
+          child: Icon(equipmentTimingIcon(timing), color: color),
+        ),
+        title: Text(
+          item.node.label,
+          style: theme.textTheme.titleSmall,
+        ),
+        subtitle: Text.rich(
+          TextSpan(
+            children: [
+              // The step in words, in its own colour, at the front of the
+              // line: the colour says which of the six it is at a glance and
+              // the word says it to a mono print and to a reader who cannot
+              // tell the amber from the orange.
+              TextSpan(
+                text: kEquipmentTimingLabels[timing]!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              TextSpan(text: '  ·  $detail'),
+            ],
+          ),
+          style: theme.textTheme.bodySmall,
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (item.replacementCost > 0)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Text(
+                  formatLifecycleMoney(item.replacementCost, currency),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            // The one control on the row, because the date is the one fact
+            // this screen exists to collect. Everything else about the box is
+            // edited where the box is drawn.
+            OutlinedButton.icon(
+              key: ValueKey('lifecycle_install_${item.node.id}'),
+              onPressed: () => _pickInstall(context),
+              icon: const Icon(Icons.event_available, size: 16),
+              label: Text(
+                item.installedOn == null
+                    ? 'Set install date'
+                    : formatEquipmentDate(item.installedOn!),
               ),
             ),
-          // The one control on the row, because the date is the one fact this
-          // screen exists to collect. Everything else about the box is edited
-          // where the box is drawn.
-          OutlinedButton.icon(
-            key: ValueKey('lifecycle_install_${item.node.id}'),
-            onPressed: () => _pickInstall(context),
-            icon: const Icon(Icons.event_available, size: 16),
-            label: Text(
-              item.installedOn == null
-                  ? 'Set install date'
-                  : formatEquipmentDate(item.installedOn!),
-            ),
-          ),
-          if (item.installedOn != null)
-            IconButton(
-              key: ValueKey('lifecycle_install_clear_${item.node.id}'),
-              tooltip: 'Nobody knows when this went in',
-              icon: const Icon(Icons.close, size: 16),
-              onPressed: () => context
-                  .read<AppStateProvider>()
-                  .setAvNodeInstalledOn(item.node.id, null),
-            ),
-        ],
+            if (item.installedOn != null)
+              IconButton(
+                key: ValueKey('lifecycle_install_clear_${item.node.id}'),
+                tooltip: 'Nobody knows when this went in',
+                icon: const Icon(Icons.close, size: 16),
+                onPressed: () => context
+                    .read<AppStateProvider>()
+                    .setAvNodeInstalledOn(item.node.id, null),
+              ),
+          ],
+        ),
       ),
     );
   }

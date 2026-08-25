@@ -40,7 +40,7 @@ void main() {
   }
 
   Future<void> pumpPane(WidgetTester tester, AppStateProvider p) async {
-    tester.view.physicalSize = const Size(1600, 1400);
+    tester.view.physicalSize = const Size(1600, 1800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -151,7 +151,14 @@ void main() {
     await pumpPane(tester, p);
 
     expect(find.textContaining('with nobody named'), findsOneWidget);
-    expect(find.textContaining('NOBODY YET'), findsOneWidget);
+    // Once on the list below the grid. The grid's own narrow cells say the
+    // short form of it, in the error colour, beside the tinted chips every
+    // named party gets.
+    // Once for each unnamed party on the list below the grid. The grid's own
+    // narrow cells say the short form of it, in the error colour, beside the
+    // tinted chip every named party gets.
+    expect(find.textContaining('NOBODY YET'), findsNWidgets(2));
+    expect(find.text('NOBODY'), findsNWidgets(2));
   });
 
   testWidgets('a line can be taken off the matrix', (tester) async {

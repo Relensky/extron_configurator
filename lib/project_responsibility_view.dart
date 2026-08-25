@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
+import 'name_colors.dart';
 import 'project_estimate.dart';
 import 'report_tools.dart';
 import 'responsibility_matrix.dart';
@@ -34,6 +35,15 @@ import 'xlsx_writer.dart';
 ///  captured off this pane. What is on this pane is an editor — it has buttons
 ///  on every row and it is as wide as the window — and photographing an editor
 ///  produces a picture with delete buttons in it. The preview is the document.
+///
+///  A COLOUR PER PARTY. The question this sheet is read for is whose job a line
+///  is, and the answer was black text in a narrow column on a grid thirty
+///  columns wide. Each party now carries its own colour — the same one wherever
+///  its name appears, from [tintForName] — so the contractor's share of the
+///  sheet is visible without reading a single cell, and the lines nobody has
+///  been named on stay grey, because an unagreed line must never read as an
+///  agreed one. The name is still written in every cell: the colour is a second
+///  way to read the sheet, never the only one.
 /// ============================================================================
 
 /// The matrix pane, as slivers for the project tab's one scroll view.
@@ -169,10 +179,37 @@ class _Toolbar extends StatelessWidget {
                 color: theme.colorScheme.error,
               ),
             ),
+          // The key to the colours on the grid below, built from the parties
+          // actually named on this job.
+          if (items.isNotEmpty)
+            NameTintKey(
+              key: const ValueKey('responsibility_party_key'),
+              title: 'PARTIES',
+              names: partiesOn(items),
+            ),
         ],
       ),
     );
   }
+}
+
+/// Every party named on [items], furnishers and installers together, in the
+/// order they first appear on the sheet.
+///
+/// One list rather than two, because a party is one party: the contractor who
+/// installs the screens and furnishes the ceiling boxes has to be the same
+/// colour in both rows or the colour stops meaning anybody.
+List<String> partiesOn(List<ResponsibilityItem> items) {
+  final seen = <String>{};
+  final out = <String>[];
+  for (final item in items) {
+    for (final party in [item.furnishedBy, item.installedBy]) {
+      final key = normalisedName(party);
+      if (key.isEmpty || !seen.add(key)) continue;
+      out.add(party.trim());
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +316,6 @@ class _MatrixGrid extends StatelessWidget {
   /// One scope item, top to bottom.
   Widget _itemColumnFor(BuildContext context, ResponsibilityItem item) {
     final theme = Theme.of(context);
-    final unassigned = item.unassigned;
 
     return SizedBox(
       width: _itemColumn,
@@ -304,28 +340,20 @@ class _MatrixGrid extends StatelessWidget {
               ),
             ),
           ),
+          // WHOSE JOB IT IS, IN ITS OWN COLOUR. Two rows under every scope
+          // name, and the pair of them is what the sheet is read for.
           _cell(
             height: _partyRow,
-            child: Text(
-              item.furnishedBy.isEmpty ? '-' : item.furnishedBy,
-              overflow: TextOverflow.ellipsis,
-              style: _metaStyle(theme).copyWith(
-                color: unassigned && item.furnishedBy.isEmpty
-                    ? theme.colorScheme.error
-                    : null,
-              ),
+            child: _PartyCell(
+              party: item.furnishedBy,
+              missing: item.furnishedBy.trim().isEmpty,
             ),
           ),
           _cell(
             height: _partyRow,
-            child: Text(
-              item.installedBy.isEmpty ? '-' : item.installedBy,
-              overflow: TextOverflow.ellipsis,
-              style: _metaStyle(theme).copyWith(
-                color: unassigned && item.installedBy.isEmpty
-                    ? theme.colorScheme.error
-                    : null,
-              ),
+            child: _PartyCell(
+              party: item.installedBy,
+              missing: item.installedBy.trim().isEmpty,
             ),
           ),
           for (final room in columns)
@@ -398,6 +426,47 @@ class _MatrixGrid extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 4),
     child: child,
   );
+}
+
+/// One party's name on the grid, in that party's colour.
+///
+/// A cell nobody has been named in reads NOBODY in the error colour rather
+/// than as a dash: a blank on this sheet is the exact thing it exists to
+/// catch, and the tinted chips around it would otherwise make an empty cell
+/// look like one more quiet agreement.
+class _PartyCell extends StatelessWidget {
+  final String party;
+  final bool missing;
+
+  /// What an unnamed party reads as. The grid's columns are a hundred pixels
+  /// wide and take the short form; the list underneath has room for the one
+  /// that says it is not finished yet.
+  final String missingLabel;
+
+  const _PartyCell({
+    required this.party,
+    required this.missing,
+    this.missingLabel = 'NOBODY',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (missing) {
+      return Text(
+        missingLabel,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.error,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: NameTintChip(name: party),
+    );
+  }
 }
 
 /// How many of one thing in one room.
@@ -501,17 +570,43 @@ class _ItemRow extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Furnished by '
-            '${item.furnishedBy.isEmpty ? 'NOBODY YET' : item.furnishedBy}'
-            '  ·  installed by '
-            '${item.installedBy.isEmpty ? 'NOBODY YET' : item.installedBy}'
-            '${item.neededBy.isEmpty ? '' : '  ·  needed by ${item.neededBy}'}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: item.unassigned
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
+          // The parties as chips, in their colours, so a row on the editor and
+          // the same row on the grid above read as the same line.
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Furnished by',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              _PartyCell(
+                party: item.furnishedBy,
+                missing: item.furnishedBy.trim().isEmpty,
+                missingLabel: 'NOBODY YET',
+              ),
+              Text(
+                'installed by',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              _PartyCell(
+                party: item.installedBy,
+                missing: item.installedBy.trim().isEmpty,
+                missingLabel: 'NOBODY YET',
+              ),
+              if (item.neededBy.isNotEmpty)
+                Text(
+                  '·  needed by ${item.neededBy}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ),
           if (rooms.isNotEmpty)
             Text(rooms, style: theme.textTheme.bodySmall),
@@ -932,6 +1027,16 @@ class _ResponsibilityImageDialogState
   final GlobalKey _boundary = GlobalKey();
   bool _saving = false;
 
+  /// Whether the picture keeps the party colours.
+  ///
+  /// ON, because the colours are half of how this particular document is read
+  /// — whose job the line is, seen down a column rather than looked up cell by
+  /// cell — and a picture of it that dropped them would be a worse copy than
+  /// the screen it was taken from. The mono treatment every other drawing
+  /// leaves this app in is still one press away, for the copy that is going to
+  /// be photocopied.
+  bool _colour = true;
+
   Future<void> _save() async {
     setState(() => _saving = true);
     final provider = context.read<AppStateProvider>();
@@ -1002,11 +1107,10 @@ class _ResponsibilityImageDialogState
           child: SingleChildScrollView(
             child: RepaintBoundary(
               key: _boundary,
-              // Light, uncoloured, on white — the same treatment every drawing
-              // that leaves this app gets, because this leaves it to be
-              // printed and photocopied like the rest of them.
+              // On white either way. The only question is whether the party
+              // colours survive — see [_colour].
               child: printSkin(
-                enabled: true,
+                enabled: !_colour,
                 child: _MatrixTable(project: project, columns: columns),
               ),
             ),
@@ -1014,6 +1118,21 @@ class _ResponsibilityImageDialogState
         ),
       ),
       actions: [
+        // A switch rather than two buttons: it changes the preview above, so
+        // what is saved is what was looked at.
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Switch(
+              key: const ValueKey('responsibility_image_colour'),
+              value: _colour,
+              onChanged: (v) => setState(() => _colour = v),
+            ),
+            const SizedBox(width: 4),
+            const Text('Party colours'),
+          ],
+        ),
+        const SizedBox(width: 12),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
@@ -1051,6 +1170,35 @@ class _MatrixTable extends StatelessWidget {
           child: Text(text, style: style),
         );
 
+    /// A party's cell: its colour behind its name, on the white the document
+    /// is printed on. Greyscaled with the rest of the table when the colours
+    /// are switched off, which is why the name is still written in it.
+    Widget partyCell(String party) {
+      final named = party.trim();
+      if (named.isEmpty) {
+        return cell(
+          'NOBODY',
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFB3261E),
+          ),
+        );
+      }
+      return Container(
+        color: nameFill(named, alpha: 0.20),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        child: Text(
+          named,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: nameTextColor(named, Colors.white),
+          ),
+        ),
+      );
+    }
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.all(20),
@@ -1072,7 +1220,18 @@ class _MatrixTable extends StatelessWidget {
             'Generated ${reportTimestamp()}',
             style: const TextStyle(fontSize: 10, color: Colors.black54),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          // The key travels with the picture. A submittal reader has not seen
+          // the screen these colours were learned on.
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final party in partiesOn(items))
+                NameTintChip(name: party, background: Colors.white),
+            ],
+          ),
+          const SizedBox(height: 10),
           Table(
             defaultVerticalAlignment: TableCellVerticalAlignment.top,
             border: TableBorder.all(color: Colors.black26, width: 0.6),
@@ -1103,8 +1262,8 @@ class _MatrixTable extends StatelessWidget {
                 TableRow(
                   children: [
                     cell(item.scope),
-                    cell(item.furnishedBy),
-                    cell(item.installedBy),
+                    partyCell(item.furnishedBy),
+                    partyCell(item.installedBy),
                     cell(item.neededBy),
                     for (final room in columns)
                       cell(

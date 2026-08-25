@@ -25,6 +25,7 @@ import 'export_tools.dart';
 import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
 import 'live_text_field.dart';
+import 'name_colors.dart';
 import 'print_mode.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
@@ -700,18 +701,40 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     return maker.isEmpty ? 'No manufacturer on the catalog entry' : maker;
   }
 
+  /// The name a line's SHADE comes from — who makes it, or '' when the catalog
+  /// entry does not say.
+  ///
+  /// Separate from [_makerOf], which is the heading's wording: a line with no
+  /// manufacturer must not be tinted as though 'No manufacturer on the catalog
+  /// entry' were a vendor, so it takes the unsettled grey [tintForName] gives
+  /// an empty name.
+  static String _makerTint(CostLine line) => line.manufacturer.trim();
+
   /// The rule and the name over one vendor's block of the equipment table.
-  Widget _makerHeading(BuildContext context, String maker) {
+  Widget _makerHeading(BuildContext context, String maker, String tintName) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 2),
       child: Row(
         children: [
+          // The vendor's own swatch, so the heading and the shaded rows under
+          // it are visibly the same block.
+          Container(
+            width: 10,
+            height: 10,
+            margin: const EdgeInsets.only(right: 6),
+            decoration: BoxDecoration(
+              color: nameFill(tintName, alpha: 0.9),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           Text(
             maker,
             style: theme.textTheme.labelMedium?.copyWith(
               fontWeight: FontWeight.w600,
-              color: theme.colorScheme.primary,
+              color: tintName.isEmpty
+                  ? theme.colorScheme.onSurfaceVariant
+                  : nameTextColor(tintName, theme.cardColor),
             ),
           ),
           const SizedBox(width: 8),
@@ -771,6 +794,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             const SizedBox(height: 8),
+            // WHO MAKES WHAT, IN COLOUR. An order is placed one vendor at a
+            // time, and this table is where it is checked — so every line
+            // carries its maker's shade down its left edge and the key to
+            // those shades sits above it. The maker is still written out over
+            // each block when the table is sorted by one, and the key names
+            // them all when it is not: the colour is a second way to read the
+            // list, never the only one.
+            if (estimate.equipment.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: NameTintKey(
+                  key: const ValueKey('equipment_vendor_key'),
+                  title: 'VENDORS',
+                  names: [
+                    for (final line in estimate.equipment) _makerTint(line),
+                  ],
+                ),
+              ),
             _headerRow(context, _kEquipmentCols),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
@@ -791,7 +832,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   (i == 0 ||
                       _makerOf(estimate.equipment[i - 1]) !=
                           _makerOf(estimate.equipment[i])))
-                _makerHeading(context, _makerOf(estimate.equipment[i])),
+                _makerHeading(
+                  context,
+                  _makerOf(estimate.equipment[i]),
+                  _makerTint(estimate.equipment[i]),
+                ),
               Builder(
                 builder: (context) {
                   final line = estimate.equipment[i];
@@ -807,7 +852,37 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   final catalogPart = extra != null
                       ? extra.catalogModel.trim()
                       : (isCatalogSource(line.source) ? line.model.trim() : '');
-                  return Padding(
+                  final tint = _makerTint(line);
+                  // THE SHADE IS PAINTED BEHIND THE ROW, NOT AROUND IT. A
+                  // border or a pad would move every cell on the line three
+                  // pixels off the caption above it, and the columns on this
+                  // table are checked against those captions — see
+                  // cost_header_alignment_test.dart. So the wash and the
+                  // vendor's band are laid under a row that is laid out
+                  // exactly as it was before.
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ColoredBox(
+                          color: nameFill(
+                            tint,
+                            alpha: tint.isEmpty ? 0.04 : 0.07,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 3,
+                        child: ColoredBox(
+                          color: nameFill(
+                            tint,
+                            alpha: tint.isEmpty ? 0.3 : 0.8,
+                          ),
+                        ),
+                      ),
+                      Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: _gridRow(_kEquipmentCols, [
                       // Device
@@ -1072,6 +1147,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         ],
                       ),
                     ], rowKey: ValueKey('gridrow_eqp_${line.key}')),
+                      ),
+                    ],
                   );
                 },
               ),

@@ -4,7 +4,13 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_view.dart'
-    show equipmentConditionColor, equipmentConditionIcon;
+    show
+        EquipmentTimingKey,
+        equipmentConditionColor,
+        equipmentConditionIcon,
+        equipmentTimingColor,
+        equipmentTimingFill,
+        equipmentTimingIcon;
 import 'project_estimate.dart';
 
 /// ============================================================================
@@ -99,7 +105,28 @@ class _Summary extends StatelessWidget {
                     condition: c,
                     rooms: building.roomsOf(c),
                     items: building.countOf(c),
+                    cost: building.costOf(c),
+                    currency: building.currency,
                   ),
+              // The whole ask, in one figure: everything past its life plus
+              // everything inside the planning window, counted and priced. It
+              // is the number a refresh request is written for, and it was
+              // previously only arrived at by adding two bands by eye.
+              if (building.toReplaceCount > 0)
+                _Figure(
+                  label: 'To replace',
+                  value: formatEquipmentBand(
+                    building.toReplaceCount,
+                    building.toReplaceCost,
+                    building.currency,
+                  ),
+                  color: equipmentConditionColor(
+                    context,
+                    building.countOf(EquipmentCondition.overdue) > 0
+                        ? EquipmentCondition.overdue
+                        : EquipmentCondition.ageing,
+                  ),
+                ),
               if (building.overdueCost > 0)
                 _Figure(
                   label: 'Past its life today',
@@ -141,10 +168,17 @@ class _Band extends StatelessWidget {
   final int rooms;
   final int items;
 
+  /// What the items in this band cost to replace. A count on its own is not
+  /// something a budget meeting can act on — see [RoomLifecycle.costOf].
+  final double cost;
+  final String currency;
+
   const _Band({
     required this.condition,
     required this.rooms,
     required this.items,
+    required this.cost,
+    required this.currency,
   });
 
   @override
@@ -167,8 +201,8 @@ class _Band extends StatelessWidget {
               ),
             ),
             Text(
-              '$rooms room${rooms == 1 ? '' : 's'} · $items item'
-              '${items == 1 ? '' : 's'}',
+              '$rooms room${rooms == 1 ? '' : 's'} · '
+              '${formatEquipmentBand(items, cost, currency)}',
               key: ValueKey('lifecycle_band_${condition.name}'),
               style: theme.textTheme.titleSmall?.copyWith(color: color),
             ),
@@ -228,6 +262,11 @@ class _YearGrid extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 4),
+          // Six shades across a row are only readable against a key. The same
+          // one the room's own tab carries, so a reader who learned it there
+          // does not have to learn it again here.
+          const EquipmentTimingKey(),
           const SizedBox(height: 6),
           // Its own horizontal scroller. The tab scrolls vertically as one
           // document; a grid twenty years wide has to move sideways without
@@ -286,20 +325,6 @@ class _GridRow extends StatelessWidget {
     required this.currency,
   });
 
-  /// Where the room sits in [year]: unknown before it was installed, in
-  /// service while it is inside its cycle, due in the year it falls due, and
-  /// past its life after that.
-  EquipmentCondition _conditionIn(int year) {
-    final installed = room.oldestInstall?.year;
-    final due = room.firstDueYear;
-    if (installed == null || due == null) return EquipmentCondition.unknown;
-    if (year < installed) return EquipmentCondition.unknown;
-    if (year >= due) return EquipmentCondition.overdue;
-    return year >= due - kEquipmentWarningYears
-        ? EquipmentCondition.ageing
-        : EquipmentCondition.good;
-  }
-
   String _label(int year) {
     final money = room.costDueIn(year);
     if (money > 0) return formatLifecycleMoney(money, currency);
@@ -329,28 +354,37 @@ class _GridRow extends StatelessWidget {
           for (final year in years)
             Builder(
               builder: (context) {
-                final condition = _conditionIn(year);
+                // THE ROW WARMS UP ACROSS THE SHEET. Green while the room is
+                // young, yellow the year it enters the planning window, amber,
+                // orange, then red the year it falls due — which is the thing
+                // the hand-coloured sheet did with six pencils and the thing a
+                // single amber band could not say.
+                final timing = room.timingIn(year);
                 final text = _label(year);
-                final color = equipmentConditionColor(context, condition);
-                return Container(
-                  key: ValueKey('lifecycle_cell_${room.roomName}_$year'),
-                  width: _kYearColumn - 2,
-                  height: 22,
-                  margin: const EdgeInsets.only(right: 2),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    // Filled only where there is something to say. An empty
-                    // cell is a year outside the room's life, and painting it
-                    // would put colour on the sheet that means nothing.
-                    color: text.isEmpty
-                        ? null
-                        : color.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    text,
-                    style: theme.textTheme.labelSmall?.copyWith(color: color),
-                    overflow: TextOverflow.ellipsis,
+                final color = equipmentTimingColor(context, timing);
+                return Tooltip(
+                  message: '${room.roomName} in $year: '
+                      '${kEquipmentTimingLabels[timing]!}',
+                  child: Container(
+                    key: ValueKey('lifecycle_cell_${room.roomName}_$year'),
+                    width: _kYearColumn - 2,
+                    height: 22,
+                    margin: const EdgeInsets.only(right: 2),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      // Filled only where there is something to say. An empty
+                      // cell is a year outside the room's life, and painting
+                      // it would put colour on the sheet that means nothing.
+                      color: text.isEmpty
+                          ? null
+                          : equipmentTimingFill(context, timing),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      text,
+                      style: theme.textTheme.labelSmall?.copyWith(color: color),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 );
               },
@@ -371,13 +405,14 @@ class _RoomRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = equipmentConditionColor(context, room.condition);
+    final timing = room.timing;
+    final color = equipmentTimingColor(context, timing);
     return ListTile(
       key: ValueKey('lifecycle_room_${room.roomName}'),
       dense: true,
       leading: Tooltip(
-        message: kEquipmentConditionLabels[room.condition]!,
-        child: Icon(equipmentConditionIcon(room.condition), color: color),
+        message: kEquipmentTimingLabels[timing]!,
+        child: Icon(equipmentTimingIcon(timing), color: color),
       ),
       title: Text(room.roomName, style: theme.textTheme.titleSmall),
       subtitle: Text(
@@ -389,6 +424,15 @@ class _RoomRow extends StatelessWidget {
           room.firstDueYear == null
               ? 'no due date'
               : 'first due ${room.firstDueYear}',
+          // How much of the room is on the list and what it costs — the two
+          // halves of the answer, on the row the question is asked about.
+          if (room.toReplaceCount > 0)
+            'to replace: '
+                '${formatEquipmentBand(
+              room.toReplaceCount,
+              room.toReplaceCost,
+              currency,
+            )}',
           if (room.undated > 0) '${room.undated} without a date',
         ].join('  ·  '),
         style: theme.textTheme.bodySmall,

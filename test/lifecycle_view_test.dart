@@ -280,7 +280,9 @@ void main() {
             ),
           )
           .data,
-      '2 rooms · 2 items',
+      // The band carries the count AND what it costs to replace. Nothing in
+      // this job is priced, which the band says rather than reading as free.
+      '2 rooms · 2 items, not priced',
     );
     // And the grid carries a cell for the year it fell due.
     expect(find.textContaining('first due 2022'), findsNWidgets(2));
