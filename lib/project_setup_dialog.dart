@@ -580,7 +580,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                   Expanded(
                     child: Text(
                       'The share of each product to keep on the shelf. Any '
-                      'part held under it is flagged on Core Components.',
+                      'part held under it is flagged on the Equipment list.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

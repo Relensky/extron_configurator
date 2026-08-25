@@ -777,6 +777,17 @@ class ProjectEstimate {
     this.controlGaps = const [],
   });
 
+  /// Room id -> the code on its door, `BSS 101`.
+  ///
+  /// What anything drawing a column per room labels it with. Built here
+  /// because this is the only layer that has both the project's room list and
+  /// the configs behind it; a room that could not be read simply has no entry
+  /// and falls back to whatever the project itself knows to call it.
+  Map<String, String> get roomCodeNames => {
+    for (final room in rooms)
+      if (room.ok) room.ref.id: room.codeName,
+  };
+
   /// Devices, not lines: three undriven displays is three things to fix.
   int get undrivenDevices =>
       controlGaps.fold(0, (s, g) => s + g.gap.qty);

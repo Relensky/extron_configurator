@@ -257,7 +257,7 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
             padding: EdgeInsets.all(24),
             child: Text(
               'Nothing to schedule yet.\n\n'
-              'The timeline is built from the core components list - add '
+              'The timeline is built from the Equipment list - add '
               'rooms that have equipment on them.',
               textAlign: TextAlign.center,
             ),
@@ -288,7 +288,7 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
               child: Text(
                 'No deadline yet.\n\n'
                 'Set the delivery deadline in the header, then put a lead '
-                'time on the parts that matter - the Core Components list has '
+                'time on the parts that matter - the Equipment list has '
                 'a Lead time column. Anything that has to arrive earlier than '
                 'the rest (screens, mounts, floor boxes) gets its own date on '
                 'the same editor.',

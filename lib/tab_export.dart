@@ -209,6 +209,8 @@ List<ReportSection> _catalogSections(AppStateProvider provider) {
         'Power (W)',
         'MSRP',
         'Education',
+        'Lead (days)',
+        'Life (yrs)',
         'Status',
       ],
       rows: [
@@ -226,6 +228,8 @@ List<ReportSection> _catalogSections(AppStateProvider provider) {
             e.powerWatts == 0 ? '' : trimNumber(e.powerWatts),
             e.price == 0 ? '' : trimNumber(e.price),
             e.educationPrice == 0 ? '' : trimNumber(e.educationPrice),
+            e.leadTimeDays?.toString() ?? '',
+            e.lifeYears == 0 ? '' : '${e.lifeYears}',
             [
               if (e.retired) 'retired',
               if (e.custom) 'local',

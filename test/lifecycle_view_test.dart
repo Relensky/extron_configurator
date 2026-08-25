@@ -123,6 +123,109 @@ void main() {
     expect(p.avNodeById('PROJECTORDEVICE_1')!.installedOn, isNull);
   });
 
+  // -------------------------------------------------------------------------
+  //  DATING THE WHOLE ROOM AT ONCE
+  // -------------------------------------------------------------------------
+  //  A room refreshed together went in together, so the honest record and the
+  //  fastest one are the same thing. What matters is that the sweep says how
+  //  much it will change, and that it cannot quietly destroy a date somebody
+  //  recorded by hand.
+
+  group('dating the whole room', () {
+    Future<void> openDialog(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('lifecycle_date_room')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('room_install_date_dialog')),
+        findsOneWidget,
+      );
+    }
+
+    Future<void> pickDay(WidgetTester tester, String day) async {
+      await tester.tap(find.byKey(const ValueKey('room_install_date_pick')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('stepped_date_day_$day')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('stepped_date_confirm')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('one date lands on every undated item', (tester) async {
+      final p = room();
+      await pumpRoom(tester, p);
+      await openDialog(tester);
+      await pickDay(tester, '14');
+
+      // The button says how much it is about to change.
+      expect(find.text('Date 2 items'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('room_install_date_apply')));
+      await tester.pumpAndSettle();
+
+      for (final id in ['PROJECTORDEVICE_1', 'DISPLAYDEVICE_1']) {
+        final node = p.avNodeById(id)!;
+        expect(node.installedOn, isNotNull, reason: id);
+        expect(node.installedOn!.day, 14, reason: id);
+        expect(node.installedOn!.hour, 0, reason: id);
+      }
+      await tester.pumpAndSettle(const Duration(seconds: 8));
+    });
+
+    testWidgets('the survey sweep leaves a date somebody typed alone', (
+      tester,
+    ) async {
+      final p = room();
+      p.setAvNodeInstalledOn('PROJECTORDEVICE_1', DateTime(2018, 4, 1));
+      await pumpRoom(tester, p);
+      await openDialog(tester);
+      await pickDay(tester, '14');
+
+      // Only one is undated, and the default scope is the safe one.
+      expect(find.text('Date 1 item'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('room_install_date_apply')));
+      await tester.pumpAndSettle();
+
+      expect(
+        p.avNodeById('PROJECTORDEVICE_1')!.installedOn,
+        DateTime(2018, 4, 1),
+        reason: 'the recorded date must survive a survey sweep',
+      );
+      expect(p.avNodeById('DISPLAYDEVICE_1')!.installedOn!.day, 14);
+      await tester.pumpAndSettle(const Duration(seconds: 8));
+    });
+
+    testWidgets('the whole-room scope does overwrite, when asked', (
+      tester,
+    ) async {
+      final p = room();
+      p.setAvNodeInstalledOn('PROJECTORDEVICE_1', DateTime(2018, 4, 1));
+      await pumpRoom(tester, p);
+      await openDialog(tester);
+      await tester.tap(find.byKey(const ValueKey('room_install_scope_all')));
+      await tester.pumpAndSettle();
+      await pickDay(tester, '14');
+
+      expect(find.text('Date 2 items'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('room_install_date_apply')));
+      await tester.pumpAndSettle();
+
+      expect(p.avNodeById('PROJECTORDEVICE_1')!.installedOn!.day, 14);
+      expect(p.avNodeById('DISPLAYDEVICE_1')!.installedOn!.day, 14);
+      await tester.pumpAndSettle(const Duration(seconds: 8));
+    });
+
+    testWidgets('backing out changes nothing', (tester) async {
+      final p = room();
+      await pumpRoom(tester, p);
+      await openDialog(tester);
+      await pickDay(tester, '14');
+      await tester.tap(find.byKey(const ValueKey('room_install_date_cancel')));
+      await tester.pumpAndSettle();
+
+      expect(p.avNodeById('PROJECTORDEVICE_1')!.installedOn, isNull);
+      expect(p.avNodeById('DISPLAYDEVICE_1')!.installedOn, isNull);
+    });
+  });
+
   testWidgets('a room with nothing on the diagram says what to do', (
     tester,
   ) async {

@@ -12,7 +12,7 @@ import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/live_text_field.dart';
 import 'package:extron_configurator/project_view.dart';
 
-/// The spares section on Core Components.
+/// The spares section on the Equipment list.
 ///
 /// Where a spare is added, scoped to a room or to the building, and moved
 /// between the two. The failure it exists to stop is a shelf list nobody can
@@ -98,7 +98,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Core Components'));
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
     // 'Spares' with nothing spared yet, 'Spares (2)' once there is.
     await tester.tap(find.textContaining('Spares').first);
@@ -347,7 +347,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Core Components'));
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
     // The list of parts with no spare used to be a list to read and then go

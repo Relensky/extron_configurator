@@ -15,7 +15,6 @@ import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
-import 'project_history_view.dart';
 import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
 import 'project_plans_view.dart';
@@ -28,6 +27,7 @@ import 'project_swap.dart';
 import 'project_todo_view.dart';
 import 'project_timeline_view.dart';
 import 'project_workbook.dart';
+import 'workbook_export.dart' show exportProjectWorkbook;
 
 /// ============================================================================
 ///  THE PROJECT TAB
@@ -58,7 +58,13 @@ import 'project_workbook.dart';
 /// Which pane is showing.
 enum _ProjectPane {
   rooms('Rooms', Icons.meeting_room),
-  parts('Core Components', Icons.inventory_2),
+  // EQUIPMENT, not "core components". The list is every piece of kit the job
+  // buys, once, with the quantities merged across rooms - and "equipment" is
+  // what everybody standing in front of it calls that. The name it had was the
+  // internal one for the merged-part key, which is not a thing anybody outside
+  // this code has to know about. The workbook's sheet keeps its own name; it
+  // has been going out to vendors under it.
+  parts('Equipment', Icons.inventory_2),
   // The drawings the job is quoted against - next to the rooms because that
   // is what they are about, and before the money because they are what the
   // money was worked out from.
@@ -73,8 +79,7 @@ enum _ProjectPane {
   responsibility('Responsibility', Icons.handshake_outlined),
   vendors('Vendors', Icons.local_shipping),
   todo('To do', Icons.checklist),
-  notes('Notes', Icons.sticky_note_2_outlined),
-  history('History', Icons.history);
+  notes('Notes', Icons.sticky_note_2_outlined);
 
   final String label;
   final IconData icon;
@@ -184,57 +189,19 @@ class _ProjectViewState extends State<ProjectView> {
   // the one here could only ever write the job, while the one up there writes
   // whichever document the tab you are standing on belongs to.
 
-  String _fileStem(BuildingProject project) {
-    final raw = project.name.trim().isNotEmpty
-        ? project.name
-        : project.building.trim().isNotEmpty
-        ? project.building
-        : 'project';
-    return raw
-        .trim()
-        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
-        .replaceAll(RegExp(r'\s+'), '_');
-  }
-
   // -------------------------------------------------------------------------
   //  EXPORTS
   // -------------------------------------------------------------------------
 
+  /// The tab's own Workbook button.
+  ///
+  /// Forwards to the shared flow rather than writing the file here: the
+  /// toolbar can produce the same book from any tab now, and two writers would
+  /// mean two file names and two chances for the sheets to drift.
   Future<void> _exportWorkbook(
     AppStateProvider provider,
     ProjectEstimate estimate,
-  ) async {
-    if (estimate.rooms.isEmpty) {
-      _snack('Add some rooms first - there is nothing to write.');
-      return;
-    }
-    final picked = await FilePicker.saveFile(
-      dialogTitle: 'Save the project workbook',
-      fileName: '${_fileStem(provider.project)}_project.xlsx',
-      type: FileType.custom,
-      allowedExtensions: const ['xlsx'],
-    );
-    if (picked == null) return;
-    final target = picked.toLowerCase().endsWith('.xlsx')
-        ? picked
-        : '$picked.xlsx';
-    try {
-      await File(
-        target,
-      ).writeAsBytes(buildProjectWorkbookBytes(
-        estimate: estimate,
-        // The catalog prices the replacement plan's sheet. The estimate does
-        // not carry one, so it is handed over here where there is a provider.
-        library: provider.avDeviceLibrary,
-        tier: provider.pricingTier,
-      ));
-      if (mounted) {
-        showSavedFileSnack(context, provider, 'The project workbook', target);
-      }
-    } catch (e) {
-      _snack('The workbook could not be written: $e', error: true);
-    }
-  }
+  ) => exportProjectWorkbook(context, provider);
 
   /// One .xlsx per vendor, into a folder the user picks.
   ///
@@ -352,7 +319,6 @@ class _ProjectViewState extends State<ProjectView> {
             _ProjectPane.vendors => vendorsSlivers(context, estimate),
             _ProjectPane.todo => todoSlivers(context, estimate),
             _ProjectPane.notes => notesSlivers(context, estimate),
-            _ProjectPane.history => historySlivers(context, estimate),
           },
         ],
       ),
@@ -3261,8 +3227,9 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
                 'A part is tagged by the FIRST vendor whose rules claim it. '
                 'Manufacturer rules are checked before category rules, so '
                 'Extron beats “AV Reseller for Speakers” for an '
-                'Extron speaker. Order matters in the list below - move  '
-                'a vendor up to give it priority.',
+                'Extron speaker. Order matters in the list below - drag a '
+                'vendor up by its handle to give it priority. Open one to '
+                'edit its rules.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -3326,9 +3293,20 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
     else
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        sliver: SliverList.builder(
+        // REORDERABLE, because the order is a rule rather than a preference:
+        // it decides which vendor wins when two claim the same manufacturer.
+        // Nudging a vendor five places with an arrow button is five presses
+        // and five re-reads of the list; dragging it is one gesture that shows
+        // the answer while you are making it.
+        sliver: SliverReorderableList(
           itemCount: vendors.length,
+          onReorderItem: provider.reorderProjectVendor,
           itemBuilder: (context, index) => _VendorCard(
+            // Keyed by the VENDOR, not the row. The list needs it to animate a
+            // drag, and the card's own open/closed state has to travel with
+            // the vendor rather than stay behind on the position it left.
+            key: ValueKey(vendors[index].id),
+            index: index,
             vendor: vendors[index],
             package: estimate.packageFor(vendors[index].id),
             currency: estimate.currency,
@@ -3340,7 +3318,19 @@ List<Widget> vendorsSlivers(BuildContext context, ProjectEstimate estimate) {
   ];
 }
 
-class _VendorCard extends StatelessWidget {
+/// One vendor: its name, and — once opened — the rules that tag parts to it.
+///
+/// CLOSED BY DEFAULT, showing the name and nothing else.
+///
+/// A vendor's card is two text fields, two rule editors and a notes box, and a
+/// job with six vendors was six of those stacked down a page. The thing that
+/// screen is actually FOR is the ORDER — which vendor claims a part first —
+/// and the order was the one thing you could not see, because two vendors
+/// never fitted on screen together. Collapsed, the whole list is one screen and
+/// the priority is readable at a glance; the rules are one press away for the
+/// one vendor being edited.
+class _VendorCard extends StatefulWidget {
+  final int index;
   final ProjectVendor vendor;
   final VendorPackage? package;
   final String currency;
@@ -3348,6 +3338,8 @@ class _VendorCard extends StatelessWidget {
   final bool isLast;
 
   const _VendorCard({
+    super.key,
+    required this.index,
     required this.vendor,
     required this.package,
     required this.currency,
@@ -3356,9 +3348,22 @@ class _VendorCard extends StatelessWidget {
   });
 
   @override
+  State<_VendorCard> createState() => _VendorCardState();
+}
+
+class _VendorCardState extends State<_VendorCard> {
+  bool _open = false;
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.read<AppStateProvider>();
+    final theme = Theme.of(context);
     final facets = provider.catalogFacets;
+    final vendor = widget.vendor;
+    final package = widget.package;
+    final currency = widget.currency;
+    final isFirst = widget.isFirst;
+    final isLast = widget.isLast;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -3367,6 +3372,116 @@ class _VendorCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // THE ROW THAT IS ALWAYS THERE. Everything below it is behind the
+            // toggle.
+            Row(
+              children: [
+                ReorderableDragStartListener(
+                  key: ValueKey('vendor_drag_${vendor.id}'),
+                  index: widget.index,
+                  child: Tooltip(
+                    message: 'Drag to change which vendor claims a part first',
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+                // The position, because it IS the rule. A list whose order
+                // decides the answer should say what the order is rather than
+                // leave it to be counted.
+                SizedBox(
+                  width: 26,
+                  child: Text(
+                    '${widget.index + 1}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    key: ValueKey('vendor_toggle_${vendor.id}'),
+                    onTap: () => setState(() => _open = !_open),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _open ? Icons.expand_less : Icons.expand_more,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              vendor.name.trim().isEmpty
+                                  ? '(unnamed vendor)'
+                                  : vendor.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // A closed card still has to say what the vendor CLAIMS -
+                // otherwise the collapsed list is a list of names and the
+                // priority order is unreadable for a different reason.
+                if (!_open) ...[
+                  Flexible(
+                    child: Text(
+                      [
+                        ...vendor.manufacturers,
+                        ...vendor.categories,
+                      ].take(4).join(', '),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (package != null)
+                  Chip(
+                    label: Text(
+                      '${package.lines.length} lines  ·  '
+                      '${formatMoney(package.total, currency)}',
+                    ),
+                  ),
+                // Kept beside the handle rather than replaced by it: a drag is
+                // the fast way and not the only way, and these are the two
+                // that work from a keyboard.
+                IconButton(
+                  tooltip: 'Higher priority',
+                  icon: const Icon(Icons.arrow_upward, size: 18),
+                  onPressed: isFirst
+                      ? null
+                      : () => provider.moveProjectVendor(vendor.id, -1),
+                ),
+                IconButton(
+                  tooltip: 'Lower priority',
+                  icon: const Icon(Icons.arrow_downward, size: 18),
+                  onPressed: isLast
+                      ? null
+                      : () => provider.moveProjectVendor(vendor.id, 1),
+                ),
+                IconButton(
+                  tooltip: 'Remove this vendor and every tag pointing at it',
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: () => provider.removeProjectVendor(vendor.id),
+                ),
+              ],
+            ),
+            if (!_open) const SizedBox.shrink() else ...[
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -3391,33 +3506,6 @@ class _VendorCard extends StatelessWidget {
                       vendor.copyWith(contact: v),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                if (package != null)
-                  Chip(
-                    label: Text(
-                      '${package!.lines.length} lines  ·  '
-                      '${formatMoney(package!.total, currency)}',
-                    ),
-                  ),
-                IconButton(
-                  tooltip: 'Higher priority',
-                  icon: const Icon(Icons.arrow_upward, size: 18),
-                  onPressed: isFirst
-                      ? null
-                      : () => provider.moveProjectVendor(vendor.id, -1),
-                ),
-                IconButton(
-                  tooltip: 'Lower priority',
-                  icon: const Icon(Icons.arrow_downward, size: 18),
-                  onPressed: isLast
-                      ? null
-                      : () => provider.moveProjectVendor(vendor.id, 1),
-                ),
-                IconButton(
-                  tooltip: 'Remove this vendor and every tag pointing at it',
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  onPressed: () => provider.removeProjectVendor(vendor.id),
                 ),
               ],
             ),
@@ -3453,6 +3541,7 @@ class _VendorCard extends StatelessWidget {
               onChanged: (v) =>
                   provider.updateProjectVendor(vendor.copyWith(notes: v)),
             ),
+            ],
           ],
         ),
       ),

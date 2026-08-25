@@ -46,6 +46,15 @@ enum RoomSidecarPart {
 
   /// The estimate: tax, fees, labor, quoted prices.
   cost,
+
+  /// Who changed what in this room, and when.
+  ///
+  /// Its own file for the same reason the estimate has one: it is written on
+  /// every edit and read by nobody most of the time, and a log appended to the
+  /// same file as the drawing would make every save of the drawing a rewrite
+  /// of the log — which is exactly the file you do not want to lose to a
+  /// half-finished write.
+  history,
 }
 
 /// File suffix for each part: `<config base>_<suffix>.json`.
@@ -55,6 +64,7 @@ const Map<RoomSidecarPart, String> kRoomSidecarSuffix = {
   RoomSidecarPart.floorPlans: 'floor_plans',
   RoomSidecarPart.cabling: 'cabling',
   RoomSidecarPart.cost: 'cost',
+  RoomSidecarPart.history: 'history',
 };
 
 /// What to call each part where a PERSON reads it: the job history, a message
@@ -65,6 +75,7 @@ const Map<RoomSidecarPart, String> kRoomSidecarFileLabels = {
   RoomSidecarPart.floorPlans: 'Floor plans',
   RoomSidecarPart.cabling: 'Cabling',
   RoomSidecarPart.cost: 'Cost',
+  RoomSidecarPart.history: 'History',
 };
 
 /// Which top-level keys of the combined document each part owns.
@@ -90,6 +101,7 @@ const Map<RoomSidecarPart, List<String>> kRoomSidecarKeys = {
   RoomSidecarPart.floorPlans: ['floorPlans', 'locations'],
   RoomSidecarPart.cabling: ['screenSwitches', 'cablingSchematic'],
   RoomSidecarPart.cost: ['cost'],
+  RoomSidecarPart.history: ['roomHistory'],
 };
 
 /// Every key that belongs to some part.
@@ -153,6 +165,10 @@ const Map<RoomSidecarPart, String> _kReadme = {
       'This room\'s cost estimate: tax, fees, labor, quoted prices and the '
           'lines added by hand. The rates and base costs it draws on are '
           'shared files in the Root Folder, not here.',
+  RoomSidecarPart.history:
+      'Who changed what in this room, and when, under whichever Windows login '
+          'they were signed in as. A log, not an undo - nothing here puts '
+          'anything back.',
 };
 
 /// `<dir>/<config base>_<suffix>.json` for [part], or '' with no config file.

@@ -33,11 +33,17 @@ import 'room_locations.dart';
 ///                                it should appear on a budget request
 ///    * RED      year 9 onward  — past its life, running on borrowed time
 ///
-///  Generalised so a position with its own [AvNode.lifeYears] bands the same
-///  way: amber for the last three years of whatever life it was given, red past
-///  the end of it. A position with no install date is UNKNOWN and says so —
-///  a room whose dates were never entered has to read as unanswered rather than
-///  as new, because those two lead to opposite decisions.
+///  Generalised so a position on a different life bands the same way: amber for
+///  the last three years of whatever life it was given, red past the end of it.
+///  WHERE THAT LIFE COMES FROM IS THREE ANSWERS, most specific first — what
+///  somebody said about this position, what the catalog says the product does
+///  in general, and the blanket cycle for a product nobody has recorded one
+///  for. Every row says which of the three it used, because a plan whose
+///  figures cannot be traced is one nobody argues a budget from.
+///
+///  A position with no install date is UNKNOWN and says so — a room whose dates
+///  were never entered has to read as unanswered rather than as new, because
+///  those two lead to opposite decisions.
 ///
 ///  Pure functions over the model, no provider and no widgets, so the room
 ///  view, the project roll-up, both workbooks and the tests all read the same
@@ -52,9 +58,13 @@ import 'room_locations.dart';
 /// otherwise.
 ///
 /// Eight years, which is the cycle the RYG sheet this is modelled on has been
-/// run on: green for five, amber for three, replace in the ninth. Overridable
-/// per position through [AvNode.lifeYears] for the gear that genuinely differs
-/// — a lectern PC in a teaching lab, a display in a boardroom nobody uses.
+/// run on: green for five, amber for three, replace in the ninth.
+///
+/// THE LAST RESORT, not the usual answer. A product with a figure in the
+/// catalog uses that ([AvDeviceTemplate.lifeYears]), and a position somebody
+/// has said something specific about uses THAT ([AvNode.lifeYears]) — a
+/// lectern PC in a teaching lab, a display in a boardroom nobody books. This is
+/// what is left when neither has been recorded.
 const int kDefaultEquipmentLifeYears = 8;
 
 /// How many years before the end of its life a position starts reading amber.
@@ -68,6 +78,41 @@ const int kEquipmentWarningYears = 3;
 /// Days in the average year, leap years included. Used to turn two dates into
 /// an age in years without pretending a year is 365 days.
 const double kDaysPerYear = 365.2425;
+
+/// True when [node] is on the refresh cycle at all.
+///
+/// JACK FIELDS AND PATCH PANELS ARE NOT. A wall plate and a punched-down panel
+/// are part of the building, replaced when the room is rebuilt rather than on a
+/// life of their own, and listing sixteen of them beside the projector would
+/// bury the four things that matter.
+///
+/// Top-level so the ONE rule serves both readers: the plan that lists the
+/// room's items, and the bulk date that sets them. A dialog offering to date
+/// "14 items" that then dated eleven would be a dialog nobody trusts again.
+bool equipmentIsTracked(AvNode node) => !node.isJackField;
+
+/// Where the life a position is held to came from.
+///
+/// Reported rather than left implicit, for the same reason the cable schedule
+/// says which of its counts were typed over: a plan whose figures cannot be
+/// traced is one nobody argues a budget from. The three sources are also the
+/// resolution ORDER — most specific first.
+enum EquipmentLifeSource {
+  /// Somebody said so about THIS position: [AvNode.lifeYears].
+  position,
+
+  /// The catalog's average for the product: [AvDeviceTemplate.lifeYears].
+  catalog,
+
+  /// Nobody has said, so the blanket cycle applies.
+  fallback,
+}
+
+const Map<EquipmentLifeSource, String> kEquipmentLifeSourceLabels = {
+  EquipmentLifeSource.position: 'set on this item',
+  EquipmentLifeSource.catalog: 'from the catalog',
+  EquipmentLifeSource.fallback: 'default cycle',
+};
 
 /// Where one position sits in its life.
 enum EquipmentCondition {
@@ -137,9 +182,19 @@ class EquipmentLife {
   /// The day this unit went in, or null when nobody recorded one.
   final DateTime? installedOn;
 
-  /// The life this position is being held to: its own [AvNode.lifeYears], or
-  /// the default.
+  /// The life this position is being held to.
+  ///
+  /// THREE SOURCES, MOST SPECIFIC FIRST — the same shape the schedule resolves
+  /// a lead time with. The position's own [AvNode.lifeYears] is somebody
+  /// saying "this one, sooner"; the catalog's [AvDeviceTemplate.lifeYears] is
+  /// what the product does in general; the default is the blanket cycle for a
+  /// product nobody has recorded one for. Each level only ever narrows, so a
+  /// catalog with no lives in it behaves exactly as it did before they
+  /// existed.
   final int lifeYears;
+
+  /// Which of those three [lifeYears] came from.
+  final EquipmentLifeSource lifeSource;
 
   /// The day this was measured on. Carried rather than read from the clock at
   /// render time, so every figure on one sheet is as of the same day.
@@ -156,6 +211,7 @@ class EquipmentLife {
     required this.zone,
     required this.installedOn,
     required this.lifeYears,
+    this.lifeSource = EquipmentLifeSource.fallback,
     required this.asOf,
     required this.replacementCost,
   });
@@ -332,19 +388,31 @@ RoomLifecycle buildRoomLifecycle({
 
   final items = <EquipmentLife>[];
   for (final node in model.nodes) {
-    // JACK FIELDS AND PATCH PANELS ARE NOT ON THE REFRESH CYCLE. A wall plate
-    // and a punched-down panel are part of the building, replaced when the
-    // room is rebuilt rather than on a life of their own, and listing sixteen
-    // of them beside the projector would bury the four things that matter.
-    if (node.isJackField) continue;
+    if (!equipmentIsTracked(node)) continue;
 
     final template = library?.templateForModel(node.model);
+
+    // Most specific first — see [EquipmentLife.lifeYears].
+    final int life;
+    final EquipmentLifeSource source;
+    if (node.lifeYears > 0) {
+      life = node.lifeYears;
+      source = EquipmentLifeSource.position;
+    } else if ((template?.lifeYears ?? 0) > 0) {
+      life = template!.lifeYears;
+      source = EquipmentLifeSource.catalog;
+    } else {
+      life = defaultLifeYears;
+      source = EquipmentLifeSource.fallback;
+    }
+
     items.add(EquipmentLife(
       node: node,
       locationName: model.locationNameOf(node.id),
       zone: model.zoneOf(node.id),
       installedOn: node.installedOn,
-      lifeYears: node.lifeYears > 0 ? node.lifeYears : defaultLifeYears,
+      lifeYears: life,
+      lifeSource: source,
       asOf: day,
       replacementCost: template?.priceForTier(tier).price ?? 0,
     ));
@@ -573,6 +641,7 @@ List<ReportSection> roomLifecycleSections(
         'Installed',
         'Age',
         'Life (yrs)',
+        'Life from',
         'Due',
         'Status',
         'Replacement',
@@ -586,6 +655,7 @@ List<ReportSection> roomLifecycleSections(
             i.installedOn == null ? '' : formatEquipmentDate(i.installedOn!),
             formatEquipmentAge(i.ageYears),
             i.lifeYears,
+            kEquipmentLifeSourceLabels[i.lifeSource]!,
             i.dueYear ?? '',
             kEquipmentConditionCodes[i.condition]!,
             formatLifecycleMoney(i.replacementCost, currency),

@@ -724,4 +724,82 @@ void main() {
     // the Project tab has always produced.
     expect(kProjectFileSuffix, '_project.json');
   });
+
+  // -------------------------------------------------------------------------
+  //  WHICH WORKBOOK
+  // -------------------------------------------------------------------------
+
+  group('the workbook button', () {
+    Future<void> pumpApp(WidgetTester tester, AppStateProvider p) async {
+      p
+        ..settingsLoaded = true
+        ..firstRunSetupNeeded = false;
+      tester.view.physicalSize = const Size(1800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const RoomConfigApp(),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('asks which one when a room is open inside a job', (
+      tester,
+    ) async {
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+        };
+      p.newProject(name: 'Bessey Hall');
+      await pumpApp(tester, p);
+
+      await tester.tap(find.byKey(const ValueKey('export_workbook')));
+      await tester.pumpAndSettle();
+
+      // BOTH are documents somebody means by "the workbook", and the button
+      // used to answer that question by itself, always in favour of the room.
+      expect(
+        find.byKey(const ValueKey('workbook_scope_dialog')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('workbook_scope_room')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('workbook_scope_project')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('workbook_scope_cancel')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('workbook_scope_dialog')), findsNothing);
+    });
+
+    testWidgets('does not ask when only one of them is open', (tester) async {
+      // A room and no job: nothing to choose between, so there is no dialog to
+      // put in the way of the file picker.
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+        };
+      await pumpApp(tester, p);
+
+      expect(p.hasOpenProject, isFalse);
+      final button = tester.widget<IconButton>(
+        find.byKey(const ValueKey('export_workbook')),
+      );
+      expect(button.onPressed, isNotNull);
+      expect(button.tooltip, contains('room workbook'));
+    });
+
+    testWidgets('is dead only when neither is open', (tester) async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      await pumpApp(tester, p);
+      final button = tester.widget<IconButton>(
+        find.byKey(const ValueKey('export_workbook')),
+      );
+      expect(button.onPressed, isNull);
+    });
+  });
 }

@@ -25,6 +25,7 @@ import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
 import 'nav_rail.dart';
 import 'project_room_picker.dart';
+import 'project_history_view.dart' show showHistoryDialog;
 import 'project_view.dart';
 import 'new_room_dialog.dart';
 import 'rack_tab_view.dart';
@@ -678,17 +679,36 @@ class _MainDashboardState extends State<MainDashboard> {
             ? () => _undoLastSave(context, provider)
             : null,
       ),
+      // WHO CHANGED WHAT, from wherever you are standing. It used to be a
+      // pane on the Project tab, which meant looking up what you had just
+      // done on a drawing meant leaving the drawing — so half of what the log
+      // records was the half nobody ever went and read.
+      IconButton(
+        key: const ValueKey('show_history'),
+        icon: const Icon(Icons.history),
+        tooltip: 'History - what has been changed on this room and this job',
+        onPressed: () => showHistoryDialog(context),
+      ),
       // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
       // to live on two of the twelve tabs, which made "send me the
       // workbook" a question about which page somebody happened to be on.
       IconButton(
         key: const ValueKey('export_workbook'),
         icon: const Icon(Icons.menu_book),
-        tooltip: hasConfig
-            ? 'Export the full room workbook - every tab, one .xlsx'
-            : 'Export the full room workbook - nothing loaded yet',
-        onPressed:
-            hasConfig ? () => exportRoomWorkbook(context, provider) : null,
+        // WHICH book is the button's question to ask, not its answer. A room
+        // open inside a job is the ordinary case and both are documents
+        // somebody means by "the workbook"; see [exportWorkbook].
+        tooltip: switch ((hasConfig, provider.hasOpenProject)) {
+          (false, false) => 'Export a workbook - nothing loaded yet',
+          (true, false) => 'Export the full room workbook - every tab, one '
+              '.xlsx',
+          (false, true) => 'Export the project workbook - the whole job, one '
+              '.xlsx',
+          (true, true) => 'Export a workbook - this room, or the whole job',
+        },
+        onPressed: hasConfig || provider.hasOpenProject
+            ? () => exportWorkbook(context, provider)
+            : null,
       ),
       // ...and THIS tab on its own, the three ways a document leaves this
       // app. Beside the workbook button so the answer to "can I get this

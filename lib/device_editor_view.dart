@@ -14,6 +14,7 @@ import 'av_flow_model.dart';
 import 'av_port_editor.dart';
 import 'cost_estimate.dart' show trimNumber, formatMoney;
 import 'device_merge.dart';
+import 'equipment_lifecycle.dart' show kDefaultEquipmentLifeYears;
 import 'live_text_field.dart';
 import 'side_pane.dart';
 
@@ -690,6 +691,27 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
                     ),
                   );
                 },
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 140,
+              child: LiveTextField(
+                fieldId: 'life_$key',
+                // How long the product lasts, which the replacement plan is
+                // built from - see [AvDeviceTemplate.lifeYears]. Beside the
+                // lead time because the two are the same kind of fact: when it
+                // arrives, and when it has to be bought again.
+                initial: entry.lifeYears == 0 ? '' : '${entry.lifeYears}',
+                label: 'Life',
+                suffix: 'yrs',
+                helper: 'blank = $kDefaultEquipmentLifeYears',
+                numeric: true,
+                onChanged: (v) => setState(
+                  () => _apply(
+                    entry.copyWith(lifeYears: int.tryParse(v.trim()) ?? 0),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),

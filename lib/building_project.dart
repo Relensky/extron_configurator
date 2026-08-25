@@ -1797,15 +1797,30 @@ class BuildingProject {
 
   /// The room columns the matrix is drawn with, in project order.
   ///
-  /// Named from the room reference alone rather than from a loaded config: the
-  /// matrix is edited on a job whose rooms may not all read, and a column that
-  /// vanished because a share was offline would take the quantities under it
-  /// out of view.
-  List<({String id, String name})> responsibilityRoomColumns() => [
+  /// [names] is room id -> what to call it, from a caller that has read the
+  /// configs — the building code and the room number, `BSS 101`, which is what
+  /// is written on the door and on the work order. Without it the fallback is
+  /// the label somebody typed on the job and then the FILE STEM, and a matrix
+  /// headed `BSS_101_config` is one nobody can check against a drawing.
+  ///
+  /// Passed in rather than resolved here because a project is loaded and
+  /// edited with no app around it: the room files may be on a share that is
+  /// briefly offline, and a column that vanished because of that would take
+  /// the quantities under it out of view.
+  List<({String id, String name})> responsibilityRoomColumns({
+    Map<String, String> names = const {},
+  }) => [
     for (final room in rooms)
       (
         id: room.id,
-        name: room.label.trim().isEmpty ? room.fallbackName : room.label.trim(),
+        name: switch ((
+          names[room.id]?.trim() ?? '',
+          room.label.trim(),
+        )) {
+          (final code, _) when code.isNotEmpty => code,
+          (_, final label) when label.isNotEmpty => label,
+          _ => room.fallbackName,
+        },
       ),
   ];
 
@@ -1863,50 +1878,16 @@ class BuildingProject {
     String? user,
     DateTime? at,
     bool coalesce = false,
-  }) {
-    final when = at ?? DateTime.now();
-    final who = user ?? currentUserName();
-
-    // TYPING IS ONE DECISION, NOT FORTY. A field that writes through on every
-    // keystroke — a note, a label — would otherwise put one entry per
-    // character in the log and bury everything else on the job.
-    //
-    // Only for fields that say they are continuous, and only when the same
-    // person is still editing the same field of the same item inside the
-    // window. A done/undone pair on a to-do is two decisions however fast they
-    // happen, so discrete changes never coalesce.
-    if (coalesce && history.isNotEmpty) {
-      final last = history.last;
-      if (last.itemKey == itemKey &&
-          last.field == field &&
-          last.user == who &&
-          when.difference(last.at).abs() < kEditCoalesceWindow) {
-        history[history.length - 1] = ProjectEdit(
-          itemKey: itemKey,
-          itemName: itemName.isEmpty ? last.itemName : itemName,
-          field: field,
-          summary: summary,
-          user: who,
-          at: when,
-        );
-        return;
-      }
-    }
-
-    history.add(
-      ProjectEdit(
-        itemKey: itemKey,
-        itemName: itemName,
-        field: field,
-        summary: summary,
-        user: who,
-        at: when,
-      ),
-    );
-    if (history.length > kMaxProjectHistory) {
-      history.removeRange(0, history.length - kMaxProjectHistory);
-    }
-  }
+  }) => appendEdit(
+    history,
+    itemKey: itemKey,
+    field: field,
+    summary: summary,
+    itemName: itemName,
+    user: user,
+    at: at,
+    coalesce: coalesce,
+  );
 
   /// Everything recorded against one item, NEWEST FIRST — which is the order
   /// "what has happened to this" is read in.
@@ -2321,6 +2302,70 @@ class BuildingProject {
     planCounter: _planCounter,
     responsibilityCounter: _responsibilityCounter,
   );
+}
+
+/// Appends one entry to an edit log, coalescing a run of keystrokes.
+///
+/// Free rather than a method, because there are now TWO logs with exactly this
+/// rule: the job's ([BuildingProject.history]) and the open room's. Two copies
+/// of a coalescing window is two answers to "is this one decision or forty",
+/// and the answer has to be the same or the two halves of the History screen
+/// read as different features.
+///
+/// TYPING IS ONE DECISION, NOT FORTY. A field that writes through on every
+/// keystroke — a note, a label, a device name — would otherwise put one entry
+/// per character in the log and bury everything else. Only for fields that say
+/// they are continuous, and only while the same person is still editing the
+/// same field of the same item inside [kEditCoalesceWindow]. A done/undone pair
+/// on a to-do is two decisions however fast they happen, so discrete changes
+/// never coalesce.
+///
+/// [limit] caps the log so a file cannot grow without bound; the oldest go.
+void appendEdit(
+  List<ProjectEdit> log, {
+  required String itemKey,
+  required String field,
+  required String summary,
+  String itemName = '',
+  String? user,
+  DateTime? at,
+  bool coalesce = false,
+  int limit = kMaxProjectHistory,
+}) {
+  final when = at ?? DateTime.now();
+  final who = user ?? currentUserName();
+
+  if (coalesce && log.isNotEmpty) {
+    final last = log.last;
+    if (last.itemKey == itemKey &&
+        last.field == field &&
+        last.user == who &&
+        when.difference(last.at).abs() < kEditCoalesceWindow) {
+      log[log.length - 1] = ProjectEdit(
+        itemKey: itemKey,
+        itemName: itemName.isEmpty ? last.itemName : itemName,
+        field: field,
+        summary: summary,
+        user: who,
+        at: when,
+      );
+      return;
+    }
+  }
+
+  log.add(
+    ProjectEdit(
+      itemKey: itemKey,
+      itemName: itemName,
+      field: field,
+      summary: summary,
+      user: who,
+      at: when,
+    ),
+  );
+  if (log.length > limit) {
+    log.removeRange(0, log.length - limit);
+  }
 }
 
 /// The file suffix a project is saved under, so the picker and the "is this a

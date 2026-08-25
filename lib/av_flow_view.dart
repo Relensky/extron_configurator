@@ -2680,6 +2680,21 @@ class _AvFlowViewState extends State<AvFlowView>
 
   // --- device / port editing ----------------------------------------------
 
+  /// What leaving the Life field blank actually means for a box of [model].
+  ///
+  /// NOT a fixed "8". The field is an OVERRIDE, and the thing it overrides is
+  /// different per model: the catalog's average for the product when somebody
+  /// has recorded one, and the blanket cycle when nobody has. A helper that
+  /// always named the blanket figure would be wrong on every model with a life
+  /// on it, and would tell somebody to type a number they did not need.
+  static String _lifeHelper(AppStateProvider provider, String model) {
+    final catalog =
+        provider.avDeviceLibrary.templateForModel(model.trim())?.lifeYears ?? 0;
+    return catalog > 0
+        ? 'blank = $catalog (catalog)'
+        : 'blank = $kDefaultEquipmentLifeYears';
+  }
+
   Future<void> _showNodeDialog(AppStateProvider provider, AvNode node) async {
     final labelController = TextEditingController(text: node.label);
     final modelController = TextEditingController(text: node.model);
@@ -2935,13 +2950,16 @@ class _AvFlowViewState extends State<AvFlowView>
                       ),
                     const SizedBox(width: 12),
                     SizedBox(
-                      width: 130,
+                      width: 150,
                       child: TextField(
                         key: const ValueKey('node_life_years'),
                         controller: lifeYearsController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Life (years)',
-                          helperText: 'blank = $kDefaultEquipmentLifeYears',
+                          helperText: _lifeHelper(
+                            provider,
+                            modelController.text,
+                          ),
                         ),
                         keyboardType: TextInputType.number,
                         inputFormatters: [
@@ -3349,6 +3367,11 @@ class _AvFlowViewState extends State<AvFlowView>
                   ? PowerInput.poe
                   : PowerInput.mains)
             : PowerInput.none,
+        // NOT the box's life. A position's [AvNode.lifeYears] is somebody
+        // saying "this one, sooner" - the lectern PC in the teaching lab -
+        // and pushing it onto the product would make one room's exception the
+        // average for every room that specifies the model. The product's
+        // average is typed on the Catalog tab, which is where it belongs.
         ports: updated.ports,
       );
       if (result == 'copy') {

@@ -29,6 +29,7 @@ enum DeviceField {
   powerWatts,
   price,
   educationPrice,
+  lifeYears,
   notes,
   ports,
 }
@@ -43,6 +44,7 @@ const Map<DeviceField, String> kDeviceFieldLabels = {
   DeviceField.powerWatts: 'Power (W)',
   DeviceField.price: 'Unit price (list)',
   DeviceField.educationPrice: 'Unit price (education)',
+  DeviceField.lifeYears: 'Average life (years)',
   DeviceField.notes: 'Notes',
   DeviceField.ports: 'Connectors',
 };
@@ -100,6 +102,8 @@ class DeviceFieldDiff {
         return base.copyWith(price: theirs.price);
       case DeviceField.educationPrice:
         return base.copyWith(educationPrice: theirs.educationPrice);
+      case DeviceField.lifeYears:
+        return base.copyWith(lifeYears: theirs.lifeYears);
       case DeviceField.notes:
         return base.copyWith(notes: theirs.notes);
       case DeviceField.ports:
@@ -262,6 +266,11 @@ List<DeviceFieldDiff> fieldDiffs(
   }
   number(DeviceField.cableLength, mine.cableLengthFt, theirs.cableLengthFt);
   number(DeviceField.powerWatts, mine.powerWatts, theirs.powerWatts);
+  // How long the product lasts. Offered like any other figure, because a
+  // catalog merged without it arrives with every model back on the blanket
+  // eight-year cycle - which reads as a considered answer rather than as a
+  // column nobody copied.
+  number(DeviceField.lifeYears, mine.lifeYears, theirs.lifeYears);
   number(DeviceField.price, mine.price, theirs.price, decimals: 2);
   // The second published price is its own decision, and its own checkbox: a
   // catalog merged without it used to arrive with list prices and no

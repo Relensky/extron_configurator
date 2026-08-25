@@ -128,7 +128,7 @@ class _Overview extends StatelessWidget {
           ),
           fact(
             Icons.inventory_2_outlined,
-            'Core components',
+            'Equipment',
             o.partsWithoutLeadTime == 0
                 ? '${o.parts}'
                 : '${o.parts}  ·  ${o.partsWithoutLeadTime} with no lead time',

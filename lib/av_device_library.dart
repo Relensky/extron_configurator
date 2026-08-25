@@ -32,6 +32,7 @@ import 'search_match.dart';
 ///        "category": "Switcher", "rackUnits": 2,
 ///        "clearanceAboveU": 1, "clearanceBelowU": 0,
 ///        "powerWatts": 90, "price": 8500,
+///        "leadTimeDays": 42, "lifeYears": 8,
 ///        "ports": [
 ///          {"id":"in_hdmi_1","label":"HDMI IN 1","signal":"hdmi","direction":"input"},
 ///          {"id":"out_dtp_1","label":"DTP OUT 1","signal":"hdbaset","direction":"output"}
@@ -46,6 +47,13 @@ import 'search_match.dart';
 ///  entry per made-up length (3 ft, 6 ft, 25 ft), each with its own model and
 ///  price, and the estimate buys every drawn run the shortest one that reaches
 ///  it. A cable entry with no length is bulk off a spool.
+///
+///  `lifeYears` is how long the product lasts before it wants replacing, which
+///  is what the room's Lifecycle tab and the building's replacement plan are
+///  built from. Recorded here so every room that specifies the model inherits
+///  it; a position that genuinely differs overrides it on the box itself. 0 or
+///  absent means nobody has recorded one, and the plan falls back to the
+///  default cycle.
 ///
 ///  `clearanceAboveU` / `clearanceBelowU` are the rails this model wants left
 ///  EMPTY around it in a frame — the amplifier that vents upwards, the drawer
@@ -285,6 +293,28 @@ class AvDeviceTemplate {
   /// which is the one direction this must not be wrong in.
   final int? leadTimeDays;
 
+  /// How long this product lasts before it wants replacing, in years. 0 when
+  /// nobody has recorded one.
+  ///
+  /// A FACT ABOUT THE PRODUCT, beside the lead time and for the same reason. A
+  /// laser projector runs for eight years and a lamp one for four; a lectern PC
+  /// is on the desktop refresh at five whatever room it is in; a ceiling
+  /// speaker outlives two of everything else around it. Recorded once here and
+  /// every room that specifies the model inherits it, rather than being typed
+  /// per box — which in practice means it stops getting typed at all and every
+  /// room falls back to one blanket figure.
+  ///
+  /// A ROOM CAN STILL DISAGREE. What somebody knows about THIS position beats
+  /// what the catalog says about the product in general — a display in a
+  /// boardroom nobody books outlives the same display in a lecture hall running
+  /// eight hours a day — so [AvNode.lifeYears] wins over this, and this wins
+  /// over [kDefaultEquipmentLifeYears]. See `buildRoomLifecycle`.
+  ///
+  /// Zero is "nobody has recorded one", not "it lasts no time": there is no
+  /// sensible reading of a nought-year life, so the two do not have to be told
+  /// apart the way null and zero do on [leadTimeDays].
+  final int lifeYears;
+
   final String notes;
 
   final List<AvPort> ports;
@@ -313,6 +343,7 @@ class AvDeviceTemplate {
     this.cableLengthFt = 0,
     this.url = '',
     this.leadTimeDays,
+    this.lifeYears = 0,
     this.notes = '',
     required this.ports,
     this.custom = false,
@@ -386,6 +417,7 @@ class AvDeviceTemplate {
     // Null means "leave it alone" on every other field here, so taking a lead
     // time back OFF an entry needs its own flag.
     bool clearLeadTime = false,
+    int? lifeYears,
     String? notes,
     List<AvPort>? ports,
     bool? custom,
@@ -408,6 +440,7 @@ class AvDeviceTemplate {
     cableLengthFt: cableLengthFt ?? this.cableLengthFt,
     url: url ?? this.url,
     leadTimeDays: clearLeadTime ? null : (leadTimeDays ?? this.leadTimeDays),
+    lifeYears: lifeYears ?? this.lifeYears,
     notes: notes ?? this.notes,
     ports: ports ?? this.ports,
     custom: custom ?? this.custom,
@@ -432,6 +465,7 @@ class AvDeviceTemplate {
     if (cableLengthFt > 0) 'cableLengthFt': cableLengthFt,
     if (url.isNotEmpty) 'url': url,
     if (leadTimeDays != null) 'leadTimeDays': leadTimeDays,
+    if (lifeYears > 0) 'lifeYears': lifeYears,
     if (notes.isNotEmpty) 'notes': notes,
     'ports': ports.map((p) => p.toJson()).toList(),
   };
@@ -446,6 +480,20 @@ class AvDeviceTemplate {
     if (raw == null) return null;
     final days = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
     return (days == null || days < 0) ? null : days;
+  }
+
+  /// A life off a catalog file, or 0 when there is not a usable one.
+  ///
+  /// Text where a number belongs ('about 8 years'), a negative, or a figure so
+  /// large it is plainly a typo all read as unrecorded rather than being
+  /// honoured — a product with a 600-year life would sit green on the
+  /// replacement plan for ever, which is the one direction this must not be
+  /// wrong in.
+  static int _lifeYearsFromJson(Object? raw) {
+    if (raw == null) return 0;
+    final years = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
+    if (years == null || years <= 0 || years > 100) return 0;
+    return years;
   }
 
   factory AvDeviceTemplate.fromJson(
@@ -495,6 +543,10 @@ class AvDeviceTemplate {
     // rather than as zero: a catalog hand-edited to say "6-8 weeks" must not
     // turn the product into one that is on the shelf.
     leadTimeDays: _leadTimeFromJson(json['leadTimeDays']),
+    // Anything that is not a positive whole number of years reads as "nobody
+    // has recorded one" - see [lifeYears] on why zero and unrecorded are the
+    // same answer here.
+    lifeYears: _lifeYearsFromJson(json['lifeYears']),
     notes: json['notes']?.toString() ?? '',
     ports: [
       for (final p in (json['ports'] as List? ?? []))

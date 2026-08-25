@@ -121,6 +121,46 @@ void main() {
       final columns = job().responsibilityRoomColumns();
       expect(columns.map((c) => c.name), ['BSS 101', 'BSS 103']);
     });
+
+    test('the code on the door beats the label and the file name', () {
+      final project = BuildingProject(name: 'Bessey refresh');
+      // A room nobody labelled: without a code it can only be named after the
+      // file it is stored in, which is what the matrix used to print.
+      project.rooms.add(
+        ProjectRoomRef(
+          id: project.nextRoomId(),
+          configPath: 'C:/rooms/BSS_101_config.json',
+        ),
+      );
+      // ...and one somebody typed a label onto.
+      project.rooms.add(
+        ProjectRoomRef(
+          id: project.nextRoomId(),
+          configPath: 'C:/rooms/BSS_103_config.json',
+          label: 'The lecture hall',
+        ),
+      );
+
+      final bare = project.responsibilityRoomColumns();
+      expect(bare.first.name, isNot(contains(' ')),
+          reason: 'with nothing else, the file stem is all there is');
+      expect(bare.last.name, 'The lecture hall');
+
+      // Given the codes read off the configs, they win over both.
+      final coded = project.responsibilityRoomColumns(
+        names: {'room1': 'BSS 101', 'room2': 'BSS 103'},
+      );
+      expect(coded.map((c) => c.name), ['BSS 101', 'BSS 103']);
+    });
+
+    test('a room whose config could not be read keeps its old name', () {
+      final project = job();
+      // Only the first room resolved; the second is on an offline share.
+      final columns = project.responsibilityRoomColumns(
+        names: {'room1': 'BSS 101A'},
+      );
+      expect(columns.map((c) => c.name), ['BSS 101A', 'BSS 103']);
+    });
   });
 
   group('the file', () {

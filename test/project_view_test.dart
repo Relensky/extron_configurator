@@ -149,7 +149,7 @@ void main() {
     final p = withProject();
     await pump(tester, p);
 
-    await tester.tap(find.text('Core Components'));
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
     // One transmitter line, quantity two, and the rooms it is for.
@@ -188,7 +188,7 @@ void main() {
 
     Future<void> openSpares(WidgetTester tester, AppStateProvider p) async {
       await pump(tester, p);
-      await tester.tap(find.text('Core Components'));
+      await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Spares'));
       await tester.pumpAndSettle();
@@ -264,7 +264,7 @@ void main() {
       // that appeared only once somebody had already added a spare would be a
       // door that opens from the inside.
       await pump(tester, withProject());
-      await tester.tap(find.text('Core Components'));
+      await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
       expect(find.text('Spares'), findsOneWidget);
@@ -367,6 +367,11 @@ void main() {
       await pump(tester, p);
       await tester.tap(find.byIcon(Icons.local_shipping).first);
       await tester.pumpAndSettle();
+      // The cards are closed by default now; the rules are behind the toggle.
+      await tester.tap(
+        find.byKey(ValueKey('vendor_toggle_${p.project.vendors.first.id}')),
+      );
+      await tester.pumpAndSettle();
 
       final box = find.byKey(const ValueKey('rule_add_Categories')).first;
       expect(box, findsOneWidget);
@@ -389,7 +394,7 @@ void main() {
       (tester) async {
     final p = withProject();
     await pump(tester, p);
-    await tester.tap(find.text('Core Components'));
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
     final estimate = p.priceProject();
@@ -416,7 +421,7 @@ void main() {
       (tester) async {
     final p = withProject();
     await pump(tester, p);
-    await tester.tap(find.text('Core Components'));
+    await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
     await tester.pumpAndSettle();
 
     final extronKey = p
@@ -442,13 +447,77 @@ void main() {
     final p = withProject();
     await pump(tester, p);
 
-    await tester.tap(find.text('Vendors'));
+    await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Extron'), findsWidgets, reason: 'the manufacturer rule');
-    expect(find.text('Camera'), findsWidgets, reason: 'a category rule');
-    // Two transmitters at 500.
+    // Closed, the card is the name, what it claims, and what it comes to.
+    expect(find.text('Extron Direct'), findsOneWidget);
     expect(find.textContaining(r'$1,000.00'), findsWidgets);
+
+    // The rules are one press away.
+    await tester.tap(find.byKey(const ValueKey('vendor_toggle_vendor1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Extron'), findsWidgets, reason: 'the manufacturer rule');
+  });
+
+  testWidgets('the vendor list opens one card at a time', (tester) async {
+    final p = withProject();
+    await pump(tester, p);
+    await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
+    await tester.pumpAndSettle();
+
+    // CLOSED BY DEFAULT. The screen is about the ORDER, and two open cards
+    // never fitted on it together. Checked against a label only an OPEN card
+    // has - the header's own identity fields are LiveTextFields too.
+    const inside = 'Notes on the quote request';
+    expect(find.text(inside), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('vendor_toggle_vendor1')));
+    await tester.pumpAndSettle();
+    expect(find.text(inside), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('vendor_toggle_vendor1')));
+    await tester.pumpAndSettle();
+    expect(find.text(inside), findsNothing);
+  });
+
+  testWidgets('a vendor is dragged into a different priority', (tester) async {
+    // The order is a RULE - the first vendor whose rules claim a part gets it
+    // - so dragging one is a change to how the job is tagged, not a tidy-up.
+    final p = withProject();
+    final before = p.project.vendors.map((v) => v.name).toList();
+    expect(before, hasLength(greaterThan(1)));
+
+    await pump(tester, p);
+    await tester.tap(find.byKey(const ValueKey('project_pane_vendors')));
+    await tester.pumpAndSettle();
+
+    final first = tester.getCenter(
+      find.byKey(ValueKey('vendor_drag_${p.project.vendors.first.id}')),
+    );
+    final second = tester.getCenter(
+      find.byKey(ValueKey('vendor_drag_${p.project.vendors[1].id}')),
+    );
+
+    // Moved in steps rather than in one jump: a reorderable list decides where
+    // the row has landed from the pointer positions it is given, and a single
+    // moveTo gives it one.
+    final gesture = await tester.startGesture(first);
+    await tester.pump(const Duration(milliseconds: 100));
+    final step = (second.dy - first.dy + 12) / 10;
+    for (var i = 0; i < 10; i++) {
+      await gesture.moveBy(Offset(0, step));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      p.project.vendors.map((v) => v.name).toList(),
+      isNot(before),
+      reason: 'the drag must have moved it',
+    );
+    expect(p.project.vendors[1].name, before.first);
   });
 
   testWidgets('an empty project says what to do rather than showing zeros',
@@ -579,11 +648,13 @@ void main() {
 
     final vertical = find.byWidgetPredicate(isPageScroller);
 
-    for (final pane in ['Rooms', 'Core Components', 'Vendors']) {
+    // By key rather than by label: 'Equipment' is also a heading on the cost
+    // breakdown, so tapping the words would sometimes hit the wrong one.
+    for (final pane in ['rooms', 'parts', 'vendors']) {
       testWidgets('on $pane', (tester) async {
         final p = withProject();
         await pump(tester, p, width: 1200);
-        await tester.tap(find.text(pane));
+        await tester.tap(find.byKey(ValueKey('project_pane_$pane')));
         await tester.pumpAndSettle();
 
         expect(
@@ -649,23 +720,28 @@ void main() {
       // A narrow window drops the segment labels so seven panes still fit, so
       // which of the two the switcher offers is itself part of the layout
       // being checked.
+      // Every pane on the switcher. History is no longer among them - it is
+      // an icon on the toolbar now, reachable from every tab rather than only
+      // from the job.
       for (final pane in [
-        (label: 'Rooms', icon: Icons.meeting_room),
-        (label: 'Core Components', icon: Icons.inventory_2),
-        (label: 'Timeline', icon: Icons.event_available),
-        (label: 'Vendors', icon: Icons.local_shipping),
-        (label: 'To do', icon: Icons.checklist),
-        (label: 'Notes', icon: Icons.sticky_note_2_outlined),
-        (label: 'History', icon: Icons.history),
+        (key: 'rooms', icon: Icons.meeting_room),
+        (key: 'parts', icon: Icons.inventory_2),
+        (key: 'plans', icon: Icons.architecture),
+        (key: 'timeline', icon: Icons.event_available),
+        (key: 'lifecycle', icon: Icons.history_toggle_off),
+        (key: 'responsibility', icon: Icons.handshake_outlined),
+        (key: 'vendors', icon: Icons.local_shipping),
+        (key: 'todo', icon: Icons.checklist),
+        (key: 'notes', icon: Icons.sticky_note_2_outlined),
       ]) {
         await pump(tester, p, width: width);
         await tester.tap(
           width < kProjectHeaderCompactWidth
               ? find.byIcon(pane.icon).first
-              : find.text(pane.label).first,
+              : find.byKey(ValueKey('project_pane_${pane.key}')).first,
         );
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: '${pane.label} at $width');
+        expect(tester.takeException(), isNull, reason: '${pane.key} at $width');
       }
     });
   }
@@ -685,7 +761,12 @@ void main() {
 
       expect(find.text('Quote requests'), findsOneWidget);
       expect(find.text('Where it stands'), findsOneWidget);
-      expect(find.text('Core Components'), findsOneWidget);
+      // By key: 'Equipment' is also a heading on the cost breakdown, so the
+      // pane's own label is no longer findable by its words alone.
+      expect(
+        find.byKey(const ValueKey('project_pane_parts')),
+        findsOneWidget,
+      );
       // All four identity fields sit side by side.
       final name = tester.getRect(find.byType(TextField).first);
       final stakeholder = tester.getRect(find.byType(TextField).at(1));

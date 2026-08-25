@@ -50,11 +50,20 @@ List<Widget> responsibilitySlivers(
   final provider = context.watch<AppStateProvider>();
   final project = provider.project;
   final items = project.responsibility;
-  final columns = project.responsibilityRoomColumns();
+  // The code on the door - 'BSS 101' - not the file the room is stored in.
+  // Only this layer has both the job's room list and the configs behind it.
+  final columns = project.responsibilityRoomColumns(
+    names: estimate.roomCodeNames,
+  );
 
   return [
-    SliverToBoxAdapter(child: _Toolbar(project: project)),
+    SliverToBoxAdapter(child: _Toolbar(project: project, columns: columns)),
     const SliverToBoxAdapter(child: Divider(height: 1)),
+    if (items.isNotEmpty)
+      SliverToBoxAdapter(
+        child: _MatrixGrid(project: project, columns: columns),
+      ),
+    if (items.isNotEmpty) const SliverToBoxAdapter(child: Divider(height: 1)),
     if (items.isEmpty)
       const SliverToBoxAdapter(
         child: Padding(
@@ -89,8 +98,9 @@ List<Widget> responsibilitySlivers(
 
 class _Toolbar extends StatelessWidget {
   final BuildingProject project;
+  final List<({String id, String name})> columns;
 
-  const _Toolbar({required this.project});
+  const _Toolbar({required this.project, required this.columns});
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +121,7 @@ class _Toolbar extends StatelessWidget {
             onPressed: () async {
               final item = provider.addResponsibilityItem();
               if (!context.mounted) return;
-              await showResponsibilityEditor(context, item.id);
+              await showResponsibilityEditor(context, item.id, columns);
             },
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add a line'),
@@ -139,13 +149,14 @@ class _Toolbar extends StatelessWidget {
           if (items.isNotEmpty) ...[
             OutlinedButton.icon(
               key: const ValueKey('responsibility_export_xlsx'),
-              onPressed: () => _exportSpreadsheet(context, project),
+              onPressed: () => _exportSpreadsheet(context, project, columns),
               icon: const Icon(Icons.table_view, size: 18),
               label: const Text('Spreadsheet'),
             ),
             OutlinedButton.icon(
               key: const ValueKey('responsibility_export_image'),
-              onPressed: () => showResponsibilityImage(context, project),
+              onPressed: () =>
+                  showResponsibilityImage(context, project, columns),
               icon: const Icon(Icons.image_outlined, size: 18),
               label: const Text('Image'),
             ),
@@ -162,6 +173,292 @@ class _Toolbar extends StatelessWidget {
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+//  THE MATRIX ITSELF
+// ---------------------------------------------------------------------------
+
+/// The matrix as a grid: rooms down the left, scope across the top.
+///
+/// THE ROOM COLUMN DOES NOT MOVE. A job with thirty scope items is far wider
+/// than any window, and a grid where the room names scroll off to the left is
+/// one where the number under your finger belongs to a room you can no longer
+/// see — which is the exact mistake this document exists to prevent. So the
+/// names are painted in a fixed column and only the scope columns scroll.
+///
+/// The two halves are laid out with the SAME fixed row heights rather than
+/// with intrinsic ones, because that is the only way two independent columns
+/// stay on the same line as each other. Every height here is shared by both.
+class _MatrixGrid extends StatelessWidget {
+  final BuildingProject project;
+  final List<({String id, String name})> columns;
+
+  const _MatrixGrid({required this.project, required this.columns});
+
+  /// Room names, and the scope name over each column.
+  static const double _headRow = 58;
+
+  /// The two party rows under each scope name.
+  static const double _partyRow = 20;
+
+  /// One room, and the totals row.
+  static const double _bodyRow = 26;
+
+  static const double _roomColumn = 168;
+  static const double _itemColumn = 104;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final items = project.responsibility;
+    if (items.isEmpty || columns.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _frozenColumn(theme),
+          Expanded(
+            child: Scrollbar(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final item in items) _itemColumnFor(context, item),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The half that stays put: what each row IS.
+  Widget _frozenColumn(ThemeData theme) => SizedBox(
+    width: _roomColumn,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _cell(
+          height: _headRow,
+          align: Alignment.bottomLeft,
+          child: Text('ROOM', style: _headStyle(theme)),
+        ),
+        _cell(
+          height: _partyRow,
+          child: Text('Furnished by', style: _metaStyle(theme)),
+        ),
+        _cell(
+          height: _partyRow,
+          child: Text('Installed by', style: _metaStyle(theme)),
+        ),
+        for (final room in columns)
+          _cell(
+            height: _bodyRow,
+            child: Text(
+              room.name,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        _cell(
+          height: _bodyRow,
+          child: Text('Totals', style: _headStyle(theme)),
+        ),
+      ],
+    ),
+  );
+
+  /// One scope item, top to bottom.
+  Widget _itemColumnFor(BuildContext context, ResponsibilityItem item) {
+    final theme = Theme.of(context);
+    final unassigned = item.unassigned;
+
+    return SizedBox(
+      width: _itemColumn,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The heading is the way IN to the line: everything about it except
+          // the quantities is prose, and prose is edited in the dialog.
+          InkWell(
+            key: ValueKey('matrix_head_${item.id}'),
+            onTap: () => showResponsibilityEditor(context, item.id, columns),
+            child: _cell(
+              height: _headRow,
+              align: Alignment.bottomLeft,
+              child: Text(
+                item.scope,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          _cell(
+            height: _partyRow,
+            child: Text(
+              item.furnishedBy.isEmpty ? '-' : item.furnishedBy,
+              overflow: TextOverflow.ellipsis,
+              style: _metaStyle(theme).copyWith(
+                color: unassigned && item.furnishedBy.isEmpty
+                    ? theme.colorScheme.error
+                    : null,
+              ),
+            ),
+          ),
+          _cell(
+            height: _partyRow,
+            child: Text(
+              item.installedBy.isEmpty ? '-' : item.installedBy,
+              overflow: TextOverflow.ellipsis,
+              style: _metaStyle(theme).copyWith(
+                color: unassigned && item.installedBy.isEmpty
+                    ? theme.colorScheme.error
+                    : null,
+              ),
+            ),
+          ),
+          for (final room in columns)
+            InkWell(
+              key: ValueKey('matrix_cell_${item.id}_${room.id}'),
+              onTap: () => _editQty(context, item, room),
+              child: _cell(
+                height: _bodyRow,
+                align: Alignment.center,
+                child: Text(
+                  formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            ),
+          _cell(
+            height: _bodyRow,
+            align: Alignment.center,
+            child: Text(
+              formatResponsibilityQty(item.total),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sets one cell. A dialog rather than an inline field: thirty columns of
+  /// live text fields is thirty focus nodes and thirty controllers on a grid
+  /// most of whose cells are empty.
+  Future<void> _editQty(
+    BuildContext context,
+    ResponsibilityItem item,
+    ({String id, String name}) room,
+  ) async {
+    final provider = context.read<AppStateProvider>();
+    final typed = await showDialog<double>(
+      context: context,
+      builder: (_) => _QtyDialog(
+        title: '${item.scope} in ${room.name}',
+        initial: item.qtyByRoom[room.id] ?? 0,
+      ),
+    );
+    if (typed == null) return;
+    provider.setResponsibilityQty(item.id, room.id, typed);
+  }
+
+  static TextStyle? _headStyle(ThemeData theme) =>
+      theme.textTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: theme.colorScheme.onSurfaceVariant,
+      );
+
+  static TextStyle _metaStyle(ThemeData theme) =>
+      theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ) ??
+      const TextStyle(fontSize: 11);
+
+  static Widget _cell({
+    required double height,
+    required Widget child,
+    Alignment align = Alignment.centerLeft,
+  }) => Container(
+    height: height,
+    alignment: align,
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: child,
+  );
+}
+
+/// How many of one thing in one room.
+///
+/// Its own widget so the controller is owned by a State. A controller made in
+/// the caller and disposed when the dialog's future completes is torn out from
+/// under a field the exit animation is still building — see the same note on
+/// [_ResponsibilityEditorDialog].
+class _QtyDialog extends StatefulWidget {
+  final String title;
+  final double initial;
+
+  const _QtyDialog({required this.title, required this.initial});
+
+  @override
+  State<_QtyDialog> createState() => _QtyDialogState();
+}
+
+class _QtyDialogState extends State<_QtyDialog> {
+  late final TextEditingController _qty = TextEditingController(
+    text: widget.initial > 0 ? formatResponsibilityQty(widget.initial) : '',
+  );
+
+  @override
+  void dispose() {
+    _qty.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.of(context).pop(
+    double.tryParse(_qty.text.trim()) ?? 0,
+  );
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    key: const ValueKey('matrix_qty_dialog'),
+    title: Text(widget.title),
+    content: TextField(
+      key: const ValueKey('matrix_qty_field'),
+      controller: _qty,
+      autofocus: true,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        labelText: 'How many',
+        helperText: 'Blank or 0 takes this room off the line.',
+        border: OutlineInputBorder(),
+      ),
+      onSubmitted: (_) => _save(),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const ValueKey('matrix_qty_save'),
+        onPressed: _save,
+        child: const Text('Set'),
+      ),
+    ],
+  );
 }
 
 /// One line of the matrix on the editor.
@@ -248,7 +545,8 @@ class _ItemRow extends StatelessWidget {
             key: ValueKey('responsibility_edit_${item.id}'),
             tooltip: 'Edit this line',
             icon: const Icon(Icons.edit, size: 18),
-            onPressed: () => showResponsibilityEditor(context, item.id),
+            onPressed: () =>
+                showResponsibilityEditor(context, item.id, columns),
           ),
           IconButton(
             key: ValueKey('responsibility_delete_${item.id}'),
@@ -276,6 +574,7 @@ class _ItemRow extends StatelessWidget {
 Future<void> showResponsibilityEditor(
   BuildContext context,
   String itemId,
+  List<({String id, String name})> columns,
 ) async {
   final provider = context.read<AppStateProvider>();
   final item = provider.project.responsibilityById(itemId);
@@ -283,10 +582,7 @@ Future<void> showResponsibilityEditor(
 
   await showDialog<void>(
     context: context,
-    builder: (_) => _ResponsibilityEditorDialog(
-      item: item,
-      columns: provider.project.responsibilityRoomColumns(),
-    ),
+    builder: (_) => _ResponsibilityEditorDialog(item: item, columns: columns),
   );
 }
 
@@ -554,11 +850,12 @@ class _PartyField extends StatelessWidget {
 Future<void> _exportSpreadsheet(
   BuildContext context,
   BuildingProject project,
+  List<({String id, String name})> columns,
 ) async {
   final provider = context.read<AppStateProvider>();
   final sections = responsibilityMatrixSections(
     project.responsibility,
-    roomNames: project.responsibilityRoomColumns(),
+    roomNames: columns,
   );
   if (sections.isEmpty) return;
 
@@ -609,15 +906,21 @@ Future<void> _exportSpreadsheet(
 Future<void> showResponsibilityImage(
   BuildContext context,
   BuildingProject project,
+  List<({String id, String name})> columns,
 ) => showDialog<void>(
   context: context,
-  builder: (_) => _ResponsibilityImageDialog(project: project),
+  builder: (_) =>
+      _ResponsibilityImageDialog(project: project, columns: columns),
 );
 
 class _ResponsibilityImageDialog extends StatefulWidget {
   final BuildingProject project;
+  final List<({String id, String name})> columns;
 
-  const _ResponsibilityImageDialog({required this.project});
+  const _ResponsibilityImageDialog({
+    required this.project,
+    required this.columns,
+  });
 
   @override
   State<_ResponsibilityImageDialog> createState() =>
@@ -686,7 +989,7 @@ class _ResponsibilityImageDialogState
   @override
   Widget build(BuildContext context) {
     final project = widget.project;
-    final columns = project.responsibilityRoomColumns();
+    final columns = widget.columns;
 
     return AlertDialog(
       key: const ValueKey('responsibility_image_dialog'),

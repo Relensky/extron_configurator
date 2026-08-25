@@ -224,6 +224,134 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  //  WHERE THE LIFE COMES FROM
+  // -------------------------------------------------------------------------
+  //  Three answers, most specific first, and every row says which it used.
+
+  group('the life a position is held to', () {
+    AvDeviceLibrary catalogWith(int life) => AvDeviceLibrary.empty()
+      ..upsert(AvDeviceTemplate(model: 'PROJ-1', lifeYears: life, ports: const []));
+
+    EquipmentLife withCatalog(AvNode node, AvDeviceLibrary? library) =>
+        buildRoomLifecycle(
+          model: roomOf([node]),
+          library: library,
+          asOf: asOf,
+        ).items.single;
+
+    test('the catalog average is used when the position says nothing', () {
+      final item = withCatalog(
+        box('a', installedOn: DateTime(2022, 6, 1)),
+        catalogWith(4),
+      );
+      expect(item.lifeYears, 4);
+      expect(item.lifeSource, EquipmentLifeSource.catalog);
+      // 2022 + 4 = 2026, so a four-year product installed in 2022 is past it
+      // where the same date on the blanket cycle would still be green.
+      expect(item.dueYear, 2026);
+      expect(item.condition, EquipmentCondition.overdue);
+    });
+
+    test('the position beats the catalog', () {
+      final item = withCatalog(
+        box('a', installedOn: DateTime(2022, 6, 1), lifeYears: 12),
+        catalogWith(4),
+      );
+      expect(item.lifeYears, 12);
+      expect(item.lifeSource, EquipmentLifeSource.position);
+      expect(item.condition, EquipmentCondition.good);
+    });
+
+    test('the blanket cycle is what is left', () {
+      // No catalog at all...
+      final noLibrary = withCatalog(
+        box('a', installedOn: DateTime(2022, 6, 1)),
+        null,
+      );
+      expect(noLibrary.lifeYears, kDefaultEquipmentLifeYears);
+      expect(noLibrary.lifeSource, EquipmentLifeSource.fallback);
+
+      // ...and a catalog that has the model but no life on it.
+      final unrecorded = withCatalog(
+        box('a', installedOn: DateTime(2022, 6, 1)),
+        catalogWith(0),
+      );
+      expect(unrecorded.lifeYears, kDefaultEquipmentLifeYears);
+      expect(unrecorded.lifeSource, EquipmentLifeSource.fallback);
+    });
+
+    test('a model the catalog has never heard of falls back too', () {
+      final item = withCatalog(
+        box('a', installedOn: DateTime(2022, 6, 1), model: 'NOT-IN-CATALOG'),
+        catalogWith(4),
+      );
+      expect(item.lifeSource, EquipmentLifeSource.fallback);
+    });
+
+    test('the room sheet says where each figure came from', () {
+      final room = buildRoomLifecycle(
+        model: roomOf([
+          box('fromCatalog', installedOn: DateTime(2022, 6, 1)),
+          box('fromPosition', installedOn: DateTime(2022, 6, 1), lifeYears: 12),
+        ]),
+        library: catalogWith(4),
+        asOf: asOf,
+      );
+      final schedule = roomLifecycleSections(room)
+          .firstWhere((s) => s.title == 'Equipment Replacement Schedule');
+      final column = schedule.header.indexOf('Life from');
+      expect(column, isNonNegative);
+      final byName = {
+        for (final row in schedule.rows) row.first as String: row[column],
+      };
+      expect(byName['fromCatalog'], 'from the catalog');
+      expect(byName['fromPosition'], 'set on this item');
+    });
+  });
+
+  group('the catalog entry', () {
+    test('carries the average life through a save and a reload', () {
+      const entry = AvDeviceTemplate(
+        model: 'PROJ-1',
+        lifeYears: 6,
+        ports: [],
+      );
+      expect(entry.toJson()['lifeYears'], 6);
+      final round = AvDeviceTemplate.fromJson(
+        jsonDecode(jsonEncode(entry.toJson())) as Map<String, dynamic>,
+      );
+      expect(round.lifeYears, 6);
+    });
+
+    test('an entry with no life recorded writes no key for one', () {
+      const entry = AvDeviceTemplate(model: 'PROJ-1', ports: []);
+      expect(entry.toJson().containsKey('lifeYears'), isFalse);
+      expect(entry.lifeYears, 0);
+    });
+
+    test('a figure that is not a sane number of years reads as unrecorded', () {
+      // Text where a number belongs, a negative, and a plain typo. All of them
+      // would sit green on the plan for ever if honoured.
+      for (final raw in <Object>['about 8 years', -4, 0, 600]) {
+        final round = AvDeviceTemplate.fromJson({
+          'model': 'PROJ-1',
+          'lifeYears': raw,
+          'ports': <dynamic>[],
+        });
+        expect(round.lifeYears, 0, reason: 'lifeYears: $raw');
+      }
+    });
+
+    test('a catalog written before this existed reads as unrecorded', () {
+      final round = AvDeviceTemplate.fromJson({
+        'model': 'PROJ-1',
+        'ports': <dynamic>[],
+      });
+      expect(round.lifeYears, 0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   //  THE SWAP RECORD
   // -------------------------------------------------------------------------
 

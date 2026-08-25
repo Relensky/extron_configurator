@@ -57,7 +57,7 @@ enum BriefingPane { rooms, parts, plans, timeline, vendors, todo }
 
 const Map<BriefingPane, String> kBriefingPaneLabels = {
   BriefingPane.rooms: 'Rooms',
-  BriefingPane.parts: 'Core Components',
+  BriefingPane.parts: 'Equipment',
   BriefingPane.plans: 'Plans',
   BriefingPane.timeline: 'Timeline',
   BriefingPane.vendors: 'Vendors',
@@ -662,7 +662,7 @@ String renderBriefingText(ProjectBriefing briefing, {required String title}) {
   );
   fact('Project total', formatMoney(o.grandTotal, o.currency));
   fact(
-    'Core components',
+    'Equipment',
     o.partsWithoutLeadTime == 0
         ? '${o.parts}'
         : '${o.parts} · ${o.partsWithoutLeadTime} with no lead time',

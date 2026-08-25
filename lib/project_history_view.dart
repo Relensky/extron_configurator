@@ -16,10 +16,18 @@ import 'project_estimate.dart';
 ///  decisions made on a job are logged as they are made, against the ITEM they
 ///  belong to, under the Windows login of whoever made them. See [ProjectEdit].
 ///
-///  TWO WAYS TO READ IT, because there are two questions:
+///  TWO LOGS, because a session has two documents open and they are saved in
+///  different files: the JOB's decisions (lead times, orders, vendor pins,
+///  dates) live in the project file, and the ROOM's edits (its fields, its
+///  drawing, its racks) live in `<config>_history.json` beside the room. Both
+///  are read on one screen — see [showHistoryDialog] — because "what happened
+///  last Tuesday" is one question, and answering it should not depend on
+///  knowing which of the two files the answer is in.
 ///
-///    * WHAT HAS HAPPENED ON THIS JOB — this pane, newest first, filterable by
-///      who did it and by what kind of thing they touched.
+///  THREE WAYS TO READ IT:
+///
+///    * WHAT HAS HAPPENED, full stop — [showHistoryDialog], off the toolbar, so
+///      it is reachable from every tab rather than only from the job.
 ///    * WHAT HAS HAPPENED TO THIS PART — [ItemHistory], shown on the item's own
 ///      editor. This is the one people actually ask, and a flat list of four
 ///      hundred edits across nine rooms cannot answer it.
@@ -93,7 +101,11 @@ class _EditRow extends StatelessWidget {
   final ProjectEdit edit;
   final bool showDay;
 
-  const _EditRow({required this.edit, required this.showDay});
+  /// Which log this came out of, or null when only one is on screen and
+  /// saying so on every row would be noise.
+  final HistoryScope? source;
+
+  const _EditRow({required this.edit, required this.showDay, this.source});
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +140,16 @@ class _EditRow extends StatelessWidget {
               ),
               Icon(editKindIcon(edit.itemKind), size: 13, color: muted),
               const SizedBox(width: 6),
+              if (source != null) ...[
+                Text(
+                  source == HistoryScope.room ? 'ROOM' : 'JOB',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: muted,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
               Expanded(
                 child: RichText(
                   text: TextSpan(
@@ -282,3 +304,133 @@ const List<String> _months = [
   'Nov',
   'Dec',
 ];
+
+// ---------------------------------------------------------------------------
+//  THE WHOLE LOG, FROM ANYWHERE
+// ---------------------------------------------------------------------------
+
+/// Which log is on screen.
+enum HistoryScope { both, project, room }
+
+const Map<HistoryScope, String> kHistoryScopeLabels = {
+  HistoryScope.both: 'Everything',
+  HistoryScope.project: 'The job',
+  HistoryScope.room: 'This room',
+};
+
+/// The history, off the toolbar.
+///
+/// A DIALOG RATHER THAN A PANE, and off the toolbar rather than the Project
+/// tab, because the log is not a thing about the job in particular. It is
+/// about the SESSION: half of what somebody wants to look up happened on a
+/// drawing tab, and having to leave that tab and go to the project to find out
+/// what they just changed is the reason nobody looked.
+Future<void> showHistoryDialog(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (_) => const _HistoryDialog(),
+);
+
+class _HistoryDialog extends StatefulWidget {
+  const _HistoryDialog();
+
+  @override
+  State<_HistoryDialog> createState() => _HistoryDialogState();
+}
+
+class _HistoryDialogState extends State<_HistoryDialog> {
+  HistoryScope _scope = HistoryScope.both;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
+
+    final hasProject = provider.hasOpenProject;
+    final hasRoom = provider.roomConfig.isNotEmpty;
+
+    // Tagged as they are merged, so a combined list can still say which
+    // document each line came out of — otherwise "Deadline set to 14 Jun" and
+    // "Baud rate was 9600, now 115200" read as entries in the same file.
+    final rows = <({ProjectEdit edit, HistoryScope from})>[
+      if (_scope != HistoryScope.room)
+        for (final e in provider.project.history)
+          (edit: e, from: HistoryScope.project),
+      if (_scope != HistoryScope.project)
+        for (final e in provider.roomHistory)
+          (edit: e, from: HistoryScope.room),
+    ]..sort((a, b) => b.edit.at.compareTo(a.edit.at));
+
+    return AlertDialog(
+      key: const ValueKey('history_dialog'),
+      title: const Text('What has been changed'),
+      content: SizedBox(
+        width: 760,
+        height: 520,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Only offered when there are two logs to choose between. On a
+            // session with just a room open, a switcher whose other two
+            // options are both empty is a control that can only disappoint.
+            if (hasProject && hasRoom)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<HistoryScope>(
+                  segments: [
+                    for (final scope in HistoryScope.values)
+                      ButtonSegment(
+                        value: scope,
+                        label: Text(
+                          kHistoryScopeLabels[scope]!,
+                          key: ValueKey('history_scope_${scope.name}'),
+                        ),
+                      ),
+                  ],
+                  selected: {_scope},
+                  onSelectionChanged: (v) => setState(() => _scope = v.first),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              rows.isEmpty
+                  ? 'Nothing recorded yet. Edits to this room and decisions on '
+                      'the job are logged here as they are made, with the '
+                      'login of whoever made them.'
+                  : '${rows.length} change${rows.length == 1 ? '' : 's'}, '
+                      'newest first. Every one is stamped with the Windows '
+                      'login it was made under.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: rows.isEmpty
+                  ? const SizedBox.shrink()
+                  : ListView.builder(
+                      itemCount: rows.length,
+                      itemBuilder: (context, i) => _EditRow(
+                        edit: rows[i].edit,
+                        showDay: i == 0 ||
+                            !_sameDay(rows[i].edit.at, rows[i - 1].edit.at),
+                        // The badge earns its place only while both logs are
+                        // on screen at once.
+                        source: _scope == HistoryScope.both
+                            ? rows[i].from
+                            : null,
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('history_close'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}

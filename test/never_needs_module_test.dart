@@ -239,7 +239,7 @@ void main() {
         (tester) async {
       final p = withProject();
       await pump(tester, p);
-      await tester.tap(find.text('Core Components'));
+      await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
       // Both products are undriven, so both rows carry it.
@@ -250,7 +250,7 @@ void main() {
         (tester) async {
       final p = withProject();
       await pump(tester, p);
-      await tester.tap(find.text('Core Components'));
+      await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -276,7 +276,7 @@ void main() {
     testWidgets('confirming retires the row', (tester) async {
       final p = withProject();
       await pump(tester, p);
-      await tester.tap(find.text('Core Components'));
+      await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -326,7 +326,7 @@ void main() {
       p.refreshProjectRooms();
 
       await pump(tester, p);
-      await tester.tap(find.text('Core Components'));
+      await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
       await tester.pumpAndSettle();
 
       expect(find.text('Never needs one'), findsNothing);

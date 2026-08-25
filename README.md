@@ -139,6 +139,29 @@ at the longest. Spares stay on the type rather than on one of its lengths, and
 a type with a single entry comes out as the one line it always did - including
 any price typed on it by hand.
 
+### How long a product lasts
+
+**Life (years)** on a catalog entry is how long that product runs before it
+wants replacing. It is what the room's Lifecycle tab and the building's
+replacement plan are built from, and it is recorded here rather than on each
+box for the same reason the lead time is: a laser projector lasts eight years
+and a lamp one lasts four in every room anybody puts them in, and a figure that
+has to be retyped per room is one that stops getting typed.
+
+Three answers, most specific first, and every row on the plan says which of
+them it used:
+
+| Where | When it wins |
+|---|---|
+| The box on the drawing | somebody said something about THIS position - the lectern PC in a teaching lab, the display in a boardroom nobody books |
+| The catalog entry | the product's own average, for every room that specifies it |
+| The default cycle | eight years, when neither has been recorded |
+
+Blank means "nobody has recorded one", not "it lasts no time". A figure that is
+not a sane number of years - text, a negative, or a plain typo - reads as
+unrecorded, because a product with a six-hundred-year life would sit green on
+the plan for ever.
+
 ### Minimum space in a rack
 
 A rack elevation says what fits and nothing about what should not be touching.
@@ -415,6 +438,21 @@ the building, so the survey has a to-do list.
 Replacement cost comes off the catalog at the job's pricing tier. A model the
 catalog does not price is reported as unpriced rather than as free.
 
+### Dating a whole room at once
+
+Everything in a room that was refreshed together went in the same week - one
+crew, one week - so the honest record and the fastest one are the same thing.
+**Date the whole room…** asks for one date and who it applies to:
+
+- **only the ones with no date yet**, which finishes a survey and cannot lose
+  anything;
+- **all of them**, which is right after a refresh and *does* overwrite dates
+  that are already there.
+
+The choice is a choice rather than a default, because the two destroy different
+things. The button says how many items it is about to change, and the whole
+sweep is one press of Undo either way.
+
 ### Swapping a box out
 
 A swap does not overwrite the position's history, it **adds** to it. The unit
@@ -557,6 +595,20 @@ has one, and the workbook says so.
 A new project starts with the usual split already set up - Extron Direct by
 manufacturer, and an AV Reseller by category for cameras, screens, mounts and
 USB - so the first room added is already tagged.
+
+### The vendor list is the priority order
+
+A part is tagged by the **first** vendor whose rules claim it, so the order of
+the list is a rule rather than a preference. Two things follow from that:
+
+- the cards are **closed by default**, showing the name, the position, what the
+  vendor claims and what it comes to. A card open is two text fields, two rule
+  editors and a notes box, and six of those stacked meant the one thing the
+  screen is for - the order - was the one thing you could not see;
+- they are **dragged** by the handle on the left. The arrows are still there for
+  the keyboard.
+
+Open a card to edit its rules.
 
 ### Swapping a product across every room
 
@@ -702,6 +754,13 @@ column per room:
 | What the work is | the words it gets read in on site - the field that settles arguments |
 | Product, Notes | the cutsheet, and whatever is still open |
 
+On the pane it is drawn as a grid with **the rooms down the left in a column
+that does not scroll**: a job with thirty scope items is far wider than any
+window, and a grid where the room names scroll away is one where the number
+under your finger belongs to a room you can no longer see. Rooms are named by
+the code on the door - `BSS 101` - rather than by the file they are stored in.
+Tap a column head to edit that line, a cell to set its quantity.
+
 **Add the usual lines** starts it from the ten that are true of nearly every
 job in this shop; edit and delete from there. Nothing is derived from the
 rooms - the app knows what equipment is on the drawing, it cannot know whose
@@ -734,6 +793,30 @@ send a competitor's pricing to a supplier and your margins to both.
 Sheet names come from vendor and room names, which are free text - they are
 clipped to 31 characters and numbered when two collide, because Excel refuses
 to open a workbook with two sheets of one name.
+
+## Who changed what (the history icon)
+
+Two logs, because a session has two documents open and they are saved in
+different files:
+
+- **the job's decisions** - lead times, orders, vendor pins, deadlines, notes -
+  in the project file;
+- **the room's edits** - its config fields, its drawing, its racks, its plans -
+  in `<config>_history.json` beside the room.
+
+Both are read on one screen, off the **history icon in the toolbar**, so "what
+happened last Tuesday" is one question rather than two. It used to be a pane on
+the Project tab, which meant looking up what you had just changed on a drawing
+meant leaving the drawing - so half of what the log records was the half nobody
+went and read. With both open the screen can be narrowed to either.
+
+The room's log is fed by the two places every room edit already passes through:
+the config field writer behind the Wizard, Devices and System tabs, and the
+undo stack behind the drawings. A run of keystrokes is one entry, not forty,
+and it reads `was 9600, now 115200` - the value from before the **first**
+keystroke, not the second-to-last one.
+
+It is a **log, not an undo**. Nothing on it puts anything back.
 
 ## Colour contrast
 
@@ -990,7 +1073,7 @@ An unpriced part makes the job's total short by an unknown amount, and the
 parts list is where that is visible - so it is where the fix is.
 
 The **"N to check"** warning in the Project header is a button. Pressing it
-switches to Core Components filtered to the parts nothing anywhere has a price
+switches to Equipment filtered to the parts nothing anywhere has a price
 for; the same filter is a chip on that pane (**No price (N)**). Clicking the
 price cell on any row opens a dialog naming the rooms that carry the part, with
 two ways out - and they are two different decisions, which is why they are two
@@ -1290,10 +1373,17 @@ Everything is shown before anything is written, with two things called out:
 Nothing is destructive: existing blocks are left alone and the family counts are
 raised rather than reset.
 
-## The room workbook
+## The workbooks
 
-**The book icon in the toolbar**, on every tab, writes one book with a tab per
-question:
+**The book icon in the toolbar**, on every tab, writes a workbook. With a room
+open inside a job it **asks which one** - the room, or the building - because
+both are documents somebody means by "the workbook" and the button used to
+answer that by itself, always in favour of the room. With only one of them open
+there is nothing to ask.
+
+### The room workbook
+
+One book with a tab per question:
 
 | Sheet | Contents |
 |---|---|

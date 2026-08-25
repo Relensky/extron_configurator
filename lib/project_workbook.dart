@@ -1263,7 +1263,9 @@ Uint8List buildProjectWorkbookBytes({
   // step with the rooms the moment either changes.
   final matrix = responsibilityMatrixSections(
     estimate.project.responsibility,
-    roomNames: estimate.project.responsibilityRoomColumns(),
+    roomNames: estimate.project.responsibilityRoomColumns(
+      names: estimate.roomCodeNames,
+    ),
   );
   if (matrix.isNotEmpty) {
     sheets.add(buildStackedReportSheet(

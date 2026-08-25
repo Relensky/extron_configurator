@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
@@ -63,6 +64,7 @@ class LifecycleView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Summary(room: room, currency: provider.currencySymbol),
+        _RoomActions(room: room),
         const Divider(height: 1),
         Expanded(
           child: ListView.separated(
@@ -73,6 +75,226 @@ class LifecycleView extends StatelessWidget {
               item: room.items[i],
               currency: provider.currencySymbol,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The one thing this screen does to the whole room at once.
+///
+/// A room is usually dated ONCE — everything in a room refreshed in 2018 went
+/// in that summer, one crew, one week — so the honest record and the fastest
+/// one are the same thing. See [AppStateProvider.setRoomInstalledOn].
+class _RoomActions extends StatelessWidget {
+  final RoomLifecycle room;
+
+  const _RoomActions({required this.room});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final undated = room.undated;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Row(
+        children: [
+          FilledButton.tonalIcon(
+            key: const ValueKey('lifecycle_date_room'),
+            onPressed: () => showRoomInstallDateDialog(context),
+            icon: const Icon(Icons.event_repeat, size: 18),
+            label: const Text('Date the whole room…'),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              undated == 0
+                  ? 'Every item has a date. Use this to move them all to a new '
+                      'one after a refresh.'
+                  : '$undated of ${room.items.length} item'
+                      '${room.items.length == 1 ? '' : 's'} still have no '
+                      'date. One press sets them all.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: undated == 0
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.tertiary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Which boxes a room-wide date lands on.
+enum RoomInstallDateScope {
+  /// Finish the survey: only the ones nobody has dated.
+  undatedOnly,
+
+  /// The room was redone: every item moves to the new date.
+  everything,
+}
+
+/// Asks for one date and who it applies to, then applies it.
+///
+/// THE SCOPE IS A CHOICE, NOT A DEFAULT, because the two answers destroy
+/// different things. "Only the undated ones" finishes a survey and cannot lose
+/// anything. "Everything" is right after a refresh and DOES overwrite — a room
+/// where somebody recorded the projector's real date last month would lose it.
+/// Undo takes the whole sweep back in one press either way, but a bulk edit
+/// that guessed which of those you meant is one people press once.
+Future<void> showRoomInstallDateDialog(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (_) => const _RoomInstallDateDialog(),
+);
+
+class _RoomInstallDateDialog extends StatefulWidget {
+  const _RoomInstallDateDialog();
+
+  @override
+  State<_RoomInstallDateDialog> createState() => _RoomInstallDateDialogState();
+}
+
+class _RoomInstallDateDialogState extends State<_RoomInstallDateDialog> {
+  DateTime _date = DateTime.now();
+  RoomInstallDateScope _scope = RoomInstallDateScope.undatedOnly;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _date = DateTime(now.year, now.month, now.day);
+  }
+
+  bool get _onlyUndated => _scope == RoomInstallDateScope.undatedOnly;
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showSteppedDatePicker(
+      context,
+      initialDate: _date,
+      firstDate: DateTime(now.year - 25, 1, 1),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      helpText: 'When did this room go in?',
+    );
+    if (picked == null) return;
+    setState(() => _date = picked);
+  }
+
+  void _apply() {
+    final provider = context.read<AppStateProvider>();
+    final changed = provider.setRoomInstalledOn(
+      _date,
+      onlyUndated: _onlyUndated,
+    );
+    Navigator.of(context).pop();
+    showTimedSnackBar(
+      ScaffoldMessenger.of(context),
+      SnackBar(
+        content: Text(
+          changed == 0
+              ? 'Nothing to change - every item already carries that date.'
+              : '$changed item${changed == 1 ? '' : 's'} dated '
+                  '${formatEquipmentDate(_date)}.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
+    final undated = provider.roomInstallDateCount(onlyUndated: true);
+    final all = provider.roomInstallDateCount();
+    final target = _onlyUndated ? undated : all;
+
+    return AlertDialog(
+      key: const ValueKey('room_install_date_dialog'),
+      title: const Text('Date the whole room'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Everything in a room that was refreshed together went in the '
+              'same week. Set that date once here rather than eleven times '
+              'down the list.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              key: const ValueKey('room_install_date_pick'),
+              onPressed: _pickDate,
+              icon: const Icon(Icons.event_available, size: 18),
+              label: Text('Installed ${formatEquipmentDate(_date)}'),
+            ),
+            const SizedBox(height: 16),
+            RadioGroup<RoomInstallDateScope>(
+              groupValue: _scope,
+              onChanged: (v) =>
+                  setState(() => _scope = v ?? RoomInstallDateScope.undatedOnly),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<RoomInstallDateScope>(
+                    key: const ValueKey('room_install_scope_undated'),
+                    value: RoomInstallDateScope.undatedOnly,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Only the $undated with no date yet',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    subtitle: Text(
+                      'Finishes the survey. Nothing already recorded is '
+                      'touched.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  RadioListTile<RoomInstallDateScope>(
+                    key: const ValueKey('room_install_scope_all'),
+                    value: RoomInstallDateScope.everything,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'All $all items',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    subtitle: Text(
+                      'The room was redone. This OVERWRITES dates that are '
+                      'already there - one press of Undo takes it back.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('room_install_date_cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('room_install_date_apply'),
+          // Nothing to change is a disabled button rather than a press that
+          // appears to do nothing.
+          onPressed: target == 0 ? null : _apply,
+          child: Text(
+            target == 0
+                ? 'Nothing to date'
+                : 'Date $target item${target == 1 ? '' : 's'}',
           ),
         ),
       ],

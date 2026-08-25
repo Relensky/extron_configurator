@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'equipment_lifecycle.dart' show equipmentIsTracked;
 import 'responsibility_matrix.dart';
 import 'base_costs.dart';
 import 'config_dictionary.dart';
@@ -2067,7 +2068,125 @@ class AppStateProvider extends ChangeNotifier {
   /// about to change. Called at the top of every AV mutator; cheap enough to
   /// do unconditionally because a slice is small next to the widget tree that
   /// is about to rebuild anyway.
+  // -------------------------------------------------------------------------
+  //  WHO CHANGED WHAT IN THIS ROOM
+  // -------------------------------------------------------------------------
+  //  The job has kept a log of its own decisions for a while — lead times,
+  //  orders, vendor pins. The ROOM kept none, so "who moved this device onto
+  //  the other switcher" and "when did this field stop saying 9600" had no
+  //  answer at all, and the only record of a room's working life was whatever
+  //  somebody remembered.
+  //
+  //  Two hooks cover it, because the room already has exactly two places every
+  //  edit passes through:
+  //
+  //    * [updateDeviceValue] — every field on the Wizard, Devices and System
+  //      tabs. They are all schema-driven and they all write here.
+  //    * [_pushAvUndo] — every edit to the drawing, the racks, the cabling and
+  //      the plans. Anything undoable already carries a human label naming
+  //      what it did, which is exactly what a log line wants to say.
+  //
+  //  Hooking those two rather than the two hundred mutation sites is the whole
+  //  reason this is affordable, and it is not a compromise: an edit that
+  //  reaches neither is an edit with no undo entry and no config change, which
+  //  is not an edit.
+
+  /// The value a field held when the CURRENT run of typing started, and when.
+  ///
+  /// Coalescing turns forty keystrokes into one log line — see [appendEdit] —
+  /// but the line has to read 'was 9600, now 115200' rather than 'was 11520,
+  /// now 115200'. That means the entry keeps the value from before the FIRST
+  /// keystroke, and the only thing that knows what that was is whatever
+  /// watched the first one go past.
+  ({String key, Object? before, DateTime at})? _fieldEditRun;
+
+  /// What to call the value a field is changing FROM: the one it held before
+  /// this run of typing began, or the one it holds now when this is the first
+  /// keystroke of a new run.
+  Object? _beforeForRun(String key, Object? current) {
+    final run = _fieldEditRun;
+    final now = DateTime.now();
+    if (run != null &&
+        run.key == key &&
+        now.difference(run.at).abs() < kEditCoalesceWindow) {
+      _fieldEditRun = (key: key, before: run.before, at: now);
+      return run.before;
+    }
+    _fieldEditRun = (key: key, before: current, at: now);
+    return current;
+  }
+
+  /// 'was 9600, now 115200' — one field change, in words.
+  ///
+  /// Long values are cut: a log is a column on a screen, and a module path or a
+  /// pasted block of text would push everything else off the row. Blank on
+  /// either side reads as 'set'/'cleared' rather than as a pair of empty
+  /// quotes.
+  static String _fieldChangeSummary(Object? before, Object? after) {
+    String show(Object? v) {
+      final text = v?.toString().trim() ?? '';
+      if (text.isEmpty) return '';
+      return text.length <= 40 ? text : '${text.substring(0, 39)}…';
+    }
+
+    final was = show(before);
+    final now = show(after);
+    if (now.isEmpty) return was.isEmpty ? 'cleared' : 'cleared (was $was)';
+    if (was.isEmpty) return 'set to $now';
+    return 'was $was, now $now';
+  }
+
+  /// This room's log, oldest first. Written to `<config>_history.json`.
+  final List<ProjectEdit> roomHistory = [];
+
+  /// The whole room log, newest first — the order it is read in.
+  List<ProjectEdit> get recentRoomHistory => roomHistory.reversed.toList();
+
+  /// Records one change to the open room.
+  ///
+  /// Silently does nothing with no room open: the project's own tabs run with
+  /// no config loaded, and a log entry filed against a room that is not there
+  /// would attach itself to whichever room is opened next.
+  void logRoomEdit({
+    required String itemKey,
+    required String field,
+    required String summary,
+    String itemName = '',
+    bool coalesce = false,
+    DateTime? at,
+    String? user,
+  }) {
+    if (roomConfig.isEmpty) return;
+    appendEdit(
+      roomHistory,
+      itemKey: itemKey,
+      itemName: itemName,
+      field: field,
+      summary: summary,
+      coalesce: coalesce,
+      at: at,
+      user: user,
+    );
+  }
+
   void _pushAvUndo(String label, Set<AvUndoScope> scopes) {
+    // The room's log rides on the undo stack: anything undoable is an edit,
+    // and it already carries a sentence saying what it did. See the note above
+    // [logRoomEdit] on why these two hooks are the whole story.
+    //
+    // Coalesced, because a drag writes one entry per release and a rename
+    // writes one per keystroke — filed under the tab it happened on, so a log
+    // read months later says WHERE somebody was working as well as what they
+    // touched.
+    logRoomEdit(
+      itemKey: 'drawing:${scopes.map((s) => s.name).join(',')}',
+      itemName: scopes
+          .map((s) => kAvUndoScopeLabels[s] ?? s.name)
+          .join(', '),
+      field: 'Drawing',
+      summary: label,
+      coalesce: true,
+    );
     _avUndoStack.add((label: label, slices: _sliceAvFlow(scopes)));
     if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
     // Only the branches this edit actually invalidates.
@@ -4427,6 +4546,72 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// How many boxes [setRoomInstalledOn] would touch, without touching any.
+  ///
+  /// Asked BEFORE the dialog commits, so the button can say "date 11 items"
+  /// rather than "date the room" — a bulk edit that will not say how much it
+  /// is about to change is one people press once and then stop trusting.
+  int roomInstallDateCount({bool onlyUndated = false}) => avNodes
+      .where(equipmentIsTracked)
+      .where((n) => !onlyUndated || n.installedOn == null)
+      .length;
+
+  /// Dates every piece of equipment in the room at once. Returns how many
+  /// changed.
+  ///
+  /// A ROOM IS USUALLY DATED ONCE, NOT ELEVEN TIMES. Everything in a room that
+  /// was refreshed in 2018 went in that summer — one crew, one week — so the
+  /// honest record and the fastest one are the same thing. Typing the same date
+  /// into eleven rows is how a survey stops halfway through, and a half-dated
+  /// room reads on the plan as a room with eleven unknowns.
+  ///
+  /// [onlyUndated] leaves anything already dated alone. That is the difference
+  /// between finishing a survey and overwriting one: a room where somebody
+  /// recorded the projector's real date last month and left the rest blank must
+  /// not lose that date to a sweep of the room, so the caller has to choose.
+  ///
+  /// ONE UNDO ENTRY for the whole sweep, because it was one decision. Eleven
+  /// entries would mean eleven presses of Undo to take back one press of Apply.
+  int setRoomInstalledOn(DateTime? when, {bool onlyUndated = false}) {
+    final day = when == null
+        ? null
+        : DateTime(when.year, when.month, when.day);
+
+    final targets = <int>[
+      for (var i = 0; i < avNodes.length; i++)
+        if (equipmentIsTracked(avNodes[i]) &&
+            (!onlyUndated || avNodes[i].installedOn == null) &&
+            avNodes[i].installedOn != day)
+          i,
+    ];
+    // Nothing to do is not an edit: it must not push an undo entry that would
+    // then take back whatever the last real change was.
+    if (targets.isEmpty) return 0;
+
+    _pushAvUndo(
+      day == null
+          ? 'Clear the install dates on this room'
+          : 'Date this room ${formatEquipmentDate(day)}',
+      _flowScope,
+    );
+    for (final i in targets) {
+      avNodes[i] = avNodes[i].copyWith(
+        installedOn: day,
+        clearInstalledOn: day == null,
+      );
+    }
+    AppLogger.logInfo(
+      day == null
+          ? 'Install dates cleared on ${targets.length} item'
+              '${targets.length == 1 ? '' : 's'} in this room.'
+          : 'Install date set to ${formatEquipmentDate(day)} on '
+              '${targets.length} item${targets.length == 1 ? '' : 's'} in '
+              'this room.',
+    );
+    notifyListeners();
+    return targets.length;
+  }
+
   /// Moves a node without a full rebuild round-trip — the drag path.
   void setAvNodePosition(String nodeId, Offset pos) {
     final index = avNodes.indexWhere((n) => n.id == nodeId);
@@ -4889,6 +5074,11 @@ class AppStateProvider extends ChangeNotifier {
   /// estimate counts: tax, fees and quoted prices are work that took as long
   /// to enter as the cabling did.
   bool get hasAvFlow =>
+      // A room whose only change was a config field still has something to
+      // write: its log. Without this the history of a control-only room -
+      // no drawing, no rack, no estimate - would be built up all session and
+      // then dropped on save, which is the one thing a log must not do.
+      roomHistory.isNotEmpty ||
       avNodes.isNotEmpty ||
       avCables.isNotEmpty ||
       avRacks.isNotEmpty ||
@@ -4919,6 +5109,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Empties the AV document without touching which config it belongs to or
   /// the undo history — what an undo needs before replaying a snapshot.
   void _clearAvFlowState() {
+    roomHistory.clear();
     avNodes.clear();
     avCables.clear();
     avRacks.clear();
@@ -5054,6 +5245,16 @@ class AppStateProvider extends ChangeNotifier {
   /// The caller has already emptied the state.
   void _readAvFlowJson(Map<String, dynamic> doc) {
     try {
+      // The room's log. Read before the drawing rather than after, because the
+      // rest of this method APPENDS to lists the caller has already emptied
+      // and an exception halfway down would leave the log lost while the
+      // drawing survived - which is the wrong way round for the file whose
+      // whole job is to remember.
+      for (final h in (doc['roomHistory'] as List? ?? [])) {
+        if (h is Map) {
+          roomHistory.add(ProjectEdit.fromJson(Map<String, dynamic>.from(h)));
+        }
+      }
       for (final n in (doc['nodes'] as List? ?? [])) {
         if (n is Map) {
           final node = AvNode.fromJson(Map<String, dynamic>.from(n));
@@ -5303,6 +5504,8 @@ class AppStateProvider extends ChangeNotifier {
                 .padLeft(6, '0'),
         },
         'cost': avCost.toJson(),
+        if (roomHistory.isNotEmpty)
+          'roomHistory': [for (final h in roomHistory) h.toJson()],
       };
 
   /// Writes the AV sidecar. Returns the saved path, or '' when there is no
@@ -7619,6 +7822,22 @@ class AppStateProvider extends ChangeNotifier {
         value = normalizeModuleName(value);
       }
       roomConfig[deviceKey][property] = value;
+      // WHAT IT WAS, AND WHAT IT IS NOW. A log line saying only the new value
+      // answers "what does this say" — which the config already answers — and
+      // not "what changed", which is the question somebody has six months
+      // later. Coalesced, because this fires per keystroke.
+      if (previous?.toString() != value?.toString()) {
+        logRoomEdit(
+          itemKey: 'device:$deviceKey',
+          itemName: deviceKey,
+          field: property,
+          summary: _fieldChangeSummary(
+            _beforeForRun('$deviceKey.$property', previous),
+            value,
+          ),
+          coalesce: true,
+        );
+      }
       // Typing into a placeholder field is asking for the key back, whatever
       // was said about it earlier in the session.
       _omittedConfigKeys.remove('$deviceKey.$property');
@@ -10531,6 +10750,32 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  /// Drops the vendor at [oldIndex] in at [newIndex] — the drag-and-drop
+  /// version of [moveProjectVendor].
+  ///
+  /// Takes INDEXES rather than an id and a delta because that is what a
+  /// reorderable list hands over. [newIndex] is the position in the list with
+  /// the dragged row already taken OUT of it, which is what
+  /// `SliverReorderableList.onReorderItem` passes — the older `onReorder`
+  /// passed the un-adjusted index and left every caller to subtract one.
+  void reorderProjectVendor(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= project.vendors.length) return;
+    final to = newIndex.clamp(0, project.vendors.length - 1);
+    if (to == oldIndex) return;
+    final vendor = project.vendors.removeAt(oldIndex);
+    project.vendors.insert(to, vendor);
+    _logProjectEdit(
+      itemKey: 'vendor:${vendor.id}',
+      itemName: vendor.name,
+      field: 'Priority',
+      // The position is what the rule turns on, so the log says the position:
+      // "moved" alone would not tell anybody why a part started going to a
+      // different supplier.
+      summary: 'moved to ${to + 1} of ${project.vendors.length}',
+    );
+    _projectChanged();
+  }
+
   // --- the log ---------------------------------------------------------------
   //  Every decision made ON THE JOB goes through one of the setters below, so
   //  this is the one place that has to remember to record it. See
@@ -12055,7 +12300,14 @@ class AppStateProvider extends ChangeNotifier {
     };
 
     final keys = <String>{...currentFlow.keys, ...found.flow.keys}
-      ..remove('__readme');
+      ..remove('__readme')
+      // THE LOG IS NOT A DIFFERENCE. Two copies of a room that differ only in
+      // how many edits each of them remembers are the same room, and a
+      // recovery prompt raised over that is a prompt with nothing behind it —
+      // which is exactly the dialog this comparison exists to avoid. The log
+      // still travels with the copy and is still restored with it; it just
+      // does not get a vote on whether there is anything to restore.
+      ..remove('roomHistory');
     for (final key in keys.toList()..sort()) {
       final before = currentFlow[key];
       final after = found.flow[key];
