@@ -8,7 +8,8 @@ import 'package:path/path.dart' as path;
 import 'app_logger.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
-import 'equipment_lifecycle.dart' show equipmentIsTracked;
+import 'equipment_lifecycle.dart'
+    show equipmentIsTracked, equipmentNeverReplaced;
 import 'responsibility_matrix.dart';
 import 'base_costs.dart';
 import 'config_dictionary.dart';
@@ -4542,6 +4543,38 @@ class AppStateProvider extends ChangeNotifier {
           ? 'Install date cleared on ${node.label}.'
           : 'Install date on ${node.label} set to '
               '${formatEquipmentDate(when)}.',
+    );
+    notifyListeners();
+  }
+
+  /// Takes one position off the refresh cycle, or puts it back on.
+  ///
+  /// A bracket, a pole, a rack frame: they come out when the room is rebuilt
+  /// and never on a schedule, so counting them among the things due in 2031 is
+  /// inventing work — see [equipmentNeverReplaced].
+  ///
+  /// Off is [kNeverReplacedLife]; back on is 0, which is "nobody has said",
+  /// NOT the number of years that was there before. A position with a life
+  /// somebody typed has that life restored by the undo, which is the one path
+  /// that can honestly bring it back.
+  void setAvNodeNeverReplaced(String nodeId, bool never) {
+    final index = avNodes.indexWhere((n) => n.id == nodeId);
+    if (index < 0) return;
+    final node = avNodes[index];
+    if (equipmentNeverReplaced(node) == never) return;
+    _pushAvUndo(
+      never
+          ? '${node.label} off the refresh cycle'
+          : '${node.label} back on the refresh cycle',
+      _flowScope,
+    );
+    avNodes[index] = node.copyWith(
+      lifeYears: never ? kNeverReplacedLife : 0,
+    );
+    AppLogger.logInfo(
+      never
+          ? '${node.label} taken off the refresh cycle.'
+          : '${node.label} put back on the refresh cycle.',
     );
     notifyListeners();
   }

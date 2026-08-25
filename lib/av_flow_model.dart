@@ -277,6 +277,14 @@ SignalType signalFromName(String? name) {
 /// sides, and a patch panel is a rack-width strip with every outlet in one
 /// horizontal row. Drawing the panel as a box was the single thing that made a
 /// rack elevation and the flow diagram disagree about what the same part was.
+/// The life on a position that is NEVER replaced on a cycle — a bracket, a
+/// pole, a rack frame. See [AvNode.lifeYears].
+///
+/// A number rather than a flag because a life already has three answers and
+/// this is the third: so many years, nobody has said, and never. A second
+/// field would let a position be both eight years and never at once.
+const int kNeverReplacedLife = -1;
+
 enum AvNodeKind { device, jackField, patchPanel }
 
 AvNodeKind nodeKindFromName(String? name) {
@@ -900,8 +908,9 @@ class AvNode {
   /// is wrong.
   final DateTime? installedOn;
 
-  /// How many years this position's equipment is expected to last, or 0 to use
-  /// the default for its kind.
+  /// How many years this position's equipment is expected to last, 0 to use
+  /// the default for its kind, or -1 for a position that is never replaced on
+  /// a cycle at all.
   ///
   /// Per-position rather than per-product because that is where the answer
   /// actually varies: the same display lasts twice as long on a boardroom wall
@@ -909,6 +918,13 @@ class AvNode {
   /// in a lab is replaced on a schedule that has nothing to do with the model
   /// number. Left at 0 for nearly everything, which takes
   /// [kDefaultEquipmentLifeYears].
+  ///
+  /// -1 IS A DIFFERENT ANSWER FROM A LONG LIFE. A wall bracket, a mounting
+  /// pole, a rack frame: these come out when the room is rebuilt and never on
+  /// a schedule of their own, so a plan that counted them among the things
+  /// falling due in 2031 would be inventing work. They are hidden from the
+  /// replacement plan rather than deleted from it — the room still has them,
+  /// and the plan can still be asked to show them.
   final int lifeYears;
 
   /// Every unit that has been in this position before the one in it now,
@@ -1194,10 +1210,15 @@ class AvNode {
     if (excludeFromControl) 'excludeFromControl': true,
     if (locationId.isNotEmpty) 'location': locationId,
     if (installedOn != null) 'installedOn': formatEquipmentDate(installedOn!),
-    if (lifeYears > 0) 'lifeYears': lifeYears,
+    if (lifeYears != 0) 'lifeYears': lifeYears,
     if (swaps.isNotEmpty) 'swaps': [for (final s in swaps) s.toJson()],
     'ports': ports.map((p) => p.toJson()).toList(),
   };
+
+  /// A life read off a file, held to the three answers the app has: a positive
+  /// number of years, 0 for unrecorded, or [kNeverReplacedLife].
+  static int _sanitizeLifeYears(int raw) =>
+      raw < kNeverReplacedLife ? 0 : raw;
 
   factory AvNode.fromJson(Map<String, dynamic> json) => AvNode(
     id: json['id']?.toString() ?? '',
@@ -1218,7 +1239,9 @@ class AvNode {
     excludeFromControl: json['excludeFromControl'] == true,
     locationId: json['location']?.toString() ?? kNoLocationId,
     installedOn: parseEquipmentDate(json['installedOn']),
-    lifeYears: (json['lifeYears'] as num?)?.toInt() ?? 0,
+    // Anything below -1 is not a life anybody meant: read as unrecorded
+    // rather than as a position that falls due before it was installed.
+    lifeYears: _sanitizeLifeYears((json['lifeYears'] as num?)?.toInt() ?? 0),
     swaps: [
       for (final s in (json['swaps'] as List? ?? []))
         if (s is Map) EquipmentSwap.fromJson(Map<String, dynamic>.from(s)),

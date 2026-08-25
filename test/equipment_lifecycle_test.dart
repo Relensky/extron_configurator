@@ -363,6 +363,74 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  //  THE THINGS THAT ARE NEVER REPLACED
+  // -------------------------------------------------------------------------
+
+  group('a position taken off the refresh cycle', () {
+    RoomLifecycle roomOfThree() => buildRoomLifecycle(
+      model: roomOf([
+        box('projector', installedOn: DateTime(2016, 6, 1)),
+        box('mount', installedOn: DateTime(2016, 6, 1), lifeYears: -1),
+        box('pole', lifeYears: -1),
+      ]),
+      asOf: asOf,
+    );
+
+    test('is held off the plan, not thrown away', () {
+      final room = roomOfThree();
+      expect(room.items.map((i) => i.node.label), ['projector']);
+      expect(room.neverReplaced.map((i) => i.node.label), ['mount', 'pole']);
+      expect(room.neverCount, 2);
+    });
+
+    test('is out of every figure the plan is read from', () {
+      final room = roomOfThree();
+      // The pole has no install date, and would otherwise have been one more
+      // room-with-unknowns on a survey that is actually finished.
+      expect(room.undated, 0);
+      expect(room.items.length, 1);
+      expect(room.condition, EquipmentCondition.overdue);
+      expect(room.toReplaceCount, 1);
+    });
+
+    test('has no due date, because it is not on a cycle', () {
+      final room = roomOfThree();
+      final mount = room.neverReplaced.first;
+      expect(mount.neverReplaced, isTrue);
+      expect(mount.dueOn, isNull);
+      expect(mount.dueYear, isNull);
+      expect(mount.timing, EquipmentTiming.unknown);
+      // The install date is still recorded — the room still has the thing.
+      expect(mount.installedOn, DateTime(2016, 6, 1));
+    });
+
+    test('the sheet says what is being held back, and lists it', () {
+      final sections = roomLifecycleSections(roomOfThree());
+      final summary = sections.firstWhere((s) => s.title == 'Equipment Age');
+      expect(
+        summary.rows.any((r) => r.first == 'Never replaced'),
+        isTrue,
+        reason: 'a plan with two items held back must not read as a room with '
+            'two items fewer',
+      );
+      final off = sections.firstWhere(
+        (s) => s.title == 'Not On The Refresh Cycle',
+      );
+      expect(off.rows.map((r) => r.first), ['mount', 'pole']);
+    });
+
+    test('the sentinel survives the file, and nonsense does not', () {
+      final node = box('mount', lifeYears: -1);
+      expect(node.toJson()['lifeYears'], -1);
+      expect(AvNode.fromJson(node.toJson()).lifeYears, -1);
+      // Anything below it is not a life anybody meant.
+      final wild = Map<String, dynamic>.from(node.toJson())
+        ..['lifeYears'] = -8;
+      expect(AvNode.fromJson(wild).lifeYears, 0);
+    });
+  });
+
   group('the life a position is held to', () {
     AvDeviceLibrary catalogWith(int life) => AvDeviceLibrary.empty()
       ..upsert(AvDeviceTemplate(model: 'PROJ-1', lifeYears: life, ports: const []));

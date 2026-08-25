@@ -699,6 +699,26 @@ class ProjectVendor {
   /// themselves that identifies it.
   bool get hasRules => manufacturers.isNotEmpty || categories.isNotEmpty;
 
+  /// The colour this vendor's parts are marked in, as an ARGB int, or null to
+  /// let one be derived from the name.
+  ///
+  /// WHY A COLOUR IS A PROPERTY OF THE VENDOR. A vendor IS an order: every
+  /// part tagged to it goes on one purchase order, to one company, on one
+  /// date. Reading a master list of two hundred parts and asking "which of
+  /// these am I ordering from whom" is the question the list is opened for,
+  /// and the answer was a name in a narrow column that had to be read row by
+  /// row. A colour answers it down the whole page at once.
+  ///
+  /// ASSIGNABLE, because the buyer's own colours mean things this app cannot
+  /// know — the vendor that is always late, the one the contract covers, the
+  /// order that has already been placed. Null is not "no colour": a vendor
+  /// nobody has assigned one still gets a stable colour off its name, so a
+  /// list is legible before anybody has set anything up.
+  ///
+  /// Stored as an int rather than a Color to keep this file free of Flutter,
+  /// the same way the cable colours are stored on a bundle.
+  final int? color;
+
   const ProjectVendor({
     required this.id,
     required this.name,
@@ -706,14 +726,20 @@ class ProjectVendor {
     this.notes = '',
     this.manufacturers = const [],
     this.categories = const [],
+    this.color,
   });
 
+  /// [clearColor] rather than passing null, which cannot be told from "leave
+  /// it alone" — and the two mean opposite things here: back to the derived
+  /// colour, or keep the one that was assigned.
   ProjectVendor copyWith({
     String? name,
     String? contact,
     String? notes,
     List<String>? manufacturers,
     List<String>? categories,
+    int? color,
+    bool clearColor = false,
   }) => ProjectVendor(
     id: id,
     name: name ?? this.name,
@@ -721,6 +747,7 @@ class ProjectVendor {
     notes: notes ?? this.notes,
     manufacturers: manufacturers ?? this.manufacturers,
     categories: categories ?? this.categories,
+    color: clearColor ? null : (color ?? this.color),
   );
 
   /// True when this vendor's manufacturer rules claim [manufacturer].
@@ -764,6 +791,7 @@ class ProjectVendor {
     if (notes.isNotEmpty) 'notes': notes,
     if (manufacturers.isNotEmpty) 'manufacturers': manufacturers,
     if (categories.isNotEmpty) 'categories': categories,
+    if (color != null) 'color': color,
   };
 
   factory ProjectVendor.fromJson(Map<String, dynamic> json) {
@@ -771,6 +799,7 @@ class ProjectVendor {
       for (final m in (json[key] as List? ?? []))
         if (m.toString().trim().isNotEmpty) m.toString().trim(),
     ];
+    final raw = json['color'];
     return ProjectVendor(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Vendor',
@@ -778,6 +807,9 @@ class ProjectVendor {
       notes: json['notes']?.toString() ?? '',
       manufacturers: list('manufacturers'),
       categories: list('categories'),
+      // Anything that is not a number is no assignment at all, which reads as
+      // the derived colour rather than as black.
+      color: raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? ''),
     );
   }
 }

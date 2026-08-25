@@ -256,8 +256,54 @@ class _WheelPainter extends CustomPainter {
   bool shouldRepaint(covariant _WheelPainter old) => old.hsv != hsv;
 }
 
+/// The mark on the chosen swatch: a filled checkbox, not a bare tick.
+///
+/// A tick drawn straight onto the colour is only ever as visible as the
+/// contrast between that colour and the ink — which on a row of sixteen
+/// swatches is fine on the navy and nearly invisible on the mustard, so
+/// "which one is set" became a question about the border instead. A checkbox
+/// brings its own ground: a solid square in the colour that reads on the
+/// swatch, with the tick in the opposite one. Two colours that always contrast
+/// with each other, on top of anything.
+///
+/// Sized off the swatch so the small chips on the cable and signal dialogs
+/// (24x20) get one that fits, and the full-size ones get one that is worth
+/// seeing.
+class _SelectedTick extends StatelessWidget {
+  /// The colour that reads on the swatch — white on a dark one, near-black on
+  /// a light one. This is the checkbox's FILL; the tick takes its opposite.
+  final Color onColor;
+
+  final double width;
+  final double height;
+
+  const _SelectedTick({
+    required this.onColor,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final side = math.min(width, height).clamp(0.0, 40.0) - 6;
+    final box = side.clamp(11.0, 18.0);
+    final ink = onColor == Colors.white ? Colors.black87 : Colors.white;
+    return Container(
+      width: box,
+      height: box,
+      decoration: BoxDecoration(
+        color: onColor,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: ink.withValues(alpha: 0.65), width: 0.8),
+      ),
+      alignment: Alignment.center,
+      child: Icon(Icons.check, size: box - 3, color: ink),
+    );
+  }
+}
+
 /// A color chip with an unmistakable selected state: a heavy ring, a lift,
-/// and a tick in a contrasting color. The old version only thickened the
+/// and a checkbox in a contrasting color. The old version only thickened the
 /// border, which was easy to miss against a row of similar swatches.
 class ColorSwatchButton extends StatelessWidget {
   final Color color;
@@ -313,7 +359,7 @@ class ColorSwatchButton extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: selected
-          ? Icon(Icons.check, size: 16, color: onColor)
+          ? _SelectedTick(onColor: onColor, width: width, height: height)
           : (badge == null ? null : Icon(badge, size: 13, color: onColor)),
     );
 

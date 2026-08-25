@@ -278,44 +278,61 @@ class _MatrixGrid extends StatelessWidget {
   }
 
   /// The half that stays put: what each row IS.
-  Widget _frozenColumn(ThemeData theme) => SizedBox(
-    width: _roomColumn,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _cell(
-          height: _headRow,
-          align: Alignment.bottomLeft,
-          child: Text('ROOM', style: _headStyle(theme)),
-        ),
-        _cell(
-          height: _partyRow,
-          child: Text('Furnished by', style: _metaStyle(theme)),
-        ),
-        _cell(
-          height: _partyRow,
-          child: Text('Installed by', style: _metaStyle(theme)),
-        ),
-        for (final room in columns)
+  Widget _frozenColumn(ThemeData theme) {
+    final line = _line(theme);
+    return SizedBox(
+      width: _roomColumn,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _cell(
+            height: _headRow,
+            align: Alignment.bottomLeft,
+            line: line,
+            strongRight: true,
+            child: Text('ROOM', style: _headStyle(theme)),
+          ),
+          _cell(
+            height: _partyRow,
+            line: line,
+            strongRight: true,
+            child: Text('Furnished by', style: _metaStyle(theme)),
+          ),
+          _cell(
+            height: _partyRow,
+            line: line,
+            strongRight: true,
+            strongBottom: true,
+            child: Text('Installed by', style: _metaStyle(theme)),
+          ),
+          for (final (i, room) in columns.indexed)
+            _cell(
+              height: _bodyRow,
+              line: line,
+              fill: _band(theme, i),
+              strongRight: true,
+              strongBottom: i == columns.length - 1,
+              child: Text(
+                room.name,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
           _cell(
             height: _bodyRow,
-            child: Text(
-              room.name,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
-            ),
+            line: line,
+            strongRight: true,
+            child: Text('Totals', style: _headStyle(theme)),
           ),
-        _cell(
-          height: _bodyRow,
-          child: Text('Totals', style: _headStyle(theme)),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 
   /// One scope item, top to bottom.
   Widget _itemColumnFor(BuildContext context, ResponsibilityItem item) {
     final theme = Theme.of(context);
+    final line = _line(theme);
 
     return SizedBox(
       width: _itemColumn,
@@ -330,6 +347,7 @@ class _MatrixGrid extends StatelessWidget {
             child: _cell(
               height: _headRow,
               align: Alignment.bottomLeft,
+              line: line,
               child: Text(
                 item.scope,
                 maxLines: 3,
@@ -344,6 +362,7 @@ class _MatrixGrid extends StatelessWidget {
           // name, and the pair of them is what the sheet is read for.
           _cell(
             height: _partyRow,
+            line: line,
             child: _PartyCell(
               party: item.furnishedBy,
               missing: item.furnishedBy.trim().isEmpty,
@@ -351,18 +370,26 @@ class _MatrixGrid extends StatelessWidget {
           ),
           _cell(
             height: _partyRow,
+            line: line,
+            strongBottom: true,
             child: _PartyCell(
               party: item.installedBy,
               missing: item.installedBy.trim().isEmpty,
             ),
           ),
-          for (final room in columns)
+          for (final (i, room) in columns.indexed)
             InkWell(
               key: ValueKey('matrix_cell_${item.id}_${room.id}'),
               onTap: () => _editQty(context, item, room),
               child: _cell(
                 height: _bodyRow,
                 align: Alignment.center,
+                line: line,
+                // The band runs across the whole row, frozen half included,
+                // which is what makes a quantity readable against the room
+                // name thirty columns to its left.
+                fill: _band(theme, i),
+                strongBottom: i == columns.length - 1,
                 child: Text(
                   formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
                   style: theme.textTheme.bodySmall,
@@ -372,6 +399,7 @@ class _MatrixGrid extends StatelessWidget {
           _cell(
             height: _bodyRow,
             align: Alignment.center,
+            line: line,
             child: Text(
               formatResponsibilityQty(item.total),
               style: theme.textTheme.bodySmall?.copyWith(
@@ -416,16 +444,62 @@ class _MatrixGrid extends StatelessWidget {
       ) ??
       const TextStyle(fontSize: 11);
 
+  /// One cell, RULED.
+  ///
+  /// A matrix without lines on it is a spreadsheet screenshot with the grid
+  /// turned off: thirty columns of numbers whose row you lose halfway across,
+  /// which on this document means reading a quantity against the wrong room.
+  /// So every cell draws its own bottom and right rule, alternate room rows
+  /// are banded, and the two blocks that are not room rows — the parties at the
+  /// top and the totals at the bottom — are separated by a heavier line.
+  ///
+  /// THE BORDERS GO ON EVERY CELL, both halves included. The frozen column and
+  /// the scrolling columns are two independent Columns laid out on the same
+  /// fixed heights; a rule on one and not the other would take a pixel off one
+  /// side's rows and put the two halves permanently out of line.
   static Widget _cell({
     required double height,
     required Widget child,
     Alignment align = Alignment.centerLeft,
+    Color? line,
+    Color? fill,
+    bool strongBottom = false,
+    bool strongRight = false,
   }) => Container(
     height: height,
     alignment: align,
     padding: const EdgeInsets.symmetric(horizontal: 4),
+    decoration: line == null
+        ? null
+        : BoxDecoration(
+            color: fill,
+            border: Border(
+              bottom: BorderSide(
+                color: line,
+                width: strongBottom ? 1.4 : 0.6,
+              ),
+              right: BorderSide(
+                color: line,
+                width: strongRight ? 1.4 : 0.6,
+              ),
+            ),
+          ),
     child: child,
   );
+
+  /// The colour the rules are drawn in.
+  ///
+  /// [ColorScheme.outlineVariant] rather than [ThemeData.dividerColor]: the
+  /// divider colour is tuned for one line between two blocks of content, and a
+  /// grid of it on a dark theme measured as a grid that is not there.
+  static Color _line(ThemeData theme) => theme.colorScheme.outlineVariant;
+
+  /// The band behind every other room row. Faint enough to be a guide and
+  /// never a highlight — the colours that mean something on this sheet are the
+  /// parties'.
+  static Color? _band(ThemeData theme, int index) => index.isOdd
+      ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
+      : null;
 }
 
 /// One party's name on the grid, in that party's colour.
@@ -1234,7 +1308,10 @@ class _MatrixTable extends StatelessWidget {
           const SizedBox(height: 10),
           Table(
             defaultVerticalAlignment: TableCellVerticalAlignment.top,
-            border: TableBorder.all(color: Colors.black26, width: 0.6),
+            // Darker than the hairline it was: this table is photographed
+            // for a submittal and photocopied from there, and a 0.6pt grey
+            // rule is the first thing a copier loses.
+            border: TableBorder.all(color: Colors.black45, width: 0.8),
             columnWidths: {
               0: const FixedColumnWidth(170),
               1: const FixedColumnWidth(95),

@@ -102,6 +102,25 @@ Color tintForName(String name) {
   return kNameTintWheel[_hashOf(key) % kNameTintWheel.length];
 }
 
+/// The colour something reads in, honouring a colour somebody ASSIGNED it.
+///
+/// The derived colour is a starting point, not a verdict. A buyer's own
+/// colours mean things this app cannot work out — the order that is already
+/// placed, the vendor the contract covers, the one that is always late — so
+/// wherever a colour can be assigned, [assigned] wins and the hash is what a
+/// thing reads in until somebody says otherwise. Null is not "no colour": it
+/// is "nobody has chosen", which is why a list is legible before anything has
+/// been set up.
+Color resolveTint({int? assigned, required String name}) =>
+    assigned == null ? tintForName(name) : Color(assigned);
+
+/// A fill behind text, from a colour that has already been resolved.
+Color tintFill(Color tint, {double alpha = 0.16}) =>
+    tint.withValues(alpha: alpha);
+
+/// A resolved colour as TEXT on [background] — see [legibleTone].
+Color tintText(Color tint, Color background) => legibleTone(tint, background);
+
 /// True when [name] is one of the answers that means nothing has been settled.
 bool nameIsUnsettled(String name) {
   final key = normalisedName(name);
@@ -130,6 +149,10 @@ Color nameFill(String name, {double alpha = 0.16}) =>
 class NameTintChip extends StatelessWidget {
   final String name;
 
+  /// The colour to use instead of the one [name] derives, for a thing whose
+  /// colour somebody has assigned — see [resolveTint].
+  final Color? color;
+
   /// What to show when the name is blank. The matrix says NOBODY YET out loud
   /// rather than leaving an empty cell that reads as agreed.
   final String emptyLabel;
@@ -143,6 +166,7 @@ class NameTintChip extends StatelessWidget {
   const NameTintChip({
     super.key,
     required this.name,
+    this.color,
     this.emptyLabel = '-',
     this.background,
     this.fontSize = 11,
@@ -153,11 +177,12 @@ class NameTintChip extends StatelessWidget {
     final theme = Theme.of(context);
     final ground = background ?? theme.cardColor;
     final shown = name.trim().isEmpty ? emptyLabel : name.trim();
-    final unsettled = nameIsUnsettled(name);
+    final unsettled = color == null && nameIsUnsettled(name);
+    final tint = color ?? tintForName(name);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: nameFill(name, alpha: unsettled ? 0.10 : 0.16),
+        color: tintFill(tint, alpha: unsettled ? 0.10 : 0.16),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
@@ -169,11 +194,37 @@ class NameTintChip extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: unsettled
               ? theme.colorScheme.onSurfaceVariant
-              : nameTextColor(name, ground),
+              : tintText(tint, ground),
         ),
       ),
     );
   }
+}
+
+/// A colour on its own, where there is no room for a chip: in front of a name
+/// on a menu, on a filter, at the head of a row.
+///
+/// Never alone. Every one of these sits beside the name it stands for — the
+/// dot is what makes a list scannable, the name is what makes it readable.
+class NameTintDot extends StatelessWidget {
+  final Color color;
+  final double size;
+
+  const NameTintDot({super.key, required this.color, this.size = 12});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: color,
+      shape: BoxShape.circle,
+      border: Border.all(
+        color: Theme.of(context).dividerColor,
+        width: 0.5,
+      ),
+    ),
+  );
 }
 
 /// The key to whatever colours are actually on the sheet.

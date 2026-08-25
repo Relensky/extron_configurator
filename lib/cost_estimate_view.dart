@@ -25,7 +25,6 @@ import 'export_tools.dart';
 import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
 import 'live_text_field.dart';
-import 'name_colors.dart';
 import 'print_mode.dart';
 import 'report_tools.dart';
 import 'screenshot_tools.dart';
@@ -701,40 +700,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     return maker.isEmpty ? 'No manufacturer on the catalog entry' : maker;
   }
 
-  /// The name a line's SHADE comes from — who makes it, or '' when the catalog
-  /// entry does not say.
-  ///
-  /// Separate from [_makerOf], which is the heading's wording: a line with no
-  /// manufacturer must not be tinted as though 'No manufacturer on the catalog
-  /// entry' were a vendor, so it takes the unsettled grey [tintForName] gives
-  /// an empty name.
-  static String _makerTint(CostLine line) => line.manufacturer.trim();
-
   /// The rule and the name over one vendor's block of the equipment table.
-  Widget _makerHeading(BuildContext context, String maker, String tintName) {
+  Widget _makerHeading(BuildContext context, String maker) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 2),
       child: Row(
         children: [
-          // The vendor's own swatch, so the heading and the shaded rows under
-          // it are visibly the same block.
-          Container(
-            width: 10,
-            height: 10,
-            margin: const EdgeInsets.only(right: 6),
-            decoration: BoxDecoration(
-              color: nameFill(tintName, alpha: 0.9),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
           Text(
             maker,
             style: theme.textTheme.labelMedium?.copyWith(
               fontWeight: FontWeight.w600,
-              color: tintName.isEmpty
-                  ? theme.colorScheme.onSurfaceVariant
-                  : nameTextColor(tintName, theme.cardColor),
+              color: theme.colorScheme.primary,
             ),
           ),
           const SizedBox(width: 8),
@@ -794,24 +771,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             const SizedBox(height: 8),
-            // WHO MAKES WHAT, IN COLOUR. An order is placed one vendor at a
-            // time, and this table is where it is checked — so every line
-            // carries its maker's shade down its left edge and the key to
-            // those shades sits above it. The maker is still written out over
-            // each block when the table is sorted by one, and the key names
-            // them all when it is not: the colour is a second way to read the
-            // list, never the only one.
-            if (estimate.equipment.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: NameTintKey(
-                  key: const ValueKey('equipment_vendor_key'),
-                  title: 'VENDORS',
-                  names: [
-                    for (final line in estimate.equipment) _makerTint(line),
-                  ],
-                ),
-              ),
             _headerRow(context, _kEquipmentCols),
             const Divider(height: 12),
             if (estimate.equipment.isEmpty)
@@ -832,11 +791,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   (i == 0 ||
                       _makerOf(estimate.equipment[i - 1]) !=
                           _makerOf(estimate.equipment[i])))
-                _makerHeading(
-                  context,
-                  _makerOf(estimate.equipment[i]),
-                  _makerTint(estimate.equipment[i]),
-                ),
+                _makerHeading(context, _makerOf(estimate.equipment[i])),
               Builder(
                 builder: (context) {
                   final line = estimate.equipment[i];
@@ -852,37 +807,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   final catalogPart = extra != null
                       ? extra.catalogModel.trim()
                       : (isCatalogSource(line.source) ? line.model.trim() : '');
-                  final tint = _makerTint(line);
-                  // THE SHADE IS PAINTED BEHIND THE ROW, NOT AROUND IT. A
-                  // border or a pad would move every cell on the line three
-                  // pixels off the caption above it, and the columns on this
-                  // table are checked against those captions — see
-                  // cost_header_alignment_test.dart. So the wash and the
-                  // vendor's band are laid under a row that is laid out
-                  // exactly as it was before.
-                  return Stack(
-                    children: [
-                      Positioned.fill(
-                        child: ColoredBox(
-                          color: nameFill(
-                            tint,
-                            alpha: tint.isEmpty ? 0.04 : 0.07,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: 3,
-                        child: ColoredBox(
-                          color: nameFill(
-                            tint,
-                            alpha: tint.isEmpty ? 0.3 : 0.8,
-                          ),
-                        ),
-                      ),
-                      Padding(
+                  return _stripe(
+                    context,
+                    i,
+                    Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: _gridRow(_kEquipmentCols, [
                       // Device
@@ -1147,8 +1075,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         ],
                       ),
                     ], rowKey: ValueKey('gridrow_eqp_${line.key}')),
-                      ),
-                    ],
+                    ),
                   );
                 },
               ),
@@ -1212,7 +1139,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               const SizedBox(height: 8),
               _headerRow(context, _kHardwareCols),
               const Divider(height: 12),
-              for (final line in estimate.hardware)
+              for (final (i, line) in estimate.hardware.indexed)
                 Builder(
                   builder: (context) {
                     // Lines added here (rather than placed in a frame) keep an
@@ -1230,7 +1157,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     ? line.model.trim()
                                     : line.description.trim())
                               : '');
-                    return Padding(
+                    return _stripe(
+                      context,
+                      i,
+                      Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: _gridRow(_kHardwareCols, [
                       // Item
@@ -1411,7 +1341,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         ],
                       ),
                     ], rowKey: ValueKey('gridrow_hw_${line.key}')),
-                );
+                ),
+                    );
                   },
                 ),
             ],
@@ -1438,6 +1369,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     final settings = provider.avCost;
     final drawn = countCableRuns(model);
     final library = provider.avDeviceLibrary;
+
+    // The runs the table actually draws a row for. Held here rather than
+    // filtered inside the list, so the zebra counts rows on the sheet rather
+    // than entries it walked past — a stripe that skipped an entry would put
+    // two washed rows together and stop reading as an alternation at all.
+    final countedCabling = [
+      for (final line in estimate.cabling)
+        if (cableSignalOfKey(line.key) != null) line,
+    ];
 
     // Types with runs on the diagram, plus any that only have spares — a
     // spare for a type you didn't draw is still cable somebody is buying.
@@ -1511,8 +1451,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               // row for "HDMI" is a row that is wrong in both directions at
               // once. A type with one entry (or none) still comes out as the
               // one row it always did.
-              for (final line in estimate.cabling)
-                if (cableSignalOfKey(line.key) != null)
+              for (final (i, line) in countedCabling.indexed)
                   Builder(
                     builder: (context) {
                       final signal = cableSignalOfKey(line.key)!;
@@ -1526,7 +1465,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       final catalog =
                           library.templateForModel(line.model) ??
                               library.cableForSignal(signal);
-                      return Padding(
+                      return _stripe(
+                        context,
+                        i,
+                        Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
                         child: _gridRow(_kCablingCols, [
                           // Cable type
@@ -1686,19 +1628,25 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             ],
                           ),
                         ], rowKey: ValueKey('gridrow_cbl_${line.key}')),
+                      ),
                       );
                     },
                   ),
               // Cable bought for the job that no run on the diagram accounts
               // for. Listed under the counted runs so the two are read
               // together, and labeled so nobody looks for it on the drawing.
-              for (final item in settings.extraCables)
+              for (final (i, item) in settings.extraCables.indexed)
                 Builder(
                   builder: (context) {
                     final line = estimate.cabling
                         .where((l) => l.key == item.id)
                         .firstOrNull;
-                    return Padding(
+                    // Carries on from the counted runs above rather than
+                    // restarting: the two loops are one table to read.
+                    return _stripe(
+                      context,
+                      countedCabling.length + i,
+                      Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
                       child: _gridRow(_kCablingCols, [
                           // Cable type
@@ -1827,6 +1775,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             ],
                           ),
                         ], rowKey: ValueKey('gridrow_cbl_${item.id}')),
+                    ),
                     );
                   },
                 ),
@@ -3995,13 +3944,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               _headerRow(context, _kLaborCols),
               const Divider(height: 12),
             ],
-            for (final line in lines)
+            for (final (i, line) in lines.indexed)
               Builder(
                 builder: (context) {
                   final costed = estimate.labor.firstWhere(
                     (l) => l.id == line.id,
                   );
-                  return Padding(
+                  return _stripe(
+                    context,
+                    i,
+                    Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: _gridRow(_kLaborCols, [
                       // Job type
@@ -4087,6 +4039,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         danger: true,
                       ),
                     ], rowKey: ValueKey('gridrow_labor_${line.id}')),
+                    ),
                   );
                 },
               ),
@@ -4139,8 +4092,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               _headerRow(context, _kItemsCols),
               const Divider(height: 12),
             ],
-            for (final item in items)
-              Padding(
+            for (final (i, item) in items.indexed)
+              _stripe(
+                context,
+                i,
+                Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: _gridRow(_kItemsCols, [
                     // Description
@@ -4231,6 +4187,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ],
                     ),
                   ], rowKey: ValueKey('gridrow_item_${item.id}')),
+              ),
               ),
           ],
         ),
@@ -4581,6 +4538,32 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// pixels narrower than the buttons render walks every caption on the row
   /// out of place, and nothing says so until somebody looks hard at a
   /// screenshot. Now there is one description, and the row is built from it.
+  /// Every other row on a table, washed.
+  ///
+  /// THE TABLES ON THIS PAGE ARE TWELVE COLUMNS WIDE and read across: a
+  /// quantity on the left, a spares box, a price typed into the middle, an
+  /// extended figure on the right. Losing the line halfway is how a figure
+  /// gets typed onto the wrong row, and the only thing that was holding the
+  /// eye on one was three pixels of padding.
+  ///
+  /// A NEUTRAL WASH, not a colour. The stripe is here to keep a line together,
+  /// so it must not look like it MEANS anything — the coloured things on this
+  /// page (the signal dot on a cable row, the red on an unpriced source) are
+  /// saying something, and a row tinted by its vendor would be a third
+  /// vocabulary competing with both.
+  ///
+  /// Painted BEHIND the row rather than around it: a border or a pad would
+  /// move every cell off the caption above it, and the captions on these
+  /// tables are measured against the rows they head — see
+  /// cost_header_alignment_test.dart.
+  static Widget _stripe(BuildContext context, int index, Widget child) {
+    if (index.isEven) return child;
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.045),
+      child: child,
+    );
+  }
+
   static Widget _gridRow(
     List<_Col> columns,
     List<Widget> cells, {

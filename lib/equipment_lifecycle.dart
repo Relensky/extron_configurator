@@ -98,6 +98,26 @@ const double kDaysPerYear = 365.2425;
 /// "14 items" that then dated eleven would be a dialog nobody trusts again.
 bool equipmentIsTracked(AvNode node) => !node.isJackField;
 
+/// True when this position has been taken OFF the refresh cycle by hand.
+///
+/// The bracket the display hangs on, the pole under the projector, the frame
+/// the rack is built into: they come out when the room is rebuilt and never on
+/// a schedule of their own. Counted among the things falling due in 2031 they
+/// are invented work, and on a list of eleven items they are the four nobody
+/// needed to read.
+///
+/// SET RATHER THAN GUESSED — [kNeverReplacedLife] on the position itself. The
+/// app knows what a box is called and what it costs; it does not know whether
+/// this building replaces its mounts, and a rule that hid the wrong four items
+/// would be a plan that quietly under-reads. So the room reads exactly as it
+/// did until somebody says otherwise, one item at a time.
+///
+/// Still TRACKED: these are hidden from the plan, not dropped from the room.
+/// They keep their install date, they come back on one press, and the plan
+/// says how many are being held back.
+bool equipmentNeverReplaced(AvNode node) =>
+    node.lifeYears == kNeverReplacedLife;
+
 /// Where the life a position is held to came from.
 ///
 /// Reported rather than left implicit, for the same reason the cable schedule
@@ -120,6 +140,11 @@ const Map<EquipmentLifeSource, String> kEquipmentLifeSourceLabels = {
   EquipmentLifeSource.catalog: 'from the catalog',
   EquipmentLifeSource.fallback: 'default cycle',
 };
+
+/// What a position off the refresh cycle reads as, on the screen and in the
+/// tooltip. Not a step on the ramp and not a condition: it is the answer
+/// "this one does not get replaced".
+const String kEquipmentNeverLabel = 'Never replaced';
 
 /// Where one position sits in its life.
 enum EquipmentCondition {
@@ -385,9 +410,16 @@ class EquipmentLife {
   /// on 1 March is due on 1 March and not two days either side of it. A 29
   /// February install lands on the 28th of a non-leap year, which is what
   /// [DateTime]'s own rollover would get wrong by a day.
+  /// True when this position has been taken off the refresh cycle — see
+  /// [equipmentNeverReplaced].
+  bool get neverReplaced => lifeYears == kNeverReplacedLife;
+
   DateTime? get dueOn {
     final from = installedOn;
-    if (from == null) return null;
+    // Never on a cycle, so never due. Everything downstream of a due date —
+    // the years remaining, the step on the ramp, the colour — falls out of
+    // this one answer rather than each having to know about the sentinel.
+    if (from == null || neverReplaced) return null;
     final year = from.year + lifeYears;
     final day = from.day.clamp(1, DateTime(year, from.month + 1, 0).day);
     return DateTime(year, from.month, day);
@@ -432,8 +464,18 @@ class RoomLifecycle {
   /// What to call the room on a building-wide sheet.
   final String roomName;
 
-  /// One entry per box on the drawing, worst condition first.
+  /// One entry per box on the drawing that IS on the refresh cycle, worst
+  /// condition first.
   final List<EquipmentLife> items;
+
+  /// The positions somebody has taken off the cycle — see
+  /// [equipmentNeverReplaced].
+  ///
+  /// Carried rather than discarded, and kept OUT of [items] so that every
+  /// count, every colour and every figure on the plan excludes them without
+  /// each of them having to remember to. The room still has these boxes, and
+  /// the screen can still be asked to show them.
+  final List<EquipmentLife> neverReplaced;
 
   final DateTime asOf;
 
@@ -441,7 +483,13 @@ class RoomLifecycle {
     required this.roomName,
     required this.items,
     required this.asOf,
+    this.neverReplaced = const [],
   });
+
+  /// How many positions are being held back from the plan. What the toggle on
+  /// the screen counts, and what the sheet says out loud so a plan with four
+  /// items hidden cannot read as a room with four items fewer.
+  int get neverCount => neverReplaced.length;
 
   int countOf(EquipmentCondition c) =>
       items.where((i) => i.condition == c).length;
@@ -585,15 +633,21 @@ RoomLifecycle buildRoomLifecycle({
   final day = DateTime(now.year, now.month, now.day);
 
   final items = <EquipmentLife>[];
+  final never = <EquipmentLife>[];
   for (final node in model.nodes) {
     if (!equipmentIsTracked(node)) continue;
 
     final template = library?.templateForModel(node.model);
 
-    // Most specific first — see [EquipmentLife.lifeYears].
+    // Most specific first — see [EquipmentLife.lifeYears]. A position taken
+    // off the cycle carries its sentinel through so the row that shows it can
+    // say why it is not on the plan.
     final int life;
     final EquipmentLifeSource source;
-    if (node.lifeYears > 0) {
+    if (node.lifeYears == kNeverReplacedLife) {
+      life = kNeverReplacedLife;
+      source = EquipmentLifeSource.position;
+    } else if (node.lifeYears > 0) {
       life = node.lifeYears;
       source = EquipmentLifeSource.position;
     } else if ((template?.lifeYears ?? 0) > 0) {
@@ -604,7 +658,7 @@ RoomLifecycle buildRoomLifecycle({
       source = EquipmentLifeSource.fallback;
     }
 
-    items.add(EquipmentLife(
+    final entry = EquipmentLife(
       node: node,
       locationName: model.locationNameOf(node.id),
       zone: model.zoneOf(node.id),
@@ -613,8 +667,15 @@ RoomLifecycle buildRoomLifecycle({
       lifeSource: source,
       asOf: day,
       replacementCost: template?.priceForTier(tier).price ?? 0,
-    ));
+    );
+    // Off the cycle entirely, and out of everything derived from the list —
+    // the counts, the colours, the money and the year grid.
+    (equipmentNeverReplaced(node) ? never : items).add(entry);
   }
+
+  never.sort(
+    (a, b) => a.node.label.toLowerCase().compareTo(b.node.label.toLowerCase()),
+  );
 
   // Worst first, then by due date, then by name — so the top of the list is
   // always what to do something about, and two readings of the same room come
@@ -630,7 +691,12 @@ RoomLifecycle buildRoomLifecycle({
     return a.node.label.toLowerCase().compareTo(b.node.label.toLowerCase());
   });
 
-  return RoomLifecycle(roomName: roomName, items: items, asOf: day);
+  return RoomLifecycle(
+    roomName: roomName,
+    items: items,
+    neverReplaced: never,
+    asOf: day,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -652,6 +718,10 @@ class BuildingLifecycle {
   });
 
   List<EquipmentLife> get items => [for (final r in rooms) ...r.items];
+
+  /// How many positions across the job are held off the plan.
+  int get neverCount =>
+      rooms.fold<int>(0, (sum, r) => sum + r.neverCount);
 
   int countOf(EquipmentCondition c) =>
       items.where((i) => i.condition == c).length;
@@ -845,6 +915,14 @@ List<ReportSection> roomLifecycleSections(
           '${kEquipmentConditionCodes[room.condition]} - '
               '${kEquipmentConditionLabels[room.condition]}',
         ],
+        // Said out loud, because a plan with four items held back must not
+        // read as a room with four items fewer.
+        if (room.neverCount > 0)
+          [
+            'Never replaced',
+            '${room.neverCount} item${room.neverCount == 1 ? '' : 's'} off the '
+                'cycle',
+          ],
         [
           'Room last done',
           room.oldestInstall == null
@@ -911,6 +989,26 @@ List<ReportSection> roomLifecycleSections(
       ],
     ),
   ];
+
+  // The positions somebody took off the cycle. On the sheet rather than left
+  // to the screen: a plan is read by people who were not there when the
+  // decision was made, and "why is the projector mount not on this" is a
+  // question the document should answer itself.
+  if (room.neverReplaced.isNotEmpty) {
+    sections.add((
+      title: 'Not On The Refresh Cycle',
+      header: const ['Position', 'Model', 'Location', 'Installed'],
+      rows: [
+        for (final i in room.neverReplaced)
+          [
+            i.node.label,
+            i.node.model,
+            i.locationName,
+            i.installedOn == null ? '' : formatEquipmentDate(i.installedOn!),
+          ],
+      ],
+    ));
+  }
 
   // What has already been replaced, and how long each of those lasted. The
   // half of the record that says whether the eight-year cycle is the right
@@ -999,6 +1097,12 @@ List<ReportSection> buildingLifecycleSections(
                   building.costOf(c),
                   currency,
                 )}',
+          ],
+        if (building.neverCount > 0)
+          [
+            'Never replaced',
+            '${building.neverCount} item'
+                '${building.neverCount == 1 ? '' : 's'} off the cycle',
           ],
         [
           'Past its life today',

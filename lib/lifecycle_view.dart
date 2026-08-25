@@ -32,8 +32,23 @@ import 'stepped_date_picker.dart';
 ///  and this is a document that gets printed.
 /// ============================================================================
 
-class LifecycleView extends StatelessWidget {
+class LifecycleView extends StatefulWidget {
   const LifecycleView({super.key});
+
+  @override
+  State<LifecycleView> createState() => _LifecycleViewState();
+}
+
+class _LifecycleViewState extends State<LifecycleView> {
+  /// Whether the positions taken off the refresh cycle are on screen.
+  ///
+  /// OFF BY DEFAULT, which is the whole point of taking one off: a mount and a
+  /// pole among nine live positions are four rows nobody reads and two more
+  /// undated items on the count. HELD ON THE SCREEN rather than in the file,
+  /// because it is a way of looking at the room and not a fact about it — and
+  /// a room that opened with them showing because somebody once looked would
+  /// be a plan that reads differently for two people.
+  bool _showNever = false;
 
   @override
   Widget build(BuildContext context) {
@@ -60,22 +75,48 @@ class LifecycleView extends StatelessWidget {
       );
     }
 
+    // The plan, and then — only when asked for — the positions held off it.
+    final rows = <({EquipmentLife item, bool never})>[
+      for (final i in room.items) (item: i, never: false),
+      if (_showNever)
+        for (final i in room.neverReplaced) (item: i, never: true),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Summary(room: room, currency: provider.currencySymbol),
-        _RoomActions(room: room),
+        _RoomActions(
+          room: room,
+          showNever: _showNever,
+          onShowNever: () => setState(() => _showNever = !_showNever),
+        ),
         const Divider(height: 1),
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: room.items.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, i) => _ItemRow(
-              item: room.items[i],
-              currency: provider.currencySymbol,
-            ),
-          ),
+          child: rows.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'Every item in this room is off the refresh cycle.\n\n'
+                      'Nothing here falls due, which is a real answer for a '
+                      'room of brackets and plates - and the toggle above '
+                      'shows them.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, i) => _ItemRow(
+                    item: rows[i].item,
+                    currency: provider.currencySymbol,
+                    never: rows[i].never,
+                  ),
+                ),
         ),
       ],
     );
@@ -90,12 +131,22 @@ class LifecycleView extends StatelessWidget {
 class _RoomActions extends StatelessWidget {
   final RoomLifecycle room;
 
-  const _RoomActions({required this.room});
+  /// Whether the positions off the cycle are on screen, and the way to change
+  /// it. Owned by the screen — see [_LifecycleViewState._showNever].
+  final bool showNever;
+  final VoidCallback onShowNever;
+
+  const _RoomActions({
+    required this.room,
+    required this.showNever,
+    required this.onShowNever,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final undated = room.undated;
+    final never = room.neverCount;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -123,6 +174,25 @@ class _RoomActions extends StatelessWidget {
               ),
             ),
           ),
+          // WHAT IS BEING HELD BACK, AND THE WAY TO SEE IT. Only once there is
+          // something: a toggle for a thing that has never happened is one
+          // more control to read past. It says the COUNT rather than 'show
+          // hidden', because a plan that is quietly shorter than the room is
+          // exactly what this had to avoid.
+          if (never > 0)
+            TextButton.icon(
+              key: const ValueKey('lifecycle_show_never'),
+              onPressed: onShowNever,
+              icon: Icon(
+                showNever ? Icons.visibility_off : Icons.visibility,
+                size: 18,
+              ),
+              label: Text(
+                showNever
+                    ? 'Hide the $never that never need replacing'
+                    : 'Show $never that never need replacing',
+              ),
+            ),
         ],
       ),
     );
@@ -675,7 +745,17 @@ class _ItemRow extends StatelessWidget {
   final EquipmentLife item;
   final String currency;
 
-  const _ItemRow({required this.item, required this.currency});
+  /// True for a position that has been taken off the refresh cycle. It is
+  /// drawn as what it is — a box in the room with no replacement date — rather
+  /// than left off the screen entirely, so a decision somebody made can be
+  /// seen and undone.
+  final bool never;
+
+  const _ItemRow({
+    required this.item,
+    required this.currency,
+    this.never = false,
+  });
 
   Future<void> _pickInstall(BuildContext context) async {
     final provider = context.read<AppStateProvider>();
@@ -695,13 +775,17 @@ class _ItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final timing = item.timing;
-    final color = equipmentTimingColor(context, timing);
+    final color = never
+        ? theme.colorScheme.onSurfaceVariant
+        : equipmentTimingColor(context, timing);
     final detail = [
       if (item.node.model.isNotEmpty) item.node.model,
       if (item.locationName.isNotEmpty) item.locationName,
       '${formatEquipmentAge(item.ageYears)} old',
-      formatEquipmentDue(item),
-      'life ${item.lifeYears} yrs',
+      // A due date is the one thing a position off the cycle does not have,
+      // and 'no install date' would be the wrong reason for it.
+      if (!never) formatEquipmentDue(item),
+      if (!never) 'life ${item.lifeYears} yrs',
       if (item.hasHistory) 'replaced ${item.node.swaps.length}x before',
     ].join('  ·  ');
 
@@ -710,10 +794,14 @@ class _ItemRow extends StatelessWidget {
       // behind it is faint enough that the text on top of it is the text
       // everywhere else on this screen; the edge is where the colour is.
       decoration: BoxDecoration(
-        color: equipmentTimingFill(context, timing, alpha: 0.10),
+        color: never
+            ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.05)
+            : equipmentTimingFill(context, timing, alpha: 0.10),
         border: Border(
           left: BorderSide(
-            color: equipmentTimingFill(context, timing, alpha: 0.9),
+            color: never
+                ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
+                : equipmentTimingFill(context, timing, alpha: 0.9),
             width: 4,
           ),
         ),
@@ -721,8 +809,14 @@ class _ItemRow extends StatelessWidget {
       child: ListTile(
         key: ValueKey('lifecycle_item_${item.node.id}'),
         leading: Tooltip(
-          message: kEquipmentTimingLabels[timing]!,
-          child: Icon(equipmentTimingIcon(timing), color: color),
+          message: never
+              ? kEquipmentNeverLabel
+              : kEquipmentTimingLabels[timing]!,
+          child: Icon(
+            never ? Icons.do_not_disturb_on_outlined
+                : equipmentTimingIcon(timing),
+            color: color,
+          ),
         ),
         title: Text(
           item.node.label,
@@ -736,7 +830,9 @@ class _ItemRow extends StatelessWidget {
               // the word says it to a mono print and to a reader who cannot
               // tell the amber from the orange.
               TextSpan(
-                text: kEquipmentTimingLabels[timing]!,
+                text: never
+                    ? kEquipmentNeverLabel
+                    : kEquipmentTimingLabels[timing]!,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: color,
                   fontWeight: FontWeight.w600,
@@ -771,7 +867,7 @@ class _ItemRow extends StatelessWidget {
                     : formatEquipmentDate(item.installedOn!),
               ),
             ),
-            if (item.installedOn != null)
+            if (item.installedOn != null && !never)
               IconButton(
                 key: ValueKey('lifecycle_install_clear_${item.node.id}'),
                 tooltip: 'Nobody knows when this went in',
@@ -780,6 +876,25 @@ class _ItemRow extends StatelessWidget {
                     .read<AppStateProvider>()
                     .setAvNodeInstalledOn(item.node.id, null),
               ),
+            // ON OR OFF THE CYCLE, on the row itself. It is a judgement about
+            // one position — this bracket, this pole — made while looking at
+            // the list it is cluttering, and a screen somewhere else to make
+            // it in is a screen nobody goes to.
+            IconButton(
+              key: ValueKey('lifecycle_never_${item.node.id}'),
+              tooltip: never
+                  ? 'Put this back on the refresh cycle'
+                  : 'This never needs replacing - take it off the plan',
+              icon: Icon(
+                never
+                    ? Icons.restart_alt
+                    : Icons.do_not_disturb_on_outlined,
+                size: 16,
+              ),
+              onPressed: () => context
+                  .read<AppStateProvider>()
+                  .setAvNodeNeverReplaced(item.node.id, !never),
+            ),
           ],
         ),
       ),

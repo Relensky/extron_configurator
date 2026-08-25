@@ -287,4 +287,43 @@ void main() {
     // And the grid carries a cell for the year it fell due.
     expect(find.textContaining('first due 2022'), findsNWidgets(2));
   });
+
+  testWidgets('a bracket taken off the cycle leaves the plan, and comes back',
+      (tester) async {
+    final p = room();
+    await pumpRoom(tester, p);
+
+    // Both boxes are on the plan to start with.
+    expect(find.byKey(const ValueKey('lifecycle_item_PROJECTORDEVICE_1')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('lifecycle_show_never')), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('lifecycle_never_PROJECTORDEVICE_1')),
+    );
+    await tester.pumpAndSettle();
+
+    // Off the list, and the toggle says how many are being held back rather
+    // than leaving the room quietly one item shorter.
+    expect(find.byKey(const ValueKey('lifecycle_item_PROJECTORDEVICE_1')),
+        findsNothing);
+    expect(find.textContaining('1 that never need replacing'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('lifecycle_show_never')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('lifecycle_item_PROJECTORDEVICE_1')),
+        findsOneWidget);
+    // In the row's own subtitle, which is a rich string - the step in words
+    // in its own colour, then the rest of the line.
+    expect(find.textContaining('Never replaced'), findsWidgets);
+
+    // And back onto the plan from the same button.
+    await tester.tap(
+      find.byKey(const ValueKey('lifecycle_never_PROJECTORDEVICE_1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('lifecycle_show_never')), findsNothing);
+    expect(find.byKey(const ValueKey('lifecycle_item_PROJECTORDEVICE_1')),
+        findsOneWidget);
+  });
 }

@@ -10,9 +10,11 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_swap_dialogs.dart' show pickCatalogModel;
 import 'building_project.dart';
+import 'color_wheel_picker.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
+import 'name_colors.dart';
 import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
 import 'project_lifecycle_view.dart';
@@ -84,6 +86,147 @@ enum _ProjectPane {
   final String label;
   final IconData icon;
   const _ProjectPane(this.label, this.icon);
+}
+
+/// THE COLOUR A VENDOR'S PARTS ARE MARKED IN.
+///
+/// A vendor is an ORDER: everything tagged to it goes to one company on one
+/// purchase order. "Which of these two hundred parts am I buying from whom" is
+/// the question the master list is opened for, and until now the answer was a
+/// name in a narrow column that had to be read a row at a time. A colour
+/// answers it down the whole page at once.
+///
+/// Assigned first ([ProjectVendor.color]), derived from the name otherwise, so
+/// the list is legible on a job where nobody has set a colour. An untagged
+/// part has no vendor and takes the unsettled grey — it is not an order yet,
+/// and giving it a colour of its own would make it look like one.
+Color projectVendorColor(ProjectVendor? vendor) => vendor == null
+    ? kNameTintUnsettled
+    : resolveTint(assigned: vendor.color, name: vendor.name);
+
+/// The palette offered when a colour is assigned by hand.
+///
+/// The same twelve the derived colours come out of, so an assigned colour and
+/// a derived one belong to one set rather than looking like two systems on one
+/// page. Any other colour is one press further on, through the wheel.
+const List<Color> kVendorPalette = kNameTintWheel;
+
+/// Assigns [vendor] a colour, or takes it back to the derived one.
+///
+/// A dialog rather than an inline row of swatches: the vendor list is a list
+/// of ORDERS in priority order, and twelve swatches on every row would bury
+/// the one thing that list is read for.
+Future<void> showVendorColorDialog(
+  BuildContext context,
+  ProjectVendor vendor,
+) async {
+  final provider = context.read<AppStateProvider>();
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        // Re-read the vendor every rebuild: the swatch that reads as chosen
+        // has to be the one the project actually holds.
+        final current = provider.project.vendors
+                .where((v) => v.id == vendor.id)
+                .firstOrNull ??
+            vendor;
+        final assigned = current.color;
+        final shown = projectVendorColor(current);
+
+        return AlertDialog(
+          key: const ValueKey('vendor_color_dialog'),
+          title: Text(
+            current.name.trim().isEmpty
+                ? 'Colour for this vendor'
+                : 'Colour for ${current.name}',
+          ),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Every part this vendor is quoting is marked in this colour '
+                  'on the equipment list, so one order can be read down the '
+                  'page at a glance.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final c in kVendorPalette)
+                      ColorSwatchButton(
+                        key: ValueKey(
+                          'vendor_color_${vendor.id}_'
+                          '${(c.toARGB32() & 0xFFFFFF).toRadixString(16)}',
+                        ),
+                        color: c,
+                        selected: shown.toARGB32() == c.toARGB32(),
+                        onTap: () => setLocal(
+                          () => provider.updateProjectVendor(
+                            current.copyWith(color: c.toARGB32()),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('vendor_color_custom'),
+                      icon: const Icon(Icons.colorize, size: 16),
+                      label: const Text('Any other colour'),
+                      onPressed: () async {
+                        final picked = await showColorWheelDialog(
+                          ctx,
+                          initial: shown,
+                          title: 'Colour for ${current.name}',
+                        );
+                        if (picked == null) return;
+                        setLocal(
+                          () => provider.updateProjectVendor(
+                            current.copyWith(color: picked.toARGB32()),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    // Back to the colour the name gives it. Disabled while
+                    // nothing has been assigned, so the button says whether
+                    // this vendor's colour was chosen or derived.
+                    TextButton.icon(
+                      key: const ValueKey('vendor_color_auto'),
+                      icon: const Icon(Icons.auto_awesome, size: 16),
+                      label: const Text('Automatic'),
+                      onPressed: assigned == null
+                          ? null
+                          : () => setLocal(
+                              () => provider.updateProjectVendor(
+                                current.copyWith(clearColor: true),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              key: const ValueKey('vendor_color_done'),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 /// Below this the header stops trying to fit everything side by side: the
@@ -1684,10 +1827,19 @@ List<Widget> partsSlivers(
         .contains(needle);
   }
 
-  Widget filterChip(String label, String value, {bool warn = false}) {
+  Widget filterChip(
+    String label,
+    String value, {
+    bool warn = false,
+
+    /// The vendor this chip narrows to, so the chip carries the same colour
+    /// its rows are marked in. Null on the chips that are not about a vendor.
+    Color? tint,
+  }) {
     final selected = vendorFilter == value;
 
     return FilterChip(
+      avatar: tint == null ? null : NameTintDot(color: tint, size: 12),
       label: Text(
         label,
         // ONLY WHILE IT IS UNSELECTED does this chip paint a fill of its own.
@@ -1759,7 +1911,11 @@ List<Widget> partsSlivers(
                   filterChip('All (${estimate.master.length})', ''),
                   for (final p in estimate.vendors)
                     if (!p.isUntagged)
-                      filterChip('${p.name} (${p.lines.length})', p.vendor!.id),
+                      filterChip(
+                        '${p.name} (${p.lines.length})',
+                        p.vendor!.id,
+                        tint: projectVendorColor(p.vendor),
+                      ),
                   if (estimate.untaggedParts > 0)
                     filterChip(
                       'Untagged (${estimate.untaggedParts})',
@@ -2162,8 +2318,31 @@ class _PartRow extends StatelessWidget {
         '${roomNames[e.key] ?? e.key} ×${e.value}',
     ].join(', ');
 
+    // WHICH ORDER THIS PART IS ON, as a colour. The vendor's own — assigned
+    // on the Vendors pane or derived from its name — washed behind the row and
+    // drawn round it, so a master list of two hundred parts can be read as the
+    // four orders it actually is. The vendor is still named in the column on
+    // the right: the colour groups the page, the name says who.
+    final tint = projectVendorColor(line.vendor);
+    final tagged = line.vendor != null;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 4),
+      // Blended rather than laid over: a Card's fill is what its text was
+      // measured against, and a translucent one would put the row's ink on
+      // whatever happens to be behind the list.
+      color: tagged
+          ? Color.alphaBlend(tintFill(tint, alpha: 0.10), theme.cardColor)
+          : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: tagged
+              ? tint.withValues(alpha: 0.85)
+              : theme.dividerColor,
+          width: tagged ? 1.4 : 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         child: Row(
@@ -3162,8 +3341,22 @@ class _VendorPicker extends StatelessWidget {
               ),
             ),
           ),
+          // The dot in front of the name is the same colour the row is washed
+          // in, which is what ties the two together: picking a vendor here is
+          // what recolours the row.
           for (final v in vendors)
-            DropdownMenuItem(value: v.id, child: Text(v.name)),
+            DropdownMenuItem(
+              value: v.id,
+              child: Row(
+                children: [
+                  NameTintDot(color: projectVendorColor(v), size: 10),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(v.name, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
         ],
         onChanged: (id) {
           // Choosing the vendor the rules already picked clears the pin
@@ -3365,8 +3558,17 @@ class _VendorCardState extends State<_VendorCard> {
     final isFirst = widget.isFirst;
     final isLast = widget.isLast;
 
+    final tint = projectVendorColor(vendor);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      // The card wears the order's colour, so the vendor list and the parts
+      // list are visibly the same four orders rather than two lists that have
+      // to be cross-referenced by name.
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: tint.withValues(alpha: 0.85), width: 1.4),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -3400,6 +3602,47 @@ class _VendorCardState extends State<_VendorCard> {
                     '${widget.index + 1}',
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Tooltip(
+                  message: vendor.color == null
+                      ? 'Colour: from the name. Press to choose one.'
+                      : 'Colour: chosen. Press to change it.',
+                  child: InkWell(
+                    key: ValueKey('vendor_color_${vendor.id}'),
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => showVendorColorDialog(context, vendor),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: tint,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: theme.dividerColor,
+                            width: 0.5,
+                          ),
+                        ),
+                        // An assigned colour says so. Without it there is no
+                        // way to tell the colour somebody chose from the one
+                        // the name happened to give — and the difference
+                        // matters the moment a vendor is renamed.
+                        child: vendor.color == null
+                            ? null
+                            : Icon(
+                                Icons.edit,
+                                size: 10,
+                                color: ThemeData.estimateBrightnessForColor(
+                                          tint,
+                                        ) ==
+                                        Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                      ),
                     ),
                   ),
                 ),

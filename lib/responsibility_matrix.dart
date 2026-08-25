@@ -203,7 +203,7 @@ const List<({String scope, String furnishedBy, String installedBy, String work})
     scope: 'Projection screen',
     furnishedBy: 'Owner',
     installedBy: 'Contractor',
-    work: 'Install the motorised screen and run control cable back to the '
+    work: 'Install the motorized screen and run control cable back to the '
         'control processor.',
   ),
   (
