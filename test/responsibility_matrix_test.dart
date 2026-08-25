@@ -303,8 +303,38 @@ void main() {
         'Screens',
         'Install 120V motorised screens.',
         '',
+        '',
         'Sizes TBD',
       ]);
+    });
+
+    test('the cutsheet is named as well as linked', () {
+      // The name is what somebody holding the printout searches the job folder
+      // for; the path is routinely too long to read and useless on paper.
+      final project = job();
+      final item = project.addResponsibilityItem('Projector');
+      project.updateResponsibilityItem(
+        item.copyWith(productLink: r'cutsheets\NEC-P525UL.pdf'),
+      );
+      final work = responsibilityMatrixSections(
+        project.responsibility,
+        roomNames: project.responsibilityRoomColumns(),
+      ).firstWhere((s) => s.title == 'Description of Work');
+      expect(work.rows.single[2], 'NEC-P525UL.pdf');
+      expect(work.rows.single[3], r'cutsheets\NEC-P525UL.pdf');
+    });
+
+    test('a web cutsheet is named by its host', () {
+      final project = job();
+      final item = project.addResponsibilityItem('Projector');
+      project.updateResponsibilityItem(
+        item.copyWith(productLink: 'https://www.extron.com/product/dtp3'),
+      );
+      final work = responsibilityMatrixSections(
+        project.responsibility,
+        roomNames: project.responsibilityRoomColumns(),
+      ).firstWhere((s) => s.title == 'Description of Work');
+      expect(work.rows.single[2], 'www.extron.com');
     });
 
     test('what nobody has claimed gets called out on its own', () {

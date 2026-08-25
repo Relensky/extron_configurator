@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as path;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +11,7 @@ import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'name_colors.dart';
+import 'pdf_viewer_dialog.dart';
 import 'pinned_grid.dart';
 import 'project_estimate.dart';
 import 'report_tools.dart';
@@ -105,6 +108,146 @@ List<Widget> responsibilitySlivers(
       ),
     const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
+}
+
+// ---------------------------------------------------------------------------
+//  THE CUTSHEET
+// ---------------------------------------------------------------------------
+//  Every line on this matrix has a product behind it, and the argument the
+//  document exists to settle - is THIS the screen we agreed - is settled by
+//  looking at the cutsheet. Before this the link was a string in a dialog:
+//  something to select, copy, and paste into a browser, which is three steps
+//  more than anybody takes while reading a sheet.
+
+/// Where a cutsheet actually is on this machine, for a link that is a file.
+///
+/// Resolved against the project file exactly the way a room's config path and
+/// a building plan are, so a job folder that has been moved or handed over
+/// still finds its own documents.
+String resolveCutsheetPath(AppStateProvider provider, ResponsibilityItem item) {
+  if (item.productLink.trim().isEmpty || item.productIsUrl) return '';
+  return BuildingProject.resolvePath(
+    item.productLink.trim(),
+    provider.currentProjectPath,
+  );
+}
+
+/// Opens the cutsheet behind one line: IN THE APP where it can be drawn,
+/// otherwise in whatever this machine opens it with.
+///
+/// The same bargain the plans pane makes, and for the same reason - a PDF
+/// handed to the machine's reader is a second window that has to be found
+/// again every time, and the thing somebody is doing with it (checking a model
+/// number against the line they are reading) is a thing they are doing HERE.
+Future<void> openResponsibilityCutsheet(
+  BuildContext context,
+  ResponsibilityItem item,
+) async {
+  final provider = context.read<AppStateProvider>();
+  final messenger = ScaffoldMessenger.of(context);
+  final link = item.productLink.trim();
+  if (link.isEmpty) return;
+
+  // A web page is the browser's job. Nothing in this app renders one, and
+  // pretending otherwise would be a blank panel with a URL at the top.
+  if (item.productIsUrl) {
+    final uri = Uri.tryParse(link);
+    if (uri == null ||
+        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('Could not open $link')),
+      );
+    }
+    return;
+  }
+
+  final resolved = resolveCutsheetPath(provider, item);
+  // SAID, NOT THROWN. A cutsheet that has been moved is a fact about the file,
+  // and "the viewer failed" would send somebody looking in the wrong place.
+  if (resolved.isEmpty || !File(resolved).existsSync()) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          'The cutsheet for ${item.scope} is not where the matrix says it '
+          'is${resolved.isEmpty ? '' : ' ($resolved)'}.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  final extension = path.extension(resolved).replaceFirst('.', '').toLowerCase();
+  if (!kViewablePlanExtensions.contains(extension)) {
+    final error = await provider.openInDesktop(resolved);
+    if (error != null) {
+      showTimedSnackBar(messenger, SnackBar(content: Text(error)));
+    }
+    return;
+  }
+
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => PdfViewerDialog(
+      filePath: resolved,
+      title: item.productName,
+      screenshotStem: path.basenameWithoutExtension(resolved),
+      onOpenExternally: () => provider.openInDesktop(resolved),
+    ),
+  );
+}
+
+/// The way in to a cutsheet, wherever a line is being read.
+///
+/// Named rather than iconic: 'NEC-P525UL.pdf' says which document is behind
+/// the line, and a bare paperclip says only that one is.
+class CutsheetLink extends StatelessWidget {
+  final ResponsibilityItem item;
+
+  /// Drawn small enough to sit inside a grid column head.
+  final bool compact;
+
+  const CutsheetLink({super.key, required this.item, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (item.productLink.trim().isEmpty) return const SizedBox.shrink();
+
+    final icon = item.productIsUrl
+        ? Icons.open_in_new
+        : Icons.picture_as_pdf_outlined;
+
+    if (compact) {
+      return IconButton(
+        key: ValueKey('matrix_cutsheet_${item.id}'),
+        tooltip: 'Open ${item.productName}',
+        iconSize: gridMetric(context, 16),
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: BoxConstraints.tightFor(
+          width: gridMetric(context, 22),
+          height: gridMetric(context, 22),
+        ),
+        icon: Icon(icon, color: theme.colorScheme.primary),
+        onPressed: () => openResponsibilityCutsheet(context, item),
+      );
+    }
+
+    return TextButton.icon(
+      key: ValueKey('responsibility_cutsheet_${item.id}'),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: () => openResponsibilityCutsheet(context, item),
+      icon: Icon(icon, size: gridMetric(context, 16)),
+      label: Text(item.productName),
+    );
+  }
 }
 
 class _Toolbar extends StatelessWidget {
@@ -362,35 +505,52 @@ class _MatrixGrid extends StatelessWidget {
     );
   }
 
-  /// One scope item's heading: its name, and whose job it is.
+  /// One scope item's heading: its name, whose job it is, and the way to its
+  /// cutsheet.
+  ///
+  /// THE HEAD IS ALSO THE HANDLE. The order of the columns is content on this
+  /// document - it is grouped the way the work is sequenced, everything in the
+  /// ceiling together - and on a sheet of thirty, nudging a column into place
+  /// with the arrow buttons on the editor list below is a job nobody finishes.
+  /// Dragging it is one gesture that lands where it was let go.
   Widget _itemHead(BuildContext context, ResponsibilityItem item, _Metrics m) {
     final theme = Theme.of(context);
     final line = _line(theme);
+    final index = project.responsibility.indexWhere((i) => i.id == item.id);
 
-    return SizedBox(
-      width: m.itemColumn,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // The heading is the way IN to the line: everything about it except
-          // the quantities is prose, and prose is edited in the dialog.
-          InkWell(
-            key: ValueKey('matrix_head_${item.id}'),
-            onTap: () => showResponsibilityEditor(context, item.id, columns),
-            child: _cell(
-              height: m.headRow,
-              align: Alignment.bottomLeft,
-              line: line,
-              child: Text(
-                item.scope,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+    final head = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The heading is the way IN to the line: everything about it except
+        // the quantities is prose, and prose is edited in the dialog. The
+        // cutsheet sits beside it because it is the one thing on the line
+        // somebody wants to LOOK at rather than edit.
+        InkWell(
+          key: ValueKey('matrix_head_${item.id}'),
+          onTap: () => showResponsibilityEditor(context, item.id, columns),
+          child: _cell(
+            height: m.headRow,
+            align: Alignment.bottomLeft,
+            line: line,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _ColumnGrip(item: item, width: m.itemColumn),
+                Expanded(
+                  child: Text(
+                    item.scope,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
+                CutsheetLink(item: item, compact: true),
+              ],
             ),
           ),
+        ),
           // WHOSE JOB IT IS, IN ITS OWN COLOUR. Two rows under every scope
           // name, and the pair of them is what the sheet is read for.
           _cell(
@@ -401,16 +561,66 @@ class _MatrixGrid extends StatelessWidget {
               missing: item.furnishedBy.trim().isEmpty,
             ),
           ),
-          _cell(
-            height: m.partyRow,
-            line: line,
-            strongBottom: true,
-            child: _PartyCell(
-              party: item.installedBy,
-              missing: item.installedBy.trim().isEmpty,
-            ),
+        _cell(
+          height: m.partyRow,
+          line: line,
+          strongBottom: true,
+          child: _PartyCell(
+            party: item.installedBy,
+            missing: item.installedBy.trim().isEmpty,
           ),
-        ],
+        ),
+      ],
+    );
+
+    // WHAT THE LINE SAYS, WHERE THE LINE IS. The prose lives in a dialog, so
+    // the sheet itself used to be the one place it could not be read.
+    final described = Tooltip(
+      richMessage: WidgetSpan(
+        alignment: PlaceholderAlignment.baseline,
+        baseline: TextBaseline.alphabetic,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Text(
+            [
+              item.scope,
+              if (item.work.trim().isNotEmpty) item.work.trim(),
+              if (item.notes.trim().isNotEmpty) 'Notes: ${item.notes.trim()}',
+              if (item.productName.isNotEmpty)
+                'Cutsheet: ${item.productName}',
+            ].join('\n\n'),
+            style: TextStyle(color: theme.colorScheme.onInverseSurface),
+          ),
+        ),
+      ),
+      child: head,
+    );
+
+    return SizedBox(
+      width: m.itemColumn,
+      // DROPPED ON A HEAD, dragged by the grip inside it. A column is its
+      // heading as far as anybody reading the sheet is concerned, so the head
+      // is the target - but it is NOT the handle: dragging the head is how the
+      // sheet is panned sideways, and a grid that reordered itself every time
+      // somebody scrolled it would be unusable.
+      child: DragTarget<String>(
+        onWillAcceptWithDetails: (d) => d.data != item.id,
+        onAcceptWithDetails: (d) => context
+            .read<AppStateProvider>()
+            .reorderResponsibilityItem(d.data, index),
+        builder: (context, candidate, _) => Container(
+          decoration: candidate.isEmpty
+              ? null
+              : BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 3,
+                    ),
+                  ),
+                ),
+          child: described,
+        ),
       ),
     );
   }
@@ -548,6 +758,60 @@ class _MatrixGrid extends StatelessWidget {
   static Color? _band(ThemeData theme, int index) => index.isOdd
       ? theme.colorScheme.onSurface.withValues(alpha: 0.04)
       : null;
+}
+
+/// The handle a column is dragged by.
+///
+/// ITS OWN TARGET, not the whole heading. The sheet is panned sideways by
+/// dragging it, and a grid that reordered its columns every time somebody
+/// scrolled across it would be a grid nobody dared touch. Small, at the left
+/// edge of the head, drawn as the same grip every reorderable list in this app
+/// uses - so the one thing it says is "this moves".
+class _ColumnGrip extends StatelessWidget {
+  final ResponsibilityItem item;
+  final double width;
+
+  const _ColumnGrip({required this.item, required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final grip = Tooltip(
+      message: 'Drag to move this column',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        child: Icon(
+          Icons.drag_indicator,
+          size: gridMetric(context, 14),
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+
+    return Draggable<String>(
+      key: ValueKey('matrix_grip_${item.id}'),
+      data: item.id,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Material(
+        elevation: 4,
+        child: Container(
+          width: width,
+          padding: const EdgeInsets.all(8),
+          color: theme.colorScheme.surfaceContainerHigh,
+          child: Text(
+            item.scope,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: grip),
+      child: grip,
+    );
+  }
 }
 
 /// One party's name on the grid, in that party's colour.
@@ -741,6 +1005,41 @@ class _ItemRow extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+          // WHAT IS STILL OPEN, ON THE ROW. A note that can only be seen by
+          // opening the editor is a note nobody reads, and "a size not
+          // settled" is exactly the kind of thing that has to be visible while
+          // the sheet is being agreed.
+          if (item.notes.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.sticky_note_2_outlined,
+                    size: 14,
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      item.notes.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.tertiary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          // The product, as a document to open rather than a string to copy.
+          if (item.productLink.trim().isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: CutsheetLink(item: item),
+            ),
         ],
       ),
       trailing: Row(
@@ -849,6 +1148,22 @@ class _ResponsibilityEditorDialogState
             : '',
       ),
   };
+
+  /// Picks a cutsheet off disk into the product field.
+  Future<void> _pickCutsheet() async {
+    final provider = context.read<AppStateProvider>();
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: 'Choose the cutsheet for this line',
+    );
+    final chosen = picked?.files.firstOrNull?.path;
+    if (chosen == null) return;
+    setState(
+      () => _link.text = BuildingProject.storePath(
+        path.normalize(chosen),
+        provider.currentProjectPath,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -988,12 +1303,35 @@ class _ResponsibilityEditorDialogState
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _link,
-                decoration: const InputDecoration(
-                  labelText: 'Product or cutsheet',
-                  border: OutlineInputBorder(),
-                ),
+              // A LINK OR A FILE, in one field. Half the cutsheets on a job
+              // are a manufacturer's page somebody pasted and half are a PDF
+              // in the job folder; forcing either into the shape of the other
+              // is how the field stops being filled in. The button picks the
+              // second kind and stores it the way a plan is stored - relative
+              // to the project when it lives under it, so a job folder that
+              // gets handed over still finds its own documents.
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('responsibility_link'),
+                      controller: _link,
+                      decoration: const InputDecoration(
+                        labelText: 'Product or cutsheet',
+                        helperText: 'A web page, or a file on disk that opens '
+                            'in the app',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('responsibility_pick_cutsheet'),
+                    onPressed: _pickCutsheet,
+                    icon: const Icon(Icons.attach_file, size: 18),
+                    label: const Text('Choose file…'),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               TextField(
@@ -1368,7 +1706,13 @@ class _MatrixTable extends StatelessWidget {
               for (var i = 0; i < columns.length; i++)
                 4 + i: const FixedColumnWidth(62),
               4 + columns.length: const FixedColumnWidth(56),
-              5 + columns.length: const FixedColumnWidth(300),
+              5 + columns.length: const FixedColumnWidth(260),
+              // The cutsheet's NAME, not its path: a printed matrix carrying a
+              // full job-folder path is a matrix with a column of noise in it,
+              // and the name is what somebody holding the paper searches the
+              // folder for.
+              6 + columns.length: const FixedColumnWidth(140),
+              7 + columns.length: const FixedColumnWidth(200),
             },
             children: [
               TableRow(
@@ -1381,6 +1725,8 @@ class _MatrixTable extends StatelessWidget {
                   for (final room in columns) cell(room.name, style: headStyle),
                   cell('Total', style: headStyle),
                   cell('What the work is', style: headStyle),
+                  cell('Cutsheet', style: headStyle),
+                  cell('Notes', style: headStyle),
                 ],
               ),
               for (final item in items)
@@ -1396,6 +1742,8 @@ class _MatrixTable extends StatelessWidget {
                       ),
                     cell(formatResponsibilityQty(item.total)),
                     cell(item.work),
+                    cell(item.productName),
+                    cell(item.notes),
                   ],
                 ),
               if (columns.isNotEmpty)
@@ -1422,6 +1770,10 @@ class _MatrixTable extends StatelessWidget {
                       ),
                       style: headStyle,
                     ),
+                    // Work, cutsheet, notes: nothing to total, but a Table
+                    // demands every row be the same width.
+                    cell(''),
+                    cell(''),
                     cell(''),
                   ],
                 ),

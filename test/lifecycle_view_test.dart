@@ -498,6 +498,141 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  //  WHAT LANDS WHEN, AND WHAT IS IN IT
+  // -------------------------------------------------------------------------
+  //  A cell painted amber in the 2027 column says a year. It does not say
+  //  which boxes, and it does not say "put twenty-four thousand in the 2027
+  //  request" - which is the sentence the screen exists to produce.
+
+  group('a room with more than one replacement date', () {
+    /// One room whose projector went in in 2016 and whose display went in in
+    /// 2019 - two dates, eight-year cycle, so 2024 and 2027.
+    AppStateProvider phased() {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Bessey Hall');
+      final file = '${dir.path}/bss101_config.json';
+      File(file).writeAsStringSync(
+        '{"SYSTEM_SETUP":{"gve_bldg":"BSS","gve_room":"101"}}',
+      );
+      File('${dir.path}/bss101_config_av_flow.json').writeAsStringSync(
+        '{"nodes":['
+        '{"id":"PROJECTORDEVICE_1","label":"Projector 1","model":"PROJ-1",'
+        '"installedOn":"2016-05-01","ports":[]},'
+        '{"id":"DISPLAYDEVICE_1","label":"Display 1","model":"DISP-1",'
+        '"installedOn":"2019-05-01","ports":[]}'
+        '],"cables":[]}',
+      );
+      p.addRoomToProject(file);
+      return p;
+    }
+
+    Future<void> pumpPlan(WidgetTester tester, AppStateProvider p) async {
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: ProjectView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.history_toggle_off));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('opens into a line per date, each running from its own start',
+        (tester) async {
+      await pumpPlan(tester, phased());
+
+      // The projector's run: 2016 to 2024. Its first year is drawn, the year
+      // before it is not.
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 101_2024_2016')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 101_2024_2025')),
+        findsNothing,
+      );
+      // The display's run starts three years later and lands three years
+      // later - which is the whole point of drawing them apart.
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 101_2027_2019')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 101_2027_2016')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a cell says which boxes are in it', (tester) async {
+      await pumpPlan(tester, phased());
+
+      final cell = tester.widget<Tooltip>(
+        find.ancestor(
+          of: find.byKey(const ValueKey('lifecycle_cell_BSS 101_2024')),
+          matching: find.byType(Tooltip),
+        ),
+      );
+      // The name, not just a colour and a figure. "Which boxes" is the first
+      // thing anybody asks of a cell with money in it.
+      expect(cell.message, contains('Projector 1'));
+      expect(cell.message, contains('due 2024'));
+      expect(cell.message, isNot(contains('Display 1')));
+    });
+
+    testWidgets('the room list carries the money in the year it lands',
+        (tester) async {
+      await pumpPlan(tester, phased());
+
+      expect(find.text('BUDGET FOR THIS ROOM'), findsOneWidget);
+      // One figure per date rather than one figure for the room: a budget
+      // request is written a year at a time.
+      expect(
+        find.byKey(const ValueKey('lifecycle_due_BSS 101_2024')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('lifecycle_due_BSS 101_2027')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a room that falls due all at once stays one line',
+        (tester) async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Bessey Hall');
+      final file = '${dir.path}/bss102_config.json';
+      File(file).writeAsStringSync(
+        '{"SYSTEM_SETUP":{"gve_bldg":"BSS","gve_room":"102"}}',
+      );
+      File('${dir.path}/bss102_config_av_flow.json').writeAsStringSync(
+        '{"nodes":['
+        '{"id":"PROJECTORDEVICE_1","label":"Projector 1","model":"PROJ-1",'
+        '"installedOn":"2019-05-01","ports":[]},'
+        '{"id":"DISPLAYDEVICE_1","label":"Display 1","model":"DISP-1",'
+        '"installedOn":"2019-05-01","ports":[]}'
+        '],"cables":[]}',
+      );
+      p.addRoomToProject(file);
+      await pumpPlan(tester, p);
+
+      // A second row saying the same thing as the first is a row to read past.
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 102_2027_2019')),
+        findsNothing,
+      );
+      // The budget figure is still broken out on the list underneath.
+      expect(
+        find.byKey(const ValueKey('lifecycle_due_BSS 102_2027')),
+        findsOneWidget,
+      );
+    });
+  });
+
   testWidgets('the room tab lays out at 150% without overflowing', (
     tester,
   ) async {

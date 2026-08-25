@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as path;
+
 import 'report_tools.dart';
 
 /// ============================================================================
@@ -113,6 +115,37 @@ class ResponsibilityItem {
   /// True when neither party has been settled. The matrix's own to-do list.
   bool get unassigned =>
       furnishedBy.trim().isEmpty || installedBy.trim().isEmpty;
+
+  /// True when [productLink] is a web address rather than a file on disk.
+  ///
+  /// The field takes both on purpose. Half the cutsheets on a job are a
+  /// manufacturer's page somebody pasted and half are a PDF in the job folder,
+  /// and forcing one of them into the shape of the other is how the field
+  /// stops being filled in.
+  bool get productIsUrl {
+    final link = productLink.trim().toLowerCase();
+    return link.startsWith('http://') || link.startsWith('https://');
+  }
+
+  /// WHAT THE CUTSHEET IS CALLED, for a document that cannot be clicked.
+  ///
+  /// A printed matrix carrying a full job-folder path to a PDF is a matrix
+  /// with a column of noise in it. The file's NAME is the half that means
+  /// something to somebody holding the paper, and it is what they will search
+  /// the job folder for. A web link keeps its host for the same reason -
+  /// 'extron.com' says where to look, the query string does not.
+  ///
+  /// '' when there is no link at all.
+  String get productName {
+    final link = productLink.trim();
+    if (link.isEmpty) return '';
+    if (productIsUrl) {
+      final host = Uri.tryParse(link)?.host ?? '';
+      return host.isEmpty ? link : host;
+    }
+    final base = path.basename(link.replaceAll(r'\', '/'));
+    return base.isEmpty ? link : base;
+  }
 
   ResponsibilityItem copyWith({
     String? scope,
@@ -345,12 +378,31 @@ List<ReportSection> responsibilityMatrixSections(
       ],
       rows: grid,
     ),
+    // EVERY LINE, WHETHER IT HAS PROSE ON IT OR NOT. A table that skipped the
+    // blank ones would read as a shorter matrix than the one being issued -
+    // and a line with nothing said about it is itself worth seeing.
+    //
+    // The cutsheet is named AND linked. The name is what somebody holding the
+    // printout searches the job folder for; the link is what the person with
+    // the file open needs, and it is routinely a path too long to read.
     (
       title: 'Description of Work',
-      header: const ['Scope', 'What the work is', 'Product', 'Notes'],
+      header: const [
+        'Scope',
+        'What the work is',
+        'Cutsheet',
+        'Product or cutsheet link',
+        'Notes',
+      ],
       rows: [
         for (final item in items)
-          [item.scope, item.work, item.productLink, item.notes],
+          [
+            item.scope,
+            item.work,
+            item.productName,
+            item.productLink,
+            item.notes,
+          ],
       ],
     ),
   ];

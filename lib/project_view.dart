@@ -15,6 +15,7 @@ import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'name_colors.dart';
+import 'pinned_grid.dart' show gridMetric;
 import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
 import 'project_lifecycle_view.dart';
@@ -239,6 +240,13 @@ Future<void> showVendorColorDialog(
 ///
 /// Public so the layout tests can ask which side of it they are on instead of
 /// carrying a second copy of the number that drifts from this one.
+///
+/// IT IS A WIDTH IN TYPE, NOT IN PIXELS. Everything it measures - two prose
+/// fields, nine labelled panes - is text, so the threshold is put through
+/// [gridMetric] at the point of use: on a display at 150% the labels are half
+/// again as wide and the window that could hold them is half again as wide
+/// too. Before that, a 1400-pixel window at 150% counted as roomy and the pane
+/// rail laid out nine full labels in the space of six.
 const double kProjectHeaderCompactWidth = 1040;
 
 /// How much weight a header action carries. The two exports are what the tab
@@ -489,7 +497,8 @@ class _ProjectViewState extends State<ProjectView> {
     // is a button that cannot be pressed on a screen with plenty of room left
     // on it.
     return LayoutBuilder(builder: (context, box) {
-    final compact = box.maxWidth < kProjectHeaderCompactWidth;
+    final compact =
+        box.maxWidth < gridMetric(context, kProjectHeaderCompactWidth);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -677,7 +686,7 @@ class _ProjectViewState extends State<ProjectView> {
                   for (final pane in _ProjectPane.values)
                     ButtonSegment(
                       value: pane,
-                      icon: Icon(pane.icon, size: 18),
+                      icon: Icon(pane.icon, size: gridMetric(context, 18)),
                       // The label goes when the window cannot hold all of
                       // them. Eight labelled segments are wider than a narrow
                       // window on their own, and a switcher that overflows is
@@ -1328,198 +1337,234 @@ class _RoomRowState extends State<_RoomRow> {
     );
     final alarm = errorOn(theme.colorScheme, fill);
 
+    final include = Tooltip(
+      message: room.ref.included
+          ? 'Counted in the project total'
+          : 'Kept on the job but out of the total - an alternate, or a later '
+                'phase',
+      child: Checkbox(
+        value: room.ref.included,
+        onChanged: (v) =>
+            provider.updateProjectRoom(room.ref.id, included: v ?? true),
+      ),
+    );
+
+    final name = _NameTarget(
+      enabled: !isOpen,
+      hovering: _hoveringName,
+      onHover: (v) => setState(() => _hoveringName = v),
+      onTap: () => _open(provider),
+      tooltip: isOpen
+          ? 'This is the room the editor is working on'
+          : 'Open ${room.name} in the editor',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            room.name,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: ink,
+              // Struck through when the room is off the total, and underlined
+              // while the pointer is over it — the two never coincide, because
+              // the open room is not a way in to itself.
+              decoration: dimmed
+                  ? TextDecoration.lineThrough
+                  : (_hoveringName && !isOpen
+                        ? TextDecoration.underline
+                        : null),
+              decorationColor: ink,
+            ),
+          ),
+          Text(
+            room.ok ? room.ref.configPath : room.room.error,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: room.ok ? quiet : alarm,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          // The room in the editor is priced from MEMORY, so its row can be
+          // ahead of its own file. Saying so is the price of that: a total
+          // nobody can reconcile with the folder is a total nobody trusts.
+          if (isOpen)
+            Row(
+              children: [
+                Icon(Icons.edit_note, size: 13, color: ink),
+                const SizedBox(width: 4),
+                // Expanded, because the unsaved wording is half a sentence
+                // longer than the plain one and the column it sits in is
+                // whatever the figures beside it leave over.
+                Expanded(
+                  child: Text(
+                    unsaved
+                        ? 'Open in the editor - counted with its unsaved '
+                              'changes'
+                        : 'Open in the editor',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: unsaved ? alarm : ink,
+                      fontWeight: unsaved ? FontWeight.w600 : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+
+    // THE THREE FIGURES, AS A BLOCK. They belong together — equipment plus
+    // labor IS the room total — so they move together when the row runs out of
+    // width rather than being squeezed one by one until the last two touch.
+    final figures = e == null
+        ? null
+        : <Widget>[
+            _cell(
+              context,
+              'Equipment',
+              formatMoney(e.equipmentTotal, currency),
+              ink: ink,
+              quiet: quiet,
+            ),
+            _cell(
+              context,
+              'Labor',
+              formatMoney(e.laborTotal, currency),
+              ink: ink,
+              quiet: quiet,
+            ),
+            _cell(
+              context,
+              'Room total',
+              formatMoney(e.grandTotal, currency),
+              ink: ink,
+              quiet: quiet,
+              bold: true,
+            ),
+          ];
+
+    // WHAT IS TRUE ABOUT THIS ROOM that no other column asks — the asbestos
+    // above the grid, the wall it shares with the studio.
+    //
+    // Editable here rather than read-only, because the moment somebody wants
+    // to write one is while they are looking at the room list; sending them to
+    // the Notes pane to type it is how it ends up in an email instead. The
+    // same field, either way — the Notes pane and this column write to the
+    // same place.
+    //
+    // One line, because a row is a row. The full text is in the tooltip and on
+    // the Notes pane, which is where a long one belongs.
+    final notes = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Notes', style: theme.textTheme.labelSmall?.copyWith(color: quiet)),
+        Tooltip(
+          message: room.ref.notes.trim().isEmpty
+              ? 'Anything true of this room that the other columns do not '
+                    'say. Goes out beside it on the workbook.'
+              : room.ref.notes,
+          child: LiveTextField(
+            key: ValueKey('room_row_notes_${room.ref.id}'),
+            fieldId: 'room_row_notes_${room.ref.id}',
+            initial: room.ref.notes,
+            hint: 'e.g. asbestos above the grid, contact facilities',
+            onChanged: (v) =>
+                provider.updateProjectRoom(room.ref.id, notes: v),
+          ),
+        ),
+      ],
+    );
+
+    final actions = <Widget>[
+      // WHAT IS ODD ABOUT THIS ROOM. Bigger than the buttons beside it on
+      // purpose: it is the one thing on the row that is not always there, and
+      // at 18 pixels in the quiet ink it read as decoration.
+      //
+      // Pressing it COPIES. What it lists is the answer to "why is this room's
+      // total short", and that question is nearly always being asked by
+      // somebody who is not in front of the app: a tooltip can only be read,
+      // and a list that has to be retyped into a message is one that arrives
+      // shortened.
+      if (e != null && _roomFlags(room).isNotEmpty)
+        IconButton(
+          key: ValueKey('room_row_flags_${room.ref.id}'),
+          tooltip: '${_roomFlags(room).join('\n')}\n\nClick to copy',
+          icon: Icon(Icons.info_outline, size: 24, color: quiet),
+          onPressed: () => _copyFlags(room),
+        ),
+      IconButton(
+        tooltip: 'Move up',
+        icon: const Icon(Icons.arrow_upward, size: 18),
+        onPressed: widget.isFirst
+            ? null
+            : () => provider.moveProjectRoom(room.ref.id, -1),
+      ),
+      IconButton(
+        tooltip: 'Move down',
+        icon: const Icon(Icons.arrow_downward, size: 18),
+        onPressed: widget.isLast
+            ? null
+            : () => provider.moveProjectRoom(room.ref.id, 1),
+      ),
+      IconButton(
+        tooltip: 'Remove from the project (the room file is untouched)',
+        icon: const Icon(Icons.close, size: 18),
+        onPressed: () => provider.removeRoomFromProject(room.ref.id),
+      ),
+    ];
+
     return Card(
       margin: EdgeInsets.zero,
       color: fill,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Row(
-          children: [
-            Tooltip(
-              message: room.ref.included
-                  ? 'Counted in the project total'
-                  : 'Kept on the job but out of the total - an alternate, or '
-                        'a later phase',
-              child: Checkbox(
-                value: room.ref.included,
-                onChanged: (v) => provider.updateProjectRoom(
-                  room.ref.id,
-                  included: v ?? true,
+        // THE FIGURES DROP TO THEIR OWN LINE BEFORE THEY COLLIDE. Three money
+        // columns, a notes field and four buttons do not fit beside a room
+        // name on a narrow window — and at 150% no window is wide. Squeezed on
+        // one line, Labor and Room total ended up touching, which on a sheet
+        // of figures is two numbers read as one. Below the threshold the row
+        // becomes two: what the room IS, then what it COSTS.
+        child: LayoutBuilder(
+          builder: (context, box) {
+            if (box.maxWidth >= gridMetric(context, 900)) {
+              return Row(
+                children: [
+                  include,
+                  Expanded(flex: 3, child: name),
+                  if (figures != null)
+                    ...figures
+                  else
+                    const Expanded(flex: 3, child: SizedBox()),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 3, child: notes),
+                  const SizedBox(width: 4),
+                  ...actions,
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    include,
+                    Expanded(child: name),
+                    ...actions,
+                  ],
                 ),
-              ),
-            ),
-            Expanded(
-              flex: 3,
-              child: _NameTarget(
-                enabled: !isOpen,
-                hovering: _hoveringName,
-                onHover: (v) => setState(() => _hoveringName = v),
-                onTap: () => _open(provider),
-                tooltip: isOpen
-                    ? 'This is the room the editor is working on'
-                    : 'Open ${room.name} in the editor',
-                child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    room.name,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: ink,
-                      // Struck through when the room is off the total, and
-                      // underlined while the pointer is over it — the two
-                      // never coincide, because the open room is not a way in
-                      // to itself.
-                      decoration: dimmed
-                          ? TextDecoration.lineThrough
-                          : (_hoveringName && !isOpen
-                              ? TextDecoration.underline
-                              : null),
-                      decorationColor: ink,
-                    ),
+                if (figures != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, left: 4),
+                    child: Row(children: figures),
                   ),
-                  Text(
-                    room.ok ? room.ref.configPath : room.room.error,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: room.ok ? quiet : alarm,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  // The room in the editor is priced from MEMORY, so its row
-                  // can be ahead of its own file. Saying so is the price of
-                  // that: a total nobody can reconcile with the folder is a
-                  // total nobody trusts.
-                  if (isOpen)
-                    Row(
-                      children: [
-                        Icon(Icons.edit_note, size: 13, color: ink),
-                        const SizedBox(width: 4),
-                        // Expanded, because the unsaved wording is half a
-                        // sentence longer than the plain one and the column it
-                        // sits in is whatever the figures beside it leave over.
-                        Expanded(
-                          child: Text(
-                            unsaved
-                                ? 'Open in the editor - counted with its '
-                                      'unsaved changes'
-                                : 'Open in the editor',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: unsaved ? alarm : ink,
-                              fontWeight: unsaved ? FontWeight.w600 : null,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-              ),
-            ),
-            if (e != null) ...[
-              _cell(
-                context,
-                'Equipment',
-                formatMoney(e.equipmentTotal, currency),
-                ink: ink,
-                quiet: quiet,
-              ),
-              _cell(
-                context,
-                'Labor',
-                formatMoney(e.laborTotal, currency),
-                ink: ink,
-                quiet: quiet,
-              ),
-              _cell(
-                context,
-                'Room total',
-                formatMoney(e.grandTotal, currency),
-                ink: ink,
-                quiet: quiet,
-                bold: true,
-              ),
-            ] else
-              const Expanded(flex: 3, child: SizedBox()),
-            // WHAT IS TRUE ABOUT THIS ROOM that no other column asks — the
-            // asbestos above the grid, the wall it shares with the studio.
-            //
-            // Editable here rather than read-only, because the moment somebody
-            // wants to write one is while they are looking at the room list;
-            // sending them to the Notes pane to type it is how it ends up in
-            // an email instead. The same field, either way — the Notes pane
-            // and this column write to the same place.
-            //
-            // One line, because a row is a row. The full text is in the
-            // tooltip and on the Notes pane, which is where a long one belongs.
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Notes',
-                    style: theme.textTheme.labelSmall?.copyWith(color: quiet),
-                  ),
-                  Tooltip(
-                    message: room.ref.notes.trim().isEmpty
-                        ? 'Anything true of this room that the other columns '
-                              'do not say. Goes out beside it on the workbook.'
-                        : room.ref.notes,
-                    child: LiveTextField(
-                      key: ValueKey('room_row_notes_${room.ref.id}'),
-                      fieldId: 'room_row_notes_${room.ref.id}',
-                      initial: room.ref.notes,
-                      hint: 'e.g. asbestos above the grid, contact '
-                          'facilities',
-                      onChanged: (v) =>
-                          provider.updateProjectRoom(room.ref.id, notes: v),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            // WHAT IS ODD ABOUT THIS ROOM. Bigger than the buttons beside it
-            // on purpose: it is the one thing on the row that is not always
-            // there, and at 18 pixels in the quiet ink it read as decoration.
-            //
-            // Pressing it COPIES. What it lists is the answer to "why is this
-            // room's total short", and that question is nearly always being
-            // asked by somebody who is not in front of the app: a tooltip can
-            // only be read, and a list that has to be retyped into a message
-            // is one that arrives shortened.
-            if (e != null && _roomFlags(room).isNotEmpty)
-              IconButton(
-                key: ValueKey('room_row_flags_${room.ref.id}'),
-                tooltip:
-                    '${_roomFlags(room).join('\n')}'
-                    '\n\nClick to copy',
-                icon: Icon(Icons.info_outline, size: 24, color: quiet),
-                onPressed: () => _copyFlags(room),
-              ),
-            IconButton(
-              tooltip: 'Move up',
-              icon: const Icon(Icons.arrow_upward, size: 18),
-              onPressed: widget.isFirst
-                  ? null
-                  : () => provider.moveProjectRoom(room.ref.id, -1),
-            ),
-            IconButton(
-              tooltip: 'Move down',
-              icon: const Icon(Icons.arrow_downward, size: 18),
-              onPressed: widget.isLast
-                  ? null
-                  : () => provider.moveProjectRoom(room.ref.id, 1),
-            ),
-            IconButton(
-              tooltip: 'Remove from the project (the room file is untouched)',
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: () => provider.removeRoomFromProject(room.ref.id),
-            ),
-          ],
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: notes,
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1589,18 +1634,33 @@ class _RoomRowState extends State<_RoomRow> {
   }) {
     final theme = Theme.of(context);
     return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(label, style: theme.textTheme.labelSmall?.copyWith(color: quiet)),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: bold ? FontWeight.bold : null,
-              color: ink,
+      // A GAP THAT CANNOT BE SQUEEZED OUT. Three right-aligned figures in
+      // three Expandeds have nothing between them but whatever slack is left,
+      // and on a narrow card there is none - which put the end of Labor
+      // against the start of Room total.
+      child: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(color: quiet),
             ),
-          ),
-        ],
+            Text(
+              value,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: bold ? FontWeight.bold : null,
+                color: ink,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

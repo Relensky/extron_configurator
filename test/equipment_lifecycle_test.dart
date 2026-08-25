@@ -519,6 +519,67 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  //  A ROOM IS RARELY ONE DATE
+  // -------------------------------------------------------------------------
+  //  The projector went in in 2016 and the displays in 2019. On an eight-year
+  //  cycle that is two replacement dates, and a sheet with one row per room can
+  //  only ever show the first - which leaves the rest of the room's money
+  //  invisible until the year it lands.
+
+  group('the room, split by due date', () {
+    RoomLifecycle roomOfDates(List<AvNode> nodes) =>
+        buildRoomLifecycle(model: roomOf(nodes), asOf: asOf);
+
+    test('everything due in one year is one tranche', () {
+      final room = roomOfDates([
+        box('a', installedOn: DateTime(2019, 6, 1)),
+        box('b', installedOn: DateTime(2019, 8, 1)),
+      ]);
+      final group = room.dueGroups.single;
+      expect(group.dueYear, 2027);
+      expect(group.startYear, 2019);
+      expect(group.items, hasLength(2));
+    });
+
+    test('two dates are two tranches, earliest first', () {
+      final room = roomOfDates([
+        box('display', installedOn: DateTime(2019, 6, 1)),
+        box('projector', installedOn: DateTime(2016, 6, 1)),
+      ]);
+      expect([for (final g in room.dueGroups) g.dueYear], [2024, 2027]);
+      // Each run starts where ITS equipment went in, not where the room did.
+      expect([for (final g in room.dueGroups) g.startYear], [2016, 2019]);
+    });
+
+    test('a tranche spans the oldest install in it', () {
+      // Two boxes landing in the same year having gone in two years apart - a
+      // five-year display beside a seven-year projector. The run has to cover
+      // both or it says the room was done later than it was.
+      final room = roomOfDates([
+        box('short', installedOn: DateTime(2020, 6, 1), lifeYears: 5),
+        box('long', installedOn: DateTime(2018, 6, 1), lifeYears: 7),
+      ]);
+      final group = room.dueGroups.single;
+      expect(group.dueYear, 2025);
+      expect(group.startYear, 2018);
+      // Banded on the longest life in it, so the run warms up over its whole
+      // length rather than turning red two thirds of the way along.
+      expect(group.lifeYears, 8);
+    });
+
+    test('an undated position is on no tranche at all', () {
+      // It has no span to draw. Inventing one would put a year on the sheet
+      // that nobody recorded.
+      final room = roomOfDates([
+        box('dated', installedOn: DateTime(2019, 6, 1)),
+        box('never surveyed'),
+      ]);
+      expect(room.dueGroups.single.items.single.node.id, 'dated');
+      expect(room.undated, 1);
+    });
+  });
+
   group('the life a position is held to', () {
     AvDeviceLibrary catalogWith(int life) => AvDeviceLibrary.empty()
       ..upsert(AvDeviceTemplate(model: 'PROJ-1', lifeYears: life, ports: const []));

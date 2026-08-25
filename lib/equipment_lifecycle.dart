@@ -474,6 +474,36 @@ class EquipmentLife {
 // ---------------------------------------------------------------------------
 
 /// A room's equipment, aged.
+/// One tranche of a room: everything in it that falls due in the same year.
+///
+/// A ROOM IS RARELY ONE DATE. The projector went in in 2016 and the displays
+/// in 2019; on an eight-year cycle that is 2024 and 2027, and a sheet that
+/// prints one row per room can only ever show the first of them. The rest of
+/// the room's money is then invisible until the year it lands, which is the
+/// budget surprise this whole screen exists to prevent.
+///
+/// So the room's row can be opened into one line PER DATE, each with its own
+/// span - from the year that equipment went in to the year it falls due - and
+/// its own figure. See [RoomLifecycle.dueGroups].
+typedef RoomDueGroup = ({
+  /// The year this tranche falls due. Its right-hand end.
+  int dueYear,
+
+  /// The year the oldest thing in it went in. Its left-hand end, and where the
+  /// leading line starts.
+  int startYear,
+
+  /// The life the tranche is banded on, so the line warms up across the sheet
+  /// on the same window the items themselves are judged on.
+  int lifeYears,
+
+  /// What is in it, worst first.
+  List<EquipmentLife> items,
+
+  /// What replacing all of it costs. 0 when none of it is priced.
+  double cost,
+});
+
 class RoomLifecycle {
   /// What to call the room on a building-wide sheet.
   final String roomName;
@@ -577,6 +607,46 @@ class RoomLifecycle {
       yearsRemaining: (due - year).toDouble(),
       lifeYears: _drivingLifeYears,
     );
+  }
+
+  /// The room, split into one tranche per due year - earliest first.
+  ///
+  /// Undated items are left off: a position nobody has surveyed has no span to
+  /// draw, and inventing one would put a line on the sheet that says a year
+  /// nobody recorded. They are counted where they belong, on the undated band.
+  List<RoomDueGroup> get dueGroups {
+    final byYear = <int, List<EquipmentLife>>{};
+    for (final i in items) {
+      final due = i.dueYear;
+      if (due == null) continue;
+      (byYear[due] ??= []).add(i);
+    }
+
+    final years = byYear.keys.toList()..sort();
+    return [
+      for (final year in years)
+        () {
+          final group = byYear[year]!;
+          // The span starts at the OLDEST install in the tranche. Two boxes
+          // due the same year can have gone in two years apart - a five-year
+          // display beside an eight-year projector - and the line has to cover
+          // both or it says the room was done later than it was.
+          var start = year;
+          var life = kDefaultEquipmentLifeYears;
+          for (final i in group) {
+            final installed = i.installedOn?.year;
+            if (installed != null && installed < start) start = installed;
+            if (i.lifeYears > life) life = i.lifeYears;
+          }
+          return (
+            dueYear: year,
+            startYear: start,
+            lifeYears: life,
+            items: group,
+            cost: group.fold<double>(0, (sum, i) => sum + i.replacementCost),
+          );
+        }(),
+    ];
   }
 
   /// The earliest year anything in the room falls due, or null when nothing in

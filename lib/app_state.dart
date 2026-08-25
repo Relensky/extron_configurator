@@ -11137,6 +11137,29 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  /// Puts one line where a drag dropped it, and says so in the history.
+  ///
+  /// Logged where a step-at-a-time move is not: the order of this document is
+  /// content - it is read top to bottom on site - and a column that moved
+  /// across the sheet between two issues is a change somebody will ask about.
+  void reorderResponsibilityItem(String id, int toIndex) {
+    final before = project.responsibility.indexWhere((r) => r.id == id);
+    project.reorderResponsibilityItem(id, toIndex);
+    final after = project.responsibility.indexWhere((r) => r.id == id);
+    if (after == before) return;
+    final item = project.responsibilityById(id);
+    if (item != null) {
+      _logProjectEdit(
+        itemKey: 'responsibility:$id',
+        itemName: item.scope,
+        field: 'Responsibility matrix',
+        summary: 'moved to column ${after + 1}',
+        coalesce: true,
+      );
+    }
+    _projectChanged(repricing: false);
+  }
+
   /// Puts the usual lines on the matrix. Returns how many were added, so the
   /// caller can say "nothing to add" rather than appearing to do nothing.
   int addStarterResponsibilityItems() {

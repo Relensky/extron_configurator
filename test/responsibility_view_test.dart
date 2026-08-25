@@ -56,6 +56,116 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // -------------------------------------------------------------------------
+  //  THE ORDER OF THE COLUMNS IS CONTENT
+  // -------------------------------------------------------------------------
+  //  The sheet is grouped the way the work is sequenced - everything in the
+  //  ceiling together, everything in the rack together - so it has to be
+  //  arrangeable. On a sheet of thirty, nudging a column into place one press
+  //  at a time is a job nobody finishes.
+
+  group('dragging a column', () {
+    testWidgets('drops it where it was let go', (tester) async {
+      final p = withProject();
+      for (final scope in ['Screens', 'Speakers', 'Cameras']) {
+        p.addResponsibilityItem(scope);
+      }
+      await pumpPane(tester, p);
+
+      // The last column, dragged onto the first.
+      await tester.drag(
+        find.byKey(const ValueKey('matrix_grip_resp3')),
+        tester.getCenter(find.byKey(const ValueKey('matrix_head_resp1'))) -
+            tester.getCenter(find.byKey(const ValueKey('matrix_grip_resp3'))),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        p.project.responsibility.map((r) => r.scope),
+        ['Cameras', 'Screens', 'Speakers'],
+      );
+    });
+
+    testWidgets('the heading itself still pans the sheet', (tester) async {
+      // The grip is the handle, not the whole head: a grid that reordered
+      // itself every time somebody scrolled across it would be unusable.
+      final p = withProject();
+      for (var i = 0; i < 20; i++) {
+        p.addResponsibilityItem('Scope $i');
+      }
+      await pumpPane(tester, p);
+
+      final order = p.project.responsibility.map((r) => r.scope).toList();
+      await tester.drag(
+        find.byKey(const ValueKey('matrix_head_resp1')),
+        const Offset(-600, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(p.project.responsibility.map((r) => r.scope), order);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE CUTSHEET
+  // -------------------------------------------------------------------------
+  //  The argument this document exists to settle - is THIS the screen we
+  //  agreed - is settled by looking at the cutsheet. A link that can only be
+  //  selected, copied and pasted into a browser is three steps more than
+  //  anybody takes while reading a sheet.
+
+  group('the cutsheet', () {
+    testWidgets('is a way in from the sheet and from the row', (tester) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projector');
+      p.updateResponsibilityItem(
+        item.copyWith(productLink: 'https://www.extron.com/product/x'),
+      );
+      await pumpPane(tester, p);
+
+      expect(
+        find.byKey(const ValueKey('matrix_cutsheet_resp1')),
+        findsOneWidget,
+      );
+      // Named, not just iconic: which document is behind the line is the
+      // thing worth saying.
+      expect(find.text('www.extron.com'), findsOneWidget);
+    });
+
+    testWidgets('a line with no product offers nothing to open', (tester) async {
+      final p = withProject();
+      p.addResponsibilityItem('Projector');
+      await pumpPane(tester, p);
+      expect(find.byKey(const ValueKey('matrix_cutsheet_resp1')), findsNothing);
+    });
+
+    testWidgets('a missing file is said, not thrown', (tester) async {
+      final p = withProject();
+      final item = p.addResponsibilityItem('Projector');
+      p.updateResponsibilityItem(
+        item.copyWith(productLink: '${dir.path}/gone/NEC-P525UL.pdf'),
+      );
+      await pumpPane(tester, p);
+
+      await tester.tap(find.byKey(const ValueKey('matrix_cutsheet_resp1')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('is not where the matrix says it is'),
+          findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 8));
+    });
+  });
+
+  testWidgets('what is still open is on the row, not only in the editor',
+      (tester) async {
+    final p = withProject();
+    final item = p.addResponsibilityItem('Screens');
+    p.updateResponsibilityItem(item.copyWith(notes: 'Sizes still TBD'));
+    await pumpPane(tester, p);
+
+    // A note that can only be seen by opening the editor is a note nobody
+    // reads while the sheet is being agreed.
+    expect(find.text('Sizes still TBD'), findsOneWidget);
+  });
+
   testWidgets('an empty matrix says what it is for', (tester) async {
     await pumpPane(tester, withProject());
     expect(find.textContaining('Nothing agreed yet'), findsOneWidget);

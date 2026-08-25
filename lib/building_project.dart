@@ -1776,6 +1776,20 @@ class BuildingProject {
     responsibility.insert(to, responsibility.removeAt(from));
   }
 
+  /// Puts one line at [toIndex], where a drag dropped it.
+  ///
+  /// The other half of [moveResponsibilityItem]. A step at a time is right for
+  /// a keyboard and for the buttons on the editor; dragging a column across a
+  /// sheet of thirty is one gesture and has to land where it was let go, not
+  /// twenty-nine places later.
+  void reorderResponsibilityItem(String id, int toIndex) {
+    final from = responsibility.indexWhere((r) => r.id == id);
+    if (from < 0) return;
+    final to = toIndex.clamp(0, responsibility.length - 1);
+    if (to == from) return;
+    responsibility.insert(to, responsibility.removeAt(from));
+  }
+
   /// Puts the usual lines on an empty matrix, skipping any scope already
   /// there. Returns how many were added.
   ///
