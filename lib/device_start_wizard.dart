@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
+import 'control_prefill.dart';
 import 'cost_estimate.dart' show formatMoney;
 
 /// ============================================================================
@@ -22,10 +23,21 @@ import 'cost_estimate.dart' show formatMoney;
 ///  the same entries drive the cabling, the rack elevations and the estimate
 ///  without being typed a second time.
 ///
-///  Devices go on the canvas rather than into the room config's control
-///  blocks: at this stage nobody has said which of them the processor talks to
-///  or what module each one runs. When the control side is built, the config
-///  devices seed alongside these and the two are reconciled on the canvas.
+///  Devices go on the canvas AND into the room config's control blocks. That
+///  second half used to be left for later, on the grounds that nobody had yet
+///  said which of these boxes the processor talks to — but "later" meant the
+///  room's own hardware counts read zero on the Wizard tab while the estimate
+///  underneath listed twenty devices, and every one of them had to be told to
+///  the config a second time by hand.
+///
+///  The catalog already answers the question that was being deferred. Each
+///  entry carries a DEVICE TYPE, and that is what decides the family a block
+///  lands in; the module library says which driver claims the model, and its
+///  DEVICE_INFO says how the box is reached. What nothing claims — a speaker,
+///  a mount, a passive plate — gets no block, which is the same answer it
+///  would have got by hand. See [planControlSide] and [applyControlSide],
+///  which the "add a device" dialog and the cost page's catalog picker go
+///  through as well, so a room specified from any of the three is one room.
 /// ============================================================================
 
 /// One line of the wizard: a catalog model and how many of it.
@@ -53,17 +65,35 @@ class _Pick {
   void dispose() => qtyController.dispose();
 }
 
-/// Runs the wizard. Returns how many devices were placed (0 when canceled).
-Future<int> showDeviceStartWizard(
+/// What a run of the wizard did: boxes on the canvas, and the control blocks
+/// built from them.
+typedef DeviceStartResult = ({
+  /// Devices placed on the signal flow canvas.
+  int placed,
+
+  /// Config blocks created for them, which is what the Wizard tab's hardware
+  /// counts and the Devices tab read.
+  int blocks,
+
+  /// How many of those blocks have no python module yet — a device the room
+  /// has and nothing can drive until somebody picks a driver.
+  int withoutModule,
+});
+
+const DeviceStartResult _nothingPlaced =
+    (placed: 0, blocks: 0, withoutModule: 0);
+
+/// Runs the wizard. Everything is zero when it is canceled.
+Future<DeviceStartResult> showDeviceStartWizard(
   BuildContext context,
   AppStateProvider provider,
 ) async {
-  final placed = await showDialog<int>(
+  final result = await showDialog<DeviceStartResult>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => const _DeviceStartWizard(),
   );
-  return placed ?? 0;
+  return result ?? _nothingPlaced;
 }
 
 class _DeviceStartWizard extends StatefulWidget {
@@ -157,7 +187,9 @@ class _DeviceStartWizardState extends State<_DeviceStartWizard> {
             Text(
               'Pick what goes in the room. Everything chosen here is placed on '
               'the signal flow canvas with its real connectors, so it also '
-              'fills the racks, the cabling and the estimate.',
+              'fills the racks, the cabling and the estimate - and anything '
+              'the processor drives gets its device block, on the driver the '
+              'catalog names for it.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 10),
@@ -215,7 +247,7 @@ class _DeviceStartWizardState extends State<_DeviceStartWizard> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(0),
+          onPressed: () => Navigator.of(context).pop(_nothingPlaced),
           child: const Text('Skip'),
         ),
         ElevatedButton(
@@ -415,9 +447,13 @@ class _DeviceStartWizardState extends State<_DeviceStartWizard> {
 
   /// Puts every pick on the canvas, laid out in signal-flow reading order:
   /// sources on the left, switching in the middle, destinations on the right,
-  /// the same columns the auto-arrange uses. Returns how many were placed.
-  int _placeAll(AppStateProvider provider) {
+  /// the same columns the auto-arrange uses — and then builds the control side
+  /// of what was just placed.
+  DeviceStartResult _placeAll(AppStateProvider provider) {
     int placed = 0;
+    // The ids the boxes actually landed on, so the config blocks are built for
+    // exactly these and not for anything already on the canvas.
+    final ids = <String>[];
     // Where the next box in each column goes. Kept per column so a room with
     // eight sources and one switcher doesn't come out as one long diagonal.
     final nextY = <int, double>{};
@@ -442,10 +478,37 @@ class _DeviceStartWizardState extends State<_DeviceStartWizard> {
         );
         final stored = provider.addAvNode(node);
         nextY[column] = y + stored.height + 30;
+        ids.add(stored.id);
         placed++;
       }
     }
-    return placed;
+    final control = _buildControlSide(provider, ids);
+    return (
+      placed: placed,
+      blocks: control.blocks,
+      withoutModule: control.withoutModule,
+    );
+  }
+
+  /// The config blocks for the boxes just placed.
+  ///
+  /// The counts are RAISED rather than set, and the numbering runs past
+  /// whatever the room already has, so a wizard run on a room built from a
+  /// room-type preset adds to that preset's devices instead of renumbering
+  /// them. Nothing is created for a room with no config open, or for a part no
+  /// device family claims.
+  ({int blocks, int withoutModule}) _buildControlSide(
+    AppStateProvider provider,
+    List<String> ids,
+  ) {
+    if (ids.isEmpty) return (blocks: 0, withoutModule: 0);
+    if (provider.roomConfig['SYSTEM_SETUP'] is! Map) {
+      return (blocks: 0, withoutModule: 0);
+    }
+    final plan = planControlSide(provider, nodeIds: ids);
+    if (plan.creatable.isEmpty) return (blocks: 0, withoutModule: 0);
+    final result = applyControlSide(provider, plan);
+    return (blocks: result.created, withoutModule: result.withoutModule);
   }
 
   /// Reading order by category, matching the AV tab's own column rule so a

@@ -20,6 +20,7 @@ import 'av_flow_routing_dialog.dart';
 import 'av_flow_swap_dialogs.dart';
 import 'av_port_editor.dart';
 import 'color_wheel_picker.dart';
+import 'control_prefill.dart';
 import 'cost_estimate.dart';
 import 'device_recheck_dialog.dart';
 import 'diagram_capture.dart';
@@ -2140,8 +2141,12 @@ class _AvFlowViewState extends State<AvFlowView>
     final base = label.isEmpty ? (model.isEmpty ? 'Device' : model) : label;
     final int count = _addCount(countController.text);
 
+    // The ids the boxes actually land on, so the config blocks can be built
+    // for exactly these devices and nothing else already on the canvas.
+    final placed = <String>[];
+
     for (int i = 1; i <= count; i++) {
-      provider.addAvNode(
+      final stored = provider.addAvNode(
         AvNode(
           id: '', // provider assigns AVNODE_<n>
           // Numbered only when there is more than one: "DTP HDMI 4K 233 1" on
@@ -2179,7 +2184,57 @@ class _AvFlowViewState extends State<AvFlowView>
           ),
         ),
       );
+      placed.add(stored.id);
     }
+
+    _addPlacedDevicesToConfig(provider, placed);
+  }
+
+  /// Gives the devices just added from the catalog their config blocks.
+  ///
+  /// Adding a part is the moment somebody says the room HAS this box, and up
+  /// to now that fact stopped at the drawing: the device sat on the canvas
+  /// and on the estimate, and the control side only learned about it later,
+  /// when somebody remembered to run "build the control side" over the whole
+  /// room. A DSP added on Tuesday and configured on Friday is a DSP that gets
+  /// configured twice or not at all.
+  ///
+  /// So the same machinery runs here for one device: the family comes from the
+  /// catalog's device type (that is what [planControlSide] reads it for), the
+  /// block gets the family's defaults, and the driver's own DEVICE_INFO
+  /// defaults go on where the module library claims the model — see
+  /// [applyControlSide]. Numbering is worked out against the whole config, so
+  /// a device added on its own lands on the section key a full run would have
+  /// given it.
+  ///
+  /// Nothing happens for a box no family claims — a speaker, a wall plate, a
+  /// passive transmitter. Those never had a control block, and saying so on
+  /// every add would be a message about the ordinary case.
+  void _addPlacedDevicesToConfig(
+    AppStateProvider provider,
+    List<String> nodeIds,
+  ) {
+    if (nodeIds.isEmpty) return;
+    // No room config open: the canvas can be drawn on its own, and there is
+    // nowhere to put a block until there is.
+    if (provider.roomConfig['SYSTEM_SETUP'] is! Map) return;
+
+    final plan = planControlSide(provider, nodeIds: nodeIds);
+    if (plan.creatable.isEmpty) return;
+
+    final result = applyControlSide(provider, plan);
+    if (result.created == 0) return;
+
+    _snack(
+      [
+        '${result.created} device block${result.created == 1 ? '' : 's'} '
+            'added to the config (${result.sectionKeys.join(', ')})',
+        if (result.withoutModule > 0)
+          '${result.withoutModule} with no python module yet - the Devices '
+              'tab shows those in red',
+        'fill in the address on the Devices tab',
+      ].join('. '),
+    );
   }
 
   /// How many devices the "How many" field is asking for.

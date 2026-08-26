@@ -189,4 +189,40 @@ void main() {
       );
     }
   });
+
+  /// WHERE the add buttons are, not just that they fit.
+  ///
+  /// They used to land wherever the heading's sentence left off — a card with
+  /// a long subtitle pushed them onto a second line, hard against the left
+  /// edge, under the words. Every one of them is the same gesture, so they all
+  /// sit in the same place: the far right of the card they add to.
+  testWidgets('the add buttons sit on the right edge of their card',
+      (tester) async {
+    tester.view.physicalSize = const Size(1500, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: fullEstimate(),
+        child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The Equipment card's own right edge, measured off the row of column
+    // captions under the heading rather than hard-coded.
+    final cardRight = tester.getBottomRight(find.byType(Card).at(1)).dx;
+    final addLine = find.text('Add line');
+    expect(addLine, findsOneWidget);
+    final buttonRight = tester.getBottomRight(addLine).dx;
+
+    // Within the card's padding and the button's own label inset — the point
+    // is that it is at the right-hand end, not somewhere in the middle.
+    expect(buttonRight, greaterThan(cardRight - 60),
+        reason: 'the last add button should be flush right on the card');
+    // And the heading is still on the left where it is read.
+    expect(tester.getTopLeft(find.textContaining('Equipment (')).dx,
+        lessThan(cardRight / 2));
+  });
 }

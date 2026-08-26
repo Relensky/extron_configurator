@@ -101,4 +101,39 @@ void main() {
         reason: 'the pro/xi profile should be visible in the template itself');
     expect((env as Map)['controlscript_profile'], 'pro');
   });
+
+  /// A new config was never converted from anything, and the toolbar must not
+  /// say it was.
+  ///
+  /// The Convert button reads [AppStateProvider.lastLoadHadChanges] and shows
+  /// [AppStateProvider.systemLogs] — both of which belonged to the file that
+  /// was open BEFORE New Config was pressed. Left standing, pressing Convert
+  /// on a brand new room opened the previous room's migration log, naming its
+  /// backup ("BSS112_old_config.json") as this config's original.
+  test("a new file does not inherit the last room's conversion", () async {
+    writeTemplate({
+      'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+    });
+    final p = await provider();
+
+    // What opening a legacy room leaves behind.
+    p
+      ..lastLoadHadChanges = true
+      ..conversionAcknowledged = true
+      ..lastSectionRenames = {'CAMERA1DEVICE': 'CAMERADEVICE_1'};
+    p.systemLogs.addAll([
+      "BACKUP SAVED: Original file preserved as 'BSS112_old_config.json'",
+      'KEY MAPPING: Translated 14 legacy item(s)',
+    ]);
+
+    expect(await p.createNewConfig(), isTrue);
+
+    expect(p.systemLogs, isEmpty,
+        reason: 'the log describes a file this room has nothing to do with');
+    expect(p.lastLoadHadChanges, isFalse,
+        reason: 'nothing was converted, so Convert has nothing to open');
+    expect(p.conversionNeedsAttention, isFalse);
+    expect(p.conversionAcknowledged, isFalse);
+    expect(p.lastSectionRenames, isEmpty);
+  });
 }

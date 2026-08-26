@@ -120,6 +120,71 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
   /// Wraps the rendered document so the top-bar camera button can capture it.
   final GlobalKey _captureKey = GlobalKey();
 
+  /// The pan/zoom of an IMAGE document, held here so the toolbar's buttons can
+  /// drive it. A PDF's zoom lives in [_controller] instead.
+  final TransformationController _imageView = TransformationController();
+
+  /// How far one press of the zoom buttons moves an image. The PDF side has
+  /// its own zoom stops (pdfrx doubles and halves), and this is the closest
+  /// equivalent for the other half of the viewer, so the two buttons feel like
+  /// one control whichever kind of document is open.
+  static const double _imageZoomStep = 1.5;
+  static const double _imageMinZoom = 0.2;
+  static const double _imageMaxZoom = 12;
+
+  @override
+  void dispose() {
+    _imageView.dispose();
+    super.dispose();
+  }
+
+  /// Zooms the document on screen, whichever kind it is.
+  ///
+  /// A DIALOG IS NOT A DESK. The reason to open a plan here rather than in the
+  /// machine's own reader is to read it beside the field being filled in, and
+  /// that means going in close on one corner of a forty-sheet set. A wheel
+  /// does it on a mouse and a pinch does it on a trackpad, but neither is
+  /// discoverable and neither is available to somebody driving the app from a
+  /// laptop keyboard — so the two presses that every other reader has are on
+  /// the toolbar as buttons.
+  ///
+  /// Zoom about the CENTRE of the view, which is the part being read: zooming
+  /// about the top-left corner walks whatever is on screen off the edge of it,
+  /// and the next press then has to be undone by dragging.
+  void _zoom({required bool inwards}) {
+    if (_isPdf) {
+      // Before the document is laid out there is nothing to zoom, and asking
+      // anyway throws rather than doing nothing.
+      if (!_controller.isReady) return;
+      if (inwards) {
+        _controller.zoomUp();
+      } else {
+        _controller.zoomDown();
+      }
+      return;
+    }
+    final current = _imageView.value.getMaxScaleOnAxis();
+    final wanted = inwards
+        ? current * _imageZoomStep
+        : current / _imageZoomStep;
+    final next = wanted.clamp(_imageMinZoom, _imageMaxZoom);
+    if (next == current) return;
+
+    // Keep the middle of the viewport over the same point of the image: scale
+    // about the centre rather than about the matrix origin.
+    final box = _captureKey.currentContext?.findRenderObject();
+    final size = box is RenderBox ? box.size : Size.zero;
+    final centre = Offset(size.width / 2, size.height / 2);
+    final factor = next / current;
+    setState(() {
+      _imageView.value = Matrix4.identity()
+        ..translateByDouble(centre.dx, centre.dy, 0, 1)
+        ..scaleByDouble(factor, factor, 1, 1)
+        ..translateByDouble(-centre.dx, -centre.dy, 0, 1)
+        ..multiply(_imageView.value);
+    });
+  }
+
   /// Whether this is a PDF, decided on the file name rather than on a sniff of
   /// the bytes: the extension is what every other part of this app routes on,
   /// and a mislabelled file fails with a readable error either way.
@@ -155,6 +220,18 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
                       key: const ValueKey('document_viewer_title'),
                       style: Theme.of(context).textTheme.titleMedium,
                       overflow: TextOverflow.ellipsis),
+                ),
+                IconButton(
+                  key: const ValueKey('document_viewer_zoom_out'),
+                  icon: const Icon(Icons.zoom_out),
+                  tooltip: 'Zoom out',
+                  onPressed: () => _zoom(inwards: false),
+                ),
+                IconButton(
+                  key: const ValueKey('document_viewer_zoom_in'),
+                  icon: const Icon(Icons.zoom_in),
+                  tooltip: 'Zoom in',
+                  onPressed: () => _zoom(inwards: true),
                 ),
                 // THE WAY INTO A FORTY-SHEET SET.
                 if (_isPdf)
@@ -264,7 +341,9 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
   /// plan is read by going in close on one corner of it, and a drawing scaled
   /// to a dialog is a grey rectangle.
   Widget _image(BuildContext context) => InteractiveViewer(
-        maxScale: 12,
+        transformationController: _imageView,
+        minScale: _imageMinZoom,
+        maxScale: _imageMaxZoom,
         child: Center(
           child: Image.file(
             File(widget.filePath),

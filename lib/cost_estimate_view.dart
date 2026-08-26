@@ -2053,12 +2053,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
 
     switch (kind) {
       case _ExtraPart.equipment:
-        provider.addAvCostExtraEquipment(
+        final line = provider.addAvCostExtraEquipment(
           catalogModel: selectedModel ?? '',
           description: name,
           category: template?.category ?? '',
           qty: qty,
         );
+        // Quoting a device IS putting it in the room, so the control side is
+        // built here rather than left for somebody to remember.
+        if (context.mounted) {
+          await _buildConfigForQuotedDevice(context, provider, line);
+        }
       case _ExtraPart.cable:
         provider.addAvCostExtraCable(
           catalogModel: selectedModel ?? '',
@@ -2080,6 +2085,90 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           qty: qty,
         );
     }
+  }
+
+  /// Builds the control side of a device the moment it is quoted here.
+  ///
+  /// THE GAP THIS CLOSES is the one the orange flag on each row reports: a
+  /// part picked on this page is a part somebody is buying, and until now the
+  /// config only heard about it when the flag was noticed and its button
+  /// pressed. A device quoted in March and configured in May is a device that
+  /// gets configured twice or not at all — and the Wizard, which counts the
+  /// room's hardware out of SYSTEM_SETUP, went on saying the room had none of
+  /// them.
+  ///
+  /// So the same three steps the row's button takes run here: the part goes on
+  /// the diagram with its real connectors, the prefill puts it in the family
+  /// its DEVICE TYPE names, and the family's count goes up — which is what the
+  /// Wizard and the Devices tab read. See [applyControlSide], which also lays
+  /// the driver's own DEVICE_INFO defaults on the new block.
+  ///
+  /// Three kinds of line are left exactly as typed, because for these there is
+  /// no device to build:
+  ///
+  ///   * one with NO CATALOG MODEL — a name and a price somebody was quoted
+  ///     over the phone, with no part behind it to take connectors from;
+  ///   * a product the catalog says is NEVER CONTROLLED — a speaker, a mount,
+  ///     a passive splitter;
+  ///   * one no device family claims, which is the same answer arrived at by
+  ///     the catalog's category and the model's own words.
+  ///
+  /// Those stay quoted-but-not-drawn, which is what the "Other items" and
+  /// hardware cards are full of and what this page has always allowed.
+  Future<void> _buildConfigForQuotedDevice(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLineItem line,
+  ) async {
+    final model = line.catalogModel.trim();
+    if (model.isEmpty) return;
+    // No room config open — the estimate works on its own, and there is
+    // nowhere to put a block until there is one.
+    if (provider.roomConfig['SYSTEM_SETUP'] is! Map) return;
+    if (provider.avModelNeverControlled(model)) return;
+
+    // Asked BEFORE the line is promoted: a part nothing drives should stay a
+    // quoted line rather than being moved onto the diagram for a block that
+    // is then never created.
+    final probe = AvNode(
+      id: '',
+      label: line.description.trim().isEmpty ? model : line.description.trim(),
+      model: model,
+      pos: Offset.zero,
+      ports: const [],
+    );
+    if (familyForNode(provider, probe) == null) return;
+
+    final added = provider.promoteAvCostEquipmentToDiagram(
+      line.id,
+      at: const Offset(40, 60),
+    );
+    if (added.isEmpty) return;
+
+    final plan = planControlSide(
+      provider,
+      nodeIds: [for (final n in added) n.id],
+    );
+    if (plan.creatable.isEmpty) return;
+    final result = applyControlSide(provider, plan);
+    if (result.created == 0 || !context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          [
+            '${result.created} device block'
+                '${result.created == 1 ? '' : 's'} added to the config '
+                '(${result.sectionKeys.join(', ')})',
+            if (result.withoutModule > 0)
+              '${result.withoutModule} with no python module yet - the '
+                  'Devices tab shows those in red',
+            'fill in the address on the Devices tab',
+          ].join('. '),
+        ),
+        duration: const Duration(seconds: 7),
+      ),
+    );
   }
 
   // --- is this line in the room config? ------------------------------------
@@ -4907,48 +4996,87 @@ class _CardHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      // Title left, buttons right, exactly as the Spacer had them — until
-      // they stop fitting on one line, when the buttons drop below.
-      alignment: WrapAlignment.spaceBetween,
-      spacing: 12,
-      runSpacing: 6,
+    final heading = Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(title, style: titleStyle ?? theme.textTheme.titleSmall),
-            // Not on the image. Every one of these says what the section is
-            // for - "counted off the signal flow diagram", "each a percentage
-            // of the subtotal before tax" - which is help for somebody filling
-            // the estimate in and clutter on the copy that gets sent out.
-            if (!PrintMode.of(context) &&
-                subtitle != null &&
-                subtitle!.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  subtitle!,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: mutedInk(context, theme),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        if (actions.isNotEmpty)
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 6,
-            children: actions,
+        // Flexible, not a bare Text: the title shares a row with the buttons
+        // now, and a card narrow enough to squeeze it has to ellipsize the
+        // words rather than overflow the card.
+        Flexible(
+          child: Text(
+            title,
+            overflow: TextOverflow.ellipsis,
+            style: titleStyle ?? theme.textTheme.titleSmall,
           ),
+        ),
+        // Not on the image. Every one of these says what the section is
+        // for - "counted off the signal flow diagram", "each a percentage
+        // of the subtotal before tax" - which is help for somebody filling
+        // the estimate in and clutter on the copy that gets sent out.
+        if (!PrintMode.of(context) &&
+            subtitle != null &&
+            subtitle!.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              subtitle!,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: mutedInk(context, theme),
+              ),
+            ),
+          ),
+        ],
       ],
+    );
+    if (actions.isEmpty) return heading;
+
+    // A ROW, NOT A WRAP. Wrapping put the buttons where the eye does not look
+    // for them: the subtitle is a whole sentence and takes what it is given,
+    // so the heading filled the line on its own and every Add button dropped
+    // to a second run — hard against the LEFT edge of the card, under the
+    // words, in a different place on each card depending on how long its
+    // sentence was. The Add buttons on this page are all one gesture ("put
+    // another line on this section"), and they belong in one place: the far
+    // right of the card they belong to, the way the rack hardware card has
+    // always had them.
+    //
+    // The buttons are measured first and keep their natural width; the
+    // heading takes what is left and ellipsizes into it, so a narrow window
+    // costs the sentence rather than pushing a button off the card. The
+    // actions stay a Wrap of their own so a card carrying three of them still
+    // has somewhere to put the third.
+    return LayoutBuilder(
+      builder: (context, box) {
+        // A Row hands its non-flexible children an UNBOUNDED main axis, so the
+        // buttons would measure at their full single-line width and run off
+        // the card rather than wrapping. The cap is what makes them wrap, and
+        // it leaves a strip for the heading rather than taking a fixed share:
+        // buttons that fit stay on one line the way they always have, and only
+        // a card too narrow for them starts a second run.
+        final cap = box.maxWidth.isFinite
+            ? (box.maxWidth - 140).clamp(0.0, double.infinity)
+            : double.infinity;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: heading),
+            const SizedBox(width: 12),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: cap),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 6,
+                children: actions,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

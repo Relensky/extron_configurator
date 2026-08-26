@@ -1216,6 +1216,11 @@ class AppStateProvider extends ChangeNotifier {
     valueOrigins.clear();
     conversionChanges.clear();
     _originalLoadedConfig = {};
+    // The renames describe which of the OLD file's sections became which of
+    // this one's. With no old file there is nothing for them to line up, and
+    // leaving them would let the next diff match this room's blocks against
+    // the previous room's names.
+    lastSectionRenames = const {};
   }
 
   /// Applies the accept/reject choices from the preview: every REJECTED
@@ -7211,6 +7216,17 @@ class AppStateProvider extends ChangeNotifier {
       // Built from the template, not converted — every value is "written",
       // so there is nothing to color orange.
       _clearConversionProvenance();
+
+      // AND NOTHING WAS CONVERTED, so the previous room's conversion must not
+      // still be on the toolbar. The change log, the "this file needed
+      // converting" flag and the acknowledgement state all belong to the file
+      // that was open before this one: left standing, the Convert button on a
+      // brand new config opened the log of the last room that was migrated —
+      // "BACKUP SAVED: Original file preserved as 'BSS112_old_config.json'" —
+      // which reads as this config having been converted from that room.
+      systemLogs.clear();
+      lastLoadHadChanges = false;
+      conversionAcknowledged = false;
 
       // Nothing carried over from the previous room can be restored into this
       // one — the stash is per-config.

@@ -317,17 +317,30 @@ class _MainDashboardState extends State<MainDashboard> {
     if (!context.mounted) return;
     if (success) {
       if (choice.startFromEstimator) {
-        final placed = await showDeviceStartWizard(context, provider);
+        final started = await showDeviceStartWizard(context, provider);
         if (!context.mounted) return;
-        if (placed > 0) {
+        if (started.placed > 0) {
           // Straight to the estimate: the list was just priced, and the
           // numbers are what the wizard was opened for.
           provider.selectTab(AppTab.cost.index);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
+              duration: const Duration(seconds: 7),
               content: Text(
-                '$placed device${placed == 1 ? '' : 's'} added - they are on '
-                'the Signal Flow canvas and priced here.',
+                [
+                  '${started.placed} device'
+                      '${started.placed == 1 ? '' : 's'} added - they are on '
+                      'the Signal Flow canvas and priced here',
+                  // What the Wizard tab and the Devices tab will now show, so
+                  // the blocks are not a silent side effect.
+                  if (started.blocks > 0)
+                    '${started.blocks} device block'
+                        '${started.blocks == 1 ? '' : 's'} written to the '
+                        'config',
+                  if (started.withoutModule > 0)
+                    '${started.withoutModule} still needing a python module - '
+                        'the Devices tab shows those in red',
+                ].join('. '),
               ),
             ),
           );

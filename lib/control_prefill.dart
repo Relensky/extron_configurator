@@ -381,6 +381,9 @@ typedef ControlPrefillResult = ({
 ///     was chosen;
 ///   * `module` is filled in only where the library claims the model, and left
 ///     blank otherwise so the app's own missing-module list catches it;
+///   * where the module IS known, its DEVICE_INFO defaults are written onto the
+///     block as well — the same values picking the model in the Device Editor
+///     would load, so the two routes cannot produce different documents;
 ///   * the AV node is RE-KEYED to the new section key, which is what makes the
 ///     diagram and the config the same device rather than two records of it.
 ///
@@ -417,6 +420,21 @@ ControlPrefillResult applyControlSide(
     }
 
     provider.roomConfig[entry.sectionKey] = block;
+    // The driver's own DEVICE_INFO answer for this model — com_type, protocol,
+    // port, keep-alive — laid on before the family defaults, so the block says
+    // how the box is actually reached rather than how the family usually is.
+    // A device created here and one created by picking the model in the Device
+    // Editor are then the same block: [AppStateProvider.applyModuleDefaults] is
+    // the same call the editor's model pick makes.
+    //
+    // BEFORE the schema defaults on purpose. The family's `device_defaults` are
+    // filtered by what the block's connection can use, so a driver that puts
+    // this model on Serial has to have said so before the baud rate is offered
+    // — the other order fills in the network keys and then changes the
+    // connection out from under them.
+    if (entry.module.isNotEmpty && entry.model.trim().isNotEmpty) {
+      provider.applyModuleDefaults(entry.sectionKey, entry.model.trim());
+    }
     provider.applyDeviceBlockDefaults(entry.sectionKey);
     created.add(entry.sectionKey);
   }
