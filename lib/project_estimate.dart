@@ -793,7 +793,13 @@ class ProjectEstimate {
   /// exactly like a right one.
   final bool mixedCurrency;
 
-  const ProjectEstimate({
+  /// NOT const any more. The rollup now HOLDS the lists it used to rebuild on
+  /// every read - the cover table, the shelf list, the room codes - because
+  /// each of them is a pass over the master list and several of them were
+  /// being asked for four times to draw one page. Nothing constructs an
+  /// estimate as a constant: it is derived wholesale from the project every
+  /// time the project changes, which is exactly what makes holding them safe.
+  ProjectEstimate({
     required this.project,
     required this.currency,
     this.projectPath = '',
@@ -823,7 +829,11 @@ class ProjectEstimate {
   /// because this is the only layer that has both the project's room list and
   /// the configs behind it; a room that could not be read simply has no entry
   /// and falls back to whatever the project itself knows to call it.
-  Map<String, String> get roomCodeNames => {
+  /// Built once. The room picker in the TITLE BAR reads this to label its
+  /// button, and the title bar rebuilds on every notify - which on a job of
+  /// forty rooms was a forty-entry map assembled per keystroke, per tab
+  /// switch, per anything.
+  late final Map<String, String> roomCodeNames = {
     for (final room in rooms)
       if (room.ok) room.ref.id: room.codeName,
   };
@@ -852,7 +862,10 @@ class ProjectEstimate {
   ///
   /// Ties break on the description so two parts with one spare each do not
   /// swap places between two readings of the same job.
-  List<MasterPartLine> get sparedParts {
+  ///
+  /// Built once - see [spareCover]. The Equipment pane reads it twice just to
+  /// label the Spares chip, and the section under it reads it again.
+  late final List<MasterPartLine> sparedParts = () {
     final out = [for (final l in master) if (l.hasSpares) l];
     out.sort((a, b) {
       final byQty = b.spareQty.compareTo(a.spareQty);
@@ -861,7 +874,7 @@ class ProjectEstimate {
           : a.description.toLowerCase().compareTo(b.description.toLowerCase());
     });
     return out;
-  }
+  }();
 
   /// EQUIPMENT with no spare on it, in master-list order.
   ///
@@ -869,7 +882,7 @@ class ProjectEstimate {
   /// anybody wants a report to nag about, and a list that asked for one would
   /// be long enough that nobody would read the rows that matter — the boxes
   /// with power supplies in them that a room stops working without.
-  List<MasterPartLine> get partsWithoutSpares => [
+  late final List<MasterPartLine> partsWithoutSpares = [
     for (final l in master)
       if (l.kind == MasterPartKind.equipment && !l.hasSpares) l,
   ];
@@ -907,7 +920,17 @@ class ProjectEstimate {
   /// A part nothing installs is left off. Its coverage is not zero, it is
   /// undefined - a spare kept for a model every room has since been swapped
   /// off is a row for the shelf list, not a row on a percentage table.
-  List<SparePartCover> get spareCover {
+  ///
+  /// WORKED OUT ONCE. This is a pass over the master list plus a sort of it,
+  /// and four other things on this class are derived from it - the flag list,
+  /// the two recommendation figures, and the page itself. As a plain getter
+  /// that was four passes and four sorts of a two-hundred-part list every time
+  /// the spares page rebuilt, which is every keystroke in the target box.
+  ///
+  /// Safe to hold, for the same reason the room index is: an estimate is
+  /// derived wholesale from the project on every change and thrown away, so
+  /// there is nothing here that can go stale under it.
+  late final List<SparePartCover> spareCover = () {
     final out = <SparePartCover>[
       for (final l in master)
         if (l.kind == MasterPartKind.equipment && l.drawnQty > 0)
@@ -928,10 +951,10 @@ class ProjectEstimate {
             );
     });
     return out;
-  }
+  }();
 
   /// The parts the job installs and holds nothing spare of, worst first.
-  List<SparePartCover> get unsparedParts =>
+  late final List<SparePartCover> unsparedParts =
       [for (final c in spareCover) if (c.short) c];
 
   /// The share of what the job installs it means to hold spare - the job's
@@ -945,13 +968,13 @@ class ProjectEstimate {
   ///
   /// NOT A FAULT LIST. Nothing on the page is drawn in the error ink for being
   /// on it; it is what the recommendation note is counted from.
-  List<SparePartCover> get partsUnderRecommendedCover =>
+  late final List<SparePartCover> partsUnderRecommendedCover =
       [for (final c in spareCover) if (c.toRecommend > 0) c];
 
   /// Units that would have to be added across the whole job to meet the
   /// recommendation on every part - the one figure the note can be read for
   /// without going row by row.
-  double get unitsToRecommendedCover =>
+  late final double unitsToRecommendedCover =
       spareCover.fold(0.0, (sum, c) => sum + c.toRecommend);
 
   /// One part, and whether the order holds any of it spare.

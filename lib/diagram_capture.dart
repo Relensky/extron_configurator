@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'app_logger.dart';
 import 'app_state.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'screenshot_tools.dart';
@@ -166,11 +167,43 @@ Future<DiagramImages> captureDiagramTabs(
     return captureBoundary(key, pixelRatio: pixelRatio);
   }
 
-  final schematic = await capture(AppTab.schematic);
-  final avFlow = await capture(AppTab.avFlow);
+  // EVERY DRAWING IS INDEPENDENTLY OPTIONAL.
+  //
+  // [captureBoundary] already survives anything the rasteriser throws, but the
+  // decisions AROUND it did not: whether a room has racks, whether it has plan
+  // sheets, and what its cabling schematic comes to are all worked out from
+  // the room's own data, and a room with a plan whose image file has moved or
+  // a run pointing at a device that has since been deleted throws while that
+  // question is being asked - before any picture is taken.
+  //
+  // Unguarded, one such room took the whole capture with it. That is survivable
+  // when somebody presses the button on a room they are looking at; it is not
+  // when the Save All walk photographs nine rooms nobody has opened in months,
+  // because the run died half way through and left the session parked on
+  // another room's Schematic tab. A drawing that cannot be had is already a
+  // null in this record - that is what the type is for - so a failure here is
+  // reported as the missing picture it actually is, and the other four still
+  // come back.
+  Future<T> attempt<T>(String what, Future<T> Function() body, T fallback) async {
+    try {
+      return await body();
+    } catch (e, stack) {
+      AppLogger.logError('Could not capture the $what for this room', e, stack);
+      return fallback;
+    }
+  }
+
+  final schematic = await attempt('control schematic',
+      () => capture(AppTab.schematic), null);
+  final avFlow = await attempt('signal flow',
+      () => capture(AppTab.avFlow), null);
   // An empty Racks page is a sentence saying there are no racks. The sheet
   // already says that in words, and a picture of the sentence helps nobody.
-  final racks = provider.avRacks.isEmpty ? null : await capture(AppTab.racks);
+  final racks = await attempt(
+    'rack elevation',
+    () async => provider.avRacks.isEmpty ? null : await capture(AppTab.racks),
+    null,
+  );
   // Same rule for the plan: with no image imported the page is an invitation
   // to import one, which is not an illustration of this room.
   //
@@ -178,24 +211,33 @@ Future<DiagramImages> captureDiagramTabs(
   // and a reflected ceiling plan is a room whose documents need both, and the
   // page has to be visited for any of them — so it is walked here, once, and
   // every document downstream is dealt from the same set.
-  final planSheets = <PlanDrawing>[];
-  if (provider.floorPlanSheetsWithImages.isNotEmpty) {
-    provider.selectTab(AppTab.floorPlan.index);
-    await WidgetsBinding.instance.endOfFrame;
-    await Future<void>.delayed(const Duration(milliseconds: 320));
-    await WidgetsBinding.instance.endOfFrame;
-    planSheets.addAll(await capturePlanSheets());
-  }
+  final planSheets = await attempt<List<PlanDrawing>>(
+    'floor plans',
+    () async {
+      if (provider.floorPlanSheetsWithImages.isEmpty) return const [];
+      provider.selectTab(AppTab.floorPlan.index);
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      await WidgetsBinding.instance.endOfFrame;
+      return capturePlanSheets();
+    },
+    const [],
+  );
   // Same rule again: with nowhere for the drawing to come from, the Cabling
   // page is an invitation to name some locations, and a picture of an
   // invitation illustrates nothing.
-  final cabling = provider
-          .cablingSchematic(buildAvFlowModel(provider))
-          .boxes
-          .isEmpty
-      ? null
-      : await capture(AppTab.cabling);
+  final cabling = await attempt(
+    'cabling drawing',
+    () async =>
+        provider.cablingSchematic(buildAvFlowModel(provider)).boxes.isEmpty
+            ? null
+            : await capture(AppTab.cabling),
+    null,
+  );
 
+  // BACK TO THE TAB THE READER WAS ON, whatever happened above. Everything in
+  // this function has moved the session somewhere it did not ask to be, and
+  // leaving it there is the part that reads as a crash.
   provider.selectTab(startingTab);
   await WidgetsBinding.instance.endOfFrame;
 

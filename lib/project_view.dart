@@ -1641,6 +1641,12 @@ class _RoomRowState extends State<_RoomRow> {
       ],
     );
 
+    // WHAT IS FLAGGED, WORKED OUT ONCE. The list is a pass over the room's
+    // estimate, and it was being built three times to draw one icon -
+    // once to ask whether there was anything to say, once for the tooltip
+    // and once more inside it.
+    final flags = e == null ? const <String>[] : _roomFlags(room);
+
     final actions = <Widget>[
       // WHAT IS ODD ABOUT THIS ROOM. Bigger than the buttons beside it on
       // purpose: it is the one thing on the row that is not always there, and
@@ -1662,16 +1668,16 @@ class _RoomRowState extends State<_RoomRow> {
       // has one gesture and this target needs two - the copy AND the jump.
       // Padded to the size of the button it replaces so the row does not
       // shift under it.
-      if (e != null && _roomFlags(room).isNotEmpty)
+      if (e != null && flags.isNotEmpty)
         Tooltip(
           message:
-              '${_roomFlags(room).join('\n')}\n\n'
+              '${flags.join('\n')}\n\n'
               'Click to copy  ·  Double-click to open '
               '${room.room.isEmpty ? 'the drawing' : 'this room\'s Cost page'}',
           child: InkWell(
             key: ValueKey('room_row_flags_${room.ref.id}'),
             customBorder: const CircleBorder(),
-            onTap: () => _copyFlags(room),
+            onTap: () => _copyFlags(room, flags),
             onDoubleTap: () => openProjectRoomOn(
               context,
               room.ref,
@@ -1768,9 +1774,11 @@ class _RoomRowState extends State<_RoomRow> {
   ///
   /// The room's code leads, because a bare list of "3 line(s) have no price"
   /// pasted into a message is a fact with no subject.
-  Future<void> _copyFlags(ProjectRoomCost room) async {
+  Future<void> _copyFlags(
+    ProjectRoomCost room,
+    List<String> flags,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final flags = _roomFlags(room);
     await Clipboard.setData(
       ClipboardData(
         text: [
@@ -2126,6 +2134,12 @@ List<Widget> partsSlivers(
   // Built once for the whole list rather than per row — see [_PartRow].
   final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
 
+  // How many parts nothing on the job can drive. One pass, for the chip.
+  var controlGapParts = 0;
+  for (final l in estimate.master) {
+    if (l.hasControlGap) controlGapParts++;
+  }
+
   return [
     SliverToBoxAdapter(
       child: Padding(
@@ -2162,9 +2176,12 @@ List<Widget> partsSlivers(
                       untaggedFilter,
                       warn: true,
                     ),
-                  if (estimate.master.any((l) => l.hasControlGap))
+                  // Counted ONCE. Asking whether there are any and then
+                  // asking how many is two walks of a two-hundred-part
+                  // list to label one chip.
+                  if (controlGapParts > 0)
                     filterChip(
-                      'No control module (${estimate.master.where((l) => l.hasControlGap).length})',
+                      'No control module ($controlGapParts)',
                       undrivenFilter,
                       warn: true,
                     ),

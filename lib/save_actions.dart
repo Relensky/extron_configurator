@@ -771,6 +771,11 @@ Future<void> saveAllToRoomFolder(
         : (names[ref.id] ??
             (ref.label.trim().isEmpty ? ref.fallbackName : ref.label.trim()));
 
+    // REPLACED, NOT QUEUED. A ScaffoldMessenger holds snack bars in a line and
+    // shows them one after the other, so nine of these at thirty seconds each
+    // is four and a half minutes of stale progress messages after the run has
+    // finished - which reads as an application that has hung.
+    messenger.hideCurrentSnackBar();
     messenger.showSnackBar(SnackBar(
       duration: const Duration(seconds: 30),
       content: Text(
@@ -780,17 +785,38 @@ Future<void> saveAllToRoomFolder(
       ),
     ));
 
-    if (ref != null) {
-      final error = await provider.openProjectRoomRef(ref);
-      if (error.isNotEmpty) {
-        done.add((room: label, export: null, error: error));
-        continue;
-      }
-    }
-
-    final shots = await captureDiagramTabs(provider, pixelRatio: 2.0);
-
+    // ONE BAD ROOM IS ONE BAD ROW, NOT THE END OF THE RUN.
+    //
+    // This is the whole difference between walking one room and walking nine.
+    // Opening a room reads a config and three sidecars off disk; capturing it
+    // then forces five drawing tabs to build, lay out, paint and rasterise -
+    // for a room nobody may have opened in months. A floor plan whose image
+    // has moved, a sidecar hand-edited into invalid JSON, a canvas that has
+    // not painted yet: any of them throws, and unguarded that took down the
+    // entire export half way through, leaving the session parked on some other
+    // room's Schematic tab with a progress bar still up. It looked exactly
+    // like a crash, and from the user's side it was one.
+    //
+    // Guarded per room, the same failure is a named row on the summary saying
+    // which building could not be photographed and why, and the other eight
+    // still land in their folders.
     try {
+      if (ref != null) {
+        final error = await provider.openProjectRoomRef(ref);
+        if (error.isNotEmpty) {
+          done.add((room: label, export: null, error: error));
+          continue;
+        }
+        // Let the room actually mount before its tabs are photographed. The
+        // capture drives the tabs itself, but it starts by selecting one - and
+        // selecting a tab on a room that has been swapped in memory but not
+        // yet built is how a stale index from the room before it ends up being
+        // read.
+        await WidgetsBinding.instance.endOfFrame;
+      }
+
+      final shots = await captureDiagramTabs(provider, pixelRatio: 2.0);
+
       done.add((
         room: label,
         export: await saveProjectFolder(
@@ -804,16 +830,26 @@ Future<void> saveAllToRoomFolder(
         ),
         error: '',
       ));
-    } catch (e) {
+    } catch (e, stack) {
       done.add((room: label, export: null, error: '$e'));
-      AppLogger.logError('Save All could not write the folder for $label', e);
+      AppLogger.logError('Save All could not write the folder for $label', e, stack);
     }
   }
 
   // BACK WHERE IT STARTED. Somebody who ran this from the middle of cabling a
   // room is standing in that room's cabling when it finishes.
-  if (startingRoom != null && provider.openProjectRoom?.id != startingRoom.id) {
-    await provider.openProjectRoomRef(startingRoom);
+  //
+  // Guarded for the same reason the walk is: the room somebody started from
+  // can have been renamed or moved by something else while nine rooms were
+  // being written, and failing to get back to it must not lose the summary
+  // that says what the run actually did.
+  try {
+    if (startingRoom != null &&
+        provider.openProjectRoom?.id != startingRoom.id) {
+      await provider.openProjectRoomRef(startingRoom);
+    }
+  } catch (e, stack) {
+    AppLogger.logError('Save All could not reopen the room it started on', e, stack);
   }
   provider.selectTab(startingTab);
   messenger.hideCurrentSnackBar();

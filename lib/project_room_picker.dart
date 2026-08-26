@@ -230,12 +230,23 @@ class _RoomMenu extends StatelessWidget {
     final onBar =
         theme.appBarTheme.foregroundColor ?? theme.colorScheme.onPrimary;
 
+    // EVERY NAME ON THIS MENU, WORKED OUT IN ONE PASS.
+    //
+    // These used to be functions asked per room and per line: the subtitle
+    // alone called both of them, and it was called twice for each item just to
+    // decide whether there was a subtitle at all. Each of those calls walked
+    // the job's rooms or assembled a map of them, so drawing a forty-room menu
+    // was hundreds of passes over the same forty rooms - and the BUTTON did
+    // one of them on every rebuild of the app bar, which is every keystroke
+    // anywhere in the application.
+    final names = _namesOf(provider);
+
     return PopupMenuButton<String>(
       key: const ValueKey('room_picker_menu'),
       // The name the button no longer has room for.
       tooltip: open == null
           ? 'Switch to another room on this project'
-          : '${_nameFor(provider, open!)}'
+          : '${names.nameFor(open!)}'
               '\n\nSwitch to another room on this project',
       constraints: const BoxConstraints(minWidth: 260, maxWidth: 460),
       onSelected: (id) async {
@@ -276,7 +287,7 @@ class _RoomMenu extends StatelessWidget {
                     : Icons.radio_button_unchecked,
                 size: 18,
               ),
-              title: Text(_codeFor(provider, ref)),
+              title: Text(names.codeFor(ref)),
               // THE FULL NAME BELONGS ON THE MENU, not on the button. The
               // button has to be short enough to live in a title bar; the menu
               // is a list somebody has stopped to read, and 'BSS 101' with no
@@ -285,9 +296,9 @@ class _RoomMenu extends StatelessWidget {
               // Worth saying here as well as on the Rooms pane: an excluded
               // room is still a room somebody works on, and the picker is
               // where they pick it.
-              subtitle: _menuSubtitle(provider, ref) == null
+              subtitle: names.subtitleFor(ref) == null
                   ? null
-                  : Text(_menuSubtitle(provider, ref)!),
+                  : Text(names.subtitleFor(ref)!),
             ),
           ),
         const PopupMenuDivider(),
@@ -319,7 +330,7 @@ class _RoomMenu extends StatelessWidget {
             Flexible(
               child: Text(
                 open != null
-                    ? _codeFor(provider, open!)
+                    ? names.codeFor(open!)
                     : rooms.isEmpty
                     ? 'No rooms yet'
                     : 'Pick a room',
@@ -342,12 +353,36 @@ class _RoomMenu extends StatelessWidget {
   /// The room's label if it has one, else the config's own name once it has
   /// been read, else the file name. The middle case is why this asks the
   /// project's cached read rather than only the ref.
-  String _nameFor(AppStateProvider provider, ProjectRoomRef ref) {
+  /// Every room's names, read off the job once.
+  static _RoomNames _namesOf(AppStateProvider provider) {
+    final estimate = provider.priceProject();
+    return _RoomNames(
+      full: {for (final room in estimate.rooms) room.ref.id: room.name},
+      codes: estimate.roomCodeNames,
+    );
+  }
+}
+
+/// What to call each room, in the two lengths the picker needs.
+///
+/// A value built once per build rather than three functions asked per room:
+/// the button, the menu titles and the menu subtitles all want the same two
+/// answers about the same rooms, and computing them per question is how a
+/// dropdown of forty ended up walking the job hundreds of times to open.
+class _RoomNames {
+  /// Room id -> what the room is actually called.
+  final Map<String, String> full;
+
+  /// Room id -> the code on its door, which is often the same string.
+  final Map<String, String> codes;
+
+  const _RoomNames({required this.full, required this.codes});
+
+  /// A room's full name: the label somebody typed, else what the job calls it,
+  /// else the file it lives in.
+  String nameFor(ProjectRoomRef ref) {
     if (ref.label.trim().isNotEmpty) return ref.label.trim();
-    for (final room in provider.priceProject().rooms) {
-      if (room.ref.id == ref.id) return room.name;
-    }
-    return ref.fallbackName;
+    return full[ref.id] ?? ref.fallbackName;
   }
 
   /// The shortest true name this room has: usually the code on the door.
@@ -363,19 +398,19 @@ class _RoomMenu extends StatelessWidget {
   /// than, what the room is actually called. Comparing the two lengths sorts
   /// every one of those cases out without this having to know what any
   /// particular placeholder looks like.
-  String _codeFor(AppStateProvider provider, ProjectRoomRef ref) {
-    final name = _nameFor(provider, ref);
-    final code = provider.priceProject().roomCodeNames[ref.id] ?? '';
+  String codeFor(ProjectRoomRef ref) {
+    final name = nameFor(ref);
+    final code = codes[ref.id] ?? '';
     if (code.isEmpty) return name;
     return code.length <= name.length ? code : name;
   }
 
   /// What goes under a room on the menu: its full name when that is not just
   /// the code again, and whether the job counts it.
-  String? _menuSubtitle(AppStateProvider provider, ProjectRoomRef ref) {
-    final name = _nameFor(provider, ref);
+  String? subtitleFor(ProjectRoomRef ref) {
+    final name = nameFor(ref);
     final parts = [
-      if (name != _codeFor(provider, ref)) name,
+      if (name != codeFor(ref)) name,
       if (!ref.included) 'Not counted in the project total',
     ];
     return parts.isEmpty ? null : parts.join('  ·  ');

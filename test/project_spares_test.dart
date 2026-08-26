@@ -578,7 +578,8 @@ void main() {
       for (final bad in [200, -5, 'soon', null]) {
         final read = BuildingProject.fromJson({
           'rooms': const [],
-          if (bad != null) 'spareTargetPercent': bad,
+          // A null here is the fourth case: the key absent altogether.
+          'spareTargetPercent': ?bad,
         });
         expect(read.spareCoverTarget, kSuggestedSpareCover, reason: '$bad');
         // At the suggestion the key is not written at all.
