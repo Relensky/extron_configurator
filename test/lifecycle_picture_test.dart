@@ -204,4 +204,128 @@ void main() {
     expect(find.text('An unsurveyed building'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // ---------------------------------------------------------------------------
+  //  THE WHOLE TIMELINE, NOT A WINDOW ON IT
+  // ---------------------------------------------------------------------------
+
+  /// A room whose projector went in a long time ago, and one whose display is
+  /// held to a forty-year life - so the span runs well past both ends of the
+  /// window the on-screen grid caps itself to.
+  String writeWideRoom(String stem, String name) {
+    final configPath = path.join(dir.path, '${stem}_config.json');
+    File(configPath).writeAsStringSync(jsonEncode({
+      'SYSTEM_SETUP': {
+        'gui_full_room_name': name,
+        'gve_bldg': 'BSS',
+        'gve_room': stem,
+      },
+    }));
+    File(path.join(dir.path, '${stem}_config_av_flow.json'))
+        .writeAsStringSync(jsonEncode({
+      'nodes': [
+        {
+          'id': 'PROJECTORDEVICE_1',
+          'label': 'Projector 1',
+          'model': 'PROJ-1',
+          'installedOn': '1998-05-01',
+          'ports': const [],
+        },
+        {
+          'id': 'DISPLAYDEVICE_1',
+          'label': 'Lectern rack frame',
+          'model': 'LONG-LIFE-1',
+          'installedOn': '2022-05-01',
+          'ports': const [],
+        },
+      ],
+      'cables': const [],
+    }));
+    return configPath;
+  }
+
+  AppStateProvider wideJob() {
+    final p = AppStateProvider(autoLoadSettings: false);
+    p.avDeviceLibrary = AvDeviceLibrary.empty()
+      ..upsert(const AvDeviceTemplate(
+        model: 'PROJ-1',
+        manufacturer: 'Generic',
+        category: 'Projector',
+        price: 10000,
+        ports: [],
+      ))
+      ..upsert(const AvDeviceTemplate(
+        model: 'LONG-LIFE-1',
+        manufacturer: 'Generic',
+        category: 'Display',
+        price: 4000,
+        lifeYears: 40,
+        ports: [],
+      ));
+    p.newProject(name: 'Bessey refresh', building: 'BSS');
+    p.addRoomToProject(writeWideRoom('r0', 'Bessey 100'));
+    return p;
+  }
+
+  BuildingLifecycle planOf(AppStateProvider p) => buildProjectLifecycle(
+    estimate: p.priceProject(),
+    library: p.avDeviceLibrary,
+    baseCosts: p.baseCosts,
+    tier: p.pricingTier,
+  );
+
+  testWidgets('the picture carries every year, both ends of the span',
+      (tester) async {
+    final p = wideJob();
+    final plan = planOf(p);
+
+    // The setup has to actually exercise the cap, or this test passes for the
+    // wrong reason on any job that happens to fit.
+    expect(
+      plan.allYears.length,
+      greaterThan(plan.years().length),
+      reason: 'the on-screen grid should be capping this job',
+    );
+
+    await openLifecycle(tester, p);
+    await tester.tap(find.byKey(const ValueKey('lifecycle_picture')));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(LifecyclePlanSheet);
+    // A 1998 install at one end and a 2062 replacement at the other: both are
+    // dates the plan turns on, and both were off the picture.
+    for (final year in [plan.allYears.first, plan.allYears.last]) {
+      expect(
+        find.descendant(of: sheet, matching: find.text('$year')),
+        findsOneWidget,
+        reason: '$year is on the plan and has to be on the picture',
+      );
+    }
+    // ...and every year in between, so the row a reader traces is unbroken.
+    for (final year in plan.allYears) {
+      expect(
+        find.descendant(of: sheet, matching: find.text('$year')),
+        findsOneWidget,
+        reason: '$year should be a column on the picture',
+      );
+    }
+  });
+
+  testWidgets('the grid on the pane still caps itself - a screen is a window',
+      (tester) async {
+    final p = wideJob();
+    final plan = planOf(p);
+    await openLifecycle(tester, p);
+
+    // The picture is uncapped BECAUSE the screen is not. Thirty columns of
+    // nothing in front of the first real one is thirty columns to scroll past.
+    expect(
+      find.descendant(
+        of: find.byType(LifecycleYearGrid),
+        matching: find.text('${plan.allYears.first}'),
+      ),
+      findsNothing,
+    );
+  });
+
 }

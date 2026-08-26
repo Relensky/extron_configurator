@@ -411,7 +411,10 @@ class LifecyclePlanSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final years = building.years(maxColumns: 20);
+    // EVERY YEAR, not the window the screen uses. A picture is not scrollable
+    // - it is the whole document or it is a fragment of one - and the grid it
+    // is a picture of caps its columns precisely because a screen IS a window.
+    final years = building.allYears;
     final lines = LifecycleYearGrid.linesOf(building);
     final currency = building.currency;
     final thisYear = building.asOf.year;

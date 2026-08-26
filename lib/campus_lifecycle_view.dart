@@ -804,7 +804,9 @@ class CampusPlanSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final years = campus.years;
+    // EVERY YEAR, not the window the screen uses - see [CampusLifecycle.years]
+    // for why the on-screen grid caps its own and a picture must not.
+    final years = campus.allYears;
     final jobs = campus.ok;
     final currency = campus.currency;
     final thisYear = campus.asOf.year;

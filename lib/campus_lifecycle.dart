@@ -91,6 +91,29 @@ class CampusLifecycle {
   /// building's span is - a plan that runs to 2061 because one item was given
   /// a forty-year life is a plan nobody reads.
   late final List<int> years = () {
+    var first = _span.first;
+    var last = _span.last;
+    if (first < asOf.year - kCampusMaxYears) {
+      first = asOf.year - kCampusMaxYears;
+    }
+    if (last > asOf.year + kCampusMaxYears) last = asOf.year + kCampusMaxYears;
+    return [for (var y = first; y <= last; y++) y];
+  }();
+
+  /// EVERY YEAR THE ESTATE TOUCHES, uncapped.
+  ///
+  /// What a DOCUMENT gets. The cap on [years] exists because a screen is a
+  /// window - but a picture or a spreadsheet is not, and one that silently
+  /// stops at the twenty-fifth year is a plan missing the building that falls
+  /// due after it. A timeline that leaves dates off is worse than a wide one.
+  late final List<int> allYears = [
+    for (var y = _span.first; y <= _span.last; y++) y,
+  ];
+
+  /// The raw span, worked out once: the earliest install anywhere on the estate
+  /// to the last year anything falls due, both bounded by today so a campus
+  /// with nothing recorded still has a column to say so in.
+  late final ({int first, int last}) _span = () {
     var first = asOf.year;
     var last = asOf.year;
     for (final i in items) {
@@ -99,11 +122,7 @@ class CampusLifecycle {
       final due = i.dueYear;
       if (due != null && due > last) last = due;
     }
-    if (last > asOf.year + kCampusMaxYears) last = asOf.year + kCampusMaxYears;
-    if (first < asOf.year - kCampusMaxYears) {
-      first = asOf.year - kCampusMaxYears;
-    }
-    return [for (var y = first; y <= last; y++) y];
+    return (first: first, last: last);
   }();
 
   /// What one job has falling due in one year.
@@ -116,9 +135,13 @@ class CampusLifecycle {
 
   /// The worst year on the calendar, which is the one a phased plan exists to
   /// flatten. 0 when nothing falls due at all.
+  /// Read across EVERY year, not just the ones the screen has room for: a
+  /// spike parked outside the window is still the year that has to be
+  /// flattened, and a figure headed "worst single year" that quietly skipped
+  /// it would be wrong in the direction nobody checks.
   double get peakYear {
     var worst = 0.0;
-    for (final y in years) {
+    for (final y in allYears) {
       final total = totalIn(y);
       if (total > worst) worst = total;
     }

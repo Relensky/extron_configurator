@@ -1008,6 +1008,19 @@ class BuildingLifecycle {
   /// current year so a building with nothing recorded still has a column to
   /// read.
   ///
+  /// EVERY YEAR THE PLAN TOUCHES, uncapped: the earliest install to the last
+  /// thing due.
+  ///
+  /// What a DOCUMENT gets. The cap below exists because a screen is a window
+  /// and thirty columns of nothing in front of the first real one is thirty
+  /// columns somebody has to scroll past - but a picture or a spreadsheet is
+  /// not a window, and one that silently stops at 2046 is a plan missing the
+  /// two rooms that fall due after it. A timeline that leaves dates off is
+  /// worse than a wide one.
+  late final List<int> allYears = [
+    for (var y = _span.first; y <= _span.last; y++) y,
+  ];
+
   /// Capped at [maxColumns] years from today, because a single unit installed
   /// in 1998 should not stretch the grid across thirty columns of nothing.
   List<int> years({int maxColumns = 12}) {
@@ -1294,16 +1307,22 @@ List<ReportSection> roomLifecycleSections(
 /// its cycle and the replacement figure in the year it falls due, so the sheet
 /// can be read two ways: across a row to see one room's life, and down a
 /// column to see what a given budget year has to cover.
+/// [maxColumns] caps how many years either side of today the grid runs to.
+/// NULL MEANS EVERY YEAR, which is what a document issued on its own gets: a
+/// sheet that silently stops short is a plan missing the rooms that fall due
+/// after the cut, and unlike a screen it cannot be scrolled to find them.
 List<ReportSection> buildingLifecycleSections(
   BuildingLifecycle building, {
-  int maxColumns = 12,
+  int? maxColumns = 12,
 }) {
   // Nothing dated is nothing to plan — see [BuildingLifecycle.anyDated]. The
   // pane still shows the rooms and says how many items are waiting on a date;
   // a document that leaves the building does not carry a grid of blanks.
   if (building.rooms.isEmpty || !building.anyDated) return const [];
   final currency = building.currency;
-  final years = building.years(maxColumns: maxColumns);
+  final years = maxColumns == null
+      ? building.allYears
+      : building.years(maxColumns: maxColumns);
 
   /// What goes in the cell for [room] in [year].
   ///

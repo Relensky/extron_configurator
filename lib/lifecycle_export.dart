@@ -67,14 +67,12 @@ String lifecycleNumberFormat(String currency) => '"$currency"#,##0';
 /// The years a MONEY chart covers: every year something falls due, always
 /// including today so a plan with nothing due still has a column to say so in.
 ///
-/// Capped [span] years either side of today. A single unit given a forty-year
-/// life should not stretch the chart to 2066 and squash every real bar into
-/// the left-hand inch of it.
-List<int> lifecycleDueYears(
-  List<EquipmentLife> items,
-  DateTime asOf, {
-  int span = 20,
-}) {
+/// NOT CAPPED. The years with no money in them are already left off - that is
+/// what this function is for - so what is left is the years that carry a
+/// figure, and dropping one of those would mean the bars on the chart added up
+/// to less than the table beside them. A wide chart is a nuisance; a chart
+/// whose total disagrees with the sheet is a document nobody can use.
+List<int> lifecycleDueYears(List<EquipmentLife> items, DateTime asOf) {
   var first = asOf.year;
   var last = asOf.year;
   for (final item in items) {
@@ -83,8 +81,6 @@ List<int> lifecycleDueYears(
     if (due < first) first = due;
     if (due > last) last = due;
   }
-  if (first < asOf.year - span) first = asOf.year - span;
-  if (last > asOf.year + span) last = asOf.year + span;
   return [for (var y = first; y <= last; y++) y];
 }
 
@@ -170,7 +166,10 @@ Uint8List buildBuildingLifecycleXlsx({
     buildStackedReportSheet(
       sheetName: kLifecyclePlanSheet,
       title: title,
-      sections: buildingLifecycleSections(building, maxColumns: 20),
+      // EVERY year, not a window on them. This book is read on its own, and
+      // a year grid that stopped at the twentieth column would be a plan
+      // missing whatever falls due in the twenty-first.
+      sections: buildingLifecycleSections(building, maxColumns: null),
       generated: at,
       imageBuilder: picture == null
           ? null
@@ -202,7 +201,9 @@ int? firstDueYearOf(BuildingLifecycle building) {
 List<ReportSection> campusLifecycleSections(CampusLifecycle campus) {
   if (campus.jobs.isEmpty) return const [];
   final currency = campus.currency;
-  final years = lifecycleDueYears(campus.items, campus.asOf);
+  // The GRID is the timeline and carries every year the estate touches; the
+  // chart below is about the money and carries only the years that have any.
+  final years = campus.allYears;
 
   return [
     (

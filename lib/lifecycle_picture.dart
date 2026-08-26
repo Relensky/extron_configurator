@@ -30,6 +30,30 @@ import 'screenshot_tools.dart';
 ///      the spreadsheet to drop under its tables.
 /// ============================================================================
 
+/// The longest edge a captured image is allowed to reach, in device pixels.
+///
+/// A replacement plan that covers every year an estate touches is a WIDE
+/// document - thirty years across and forty rooms down is normal - and doubling
+/// it for print can put it past what the rasteriser will hand back, which comes
+/// out as a capture that simply fails. Rather than trimming the document to fit
+/// the photograph, the photograph is taken at whatever density fits: a slightly
+/// softer picture of the whole plan beats a crisp one of two thirds of it.
+const double kMaxCapturePixels = 7800;
+
+/// The density to photograph a boundary of [size] at.
+///
+/// [preferred] on anything of a normal size - two device pixels per logical
+/// one, because these go into budget papers and get read on paper, where a
+/// screen-resolution capture of a grid of small figures is unreadable. Wound
+/// back only as far as it has to be, and never below one.
+double captureRatioFor(Size? size, {double preferred = 2.0}) {
+  if (size == null) return preferred;
+  final longest = size.width > size.height ? size.width : size.height;
+  if (longest <= 0 || longest * preferred <= kMaxCapturePixels) return preferred;
+  final fitted = kMaxCapturePixels / longest;
+  return fitted < 1 ? 1 : fitted;
+}
+
 /// Renders [sheet] at its natural size off the side of the screen and
 /// photographs it.
 ///
@@ -76,7 +100,15 @@ Future<Uint8List?> captureOffscreenSheet(
     // never been painted has no layer to photograph.
     await WidgetsBinding.instance.endOfFrame;
     await WidgetsBinding.instance.endOfFrame;
-    return await captureBoundary(key, pixelRatio: pixelRatio);
+    return await captureBoundary(
+      key,
+      // Asked AFTER the layout, because the whole point of this render is that
+      // nothing knew how big the sheet was until it was laid out.
+      pixelRatio: captureRatioFor(
+        key.currentContext?.size,
+        preferred: pixelRatio,
+      ),
+    );
   } catch (_) {
     return null;
   } finally {
@@ -149,10 +181,10 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
     setState(() => _saving = true);
     Uint8List? bytes;
     try {
-      // Two pixels per logical one: this goes into a budget paper and is read
-      // on paper, where a screen-resolution capture of a grid of small figures
-      // is unreadable.
-      bytes = await captureBoundary(_boundary, pixelRatio: 2.0);
+      bytes = await captureBoundary(
+        _boundary,
+        pixelRatio: captureRatioFor(_boundary.currentContext?.size),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
