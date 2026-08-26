@@ -8,7 +8,12 @@ import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:path/path.dart' as path;
+
 import 'app_snack.dart';
+import 'campus_file.dart';
+import 'campus_lifecycle_view.dart'
+    show showCampusLifecycle, showCampusLifecycleFile;
 import 'app_state.dart';
 import 'av_device_library.dart';
 import 'av_only_notice.dart';
@@ -1113,12 +1118,33 @@ class _MainDashboardState extends State<MainDashboard> {
     // to open the job — being told it is not a room config would be the app
     // refusing to do the obvious thing.
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Open a room config or a project',
+      dialogTitle: 'Open a room config, a project or a campus',
       type: FileType.custom,
       allowedExtensions: const ['json'],
     );
     final file = picked?.files.single.path;
     if (file == null || !context.mounted) return;
+
+    // THREE DOCUMENTS, ONE BUTTON. A campus is a list of jobs somebody
+    // assembled and named - see campus_file.dart - and opening it here rather
+    // than only from inside the campus view means the file behaves like the
+    // document it is: double-click-ish, from the same place as the other two.
+    if (CampusFile.looksLikeCampus(file)) {
+      try {
+        final campus = await CampusFile.load(file);
+        if (!context.mounted) return;
+        await showCampusLifecycleFile(context, campus);
+      } catch (e) {
+        if (!context.mounted) return;
+        showTimedSnackBar(
+          ScaffoldMessenger.of(context),
+          SnackBar(
+            content: Text('${path.basename(file)} is not a campus: $e'),
+          ),
+        );
+      }
+      return;
+    }
 
     if (isProjectFile(file)) {
       if (!await confirmLeavingProject(context, provider)) return;
@@ -1424,6 +1450,29 @@ class TopLevelBar extends StatelessWidget {
                   minRatio: kContrastLarge,
                 ),
                 onPressed: () => closeProjectFile(context, provider),
+              ),
+              // ONE LEVEL UP FROM THE JOB. The campus is the same session in a
+              // wider frame - this job and the others on one calendar - and it
+              // is reached from here rather than only from a button inside the
+              // Lifecycle pane, so the three levels read as three levels:
+              // campus over project over room, each with its own way out.
+              TextButton.icon(
+                key: const ValueKey('banner_campus_open'),
+                icon: const Icon(Icons.location_city, size: 18),
+                label: const Text('Campus'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: readableOn(
+                    bannerFill,
+                    prefer: [
+                      theme.textTheme.bodySmall?.color ??
+                          theme.colorScheme.onSurfaceVariant,
+                      theme.colorScheme.onSurface,
+                    ],
+                    minRatio: kContrastLarge,
+                  ),
+                ),
+                onPressed: () => showCampusLifecycle(context),
               ),
               const SizedBox(width: 8),
             ] else if (hasRoom) ...[

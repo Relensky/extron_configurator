@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:extron_configurator/app_state.dart';
+import 'package:extron_configurator/contrast.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/cost_estimate_view.dart';
@@ -308,6 +310,138 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Quantities are the devices'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  //  A DARK IMAGE OFF A LIGHT APP
+  // ---------------------------------------------------------------------------
+
+  /// Every text in the captured sheet that does not read on what is painted
+  /// behind it, as "ratio - the words".
+  List<String> unreadable(WidgetTester tester) {
+    final out = <String>[];
+    void walk(RenderObject node, List<Color> grounds) {
+      var stack = grounds;
+      if (node is RenderPhysicalShape && node.color.a == 1.0) {
+        stack = [...grounds, node.color];
+      } else if (node is RenderPhysicalModel && node.color.a == 1.0) {
+        stack = [...grounds, node.color];
+      } else if (node is RenderDecoratedBox) {
+        final d = node.decoration;
+        if (d is BoxDecoration && d.color != null && d.color!.a == 1.0) {
+          stack = [...grounds, d.color!];
+        }
+      }
+      if (node is RenderParagraph && stack.isNotEmpty) {
+        final span = node.text;
+        final text = span.toPlainText(includeSemanticsLabels: false).trim();
+        final ink = span.style?.color;
+        // An Icon is a glyph in a RichText with no plain text of its own, and
+        // a disabled one is meant to be faint.
+        if (text.isNotEmpty && ink != null) {
+          final ground = stack.last;
+          final ratio = contrastRatio(Color.alphaBlend(ink, ground), ground);
+          if (ratio < kContrastBody) {
+            out.add('${ratio.toStringAsFixed(2)}:1  "$text"');
+          }
+        }
+      }
+      node.visitChildren((c) => walk(c, stack));
+    }
+
+    walk(
+      capturedSheet().evaluate().single.renderObject!,
+      [const Color(0xFF16191D)],
+    );
+    return out;
+  }
+
+  testWidgets('a dark image off a light app is dark all the way down', (
+    tester,
+  ) async {
+    // THE FAILURE: the cards were built against the APP's theme and only
+    // wrapped in the image's afterwards, so a dark image taken from a light
+    // app came out with the totals in a white box, black section headings and
+    // the top of the sheet unreadable. The paper was the only thing that had
+    // heard about the brightness.
+    await pump(tester, room(extraLines: 1), capturing: Brightness.dark);
+
+    final bad = unreadable(tester);
+    expect(
+      bad,
+      isEmpty,
+      reason: 'unreadable on the dark image:\n${bad.join('\n')}',
+    );
+  });
+
+  testWidgets('and a light image off a light app still reads', (tester) async {
+    await pump(tester, room(extraLines: 1), capturing: Brightness.light);
+    final bad = unreadable(tester);
+    expect(
+      bad,
+      isEmpty,
+      reason: 'unreadable on the light image:\n${bad.join('\n')}',
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  //  READING A CELL THAT DID NOT FIT
+  // ---------------------------------------------------------------------------
+
+  testWidgets('a cut-off device hovers to its name and model', (tester) async {
+    final p = room();
+    // A name far longer than the Device column, on a narrow window.
+    p.addAvNode(
+      device('D2', 'Lectern rack frame with the cable cubby under it',
+          'Display X'),
+    );
+    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final long = find.textContaining('Lectern rack frame');
+    expect(long, findsWidgets);
+    final tip = find.ancestor(of: long.first, matching: find.byType(Tooltip));
+    expect(
+      tip,
+      findsWidgets,
+      reason: 'a name the column cannot show has to be readable somehow',
+    );
+    expect(
+      tester.widget<Tooltip>(tip.first).message,
+      contains('Display X'),
+      reason: 'the model is half of what the row is',
+    );
+  });
+
+  testWidgets('a name that fits is left alone', (tester) async {
+    // The other half: a tooltip over every cell in a table of ninety is a
+    // page that flickers a black box wherever the pointer rests.
+    final p = room();
+    tester.view.physicalSize = const Size(1900, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final short = find.text('Display');
+    expect(short, findsWidgets);
+    expect(
+      find.ancestor(of: short.first, matching: find.byType(Tooltip)),
+      findsNothing,
+    );
   });
 
 }

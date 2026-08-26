@@ -75,6 +75,48 @@ class PdfViewerDialog extends StatefulWidget {
 class _PdfViewerDialogState extends State<PdfViewerDialog> {
   final PdfViewerController _controller = PdfViewerController();
 
+  /// THE DRAWING SET'S OWN CONTENTS PAGE.
+  ///
+  /// A building's plan set is forty sheets - levels, ceilings, power, a riser
+  /// diagram - and every one of them looks like the last from a scroll thumb.
+  /// Whoever drew it already wrote the contents page: PDF bookmarks, which is
+  /// what an architect's export carries and what "go to Level 2" means in
+  /// every other reader. Read once when the document opens; a set with no
+  /// bookmarks in it has none, and the panel lists its sheets instead of
+  /// standing there empty.
+  List<PdfOutlineNode> _chapters = const [];
+
+  /// How many sheets, for the panel's fallback list.
+  int _pages = 0;
+
+  /// Which sheet is on screen, so the panel can mark it.
+  int _page = 1;
+
+  /// Whether the contents panel is open. Opened by default on a document that
+  /// HAS chapters - a plan set is opened to find a sheet, and a contents page
+  /// somebody has to go looking for is one nobody knows is there.
+  bool _showChapters = false;
+
+  Future<void> _readOutline(PdfDocument? document) async {
+    if (document == null) {
+      if (mounted) setState(() => _chapters = const []);
+      return;
+    }
+    List<PdfOutlineNode> outline;
+    try {
+      outline = await document.loadOutline();
+    } catch (_) {
+      // A set whose bookmarks cannot be read is still a set to read.
+      outline = const [];
+    }
+    if (!mounted) return;
+    setState(() {
+      _chapters = outline;
+      _pages = document.pages.length;
+      _showChapters = outline.isNotEmpty;
+    });
+  }
+
   /// Wraps the rendered document so the top-bar camera button can capture it.
   final GlobalKey _captureKey = GlobalKey();
 
@@ -114,6 +156,18 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
                       style: Theme.of(context).textTheme.titleMedium,
                       overflow: TextOverflow.ellipsis),
                 ),
+                // THE WAY INTO A FORTY-SHEET SET.
+                if (_isPdf)
+                  IconButton(
+                    key: const ValueKey('document_viewer_chapters'),
+                    icon: const Icon(Icons.toc),
+                    isSelected: _showChapters,
+                    tooltip: _chapters.isEmpty
+                        ? 'Sheets - this document carries no chapters'
+                        : 'Chapters',
+                    onPressed: () =>
+                        setState(() => _showChapters = !_showChapters),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.photo_camera),
                   tooltip: 'Screenshot & annotate this page',
@@ -143,11 +197,32 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
           ),
           const Divider(height: 1),
           // The document itself, filling the rest of the dialog and captured
-          // for the screenshot action.
+          // for the screenshot action. The contents panel is OUTSIDE the
+          // capture boundary: a screenshot of a drawing is the drawing, not
+          // the drawing with a table of contents down the side of it.
           Expanded(
-            child: RepaintBoundary(
-              key: _captureKey,
-              child: _isPdf ? _pdf(context) : _image(context),
+            child: Row(
+              children: [
+                if (_isPdf && _showChapters) ...[
+                  SizedBox(
+                    width: 260,
+                    child: PdfChapterList(
+                      chapters: _chapters,
+                      pages: _pages,
+                      page: _page,
+                      onGoToDest: (dest) => _controller.goToDest(dest),
+                      onGoToPage: (n) => _controller.goToPage(pageNumber: n),
+                    ),
+                  ),
+                  const VerticalDivider(width: 1),
+                ],
+                Expanded(
+                  child: RepaintBoundary(
+                    key: _captureKey,
+                    child: _isPdf ? _pdf(context) : _image(context),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -160,6 +235,10 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
         controller: _controller,
         params: PdfViewerParams(
           margin: 8,
+          onDocumentChanged: _readOutline,
+          onPageChanged: (n) {
+            if (n != null && mounted) setState(() => _page = n);
+          },
           // A visible, draggable scroll thumb down the right edge.
           viewerOverlayBuilder: (context, size, handleLinkTap) => [
             PdfViewerScrollThumb(
@@ -199,4 +278,127 @@ class _PdfViewerDialogState extends State<PdfViewerDialog> {
           ),
         ),
       );
+}
+
+/// A plan set's contents page: its chapters, or its sheets when it has none.
+///
+/// Public so it can be tested without pdfium: the nesting, the selection and
+/// the fallback to a sheet list are the whole of it, and none of them need a
+/// real document to be wrong.
+///
+/// NESTED, because a drawing set's bookmarks are: "Architectural" over
+/// "Level 1" over "Reflected ceiling". Flattening it would turn the one piece
+/// of structure the person who drew the set left behind into a list of forty
+/// similar names.
+class PdfChapterList extends StatelessWidget {
+  final List<PdfOutlineNode> chapters;
+  final int pages;
+  final int page;
+  final ValueChanged<PdfDest?> onGoToDest;
+  final ValueChanged<int> onGoToPage;
+
+  const PdfChapterList({
+    super.key,
+    required this.chapters,
+    required this.pages,
+    required this.page,
+    required this.onGoToDest,
+    required this.onGoToPage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: Text(
+              chapters.isEmpty ? 'SHEETS' : 'CHAPTERS',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          if (chapters.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                'This set carries no bookmarks, so there is no contents page '
+                'to read off it. Its sheets are listed instead.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              children: chapters.isEmpty
+                  ? [
+                      for (var n = 1; n <= pages; n++)
+                        _row(
+                          context,
+                          title: 'Sheet $n',
+                          depth: 0,
+                          selected: n == page,
+                          onTap: () => onGoToPage(n),
+                        ),
+                    ]
+                  : [
+                      for (final node in chapters) ..._nodes(context, node, 0),
+                    ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One bookmark and everything under it, indented by how deep it sits.
+  List<Widget> _nodes(BuildContext context, PdfOutlineNode node, int depth) => [
+    _row(
+      context,
+      title: node.title.trim().isEmpty ? 'Untitled' : node.title.trim(),
+      depth: depth,
+      selected: node.dest?.pageNumber == page,
+      onTap: node.dest == null ? null : () => onGoToDest(node.dest),
+    ),
+    for (final child in node.children) ..._nodes(context, child, depth + 1),
+  ];
+
+  Widget _row(
+    BuildContext context, {
+    required String title,
+    required int depth,
+    required bool selected,
+    VoidCallback? onTap,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        color: selected
+            ? theme.colorScheme.primary.withValues(alpha: 0.12)
+            : null,
+        padding: EdgeInsets.fromLTRB(12.0 + depth * 14, 6, 12, 6),
+        child: Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: selected ? FontWeight.bold : null,
+            color: onTap == null
+                ? theme.colorScheme.onSurfaceVariant
+                : theme.colorScheme.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
 }

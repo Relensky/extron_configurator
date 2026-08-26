@@ -24,6 +24,7 @@ import 'cost_estimate.dart';
 import 'export_tools.dart';
 import 'labor_rates.dart';
 import 'labor_rates_dialog.dart';
+import 'legible_theme.dart';
 import 'live_text_field.dart';
 import 'print_mode.dart';
 import 'report_tools.dart';
@@ -152,6 +153,19 @@ const List<_Col> _kItemsCols = [
   // 40, which is what the column actually takes.
   _Col('', width: 80),
 ];
+
+/// The ink the quiet columns are set in - the model number beside a device,
+/// where a price came from, the note under a row.
+///
+/// ON SCREEN it is Material's disabled grey, which is what those columns have
+/// always been and reads as "this is secondary" at a glance. ON THE IMAGE it
+/// is the theme's measured muted ink instead: disabled grey is 38% of the
+/// page's ink by definition, which lands at 2.6:1 on a light sheet and 3.6:1
+/// on a dark one - fine for something greyed out on a screen, and not fine for
+/// a model number on a quote somebody is reading off a printout.
+Color mutedInk(BuildContext context, ThemeData theme) => PrintMode.of(context)
+    ? theme.colorScheme.onSurfaceVariant
+    : theme.disabledColor;
 
 class CostEstimateView extends StatefulWidget {
   /// The diagram to price. Null means "read it from the provider", which is
@@ -320,31 +334,33 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       baseCosts: provider.baseCosts,
       tier: provider.pricingTier,
     );
-    final theme = Theme.of(context);
-    final cards = <Widget>[
-              _header(context, provider, estimate, model),
-              const SizedBox(height: 12),
-              _equipmentCard(context, provider, estimate, model),
-              const SizedBox(height: 12),
-              _hardwareCard(context, provider, estimate),
-              const SizedBox(height: 12),
-              _cablingCard(context, provider, estimate, model),
-              const SizedBox(height: 12),
-              _laborCard(context, provider, estimate),
-              const SizedBox(height: 12),
-              _itemsCard(context, provider, estimate),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _feesCard(context, provider, settings)),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 380,
-                    child: _totalsCard(context, estimate, theme),
-                  ),
-                ],
-              ),
+    // THE CARDS ARE BUILT FROM WHATEVER CONTEXT ASKS FOR THEM, which is the
+    // whole point: the image is rendered under a theme of its own - see the
+    // frame below - and a card built out here would carry the APP's colours
+    // into it. A dark image taken from a light app came out with black
+    // headings, black figures and the totals in a white box, because the
+    // paper was the only thing that had heard about the brightness.
+    List<Widget> cardsIn(BuildContext context) => <Widget>[
+      _header(context, provider, estimate, model),
+      const SizedBox(height: 12),
+      _equipmentCard(context, provider, estimate, model),
+      const SizedBox(height: 12),
+      _hardwareCard(context, provider, estimate),
+      const SizedBox(height: 12),
+      _cablingCard(context, provider, estimate, model),
+      const SizedBox(height: 12),
+      _laborCard(context, provider, estimate),
+      const SizedBox(height: 12),
+      _itemsCard(context, provider, estimate),
+      const SizedBox(height: 12),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _feesCard(context, provider, settings)),
+          const SizedBox(width: 12),
+          SizedBox(width: 380, child: _totalsCard(context, estimate)),
+        ],
+      ),
     ];
 
     // --- the frame that gets photographed ---------------------------------
@@ -370,9 +386,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             child: Container(
               color: _capturePaper,
               child: Theme(
-                data: ThemeData(
-                  brightness: _captureBrightness,
-                  useMaterial3: true,
+                // Measured like every other theme in this app - a generated
+                // scheme is not safe on its own, see legible_theme.dart.
+                data: legibleTheme(
+                  ThemeData(
+                    brightness: _captureBrightness,
+                    useMaterial3: true,
+                  ),
                 ),
                 // Everything below asks this on the way past: the price boxes
                 // print their figure instead of an input outline, and the
@@ -381,10 +401,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   printing: true,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: cards,
+                    // A Builder, so the cards are built BELOW the theme above
+                    // and read the image's colours rather than the app's.
+                    child: Builder(
+                      builder: (context) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: cardsIn(context),
+                      ),
                     ),
                   ),
                 ),
@@ -399,7 +423,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       key: _sheetKey,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        children: cards,
+        children: cardsIn(context),
       ),
     );
   }
@@ -813,9 +837,14 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                     Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: _gridRow(_kEquipmentCols, [
-                      // Device
+                      // Device. The name and the model are one identity -
+                      // "Projector 1" says nothing without "PowerLite L630U"
+                      // beside it - so either cell, cut off, hovers to both.
                       extra == null
-                          ? _CellText(line.description)
+                          ? _CellText(
+                              line.description,
+                              hover: _rowIdentity(line),
+                            )
                           : LiveTextField(
                               fieldId: 'eqpdesc_${extra.id}',
                               initial: extra.description,
@@ -826,8 +855,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               ),
                             ),
                       // Model
-                      Text(
-                        extra == null
+                      _ModelCell(
+                        text: extra == null
                             ? (line.model.isEmpty ? '-' : line.model)
                             : [
                                 if (line.model.isNotEmpty) line.model,
@@ -838,11 +867,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 else
                                   'not on the diagram',
                               ].join(' · '),
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.disabledColor,
-                        ),
+                        hover: _rowIdentity(line),
+                        color: mutedInk(context, theme),
                       ),
                       // Qty: what the diagram counts, or the quantity typed
                       // on a line that is not drawn. Only the typed one can be
@@ -959,7 +985,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           fontSize: 11,
                           color: line.source == PriceSource.none
                               ? theme.colorScheme.error
-                              : theme.disabledColor,
+                              : mutedInk(context, theme),
                         ),
                       ),
                       // The row's buttons, as ONE cell: the grid reserves the
@@ -1119,7 +1145,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       'placed on the Racks tab, plus anything added here that '
                       'is bought but not racked',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.disabledColor,
+                        color: mutedInk(context, theme),
                       ),
                     ),
                   ),
@@ -1181,7 +1207,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           Icon(
                             iconForRackItem(line.category),
                             size: 15,
-                            color: theme.disabledColor,
+                            color: mutedInk(context, theme),
                           ),
                           const SizedBox(width: 6),
                           Expanded(
@@ -1202,7 +1228,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.disabledColor,
+                          color: mutedInk(context, theme),
                         ),
                       ),
                       // Qty
@@ -1254,7 +1280,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           fontSize: 11,
                           color: line.source == PriceSource.none
                               ? theme.colorScheme.error
-                              : theme.disabledColor,
+                              : mutedInk(context, theme),
                         ),
                       ),
                       // The row's buttons, as one cell.
@@ -1670,7 +1696,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           Row(
                             children: [
                               Icon(Icons.shopping_bag_outlined,
-                                  size: 15, color: theme.disabledColor),
+                                  size: 15, color: mutedInk(context, theme)),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: LiveTextField(
@@ -1691,7 +1717,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             textAlign: TextAlign.right,
                             style: TextStyle(
                               fontSize: 11,
-                              color: theme.disabledColor,
+                              color: mutedInk(context, theme),
                             ),
                           ),
                           // Spares column: for a quoted line this IS the
@@ -2189,7 +2215,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
           // normal case, and half these rows are legitimately flagged all the
           // way to the day somebody builds it.
           color: spare || uncontrolled
-              ? theme.disabledColor
+              ? mutedInk(context, theme)
               : Colors.orange.shade700,
         ),
         padding: EdgeInsets.zero,
@@ -3076,7 +3102,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: theme.disabledColor),
+          Icon(icon, size: 16, color: mutedInk(context, theme)),
           const SizedBox(width: 8),
           Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
         ],
@@ -4323,11 +4349,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   }
 
   // --- totals --------------------------------------------------------------
-  Widget _totalsCard(
-    BuildContext context,
-    CostEstimate estimate,
-    ThemeData theme,
-  ) {
+  Widget _totalsCard(BuildContext context, CostEstimate estimate) {
+    final theme = Theme.of(context);
     final currency = estimate.currency;
     Widget row(
       String label,
@@ -4707,8 +4730,48 @@ class _Col {
 /// It follows the box into the capture, where a [LiveTextField] prints its
 /// value at [kPrintValueInset] instead — so the photograph is as square as the
 /// screen.
+/// [child] under a tooltip ONLY WHERE THE TEXT IS CUT OFF.
+///
+/// A cost table is a fixed grid - the columns have to line up down the page,
+/// and a Device column wide enough for "Lectern rack frame with cable cubby"
+/// would leave nothing for the money. So the long ones ellipsize, and until
+/// now the only way to read one in full was to widen the window.
+///
+/// MEASURED RATHER THAN ALWAYS ON. A tooltip over every cell in a table of
+/// ninety is a page that flickers a black box at the pointer wherever it
+/// rests; one over the cells that are actually short of room is the answer to
+/// "what does that say". Null [message] leaves the cell alone.
+Widget hoverWhenClipped({
+  required String text,
+  required String? message,
+  required TextStyle style,
+  required Widget child,
+}) {
+  if (message == null || message.trim().isEmpty || text.trim().isEmpty) {
+    return child;
+  }
+  return LayoutBuilder(
+    builder: (context, box) {
+      if (!box.maxWidth.isFinite) return child;
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        maxLines: 1,
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout(maxWidth: box.maxWidth);
+      final clipped = painter.didExceedMaxLines || painter.width > box.maxWidth;
+      painter.dispose();
+      return clipped ? Tooltip(message: message, child: child) : child;
+    },
+  );
+}
+
 class _CellText extends StatelessWidget {
   final String text;
+
+  /// What to say on hover when the text does not fit - the whole row's
+  /// identity, not just this cell's. Null asks for no tooltip at all.
+  final String? hover;
 
   /// Right-aligned and inset from the right, the way a numeric field puts its
   /// figure.
@@ -4719,22 +4782,33 @@ class _CellText extends StatelessWidget {
   /// cell edge by the width of the one on the row above.
   final bool stepper;
 
-  const _CellText(this.text, {this.numeric = false, this.stepper = false});
+  const _CellText(
+    this.text, {
+    this.numeric = false,
+    this.stepper = false,
+    this.hover,
+  });
 
   @override
   Widget build(BuildContext context) {
     final inset =
         (PrintMode.of(context) ? kPrintValueInset : kFieldTextInset) +
         (stepper ? kStepButtonWidth : 0);
+    const style = TextStyle(fontSize: 13);
     return Padding(
       padding: numeric
           ? EdgeInsets.only(right: inset)
           : EdgeInsets.only(left: inset),
-      child: Text(
-        text,
-        textAlign: numeric ? TextAlign.right : TextAlign.left,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 13),
+      child: hoverWhenClipped(
+        text: text,
+        message: hover,
+        style: style,
+        child: Text(
+          text,
+          textAlign: numeric ? TextAlign.right : TextAlign.left,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        ),
       ),
     );
   }
@@ -4860,7 +4934,7 @@ class _CardHeading extends StatelessWidget {
                   subtitle!,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.disabledColor,
+                    color: mutedInk(context, theme),
                   ),
                 ),
               ),
@@ -5113,4 +5187,39 @@ Future<String?> _pickJobType(
       },
     ),
   );
+}
+
+/// What a row IS, for the hover on a cell that could not show it all.
+///
+/// The device and the model together, because neither answers "what is that"
+/// on its own: a row called "Projector 1" means nothing without the product
+/// beside it, and a row that only shows "PowerLite L630U" does not say which
+/// of the three in the room it is.
+String _rowIdentity(CostLine line) => [
+  if (line.description.trim().isNotEmpty) line.description.trim(),
+  if (line.model.trim().isNotEmpty) line.model.trim(),
+].join('\n');
+
+/// The Model column's cell - the quiet half of a row's identity.
+class _ModelCell extends StatelessWidget {
+  final String text;
+  final String? hover;
+  final Color color;
+
+  const _ModelCell({
+    required this.text,
+    required this.hover,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(fontSize: 12, color: color);
+    return hoverWhenClipped(
+      text: text,
+      message: hover,
+      style: style,
+      child: Text(text, overflow: TextOverflow.ellipsis, style: style),
+    );
+  }
 }

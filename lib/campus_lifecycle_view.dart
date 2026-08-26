@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'av_flow_model.dart' show formatEquipmentDate;
 import 'building_project.dart' show kProjectFileSuffix;
+import 'campus_file.dart';
 import 'campus_lifecycle.dart';
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
@@ -21,6 +23,8 @@ import 'lifecycle_view.dart'
         equipmentTimingColor,
         equipmentTimingFill;
 import 'pinned_grid.dart';
+import 'save_actions.dart'
+    show confirmLeavingProject, openProjectAtPath;
 
 /// ============================================================================
 ///  THE CAMPUS VIEW
@@ -65,10 +69,43 @@ Future<void> showCampusLifecycle(BuildContext context) async {
   );
 }
 
+/// Opens the campus SAVED AT [file] - the list of jobs somebody assembled once
+/// and named, re-read off disk so the plan is today's.
+///
+/// Its own entry point because a campus is a document now: Open File hands one
+/// here the same way it hands a project to [openProjectAtPath], and a campus
+/// opened that way has to be the campus opened from the button.
+Future<void> showCampusLifecycleFile(
+  BuildContext context,
+  CampusFile campus,
+) async {
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => Dialog.fullscreen(
+      child: _CampusView(
+        initial: campus.projects,
+        name: campus.name,
+        savedAt: campus.file,
+      ),
+    ),
+  );
+}
+
 class _CampusView extends StatefulWidget {
   final List<String> initial;
 
-  const _CampusView({required this.initial});
+  /// What this estate is called, when it came out of a campus file.
+  final String name;
+
+  /// The campus file it came out of, so saving again goes back to it.
+  final String savedAt;
+
+  const _CampusView({
+    required this.initial,
+    this.name = '',
+    this.savedAt = '',
+  });
 
   @override
   State<_CampusView> createState() => _CampusViewState();
@@ -79,6 +116,11 @@ class _CampusViewState extends State<_CampusView> {
   /// lose that order, and the order is how somebody keeps track of what they
   /// have added on an estate of thirty.
   late final List<String> _paths = [...widget.initial];
+
+  /// What this estate is called, and the file it is saved in - both empty
+  /// until somebody saves it or opens one.
+  late String _name = widget.name;
+  late String _file = widget.savedAt;
 
   CampusLifecycle? _campus;
   bool _reading = false;
@@ -172,6 +214,151 @@ class _CampusViewState extends State<_CampusView> {
     if (added > 0) _reread();
   }
 
+  // -------------------------------------------------------------------------
+  //  THE CAMPUS AS A DOCUMENT
+  // -------------------------------------------------------------------------
+  //  An assembled campus was worth nothing the moment the window closed: the
+  //  next person to want the same estate picked the same eleven files out of
+  //  the same four folders from memory, and got a different eleven. Saving it
+  //  keeps the LIST - never the figures, which are re-read off disk every time
+  //  it is opened, so a campus saved in March opens in June showing June.
+
+  /// Writes the campus, asking for a name the first time and a folder every
+  /// time it is saved somewhere new.
+  Future<void> _saveCampus() async {
+    final messenger = ScaffoldMessenger.of(context);
+    var name = _name;
+    if (name.trim().isEmpty) {
+      final asked = await _askName();
+      if (asked == null || !mounted) return;
+      name = asked;
+    }
+    final campus = CampusFile(name: name, projects: _paths);
+    final picked = await FilePicker.saveFile(
+      dialogTitle: 'Save this campus',
+      fileName: _file.isNotEmpty
+          ? path.basename(_file)
+          : '${campus.fileStem}$kCampusFileSuffix',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+    if (picked == null) return;
+    // Named the way this app names its own documents, so the campus and the
+    // projects beside it are told apart in a folder listing and by
+    // [CampusFile.looksLikeCampus].
+    final target = picked.toLowerCase().endsWith('.json')
+        ? picked
+        : '$picked$kCampusFileSuffix';
+    try {
+      await campus.save(target);
+      if (!mounted) return;
+      setState(() {
+        _name = name;
+        _file = target;
+      });
+      showSavedFileSnack(context, context.read<AppStateProvider>(),
+          'The campus', target);
+    } catch (e) {
+      showTimedSnackBar(
+        messenger,
+        SnackBar(
+          content: Text('The campus could not be saved: $e'),
+          backgroundColor: snackErrorFillOn(messenger),
+        ),
+      );
+    }
+  }
+
+  /// Opens a saved campus over this one.
+  Future<void> _openCampus() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: 'Open a campus',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+    final file = picked?.files.single.path;
+    if (file == null || !mounted) return;
+    try {
+      final campus = await CampusFile.load(file);
+      if (!mounted) return;
+      setState(() {
+        _paths
+          ..clear()
+          ..addAll(campus.projects);
+        _name = campus.name;
+        _file = campus.file;
+        _campus = null;
+      });
+      await _reread();
+    } catch (e) {
+      showTimedSnackBar(
+        messenger,
+        SnackBar(
+          content: Text('${path.basename(file)} is not a campus: $e'),
+          backgroundColor: snackErrorFillOn(messenger),
+        ),
+      );
+    }
+  }
+
+  /// Asks what the estate is called. A campus with no name is a file called
+  /// campus.json in a folder of them.
+  Future<String?> _askName() async {
+    final controller = TextEditingController(text: _name);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('campus_name_dialog'),
+        title: const Text('What is this campus called?'),
+        content: SizedBox(
+          width: 380,
+          child: TextField(
+            key: const ValueKey('campus_name'),
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Called',
+              hintText: 'Chico campus',
+              helperText: 'It heads the sheet and names the file.',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('campus_name_ok'),
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Opens one of the buildings as the job it is, and leaves the campus.
+  ///
+  /// THE WAY IN FROM THE OVERVIEW. The campus answers "which year is
+  /// frightening and which buildings make it up"; the answer to both is a job
+  /// somebody then has to work on, and going and finding that job on disk
+  /// again is the step this removes. Same prompt about unsaved edits and same
+  /// briefing as every other way of opening a project - see
+  /// [openProjectAtPath].
+  Future<void> _openJob(String file) async {
+    final provider = context.read<AppStateProvider>();
+    if (!await confirmLeavingProject(context, provider)) return;
+    if (!mounted) return;
+    final opened = await openProjectAtPath(context, provider, file);
+    // Only on the way in: a job that would not open leaves the campus where
+    // it was, with the message about why on top of it.
+    if (opened && mounted) Navigator.of(context).pop();
+  }
+
   void _remove(String file) {
     _paths.removeWhere((p) => path.equals(p, file));
     if (_paths.isEmpty) {
@@ -197,7 +384,12 @@ class _CampusViewState extends State<_CampusView> {
     final at = _campus?.asOf ?? DateTime.now();
     final month = at.month.toString().padLeft(2, '0');
     final day = at.day.toString().padLeft(2, '0');
-    return 'campus_refresh_plan_${at.year}-$month-$day';
+    // A campus that has been saved HAS a name, and a folder of exports called
+    // after four different estates beats a folder of dates.
+    final named = _name.trim().isEmpty
+        ? ''
+        : '${CampusFile(name: _name, projects: const []).fileStem}_';
+    return '${named}campus_refresh_plan_${at.year}-$month-$day';
   }
 
   void _picture() => showLifecycleSheetPicture(
@@ -236,50 +428,152 @@ class _CampusViewState extends State<_CampusView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final campus = _campus;
+    // THE LABELS GIVE WAY BEFORE THE BUTTONS DO. The bar carries the mode
+    // strip and four controls, and on a laptop the four of them with their
+    // labels on ran off the right-hand edge - which is a button that cannot
+    // be pressed on a screen that had room for it.
+    final compact = MediaQuery.sizeOf(context).width < 1300;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Campus refresh plan'),
-        leading: IconButton(
-          key: const ValueKey('campus_close'),
-          icon: const Icon(Icons.close),
-          tooltip: 'Back to the job',
-          onPressed: () => Navigator.of(context).pop(),
+        // WHICH MODE THIS SESSION IS IN, said the same way the banner says it
+        // one level down. The strip under the title bar reads Room when a room
+        // is open and Project when a job is; while the campus is up it reads
+        // CAMPUS, and pressing it drops back to the job - the same shape, the
+        // same size, the same X beside it, so closing goes campus, project,
+        // room without anybody having to learn a second control.
+        titleSpacing: 12,
+        leadingWidth: 0,
+        leading: const SizedBox.shrink(),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton.icon(
+              key: const ValueKey('banner_campus'),
+              icon: const Icon(Icons.location_city, size: 22),
+              label: const Text('Campus'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                minimumSize: const Size(0, 44),
+                textStyle: theme.textTheme.titleMedium,
+              ),
+              // A toggle rather than a label: it is lit because the campus is
+              // what is open, and pressing it is how you stop being in it.
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            IconButton(
+              key: const ValueKey('campus_close'),
+              icon: const Icon(Icons.close, size: 18),
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Close the campus and go back to the project',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
         ),
         actions: [
-          TextButton.icon(
-            key: const ValueKey('campus_add_files'),
-            onPressed: _reading ? null : _addFiles,
-            icon: const Icon(Icons.note_add_outlined, size: 18),
-            label: const Text('Add projects…'),
+          // FOUR CONTROLS, NOT SIX. The bar carries the mode strip as well
+          // now, and six full-width buttons beside it ran off the edge of a
+          // laptop - so the two ways of adding jobs share a menu, and so do
+          // the two documents the sheet can be turned into.
+          PopupMenuButton<String>(
+            key: const ValueKey('campus_add'),
+            enabled: !_reading,
+            tooltip: 'Put jobs on this campus',
+            onSelected: (v) => v == 'files' ? _addFiles() : _addFolder(),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                key: ValueKey('campus_add_files'),
+                value: 'files',
+                child: Text('Add projects…'),
+              ),
+              PopupMenuItem(
+                key: ValueKey('campus_add_folder'),
+                value: 'folder',
+                child: Text('Add a folder…'),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.note_add_outlined, size: 18),
+                  if (!compact) ...[
+                    const SizedBox(width: 6),
+                    const Text('Add jobs…'),
+                  ],
+                ],
+              ),
+            ),
           ),
-          TextButton.icon(
-            key: const ValueKey('campus_add_folder'),
-            onPressed: _reading ? null : _addFolder,
-            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-            label: const Text('Add a folder…'),
-          ),
+          const SizedBox(width: 8),
+          // THE ASSEMBLY ITSELF, KEPT. See [_saveCampus].
+          if (compact) ...[
+            IconButton(
+              key: const ValueKey('campus_open'),
+              onPressed: _reading ? null : _openCampus,
+              icon: const Icon(Icons.folder_open_outlined, size: 18),
+              tooltip: 'Open a campus…',
+            ),
+            IconButton(
+              key: const ValueKey('campus_save'),
+              onPressed: _reading || _paths.isEmpty ? null : _saveCampus,
+              icon: const Icon(Icons.save_outlined, size: 18),
+              tooltip: 'Save the campus…',
+            ),
+          ] else ...[
+            TextButton.icon(
+              key: const ValueKey('campus_open'),
+              onPressed: _reading ? null : _openCampus,
+              icon: const Icon(Icons.folder_open_outlined, size: 18),
+              label: const Text('Open a campus…'),
+            ),
+            TextButton.icon(
+              key: const ValueKey('campus_save'),
+              onPressed: _reading || _paths.isEmpty ? null : _saveCampus,
+              icon: const Icon(Icons.save_outlined, size: 18),
+              label: const Text('Save the campus…'),
+            ),
+          ],
+          const SizedBox(width: 8),
           // WHAT LEAVES THE ROOM. This view exists to be quoted at a budget
           // meeting, and until now the only way to quote it was to describe
           // it: nothing on it could be attached to a mail or pasted onto a
-          // slide. Disabled until there is a campus to picture - the buttons
-          // are visible so somebody knows they are coming.
-          const SizedBox(width: 8),
-          TextButton.icon(
-            key: const ValueKey('campus_picture'),
-            onPressed: _reading || campus == null || campus.isEmpty
-                ? null
-                : _picture,
-            icon: const Icon(Icons.image_outlined, size: 18),
-            label: const Text('Picture…'),
-          ),
-          TextButton.icon(
-            key: const ValueKey('campus_spreadsheet'),
-            onPressed: _reading || _exporting || campus == null || campus.jobs.isEmpty
-                ? null
-                : _spreadsheet,
-            icon: const Icon(Icons.table_view, size: 18),
-            label: Text(_exporting ? 'Drawing…' : 'Spreadsheet…'),
+          // slide. Disabled until there is a campus to picture.
+          PopupMenuButton<String>(
+            key: const ValueKey('campus_export'),
+            enabled: !_reading &&
+                !_exporting &&
+                campus != null &&
+                !campus.isEmpty,
+            tooltip: 'Hand this campus over',
+            onSelected: (v) => v == 'picture' ? _picture() : _spreadsheet(),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                key: ValueKey('campus_picture'),
+                value: 'picture',
+                child: Text('Picture…'),
+              ),
+              PopupMenuItem(
+                key: ValueKey('campus_spreadsheet'),
+                value: 'spreadsheet',
+                child: Text('Spreadsheet…'),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.ios_share, size: 18),
+                  if (!compact || _exporting) ...[
+                    const SizedBox(width: 6),
+                    Text(_exporting ? 'Drawing…' : 'Hand over…'),
+                  ],
+                ],
+              ),
+            ),
           ),
           const SizedBox(width: 12),
         ],
@@ -296,13 +590,29 @@ class _CampusViewState extends State<_CampusView> {
                         padding: EdgeInsets.only(bottom: 8),
                         child: LinearProgressIndicator(),
                       ),
+                    // WHAT THIS ESTATE IS CALLED, where a heading has room
+                    // to be one. The app bar carries the mode control and the
+                    // five things a campus can be done to; a long name up
+                    // there pushed the lot off the edge.
+                    if (_name.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          _name.trim(),
+                          style: theme.textTheme.headlineSmall,
+                        ),
+                      ),
                     _CampusHeadline(campus: campus),
                     const SizedBox(height: 12),
                     const EquipmentTimingKey(),
                     const SizedBox(height: 12),
                     _CampusGrid(campus: campus),
                     const SizedBox(height: 16),
-                    _JobList(campus: campus, onRemove: _remove),
+                    _JobList(
+                      campus: campus,
+                      onRemove: _remove,
+                      onOpen: _openJob,
+                    ),
                     if (campus.failed.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Text(
@@ -1151,7 +1461,14 @@ class _JobList extends StatelessWidget {
   final CampusLifecycle campus;
   final ValueChanged<String> onRemove;
 
-  const _JobList({required this.campus, required this.onRemove});
+  /// Opens one of them as the job it is - see [_CampusViewState._openJob].
+  final ValueChanged<String> onOpen;
+
+  const _JobList({
+    required this.campus,
+    required this.onRemove,
+    required this.onOpen,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1207,6 +1524,16 @@ class _JobList extends StatelessWidget {
                     ],
                   ),
                 ),
+                // The way from the overview into the job it is about. Only
+                // on a job that could be read - a file that failed to open
+                // as a campus entry will not open as a project either.
+                if (j.error.isEmpty)
+                  TextButton.icon(
+                    key: ValueKey('campus_open_${path.basename(j.path)}'),
+                    onPressed: () => onOpen(j.path),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Open'),
+                  ),
                 IconButton(
                   key: ValueKey('campus_remove_${path.basename(j.path)}'),
                   tooltip: 'Take it off the campus (the file is untouched)',

@@ -499,4 +499,92 @@ void main() {
       expect(railTabs, isNot(contains(banner)));
     }
   });
+  // -------------------------------------------------------------------------
+  //  THREE LEVELS, EACH WITH ITS OWN WAY OUT
+  // -------------------------------------------------------------------------
+  //  Room, then the job it belongs to, then the estate the job is one of.
+  //  Each level says what it is in the same place and closes down to the one
+  //  below it, so "where am I" and "how do I get out of here" have one answer
+  //  each rather than three.
+
+  testWidgets('a job offers the campus over it', (tester) async {
+    final p = fresh();
+    await pump(tester, p);
+    // Nothing to compare across a campus until there is a job on it.
+    expect(find.byKey(const ValueKey('banner_campus_open')), findsNothing);
+
+    p.newProject(name: 'Bessey Hall');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('banner_campus_open')), findsOneWidget);
+  });
+
+  testWidgets('the campus says it is the campus, and closes down to the job',
+      (tester) async {
+    final p = fresh();
+    p.newProject(name: 'Bessey Hall');
+    await pump(tester, p);
+
+    await tester.tap(find.byKey(const ValueKey('banner_campus_open')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The mode control now reads CAMPUS, in the same shape and size the
+    // banner's own uses one level down.
+    final campus = find.byKey(const ValueKey('banner_campus'));
+    expect(campus, findsOneWidget);
+    expect(tester.getRect(campus).height, greaterThanOrEqualTo(44));
+    expect(
+      tester.getRect(campus).height,
+      greaterThan(
+        tester.getRect(find.byKey(const ValueKey('campus_close'))).height,
+      ),
+    );
+    // And it can be saved and reopened as a document of its own.
+    expect(find.byKey(const ValueKey('campus_save')), findsOneWidget);
+    expect(find.byKey(const ValueKey('campus_open')), findsOneWidget);
+
+    // Pressing it is how you stop being in it: back down to the job, whose
+    // own X goes back down to the room.
+    await tester.tap(campus);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('banner_campus')), findsNothing);
+    expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('banner_project_close')),
+      findsOneWidget,
+      reason: 'and the job still closes down to the room',
+    );
+  });
+
+  for (final width in [1100.0, 1280.0, 1600.0]) {
+    testWidgets('the campus bar fits a $width window', (tester) async {
+      // The bar carries the mode strip and four controls; on a laptop the
+      // four of them with their labels on ran off the right-hand edge, which
+      // is a button that cannot be pressed on a screen that had room for it.
+      final p = fresh();
+      p.newProject(name: 'Bessey Hall');
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const RoomConfigApp(),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('banner_campus_open')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(const ValueKey('banner_campus')), findsOneWidget);
+      // Every control still there, whichever shape it is in.
+      for (final key in ['campus_add', 'campus_open', 'campus_save']) {
+        expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+      }
+      expect(tester.takeException(), isNull, reason: 'overflowed at $width');
+    });
+  }
+
 }
