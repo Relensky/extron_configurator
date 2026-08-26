@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'contrast.dart';
 import 'device_recheck.dart';
 
 /// ============================================================================
@@ -82,11 +83,25 @@ class _DeviceRecheckDialogState extends State<_DeviceRecheckDialog> {
           const SizedBox(width: 12),
           if (!result.isClean)
             Chip(
+              // TWO FILLS, SO TWO INKS. This chip is green-ish when the work
+              // is done and red when it is not, and its label carried neither
+              // - so it inherited the page's ink onto whichever of the two it
+              // happened to be painting. On Classic with a dark blue accent
+              // secondaryContainer IS a dark blue and the page's ink is
+              // near-black: 1.07:1.
               label: Text(
                 _done.length >= result.findings
                     ? 'all ${result.findings} dealt with'
                     : '${result.findings - _done.length} to look at',
-                style: const TextStyle(fontSize: 12),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: foregroundOn(
+                    theme.colorScheme,
+                    _done.length >= result.findings
+                        ? theme.colorScheme.secondaryContainer
+                        : theme.colorScheme.errorContainer,
+                  ),
+                ),
               ),
               backgroundColor: _done.length >= result.findings
                   ? theme.colorScheme.secondaryContainer

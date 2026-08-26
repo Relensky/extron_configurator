@@ -117,6 +117,222 @@ ThemeData legibleTheme(ThemeData theme) {
         plain: theme.chipTheme.backgroundColor ?? scheme.surfaceContainerLow,
       ),
     ),
+    // ------------------------------------------------------------------
+    //  THE FOREGROUNDS THE THEME NAMES ON A FILL THE THEME ALSO NAMES
+    // ------------------------------------------------------------------
+    //  Everything above is about the scheme and about buttons. These are the
+    //  component themes that carry their OWN ink on their OWN fill, which
+    //  nothing above touches - so a generator that got one of them wrong got
+    //  it wrong all the way to the screen. Measured across every accent in the
+    //  picker plus a grid of hues at five lightnesses, the failures were real
+    //  and several were total: an app bar icon at 1.02:1, a list-tile icon at
+    //  1.00:1, a nav-rail label at 1.02:1, a tab label at 1.03:1.
+    //
+    //  [legibleTone] rather than [readableOn] throughout: these are the app's
+    //  own colours on the app's own furniture, and an accent that turned white
+    //  would stop being the accent. The tone keeps the hue and moves the
+    //  lightness only as far as it has to.
+    appBarTheme: _measuredAppBar(theme.appBarTheme, scheme),
+    tabBarTheme: _measuredTabBar(
+      theme.tabBarTheme,
+      theme.appBarTheme.backgroundColor ?? scheme.surface,
+    ),
+    snackBarTheme: _measuredSnackBar(theme.snackBarTheme, scheme),
+    floatingActionButtonTheme: _measuredFab(
+      theme.floatingActionButtonTheme,
+      scheme,
+    ),
+    listTileTheme: _measuredListTile(theme.listTileTheme, scheme, behind),
+    navigationRailTheme: _measuredRail(theme.navigationRailTheme, scheme),
+    inputDecorationTheme: _measuredField(theme.inputDecorationTheme, behind),
+  );
+}
+
+/// A colour that reads on EVERY ground in [grounds].
+///
+/// The same question the transparent buttons ask: a list tile is used on the
+/// page, in a card and in a dialog, and a field is dropped into all three too.
+/// Measuring against whichever one the theme happens to name leaves the other
+/// two to chance - which is how a tile's ink came out fine on `surface` and
+/// unreadable on the card the app actually draws it in.
+///
+/// WALKED TO A FIXED POINT, not once per ground. [legibleTone] moves a colour
+/// the NEARER way, so fixing it against a light ground can push it back under
+/// the bar on a dark one - and one pass down a list of four leaves whichever
+/// ground came first to chance. Repeating until nothing moves settles it,
+/// which on grounds this close together takes two passes at most.
+///
+/// If it still will not settle, black or white takes over against the ground
+/// it reads worst on. Losing the hue is a real loss; losing the text is worse,
+/// and that is the same trade [legibleTone] makes at the end of its own walk.
+Color? _inkOnAll(Color? ink, List<Color> grounds, {double min = kContrastBody}) {
+  if (ink == null || grounds.isEmpty) return ink;
+
+  var out = ink;
+  for (var pass = 0; pass < 6; pass++) {
+    var moved = false;
+    for (final ground in grounds) {
+      final next = legibleTone(out, ground, minRatio: min);
+      if (next != out) {
+        out = next;
+        moved = true;
+      }
+    }
+    if (!moved) return out;
+  }
+
+  var worst = grounds.first;
+  for (final ground in grounds) {
+    if (contrastRatio(out, ground) < contrastRatio(out, worst)) worst = ground;
+  }
+  return readableOn(worst, prefer: [out], minRatio: min);
+}
+
+TextStyle? _styleOnAll(TextStyle? style, List<Color> grounds,
+        {double min = kContrastBody}) =>
+    style?.color == null
+        ? style
+        : style!.copyWith(color: _inkOnAll(style.color, grounds, min: min));
+
+/// A colour moved onto [ground] only if it does not already read there.
+Color? _ink(Color? ink, Color ground, {double min = kContrastBody}) =>
+    ink == null ? null : legibleTone(ink, ground, minRatio: min);
+
+/// A text style whose colour has been measured against [ground].
+TextStyle? _inkStyle(TextStyle? style, Color ground,
+        {double min = kContrastBody}) =>
+    style?.color == null
+        ? style
+        : style!.copyWith(color: _ink(style.color, ground, min: min));
+
+/// The bar across the top: its title, its ink and both sets of icons, all
+/// measured against the fill the bar itself paints.
+AppBarThemeData _measuredAppBar(AppBarThemeData bar, ColorScheme scheme) {
+  final ground = bar.backgroundColor ?? scheme.surface;
+  return bar.copyWith(
+    foregroundColor: _ink(bar.foregroundColor, ground),
+    titleTextStyle: _inkStyle(bar.titleTextStyle, ground),
+    toolbarTextStyle: _inkStyle(bar.toolbarTextStyle, ground),
+    // Icons carry meaning rather than words, so they clear the large-text bar
+    // rather than the body one - the same rule the rest of the app uses.
+    iconTheme: bar.iconTheme?.color == null
+        ? bar.iconTheme
+        : bar.iconTheme!.copyWith(
+            color: _ink(bar.iconTheme!.color, ground, min: kContrastLarge),
+          ),
+    actionsIconTheme: bar.actionsIconTheme?.color == null
+        ? bar.actionsIconTheme
+        : bar.actionsIconTheme!.copyWith(
+            color:
+                _ink(bar.actionsIconTheme!.color, ground, min: kContrastLarge),
+          ),
+  );
+}
+
+/// Tabs sit on the app bar, so that is what their labels are measured on.
+///
+/// The unselected label is meant to be quieter and is held to the large bar;
+/// quieter is not the same as absent, and 1.03:1 is absent.
+TabBarThemeData _measuredTabBar(TabBarThemeData tabs, Color ground) =>
+    tabs.copyWith(
+      labelColor: _ink(tabs.labelColor, ground),
+      unselectedLabelColor:
+          _ink(tabs.unselectedLabelColor, ground, min: kContrastLarge),
+      labelStyle: _inkStyle(tabs.labelStyle, ground),
+      unselectedLabelStyle:
+          _inkStyle(tabs.unselectedLabelStyle, ground, min: kContrastLarge),
+    );
+
+/// A snack bar is a message somebody has a few seconds to read, and its action
+/// is the only thing on it that can be pressed.
+SnackBarThemeData _measuredSnackBar(SnackBarThemeData bar, ColorScheme scheme) {
+  final ground = bar.backgroundColor ?? scheme.inverseSurface;
+  return bar.copyWith(
+    contentTextStyle: _inkStyle(bar.contentTextStyle, ground),
+    actionTextColor: _ink(bar.actionTextColor, ground),
+  );
+}
+
+FloatingActionButtonThemeData _measuredFab(
+  FloatingActionButtonThemeData fab,
+  ColorScheme scheme,
+) {
+  final ground = fab.backgroundColor ?? scheme.primaryContainer;
+  return fab.copyWith(
+    foregroundColor: _ink(fab.foregroundColor, ground, min: kContrastLarge),
+  );
+}
+
+/// A list tile is used on the page, in a card and in a dialog, so its ink has
+/// to clear all three - unless the theme pins a fill of its own, in which case
+/// that is the only thing it ever sits on.
+ListTileThemeData _measuredListTile(
+  ListTileThemeData tile,
+  ColorScheme scheme,
+  List<Color> behind,
+) {
+  final grounds = tile.tileColor == null ? behind : [tile.tileColor!];
+  return tile.copyWith(
+    textColor: _inkOnAll(tile.textColor, grounds),
+    iconColor: _inkOnAll(tile.iconColor, grounds, min: kContrastLarge),
+  );
+}
+
+/// The words around a text field: its label, its hint, its helper and the
+/// prefix and suffix inside it.
+///
+/// THE HINT IS THE ONE THAT MATTERS. It is the only text in this app that is
+/// meant to be faint, which is exactly why it is the one a generator lets
+/// drift below readable - and on the cost sheet a hint is not decoration, it
+/// is the catalog price the row resolved to. Held to the large-text bar, which
+/// is quiet without being absent.
+InputDecorationThemeData _measuredField(
+  InputDecorationThemeData field,
+  List<Color> behind,
+) {
+  // A FILLED FIELD PAINTS ITS OWN GROUND. Auris fills; Classic does not, and
+  // there the words inside a field sit on whatever the field was dropped onto
+  // - the page, a card or a dialog - so all three have to clear.
+  final fill = field.fillColor;
+  final grounds = field.filled && fill != null ? [fill] : behind;
+  return field.copyWith(
+    labelStyle: _styleOnAll(field.labelStyle, grounds),
+    floatingLabelStyle: _styleOnAll(field.floatingLabelStyle, grounds),
+    hintStyle: _styleOnAll(field.hintStyle, grounds, min: kContrastLarge),
+    helperStyle: _styleOnAll(field.helperStyle, grounds, min: kContrastLarge),
+    prefixStyle: _styleOnAll(field.prefixStyle, grounds),
+    suffixStyle: _styleOnAll(field.suffixStyle, grounds),
+    counterStyle: _styleOnAll(field.counterStyle, grounds, min: kContrastLarge),
+  );
+}
+
+NavigationRailThemeData _measuredRail(
+  NavigationRailThemeData rail,
+  ColorScheme scheme,
+) {
+  final ground = rail.backgroundColor ?? scheme.surface;
+  return rail.copyWith(
+    selectedLabelTextStyle: _inkStyle(rail.selectedLabelTextStyle, ground),
+    unselectedLabelTextStyle:
+        _inkStyle(rail.unselectedLabelTextStyle, ground, min: kContrastLarge),
+    selectedIconTheme: rail.selectedIconTheme?.color == null
+        ? rail.selectedIconTheme
+        : rail.selectedIconTheme!.copyWith(
+            color: _ink(
+              rail.selectedIconTheme!.color,
+              ground,
+              min: kContrastLarge,
+            ),
+          ),
+    unselectedIconTheme: rail.unselectedIconTheme?.color == null
+        ? rail.unselectedIconTheme
+        : rail.unselectedIconTheme!.copyWith(
+            color: _ink(
+              rail.unselectedIconTheme!.color,
+              ground,
+              min: kContrastLarge,
+            ),
+          ),
   );
 }
 

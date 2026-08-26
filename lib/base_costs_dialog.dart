@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'contrast.dart';
 import 'av_port_editor.dart' show avRowIcon;
 import 'base_costs.dart';
 import 'cost_estimate.dart' show trimNumber;
@@ -75,7 +76,18 @@ class _BaseCostsDialogState extends State<_BaseCostsDialog> {
           const SizedBox(width: 12),
           if (_dirty)
             Chip(
-              label: const Text('Unsaved'),
+              // A CHIP THAT OVERRIDES ITS FILL HAS TO OVERRIDE ITS INK. The
+              // theme's label colour was measured against the chip's DEFAULT
+              // fill, and this one is not that fill.
+              label: Text(
+                'Unsaved',
+                style: TextStyle(
+                  color: errorTextOn(
+                    theme.colorScheme,
+                    theme.colorScheme.errorContainer,
+                  ),
+                ),
+              ),
               backgroundColor: theme.colorScheme.errorContainer,
               visualDensity: VisualDensity.compact,
             ),

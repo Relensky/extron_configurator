@@ -10791,6 +10791,47 @@ class AppStateProvider extends ChangeNotifier {
     return spare;
   }
 
+  /// Puts ONE of every part in [lines] on the building's shelf.
+  ///
+  /// THE ONE DECISION THAT IS THE SAME ON EVERY ROW. "One spare of everything
+  /// we install" is a policy plenty of jobs actually run, and until now it was
+  /// carried out by pressing Add on two hundred rows in turn - which is how a
+  /// job ends up with a shelf list that covers the first forty parts somebody
+  /// had the patience for.
+  ///
+  /// FOR THE BUILDING, not for a room. A spare bought because the job installs
+  /// the part at all belongs to the job; a spare bought for one room is a
+  /// decision about that room, and it is made on that room's own page.
+  ///
+  /// Returns how many were added. One notify and one history line for the lot:
+  /// two hundred separate entries would bury every other edit on the job.
+  int addOneSpareOfEach(List<MasterPartLine> lines) {
+    if (lines.isEmpty) return 0;
+    for (final line in lines) {
+      project.addSpare(
+        partKey: line.key,
+        // The part as it reads TODAY, so the row still says what it is after
+        // every room has been swapped off this model.
+        description: line.description,
+        model: line.model,
+        manufacturer: line.manufacturer,
+        partNumber: line.partNumber,
+        qty: 1,
+        roomId: '',
+        note: 'one of everything',
+      );
+    }
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Spares',
+      summary: 'one each added for ${lines.length} '
+          'part${lines.length == 1 ? '' : 's'}',
+    );
+    _projectChanged();
+    return lines.length;
+  }
+
   /// Changes how many of a spare the job is buying.
   void setProjectSpareQty(String spareId, double qty) {
     final before = project.spareById(spareId);

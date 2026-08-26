@@ -379,6 +379,71 @@ void main() {
     expect(p.priceProject().partsUnderRecommendedCover, isEmpty);
   });
 
+  // ONE OF EVERYTHING, IN ONE PRESS. The rule this page is built on is "one
+  // spare of everything the job installs", and carrying it out a row at a time
+  // is how a job ends up spared down to the first forty parts somebody had the
+  // patience for.
+  testWidgets('one press spares every part that has none', (tester) async {
+    final p = withRooms(3);
+    final line = p.priceProject().master.first;
+    expect(p.priceProject().unsparedParts, isNotEmpty);
+
+    await openSpares(tester, p);
+    await tester.tap(find.byKey(const ValueKey('project_spare_one_each')));
+    await tester.pumpAndSettle();
+
+    // IT ASKS FIRST, and says what it is about to buy.
+    expect(
+      find.byKey(const ValueKey('spare_one_each_confirm')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('spare_one_each_go')));
+    await tester.pumpAndSettle();
+
+    // Every part the job installs now has exactly one, on the shelf for the
+    // building rather than against any room.
+    final after = p.priceProject();
+    expect(after.unsparedParts, isEmpty);
+    expect(p.project.spares, isNotEmpty);
+    expect(p.project.spares.every((s) => s.forBuilding), isTrue);
+    expect(p.project.spares.every((s) => s.qty == 1), isTrue);
+    expect(
+      p.project.spares.any((s) => s.partKey == line.key),
+      isTrue,
+    );
+
+    await tester.pumpAndSettle(const Duration(seconds: 6));
+  });
+
+  testWidgets('backing out of it buys nothing', (tester) async {
+    final p = withRooms(3);
+    await openSpares(tester, p);
+
+    await tester.tap(find.byKey(const ValueKey('project_spare_one_each')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(p.project.spares, isEmpty);
+  });
+
+  testWidgets('the button is gone once nothing is short', (tester) async {
+    // A button that adds nothing is a button somebody presses twice to find
+    // out why.
+    final p = withRooms(3);
+    await openSpares(tester, p);
+    await tester.tap(find.byKey(const ValueKey('project_spare_one_each')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('spare_one_each_go')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('project_spare_one_each')),
+      findsNothing,
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 6));
+  });
+
   testWidgets('a spare is added from the no-spare check', (tester) async {
     final p = withRooms(2);
     final line = p.priceProject().master.first;

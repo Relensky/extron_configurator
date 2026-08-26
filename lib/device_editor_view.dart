@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'contrast.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_port_editor.dart';
@@ -275,8 +276,25 @@ class _DeviceEditorViewState extends State<DeviceEditorView> {
               const SizedBox(width: 4),
               if (_dirty)
                 Chip(
-                  avatar: const Icon(Icons.edit, size: 16),
-                  label: const Text('Unsaved changes'),
+                  // The avatar as well as the label: an icon on a fill nobody
+                  // measured is the same fault drawn smaller.
+                  avatar: Icon(
+                    Icons.edit,
+                    size: 16,
+                    color: errorTextOn(
+                      theme.colorScheme,
+                      theme.colorScheme.errorContainer,
+                    ),
+                  ),
+                  label: Text(
+                    'Unsaved changes',
+                    style: TextStyle(
+                      color: errorTextOn(
+                        theme.colorScheme,
+                        theme.colorScheme.errorContainer,
+                      ),
+                    ),
+                  ),
                   backgroundColor: theme.colorScheme.errorContainer,
                 ),
               OutlinedButton.icon(

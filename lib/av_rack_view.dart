@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'contrast.dart';
 import 'av_device_library.dart';
 import 'av_flow_model.dart';
 import 'av_flow_swap_dialogs.dart'
@@ -735,21 +736,42 @@ class _AvRackViewState extends State<AvRackView> {
             borderRadius: BorderRadius.circular(3),
             border: Border.all(color: theme.colorScheme.primary, width: 2),
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.drag_indicator, size: 13),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+          // MEASURED AGAINST THE FILL THIS CHIP PAINTS, not inherited from the
+          // page. Both of these carried no colour at all, so they took the
+          // ambient body ink - which is chosen for the PAGE. On Classic with a
+          // dark blue accent primaryContainer is itself a dark blue, and the
+          // page's ink is near-black: 1.1:1, a label that is simply not there.
+          child: DefaultTextStyle.merge(
+            style: TextStyle(
+              color: foregroundOn(
+                theme.colorScheme,
+                theme.colorScheme.primaryContainer,
+              ),
+            ),
+            child: IconTheme.merge(
+              data: IconThemeData(
+                color: foregroundOn(
+                  theme.colorScheme,
+                  theme.colorScheme.primaryContainer,
                 ),
               ),
-            ],
+              child: Row(
+                children: [
+                  const Icon(Icons.drag_indicator, size: 13),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

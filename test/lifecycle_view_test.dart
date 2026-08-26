@@ -402,11 +402,28 @@ void main() {
         find.byKey(const ValueKey('lifecycle_play_bss101_2027')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('lifecycle_walkthrough_total')),
-        findsOneWidget,
-      );
+      // THE TOTAL IS ON THE LINE, AT THE END OF IT - not in a box under the
+      // chart. The sentence the walk-through tells is "it went in here, it
+      // lands here, and this is what the room comes to", and a figure laid out
+      // below breaks that sentence in half.
+      final total = find.byKey(const ValueKey('lifecycle_walkthrough_total'));
+      expect(total, findsOneWidget);
       expect(find.text('FULL REFRESH'), findsOneWidget);
+
+      final last = find.byKey(const ValueKey('lifecycle_play_bss101_2027'));
+      expect(
+        tester.getRect(total).left,
+        greaterThan(tester.getRect(last).left),
+        reason: 'the total sits past the last date on the line',
+      );
+      // Beside the line rather than under the plot. Laid out below the chart
+      // it would clear the whole plot - a good part of three hundred pixels -
+      // from the callouts on it; on the chart it is within one plot of them.
+      expect(
+        (tester.getCenter(total).dy - tester.getCenter(last).dy).abs(),
+        lessThan(200),
+        reason: 'on the chart, not below it',
+      );
 
       // And it can be watched again without reopening it.
       await tester.tap(

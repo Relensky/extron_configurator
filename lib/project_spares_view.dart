@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
@@ -225,6 +226,29 @@ class _SectionHeader extends StatelessWidget {
               ),
             ),
           ),
+        // ONE OF EVERYTHING, IN ONE PRESS.
+        //
+        // Beside the button that adds one spare, because it is the same
+        // decision taken across the whole job at once - and it is the decision
+        // the rule this page is built on actually asks for. Doing it a row at
+        // a time is how a job ends up spared down to the first forty parts
+        // somebody had the patience for.
+        //
+        // Offered only while there is something to do. A button that adds
+        // nothing is a button somebody presses twice to find out why.
+        if (estimate.unsparedParts.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: OutlinedButton.icon(
+              key: const ValueKey('project_spare_one_each'),
+              onPressed: () => _addOneOfEach(context, estimate),
+              icon: const Icon(Icons.playlist_add_check, size: 18),
+              label: Text(
+                'One each for the '
+                '${estimate.unsparedParts.length} with none',
+              ),
+            ),
+          ),
         FilledButton.tonalIcon(
           key: const ValueKey('project_add_spare'),
           onPressed: () => showAddSpareDialog(context, estimate),
@@ -234,6 +258,102 @@ class _SectionHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Puts one of every unspared part on the building's shelf.
+///
+/// IT ASKS FIRST, and shows what it is about to buy. This is the only control
+/// on the page that writes two hundred lines at once, and the figure it comes
+/// to is money somebody has to justify - so it is named and priced before it
+/// happens rather than explained afterwards.
+Future<void> _addOneOfEach(
+  BuildContext context,
+  ProjectEstimate estimate,
+) async {
+  final provider = context.read<AppStateProvider>();
+  final messenger = ScaffoldMessenger.of(context);
+  final lines = [for (final c in estimate.unsparedParts) c.line];
+  if (lines.isEmpty) return;
+
+  final cost = lines.fold<double>(0, (sum, l) => sum + l.unitPrice);
+  final unpriced = lines.where((l) => l.unitPrice <= 0).length;
+
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      key: const ValueKey('spare_one_each_confirm'),
+      title: Text(
+        'One spare of ${lines.length} part${lines.length == 1 ? '' : 's'}?',
+      ),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Every part this job installs and holds none of gets one, on '
+              'the shelf for the building. Parts that already have a spare '
+              'are left alone.',
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              cost > 0
+                  ? 'About ${formatMoney(cost, estimate.currency)} at the '
+                      'prices on this job'
+                  : 'Nothing on this list is priced yet',
+              style: Theme.of(ctx).textTheme.titleSmall,
+            ),
+            if (unpriced > 0 && cost > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '$unpriced of them ${unpriced == 1 ? 'has' : 'have'} no '
+                  'price, so the real figure is higher.',
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 10),
+            // Every one of them is an ordinary spare afterwards, editable and
+            // removable a row at a time - this is a short cut, not a mode.
+            Text(
+              'Each one lands as an ordinary shelf spare, so any of them can '
+              'be changed or taken off afterwards.',
+              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('spare_one_each_go'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text('Add ${lines.length}'),
+        ),
+      ],
+    ),
+  );
+  if (go != true) return;
+
+  final added = provider.addOneSpareOfEach(lines);
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      content: Text(
+        'One spare each added for $added '
+        'part${added == 1 ? '' : 's'}, on the shelf for the building.',
+      ),
+    ),
+  );
 }
 
 class _GroupHeading extends StatelessWidget {

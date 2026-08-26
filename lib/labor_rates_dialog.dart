@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'contrast.dart';
 import 'av_port_editor.dart' show avRowIcon;
 import 'cost_estimate.dart' show trimNumber;
 import 'labor_rates.dart';
@@ -87,7 +88,17 @@ class _LaborRatesDialogState extends State<_LaborRatesDialog> {
           const SizedBox(width: 12),
           if (_dirty)
             Chip(
-              label: const Text('Unsaved'),
+              // Measured against the fill this chip actually paints - see
+              // base_costs_dialog.dart for what inheriting costs.
+              label: Text(
+                'Unsaved',
+                style: TextStyle(
+                  color: errorTextOn(
+                    theme.colorScheme,
+                    theme.colorScheme.errorContainer,
+                  ),
+                ),
+              ),
               backgroundColor: theme.colorScheme.errorContainer,
               visualDensity: VisualDensity.compact,
             ),

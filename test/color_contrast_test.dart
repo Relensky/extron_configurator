@@ -49,7 +49,15 @@ void main() {
   Iterable<({String name, ThemeData theme})> everyAccent() sync* {
     final accents = <String>[
       '000000', 'FFFFFF', '808080',
-      for (final hue in [0, 30, 60, 120, 180, 210, 270, 300])
+      // The Classic picker's own sixteen, so the sweep covers what somebody
+      // can actually choose rather than only the grid below.
+      'F44336', 'E91E63', '9C27B0', '673AB7', '3F51B5', '2196F3', '03A9F4',
+      '00BCD4', '009688', '4CAF50', '8BC34A', 'FFC107', 'FF9800', 'FF5722',
+      '795548', '607D8B',
+      // Dark blues especially: a dark accent in LIGHT mode is what makes a
+      // container fill dark while the page's ink stays near-black.
+      '0D47A0', '1A237E', '01579B', '283593', '1565C0',
+      for (final hue in [0, 30, 60, 120, 180, 210, 240, 270, 300])
         for (final light in [0.15, 0.30, 0.50, 0.70, 0.90])
           HSLColor.fromAHSL(1, hue.toDouble(), 0.75, light)
               .toColor()
@@ -617,5 +625,155 @@ void main() {
         expectReadable('app bar text', ink, bar, t.name);
       });
     }
+  });
+
+  // ---------------------------------------------------------------------
+  //  THE FURNITURE THAT CARRIES ITS OWN INK ON ITS OWN FILL
+  // ---------------------------------------------------------------------
+  //  Everything above is about the scheme, the buttons and the pairings the
+  //  app composes by hand. This is the other half: the component themes that
+  //  name a foreground AND a background, which nothing in the scheme pass
+  //  touches - so a generator that got one of them wrong got it wrong all the
+  //  way to the screen.
+  //
+  //  Swept over every accent in the picker plus a grid of hues at five
+  //  lightnesses, the failures were real and several were total: an app bar
+  //  icon at 1.02:1, a list-tile icon at 1.00:1, a nav-rail label at 1.02:1,
+  //  a tab label at 1.03:1, a hint at 1.89:1. See legible_theme.dart.
+
+  group('every foreground the theme names reads on the fill it names', () {
+    test('across every accent, in both families and both modes', () {
+      var checked = 0;
+
+      void reads(String what, Color? fg, Color? bg, String where,
+          {double min = kContrastBody}) {
+        if (fg == null || bg == null || fg.a == 0 || bg.a == 0) return;
+        checked++;
+        expectReadable(what, fg, bg, where, min: min);
+      }
+
+      for (final t in everyAccent()) {
+        final th = t.theme;
+        final s = th.colorScheme;
+        final card = th.cardColor;
+        final dialog = th.dialogTheme.backgroundColor ?? s.surface;
+        final bar = th.appBarTheme.backgroundColor;
+
+        reads('app bar ink', th.appBarTheme.foregroundColor, bar, t.name);
+        reads('app bar title', th.appBarTheme.titleTextStyle?.color, bar,
+            t.name);
+        // Icons carry meaning rather than words, so they clear the large bar.
+        reads('app bar icon', th.appBarTheme.iconTheme?.color, bar, t.name,
+            min: kContrastLarge);
+        reads('app bar action icon', th.appBarTheme.actionsIconTheme?.color,
+            bar, t.name, min: kContrastLarge);
+
+        // Tabs sit on the app bar, so that is the fill they are measured on.
+        reads('tab label', th.tabBarTheme.labelColor, bar, t.name);
+        reads('unselected tab label', th.tabBarTheme.unselectedLabelColor, bar,
+            t.name, min: kContrastLarge);
+
+        final snack = th.snackBarTheme.backgroundColor;
+        reads('snack bar text', th.snackBarTheme.contentTextStyle?.color,
+            snack, t.name);
+        reads('snack bar action', th.snackBarTheme.actionTextColor, snack,
+            t.name);
+
+        reads('dialog title', th.dialogTheme.titleTextStyle?.color, dialog,
+            t.name);
+        reads('dialog body', th.dialogTheme.contentTextStyle?.color, dialog,
+            t.name);
+
+        for (final ground in [th.scaffoldBackgroundColor, card, dialog]) {
+          reads('body text', th.textTheme.bodyMedium?.color, ground, t.name);
+          reads('title text', th.textTheme.titleMedium?.color, ground, t.name);
+          reads('label text', th.textTheme.labelSmall?.color, ground, t.name);
+
+          final field = th.inputDecorationTheme;
+          // A FILLED FIELD PAINTS ITS OWN GROUND, so that is what the words
+          // inside it sit on. An unfilled one is transparent and they sit on
+          // whatever it was dropped onto - which is why this runs over all
+          // three grounds.
+          final inField = field.filled && field.fillColor != null
+              ? field.fillColor!
+              : ground;
+          reads('field label', field.labelStyle?.color, inField, t.name);
+          // A hint is the only text in this app meant to be faint - and on the
+          // cost sheet it is the catalog price the row resolved to, so faint
+          // still has to mean legible.
+          reads('field hint', field.hintStyle?.color, inField, t.name,
+              min: kContrastLarge);
+          reads('field helper', field.helperStyle?.color, inField, t.name,
+              min: kContrastLarge);
+          reads('field prefix', field.prefixStyle?.color, inField, t.name);
+          reads('field suffix', field.suffixStyle?.color, inField, t.name);
+        }
+
+        final tile = th.listTileTheme.tileColor ?? card;
+        reads('list tile text', th.listTileTheme.textColor, tile, t.name);
+        reads('list tile icon', th.listTileTheme.iconColor, tile, t.name,
+            min: kContrastLarge);
+
+        reads('fab ink', th.floatingActionButtonTheme.foregroundColor,
+            th.floatingActionButtonTheme.backgroundColor, t.name,
+            min: kContrastLarge);
+
+        final rail = th.navigationRailTheme;
+        final railBg = rail.backgroundColor ?? th.scaffoldBackgroundColor;
+        reads('rail selected label', rail.selectedLabelTextStyle?.color,
+            railBg, t.name);
+        reads('rail label', rail.unselectedLabelTextStyle?.color, railBg,
+            t.name, min: kContrastLarge);
+      }
+
+      // A guard on the guard: a sweep that silently stopped measuring
+      // anything would pass every assertion in it.
+      expect(checked, greaterThan(2000));
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  //  A FILL THE APP PAINTS ITSELF CARRIES INK THE APP CHOSE ITSELF
+  // ---------------------------------------------------------------------
+  //  A Text with no colour on it takes the ambient body ink, which is chosen
+  //  for the PAGE. Drop one inside a container filled with a scheme role and
+  //  it is being measured against the wrong thing - and on Classic with a dark
+  //  blue accent, secondaryContainer IS a dark blue while the page's ink is
+  //  near-black: 1.07:1, a label that is simply not there.
+  //
+  //  This is the shape of the bug rather than a place it happens, so what is
+  //  locked here is that the ROLES are dangerous and the HELPER is not.
+
+  group('ink inherited from the page is not safe on a scheme fill', () {
+    test('which is why nothing paints one without measuring', () {
+      var anyRoleFails = false;
+      for (final t in everyAccent()) {
+        final s = t.theme.colorScheme;
+        final body = t.theme.textTheme.bodyMedium?.color ?? s.onSurface;
+        for (final fill in [
+          s.primary,
+          s.primaryContainer,
+          s.secondary,
+          s.secondaryContainer,
+          s.tertiaryContainer,
+          s.errorContainer,
+        ]) {
+          if (contrastRatio(body, fill) < kContrastBody) anyRoleFails = true;
+          // ...and the helper the app is required to use instead always
+          // clears, on every one of them.
+          expectReadable(
+            'measured ink',
+            foregroundOn(s, fill),
+            fill,
+            t.name,
+          );
+        }
+      }
+      expect(
+        anyRoleFails,
+        isTrue,
+        reason: 'if the page ink were safe on every fill this rule could go',
+      );
+    });
   });
 }

@@ -1159,13 +1159,18 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
     _last = last > first ? last : first + 1;
 
     // READING SPEED, NOT A FIXED LENGTH. A four-year span played over the same
-    // three seconds as a twenty-year one crawls; the same twenty played over a
-    // four-year one is a flicker. A quarter of a second a year, floored and
-    // capped so neither end becomes a wait.
+    // time as a twenty-year one crawls; the same twenty played over a
+    // four-year one is a flicker. So it is paced per year, floored and capped
+    // so neither end becomes a wait.
+    //
+    // FAST. This is not a title sequence - it is a figure being introduced,
+    // and the second time somebody plays it they already know what it says.
+    // The pacing was more than twice this and a twenty-year plan took six
+    // seconds to arrive at a number that was going to be read in one.
     _run = AnimationController(
       vsync: this,
       duration: Duration(
-        milliseconds: ((_last - _first) * 260).clamp(1400, 6000),
+        milliseconds: ((_last - _first) * 110).clamp(600, 2200),
       ),
     );
   }
@@ -1234,16 +1239,17 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
               ),
             ),
             const SizedBox(height: 12),
-            // THE TOTAL, AT THE END. Held back until the line has reached it,
-            // because arriving at the figure is the whole point of walking the
-            // years: a total printed at the top is a total argued with before
-            // anybody has seen what it is made of.
+            // WHAT THE TOTAL DOES NOT SAY. The figure itself is on the end of
+            // the line where it belongs; this is the small print that would
+            // make a callout unreadable - how much of it is already on the
+            // list, and how many positions are in none of it because nobody
+            // has dated them.
             AnimatedBuilder(
               animation: _run,
               builder: (context, _) => AnimatedOpacity(
-                duration: const Duration(milliseconds: 320),
+                duration: const Duration(milliseconds: 190),
                 opacity: _run.value >= 1 ? 1 : 0,
-                child: _TotalBar(room: room, currency: widget.currency),
+                child: _TotalFootnote(room: room, currency: widget.currency),
               ),
             ),
           ],
@@ -1272,10 +1278,11 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
     final room = widget.room;
     final groups = room.dueGroups;
     final span = _last - _first;
-    final plotWidth = width - _kPlotPad * 2;
+    final plotWidth =
+        (width - _kPlotPadLeft - _kPlotPadRight).clamp(1.0, double.infinity);
 
     double xOf(num year) =>
-        _kPlotPad + ((year - _first) / span).clamp(0.0, 1.0) * plotWidth;
+        _kPlotPadLeft + ((year - _first) / span).clamp(0.0, 1.0) * plotWidth;
 
     // The longest life in the room drives the warm-up, so the colour ramp on
     // this line means the same thing it means on the room's row.
@@ -1357,6 +1364,18 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
               ),
             ),
           ),
+        // WHAT THE WHOLE LINE ADDS UP TO, AT THE END OF IT.
+        //
+        // The point of walking the years one at a time is arriving somewhere,
+        // and the place to say where is the end of the run - not a box under
+        // the chart, which is a different object that happens to be nearby.
+        // It lands when the line does.
+        _RefreshTotal(
+          room: room,
+          currency: widget.currency,
+          shown: _run.value >= 1,
+          left: xOf(_last) + 14,
+        ),
         // EVERY DATE POPS UP AS THE LINE REACHES IT. Two lanes, alternating,
         // because two tranches a year apart would otherwise be two cards on
         // top of each other — which is the one thing a callout must never do.
@@ -1375,16 +1394,32 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
   }
 }
 
-/// How tall the plot is, and where the line and the callout lanes sit in it.
+/// How tall the plot is, and where the line, the callout lanes and the total
+/// sit in it.
 ///
 /// Constants rather than measurements because the painter and the callouts
 /// have to agree about them to the pixel: a stem drawn to a lane the card is
 /// not in is a line pointing at nothing.
-const double _kPlotHeight = 210;
-const double _kLineY = 178;
-const double _kPlotPad = 30;
-const List<double> _kLaneY = [126, 58];
+///
+/// THE TWO LANES ARE A CARD APART. They were 68 apart with cards about 70 tall
+/// in them, so a callout in the upper lane ran off the top of the plot and
+/// over the line of type above it. The lanes are set from the card height now,
+/// and the box is tall enough to hold both of them plus the years.
+const double _kPlotHeight = 260;
+const double _kLineY = 224;
+const double _kCalloutHeight = 70;
+const List<double> _kLaneY = [200, 200 - _kCalloutHeight - 8];
 const double _kCalloutWidth = 168;
+
+/// The room either side of the line itself.
+///
+/// THE RIGHT-HAND MARGIN IS WHERE THE TOTAL GOES. The line stops short of the
+/// edge so the figure it adds up to can sit at the end of it, the way a label
+/// sits on the end of a run - see [_RefreshTotal]. Without the margin the
+/// total had nowhere to be except a box underneath the chart, which is the one
+/// place it stops reading as the end of the line.
+const double _kPlotPadLeft = 30;
+const double _kPlotPadRight = 178;
 
 /// One replacement date, as it pops up on the line.
 class _DueCallout extends StatelessWidget {
@@ -1419,10 +1454,12 @@ class _DueCallout extends StatelessWidget {
       bottom: bottom,
       width: _kCalloutWidth,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 220),
+        // Half the line's own pace: a callout still settling when the playhead
+        // has reached the next year is a callout the reader is chasing.
+        duration: const Duration(milliseconds: 130),
         opacity: shown ? 1 : 0,
         child: AnimatedScale(
-          duration: const Duration(milliseconds: 220),
+          duration: const Duration(milliseconds: 130),
           curve: Curves.easeOutBack,
           scale: shown ? 1 : 0.7,
           alignment: Alignment.bottomCenter,
@@ -1478,67 +1515,129 @@ class _DueCallout extends StatelessWidget {
   }
 }
 
-/// What the whole room comes to, once the line has been all the way across.
-class _TotalBar extends StatelessWidget {
+/// WHAT THE LINE ADDS UP TO, drawn on the end of it.
+///
+/// Anchored to the last year on the plot rather than laid out under the chart,
+/// because the sentence this is the end of is "it went in here, it lands here,
+/// and here is what the room comes to" - and a figure in a box below breaks
+/// that sentence in half. The right-hand margin exists to hold it; see
+/// [_kPlotPadRight].
+class _RefreshTotal extends StatelessWidget {
   final RoomLifecycle room;
   final String currency;
+  final bool shown;
+  final double left;
 
-  const _TotalBar({required this.room, required this.currency});
+  const _RefreshTotal({
+    required this.room,
+    required this.currency,
+    required this.shown,
+    required this.left,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = equipmentTimingColor(context, room.timing);
 
-    return Container(
-      key: const ValueKey('lifecycle_walkthrough_total'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: equipmentTimingFill(context, room.timing, alpha: 0.14),
-        border: Border.all(
-          color: equipmentTimingFill(context, room.timing, alpha: 0.7),
-        ),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Wrap(
-        spacing: 20,
-        runSpacing: 6,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(
-            'FULL REFRESH',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Text(
-            room.refreshCost > 0
-                ? formatLifecycleMoney(room.refreshCost, currency)
-                : 'not priced',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if (room.toReplaceCount > 0)
-            Text(
-              'on the list now: '
-              '${formatEquipmentBand(
-                room.toReplaceCount,
-                room.toReplaceCost,
-                currency,
-              )}',
-              style: theme.textTheme.bodyMedium,
-            ),
-          if (room.undated > 0)
-            Text(
-              '${room.undated} item${room.undated == 1 ? '' : 's'} with no '
-              'date are not in this',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+    return Positioned(
+      left: left,
+      // Centred on the line, so it reads as the label on the end of it.
+      top: _kLineY - 34,
+      width: _kPlotPadRight - 22,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 190),
+        opacity: shown ? 1 : 0,
+        child: AnimatedSlide(
+          duration: const Duration(milliseconds: 190),
+          curve: Curves.easeOut,
+          // Arrives from the left, along the line it belongs to.
+          offset: shown ? Offset.zero : const Offset(-0.12, 0),
+          child: Container(
+            key: const ValueKey('lifecycle_walkthrough_total'),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                equipmentTimingFill(context, room.timing, alpha: 0.16),
+                theme.dialogTheme.backgroundColor ??
+                    theme.colorScheme.surfaceContainerHigh,
               ),
+              border: Border.all(
+                color: equipmentTimingFill(context, room.timing, alpha: 0.8),
+                width: 1.4,
+              ),
+              borderRadius: BorderRadius.circular(6),
             ),
-        ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'FULL REFRESH',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  room.refreshCost > 0
+                      ? formatLifecycleMoney(room.refreshCost, currency)
+                      : 'not priced',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${room.items.length} item'
+                  '${room.items.length == 1 ? '' : 's'}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The small print under the chart: what the total does NOT say.
+///
+/// Separate from the figure, and under the plot rather than on it, because
+/// both of these are qualifications - and a callout on the end of a line has
+/// room for a number, not for a paragraph.
+class _TotalFootnote extends StatelessWidget {
+  final RoomLifecycle room;
+  final String currency;
+
+  const _TotalFootnote({required this.room, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final parts = [
+      if (room.toReplaceCount > 0)
+        'On the list now: '
+            '${formatEquipmentBand(
+          room.toReplaceCount,
+          room.toReplaceCost,
+          currency,
+        )}',
+      if (room.undated > 0)
+        '${room.undated} item${room.undated == 1 ? '' : 's'} with no install '
+            'date fall due in no year here, and are in none of these figures',
+    ];
+    if (parts.isEmpty) return const SizedBox.shrink();
+
+    return Text(
+      parts.join('  ·  '),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -1577,8 +1676,8 @@ class _PlanPainter extends CustomPainter {
       ..color = axis
       ..strokeWidth = 1;
     canvas.drawLine(
-      Offset(_kPlotPad * 0.5, _kLineY),
-      Offset(size.width - _kPlotPad * 0.5, _kLineY),
+      Offset(_kPlotPadLeft * 0.5, _kLineY),
+      Offset(size.width - _kPlotPadRight * 0.25, _kLineY),
       rule,
     );
     for (final x in ticks) {
