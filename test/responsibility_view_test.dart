@@ -327,6 +327,64 @@ void main() {
     expect(p.project.responsibility, isEmpty);
   });
 
+  // A LINE ALSO COMES OFF FROM INSIDE THE EDITOR. By the time somebody has
+  // opened it and read the nine fields on it, the row's own delete is behind a
+  // dialog - and closing the editor to go and find the row again is how a line
+  // that should have gone stays on the matrix.
+  group('deleting from the editor', () {
+    testWidgets('takes the line off and closes the editor', (tester) async {
+      final p = withProject();
+      p.addResponsibilityItem('Screens');
+      await pumpPane(tester, p);
+
+      await tester.tap(find.byKey(const ValueKey('responsibility_edit_resp1')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('responsibility_delete_line')),
+      );
+      await tester.pumpAndSettle();
+
+      // IT ASKS FIRST. The button sits an inch from Save on a line that may be
+      // ten minutes of typing.
+      expect(
+        find.byKey(const ValueKey('responsibility_delete_confirm')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Screens'), findsWidgets);
+
+      await tester.tap(
+        find.byKey(const ValueKey('responsibility_delete_confirm_go')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(p.project.responsibility, isEmpty);
+      // The editor goes with the line it was editing.
+      expect(find.byKey(const ValueKey('responsibility_editor')), findsNothing);
+    });
+
+    testWidgets('keeping it changes nothing and leaves the editor open',
+        (tester) async {
+      final p = withProject();
+      p.addResponsibilityItem('Screens');
+      await pumpPane(tester, p);
+
+      await tester.tap(find.byKey(const ValueKey('responsibility_edit_resp1')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('responsibility_delete_line')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Keep it'));
+      await tester.pumpAndSettle();
+
+      expect(p.project.responsibility, hasLength(1));
+      expect(
+        find.byKey(const ValueKey('responsibility_editor')),
+        findsOneWidget,
+      );
+    });
+  });
+
   // -------------------------------------------------------------------------
   //  THE GRID
   // -------------------------------------------------------------------------

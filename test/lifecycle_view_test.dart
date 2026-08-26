@@ -291,6 +291,133 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  //  THE ROOM'S OWN CALENDAR
+  // -------------------------------------------------------------------------
+  //  The tab answered "how old is everything in here" and left "what year does
+  //  it land, in how many tranches, and what does each cost" to the Project
+  //  tab - a different screen, on a job the room may not even be on.
+
+  testWidgets('the room tab draws the same year grid the project does',
+      (tester) async {
+    final p = room();
+    p.setAvNodeInstalledOn('PROJECTORDEVICE_1', DateTime(2014, 5, 1));
+    p.setAvNodeInstalledOn('DISPLAYDEVICE_1', DateTime(2019, 5, 1));
+    await pumpRoom(tester, p);
+
+    expect(find.text('REPLACEMENT YEAR'), findsOneWidget);
+    // Two install dates, so two tranches, each with its own line and its own
+    // due year - exactly what the building sheet opens a room into.
+    expect(find.textContaining('due 2022'), findsWidgets);
+    expect(find.textContaining('due 2027'), findsWidgets);
+
+    // And the line plays through from here too.
+    await tester.tap(find.textContaining('due 2022').first);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('lifecycle_walkthrough')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('lifecycle_walkthrough_total')),
+      findsOneWidget,
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  //  WALKING ONE ROOM THROUGH
+  // -------------------------------------------------------------------------
+  //  The grid says WHEN and HOW MUCH for forty rooms at once, which is the
+  //  wrong shape for the other thing it gets used for: standing in front of
+  //  somebody and walking them through ONE room, a date at a time, to the
+  //  figure at the end.
+
+  group('playing a room\'s plan through', () {
+    /// A job whose one room has two replacement dates on it, so the plan has
+    /// something to walk.
+    Future<AppStateProvider> played(WidgetTester tester) async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Bessey Hall');
+      final file = '${dir.path}/bss101_config.json';
+      File(file).writeAsStringSync('{"SYSTEM_SETUP":{"gve_room":"bss101"}}');
+      File('${dir.path}/bss101_config_av_flow.json').writeAsStringSync(
+        '{"nodes":['
+        '{"id":"PROJECTORDEVICE_1","label":"Projector 1","model":"PROJ-1",'
+        '"installedOn":"2014-05-01","ports":[]},'
+        '{"id":"DISPLAYDEVICE_1","label":"Display 1","model":"DISP-1",'
+        '"installedOn":"2019-05-01","ports":[]}'
+        '],"cables":[]}',
+      );
+      p.addRoomToProject(file);
+
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppStateProvider>.value(
+          value: p,
+          child: const MaterialApp(home: Scaffold(body: ProjectView())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('project_pane_lifecycle')));
+      await tester.pumpAndSettle();
+      return p;
+    }
+
+    testWidgets('the end of a line says what the whole room comes to',
+        (tester) async {
+      await played(tester);
+
+      // The cell a run finishes on used to carry only what lands in THAT year.
+      // A room with two dates therefore had no cell anywhere on the sheet
+      // saying what refreshing it actually comes to.
+      final tooltips = tester
+          .widgetList<Tooltip>(find.byType(Tooltip))
+          .map((t) => t.message ?? '')
+          .where((m) => m.contains('Full refresh for'))
+          .toList();
+      expect(tooltips, isNotEmpty);
+      expect(tooltips.first, contains('across 2 dates'));
+      expect(tooltips.first, contains('Click the row to play'));
+    });
+
+    testWidgets('clicking a line plays it through to the total',
+        (tester) async {
+      await played(tester);
+
+      await tester.tap(find.textContaining('due 2022').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('lifecycle_walkthrough')),
+        findsOneWidget,
+      );
+
+      // Every date pops up as the line reaches it, and the total lands once it
+      // has been all the way across. pumpAndSettle has run the whole thing.
+      expect(
+        find.byKey(const ValueKey('lifecycle_play_bss101_2022')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('lifecycle_play_bss101_2027')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('lifecycle_walkthrough_total')),
+        findsOneWidget,
+      );
+      expect(find.text('FULL REFRESH'), findsOneWidget);
+
+      // And it can be watched again without reopening it.
+      await tester.tap(
+        find.byKey(const ValueKey('lifecycle_walkthrough_replay')),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   //  HOW LONG IT LASTS
   // -------------------------------------------------------------------------
   //  The due date is the install date plus the life, and until now only the

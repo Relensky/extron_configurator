@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' show Size;
 
 import 'package:path/path.dart' as path;
@@ -664,6 +665,34 @@ String formatSpareCover(double? coverage) {
       : '${percent.toStringAsFixed(1)}%';
 }
 
+/// THE SHARE OF WHAT A JOB INSTALLS THAT IT IS RECOMMENDED TO HOLD SPARE.
+///
+/// A RECOMMENDATION, NOT THE RULE. The rule is one spare of everything, and it
+/// is the rule because it needs no policy typed before the table will say
+/// anything - see [ProjectEstimate.spareCover]. What a percentage adds back is
+/// the other half of the question the rule cannot answer: one spare is enough
+/// of a part the job installs three of and thin cover for the forty wall
+/// plates, and "how many should we actually hold" is what somebody is trying
+/// to settle when they open the spares page at all.
+///
+/// So it is worked out on every row and flagged on none. A part with nothing
+/// spared is still the only thing drawn as a fault; a part that has one but is
+/// under the recommendation carries a NOTE, in the quiet ink, saying what the
+/// recommendation is and how many more would meet it.
+///
+/// Ten per cent, rounded up, never less than one. It is the figure the old
+/// typed-in target defaulted to on every job that ever set one.
+const double kRecommendedSpareCover = 0.10;
+
+/// How many of a part the recommendation asks for against [installed].
+///
+/// Rounded UP and floored at one: a recommendation of 0.4 of a unit is not a
+/// thing anybody can buy, and the recommendation must never come out below the
+/// rule it sits beside.
+double recommendedSpares(double installed) => installed <= 0
+    ? 0
+    : math.max(1, (installed * kRecommendedSpareCover).ceilToDouble());
+
 /// One part's spare cover: how many are spared against how many go in.
 ///
 /// A record rather than a class for the same reason [SpareRoomTally] is - it
@@ -688,8 +717,19 @@ typedef SparePartCover = ({
 
   /// Whole units that would have to be added to cover it - always 1, and 0 on
   /// a part that already has a spare. Kept as a figure rather than a flag
-  /// because the button that fixes the row is labelled with it.
+  /// because it is what the rule says, beside what the recommendation says.
   double shortfall,
+
+  /// Whole units [kRecommendedSpareCover] would have the job hold - see
+  /// [recommendedSpares]. Never less than one, so it can never undercut the
+  /// rule.
+  double recommended,
+
+  /// Units that would have to be ADDED to reach [recommended], and 0 once the
+  /// recommendation is met. What the button that tops the row up is labelled
+  /// with, and what the note on the row is written from: "recommend 4, add 3"
+  /// is a decision and "10% cover" is a figure to go and work out.
+  double toRecommend,
 });
 
 /// A building, priced.
@@ -895,6 +935,21 @@ class ProjectEstimate {
   List<SparePartCover> get unsparedParts =>
       [for (final c in spareCover) if (c.short) c];
 
+  /// The parts holding less than [kRecommendedSpareCover] would have them,
+  /// worst first. A superset of [unsparedParts] - a part with nothing spared
+  /// is under every recommendation there is.
+  ///
+  /// NOT A FAULT LIST. Nothing on the page is drawn in the error ink for being
+  /// on it; it is what the recommendation note is counted from.
+  List<SparePartCover> get partsUnderRecommendedCover =>
+      [for (final c in spareCover) if (c.toRecommend > 0) c];
+
+  /// Units that would have to be added across the whole job to meet the
+  /// recommendation on every part - the one figure the note can be read for
+  /// without going row by row.
+  double get unitsToRecommendedCover =>
+      spareCover.fold(0.0, (sum, c) => sum + c.toRecommend);
+
   /// One part, and whether the order holds any of it spare.
   SparePartCover _coverOf(MasterPartLine line) {
     final installed = line.drawnQty;
@@ -903,6 +958,7 @@ class ProjectEstimate {
     // At least one on the shelf. The epsilon is doubles, not slack: a spare
     // qty that came out of arithmetic must not read as none.
     final short = spares < 1 - 1e-9;
+    final recommended = recommendedSpares(installed);
     return (
       line: line,
       spares: spares,
@@ -910,6 +966,10 @@ class ProjectEstimate {
       coverage: coverage,
       short: short,
       shortfall: short ? 1 - spares : 0.0,
+      recommended: recommended,
+      // The same epsilon, for the same reason: a row that is 0.0000001 under
+      // the recommendation is a row that meets it.
+      toRecommend: recommended - spares > 1e-9 ? recommended - spares : 0.0,
     );
   }
 

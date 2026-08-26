@@ -898,6 +898,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                 initial: line.spareQty == 0
                                     ? ''
                                     : trimNumber(line.spareQty),
+                                hintIsValue: true,
                                 numeric: true,
                                 hint: '0',
                                 onChanged: (v) => provider.setAvEquipmentSpares(
@@ -933,6 +934,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         prefix: currency,
                         numeric: true,
                         hint: _resolvedPriceHint(line),
+                        hintIsValue: true,
                         onChanged: (v) {
                           final parsed = double.tryParse(v);
                           provider.setAvCostPrice(
@@ -1217,6 +1219,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         prefix: currency,
                         numeric: true,
                         hint: _resolvedPriceHint(line),
+                        hintIsValue: true,
                         onChanged: (v) {
                           final parsed = double.tryParse(v);
                           provider.setAvCostPrice(
@@ -1504,6 +1507,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             initial: spares == 0 ? '' : trimNumber(spares),
                             numeric: true,
                             hint: '0',
+                            hintIsValue: true,
                             onChanged: (v) => provider.setAvCableSpares(
                               line.key,
                               double.tryParse(v) ?? 0,
@@ -1525,6 +1529,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             prefix: currency,
                             numeric: true,
                             hint: _resolvedPriceHint(line),
+                            hintIsValue: true,
                             onChanged: (v) {
                               final parsed = double.tryParse(v);
                               provider.setAvCostPrice(
@@ -1707,6 +1712,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             hint: line == null || line.unitPrice <= 0
                                 ? 'unpriced'
                                 : trimNumber(line.unitPrice),
+                            hintIsValue: true,
                             onChanged: (v) {
                               final parsed = double.tryParse(v);
                               provider.setAvCostPrice(
@@ -4004,6 +4010,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         hint: costed.unrated
                             ? 'set'
                             : trimNumber(costed.hourlyRate),
+                        hintIsValue: !costed.unrated,
                         numeric: true,
                         onChanged: (v) => provider.updateAvCostLabor(
                           line.copyWith(

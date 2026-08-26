@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'contrast.dart';
 import 'control_prefill.dart' show buildControlSideForPreset;
 import 'new_room_dialog.dart';
 import 'project_room_picker.dart' show confirmLeavingRoom;
@@ -696,85 +699,222 @@ Future<bool> openProjectAtPath(
   return true;
 }
 
-// SAVE ALL — everything this room has produced, into one folder.
+// SAVE ALL — everything the JOB has produced, a folder per room.
 ///
-/// The diagram images can only be rendered from a widget that is on screen, so
-/// [captureDiagramTabs] walks the diagram tabs, capturing each in turn, and
-/// puts the user back where they started. Anything that could not be captured
-/// is reported in the result rather than quietly missing from the folder.
+/// IT WALKS THE WHOLE PROJECT. A building is quoted, issued and handed over as
+/// a set of rooms, and a "Save All" that wrote the one room that happened to be
+/// open meant doing this nine times by hand: switch room, wait for the
+/// diagrams, pick the same parent folder again, and hope nobody lost count.
+/// The room in the editor is not a document boundary - the JOB is.
+///
+/// One folder per room, side by side under the parent folder that is picked
+/// once. Each is exactly the folder this used to write, named after its own
+/// room, so nothing downstream of it changes.
+///
+/// THE ROOM HAS TO BE ON SCREEN TO BE PHOTOGRAPHED. The diagram images can
+/// only be rendered from a widget that is mounted, so this opens each room in
+/// turn and lets [captureDiagramTabs] walk its drawing tabs - which is a
+/// visible flick through the tabs, once per room, and the reason it says which
+/// room it is on as it goes. The room that was open when it started is put
+/// back at the end, on the tab it was on.
+///
+/// Anything that could not be read, captured or written is reported beside the
+/// room it belongs to rather than quietly missing from the folder.
 Future<void> saveAllToRoomFolder(
   BuildContext context,
   AppStateProvider provider,
 ) async {
+  final rooms = provider.project.rooms;
+
+  // SWITCHING ROOMS READS THE NEXT ONE OFF DISK, so anything unsaved in the
+  // room being left goes with it. Asked once, before the folder is picked -
+  // the same question every other way of leaving a room asks, because two
+  // doors into one consequence must not have two different answers.
+  if (rooms.isNotEmpty) {
+    if (!await confirmLeavingRoom(context, provider)) return;
+    if (!context.mounted) return;
+  }
+
   final parent = await FilePicker.getDirectoryPath(
-    dialogTitle: 'Where should the room folder go?',
+    dialogTitle: rooms.isEmpty
+        ? 'Where should the room folder go?'
+        : 'Where should the room folders go?',
   );
   if (parent == null || !context.mounted) return;
 
   final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(const SnackBar(
-    duration: Duration(seconds: 2),
-    content: Text('Capturing the diagrams...'),
-  ));
+  // Held from before the walk: switching rooms and tabs rebuilds the page this
+  // was started from, and the summary still has to be able to open.
+  final navigator = Navigator.of(context, rootNavigator: true);
 
-  final shots = await captureDiagramTabs(provider, pixelRatio: 2.0);
+  // What each room is called, worked out once and from the job rather than
+  // from whichever room happens to be loaded at the time.
+  final names = {
+    for (final r in provider.priceProject().rooms) r.ref.id: r.name,
+  };
 
-  ProjectExport result;
-  try {
-    result = await saveProjectFolder(
-      provider: provider,
-      parentFolder: parent,
-      schematicPng: shots.schematic,
-      avFlowPng: shots.avFlow,
-      rackPng: shots.racks,
-      floorPlanSheets: shots.floorPlanSheets,
-      cablingPng: shots.cabling,
-    );
-  } catch (e) {
+  // Where to put the session back when it is done.
+  final startingRoom = provider.openProjectRoom;
+  final startingTab = provider.selectedTabIndex;
+
+  // A job with no rooms on it is still a room in the editor, and Save All has
+  // always worked on one. The list of one keeps the loop below honest.
+  final targets = rooms.isEmpty
+      ? <ProjectRoomRef?>[null]
+      : <ProjectRoomRef?>[...rooms];
+
+  final done = <RoomFolderResult>[];
+
+  for (final (i, ref) in targets.indexed) {
+    final label = ref == null
+        ? 'This room'
+        : (names[ref.id] ??
+            (ref.label.trim().isEmpty ? ref.fallbackName : ref.label.trim()));
+
     messenger.showSnackBar(SnackBar(
-      content: Text('Save All failed: $e'),
-      backgroundColor: snackErrorFillOn(messenger),
+      duration: const Duration(seconds: 30),
+      content: Text(
+        targets.length == 1
+            ? 'Capturing the diagrams...'
+            : 'Capturing $label - ${i + 1} of ${targets.length}...',
+      ),
     ));
-    return;
+
+    if (ref != null) {
+      final error = await provider.openProjectRoomRef(ref);
+      if (error.isNotEmpty) {
+        done.add((room: label, export: null, error: error));
+        continue;
+      }
+    }
+
+    final shots = await captureDiagramTabs(provider, pixelRatio: 2.0);
+
+    try {
+      done.add((
+        room: label,
+        export: await saveProjectFolder(
+          provider: provider,
+          parentFolder: parent,
+          schematicPng: shots.schematic,
+          avFlowPng: shots.avFlow,
+          rackPng: shots.racks,
+          floorPlanSheets: shots.floorPlanSheets,
+          cablingPng: shots.cabling,
+        ),
+        error: '',
+      ));
+    } catch (e) {
+      done.add((room: label, export: null, error: '$e'));
+      AppLogger.logError('Save All could not write the folder for $label', e);
+    }
   }
 
-  if (!context.mounted) return;
+  // BACK WHERE IT STARTED. Somebody who ran this from the middle of cabling a
+  // room is standing in that room's cabling when it finishes.
+  if (startingRoom != null && provider.openProjectRoom?.id != startingRoom.id) {
+    await provider.openProjectRoomRef(startingRoom);
+  }
+  provider.selectTab(startingTab);
+  messenger.hideCurrentSnackBar();
+
+  // The navigator rather than the page: the page this was started from has
+  // been rebuilt several times over by now, and the summary is the only record
+  // of what happened.
+  if (!navigator.mounted) return;
   await showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Project saved'),
+    context: navigator.context,
+    builder: (_) => _SaveAllSummary(parent: parent, done: done),
+  );
+}
+
+/// One room's folder, or the reason there is not one.
+typedef RoomFolderResult = ({
+  String room,
+  ProjectExport? export,
+  String error,
+});
+
+/// What Save All wrote, room by room.
+///
+/// A ROOM AT A TIME, NAMED. On a job of nine rooms the one thing somebody
+/// needs from this dialog is "did they all go" - so every room is a line
+/// whether it worked or not, and the ones that did not are the only ones that
+/// have to be read.
+class _SaveAllSummary extends StatelessWidget {
+  final String parent;
+  final List<RoomFolderResult> done;
+
+  const _SaveAllSummary({required this.parent, required this.done});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final failed = [for (final d in done) if (d.error.isNotEmpty) d];
+    final files = done.fold<int>(
+      0,
+      (sum, d) => sum + (d.export?.written.length ?? 0),
+    );
+    final alarm = errorTextOn(
+      theme.colorScheme,
+      theme.dialogTheme.backgroundColor ??
+          theme.colorScheme.surfaceContainerHigh,
+    );
+
+    const mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
+
+    return AlertDialog(
+      key: const ValueKey('save_all_summary'),
+      title: Text(
+        failed.isEmpty
+            ? (done.length == 1 ? 'Room saved' : '${done.length} rooms saved')
+            : '${done.length - failed.length} of ${done.length} rooms saved',
+      ),
       content: SizedBox(
         width: 620,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SelectableText(result.folder,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Text('${result.written.length} files written',
-                style: Theme.of(ctx).textTheme.titleSmall),
+            SelectableText(
+              parent,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
+            Text('$files files written', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final name in result.written)
-                      Text('  $name',
-                          style: const TextStyle(
-                              fontFamily: 'monospace', fontSize: 12)),
-                    if (result.skipped.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text('Not included',
-                          style: Theme.of(ctx).textTheme.titleSmall),
-                      const SizedBox(height: 4),
-                      for (final note in result.skipped)
-                        Text('  $note',
-                            style: TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 12,
-                                color: Theme.of(ctx).disabledColor)),
+                    for (final d in done) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10, bottom: 2),
+                        child: Text(
+                          d.room,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: d.error.isEmpty ? null : alarm,
+                          ),
+                        ),
+                      ),
+                      if (d.error.isNotEmpty)
+                        Text('  ${d.error}', style: mono)
+                      else ...[
+                        Text(
+                          '  ${path.basename(d.export!.folder)}',
+                          style: mono,
+                        ),
+                        Text(
+                          '  ${d.export!.written.length} files',
+                          style: mono.copyWith(color: theme.disabledColor),
+                        ),
+                        for (final note in d.export!.skipped)
+                          Text(
+                            '  not included: $note',
+                            style: mono.copyWith(color: theme.disabledColor),
+                          ),
+                      ],
                     ],
                   ],
                 ),
@@ -786,21 +926,24 @@ Future<void> saveAllToRoomFolder(
       actions: [
         TextButton(
           onPressed: () async {
-            final error = await provider.revealInFileManager(result.folder);
-            if (error != null && ctx.mounted) {
-              ScaffoldMessenger.of(ctx)
-                  .showSnackBar(SnackBar(content: Text(error)));
+            final messenger = ScaffoldMessenger.of(context);
+            final error = await context
+                .read<AppStateProvider>()
+                .revealInFileManager(parent);
+            if (error != null) {
+              messenger.showSnackBar(SnackBar(content: Text(error)));
             }
           },
           child: const Text('OPEN FOLDER'),
         ),
         ElevatedButton(
-          onPressed: () => Navigator.of(ctx).pop(),
+          key: const ValueKey('save_all_done'),
+          onPressed: () => Navigator.of(context).pop(),
           child: const Text('Done'),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1046,8 +1189,8 @@ class SaveToolbar extends StatelessWidget {
               child: _MenuLine(
                 icon: Icons.drive_folder_upload,
                 label: 'Save All to a room folder…',
-                hint: 'Config, diagrams, reports, workbook and images, '
-                    'together in one folder',
+                hint: 'Config, diagrams, reports, workbook and images - one '
+                    'folder per room, for every room on the job',
               ),
             ),
             const PopupMenuDivider(),

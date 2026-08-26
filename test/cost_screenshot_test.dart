@@ -89,8 +89,10 @@ void main() {
               initial: '',
               // Blank means the row is taking the catalog figure, and the
               // catalog figure is the hint — so the hint is what has to end
-              // up on the page.
+              // up on the page. Marked as such: a hint is only printed when
+              // it is a VALUE, never when it is an example.
               hint: '2500',
+              hintIsValue: true,
               prefix: r'$',
               numeric: true,
               onChanged: (_) {},
@@ -105,6 +107,49 @@ void main() {
       await tester.pumpWidget(host(true));
       expect(find.byType(TextField), findsNothing);
       expect(find.text(r'$2500'), findsOneWidget);
+    });
+
+    // WHAT A PHOTOGRAPHED QUOTE MUST NOT CARRY. Half the boxes on the cost
+    // sheet hint with an example of what could be typed in them - 'e.g.
+    // Freight' - and printed, an example reads as a line somebody quoted.
+    testWidgets('an example hint prints as nothing at all', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PrintMode(
+              printing: true,
+              child: LiveTextField(
+                fieldId: 'x',
+                initial: '',
+                hint: 'e.g. Rack build and termination',
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('e.g.'), findsNothing);
+    });
+
+    testWidgets('what the user typed always prints', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PrintMode(
+              printing: true,
+              child: LiveTextField(
+                fieldId: 'x',
+                initial: 'Rack build, second floor',
+                hint: 'e.g. Rack build and termination',
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Rack build, second floor'), findsOneWidget);
     });
 
     testWidgets('a taxable checkbox prints as a word', (tester) async {

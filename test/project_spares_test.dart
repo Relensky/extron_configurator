@@ -485,6 +485,53 @@ void main() {
       );
     });
 
+    test('the recommendation is a percentage of what goes in', () {
+      // Forty installed, one held. It meets the RULE - somebody looked at this
+      // part and bought one - and it is a long way under what ten per cent of
+      // forty would be, which is the other half of the question and the half
+      // the rule cannot answer.
+      final estimate = estimateOf([
+        line(description: 'Plate', qty: 41, spareQty: 1),
+      ]);
+      final cover = estimate.spareCover.single;
+      expect(cover.installed, 40);
+      expect(cover.recommended, 4);
+      expect(cover.toRecommend, 3);
+      // ...and it is STILL NOT FLAGGED. Only a part with nothing spared is.
+      expect(cover.short, isFalse);
+      expect(estimate.unsparedParts, isEmpty);
+      expect(
+        [for (final c in estimate.partsUnderRecommendedCover) c.line.description],
+        ['Plate'],
+      );
+      expect(estimate.unitsToRecommendedCover, 3);
+    });
+
+    test('the recommendation rounds up and never asks for less than one', () {
+      // Four installed is 0.4 of a unit at ten per cent, and nobody can buy
+      // 0.4 of a projector. It must also never come out below the rule it sits
+      // beside, or the two would contradict each other on the same row.
+      final estimate = estimateOf([
+        line(description: 'Display', qty: 4, spareQty: 0),
+      ]);
+      final cover = estimate.spareCover.single;
+      expect(cover.recommended, 1);
+      expect(cover.toRecommend, 1);
+      expect(cover.short, isTrue);
+    });
+
+    test('a part that meets the recommendation asks for nothing', () {
+      final estimate = estimateOf([
+        line(description: 'Plate', qty: 44, spareQty: 4),
+      ]);
+      final cover = estimate.spareCover.single;
+      expect(cover.installed, 40);
+      expect(cover.recommended, 4);
+      expect(cover.toRecommend, 0);
+      expect(estimate.partsUnderRecommendedCover, isEmpty);
+      expect(estimate.unitsToRecommendedCover, 0);
+    });
+
     test('a part nothing installs is left off the table', () {
       // A spare kept for a model every room has since been swapped off. Its
       // cover is not nought per cent, it is undefined - and a row saying 0%

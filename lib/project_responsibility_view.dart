@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
+import 'contrast.dart';
 import 'name_colors.dart';
 import 'pdf_viewer_dialog.dart';
 import 'pinned_grid.dart';
@@ -220,19 +221,47 @@ class CutsheetLink extends StatelessWidget {
         ? Icons.open_in_new
         : Icons.picture_as_pdf_outlined;
 
+    // ON THE GRID IT IS A WHOLE ROW, not an icon.
+    //
+    // It was a 22-pixel icon button sharing a cell with the scope name, inside
+    // the InkWell that opens the editor - the smallest target on the sheet, in
+    // front of a bigger one that does something else. Here it fills the cell
+    // it is given, so the press is the row.
+    //
+    // The word rather than the file name: the column is 116 wide and
+    // 'NEC-P525UL.pdf' ellipsises to 'NEC-P…' in it, which says less than
+    // 'PDF' does. The file name is on the tooltip and on the editor list
+    // below, where there is room to read it.
     if (compact) {
-      return IconButton(
-        key: ValueKey('matrix_cutsheet_${item.id}'),
-        tooltip: 'Open ${item.productName}',
-        iconSize: gridMetric(context, 16),
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        constraints: BoxConstraints.tightFor(
-          width: gridMetric(context, 22),
-          height: gridMetric(context, 22),
+      return Tooltip(
+        message: 'Open ${item.productName}',
+        child: InkWell(
+          key: ValueKey('matrix_cutsheet_${item.id}'),
+          onTap: () => openResponsibilityCutsheet(context, item),
+          child: SizedBox.expand(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: gridMetric(context, 15),
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    item.productIsUrl ? 'Link' : 'PDF',
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        icon: Icon(icon, color: theme.colorScheme.primary),
-        onPressed: () => openResponsibilityCutsheet(context, item),
       );
     }
 
@@ -374,6 +403,10 @@ List<String> partiesOn(List<ResponsibilityItem> items) {
 /// The five sizes the two halves of the matrix are both laid out on.
 typedef _Metrics = ({
   double headRow,
+
+  /// The cutsheet's OWN row under every scope name - see [_MatrixGrid].
+  double cutsheetRow,
+
   double partyRow,
   double bodyRow,
   double roomColumn,
@@ -398,6 +431,7 @@ class _MatrixGrid extends StatelessWidget {
   /// both - a metric computed twice is two halves that drift apart.
   static _Metrics _metrics(BuildContext context) => (
     headRow: gridMetric(context, 60),
+    cutsheetRow: gridMetric(context, 26),
     partyRow: gridMetric(context, 24),
     bodyRow: gridMetric(context, 28),
     roomColumn: gridMetric(context, 176),
@@ -417,6 +451,23 @@ class _MatrixGrid extends StatelessWidget {
     // Rooms, and then the totals line under them.
     final bodyRows = columns.length + 1;
 
+    // THE CUTSHEET GETS A ROW OF ITS OWN.
+    //
+    // It used to be a 22-pixel icon wedged onto the end of the scope name,
+    // inside the same InkWell that opens the editor - so a press that missed
+    // it by three pixels opened a dialog instead of the document, and the
+    // document is the thing this sheet gets opened to settle. A row of its own
+    // is the width of the whole column and cannot be pressed by accident from
+    // anywhere else.
+    //
+    // ONE DECISION FOR THE WHOLE GRID, not one per column. The frozen half and
+    // the scrolling half are laid out on the same heights, so a row that some
+    // columns had and others did not would be two halves that no longer line
+    // up. A job with no cutsheets anywhere keeps the row off and the sheet
+    // stays as short as it was.
+    final anyCutsheet =
+        items.any((i) => i.productLink.trim().isNotEmpty);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       // ITS OWN FRAME, SCROLLING BOTH WAYS. A job with thirty scope items and
@@ -428,13 +479,16 @@ class _MatrixGrid extends StatelessWidget {
       // the top.
       child: PinnedGrid(
         frozenWidth: m.roomColumn,
-        headerHeight: m.headRow + m.partyRow * 2,
+        headerHeight:
+            m.headRow + (anyCutsheet ? m.cutsheetRow : 0) + m.partyRow * 2,
         bodyWidth: m.itemColumn * items.length,
         bodyHeight: m.bodyRow * bodyRows,
-        corner: _frozenHead(theme, m),
+        corner: _frozenHead(theme, m, anyCutsheet),
         header: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [for (final item in items) _itemHead(context, item, m)],
+          children: [
+            for (final item in items) _itemHead(context, item, m, anyCutsheet),
+          ],
         ),
         frozen: _frozenBody(theme, m),
         body: Row(
@@ -447,7 +501,7 @@ class _MatrixGrid extends StatelessWidget {
 
   /// The corner: what the frozen column is, and what the two rows under every
   /// scope name are.
-  Widget _frozenHead(ThemeData theme, _Metrics m) {
+  Widget _frozenHead(ThemeData theme, _Metrics m, bool anyCutsheet) {
     final line = _line(theme);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -459,6 +513,13 @@ class _MatrixGrid extends StatelessWidget {
           strongRight: true,
           child: Text('ROOM', style: _headStyle(theme)),
         ),
+        if (anyCutsheet)
+          _cell(
+            height: m.cutsheetRow,
+            line: line,
+            strongRight: true,
+            child: Text('Cutsheet', style: _metaStyle(theme)),
+          ),
         _cell(
           height: m.partyRow,
           line: line,
@@ -513,7 +574,12 @@ class _MatrixGrid extends StatelessWidget {
   /// ceiling together - and on a sheet of thirty, nudging a column into place
   /// with the arrow buttons on the editor list below is a job nobody finishes.
   /// Dragging it is one gesture that lands where it was let go.
-  Widget _itemHead(BuildContext context, ResponsibilityItem item, _Metrics m) {
+  Widget _itemHead(
+    BuildContext context,
+    ResponsibilityItem item,
+    _Metrics m,
+    bool anyCutsheet,
+  ) {
     final theme = Theme.of(context);
     final line = _line(theme);
     final index = project.responsibility.indexWhere((i) => i.id == item.id);
@@ -546,11 +612,23 @@ class _MatrixGrid extends StatelessWidget {
                     ),
                   ),
                 ),
-                CutsheetLink(item: item, compact: true),
               ],
             ),
           ),
         ),
+        // THE DOCUMENT, ON A LINE OF ITS OWN. Full column width, outside the
+        // heading's own InkWell, so opening it is a press anywhere along the
+        // row rather than a press on a 22-pixel icon inside a bigger target
+        // that does something else.
+        if (anyCutsheet)
+          _cell(
+            height: m.cutsheetRow,
+            align: Alignment.center,
+            line: line,
+            child: item.productLink.trim().isEmpty
+                ? const SizedBox.shrink()
+                : CutsheetLink(item: item, compact: true),
+          ),
           // WHOSE JOB IT IS, IN ITS OWN COLOUR. Two rows under every scope
           // name, and the pair of them is what the sheet is read for.
           _cell(
@@ -1175,6 +1253,56 @@ class _ResponsibilityEditorDialogState
     super.dispose();
   }
 
+  /// Takes this line off the matrix and closes the editor.
+  ///
+  /// IT ASKS FIRST, and the row's own delete button does not. The difference
+  /// is what is in front of somebody at the time: on the sheet the button sits
+  /// under a row they can see and re-add in seconds, and in here it sits an
+  /// inch from Save, on a line that may be nine fields of prose somebody has
+  /// just spent ten minutes writing. One question is the cheapest possible
+  /// insurance against the worst possible slip.
+  ///
+  /// The scope is IN the question. "Delete this line?" in a dialog that opened
+  /// over another dialog is a question nobody can answer without cancelling
+  /// out of it to look.
+  Future<void> _delete() async {
+    final provider = context.read<AppStateProvider>();
+    final navigator = Navigator.of(context);
+    final scope = widget.item.scope.trim().isEmpty
+        ? 'this line'
+        : widget.item.scope.trim();
+
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('responsibility_delete_confirm'),
+        title: const Text('Take it off the matrix?'),
+        content: Text(
+          '$scope comes off the sheet, with whose job it is, the quantities '
+          'per room and the notes on it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const ValueKey('responsibility_delete_confirm_go'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (go != true) return;
+
+    provider.removeResponsibilityItem(widget.item.id);
+    // The editor goes with the line it was editing. Popped through the
+    // navigator captured above rather than through a context whose widget has
+    // just lost the thing it is showing.
+    navigator.pop();
+  }
+
   void _save() {
     final counts = <String, double>{};
     for (final room in widget.columns) {
@@ -1341,6 +1469,27 @@ class _ResponsibilityEditorDialogState
         ),
       ),
       actions: [
+        // DELETE IS ON THIS DIALOG BECAUSE THIS IS WHERE THE LINE IS READ. The
+        // sheet's own row carries a delete too, but by the time somebody has
+        // opened the editor and read the nine fields on it, the row is behind
+        // a dialog - and closing the editor to go and find the row again is
+        // how a line that should have gone stays on the matrix.
+        //
+        // Leftmost and in the error ink: it is the one action here that cannot
+        // be taken back, and it must not read as a third way of saying Cancel.
+        TextButton.icon(
+          key: const ValueKey('responsibility_delete_line'),
+          onPressed: _delete,
+          icon: const Icon(Icons.delete_outline, size: 18),
+          label: const Text('Delete line'),
+          style: TextButton.styleFrom(
+            foregroundColor: errorTextOn(
+              Theme.of(context).colorScheme,
+              Theme.of(context).dialogTheme.backgroundColor ??
+                  Theme.of(context).colorScheme.surfaceContainerHigh,
+            ),
+          ),
+        ),
         TextButton(
           key: const ValueKey('responsibility_cancel'),
           onPressed: () => Navigator.of(context).pop(),

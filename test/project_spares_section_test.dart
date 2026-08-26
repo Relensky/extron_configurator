@@ -277,7 +277,7 @@ void main() {
     );
     await openSpares(tester, p);
 
-    expect(find.text('HOW MUCH OF THIS JOB IS SPARED'), findsOneWidget);
+    expect(find.text('HOW MUCH OF THIS JOB HAS A SPARE'), findsOneWidget);
     expect(
       find.textContaining('1 spare of 4 installed  ·  25%'),
       findsOneWidget,
@@ -328,6 +328,55 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('1 spare of 4 installed  ·  25%'), findsWidgets);
+  });
+
+  testWidgets('a part under the recommended cover gets a note, not a flag',
+      (tester) async {
+    // Twenty rooms with a projector each, and one spare on the shelf. That
+    // meets the job's rule and is half of what ten per cent would hold.
+    final p = withRooms(20);
+    final line = p.priceProject().master.first;
+    p.addProjectSpare(
+      partKey: line.key,
+      description: line.description,
+      model: line.model,
+      qty: 1,
+    );
+    await openSpares(tester, p);
+
+    // NOT FLAGGED. Being under a recommendation is not a fault, and the moment
+    // it is drawn as one the recommendation stops being read.
+    expect(find.textContaining('no spare on the order'), findsNothing);
+
+    // The note, over the table and again on the row.
+    expect(
+      find.textContaining('Recommended cover is 10% of what goes in'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('1 part is under it'), findsOneWidget);
+    expect(find.textContaining('Recommended 2 at 10%'), findsOneWidget);
+    expect(find.textContaining('1 more to reach it'), findsOneWidget);
+  });
+
+  testWidgets('the button on the row offers the number that meets the '
+      'recommendation', (tester) async {
+    final p = withRooms(20);
+    final line = p.priceProject().master.first;
+    await openSpares(tester, p);
+
+    // Nothing spared of twenty installed: the rule says one, the
+    // recommendation says two, and the button offers the one that leaves the
+    // part actually covered.
+    expect(find.text('Add 2'), findsOneWidget);
+    await tester.tap(find.byKey(ValueKey('spare_cover_add_${line.key}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('add_spare_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(p.project.spares.single.qty, 2);
+    // The rule was never in doubt - two clears it as well as one does.
+    expect(p.priceProject().unsparedParts, isEmpty);
+    expect(p.priceProject().partsUnderRecommendedCover, isEmpty);
   });
 
   testWidgets('a spare is added from the no-spare check', (tester) async {

@@ -766,16 +766,30 @@ class _MainDashboardState extends State<MainDashboard> {
         // because it is not an action: it says what is on screen.
         title: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            // Both halves flexible: at 150% text the app's own name is wider
-            // than the title slot on a laptop, so a rigid Text painted an
-            // overflow stripe across the top bar before the picker even got a
-            // say. The name gives way first — it is the one thing on screen
-            // nobody needs to read twice.
-            Flexible(
-              child: Text('Room Config Builder', overflow: TextOverflow.ellipsis),
-            ),
-            Flexible(child: ProjectRoomPicker()),
+          children: [
+            // THE APP'S OWN NAME GIVES THE SLOT UP TO THE JOB.
+            //
+            // The title slot is whatever New, Open, Save and the rest of the
+            // actions leave over, and it has to hold the job's name, the room
+            // picker and - when the open room is behind its file - a Save
+            // button. 'Room Config Builder' is a third of that on a laptop,
+            // and it is the one thing in the bar nobody has to read: the
+            // window's own title bar and the taskbar both say it, and anybody
+            // looking at this screen knows what application they are in.
+            //
+            // So it shows while there is no job, where the slot is empty
+            // anyway and the app should say what it is - and steps aside the
+            // moment there is one.
+            if (!projectIsOpen(provider)) ...const [
+              Flexible(
+                child: Text(
+                  'Room Config Builder',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: 16),
+            ],
+            const Flexible(child: ProjectRoomPicker()),
           ],
         ),
         titleSpacing: 16,

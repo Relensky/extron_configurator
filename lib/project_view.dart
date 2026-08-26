@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui show lerpDouble;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -248,6 +250,71 @@ Future<void> showVendorColorDialog(
 /// too. Before that, a 1400-pixel window at 150% counted as roomy and the pane
 /// rail laid out nine full labels in the space of six.
 const double kProjectHeaderCompactWidth = 1040;
+
+/// Whether every pane label still fits on ONE LINE across [available] pixels.
+///
+/// WHY THIS IS MEASURED RATHER THAN READ OFF A WINDOW WIDTH. A
+/// [SegmentedButton] hands every segment the width of the WIDEST one and then
+/// clamps that to its own width divided by the number of segments. So the
+/// moment the longest label needs more than its ninth of the row, every
+/// segment is squeezed to a ninth and the long ones - 'Responsibility' first -
+/// wrap onto a second line inside a button. A fixed threshold cannot catch
+/// that: the label set changes when the to-do count appears, the type is the
+/// theme's rather than a number, and at 130% text a 1200-pixel window holds
+/// what a 900-pixel one holds at 100%.
+///
+/// Measuring the widest label settles the whole question, because that is the
+/// one the layout sizes every other segment from: if it fits, they all do.
+///
+/// THE ARITHMETIC IS MATERIAL'S OWN, not an estimate with slack in it. A
+/// segment carrying an icon is built exactly as `TextButton.icon` is - see
+/// `segmented_button.dart` - so its natural width is the button's padding,
+/// then the icon, then the gap, then the unwrapped label. Both the padding and
+/// the gap shrink as the app's text grows, and guessing either would drop the
+/// labels on a window that could have held them.
+bool _paneLabelsFit(BuildContext context, double available, int openTodos) {
+  // Nothing to go on - before the first layout, or a pane with no width. Keep
+  // the labels; the next frame has a real number.
+  if (available <= 0) return true;
+
+  final theme = Theme.of(context);
+  final style = theme.textTheme.labelLarge ?? const TextStyle(fontSize: 14);
+  final scaler = MediaQuery.textScalerOf(context);
+
+  double widest = 0;
+  for (final pane in _ProjectPane.values) {
+    final painter = TextPainter(
+      text: TextSpan(text: _paneLabel(pane, openTodos), style: style),
+      textDirection: Directionality.of(context),
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    widest = math.max(widest, painter.width);
+  }
+
+  // How far up the type scale the app is, as Material measures it: the size a
+  // 14pt label actually paints at, over 14.
+  final textScale = scaler.scale(style.fontSize ?? 14) / (style.fontSize ?? 14);
+  // 12 before the icon and 16 after the label at 1x, lerping to 4 either side
+  // by 2x - the two geometries `TextButton.icon` is padded between.
+  final padding = textScale <= 1
+      ? 28.0
+      : textScale < 2
+          ? ui.lerpDouble(28, 8, textScale - 1)!
+          : 8.0;
+  // The gap between the icon and the word, which closes the same way.
+  final gap = ui.lerpDouble(8, 4, math.min(1, math.max(0, textScale - 1)))!;
+
+  final segment = widest + gridMetric(context, 18) + padding + gap;
+  return segment * _ProjectPane.values.length <= available;
+}
+
+/// The word on a pane's segment — with the open count on the to-do one, which
+/// is part of the label and therefore part of what has to fit.
+String _paneLabel(_ProjectPane pane, int openTodos) =>
+    pane == _ProjectPane.todo && openTodos > 0
+        ? '${pane.label} ($openTodos)'
+        : pane.label;
 
 /// How much weight a header action carries. The two exports are what the tab
 /// is for and are drawn as such; the file actions are not.
@@ -500,6 +567,23 @@ class _ProjectViewState extends State<ProjectView> {
     final compact =
         box.maxWidth < gridMetric(context, kProjectHeaderCompactWidth);
 
+    // THE SWITCHER GIVES UP ITS LABELS WHEN THEY NO LONGER FIT ON A LINE, not
+    // when the window crosses [kProjectHeaderCompactWidth]. That threshold is
+    // the HEADER's - it says when four identity fields stop fitting side by
+    // side - and a switcher of nine segments runs out of room before the
+    // fields do. Between the two, 'Responsibility' was being wrapped onto a
+    // second line inside its own button, which is a label nobody can read on a
+    // control that has grown half a row taller than the ones beside it.
+    //
+    // Below the header's threshold the labels go anyway: the whole strip is in
+    // icon mode there and a switcher that kept its words while the buttons
+    // above it lost theirs would read as a different kind of control.
+    //
+    // The 32 is this Padding's own, taken off before the width is measured
+    // against - the switcher gets the inside of the header, not the outside.
+    final paneCompact =
+        compact || !_paneLabelsFit(context, box.maxWidth - 32, openTodos);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
@@ -686,14 +770,26 @@ class _ProjectViewState extends State<ProjectView> {
                   for (final pane in _ProjectPane.values)
                     ButtonSegment(
                       value: pane,
-                      icon: Icon(pane.icon, size: gridMetric(context, 18)),
+                      // THE KEY IS ON WHICHEVER HALF IS SHOWING. A segment is
+                      // the pane, and which of its two shapes is on screen is
+                      // a question about the width of the window - so anything
+                      // looking for a pane has to find it either way. When the
+                      // label is there it carries the key; when it has gone,
+                      // the icon does.
+                      icon: Icon(
+                        pane.icon,
+                        size: gridMetric(context, 18),
+                        key: paneCompact
+                            ? ValueKey('project_pane_${pane.name}')
+                            : null,
+                      ),
                       // The label goes when the window cannot hold all of
                       // them. Eight labelled segments are wider than a narrow
                       // window on their own, and a switcher that overflows is
                       // a pane nobody can reach — the icons are the same eight
                       // targets, in the same order, with the name on a
                       // tooltip.
-                      tooltip: compact
+                      tooltip: paneCompact
                           ? (pane == _ProjectPane.todo && openTodos > 0
                               ? '${pane.label} ($openTodos open)'
                               : pane.label)
@@ -705,13 +801,14 @@ class _ProjectViewState extends State<ProjectView> {
                       // by any more — 'Notes' is also a column on the room
                       // list — and a test that taps the wrong one of three
                       // matches is a test that fails for the wrong reason.
-                      label: compact
+                      label: paneCompact
                           ? null
                           : Text(
-                              pane == _ProjectPane.todo && openTodos > 0
-                                  ? '${pane.label} ($openTodos)'
-                                  : pane.label,
+                              _paneLabel(pane, openTodos),
                               key: ValueKey('project_pane_${pane.name}'),
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
                             ),
                     ),
                 ],
@@ -721,7 +818,7 @@ class _ProjectViewState extends State<ProjectView> {
                 // one must keep it. The default swaps in a tick, which on a
                 // labelled switcher marks the choice and on this one erases
                 // the only thing naming it.
-                showSelectedIcon: !compact,
+                showSelectedIcon: !paneCompact,
               ),
             ],
           ),
@@ -1254,6 +1351,74 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
   ];
 }
 
+// ---------------------------------------------------------------------------
+//  FROM A FLAG TO THE THING IT IS ABOUT
+// ---------------------------------------------------------------------------
+//  A flag on the project tab names a fault in a ROOM - three lines with no
+//  price, a device with no driver - and the place that fault is fixed is a
+//  room-level page one room-switch and one tab away. Reading the flag and then
+//  hunting for the room in the picker is most of the work of acting on it,
+//  which is why flags get read and not acted on.
+//
+//  DOUBLE-CLICK, NOT CLICK. Every one of these targets already had a single
+//  click that does something useful and smaller - copy the list, set the
+//  price - and taking that away to add a jump would be trading a control
+//  somebody uses for one they might. A double-click is the ordinary gesture
+//  for "open this", it is free on all three, and the tooltip on each says so
+//  rather than leaving it to be discovered.
+
+/// Makes [ref] the open room and lands on [tab] — the page the flag is about.
+///
+/// Goes through the SAME unsaved-work prompt every other way of switching
+/// rooms does: switching reads the next room off disk, and two doors into one
+/// action must not have two different answers to that question. A room that is
+/// already open skips straight to the tab, prompt and all — there is nothing
+/// being left.
+///
+/// [what] is what the reader is being sent to look at, and it goes in the
+/// confirmation: landing on a different tab is a big enough move that it has
+/// to be narrated, or it reads as the app having lost the project.
+Future<void> openProjectRoomOn(
+  BuildContext context,
+  ProjectRoomRef ref,
+  AppTab tab,
+  String what, {
+  /// What to call the room in the confirmation — the name the reader was just
+  /// looking at, which is not always the file's own.
+  String roomName = '',
+}) async {
+  final provider = context.read<AppStateProvider>();
+  final messenger = ScaffoldMessenger.of(context);
+
+  if (provider.openProjectRoom?.id != ref.id) {
+    if (!await confirmLeavingRoom(context, provider)) return;
+    if (!context.mounted) return;
+    final error = await provider.openProjectRoomRef(ref);
+    if (error.isNotEmpty) {
+      showTimedSnackBar(
+        messenger,
+        SnackBar(
+          content: Text(error),
+          backgroundColor: snackErrorFillOn(messenger),
+        ),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+  }
+
+  provider.selectTab(tab.index);
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 3),
+      content: Text(
+        '${roomName.trim().isEmpty ? ref.fallbackName : roomName}: $what',
+      ),
+    ),
+  );
+}
+
 class _RoomRow extends StatefulWidget {
   final ProjectRoomCost room;
   final String currency;
@@ -1486,12 +1651,41 @@ class _RoomRowState extends State<_RoomRow> {
       // somebody who is not in front of the app: a tooltip can only be read,
       // and a list that has to be retyped into a message is one that arrives
       // shortened.
+      //
+      // DOUBLE-CLICKING GOES THERE. Nearly everything on this list is a
+      // fault in one room's COST - lines with no price, labor with no rate
+      // - and the page that fixes it is that room's own Cost tab. A room
+      // with nothing on it at all is the exception and lands on the
+      // drawing instead, because there is no cost to go and look at yet.
+      //
+      // An InkWell rather than an IconButton for exactly that: a button
+      // has one gesture and this target needs two - the copy AND the jump.
+      // Padded to the size of the button it replaces so the row does not
+      // shift under it.
       if (e != null && _roomFlags(room).isNotEmpty)
-        IconButton(
-          key: ValueKey('room_row_flags_${room.ref.id}'),
-          tooltip: '${_roomFlags(room).join('\n')}\n\nClick to copy',
-          icon: Icon(Icons.info_outline, size: 24, color: quiet),
-          onPressed: () => _copyFlags(room),
+        Tooltip(
+          message:
+              '${_roomFlags(room).join('\n')}\n\n'
+              'Click to copy  ·  Double-click to open '
+              '${room.room.isEmpty ? 'the drawing' : 'this room\'s Cost page'}',
+          child: InkWell(
+            key: ValueKey('room_row_flags_${room.ref.id}'),
+            customBorder: const CircleBorder(),
+            onTap: () => _copyFlags(room),
+            onDoubleTap: () => openProjectRoomOn(
+              context,
+              room.ref,
+              room.room.isEmpty ? AppTab.avFlow : AppTab.cost,
+              room.room.isEmpty
+                  ? 'nothing is drawn in here yet'
+                  : 'what the flag is about is on this page',
+              roomName: room.name,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(Icons.info_outline, size: 24, color: quiet),
+            ),
+          ),
         ),
       IconButton(
         tooltip: 'Move up',
@@ -2180,8 +2374,9 @@ class _SparesPanel extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Nothing on this job is spared. Spares are asked for on a '
-                    'room’s Cost page, and every one of them shows up here.',
+                    'Nothing on this job has a spare. Spares are asked for on '
+                    'a room’s Cost page, and every one of them shows '
+                    'up here.',
                     style: theme.textTheme.bodySmall?.copyWith(color: muted),
                   ),
                 )
@@ -2273,6 +2468,26 @@ class _PartsHeaderRow extends StatelessWidget {
   }
 }
 
+/// The room a part-level flag is really about: the FIRST of [ids] that is
+/// still on the job.
+///
+/// The callers hand these in worst-first - most installed, most undriven -
+/// so the room this picks is the one somebody would have gone to anyway. A
+/// part in nine rooms cannot send anybody to nine places at once, and the
+/// biggest is the only defensible one of the nine to pick.
+///
+/// Null when none of them are on the job any more, which is a real case on
+/// a rollup built a moment before a room was removed. The flag simply does
+/// not offer the jump then, rather than throwing on a double-click.
+ProjectRoomCost? _flagRoom(ProjectEstimate estimate, Iterable<String> ids) {
+  for (final id in ids) {
+    for (final room in estimate.rooms) {
+      if (room.ref.id == id) return room;
+    }
+  }
+  return null;
+}
+
 class _PartRow extends StatelessWidget {
   final MasterPartLine line;
   final ProjectEstimate estimate;
@@ -2360,6 +2575,20 @@ class _PartRow extends StatelessWidget {
       for (final e in line.undrivenByRoom.entries)
         '${roomNames[e.key] ?? e.key} ×${e.value}',
     ].join(', ');
+
+    // WHERE EACH OF THIS ROW'S FLAGS LEADS. A part is on the master list
+    // once and in as many rooms as have it, so a flag on it cannot send
+    // anybody to one place without choosing - and the only choice that
+    // needs no explaining is the room with the MOST of what the flag is
+    // about. Worked out here rather than in the cell so the tooltip and
+    // the double-click cannot name two different rooms.
+    final priceRoom = _flagRoom(estimate, line.roomIdsByQty());
+    final gapRoom = _flagRoom(
+      estimate,
+      (line.undrivenByRoom.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value)))
+          .map((e) => e.key),
+    );
 
     // WHICH ORDER THIS PART IS ON, as a colour. The vendor's own — assigned
     // on the Vendors pane or derived from its name — washed behind the row and
@@ -2523,7 +2752,7 @@ class _PartRow extends StatelessWidget {
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              'Nothing spared of this',
+                              'No spare of this one',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -2559,12 +2788,43 @@ class _PartRow extends StatelessWidget {
                           // as well.
                           Flexible(
                             flex: 3,
-                            child: Text(
-                              'No control module - $undriven',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: errorTextOn(theme.colorScheme, theme.cardColor),
+                            // THE NOTE IS THE WAY IN. A driver is picked on
+                            // the room's own Devices page, and until now the
+                            // only thing this note did was name the rooms
+                            // somebody then had to go and find. It has no
+                            // single click of its own to lose, so the jump
+                            // is the only gesture on it and the tooltip
+                            // says what it is.
+                            child: Tooltip(
+                              message: gapRoom == null
+                                  ? 'Nothing on this job drives these.'
+                                  : 'Nothing on this job drives these.\n'
+                                      'Double-click to open ${gapRoom.name} '
+                                      'on its Devices page and pick one.',
+                              child: InkWell(
+                                key: ValueKey('part_gap_${line.key}'),
+                                borderRadius: BorderRadius.circular(4),
+                                onDoubleTap: gapRoom == null
+                                    ? null
+                                    : () => openProjectRoomOn(
+                                          context,
+                                          gapRoom.ref,
+                                          AppTab.devices,
+                                          'pick the control module for '
+                                              '${line.description} here',
+                                          roomName: gapRoom.name,
+                                        ),
+                                child: Text(
+                                  'No control module - $undriven',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: errorTextOn(
+                                      theme.colorScheme,
+                                      theme.cardColor,
+                                    ),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           // The fix, next to the complaint. Some of these rows
@@ -2634,14 +2894,25 @@ class _PartRow extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Tooltip(
-                message: line.unpriced
-                    ? 'Nothing on this job has a price for this part. Click '
+                message: [
+                  if (line.unpriced)
+                    'Nothing on this job has a price for this part. Click '
                         'to set one - in the catalog, or on this job only.'
-                    : line.priceVaries
-                        ? 'Rooms on this job hold different prices for this '
-                            'part - one of them has a negotiated override.\n'
-                            'Click to set one price for the job.'
-                        : 'Click to change the price',
+                  else if (line.priceVaries)
+                    'Rooms on this job hold different prices for this '
+                        'part - one of them has a negotiated override.\n'
+                        'Click to set one price for the job.'
+                  else
+                    'Click to change the price',
+                  // WHERE THE PRICE ACTUALLY COMES FROM. A price on the
+                  // master list is the merge of every room's, and the room
+                  // that has most of this part is where a wrong one is
+                  // read in context - beside the labor, the overrides and
+                  // the rest of that room's total.
+                  if (priceRoom != null)
+                    'Double-click to open ${priceRoom.name} on its Cost '
+                        'page.',
+                ].join('\n\n'),
                 child: InkWell(
                   key: ValueKey('part_price_${line.key}'),
                   borderRadius: BorderRadius.circular(4),
@@ -2651,6 +2922,16 @@ class _PartRow extends StatelessWidget {
                     line,
                     currency,
                   ),
+                  onDoubleTap: priceRoom == null
+                      ? null
+                      : () => openProjectRoomOn(
+                            context,
+                            priceRoom.ref,
+                            AppTab.cost,
+                            'the price for ${line.description} is on this '
+                                'page',
+                            roomName: priceRoom.name,
+                          ),
                   child: Text(
                   line.unpriced
                       ? 'not priced'

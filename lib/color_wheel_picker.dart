@@ -300,9 +300,22 @@ class _SelectedTick extends StatelessWidget {
   }
 }
 
-/// A color chip with an unmistakable selected state: a heavy ring, a lift,
-/// and a checkbox in a contrasting color. The old version only thickened the
-/// border, which was easy to miss against a row of similar swatches.
+/// A colour chip whose selected state is A CHECKBOX ON THE COLOUR, and nothing
+/// else.
+///
+/// IT USED TO BE A BOX AROUND THE COLOUR: a three-pixel ring in the theme's
+/// primary with a coloured glow spreading out behind it. That reads as
+/// selected, and it costs more than it is worth on a row of swatches. The ring
+/// is a second colour laid against the one being chosen - on a palette of
+/// twelve, the chosen swatch is the one seen through a border of a completely
+/// different hue - and the glow pushes its neighbours apart, so the row
+/// reflows by a few pixels every time somebody picks a different colour.
+///
+/// So the chosen swatch is now marked ON ITSELF: [_SelectedTick], drawn in
+/// whichever of white or near-black reads on that colour, with the colour
+/// itself as the ground behind it. Every swatch keeps the same hairline edge
+/// whether it is chosen or not - a white swatch on a white card needs one, and
+/// an edge every chip has is a cell boundary rather than a selection mark.
 class ColorSwatchButton extends StatelessWidget {
   final Color color;
   final bool selected;
@@ -341,19 +354,9 @@ class ColorSwatchButton extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(
-          color: selected ? theme.colorScheme.primary : theme.dividerColor,
-          width: selected ? 3 : 1,
-        ),
-        boxShadow: selected
-            ? [
-                BoxShadow(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.55),
-                  blurRadius: 7,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
+        // THE SAME HAIRLINE ON EVERY CHIP. It is there so a pale swatch has an
+        // edge at all, not to say which one is chosen - the tick says that.
+        border: Border.all(color: theme.dividerColor),
       ),
       alignment: Alignment.center,
       child: selected

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart'
+    show kDoubleTapMinTime, kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -273,7 +275,7 @@ void main() {
 
       expect(find.byKey(const ValueKey('project_spares_section')),
           findsOneWidget);
-      expect(find.textContaining('Nothing on this job is spared yet'),
+      expect(find.textContaining('Nothing on this job has a spare yet'),
           findsOneWidget);
     });
   });
@@ -328,6 +330,10 @@ void main() {
       await tester.tap(
         find.byKey(ValueKey('room_row_flags_${p.project.rooms.first.id}')),
       );
+      // THE COPY WAITS OUT THE DOUBLE-CLICK. The same target now opens the
+      // room's Cost page on a double-click, so a single one cannot be acted on
+      // until the gesture recogniser knows a second is not coming.
+      await tester.pump(kDoubleTapTimeout);
       await tester.pump();
 
       // The room leads: a bare "1 line(s) have no price" pasted into a message
@@ -340,6 +346,126 @@ void main() {
       // Let the confirmation bar finish rather than leaving its timer running.
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  FROM A FLAG TO THE THING IT IS ABOUT
+  // -------------------------------------------------------------------------
+  //  A flag names a fault in a ROOM, and the page that fixes it is one room
+  //  switch and one tab away. Reading the flag and then hunting for the room
+  //  was most of the work of acting on it.
+
+  group('a flag is a way in', () {
+    /// Double-clicks [target] and lets the room actually open.
+    ///
+    /// THE PUMP IN THE MIDDLE IS NOT OPTIONAL. Landing on the room's own page
+    /// means reading that room off disk, and a widget test runs in a
+    /// fake-async zone where real file I/O never completes - so the handler
+    /// would sit for ever on its first await and the room would still be
+    /// unopened when the expectations ran. [WidgetTester.runAsync] steps
+    /// outside that zone for long enough for the read to finish.
+    Future<void> doubleClick(WidgetTester tester, Finder target) async {
+      await tester.tap(target);
+      await tester.pump(kDoubleTapMinTime);
+      await tester.tap(target);
+      await tester.pump();
+      // Several turns of the real loop with a pump between them: the open
+      // reads a config, then a sidecar, then prices the room, and each await
+      // needs the zone stepped out of once more.
+      for (var i = 0; i < 8; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 40)),
+        );
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+    }
+
+    AppStateProvider withFlags() {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.avDeviceLibrary = AvDeviceLibrary.empty();
+      p.newProject(name: 'Bessey refresh', building: 'BSS');
+      p.addRoomToProject(writeRoom('a', 'Bessey 101', [
+        device('d1', 'Lectern TX', 'NO SUCH MODEL'),
+      ]));
+      return p;
+    }
+
+    testWidgets('double-clicking what is flagged opens that room on its Cost '
+        'page', (tester) async {
+      final p = withFlags();
+      await pump(tester, p);
+
+      await doubleClick(
+        tester,
+        find.byKey(ValueKey('room_row_flags_${p.project.rooms.first.id}')),
+      );
+
+      // The room is the one the flag was on, and the tab is the one the fault
+      // is fixed on - not the project tab it was double-clicked from.
+      expect(p.openProjectRoom?.id, p.project.rooms.first.id);
+      expect(p.selectedTabIndex, AppTab.cost.index);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('double-clicking a price opens the room that has most of that '
+        'part', (tester) async {
+      final p = withProject();
+      await pump(tester, p);
+      await tester.tap(find.byKey(const ValueKey('project_pane_parts')));
+      await tester.pumpAndSettle();
+
+      final line = p.priceProject().master.first;
+      await doubleClick(tester, find.byKey(ValueKey('part_price_${line.key}')));
+
+      // The price dialog is the SINGLE click and must not have opened as well.
+      expect(find.byKey(const ValueKey('part_price_dialog')), findsNothing);
+      expect(p.selectedTabIndex, AppTab.cost.index);
+      expect(p.openProjectRoom, isNotNull);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE PANE SWITCHER SIZES ITSELF TO ITS OWN LABELS
+  // -------------------------------------------------------------------------
+  //  A SegmentedButton gives every segment the width of the widest one and
+  //  then clamps that to a ninth of the row, so one long label that does not
+  //  fit wraps INSIDE its button. The switcher measures instead of guessing.
+
+  group('the pane switcher never wraps a label', () {
+    testWidgets('a window wide enough for nine labels keeps them, one line '
+        'each', (tester) async {
+      await pump(tester, withProject(), width: 2600);
+
+      final longest = find.byKey(
+        const ValueKey('project_pane_responsibility'),
+      );
+      expect(tester.widget(longest), isA<Text>());
+      // As tall as the shortest label on the strip: two lines would be twice
+      // the height, which is the fault being fixed.
+      expect(
+        tester.getSize(longest).height,
+        tester.getSize(find.byKey(const ValueKey('project_pane_rooms'))).height,
+      );
+    });
+
+    testWidgets('a window that cannot hold them drops to icons with the name '
+        'on a tooltip', (tester) async {
+      await pump(tester, withProject(), width: 900);
+
+      // The key follows the pane, not the label - a segment is findable in
+      // either shape, and here the shape is an icon.
+      expect(
+        tester.widget(find.byKey(const ValueKey('project_pane_responsibility'))),
+        isA<Icon>(),
+      );
+      expect(find.byTooltip('Responsibility'), findsOneWidget);
     });
   });
 
@@ -735,10 +861,15 @@ void main() {
         (key: 'notes', icon: Icons.sticky_note_2_outlined),
       ]) {
         await pump(tester, p, width: width);
+        // WHICHEVER SHAPE THE SWITCHER IS IN. The labels come off when they no
+        // longer fit on one line, which is measured from the labels rather
+        // than read off a threshold - so the width alone no longer says which
+        // of the two the tap has to find.
+        final labelled = find.byKey(ValueKey('project_pane_${pane.key}'));
         await tester.tap(
-          width < kProjectHeaderCompactWidth
+          labelled.evaluate().isEmpty
               ? find.byIcon(pane.icon).first
-              : find.byKey(ValueKey('project_pane_${pane.key}')).first,
+              : labelled.first,
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '${pane.key} at $width');

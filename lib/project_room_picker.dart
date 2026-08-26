@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 import 'building_project.dart';
+import 'pinned_grid.dart' show gridMetric;
 import 'save_actions.dart' show createProjectRoom;
 
 /// ============================================================================
@@ -30,6 +31,15 @@ import 'save_actions.dart' show createProjectRoom;
 ///  the offer to save is the default action.
 /// ============================================================================
 
+/// Whether there is a JOB open, which is what puts the picker on the bar.
+///
+/// Public because the title bar has to know it too: the app's own name gives
+/// the title slot up to the job the moment there is one - see main.dart.
+bool projectIsOpen(AppStateProvider provider) =>
+    provider.project.rooms.isNotEmpty ||
+    provider.currentProjectPath.isNotEmpty ||
+    provider.project.name.trim().isNotEmpty;
+
 class ProjectRoomPicker extends StatelessWidget {
   const ProjectRoomPicker({super.key});
 
@@ -44,19 +54,35 @@ class ProjectRoomPicker extends StatelessWidget {
     // most: a project just started has none, and the menu is now where a room
     // is started FROM. With no project at all it stays hidden — a permanently
     // empty dropdown explaining itself is worse than nothing.
-    final hasProject = rooms.isNotEmpty ||
-        provider.currentProjectPath.isNotEmpty ||
-        provider.project.name.trim().isNotEmpty;
-    if (!hasProject) return const SizedBox.shrink();
+    if (!projectIsOpen(provider)) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     final open = provider.openProjectRoom;
     final onBar =
         theme.appBarTheme.foregroundColor ?? theme.colorScheme.onPrimary;
 
-    return Padding(
-      padding: const EdgeInsets.only(left: 16),
-      child: Row(
+    // WHAT COMES OFF FIRST WHEN THE BAR RUNS OUT.
+    //
+    // This row sits in the title slot, which is whatever New, Open, Save and
+    // the rest of the actions leave over - and on a window dragged narrow that
+    // is not much. Its contents used to be fixed width apart from the job's
+    // name, so past a certain point the Save button and the room menu were
+    // simply painted over the buttons to their right.
+    //
+    // So it sheds, in the order the things on it can be done without:
+    //
+    //   1. THE STEPPERS. Previous and next room are a convenience; every room
+    //      on the job is in the menu beside them.
+    //   2. THE WORD ON SAVE. The button stays - a room behind its file is the
+    //      one thing on this row that is a warning - as the icon it already
+    //      carries, with the words on its tooltip.
+    //
+    // The job's name and the room stay, because between them they are what
+    // the row is for: which building, which room.
+    return LayoutBuilder(builder: (context, box) {
+      final tight = box.maxWidth < gridMetric(context, 340);
+
+      return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.apartment, size: 16, color: onBar.withValues(alpha: 0.7)),
@@ -82,14 +108,14 @@ class ProjectRoomPicker extends StatelessWidget {
                 ),
               ),
             ),
-          if (rooms.isNotEmpty)
+          if (rooms.isNotEmpty && !tight)
             _StepButton(
               icon: Icons.chevron_left,
               tooltip: 'Previous room on the project',
               delta: -1,
             ),
-          _RoomMenu(open: open, rooms: rooms),
-          if (rooms.isNotEmpty)
+          Flexible(child: _RoomMenu(open: open, rooms: rooms)),
+          if (rooms.isNotEmpty && !tight)
             _StepButton(
               icon: Icons.chevron_right,
               tooltip: 'Next room on the project',
@@ -99,23 +125,31 @@ class ProjectRoomPicker extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Tooltip(
-                message: 'This room has changes that are not in its file. The '
-                    'project total already counts them; the file does not.',
-                child: TextButton.icon(
-                  key: const ValueKey('room_picker_save'),
-                  onPressed: () => saveOpenRoom(context, provider),
-                  icon: Icon(Icons.save, size: 16, color: onBar),
-                  label: Text(
-                    'Save room',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: onBar),
-                  ),
-                ),
+                message: 'Save this room. It has changes that are not in its '
+                    'file - the project total already counts them; the file '
+                    'does not.',
+                child: tight
+                    ? IconButton(
+                        key: const ValueKey('room_picker_save'),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => saveOpenRoom(context, provider),
+                        icon: Icon(Icons.save, size: 16, color: onBar),
+                      )
+                    : TextButton.icon(
+                        key: const ValueKey('room_picker_save'),
+                        onPressed: () => saveOpenRoom(context, provider),
+                        icon: Icon(Icons.save, size: 16, color: onBar),
+                        label: Text(
+                          'Save room',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: onBar),
+                        ),
+                      ),
               ),
             ),
         ],
-      ),
-    );
+      );
+    });
   }
 }
 
@@ -198,7 +232,11 @@ class _RoomMenu extends StatelessWidget {
 
     return PopupMenuButton<String>(
       key: const ValueKey('room_picker_menu'),
-      tooltip: 'Switch to another room on this project',
+      // The name the button no longer has room for.
+      tooltip: open == null
+          ? 'Switch to another room on this project'
+          : '${_nameFor(provider, open!)}'
+              '\n\nSwitch to another room on this project',
       constraints: const BoxConstraints(minWidth: 260, maxWidth: 460),
       onSelected: (id) async {
         // Starting a room is the same decision as switching to one — "which
@@ -238,13 +276,18 @@ class _RoomMenu extends StatelessWidget {
                     : Icons.radio_button_unchecked,
                 size: 18,
               ),
-              title: Text(_nameFor(provider, ref)),
-              subtitle: ref.included
+              title: Text(_codeFor(provider, ref)),
+              // THE FULL NAME BELONGS ON THE MENU, not on the button. The
+              // button has to be short enough to live in a title bar; the menu
+              // is a list somebody has stopped to read, and 'BSS 101' with no
+              // name under it is a room nobody can tell from BSS 103.
+              //
+              // Worth saying here as well as on the Rooms pane: an excluded
+              // room is still a room somebody works on, and the picker is
+              // where they pick it.
+              subtitle: _menuSubtitle(provider, ref) == null
                   ? null
-                  // Worth saying here as well as on the Rooms pane: an
-                  // excluded room is still a room somebody works on, and the
-                  // picker is where they pick it.
-                  : const Text('Not counted in the project total'),
+                  : Text(_menuSubtitle(provider, ref)!),
             ),
           ),
         const PopupMenuDivider(),
@@ -264,15 +307,28 @@ class _RoomMenu extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              open != null
-                  ? _nameFor(provider, open!)
-                  : rooms.isEmpty
-                  ? 'No rooms yet'
-                  : 'Pick a room',
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: onBar,
-                fontStyle: open == null ? FontStyle.italic : null,
+            // THE CODE ON THE DOOR, NOT THE ROOM'S FULL NAME.
+            //
+            // This button lives in the title bar, in front of New, Open and
+            // Save, sharing whatever those leave over with the job's name. A
+            // room called 'Bessey Hall 101 Lecture Theatre' filled that slot
+            // by itself and pushed the rest of the row under the buttons to
+            // its right. 'BSS 101' is what the room is called on every door,
+            // drawing and work order in the building, it is seven characters,
+            // and the full name is one press or one hover away.
+            Flexible(
+              child: Text(
+                open != null
+                    ? _codeFor(provider, open!)
+                    : rooms.isEmpty
+                    ? 'No rooms yet'
+                    : 'Pick a room',
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: onBar,
+                  fontStyle: open == null ? FontStyle.italic : null,
+                ),
               ),
             ),
             const SizedBox(width: 2),
@@ -292,6 +348,37 @@ class _RoomMenu extends StatelessWidget {
       if (room.ref.id == ref.id) return room.name;
     }
     return ref.fallbackName;
+  }
+
+  /// The shortest true name this room has: usually the code on the door.
+  ///
+  /// WIDTH IS THE WHOLE REASON THIS EXISTS, so width is what picks between the
+  /// two. On a real room the code wins by a mile - 'BSS 101' against 'Bessey
+  /// Hall 101 Lecture Theatre' - which is the case this button was made
+  /// shorter for.
+  ///
+  /// It loses on the rooms where it is not really a code. A config still
+  /// carrying the template's defaults reads as 'UNKNOWN 000', and a room that
+  /// could not be read has no code at all; both are longer than, or no better
+  /// than, what the room is actually called. Comparing the two lengths sorts
+  /// every one of those cases out without this having to know what any
+  /// particular placeholder looks like.
+  String _codeFor(AppStateProvider provider, ProjectRoomRef ref) {
+    final name = _nameFor(provider, ref);
+    final code = provider.priceProject().roomCodeNames[ref.id] ?? '';
+    if (code.isEmpty) return name;
+    return code.length <= name.length ? code : name;
+  }
+
+  /// What goes under a room on the menu: its full name when that is not just
+  /// the code again, and whether the job counts it.
+  String? _menuSubtitle(AppStateProvider provider, ProjectRoomRef ref) {
+    final name = _nameFor(provider, ref);
+    final parts = [
+      if (name != _codeFor(provider, ref)) name,
+      if (!ref.included) 'Not counted in the project total',
+    ];
+    return parts.isEmpty ? null : parts.join('  ·  ');
   }
 }
 

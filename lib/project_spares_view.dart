@@ -92,9 +92,9 @@ List<Widget> spareSectionSlivers(
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'Nothing on this job is spared yet. Add one here for the '
-                      'building or for a room, or ask for one on a room\'s own '
-                      'Cost page.',
+                      'Nothing on this job has a spare yet. Add one here for '
+                      'the building or for a room, or ask for one on a room\'s '
+                      'own Cost page.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -624,6 +624,17 @@ class _RoomOwnSpareRow extends StatelessWidget {
 //
 //  The percentage is still what every row SAYS. "Two spare projectors" is a
 //  row nobody can approve or cut; "2 of 40, 5%" is a decision.
+//
+//  AND IT IS NOW ALSO WHAT THE ROW RECOMMENDS. A percentage of what goes in is
+//  the only thing that can turn "this has a spare" into "this has enough", and
+//  that is the question somebody opens this page with. So every row carries
+//  what 10% of its own installed count comes to and how many more would meet
+//  it - see [kRecommendedSpareCover].
+//
+//  IT IS A NOTE, NOT A FLAG. Nothing is drawn in the error ink for being under
+//  the recommendation; only a part with NOTHING spared is. That is the whole
+//  reason the percentage could come back: it advises without turning forty
+//  wall plates into forty faults, which is what the old typed-in target did.
 
 /// The percentage table, and the way to fix a row with nothing spared.
 class _SpareCoverCard extends StatefulWidget {
@@ -680,7 +691,7 @@ class _SpareCoverCardState extends State<_SpareCoverCard> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'HOW MUCH OF THIS JOB IS SPARED',
+                  'HOW MUCH OF THIS JOB HAS A SPARE',
                   style: theme.textTheme.labelSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.onSurfaceVariant,
@@ -697,6 +708,12 @@ class _SpareCoverCardState extends State<_SpareCoverCard> {
               short: short.length,
             ),
           ),
+          // WHAT WOULD BE ENOUGH, under what is missing. The line above says
+          // whether the job meets its own rule; this says what a percentage of
+          // the job would ask for on top of it, and how many units that is
+          // across the whole order - which is the figure somebody is actually
+          // deciding about when they widen the spares budget.
+          _RecommendedNote(estimate: estimate, parts: cover.length),
           for (final c in shown) _CoverRow(cover: c, estimate: estimate),
           if (cover.length > shown.length || _showAll)
             Align(
@@ -756,6 +773,46 @@ class _CoverSummary extends StatelessWidget {
   }
 }
 
+/// What a percentage of the job would have it hold, and how far off it is.
+///
+/// SEPARATE FROM [_CoverSummary] AND IN A QUIETER INK, deliberately. The line
+/// above it is the job's own rule and is drawn as a pass or a fault; this one
+/// is advice, and advice that borrows the fault's red is advice that gets
+/// argued with instead of read.
+class _RecommendedNote extends StatelessWidget {
+  final ProjectEstimate estimate;
+  final int parts;
+
+  const _RecommendedNote({required this.estimate, required this.parts});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final under = estimate.partsUnderRecommendedCover.length;
+    final units = estimate.unitsToRecommendedCover;
+    final percent = formatSpareCover(kRecommendedSpareCover);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 4),
+      child: Text(
+        under == 0
+            ? 'Recommended cover is $percent of what goes in, rounded up and '
+                'never less than one. All $parts '
+                '${parts == 1 ? 'part is' : 'parts are'} at or above it.'
+            : 'Recommended cover is $percent of what goes in, rounded up and '
+                'never less than one. $under of $parts '
+                '${parts == 1 ? 'part is' : 'parts are'} under it - '
+                '${trimNumber(units)} more ${units == 1 ? 'unit' : 'units'} '
+                'across the job would meet it. A recommendation: only a part '
+                'with no spare at all is flagged.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
 /// One part's cover, and - when it is short - the way to fix it.
 class _CoverRow extends StatelessWidget {
   final SparePartCover cover;
@@ -795,6 +852,20 @@ class _CoverRow extends StatelessWidget {
                     fontWeight: cover.short ? FontWeight.w600 : null,
                   ),
                 ),
+                // WHAT WOULD BE ENOUGH, on the row it is about. In the quiet
+                // ink whatever the row above it is drawn in: a part with one
+                // spare of forty is not a fault, and this is the sentence that
+                // tells somebody it is still worth another three.
+                if (cover.toRecommend > 0)
+                  Text(
+                    'Recommended ${trimNumber(cover.recommended)} at '
+                    '${formatSpareCover(kRecommendedSpareCover)}  ·  '
+                    '${trimNumber(cover.toRecommend)} more to reach it',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ],
             ),
           ),
@@ -804,6 +875,12 @@ class _CoverRow extends StatelessWidget {
           // to add one is a table that gets read and then ignored. A row with
           // nothing on the shelf offers the first one; every other row can
           // still be topped up.
+          //
+          // THE NUMBER ON THE BUTTON IS THE RECOMMENDATION'S, not the rule's.
+          // Both are one press, so the one worth offering is the one that
+          // leaves the part actually covered - and the dialog it opens is
+          // still a dialog, with the figure in a box somebody can change to
+          // one before confirming.
           if (cover.short)
             FilledButton.tonal(
               key: ValueKey('spare_cover_add_${line.key}'),
@@ -811,9 +888,20 @@ class _CoverRow extends StatelessWidget {
                 context,
                 estimate,
                 partKey: line.key,
-                qty: cover.shortfall,
+                qty: cover.toRecommend,
               ),
-              child: Text('Add ${trimNumber(cover.shortfall)}'),
+              child: Text('Add ${trimNumber(cover.toRecommend)}'),
+            )
+          else if (cover.toRecommend > 0)
+            OutlinedButton(
+              key: ValueKey('spare_cover_add_${line.key}'),
+              onPressed: () => showAddSpareDialog(
+                context,
+                estimate,
+                partKey: line.key,
+                qty: cover.toRecommend,
+              ),
+              child: Text('Add ${trimNumber(cover.toRecommend)}'),
             )
           else
             IconButton(

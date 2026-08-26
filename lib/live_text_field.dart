@@ -23,6 +23,26 @@ class LiveTextField extends StatefulWidget {
 
   final String? label;
   final String? hint;
+
+  /// Whether [hint] is the value this row RESOLVES TO, rather than an example
+  /// of what could be typed here.
+  ///
+  /// IT DECIDES WHAT A BLANK BOX PRINTS. Two completely different things are
+  /// written as a hint on this app's sheets:
+  ///
+  ///   * A FIGURE THE ROW ALREADY HAS. A price cell holds the room's own
+  ///     override and shows the catalog's price behind it, so a blank box
+  ///     means "the catalog's" - and on a photographed quote that number is
+  ///     the price of the line. It has to print.
+  ///   * AN EXAMPLE. 'e.g. Rack build and termination' is an instruction to
+  ///     whoever is filling the sheet in. Printed, it reads as a line item
+  ///     that somebody quoted, which is worse than a gap: a quote emailed with
+  ///     'e.g. Freight' on it is a quote that has to be explained.
+  ///
+  /// So only a hint marked as a value survives the camera. Everything else
+  /// prints as what it is - blank, because nobody typed anything.
+  final bool hintIsValue;
+
   final String? helper;
   final String? prefix;
   final String? suffix;
@@ -41,6 +61,7 @@ class LiveTextField extends StatefulWidget {
     this.onSubmitted,
     this.label,
     this.hint,
+    this.hintIsValue = false,
     this.helper,
     this.prefix,
     this.suffix,
@@ -92,12 +113,14 @@ class _LiveTextFieldState extends State<LiveTextField> {
 
   @override
   Widget build(BuildContext context) {
-    // Being photographed: print the VALUE, not an input box round it. Blank
-    // means the row is taking the catalog or base-cost figure, and that figure
-    // is the hint — which makes the hint the thing that belongs on the page.
+    // Being photographed: print the VALUE, not an input box round it. A blank
+    // box falls back to the hint ONLY where the hint is the figure the row
+    // resolved to — see [LiveTextField.hintIsValue]. Where it is an example
+    // for whoever is filling the sheet in, a blank box prints blank: the
+    // picture is of what this job says, not of what the app suggests.
     if (PrintMode.of(context)) {
       final shown = _controller.text.trim().isEmpty
-          ? (widget.hint ?? '')
+          ? (widget.hintIsValue ? (widget.hint ?? '') : '')
           : _controller.text;
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),

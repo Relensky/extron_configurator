@@ -7,6 +7,7 @@ import 'av_flow_model.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
+import 'project_lifecycle_view.dart' show LifecycleYearGrid;
 import 'pinned_grid.dart' show gridMetric;
 import 'project_estimate.dart' show roomCodeFromConfig;
 import 'stepped_date_picker.dart';
@@ -113,6 +114,27 @@ class _LifecycleViewState extends State<LifecycleView> {
               room: room,
               showNever: _showNever,
               onShowNever: () => setState(() => _showNever = !_showNever),
+            ),
+          ),
+          // THE SAME CALENDAR THE PROJECT DRAWS, FOR THIS ROOM.
+          //
+          // This tab answered "how old is everything in here" as a list of
+          // positions, and left "what year does it land, in how many tranches,
+          // and what does each cost" to the Project tab - which is a different
+          // screen, on a job the room may not even be on. They are the same
+          // facts about the same room, and this is where somebody is standing
+          // when the question comes up.
+          //
+          // A building of ONE. Nothing in the grid cares how many rooms it is
+          // given, and handing it the room this way means the two screens can
+          // never draw the same room two different ways.
+          SliverToBoxAdapter(
+            child: LifecycleYearGrid(
+              building: BuildingLifecycle(
+                rooms: [room],
+                asOf: room.asOf,
+                currency: provider.currencySymbol,
+              ),
             ),
           ),
           const SliverToBoxAdapter(child: Divider(height: 1)),
