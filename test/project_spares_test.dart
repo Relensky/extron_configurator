@@ -71,8 +71,9 @@ void main() {
   ProjectEstimate estimateOf(
     List<MasterPartLine> master, {
     List<ProjectRoomCost> rooms = const [],
+    BuildingProject? project,
   }) => ProjectEstimate(
-    project: BuildingProject(),
+    project: project ?? BuildingProject(),
     currency: r'$',
     rooms: rooms,
     costedRooms: const [],
@@ -556,15 +557,54 @@ void main() {
       expect(estimate.spareCover, isEmpty);
     });
 
-    test('a job file that still carries the old target reads fine', () {
-      // The percentage policy is gone. A file written by a version that had
-      // one must still open, with the key simply ignored.
+    test('a job file that carries a target opens with it in force', () {
+      // The same key the old policy was written under, holding the same
+      // number and meaning very nearly the same thing - so a file written by
+      // that version opens with its target back, rather than silently at the
+      // suggestion.
       final read = BuildingProject.fromJson({
         'rooms': const [],
         'spareTargetPercent': 12.5,
       });
-      expect(read.toJson().containsKey('spareTargetPercent'), isFalse);
+      expect(read.spareCoverTarget, closeTo(0.125, 1e-9));
+      expect(read.toJson()['spareTargetPercent'], closeTo(12.5, 1e-9));
+      // A percentage on its own is still not a job.
       expect(read.isEmpty, isTrue);
+    });
+
+    test('a target that is not a percentage is read as the suggestion', () {
+      // '200%' in a hand-edited file is a typo, and honouring it would put a
+      // recommendation of two hundred spare wall plates on the sheet.
+      for (final bad in [200, -5, 'soon', null]) {
+        final read = BuildingProject.fromJson({
+          'rooms': const [],
+          if (bad != null) 'spareTargetPercent': bad,
+        });
+        expect(read.spareCoverTarget, kSuggestedSpareCover, reason: '$bad');
+        // At the suggestion the key is not written at all.
+        expect(read.toJson().containsKey('spareTargetPercent'), isFalse);
+      }
+    });
+
+    test('the target is what the recommendation is worked out from', () {
+      // Forty installed. At the suggestion that is four; at nought it is the
+      // rule and nothing more, which is one of everything.
+      final rich = estimateOf(
+        [line(description: 'Plate', qty: 40, spareQty: 0)],
+        project: BuildingProject(spareCoverTarget: 0.25),
+      );
+      expect(rich.spareCover.single.recommended, 10);
+      expect(rich.spareCover.single.toRecommend, 10);
+
+      final oneEach = estimateOf(
+        [line(description: 'Plate', qty: 40, spareQty: 0)],
+        project: BuildingProject(spareCoverTarget: 0),
+      );
+      expect(oneEach.spareCover.single.recommended, 1);
+      expect(oneEach.spareCover.single.toRecommend, 1);
+      // And it is still the only thing flagged, at either setting.
+      expect(rich.unsparedParts, hasLength(1));
+      expect(oneEach.unsparedParts, hasLength(1));
     });
   });
 }

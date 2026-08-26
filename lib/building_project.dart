@@ -1058,6 +1058,15 @@ String masterPartKey({
 //  Both kinds end up on the same master line and in the same total. See
 //  [MasterPartLine.spareQty] and [MasterPartLine.buildingSpareQty].
 
+/// The spare cover a job starts at when nobody has said otherwise.
+///
+/// A SUGGESTION AND NOT A DEFAULT POLICY. It is the figure the old typed-in
+/// target defaulted to on every job that ever set one, it is what the box on
+/// the spares page opens showing, and it is one press away again after
+/// somebody has moved it. See [BuildingProject.spareCoverTarget] for what it
+/// does and, just as importantly, what it does not.
+const double kSuggestedSpareCover = 0.10;
+
 /// One spare the JOB is buying, for a room or for the building.
 class ProjectSpare {
   final String id;
@@ -1275,6 +1284,29 @@ class BuildingProject {
   /// which behaves exactly as it did before this existed.
   final List<ProjectSpare> spares;
 
+  /// THE SHARE OF WHAT THIS JOB INSTALLS THAT IT MEANS TO HOLD SPARE.
+  ///
+  /// A fraction, not a percentage: 0.1 is ten per cent. Per JOB rather than
+  /// per app, because it is a decision about this building - a lecture block
+  /// with twelve identical rooms and a shelf of spares is not the same job as
+  /// one theatre with one of everything in it.
+  ///
+  /// IT IS A RECOMMENDATION AND NOT A RULE. Nothing is flagged for being under
+  /// it; a part with NO spare at all is the only thing on the spares page
+  /// drawn as a fault, and that is true whatever this is set to. What the
+  /// figure does is turn "this has a spare" into "this has enough", which is
+  /// the question the one-spare rule cannot answer and the reason a percentage
+  /// is worth having at all. The old typed-in target was removed because it
+  /// FLAGGED against this number, which made forty wall plates into forty
+  /// faults on every job.
+  ///
+  /// NOUGHT IS A REAL ANSWER, and a useful one: the recommendation never asks
+  /// for less than one of anything, so a target of nought is exactly "one of
+  /// everything the job installs" - the rule and nothing more.
+  ///
+  /// Starts at [kSuggestedSpareCover] on a job nobody has told.
+  double spareCoverTarget;
+
 
   /// Counters behind [nextRoomId] / [nextVendorId], persisted so ids stay
   /// unique across sessions — a reused id would re-point somebody's hand
@@ -1306,6 +1338,7 @@ class BuildingProject {
     Map<String, String>? partTracks,
     Map<String, PartOrder>? partOrders,
     List<ProjectSpare>? spares,
+    this.spareCoverTarget = kSuggestedSpareCover,
     List<ProjectPlan>? plans,
     List<ProjectEdit>? history,
     int roomCounter = 0,
@@ -2065,6 +2098,13 @@ class BuildingProject {
         for (final e in partOrders.entries) e.key: e.value.toJson(),
       },
     if (spares.isNotEmpty) 'spares': [for (final s in spares) s.toJson()],
+    // AS A PERCENTAGE, under the name the old target had. A file is read by
+    // people as well as by this app, and 'spareTargetPercent: 15' is a line
+    // somebody can check against what was agreed; 0.15 is a line they have to
+    // convert first. Written only when it is not the suggested figure, so an
+    // untouched job's file does not grow a key saying nothing.
+    if ((spareCoverTarget - kSuggestedSpareCover).abs() > 1e-9)
+      'spareTargetPercent': spareCoverTarget * 100,
     if (plans.isNotEmpty) 'plans': [for (final p in plans) p.toJson()],
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
@@ -2222,11 +2262,24 @@ class BuildingProject {
       partTracks: trackPins,
       partOrders: orders,
       spares: spares,
-      plans: plans,
       // A target that is not a number, or one outside nought to a hundred, is
-      // read as no policy rather than clamped: "we hold 200%" in a
-      // hand-edited file is a typo, and honouring it would flag every part on
-      // the job as short for ever.
+      // read as the SUGGESTION rather than clamped: "we hold 200%" in a
+      // hand-edited file is a typo, and honouring it would put a
+      // recommendation of two hundred spare wall plates on the sheet.
+      //
+      // A file written by the version that first had a target opens with that
+      // target back in force - it is the same key, holding the same number,
+      // meaning very nearly the same thing.
+      spareCoverTarget: () {
+        final raw = json['spareTargetPercent'];
+        final percent = raw is num
+            ? raw.toDouble()
+            : double.tryParse(raw?.toString().trim() ?? '');
+        return percent == null || percent < 0 || percent > 100
+            ? kSuggestedSpareCover
+            : percent / 100;
+      }(),
+      plans: plans,
       history: history,
       spareCounter: [
         (json['spareCounter'] as num?)?.toInt() ?? 0,

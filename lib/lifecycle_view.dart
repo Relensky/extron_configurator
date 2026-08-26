@@ -130,6 +130,9 @@ class _LifecycleViewState extends State<LifecycleView> {
           // never draw the same room two different ways.
           SliverToBoxAdapter(
             child: LifecycleYearGrid(
+              // The key is already on the strip above this, under the timing
+              // bar it explains. Twice on one page reads as two keys.
+              showKey: false,
               building: BuildingLifecycle(
                 rooms: [room],
                 asOf: room.asOf,

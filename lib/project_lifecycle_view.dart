@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'campus_lifecycle_view.dart' show showCampusLifecycle;
 import 'equipment_lifecycle.dart';
 import 'lifecycle_view.dart'
     show
@@ -47,18 +48,29 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
   );
 
   if (building.items.isEmpty) {
-    return const [
+    return [
       SliverFillRemaining(
         hasScrollBody: false,
         child: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Nothing to age yet.\n\n'
-              'The replacement plan is built from the equipment in each room '
-              'and the date it went in. Open a room, go to its Lifecycle tab, '
-              'and record the dates - they roll up here.',
-              textAlign: TextAlign.center,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Nothing to age yet.\n\n'
+                  'The replacement plan is built from the equipment in each '
+                  'room and the date it went in. Open a room, go to its '
+                  'Lifecycle tab, and record the dates - they roll up here.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                // OFFERED HERE TOO. A job with nothing dated on it is exactly
+                // the job somebody opens in order to look at the OTHER
+                // buildings - and a door that only appears once this one has
+                // been surveyed is a door nobody finds.
+                const _CampusButton(),
+              ],
             ),
           ),
         ),
@@ -114,13 +126,22 @@ class _Summary extends StatelessWidget {
                     cost: building.costOf(c),
                     currency: building.currency,
                   ),
-              // The whole ask, in one figure: everything past its life plus
-              // everything inside the planning window, counted and priced. It
-              // is the number a refresh request is written for, and it was
-              // previously only arrived at by adding two bands by eye.
+              // THE TWO FIGURES A BUDGET MEETING ASKS FOR, SIDE BY SIDE.
+              //
+              // "What does this building need" has two honest answers and they
+              // are a long way apart. One is what it needs NOW - everything
+              // past its life plus everything inside the planning window - and
+              // that is the number the refresh request is written for. The
+              // other is what it would cost to replace the lot, which is what
+              // sizes a ten-year budget and what "we cannot do it all at once"
+              // is actually about.
+              //
+              // The sheet used to carry only the first, so the second was
+              // arrived at by adding a column of room rows by hand - and the
+              // two were being quoted at each other across the table.
               if (building.toReplaceCount > 0)
                 _Figure(
-                  label: 'To replace',
+                  label: 'Recommended now',
                   value: formatEquipmentBand(
                     building.toReplaceCount,
                     building.toReplaceCost,
@@ -145,7 +166,32 @@ class _Summary extends StatelessWidget {
                     EquipmentCondition.overdue,
                   ),
                 ),
+              // In the quiet ink, deliberately: it is the biggest number on
+              // the strip and the least urgent one, and drawn in a warning
+              // colour it would read as a bill somebody owes this year.
+              if (building.refreshCost > 0)
+                _Figure(
+                  label: 'Everything, whatever its age',
+                  value: formatEquipmentBand(
+                    building.items.length,
+                    building.refreshCost,
+                    building.currency,
+                  ),
+                ),
             ],
+          ),
+          // THE WAY OUT TO THE REST OF THE ESTATE.
+          //
+          // Under the building's own figures rather than up in the toolbar,
+          // because it is the same question one step wider: everything above
+          // this line is "what does this building need and when", and the next
+          // thing anybody asks having read it is whether the year it lands in
+          // is a year the campus can afford. The answer needs the other jobs
+          // on the same calendar, and this is where somebody is standing when
+          // they want it.
+          const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: _CampusButton(),
           ),
           // The survey's own to-do list. Said out loud rather than left to be
           // inferred from a column of blanks, because a plan built on a
@@ -167,6 +213,19 @@ class _Summary extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Opens the campus overview: this job and any others, on one calendar.
+class _CampusButton extends StatelessWidget {
+  const _CampusButton();
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    key: const ValueKey('lifecycle_campus'),
+    onPressed: () => showCampusLifecycle(context),
+    icon: const Icon(Icons.location_city, size: 18),
+    label: const Text('Compare across the campus…'),
+  );
 }
 
 class _Band extends StatelessWidget {
@@ -284,7 +343,21 @@ typedef _GridLine = ({RoomLifecycle room, RoomDueGroup? group});
 class LifecycleYearGrid extends StatelessWidget {
   final BuildingLifecycle building;
 
-  const LifecycleYearGrid({super.key, required this.building});
+  /// Whether to draw the colour key above the sheet.
+  ///
+  /// ONE KEY PER PAGE. Six shades across a row can only be read against a key,
+  /// so the grid carries its own wherever it is the first thing on the page -
+  /// which it is on the Project tab. On the room's own Lifecycle tab it is
+  /// not: the summary strip above it already ends in the same key, under the
+  /// same six colours, and printing it twice on one page says that the two are
+  /// different keys for two different things.
+  final bool showKey;
+
+  const LifecycleYearGrid({
+    super.key,
+    required this.building,
+    this.showKey = true,
+  });
 
   /// The rooms, opened out into one line per due date where there is more than
   /// one. A room whose whole contents fall due together is one line: a second
@@ -331,9 +404,12 @@ class LifecycleYearGrid extends StatelessWidget {
           SizedBox(height: gap * 0.5),
           // Six shades across a row are only readable against a key. The same
           // one the room's own tab carries, so a reader who learned it there
-          // does not have to learn it again here.
-          const EquipmentTimingKey(),
-          SizedBox(height: gap * 0.5),
+          // does not have to learn it again here - and on that tab it is the
+          // one already on screen, so this one stands down.
+          if (showKey) ...[
+            const EquipmentTimingKey(),
+            SizedBox(height: gap * 0.5),
+          ],
           Text(
             'A room with more than one replacement date opens into a line per '
             'date - the run from when that equipment went in to when it falls '

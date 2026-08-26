@@ -962,6 +962,21 @@ class BuildingLifecycle {
   double get overdueCost =>
       rooms.fold<double>(0, (sum, r) => sum + r.overdueCost);
 
+  /// WHAT REPLACING EVERYTHING ON THE JOB COSTS, whatever its age.
+  ///
+  /// The other end of the question [toReplaceCost] answers. That one is what
+  /// the building is asking for NOW - the items past their life plus the ones
+  /// inside the planning window - and it is the figure a refresh request is
+  /// written for. This is what the building is WORTH in replacement terms: the
+  /// eventual bill if every position in it were swapped, which is the number a
+  /// long-range budget is sized against and the one a "we cannot do it all at
+  /// once" conversation needs on the table beside the first.
+  ///
+  /// The same figure each room carries as [RoomLifecycle.refreshCost], summed
+  /// over the job - and computed off the shared index rather than by adding
+  /// the rooms, so it cannot drift from the bands above it.
+  late final double refreshCost = _index.totalCost;
+
   double costDueIn(int year) => _index.costByDueYear[year] ?? 0;
 
   /// True when anything on the job has an install date on it.
@@ -1341,6 +1356,14 @@ List<ReportSection> buildingLifecycleSections(
           formatEquipmentBand(
             building.toReplaceCount,
             building.toReplaceCost,
+            currency,
+          ),
+        ],
+        [
+          'Everything, whatever its age',
+          formatEquipmentBand(
+            building.items.length,
+            building.refreshCost,
             currency,
           ),
         ],

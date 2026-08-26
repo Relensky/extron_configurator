@@ -10449,6 +10449,28 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: currency != null && currency.isNotEmpty);
   }
 
+  /// Sets the share of what the job installs it means to hold spare.
+  ///
+  /// A FRACTION, clamped to nought..one. The box on the spares page types a
+  /// percentage and divides; anything outside the range is a typo, and one
+  /// honoured would put a recommendation of two hundred spare wall plates on
+  /// the sheet.
+  ///
+  /// Re-prices, because every row of the cover table is worked out from it.
+  void setSpareCoverTarget(double fraction) {
+    final next = fraction.isNaN ? kSuggestedSpareCover : fraction.clamp(0.0, 1.0);
+    if ((next - project.spareCoverTarget).abs() < 1e-9) return;
+    project.spareCoverTarget = next;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Recommended spare cover',
+      summary: '${(next * 100).toStringAsFixed(next * 100 % 1 == 0 ? 0 : 1)}%',
+      coalesce: true,
+    );
+    _projectChanged(repricing: true);
+  }
+
   // --- rooms ---------------------------------------------------------------
 
   /// Adds a room config to the project. Returns the message to show — '' when

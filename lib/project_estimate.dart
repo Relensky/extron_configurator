@@ -665,7 +665,7 @@ String formatSpareCover(double? coverage) {
       : '${percent.toStringAsFixed(1)}%';
 }
 
-/// THE SHARE OF WHAT A JOB INSTALLS THAT IT IS RECOMMENDED TO HOLD SPARE.
+/// How many of a part a cover of [target] asks for against [installed].
 ///
 /// A RECOMMENDATION, NOT THE RULE. The rule is one spare of everything, and it
 /// is the rule because it needs no policy typed before the table will say
@@ -675,23 +675,22 @@ String formatSpareCover(double? coverage) {
 /// plates, and "how many should we actually hold" is what somebody is trying
 /// to settle when they open the spares page at all.
 ///
-/// So it is worked out on every row and flagged on none. A part with nothing
-/// spared is still the only thing drawn as a fault; a part that has one but is
+/// So it is worked out on every row and flagged on none. A part with no spare
+/// at all is still the only thing drawn as a fault; a part that has one but is
 /// under the recommendation carries a NOTE, in the quiet ink, saying what the
 /// recommendation is and how many more would meet it.
 ///
-/// Ten per cent, rounded up, never less than one. It is the figure the old
-/// typed-in target defaulted to on every job that ever set one.
-const double kRecommendedSpareCover = 0.10;
-
-/// How many of a part the recommendation asks for against [installed].
+/// [target] is the job's own - [BuildingProject.spareCoverTarget] - so the
+/// figure follows what was agreed for this building rather than a number
+/// compiled into the app.
 ///
 /// Rounded UP and floored at one: a recommendation of 0.4 of a unit is not a
-/// thing anybody can buy, and the recommendation must never come out below the
-/// rule it sits beside.
-double recommendedSpares(double installed) => installed <= 0
+/// thing anybody can buy, and it must never come out below the rule it sits
+/// beside. That floor is also what makes a target of nought mean something
+/// useful - "one of everything", the rule and nothing more.
+double recommendedSpares(double installed, double target) => installed <= 0
     ? 0
-    : math.max(1, (installed * kRecommendedSpareCover).ceilToDouble());
+    : math.max(1, (installed * target).ceilToDouble());
 
 /// One part's spare cover: how many are spared against how many go in.
 ///
@@ -935,7 +934,12 @@ class ProjectEstimate {
   List<SparePartCover> get unsparedParts =>
       [for (final c in spareCover) if (c.short) c];
 
-  /// The parts holding less than [kRecommendedSpareCover] would have them,
+  /// The share of what the job installs it means to hold spare - the job's
+  /// own figure, and what every recommendation on the spares page is worked
+  /// out from. See [BuildingProject.spareCoverTarget].
+  double get spareCoverTarget => project.spareCoverTarget;
+
+  /// The parts holding less than [spareCoverTarget] would have them,
   /// worst first. A superset of [unsparedParts] - a part with nothing spared
   /// is under every recommendation there is.
   ///
@@ -958,7 +962,7 @@ class ProjectEstimate {
     // At least one on the shelf. The epsilon is doubles, not slack: a spare
     // qty that came out of arithmetic must not read as none.
     final short = spares < 1 - 1e-9;
-    final recommended = recommendedSpares(installed);
+    final recommended = recommendedSpares(installed, spareCoverTarget);
     return (
       line: line,
       spares: spares,

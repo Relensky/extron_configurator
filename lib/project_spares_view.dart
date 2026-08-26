@@ -628,13 +628,19 @@ class _RoomOwnSpareRow extends StatelessWidget {
 //  AND IT IS NOW ALSO WHAT THE ROW RECOMMENDS. A percentage of what goes in is
 //  the only thing that can turn "this has a spare" into "this has enough", and
 //  that is the question somebody opens this page with. So every row carries
-//  what 10% of its own installed count comes to and how many more would meet
-//  it - see [kRecommendedSpareCover].
+//  what the job's target comes to against its own installed count, and how
+//  many more would meet it - see [BuildingProject.spareCoverTarget].
+//
+//  THE TARGET IS THE JOB'S, AND IT IS SET HERE. A lecture block with twelve
+//  identical rooms and a shelf of spares is not the same job as one theatre
+//  with one of everything in it, so the figure is typed on the page it is read
+//  on rather than compiled into the app. It opens at the suggestion, and a job
+//  nobody tells keeps that.
 //
 //  IT IS A NOTE, NOT A FLAG. Nothing is drawn in the error ink for being under
-//  the recommendation; only a part with NOTHING spared is. That is the whole
-//  reason the percentage could come back: it advises without turning forty
-//  wall plates into forty faults, which is what the old typed-in target did.
+//  the target; only a part with NO SPARE AT ALL is. That is the whole reason
+//  the percentage could come back: it advises without turning forty wall
+//  plates into forty faults, which is what the old typed-in target did.
 
 /// The percentage table, and the way to fix a row with nothing spared.
 class _SpareCoverCard extends StatefulWidget {
@@ -700,6 +706,8 @@ class _SpareCoverCardState extends State<_SpareCoverCard> {
               ),
             ],
           ),
+          // WHAT THE JOB IS AIMING AT, on the page the aim is read on.
+          const _CoverTargetField(),
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 2),
             child: _CoverSummary(
@@ -773,6 +781,86 @@ class _CoverSummary extends StatelessWidget {
   }
 }
 
+/// The job's spare target, typed as a percentage.
+///
+/// ON THIS PAGE RATHER THAN IN A SETTINGS SCREEN. It is a decision about this
+/// building, it is made while looking at what the building actually holds, and
+/// a number that has to be hunted for on another screen is a number that stays
+/// at whatever it was.
+///
+/// NOUGHT IS OFFERED, NOT HIDDEN. The recommendation never asks for less than
+/// one of anything, so a target of nought means exactly "one of everything the
+/// job installs" - which is a policy plenty of jobs actually run, and the
+/// answer for anybody who wants the Add buttons on the rows below to offer one
+/// each rather than a share of the count.
+class _CoverTargetField extends StatelessWidget {
+  const _CoverTargetField();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.watch<AppStateProvider>();
+    final target = provider.project.spareCoverTarget;
+    final percent = target * 100;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 108,
+            child: LiveTextField(
+              key: const ValueKey('spare_cover_target'),
+              fieldId: 'spare_cover_target',
+              initial: trimNumber(percent),
+              label: 'Aim for',
+              suffix: '%',
+              numeric: true,
+              // A BLANK BOX IS SOMEBODY MID-TYPE, not a target of nought. It
+              // is left alone until there is a number in it again - clearing
+              // the box to type '25' must not re-price the job at nought and
+              // then at two and then at twenty-five.
+              onChanged: (v) {
+                final typed = double.tryParse(v.trim());
+                if (typed == null) return;
+                provider.setSpareCoverTarget(typed / 100);
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              percent <= 0
+                  ? 'One of everything the job installs, and no more. '
+                      '${formatSpareCover(kSuggestedSpareCover)} is the '
+                      'suggestion if you want a share of the count instead.'
+                  : 'of what goes in, rounded up, never less than one. '
+                      '${formatSpareCover(kSuggestedSpareCover)} suggested; '
+                      '0 asks for one of everything.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          // Back to the suggestion in one press. A figure somebody has pushed
+          // to 40% to see what it looked like needs a way home that is not
+          // "remember what it used to say".
+          if ((target - kSuggestedSpareCover).abs() > 1e-9)
+            TextButton(
+              key: const ValueKey('spare_cover_target_suggested'),
+              onPressed: () =>
+                  provider.setSpareCoverTarget(kSuggestedSpareCover),
+              child: Text(
+                'Use ${formatSpareCover(kSuggestedSpareCover)}',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// What a percentage of the job would have it hold, and how far off it is.
 ///
 /// SEPARATE FROM [_CoverSummary] AND IN A QUIETER INK, deliberately. The line
@@ -790,20 +878,23 @@ class _RecommendedNote extends StatelessWidget {
     final theme = Theme.of(context);
     final under = estimate.partsUnderRecommendedCover.length;
     final units = estimate.unitsToRecommendedCover;
-    final percent = formatSpareCover(kRecommendedSpareCover);
+    // At nought the aim is not a percentage at all, and a sentence about
+    // '0% of what goes in' is a sentence nobody can act on.
+    final aim = estimate.spareCoverTarget <= 0
+        ? 'one of everything the job installs'
+        : '${formatSpareCover(estimate.spareCoverTarget)} of what goes in, '
+            'rounded up and never less than one';
 
     return Padding(
       padding: const EdgeInsets.only(top: 2, bottom: 4),
       child: Text(
         under == 0
-            ? 'Recommended cover is $percent of what goes in, rounded up and '
-                'never less than one. All $parts '
+            ? 'This job aims for $aim. All $parts '
                 '${parts == 1 ? 'part is' : 'parts are'} at or above it.'
-            : 'Recommended cover is $percent of what goes in, rounded up and '
-                'never less than one. $under of $parts '
+            : 'This job aims for $aim. $under of $parts '
                 '${parts == 1 ? 'part is' : 'parts are'} under it - '
                 '${trimNumber(units)} more ${units == 1 ? 'unit' : 'units'} '
-                'across the job would meet it. A recommendation: only a part '
+                'across the job would meet it. An aim, not a rule: only a part '
                 'with no spare at all is flagged.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
@@ -858,9 +949,10 @@ class _CoverRow extends StatelessWidget {
                 // tells somebody it is still worth another three.
                 if (cover.toRecommend > 0)
                   Text(
-                    'Recommended ${trimNumber(cover.recommended)} at '
-                    '${formatSpareCover(kRecommendedSpareCover)}  ·  '
-                    '${trimNumber(cover.toRecommend)} more to reach it',
+                    'Aiming for ${trimNumber(cover.recommended)}'
+                    '${estimate.spareCoverTarget <= 0 ? '' : ' at '
+                        '${formatSpareCover(estimate.spareCoverTarget)}'}'
+                    '  ·  ${trimNumber(cover.toRecommend)} more to reach it',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -876,11 +968,12 @@ class _CoverRow extends StatelessWidget {
           // nothing on the shelf offers the first one; every other row can
           // still be topped up.
           //
-          // THE NUMBER ON THE BUTTON IS THE RECOMMENDATION'S, not the rule's.
-          // Both are one press, so the one worth offering is the one that
-          // leaves the part actually covered - and the dialog it opens is
-          // still a dialog, with the figure in a box somebody can change to
-          // one before confirming.
+          // THE NUMBER ON THE BUTTON IS WHAT THE JOB IS AIMING AT, not what
+          // the rule demands. Both are one press, so the one worth offering is
+          // the one that leaves the part actually covered - and with the aim
+          // set to nought it IS one each, which is what the field above it is
+          // for. The dialog it opens is still a dialog, with the figure in a
+          // box somebody can change before confirming.
           if (cover.short)
             FilledButton.tonal(
               key: ValueKey('spare_cover_add_${line.key}'),
@@ -1045,6 +1138,61 @@ class _AddSpareDialogState extends State<_AddSpareDialog> {
     super.dispose();
   }
 
+  /// The part the dialog is currently pointed at.
+  MasterPartLine get _line =>
+      widget.parts.firstWhere((l) => l.key == _partKey, orElse: () => widget.parts.first);
+
+  /// The amounts the menu offers: one, the job's own aim for this part, and a
+  /// few round figures above it.
+  ///
+  /// Trimmed to what makes sense for the part - there is no point offering ten
+  /// spares of a switcher the job installs two of - and always including one,
+  /// which is the answer on most rows.
+  List<double> _qtyChoices() {
+    final installed = _line.drawnQty;
+    final aim = recommendedSpares(installed, widget.estimate.spareCoverTarget);
+    final out = <double>{
+      1,
+      if (aim > 0) aim,
+      for (final n in const [2.0, 3.0, 5.0, 10.0])
+        if (installed <= 0 || n <= installed) n,
+    }.toList()
+      ..sort();
+    return out;
+  }
+
+  /// One amount on the menu, with the cover it would leave.
+  String _qtyChoiceLabel(double n) {
+    final installed = _line.drawnQty;
+    if (installed <= 0) {
+      return '${trimNumber(n)}  ·  no room installs this';
+    }
+    // The shelf AFTER this is added, which is what the reader is choosing
+    // between - not the share this one addition happens to be.
+    final held = _line.spareQty + n;
+    return '${trimNumber(n)}  ·  ${formatSpareCover(held / installed)} of '
+        '${trimNumber(installed)} installed';
+  }
+
+  /// The sentence under the row: what the shelf ends up holding.
+  String _coverLine() {
+    final installed = _line.drawnQty;
+    final typed = double.tryParse(_qty.text.trim()) ?? 0;
+    if (installed <= 0) {
+      return 'No room on this job installs this part, so there is no share to '
+          'measure it against.';
+    }
+    if (typed <= 0) {
+      return 'Type how many, or pick one of the usual amounts.';
+    }
+    final held = _line.spareQty + typed;
+    final aim = recommendedSpares(installed, widget.estimate.spareCoverTarget);
+    return '${trimNumber(held)} spare of ${trimNumber(installed)} installed  '
+        '·  ${formatSpareCover(held / installed)}'
+        '${held + 1e-9 >= aim ? '  ·  meets what this job aims for' : '  ·  '
+            'this job aims for ${trimNumber(aim)}'}';
+  }
+
   @override
   Widget build(BuildContext context) => AlertDialog(
     key: const ValueKey('add_spare_dialog'),
@@ -1073,6 +1221,8 @@ class _AddSpareDialogState extends State<_AddSpareDialog> {
                   ),
                 ),
             ],
+            // The cover line and the menu are both about the chosen part, so
+            // both follow it.
             onChanged: (v) => setState(() => _partKey = v ?? _partKey),
           ),
           const SizedBox(height: 12),
@@ -1106,14 +1256,45 @@ class _AddSpareDialogState extends State<_AddSpareDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                width: 110,
+                width: 168,
                 child: TextField(
                   key: const ValueKey('add_spare_qty'),
                   controller: _qty,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
+                  // The percentage moves as the figure does, so it has to be
+                  // rebuilt on every keystroke rather than only when the
+                  // dropdown is used.
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
                     labelText: 'How many',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    // THE AMOUNTS WORTH PICKING, EACH SAYING WHAT IT COVERS.
+                    //
+                    // "How many spares" is not a number anybody knows; it is a
+                    // SHARE somebody is trying to hit, and until now this box
+                    // asked for the number and said nothing about the share.
+                    // Every choice on the menu carries the cover it would
+                    // leave - one of forty included, which is the one worth
+                    // spelling out, because 'a spare' sounds like enough right
+                    // up until it is read as two and a half per cent.
+                    //
+                    // Typed as well as picked: the menu is the usual answers,
+                    // not the only ones. Same bargain the party fields on the
+                    // responsibility matrix make.
+                    suffixIcon: PopupMenuButton<double>(
+                      key: const ValueKey('add_spare_qty_menu'),
+                      tooltip: 'The usual amounts, and what each covers',
+                      icon: const Icon(Icons.arrow_drop_down),
+                      itemBuilder: (_) => [
+                        for (final n in _qtyChoices())
+                          PopupMenuItem(
+                            value: n,
+                            child: Text(_qtyChoiceLabel(n)),
+                          ),
+                      ],
+                      onSelected: (n) =>
+                          setState(() => _qty.text = trimNumber(n)),
+                    ),
                   ),
                 ),
               ),
@@ -1130,6 +1311,19 @@ class _AddSpareDialogState extends State<_AddSpareDialog> {
                 ),
               ),
             ],
+          ),
+          // WHAT THE SHELF WILL ACTUALLY HOLD once this is added, as a share.
+          // Said for one as loudly as for ten: a single spare is the amount
+          // people add without thinking about it, and it is the amount whose
+          // cover most often turns out not to be what they assumed.
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _coverLine(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ],
       ),

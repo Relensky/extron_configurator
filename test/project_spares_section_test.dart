@@ -350,11 +350,11 @@ void main() {
 
     // The note, over the table and again on the row.
     expect(
-      find.textContaining('Recommended cover is 10% of what goes in'),
+      find.textContaining('This job aims for 10% of what goes in'),
       findsOneWidget,
     );
     expect(find.textContaining('1 part is under it'), findsOneWidget);
-    expect(find.textContaining('Recommended 2 at 10%'), findsOneWidget);
+    expect(find.textContaining('Aiming for 2 at 10%'), findsOneWidget);
     expect(find.textContaining('1 more to reach it'), findsOneWidget);
   });
 
