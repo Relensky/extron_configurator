@@ -336,7 +336,7 @@ class _EquipmentLifeDialogState extends State<_EquipmentLifeDialog> {
                     ),
                     subtitle: Text(
                       'A fact about this box in this room - it runs longer '
-                      'hours, or it is already tired.',
+                      'hours, it was used, or refurbished.',
                       style: theme.textTheme.bodySmall,
                     ),
                   ),

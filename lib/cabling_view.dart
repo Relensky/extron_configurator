@@ -150,7 +150,23 @@ class _CablingViewState extends State<CablingView> {
   /// Selects [id] and takes the keyboard, so Delete and the arrows land on it.
   void _select(String id) {
     setState(() => _selectedId = id);
-    if (id.isNotEmpty) _canvasFocus.requestFocus();
+    if (id.isNotEmpty) _takeTheKeyboard();
+  }
+
+  /// Puts the keyboard back on the drawing AFTER the frame the click landed
+  /// in, which is the only way it stays there.
+  ///
+  /// A text field dismisses itself when a click lands outside it, and the way
+  /// it does that is `primaryFocus.unfocus()` — whoever is holding the focus
+  /// at that moment, which by then is the drawing that just asked for it. So a
+  /// straight `requestFocus()` here was granted and then immediately thrown
+  /// away, and since every click went the same way the arrows were dead for
+  /// the rest of the session the moment anybody typed a count. Asking a frame
+  /// later is asking after the field has had its say.
+  void _takeTheKeyboard() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _selectedId.isNotEmpty) _canvasFocus.requestFocus();
+    });
   }
 
   @override
@@ -181,20 +197,36 @@ class _CablingViewState extends State<CablingView> {
                   focusNode: _canvasFocus,
                   onKeyEvent: (_, event) =>
                       _onCanvasKey(provider, drawing, event),
-                  child: InteractiveViewer(
-                    transformationController: _transform,
-                    constrained: false,
-                    minScale: 0.15,
-                    maxScale: 3.0,
-                    boundaryMargin: const EdgeInsets.all(300),
-                    child: RepaintBoundary(
-                      key: _canvasKey,
-                      // Inside the boundary, so the black-and-white export
-                      // captures exactly what it draws — see [printSkin].
-                      child: printSkin(
-                        enabled: _printMode,
-                        child: Builder(
-                          builder: (ctx) => _canvas(ctx, provider, drawing),
+                  // ANY touch of the sheet puts the keyboard back on it.
+                  //
+                  // Selecting used to be the only thing that did, and a click
+                  // does not always reach the thing that selects: once a run
+                  // is picked, its own bend handles sit over the middle of it,
+                  // so clicking the run again lands on a handle and selects
+                  // nothing. Type a count, click back on the wire, and the
+                  // arrows stayed dead — with no way left on the page to
+                  // revive them. Listening for the pointer instead means the
+                  // keyboard comes back wherever on the drawing the click
+                  // lands.
+                  child: Listener(
+                    onPointerDown: (_) {
+                      if (_selectedId.isNotEmpty) _takeTheKeyboard();
+                    },
+                    child: InteractiveViewer(
+                      transformationController: _transform,
+                      constrained: false,
+                      minScale: 0.15,
+                      maxScale: 3.0,
+                      boundaryMargin: const EdgeInsets.all(300),
+                      child: RepaintBoundary(
+                        key: _canvasKey,
+                        // Inside the boundary, so the black-and-white export
+                        // captures exactly what it draws — see [printSkin].
+                        child: printSkin(
+                          enabled: _printMode,
+                          child: Builder(
+                            builder: (ctx) => _canvas(ctx, provider, drawing),
+                          ),
                         ),
                       ),
                     ),
@@ -287,13 +319,24 @@ class _CablingViewState extends State<CablingView> {
         key == LogicalKeyboardKey.arrowLeft;
     if (!forward && !back) return KeyEventResult.ignored;
 
+    return _stepRun(drawing, forward: forward)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
+
+  /// Moves the selection one run along the stack the selected run is in, and
+  /// says which one it landed on. False when there is nothing to step.
+  ///
+  /// The arrows and the two buttons in the selection bar both come here, so
+  /// what the keyboard does and what the buttons do cannot drift apart.
+  bool _stepRun(CablingSchematic drawing, {required bool forward}) {
     final bundle = drawing.bundles
         .where((b) => b.id == _selectedId)
         .firstOrNull;
-    if (bundle == null) return KeyEventResult.ignored;
+    if (bundle == null) return false;
 
     final siblings = drawing.bundlesBetween(bundle.fromBoxId, bundle.toBoxId);
-    if (siblings.length < 2) return KeyEventResult.ignored;
+    if (siblings.length < 2) return false;
     final at = siblings.indexWhere((b) => b.id == bundle.id);
     // Wraps, so a stack of runs can be walked round without having to know
     // which end of it you are at.
@@ -304,7 +347,7 @@ class _CablingViewState extends State<CablingView> {
       '${siblings[next].label} - run ${next + 1} of ${siblings.length} '
       'between these two',
     );
-    return KeyEventResult.handled;
+    return true;
   }
 
   /// Takes the selected box or run off the drawing.
@@ -701,6 +744,31 @@ class _CablingViewState extends State<CablingView> {
     ),
   ];
 
+  /// One end of the run stepper in the selection bar.
+  ///
+  /// Kept out of the focus order so tabbing through the bar still runs
+  /// straight down the fields somebody is filling in, and so the button itself
+  /// never becomes the thing holding the keyboard.
+  Widget _stepButton(CablingSchematic drawing, {required bool forward}) =>
+      ExcludeFocus(
+        child: IconButton(
+          key: ValueKey('cabling_step_${forward ? 'next' : 'prev'}'),
+          icon: Icon(
+            forward ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+            size: 18,
+          ),
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          padding: EdgeInsets.zero,
+          tooltip: forward
+              ? 'The next run between these two - or the down arrow, with the '
+                    'drawing selected'
+              : 'The one before it - or the up arrow, with the drawing '
+                    'selected',
+          onPressed: () => _stepRun(drawing, forward: forward),
+        ),
+      );
+
   /// The run's count and type, edited IN the bar rather than behind a button.
   ///
   /// The count is the number somebody came to this page to change, so it is a
@@ -718,19 +786,21 @@ class _CablingViewState extends State<CablingView> {
       // Which of the stack this is, and how to reach the others. Six runs
       // thirteen pixels apart are not pickable with a mouse, and until this
       // said so the ones in the middle read as unselectable.
-      if (siblings.length > 1)
-        Tooltip(
-          message: 'The arrow keys step through the runs between these two',
-          child: Chip(
-            avatar: const Icon(Icons.swap_vert, size: 16),
-            label: Text(
-              '${siblings.indexWhere((b) => b.id == bundle.id) + 1}'
-              ' of ${siblings.length}  ↑↓',
-            ),
-            visualDensity: VisualDensity.compact,
-            labelStyle: const TextStyle(fontSize: 11),
-          ),
+      //
+      // Two BUTTONS, not a caption telling you to press a key. A label that
+      // only describes a shortcut is a promise the page has to keep, and this
+      // one could not: the keyboard belongs to the drawing, so the moment the
+      // caret was in the count box beside it the arrows typed instead of
+      // stepped. The buttons work from wherever the caret is.
+      if (siblings.length > 1) ...[
+        _stepButton(drawing, forward: false),
+        Text(
+          '${siblings.indexWhere((b) => b.id == bundle.id) + 1}'
+          ' of ${siblings.length}',
+          style: const TextStyle(fontSize: 11),
         ),
+        _stepButton(drawing, forward: true),
+      ],
       // Committed on Enter or on clicking away rather than per keystroke: the
       // count goes through the undo stack, and "13" typed a digit at a time
       // would leave "1" behind as an entry of its own.
@@ -1049,10 +1119,11 @@ class _CablingViewState extends State<CablingView> {
           provider.setCablingBundleColor(bundle.id, picked.toARGB32());
         }
       case 'next':
-        final at = siblings.indexWhere((b) => b.id == bundle.id);
-        setState(
-          () => _selectedId = siblings[(at + 1) % siblings.length].id,
-        );
+        // Through the same step as the arrows and the buttons, so it also
+        // says what it landed on and leaves the keyboard on the drawing —
+        // closing a menu is not a reason for the arrows to stop working.
+        _stepRun(drawing, forward: true);
+        _takeTheKeyboard();
       case 'delete':
         _deleteSelection(provider, drawing);
     }

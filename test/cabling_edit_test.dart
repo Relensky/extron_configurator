@@ -306,6 +306,94 @@ void main() {
       }
       expect(selected(), first);
     });
+
+    /// THE WAY THIS PAGE IS ACTUALLY USED: pick a run, type its count, then
+    /// go back to the wire. That used to kill the arrows for the rest of the
+    /// session — the count box took the keyboard and nothing on the page gave
+    /// it back, because clicking the run again landed on its own bend handles
+    /// and selected nothing at all.
+    testWidgets('the arrows still work after typing in the count box',
+        (tester) async {
+      final provider = room();
+      final a = provider.addCablingBox(kind: CablingBoxKind.pullBox);
+      final b = provider.addCablingBox(kind: CablingBoxKind.pathway);
+      final ids = [
+        for (int i = 0; i < 3; i++)
+          provider.addCablingBundle(
+            fromBoxId: a.id,
+            toBoxId: b.id,
+            cableType: 'Cat ${6 + i}',
+          )!.id,
+      ];
+      await pumpTab(tester, provider);
+      await selectTheRun(tester, provider);
+
+      String selected() {
+        for (final id in ids) {
+          if (find.byKey(ValueKey('cabling_count_$id')).evaluate().isNotEmpty) {
+            return id;
+          }
+        }
+        return '';
+      }
+
+      final first = selected();
+      expect(first, isNotEmpty);
+
+      await tester.tap(find.byKey(ValueKey('cabling_count_$first')));
+      await tester.pumpAndSettle();
+      // Back to the drawing — anywhere on it, which is the point.
+      await selectTheRun(tester, provider);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(selected(), isNot(first),
+          reason: 'the drawing has to take the keyboard back');
+    });
+
+    /// And the same step without the keyboard at all. The bar used to carry a
+    /// caption saying to press the arrows, which is a promise it could not
+    /// keep while the caret was in the box next to it.
+    testWidgets('the stepper buttons walk the stack', (tester) async {
+      final provider = room();
+      final a = provider.addCablingBox(kind: CablingBoxKind.pullBox);
+      final b = provider.addCablingBox(kind: CablingBoxKind.pathway);
+      final ids = [
+        for (int i = 0; i < 3; i++)
+          provider.addCablingBundle(
+            fromBoxId: a.id,
+            toBoxId: b.id,
+            cableType: 'Cat ${6 + i}',
+          )!.id,
+      ];
+      await pumpTab(tester, provider);
+      await selectTheRun(tester, provider);
+
+      String selected() {
+        for (final id in ids) {
+          if (find.byKey(ValueKey('cabling_count_$id')).evaluate().isNotEmpty) {
+            return id;
+          }
+        }
+        return '';
+      }
+
+      final first = selected();
+      expect(first, isNotEmpty);
+
+      // With the caret parked in the count box, so this is the case the
+      // buttons exist for.
+      await tester.tap(find.byKey(ValueKey('cabling_count_$first')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('cabling_step_next')));
+      await tester.pumpAndSettle();
+      final second = selected();
+      expect(second, isNot(first));
+
+      await tester.tap(find.byKey(const ValueKey('cabling_step_prev')));
+      await tester.pumpAndSettle();
+      expect(selected(), first);
+    });
   });
 }
 
