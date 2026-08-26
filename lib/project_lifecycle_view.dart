@@ -416,6 +416,7 @@ class LifecyclePlanSheet extends StatelessWidget {
     // is a picture of caps its columns precisely because a screen IS a window.
     final years = building.allYears;
     final lines = LifecycleYearGrid.linesOf(building);
+    final banded = bandedLines(lines);
     final currency = building.currency;
     final thisYear = building.asOf.year;
     final undated = building.countOf(EquipmentCondition.unknown);
@@ -530,63 +531,84 @@ class LifecyclePlanSheet extends StatelessWidget {
             const SizedBox(height: 4),
             Divider(height: 1, color: theme.colorScheme.outlineVariant),
             const SizedBox(height: 2),
-            for (final line in lines)
-              Row(
-                children: [
-                  SizedBox(
-                    width: roomColumn,
-                    height: rowHeight,
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        // Indented under the room it belongs to, exactly as on
-                        // screen, so the block reads as one room and not four.
-                        left: line.group == null ? 0 : 12,
-                        right: 8,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: line.group == null
-                            ? Text(
-                                line.room.roomName,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
-                              )
-                            : Text(
-                                '${line.group!.items.length} item'
-                                '${line.group!.items.length == 1 ? '' : 's'} '
-                                'due ${line.group!.dueYear}',
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
+            for (final (line, shaded) in banded)
+              SheetBand(
+                // Shaded a room at a time rather than a line at a time: a room
+                // with three replacement dates is four lines that have to read
+                // as ONE room, and a stripe that alternated per line would cut
+                // it into four rooms of one line each.
+                shaded: shaded,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: roomColumn,
+                      height: rowHeight,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          // Indented under the room it belongs to, exactly as
+                          // on screen, so the block reads as one room and not
+                          // four.
+                          left: line.group == null ? 0 : 12,
+                          right: 8,
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: line.group == null
+                              ? Text(
+                                  line.room.roomName,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyMedium,
+                                )
+                              : Text(
+                                  '${line.group!.items.length} item'
+                                  '${line.group!.items.length == 1 ? '' : 's'} '
+                                  'due ${line.group!.dueYear}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
-                              ),
+                        ),
                       ),
                     ),
-                  ),
-                  if (line.group == null)
-                    _GridRow(
-                      room: line.room,
-                      years: years,
-                      currency: currency,
-                      columnWidth: yearColumn,
-                      rowHeight: rowHeight,
-                    )
-                  else
-                    _TimelineRow(
-                      room: line.room,
-                      group: line.group!,
-                      years: years,
-                      currency: currency,
-                      columnWidth: yearColumn,
-                      rowHeight: rowHeight,
-                    ),
-                ],
+                    if (line.group == null)
+                      _GridRow(
+                        room: line.room,
+                        years: years,
+                        currency: currency,
+                        columnWidth: yearColumn,
+                        rowHeight: rowHeight,
+                      )
+                    else
+                      _TimelineRow(
+                        room: line.room,
+                        group: line.group!,
+                        years: years,
+                        currency: currency,
+                        columnWidth: yearColumn,
+                        rowHeight: rowHeight,
+                      ),
+                  ],
+                ),
               ),
           ],
         ),
       ),
     );
   }
+}
+
+/// The sheet's lines, each with whether it falls in a SHADED room.
+///
+/// Counted in rooms down the sheet rather than in lines: every line of a room
+/// gets the same answer, so the wash under a room covers its whole block
+/// however many replacement dates it opened out into.
+List<(LifecycleGridLine, bool)> bandedLines(List<LifecycleGridLine> lines) {
+  var room = -1;
+  return [
+    for (final line in lines)
+      if (line.group == null) (line, (++room).isOdd) else (line, room.isOdd),
+  ];
 }
 
 /// One figure in a sheet's heading block. The screen's [_Figure] with no

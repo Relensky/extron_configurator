@@ -54,6 +54,34 @@ double captureRatioFor(Size? size, {double preferred = 2.0}) {
   return fitted < 1 ? 1 : fitted;
 }
 
+/// A row of a plan sheet with the alternating wash behind it.
+///
+/// A PLAN SEVENTY YEARS ACROSS IS READ BY RUNNING A FINGER ALONG A ROW, and on
+/// paper there is no pointer to follow: four feet of white between the name on
+/// the left and the figure on the right is where the eye changes rows. The
+/// wash is what a ruled ledger did about it.
+///
+/// The shade is the one the estimate's tables already stripe with, so the two
+/// documents look like they came from the same office - and it is a tint of
+/// the text colour rather than a grey of its own, so it follows the theme and
+/// comes through the mono treatment as a lighter band rather than as a flat
+/// grey plate.
+class SheetBand extends StatelessWidget {
+  final bool shaded;
+  final Widget child;
+
+  const SheetBand({super.key, required this.shaded, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!shaded) return child;
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.045),
+      child: child,
+    );
+  }
+}
+
 /// Renders [sheet] at its natural size off the side of the screen and
 /// photographs it.
 ///
@@ -122,8 +150,9 @@ Future<Uint8List?> captureOffscreenSheet(
 ///
 /// The preview is what gets photographed - not a smaller stand-in - so what
 /// somebody looked at is exactly what lands in the file, greyscale switch and
-/// all. Nested scroll views give it unbounded constraints both ways, which is
-/// what lets the boundary be the whole sheet rather than the window over it.
+/// all. The sheet is laid out at its FULL size either way, which is what lets
+/// the boundary be the whole sheet rather than the window over it; the fit
+/// switch only changes how that full sheet is drawn on the screen.
 Future<void> showLifecycleSheetPicture(
   BuildContext context, {
   required String dialogTitle,
@@ -164,7 +193,24 @@ class _LifecyclePictureDialog extends StatefulWidget {
 
 class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
   final GlobalKey _boundary = GlobalKey();
+
+  /// The two axes of the 1:1 view, held rather than left to the scroll views
+  /// so the bars have something to attach to - a sheet thirty years wide with
+  /// no bar down its edge is a sheet that LOOKS like it stops at the window.
+  final ScrollController _across = ScrollController();
+  final ScrollController _down = ScrollController();
   bool _saving = false;
+
+  /// Whether the preview is scaled down to show the WHOLE sheet at once.
+  ///
+  /// ON. A replacement plan is thirty to seventy years across, the dialog is
+  /// one screen wide, and at 1:1 the preview opens on the first dozen years
+  /// with the rest of the document off to the right - which reads as a picture
+  /// that stops in 2004, not as a picture that needs scrolling. Fitted, the
+  /// whole span is on screen the moment it opens and the figures are one
+  /// switch away. Either way the sheet is laid out at its full size and the
+  /// saved PNG is the full-size one: this changes the view, not the picture.
+  bool _fit = true;
 
   /// Whether the picture keeps the red-yellow-green.
   ///
@@ -217,34 +263,99 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
     }
   }
 
+  /// The sheet itself, at its natural size, inside the boundary that gets
+  /// photographed. The same widget in both views - the fit switch scales what
+  /// is DRAWN and never what is laid out, so [_save] photographs the full-size
+  /// sheet whichever way the preview happens to be showing it.
+  Widget get _plate => RepaintBoundary(
+    key: _boundary,
+    child: printSkin(enabled: !_colour, child: widget.sheet),
+  );
+
+  /// The whole sheet, scaled down to the window.
+  ///
+  /// [BoxFit.scaleDown] rather than contain: a small plan - three rooms and
+  /// eight years - is left at its own size rather than blown up into a poster
+  /// of six cells.
+  Widget get _fitted => FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: Alignment.topLeft,
+    child: _plate,
+  );
+
+  /// The sheet at 1:1, scrolling both ways with a bar on each.
+  ///
+  /// Both scroll views are unbounded in their own axis, which is what lets the
+  /// boundary be the sheet rather than the frame over it. The bars are always
+  /// visible: this is a document somebody is checking before they save it, and
+  /// a bar that only appears once you have already found the drag is no help
+  /// to somebody who thinks the picture ends at the edge of the window.
+  Widget get _actualSize => Scrollbar(
+    controller: _down,
+    thumbVisibility: true,
+    // The vertical bar is watching a scroll view one level DOWN inside the
+    // horizontal one, which the default predicate - depth zero only - would
+    // never hear from.
+    notificationPredicate: (n) => n.depth <= 1,
+    child: Scrollbar(
+      controller: _across,
+      thumbVisibility: true,
+      notificationPredicate: (n) => n.depth <= 1,
+      child: SingleChildScrollView(
+        controller: _across,
+        scrollDirection: Axis.horizontal,
+        // Room for the bars themselves, so neither one sits on top of the
+        // last year column or the bottom row.
+        padding: const EdgeInsets.only(right: 14, bottom: 14),
+        child: SingleChildScrollView(controller: _down, child: _plate),
+      ),
+    ),
+  );
+
+  @override
+  void dispose() {
+    _across.dispose();
+    _down.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     return AlertDialog(
       key: const ValueKey('lifecycle_picture_dialog'),
       title: Text(widget.dialogTitle),
-      content: SizedBox(
-        width: media.size.width * 0.9,
-        height: media.size.height * 0.7,
-        // Both ways, and both unbounded: the sheet is wider AND taller than
-        // any window it is read in, and the boundary has to be the sheet
-        // rather than the frame over it.
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-            child: RepaintBoundary(
-              key: _boundary,
-              child: printSkin(enabled: !_colour, child: widget.sheet),
+      // Fitted, the box is a CEILING rather than a size: the sheet keeps its
+      // proportions on the way down, so a plan seventy years across and eight
+      // rooms deep comes out as a wide strip - and the dialog closes up to it
+      // instead of standing a screen tall around a band of drawing.
+      content: _fit
+          ? ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: media.size.width * 0.9,
+                maxHeight: media.size.height * 0.7,
+              ),
+              child: _fitted,
+            )
+          : SizedBox(
+              width: media.size.width * 0.9,
+              height: media.size.height * 0.7,
+              child: _actualSize,
             ),
-          ),
-        ),
-      ),
       actions: [
         // A switch rather than two save buttons: it changes the preview, so
         // what is saved is what was looked at.
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Switch(
+              key: const ValueKey('lifecycle_picture_fit'),
+              value: _fit,
+              onChanged: (v) => setState(() => _fit = v),
+            ),
+            const SizedBox(width: 4),
+            const Text('Whole sheet'),
+            const SizedBox(width: 16),
             Switch(
               key: const ValueKey('lifecycle_picture_colour'),
               value: _colour,

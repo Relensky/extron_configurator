@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/equipment_lifecycle.dart';
+import 'package:extron_configurator/lifecycle_picture.dart';
 import 'package:extron_configurator/pinned_grid.dart';
 import 'package:extron_configurator/project_lifecycle_view.dart';
 import 'package:extron_configurator/project_view.dart';
@@ -325,6 +326,95 @@ void main() {
         matching: find.text('${plan.allYears.first}'),
       ),
       findsNothing,
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  //  THE PREVIEW IS A PREVIEW OF THE WHOLE THING
+  // ---------------------------------------------------------------------------
+
+  /// The sheet is laid out at its full size so the PNG is the whole plan - and
+  /// at full size it is four times wider than the dialog it is previewed in.
+  /// Shown at 1:1 that preview opens on the first dozen years with the rest of
+  /// the document off to the right, which reads as a picture that stops in
+  /// 2004 rather than as one that needs scrolling. So it opens fitted.
+  testWidgets('the preview opens with every year of it on screen',
+      (tester) async {
+    final p = wideJob();
+    await openLifecycle(tester, p);
+    await tester.tap(find.byKey(const ValueKey('lifecycle_picture')));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(LifecyclePlanSheet);
+    // Laid out at its full size - that is the thing that gets photographed...
+    expect(
+      tester.getSize(sheet).width,
+      greaterThan(1700),
+      reason: 'this plan has to be wider than the window to be worth testing',
+    );
+    // ...and DRAWN small enough that the last year is inside the window.
+    final drawn = tester.getRect(sheet);
+    expect(drawn.width, lessThan(tester.getSize(sheet).width));
+    expect(drawn.right, lessThanOrEqualTo(1700));
+    expect(drawn.left, greaterThanOrEqualTo(0));
+  });
+
+  testWidgets('the fit comes off for a 1:1 read, with a bar on each axis',
+      (tester) async {
+    final p = wideJob();
+    await openLifecycle(tester, p);
+    await tester.tap(find.byKey(const ValueKey('lifecycle_picture')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('lifecycle_picture_fit')));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(LifecyclePlanSheet);
+    // Nothing scaled now: the figures are at the size they will print at.
+    expect(tester.getRect(sheet).width, tester.getSize(sheet).width);
+    // And something to drag, on both axes - a sheet thirty years wide with no
+    // bar down its edge is a sheet that LOOKS like it stops at the window.
+    final bars = find.descendant(
+      of: find.byKey(const ValueKey('lifecycle_picture_dialog')),
+      matching: find.byType(Scrollbar),
+    );
+    expect(bars, findsNWidgets(2));
+    expect(
+      tester.widgetList<Scrollbar>(bars).every((b) => b.thumbVisibility == true),
+      isTrue,
+      reason: 'a bar somebody has to already be dragging to see is no help',
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  //  A ROW THAT CAN BE TRACED ACROSS SEVENTY YEARS
+  // ---------------------------------------------------------------------------
+
+  testWidgets('the rooms are washed alternately', (tester) async {
+    await openLifecycle(tester, job(rooms: 3));
+    await tester.tap(find.byKey(const ValueKey('lifecycle_picture')));
+    await tester.pumpAndSettle();
+
+    final bands = find.descendant(
+      of: find.byType(LifecyclePlanSheet),
+      matching: find.byType(SheetBand),
+    );
+    expect(bands, findsNWidgets(3));
+    expect(
+      tester.widgetList<SheetBand>(bands).map((b) => b.shaded).toList(),
+      [false, true, false],
+    );
+  });
+
+  test('a room opened out into several dates is washed as ONE room', () {
+    final p = wideJob();
+    final lines = LifecycleYearGrid.linesOf(planOf(p));
+    // The room, and a line for each of its two replacement dates.
+    expect(lines.length, greaterThan(1));
+    expect(
+      bandedLines(lines).map((b) => b.$2).toSet(),
+      {false},
+      reason: 'a stripe per line would cut one room into three',
     );
   });
 

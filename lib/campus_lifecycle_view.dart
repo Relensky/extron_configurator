@@ -928,35 +928,43 @@ class CampusPlanSheet extends StatelessWidget {
             const SizedBox(height: 4),
             Divider(height: 1, color: theme.colorScheme.outlineVariant),
             const SizedBox(height: 2),
-            for (final job in jobs)
-              Row(
-                children: [
-                  SizedBox(
-                    width: nameColumn,
-                    height: rowHeight,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Text(
-                          job.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium,
+            // EVERY OTHER BUILDING WASHED. The calendar is seventy years
+            // across on an estate with anything old on it, and a row is read
+            // by running a finger from the name on the left to a figure four
+            // feet to the right - on paper, with no pointer to follow. The
+            // wash is what a ruled ledger did about that.
+            for (final (i, job) in jobs.indexed)
+              SheetBand(
+                shaded: i.isOdd,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: nameColumn,
+                      height: rowHeight,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text(
+                            job.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  for (final y in years)
-                    _MoneyCell(
-                      width: yearColumn,
-                      height: rowHeight,
-                      money: campus.costIn(job, y),
-                      year: y,
-                      asOf: campus.asOf,
-                      currency: currency,
-                      tooltip: '${job.name} - $y',
-                    ),
-                ],
+                    for (final y in years)
+                      _MoneyCell(
+                        width: yearColumn,
+                        height: rowHeight,
+                        money: campus.costIn(job, y),
+                        year: y,
+                        asOf: campus.asOf,
+                        currency: currency,
+                        tooltip: '${job.name} - $y',
+                      ),
+                  ],
+                ),
               ),
             // THE LINE THE BUDGET IS ACTUALLY SET FROM, and the same figures
             // as a shape under it: a row of numbers says what each year costs
