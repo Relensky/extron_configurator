@@ -1030,4 +1030,85 @@ void main() {
       expect(find.text('Search parts'), findsOneWidget);
     });
   });
+  // -------------------------------------------------------------------------
+  //  THE ORDER OF THE PHASES ON THE TIMELINE
+  // -------------------------------------------------------------------------
+
+  Future<void> openTimeline(WidgetTester tester, AppStateProvider p) async {
+    await pump(tester, p);
+    final labelled = find.byKey(const ValueKey('project_pane_timeline'));
+    await tester.tap(
+      labelled.evaluate().isEmpty
+          ? find.byIcon(Icons.event_available).first
+          : labelled.first,
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a phase is dragged into place by its handle', (tester) async {
+    final p = withProject();
+    p.project.deliveryDeadline = DateTime(2026, 6, 1);
+    p.addProjectTrack('Infrastructure', deadline: DateTime(2026, 5, 1));
+    p.addProjectTrack('Tech install', deadline: DateTime(2026, 3, 1));
+    await openTimeline(tester, p);
+
+    expect(find.text('Infrastructure'), findsOneWidget);
+    expect(find.text('Tech install'), findsOneWidget);
+
+    // The second phase, picked up by its handle and dropped on the first.
+    final handle = find.byKey(
+      ValueKey('track_drag_${p.project.tracks[1].id}'),
+    );
+    expect(handle, findsOneWidget);
+    final target = tester.getCenter(find.text('Infrastructure'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump(const Duration(milliseconds: 100));
+    await gesture.moveTo(target);
+    await tester.pump(const Duration(milliseconds: 100));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      [for (final t in p.project.tracks) t.name],
+      ['Tech install', 'Infrastructure'],
+      reason: 'the phase should have landed where it was dropped',
+    );
+  });
+
+  testWidgets('the two dates each sort the phases their own way',
+      (tester) async {
+    final p = withProject();
+    p.project.deliveryDeadline = DateTime(2026, 6, 1);
+    final infra = p.addProjectTrack(
+      'Infrastructure',
+      deadline: DateTime(2026, 5, 1),
+    );
+    final tech = p.addProjectTrack(
+      'Tech install',
+      deadline: DateTime(2026, 3, 1),
+    );
+    // The tech goes in first and is finished last.
+    p.setProjectTrackCompletion(infra.id, DateTime(2026, 6, 1));
+    p.setProjectTrackCompletion(tech.id, DateTime(2026, 9, 1));
+    await openTimeline(tester, p);
+
+    await tester.tap(find.byKey(const ValueKey('timeline_sort_delivery')));
+    await tester.pumpAndSettle();
+    expect(
+      [for (final t in p.project.tracks) t.name],
+      ['Tech install', 'Infrastructure'],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('timeline_sort_completion')));
+    await tester.pumpAndSettle();
+    expect(
+      [for (final t in p.project.tracks) t.name],
+      ['Infrastructure', 'Tech install'],
+      reason: 'delivered first is not the same as finished first',
+    );
+
+    // And the date somebody set is on the card, not just in the file.
+    expect(find.textContaining('finished'), findsWidgets);
+  });
+
 }

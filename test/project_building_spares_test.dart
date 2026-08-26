@@ -114,6 +114,57 @@ void main() {
       expect(after.spareByRoom, isEmpty);
     });
 
+    test('is in the project total, not only on the order', () {
+      // THE FAILURE THIS EXISTS FOR: the project total is the sum of the
+      // ROOMS' totals, and a spare the job buys belongs to no room. It reached
+      // the parts list, the vendor packages and every quote request, and was
+      // in none of the figures on the front of the tab - so the number
+      // somebody budgets from was short by the whole spares bill.
+      final p = withRooms(4);
+      final before = p.priceProject();
+      final line = projectorLine(p);
+
+      p.addProjectSpare(
+        partKey: line.key,
+        description: line.description,
+        model: line.model,
+        qty: 2,
+      );
+
+      final after = p.priceProject();
+      expect(after.projectSpareTotal, 2000);
+      expect(after.grandTotal, before.grandTotal + 2000);
+      // Against the section it lands in, so the sections still add up to the
+      // parts figure...
+      expect(after.equipmentTotal, before.equipmentTotal + 2000);
+      expect(
+        after.partsTotal,
+        after.equipmentTotal +
+            after.hardwareTotal +
+            after.cablingTotal +
+            after.extrasTotal,
+      );
+      // ...and the total now agrees with what the vendors are being asked for,
+      // which on a job with no labour or tax is the same money twice.
+      expect(
+        after.vendors.fold<double>(0, (sum, v) => sum + v.total),
+        after.grandTotal,
+      );
+    });
+
+    test('a spare of a part no room is having is money too', () {
+      final p = withRooms(2);
+      final before = p.priceProject();
+      p.addProjectSpare(
+        partKey: masterPartKey(kind: 'equipment', model: 'DMP 128 PLUS'),
+        description: 'DSP for the store',
+        model: 'DMP 128 PLUS',
+        qty: 1,
+      );
+      // Priced off the catalog, because no room established a price for it.
+      expect(p.priceProject().grandTotal, before.grandTotal + 2000);
+    });
+
     test('says what share of the installed units it covers', () {
       final p = withRooms(40);
       final line = projectorLine(p);

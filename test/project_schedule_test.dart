@@ -417,6 +417,104 @@ void main() {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  //  THE ORDER THE PHASES ARE READ IN
+  // ---------------------------------------------------------------------------
+  //  A job's phases are read in the order the work happens in, which is not
+  //  always the order of their dates - a long-lead order goes in for a phase
+  //  that lands last. So the list keeps the order somebody put it in, dragging
+  //  is how that order is set, and sorting by a date is an action that
+  //  rewrites it rather than a view that hides it.
+  group('the phase order', () {
+    BuildingProject threePhases() {
+      final p = BuildingProject(name: 'Bessey Hall');
+      p.addTrack('Infrastructure', deadline: DateTime(2026, 5, 1));
+      p.addTrack('Tech install', deadline: DateTime(2026, 3, 1));
+      p.addTrack('Furniture');
+      return p;
+    }
+
+    test('a phase moves to where it was dropped', () {
+      final p = threePhases();
+      p.moveTrack(2, 0);
+      expect([for (final t in p.tracks) t.name], [
+        'Furniture',
+        'Infrastructure',
+        'Tech install',
+      ]);
+    });
+
+    test('a drop that lands nowhere leaves the order alone', () {
+      final p = threePhases();
+      final before = [for (final t in p.tracks) t.name];
+      p.moveTrack(1, 1);
+      p.moveTrack(-1, 0);
+      p.moveTrack(0, 9);
+      expect([for (final t in p.tracks) t.name], before);
+    });
+
+    test('sorting by delivery date puts the undated ones last', () {
+      final p = threePhases()..sortTracksByDate(byCompletion: false);
+      expect([for (final t in p.tracks) t.name], [
+        'Tech install',
+        'Infrastructure',
+        // No date on it, so it keeps to the end rather than sorting as the
+        // beginning of time.
+        'Furniture',
+      ]);
+    });
+
+    test('sorting by completion date is a different order', () {
+      final p = threePhases();
+      // The tech goes in first and is finished last - which is exactly the
+      // job the two sorts exist to tell apart.
+      p.setTrackCompletion(p.tracks[0].id, DateTime(2026, 6, 1));
+      p.setTrackCompletion(p.tracks[1].id, DateTime(2026, 9, 1));
+      p.sortTracksByDate(byCompletion: true);
+      expect([for (final t in p.tracks) t.name], [
+        'Infrastructure',
+        'Tech install',
+        'Furniture',
+      ]);
+
+      p.sortTracksByDate(byCompletion: false);
+      expect([for (final t in p.tracks) t.name], [
+        'Tech install',
+        'Infrastructure',
+        'Furniture',
+      ]);
+    });
+
+    test('a completion date is a plain day, and round-trips', () async {
+      final dir = Directory.systemTemp.createTempSync('phase_order_');
+      addTearDown(() {
+        try {
+          dir.deleteSync(recursive: true);
+        } catch (_) {}
+      });
+      final p = threePhases();
+      p.setTrackCompletion(p.tracks[0].id, DateTime(2026, 6, 1, 17, 45));
+      expect(p.tracks[0].completion, DateTime(2026, 6, 1));
+
+      final file = '${dir.path}/phases_project.json';
+      await p.save(file);
+      final back = await BuildingProject.load(file);
+      expect(back.tracks[0].completion, DateTime(2026, 6, 1));
+      expect(back.tracks[0].deadline, DateTime(2026, 5, 1));
+      // And the order the file was written in is the order it comes back in.
+      expect([for (final t in back.tracks) t.name], [
+        for (final t in p.tracks) t.name,
+      ]);
+    });
+
+    test('clearing a completion date takes it off', () {
+      final p = threePhases();
+      p.setTrackCompletion(p.tracks[0].id, DateTime(2026, 6, 1));
+      p.setTrackCompletion(p.tracks[0].id, null);
+      expect(p.tracks[0].completion, isNull);
+    });
+  });
+
   group('how the dates read', () {
     test('a lead time is spoken the way it was quoted', () {
       expect(formatLeadTime(null), 'not asked');

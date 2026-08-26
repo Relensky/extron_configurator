@@ -10,6 +10,8 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'av_device_library.dart'
+    show PricingTier, kPricingTierLabels, kPricingTierShort;
 import 'av_flow_swap_dialogs.dart' show pickCatalogModel;
 import 'building_project.dart';
 import 'color_wheel_picker.dart';
@@ -605,9 +607,16 @@ class _ProjectViewState extends State<ProjectView> {
     ProjectEstimate estimate,
   ) {
     final theme = Theme.of(context);
+    // EVERYTHING THAT WOULD MAKE THIS QUOTE WRONG TO SEND, in one number. A
+    // part no vendor claims never reaches an order, and a box with no control
+    // module arrives and cannot be commissioned - both are things to fix
+    // before the job goes out, and both used to be spelled out in the tooltip
+    // of a chip whose count had already decided they were nothing.
     final warnings =
         estimate.failedRooms +
         estimate.unpricedParts +
+        estimate.untaggedParts +
+        estimate.undrivenDevices +
         (estimate.mixedCurrency ? 1 : 0);
     final openTodos = provider.project.openTodos.length;
 
@@ -746,6 +755,32 @@ class _ProjectViewState extends State<ProjectView> {
                     '${formatMoney(estimate.laborTotal, estimate.currency)}'
                     '  ·  ${trimNumber(estimate.laborHours)} hrs',
               ),
+              // WHICH OF THE CATALOG'S TWO PRICES EVERY FIGURE ABOVE IS
+              // COSTED FROM. The room's estimate has carried this switch for a
+              // while; the project total is where the question is actually
+              // asked, because the figure somebody sends out is this one and
+              // an education price on a job quoted at list is the difference
+              // between winning it and not.
+              Tooltip(
+                message: 'Which of the two published prices the whole '
+                    'job is costed from',
+                child: SegmentedButton<PricingTier>(
+                  key: const ValueKey('project_pricing_tier'),
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  segments: [
+                    for (final t in PricingTier.values)
+                      ButtonSegment(
+                        value: t,
+                        label: Text(kPricingTierShort[t] ?? t.name),
+                        tooltip: kPricingTierLabels[t],
+                      ),
+                  ],
+                  selected: {provider.pricingTier},
+                  onSelectionChanged: (s) => provider.setPricingTier(s.first),
+                ),
+              ),
               _TotalChip(
                 // Not just 'Rooms': the panes below are named Rooms too, and
                 // one word meaning two things on one screen is a screen that
@@ -760,6 +795,9 @@ class _ProjectViewState extends State<ProjectView> {
                   message: estimate.unpricedParts > 0
                       ? '${_warningTooltip(estimate)}'
                           '\n\nClick to list the parts with no price.'
+                      : estimate.untaggedParts > 0
+                      ? '${_warningTooltip(estimate)}'
+                            '\n\nClick to list the parts with no vendor.'
                       : _warningTooltip(estimate),
                   // AN ACTION, not a label. A count of things to check that
                   // cannot be pressed leaves somebody hunting through a parts
@@ -785,10 +823,18 @@ class _ProjectViewState extends State<ProjectView> {
                       ),
                     ),
                     backgroundColor: theme.colorScheme.errorContainer,
-                    onPressed: estimate.unpricedParts > 0
+                    // Straight to the rows it is talking about. Unpriced
+                    // first when there are both: a part with no price makes
+                    // the TOTAL wrong, which is worse than a part that is
+                    // merely on nobody's order yet.
+                    onPressed:
+                        estimate.unpricedParts > 0 ||
+                            estimate.untaggedParts > 0
                         ? () => setState(() {
                               _pane = _ProjectPane.parts;
-                              _vendorFilter = _unpricedFilter;
+                              _vendorFilter = estimate.unpricedParts > 0
+                                  ? _unpricedFilter
+                                  : _untaggedFilter;
                               _search = '';
                             })
                         : null,
@@ -1033,6 +1079,9 @@ class _ProjectViewState extends State<ProjectView> {
       '${estimate.failedRooms} room(s) could not be read - the total is short.',
     if (estimate.unpricedParts > 0)
       '${estimate.unpricedParts} part(s) have no price anywhere.',
+    if (estimate.untaggedParts > 0)
+      '${estimate.untaggedParts} part(s) are tagged to no vendor - they are on '
+          'no order as things stand.',
     if (estimate.undrivenDevices > 0)
       '${estimate.undrivenDevices} device(s) have no control module - quoted, '
           'but they will not commission as they stand.',
@@ -1242,12 +1291,16 @@ class _TotalChip extends StatelessWidget {
       ],
     );
     // The label is the quiet half, so it is allowed to be dimmer — but only as
-    // far as its own contrast holds. Faded to 70% and re-measured rather than
-    // assumed: 70% of an ink that only just cleared the threshold does not.
+    // far as its own contrast holds. Faded to 75% and re-measured rather than
+    // assumed: 75% of an ink that only just cleared the threshold does not.
+    //
+    // MEASURED AS THE SMALL TEXT IT IS. This asked for the large-text bar of
+    // 3:1 while being drawn at eleven points, which on a slate accent put
+    // "Project total" on its own fill at 4.45:1 - under the bar for body text,
+    // and the caption over the one figure this tab exists for.
     final labelInk = readableOn(
       fill,
       prefer: [Color.alphaBlend(ink.withValues(alpha: 0.75), fill), ink],
-      minRatio: kContrastLarge,
     );
 
     return Container(

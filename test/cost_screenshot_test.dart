@@ -200,8 +200,12 @@ void main() {
       expect(find.text('Room Cost Estimate'), findsOneWidget);
       expect(find.text('Display'), findsWidgets);
       expect(find.textContaining('TOTAL'), findsWidgets);
-      // The tier and tax settings say themselves in prose instead.
-      expect(find.textContaining('Priced at'), findsOneWidget);
+      // The tier and the tax rate used to print as a line of prose above the
+      // sections. They do not any more - see "the capture carries the figures
+      // and none of the prose": the image goes out to people, and the tax
+      // still says itself where it belongs, on its own line in the totals.
+      expect(find.textContaining('Priced at'), findsNothing);
+      expect(find.textContaining('State tax (8.25%)'), findsOneWidget);
     });
 
     testWidgets('is as long as the estimate, not as tall as the window', (
@@ -252,4 +256,58 @@ void main() {
       expect(find.text('Dark image'), findsOneWidget);
     });
   });
+  // ---------------------------------------------------------------------------
+  //  THE IMAGE IS A QUOTE, NOT A PAGE OF THE APP
+  // ---------------------------------------------------------------------------
+
+  testWidgets('the capture carries the figures and none of the prose', (
+    tester,
+  ) async {
+    final p = room(extraLines: 1);
+    await pump(tester, p, capturing: Brightness.light);
+
+    // What a quote is made of: the headings, what is being bought, and what
+    // it costs.
+    expect(find.text('Room Cost Estimate'), findsOneWidget);
+    expect(find.textContaining('Equipment ('), findsOneWidget);
+    expect(find.text('Display X'), findsWidgets);
+    expect(find.text('TOTAL'), findsOneWidget);
+    expect(find.textContaining(r'$1,000.00'), findsWidgets);
+
+    // And what it is not made of: the paragraph that explains the page to
+    // whoever is filling it in, the line describing how the picture was
+    // priced, and the note under every heading saying what that section is
+    // for. This one goes out to people.
+    for (final prose in [
+      'Quantities are the devices',
+      'Priced at',
+      'counted off the signal flow diagram',
+      'placed on the Racks tab',
+      'one lead per run',
+      'anything not a device on the canvas',
+      'each a percentage of the subtotal',
+      'No cables drawn yet',
+      'None yet.',
+      'No job type has an hourly rate',
+    ]) {
+      expect(
+        find.textContaining(prose),
+        findsNothing,
+        reason: '"$prose" has no business on an emailed quote',
+      );
+    }
+  });
+
+  testWidgets('the same notes are still there on screen', (tester) async {
+    // The other half of it: these are useful to the person working, and
+    // hiding them from the app as well would be fixing the wrong thing.
+    final p = room();
+    await pump(tester, p);
+    expect(
+      find.textContaining('counted off the signal flow diagram'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Quantities are the devices'), findsOneWidget);
+  });
+
 }

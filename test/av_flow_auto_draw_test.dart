@@ -640,6 +640,22 @@ void main() {
       );
     });
 
+    test('an SMP takes both feeds, the way an AV Bridge 2x1 does', () {
+      // A lecture capture is the presenter AND the content, which is what the
+      // recorder's two inputs are for. The SMP is a catalog model rather than
+      // the untyped fallback, so it had to carry two of them itself.
+      final p = withRecorder('SMP 351');
+      autoDrawRoutingFromConfig(p);
+      expect(captureInputs(p), ['HDMI IN 1', 'HDMI IN 2']);
+      expect(
+        planRoutingFromConfig(p)
+            .unresolved
+            .where((u) => u.configKey.startsWith('output_cc')),
+        isEmpty,
+        reason: 'both capture feeds should have landed',
+      );
+    });
+
     test('a second pass leaves both where they are', () {
       final p = withRecorder('AV Bridge 2x1');
       autoDrawRoutingFromConfig(p);

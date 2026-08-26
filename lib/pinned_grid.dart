@@ -34,6 +34,163 @@ double gridMetric(BuildContext context, double base) => MediaQuery.textScalerOf(
   context,
 ).clamp(minScaleFactor: 1, maxScaleFactor: 2).scale(base);
 
+/// The sizes a sheet can be read at, as multiples of its natural one.
+///
+/// STEPS RATHER THAN A SLIDER. There is one right answer at a time - the plan
+/// fits or it does not - and a step gets there in one press without anybody
+/// having to aim at a rail with a mouse.
+const List<double> kGridZoomSteps = <double>[0.5, 0.75, 1, 1.25, 1.5, 2];
+
+/// The natural size, and what a grid opens at.
+const double kGridZoomNormal = 1;
+
+/// The step above [zoom], or [zoom] itself at the top of the range.
+double gridZoomIn(double zoom) => kGridZoomSteps.firstWhere(
+  (s) => s > zoom + 0.001,
+  orElse: () => zoom,
+);
+
+/// The step below [zoom], or [zoom] itself at the bottom of the range.
+double gridZoomOut(double zoom) => kGridZoomSteps.lastWhere(
+  (s) => s < zoom - 0.001,
+  orElse: () => zoom,
+);
+
+/// How many years of a plan a grid shows at [zoom], given the [natural] window.
+///
+/// ZOOMING OUT WIDENS THE WINDOW; zooming in never narrows it. Out is the
+/// half of this somebody reaches for to see the shape of a plan, and shrinking
+/// the cells without letting more years into the frame would just leave a
+/// third of the sheet empty. In is for reading a figure, and a grid that threw
+/// away the far years to give the near ones more room would be hiding data
+/// somebody could otherwise have scrolled to.
+int gridYearWindow(int natural, double zoom) =>
+    zoom >= 1 ? natural : (natural / zoom).round();
+
+/// [theme]'s type at [zoom].
+///
+/// The figures have to move with the boxes. A cell taken down to half size
+/// with the same 12pt figure in it is a cell with an ellipsis where the money
+/// was, and one grown to double with the same figure is a large empty box -
+/// either way the zoom would have changed the sheet without changing what can
+/// be read off it.
+TextTheme zoomedTextTheme(ThemeData theme, double zoom) => zoom == kGridZoomNormal
+    ? theme.textTheme
+    : theme.textTheme.apply(fontSizeFactor: zoom);
+
+/// The zoom that puts a sheet [natural] wide inside a frame [available] wide.
+///
+/// Clamped to the ends of [kGridZoomSteps] rather than to 100%: a sheet with
+/// four years on it is as wrong at 40% of the window as a thirty-year one is
+/// running off the edge, so fitting grows as well as shrinks. A frame with no
+/// width yet - the first layout pass of a hidden pane - fits to nothing and
+/// leaves the sheet where it was.
+double gridFitZoom({required double natural, required double available}) {
+  if (natural <= 0 || !available.isFinite || available <= 0) {
+    return kGridZoomNormal;
+  }
+  final fit = available / natural;
+  if (fit < kGridZoomSteps.first) return kGridZoomSteps.first;
+  if (fit > kGridZoomSteps.last) return kGridZoomSteps.last;
+  return fit;
+}
+
+/// Zoom out, the level, and zoom in — the control a wide sheet carries.
+///
+/// The level is a button as well as a readout: once somebody has pushed a
+/// sheet down to half size to see the shape of it, the way back to the size
+/// the figures are legible at should not be three presses of the other arrow.
+class GridZoomControls extends StatelessWidget {
+  final double zoom;
+  final ValueChanged<double> onChanged;
+
+  /// Names the buttons apart from the other grid's - both live on the campus
+  /// screen at once.
+  final String keyPrefix;
+
+  /// Whether the sheet is currently being held at whatever size fits the
+  /// window, and the way to ask for that. Null leaves the button off.
+  final bool fitted;
+  final VoidCallback? onFit;
+
+  const GridZoomControls({
+    super.key,
+    required this.zoom,
+    required this.onChanged,
+    required this.keyPrefix,
+    this.fitted = false,
+    this.onFit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final out = gridZoomOut(zoom);
+    final into = gridZoomIn(zoom);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          key: ValueKey('${keyPrefix}_zoom_out'),
+          onPressed: out == zoom ? null : () => onChanged(out),
+          icon: const Icon(Icons.zoom_out),
+          iconSize: 20,
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Smaller cells, and more years in the frame',
+        ),
+        SizedBox(
+          // A fixed box, so the arrows do not shuffle sideways as the figure
+          // goes from 50% to 100% and back.
+          width: 46,
+          child: TextButton(
+            key: ValueKey('${keyPrefix}_zoom_level'),
+            onPressed: zoom == kGridZoomNormal && !fitted
+                ? null
+                : () => onChanged(kGridZoomNormal),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              '${(zoom * 100).round()}%',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          key: ValueKey('${keyPrefix}_zoom_in'),
+          onPressed: into == zoom ? null : () => onChanged(into),
+          icon: const Icon(Icons.zoom_in),
+          iconSize: 20,
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Bigger cells',
+        ),
+        // THE ONE PRESS THAT ANSWERS "how much of this is there". The steps
+        // are for reading; this is for seeing the shape of the whole thing,
+        // and on a sheet of an unknown width it is the only one of the three
+        // that does not have to be pressed twice to find out.
+        if (onFit != null)
+          IconButton(
+            key: ValueKey('${keyPrefix}_zoom_fit'),
+            onPressed: onFit,
+            isSelected: fitted,
+            icon: const Icon(Icons.fit_screen_outlined),
+            selectedIcon: const Icon(Icons.fit_screen),
+            iconSize: 20,
+            visualDensity: VisualDensity.compact,
+            tooltip: fitted
+                ? 'Fitted to the window - press to leave it at this size'
+                : 'Fit the whole sheet in the window',
+          ),
+      ],
+    );
+  }
+}
+
 /// A grid whose first column and header row stay put while the cells scroll.
 ///
 /// The caller lays out four rectangles at sizes it already knows — it is the

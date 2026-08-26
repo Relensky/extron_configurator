@@ -9,6 +9,7 @@ import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/equipment_lifecycle.dart';
 import 'package:extron_configurator/lifecycle_view.dart';
+import 'package:extron_configurator/project_lifecycle_view.dart';
 import 'package:extron_configurator/pinned_grid.dart';
 import 'package:extron_configurator/project_view.dart';
 
@@ -305,6 +306,10 @@ void main() {
     await pumpRoom(tester, p);
 
     expect(find.text('REPLACEMENT YEAR'), findsOneWidget);
+    // Including the zoom, which is part of the grid rather than of the page
+    // it is on - the room's sheet is as wide as the building's.
+    expect(find.byKey(const ValueKey('lifecycle_zoom_in')), findsOneWidget);
+    expect(find.byKey(const ValueKey('lifecycle_zoom_out')), findsOneWidget);
     // Two install dates, so two tranches, each with its own line and its own
     // due year - exactly what the building sheet opens a room into.
     expect(find.textContaining('due 2022'), findsWidgets);
@@ -319,6 +324,42 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('lifecycle_walkthrough_total')),
+      findsOneWidget,
+    );
+    // The played plan is a document too - the room's name is on it, so a
+    // picture of it is a picture of a room rather than of a line.
+    expect(
+      find.byKey(const ValueKey('lifecycle_walkthrough_picture')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('when it falls due'), findsWidgets);
+  });
+
+  testWidgets('the room can hand its own plan over as a picture',
+      (tester) async {
+    final p = room();
+    p.setAvNodeInstalledOn('PROJECTORDEVICE_1', DateTime(2014, 5, 1));
+    await pumpRoom(tester, p);
+
+    // The Project tab has had this since the plan did; this is the tab
+    // somebody is on when they are asked what one room needs and when.
+    final button = find.byKey(const ValueKey('lifecycle_room_picture'));
+    expect(button, findsOneWidget);
+
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('lifecycle_picture_dialog')),
+      findsOneWidget,
+    );
+    // A building of one: the same flat sheet the Project tab photographs.
+    expect(find.byType(LifecyclePlanSheet), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(LifecyclePlanSheet),
+        matching: find.text('EVERYTHING, WHATEVER ITS AGE'),
+      ),
       findsOneWidget,
     );
   });
@@ -659,6 +700,93 @@ void main() {
         lessThan(30 * 13 ~/ 2),
         reason: 'only the rows in the frame should have been built',
       );
+    });
+
+    testWidgets('the sheet zooms, and comes back to 100%', (tester) async {
+      await pumpPlan(tester, building(2));
+      const cell = ValueKey('lifecycle_cell_BSS 101_2014');
+      final natural = tester.getSize(find.byKey(cell));
+
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_in')));
+      await tester.pumpAndSettle();
+      final bigger = tester.getSize(find.byKey(cell));
+      expect(bigger.width, greaterThan(natural.width));
+      expect(bigger.height, greaterThan(natural.height));
+
+      // The level is the way back. Somebody who has pushed the sheet down to
+      // half size to see the shape of it should not have to press the other
+      // arrow three times to read a figure again.
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_level')));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(cell)), natural);
+
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_out')));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(cell)).width, lessThan(natural.width));
+    });
+
+    testWidgets('fit puts the whole sheet inside the frame', (tester) async {
+      // Narrow enough that thirteen years of columns run well past the edge.
+      await pumpPlan(tester, building(2), size: const Size(760, 1100));
+      final grid = find.byType(PinnedGrid);
+      final frame = tester.getSize(grid).width;
+
+      // Before: the last year is off the right-hand edge of the frame.
+      // The sheet runs from the 2014 installs to this year, so the current
+      // year is the column hardest against the right-hand edge.
+      final lastYear = find.text('${DateTime.now().year}');
+      expect(lastYear, findsWidgets);
+      final before = tester.getTopLeft(lastYear.first).dx;
+      expect(before, greaterThan(frame));
+
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_fit')));
+      await tester.pumpAndSettle();
+
+      // After: it is on screen, and the sheet did not get any wider than the
+      // frame it was fitted to.
+      final after = tester.getTopLeft(lastYear.first).dx;
+      expect(after, lessThan(before));
+      expect(after, lessThan(frame));
+      expect(tester.getSize(grid).width, lessThanOrEqualTo(frame + 1));
+    });
+
+    testWidgets('leaving the fit keeps the size it fitted to', (tester) async {
+      await pumpPlan(tester, building(2), size: const Size(760, 1100));
+      const cell = ValueKey('lifecycle_cell_BSS 101_2014');
+
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_fit')));
+      await tester.pumpAndSettle();
+      final fitted = tester.getSize(find.byKey(cell));
+
+      // Pressing it again lets go of the window without the sheet jumping
+      // back to 100% under the reader.
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_fit')));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(cell)), fitted);
+
+      // And the level is still the way back.
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_level')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(find.byKey(cell)).width,
+        greaterThan(fitted.width),
+      );
+    });
+
+    testWidgets('the figures go down with the boxes', (tester) async {
+      await pumpPlan(tester, building(2));
+      // The age in the 2014 cell, which is the figure a shrunk cell would
+      // have put an ellipsis through.
+      final year = find.descendant(
+        of: find.byKey(const ValueKey('lifecycle_cell_BSS 101_2014')),
+        matching: find.byType(Text),
+      );
+      final before = tester.widget<Text>(year).style?.fontSize;
+      expect(before, isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_out')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(year).style?.fontSize, lessThan(before!));
     });
 
     testWidgets('at 150% the cells grow rather than clip', (tester) async {

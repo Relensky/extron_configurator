@@ -122,17 +122,22 @@ String lifecycleDocumentTitle(ProjectEstimate estimate) {
 
 /// What they are CALLED on disk. The same rule the workbook uses, so a folder
 /// holding both reads as one job rather than two.
-String lifecycleFileStem(ProjectEstimate estimate) {
-  final raw = estimate.project.name.trim().isNotEmpty
+String lifecycleFileStem(ProjectEstimate estimate) => lifecycleFileStemFor(
+  estimate.project.name.trim().isNotEmpty
       ? estimate.project.name
       : estimate.project.building.trim().isNotEmpty
       ? estimate.project.building
-      : 'project';
+      : 'project',
+);
+
+/// The same, for anything that has a name rather than a project - a single
+/// room's own plan, which is a building of one.
+String lifecycleFileStemFor(String raw) {
   final clean = raw
       .trim()
       .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
       .replaceAll(RegExp(r'\s+'), '_');
-  return '${clean}_replacement_plan';
+  return '${clean.isEmpty ? 'room' : clean}_replacement_plan';
 }
 
 /// What the building reads as, in one strip.
@@ -751,7 +756,7 @@ typedef LifecycleGridLine = ({RoomLifecycle room, RoomDueGroup? group});
 /// EVERY CELL SAYS WHAT IS IN IT ON HOVER. The colour says when, the figure
 /// says how much, and neither says WHICH BOXES - which is the first question
 /// anybody asks of a cell with 24,000 dollars in it. The tooltip names them.
-class LifecycleYearGrid extends StatelessWidget {
+class LifecycleYearGrid extends StatefulWidget {
   final BuildingLifecycle building;
 
   /// Whether to draw the colour key above the sheet.
@@ -782,24 +787,72 @@ class LifecycleYearGrid extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  State<LifecycleYearGrid> createState() => _LifecycleYearGridState();
+}
+
+class _LifecycleYearGridState extends State<LifecycleYearGrid> {
+  /// How big the sheet is being read at. See [GridZoomControls].
+  double _zoom = kGridZoomNormal;
+
+  /// Whether the size is being taken from the WINDOW rather than from the
+  /// steps: while this is on, the sheet is re-fitted on every layout, so it
+  /// keeps fitting when the window is resized or the rail is folded away.
+  bool _fit = false;
+
+  /// How many years either side of today the grid opens on.
+  static const int _naturalWindow = 12;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => _sheet(context, box.maxWidth),
+  );
+
+  Widget _sheet(BuildContext context, double available) {
+    final building = widget.building;
     final theme = Theme.of(context);
-    final years = building.years();
+
+    // FITTING SCALES THE SHEET, IT DOES NOT WIDEN IT. Zooming out with the
+    // steps lets more years into the frame, which is the right answer for
+    // "show me more" - but it would make fitting chase its own tail, since
+    // every year it let in is another column to fit. So a fitted sheet keeps
+    // the window it opens with and only changes size.
+    final years = building.years(
+      maxColumns: _fit
+          ? _naturalWindow
+          : gridYearWindow(_naturalWindow, _zoom),
+    );
     final thisYear = building.asOf.year;
     if (years.isEmpty || building.rooms.isEmpty) return const SizedBox.shrink();
 
-    final lines = linesOf(building);
+    final lines = LifecycleYearGrid.linesOf(building);
 
     // EVERY BOX ON THE SHEET IS THE READER'S SIZE. These were fixed pixels,
     // which on a machine at 150% gave the same 62-wide cell with a larger
     // figure clipped inside it. See [gridMetric].
-    final yearColumn = gridMetric(context, 72);
-    final rowHeight = gridMetric(context, 28);
-    final roomColumn = gridMetric(context, 168);
-    final headHeight = gridMetric(context, 26);
+    //
+    // Then the reader's own zoom on top of that: the display scale is what the
+    // machine says this person needs, and the zoom is what THIS sheet needs
+    // this minute, which is a different question with a different answer.
+    // What the sheet would take at its natural size, which is what a fit is
+    // measured against - the frame's own padding comes off the frame first.
+    final zoom = _fit
+        ? gridFitZoom(
+            natural:
+                gridMetric(context, 168) + gridMetric(context, 72) * years.length,
+            available: available - 32,
+          )
+        : _zoom;
+
+    final yearColumn = gridMetric(context, 72) * zoom;
+    final rowHeight = gridMetric(context, 28) * zoom;
+    final roomColumn = gridMetric(context, 168) * zoom;
+    final headHeight = gridMetric(context, 26) * zoom;
     final gap = gridMetric(context, 8);
 
-    final headStyle = theme.textTheme.labelMedium?.copyWith(
+    // The type goes with the boxes. A cell half the size with the same figure
+    // in it is a cell with an ellipsis in it - see [zoomedTextTheme].
+    final zoomed = zoomedTextTheme(theme, zoom);
+    final headStyle = zoomed.labelMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
 
@@ -808,16 +861,36 @@ class LifecycleYearGrid extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'REPLACEMENT YEAR',
-            style: headStyle?.copyWith(fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Text(
+                'REPLACEMENT YEAR',
+                style: headStyle?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              GridZoomControls(
+                keyPrefix: 'lifecycle',
+                zoom: zoom,
+                fitted: _fit,
+                onChanged: (z) => setState(() {
+                  _zoom = z;
+                  _fit = false;
+                }),
+                onFit: () => setState(() {
+                  // Leaving the fit keeps the size it fitted to, so the sheet
+                  // does not jump back to 100% under the reader.
+                  if (_fit) _zoom = zoom;
+                  _fit = !_fit;
+                }),
+              ),
+            ],
           ),
           SizedBox(height: gap * 0.5),
           // Six shades across a row are only readable against a key. The same
           // one the room's own tab carries, so a reader who learned it there
           // does not have to learn it again here - and on that tab it is the
           // one already on screen, so this one stands down.
-          if (showKey) ...[
+          if (widget.showKey) ...[
             const EquipmentTimingKey(),
             SizedBox(height: gap * 0.5),
           ],
@@ -887,14 +960,14 @@ class LifecycleYearGrid extends StatelessWidget {
                         ? Text(
                             line.room.roomName,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium,
+                            style: zoomed.bodyMedium,
                           )
                         : Text(
                             '${line.group!.items.length} item'
                             '${line.group!.items.length == 1 ? '' : 's'} '
                             'due ${line.group!.dueYear}',
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
+                            style: zoomed.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
@@ -914,6 +987,7 @@ class LifecycleYearGrid extends StatelessWidget {
                         currency: building.currency,
                         columnWidth: yearColumn,
                         rowHeight: rowHeight,
+                        label: zoomed.labelMedium,
                       )
                     : _TimelineRow(
                         room: line.room,
@@ -922,6 +996,7 @@ class LifecycleYearGrid extends StatelessWidget {
                         currency: building.currency,
                         columnWidth: yearColumn,
                         rowHeight: rowHeight,
+                        label: zoomed.labelMedium,
                       ),
               );
             },
@@ -1044,12 +1119,18 @@ class _GridRow extends StatelessWidget {
   final double columnWidth;
   final double rowHeight;
 
+  /// The type the figures are set in, handed down rather than read off the
+  /// theme: on the pane the sheet zooms, and the figure has to move with the
+  /// box it is in. Null takes the theme's own.
+  final TextStyle? label;
+
   const _GridRow({
     required this.room,
     required this.years,
     required this.currency,
     required this.columnWidth,
     required this.rowHeight,
+    this.label,
   });
 
   String _label(int year) {
@@ -1122,7 +1203,7 @@ class _GridRow extends StatelessWidget {
         ),
         child: Text(
           text,
-          style: theme.textTheme.labelMedium?.copyWith(
+          style: (label ?? theme.textTheme.labelMedium)?.copyWith(
             color: equipmentTimingColor(context, timing),
           ),
           overflow: TextOverflow.ellipsis,
@@ -1147,6 +1228,9 @@ class _TimelineRow extends StatelessWidget {
   final double columnWidth;
   final double rowHeight;
 
+  /// The type the money at the end of the run is set in - see [_GridRow.label].
+  final TextStyle? label;
+
   const _TimelineRow({
     required this.room,
     required this.group,
@@ -1154,6 +1238,7 @@ class _TimelineRow extends StatelessWidget {
     required this.currency,
     required this.columnWidth,
     required this.rowHeight,
+    this.label,
   });
 
   @override
@@ -1235,7 +1320,7 @@ class _TimelineRow extends StatelessWidget {
                       ? formatLifecycleMoney(group.cost, currency)
                       : 'due',
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
+                  style: (label ?? theme.textTheme.labelMedium)?.copyWith(
                     color: equipmentTimingColor(context, timing),
                   ),
                 ),
@@ -1542,6 +1627,14 @@ class _RefreshWalkthrough extends StatefulWidget {
 
 class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
     with SingleTickerProviderStateMixin {
+  /// What the picture is of: the plot and the figures under it, without the
+  /// dialog's frame or its buttons.
+  final GlobalKey _boundary = GlobalKey();
+
+  /// True while the picture is being taken, so the button says so and cannot
+  /// be pressed twice.
+  bool _saving = false;
+
   /// The span the plot covers: the oldest install in the room to the last year
   /// anything in it falls due.
   late final int _first;
@@ -1626,10 +1719,25 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
       title: Text('${room.roomName}: when it falls due'),
       content: SizedBox(
         width: 760,
-        child: Column(
+        // The boundary is the plan, not the dialog: a picture with Play again
+        // and Done printed across the bottom of it is a picture of a piece of
+        // software rather than of a replacement plan.
+        child: RepaintBoundary(
+          key: _boundary,
+          child: Material(
+            color: theme.colorScheme.surface,
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // The room's name goes ON the picture. In the dialog it is the
+            // title bar overhead, and a plot that leaves here with no room
+            // name on it is a plot of nothing in particular.
+            Text(
+              '${room.roomName}: when it falls due',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 2),
             Text(
               '$_first to $_last  ·  '
               '${groups.length} replacement date'
@@ -1664,9 +1772,17 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
               ),
             ),
           ],
+            ),
+          ),
         ),
       ),
       actions: [
+        TextButton.icon(
+          key: const ValueKey('lifecycle_walkthrough_picture'),
+          onPressed: _saving ? null : _picture,
+          icon: const Icon(Icons.image_outlined, size: 18),
+          label: Text(_saving ? 'Capturing…' : 'Picture…'),
+        ),
         TextButton.icon(
           key: const ValueKey('lifecycle_walkthrough_replay'),
           onPressed: _play,
@@ -1680,6 +1796,33 @@ class _RefreshWalkthroughState extends State<_RefreshWalkthrough>
         ),
       ],
     );
+  }
+
+  /// Saves the played plan as an image.
+  ///
+  /// THE PLAY IS RUN TO THE END FIRST. The picture is of a plan, and a
+  /// photograph of a line that happens to be two thirds drawn is a photograph
+  /// of a plan that stops in 2024 - so the playhead is put at the end, the
+  /// footnote is given its fade, and then the shutter goes.
+  Future<void> _picture() async {
+    setState(() {
+      _saving = true;
+      _run.value = 1;
+    });
+    try {
+      // The footnote arrives on a 190ms fade once the line is complete, and a
+      // picture taken before it lands is a picture missing the small print.
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+      if (!mounted) return;
+      await saveSheetPicture(
+        context,
+        boundary: _boundary,
+        fileStem: '${lifecycleFileStemFor(widget.room.roomName)}_timeline',
+        what: 'The replacement timeline',
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   /// The plot: the axis, the line as far as it has got, and every date the

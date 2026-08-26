@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'contrast.dart';
@@ -384,8 +386,27 @@ TextStyle? _measuredChipLabel(
 /// fill, where black and white are the right answers and are what Material
 /// picks itself. Keeping the hue matters for a coloured label on a neutral
 /// page; it does not for white text on a coloured button.
-ColorScheme _legibleScheme(ColorScheme s) => s.copyWith(
-      onPrimary: readableOn(s.primary, prefer: [s.onPrimary]),
+ColorScheme _legibleScheme(ColorScheme s) {
+  // THE ACCENT ITSELF, WHERE NO INK IS COMFORTABLE ON IT.
+  //
+  // Every other repair in this file moves the ink and leaves the fill alone.
+  // A mid-tone accent - the slate and the light blues in the Classic picker -
+  // is the case where that is not enough: it is too dark for black and too
+  // light for white, so black lands around 5:1, white around 4:1, the pass
+  // picks black because it is the better of the two, and the result is a
+  // filled button with BLACK text on a colour, sitting next to a tonal button
+  // in white. Both clear the WCAG bar and it still reads badly.
+  //
+  // So `primary` - and only `primary`, the one role this app paints solid
+  // buttons out of - is taken the way its own mode already goes: darker in a
+  // light theme so white sits on it, lighter in a dark one so black does. The
+  // hue is kept, as everywhere else here, so the button is still the colour
+  // somebody picked. An accent that already carries a comfortable ink is left
+  // exactly where it is, which is most of them and all of Auris.
+  final primary = _comfortableFill(s.primary, s.brightness);
+  return s.copyWith(
+      primary: primary,
+      onPrimary: readableOn(primary, prefer: [s.onPrimary]),
       onSecondary: readableOn(s.secondary, prefer: [s.onSecondary]),
       onTertiary: readableOn(s.tertiary, prefer: [s.onTertiary]),
       onPrimaryContainer:
@@ -408,6 +429,28 @@ ColorScheme _legibleScheme(ColorScheme s) => s.copyWith(
         prefer: [s.onSurfaceVariant],
       ),
     );
+}
+
+/// [fill] moved until black or white is COMFORTABLE on it, or left alone.
+///
+/// Comfortable is [kContrastStrong] rather than the 4.5:1 bar: this is about
+/// the pairing that passes and still reads badly, and a button label is the
+/// place that shows up worst. The direction is the one the mode already
+/// implies - a light theme's solid button is dark with white on it, a dark
+/// theme's is light with black on it - so an accent that has to move goes the
+/// way it was already meant to be.
+Color _comfortableFill(Color fill, Brightness brightness) {
+  if (fill.a == 0) return fill;
+  if (math.max(
+        contrastRatio(Colors.white, fill),
+        contrastRatio(Colors.black, fill),
+      ) >=
+      kContrastStrong) {
+    return fill;
+  }
+  final ink = brightness == Brightness.light ? Colors.white : Colors.black;
+  return legibleTone(fill, ink, minRatio: kContrastStrong);
+}
 
 /// One button style with its enabled ink measured against what it is painted
 /// on.
@@ -459,3 +502,4 @@ ButtonStyle? _measuredStyle(
     iconColor: WidgetStateProperty.resolveWith(resolve),
   );
 }
+

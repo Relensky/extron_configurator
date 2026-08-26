@@ -494,36 +494,86 @@ class _Figure extends StatelessWidget {
 
 /// The calendar: a building a row, a year a column, and the campus total under
 /// it as a figure AND as a bar.
-class _CampusGrid extends StatelessWidget {
+class _CampusGrid extends StatefulWidget {
   final CampusLifecycle campus;
 
   const _CampusGrid({required this.campus});
 
   @override
-  Widget build(BuildContext context) {
+  State<_CampusGrid> createState() => _CampusGridState();
+}
+
+class _CampusGridState extends State<_CampusGrid> {
+  /// How big the calendar is being read at. See [GridZoomControls].
+  double _zoom = kGridZoomNormal;
+
+  /// Whether the size is taken from the window rather than from the steps -
+  /// see [_LifecycleYearGridState], which does the same for one building.
+  bool _fit = false;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => _calendar(context, box.maxWidth),
+  );
+
+  Widget _calendar(BuildContext context, double available) {
+    final campus = widget.campus;
     final theme = Theme.of(context);
-    final years = campus.years;
+    // A fitted calendar keeps the window it opens with and only changes size,
+    // or every year it let in would be another column to fit.
+    final years = campus.yearsWithin(
+      _fit ? kCampusMaxYears : gridYearWindow(kCampusMaxYears, _zoom),
+    );
     final jobs = campus.ok;
     if (years.isEmpty || jobs.isEmpty) return const SizedBox.shrink();
 
-    final yearColumn = gridMetric(context, 92);
-    final rowHeight = gridMetric(context, 30);
-    final nameColumn = gridMetric(context, 210);
-    final headHeight = gridMetric(context, 26);
-    final barRow = gridMetric(context, 46);
+    final zoom = _fit
+        ? gridFitZoom(
+            natural: gridMetric(context, 210) +
+                gridMetric(context, 92) * years.length,
+            available: available - 8,
+          )
+        : _zoom;
+
+    // The reader's display scale, and then the reader's own zoom on top of it
+    // - see [LifecycleYearGrid] for why those are two different questions.
+    final yearColumn = gridMetric(context, 92) * zoom;
+    final rowHeight = gridMetric(context, 30) * zoom;
+    final nameColumn = gridMetric(context, 210) * zoom;
+    final headHeight = gridMetric(context, 26) * zoom;
+    final barRow = gridMetric(context, 46) * zoom;
     final thisYear = campus.asOf.year;
     final peak = campus.peakYear;
 
-    final headStyle = theme.textTheme.labelMedium?.copyWith(
+    final zoomed = zoomedTextTheme(theme, zoom);
+    final headStyle = zoomed.labelMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'REPLACEMENT YEAR, ACROSS THE CAMPUS',
-          style: headStyle?.copyWith(fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            Text(
+              'REPLACEMENT YEAR, ACROSS THE CAMPUS',
+              style: headStyle?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            GridZoomControls(
+              keyPrefix: 'campus',
+              zoom: zoom,
+              fitted: _fit,
+              onChanged: (z) => setState(() {
+                _zoom = z;
+                _fit = false;
+              }),
+              onFit: () => setState(() {
+                if (_fit) _zoom = zoom;
+                _fit = !_fit;
+              }),
+            ),
+          ],
         ),
         SizedBox(height: gridMetric(context, 4)),
         Text(
@@ -577,7 +627,7 @@ class _CampusGrid extends StatelessWidget {
                     child: Text(
                       j.name,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium,
+                      style: zoomed.bodyMedium,
                     ),
                   ),
                 ),
@@ -587,7 +637,7 @@ class _CampusGrid extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'CAMPUS',
-                    style: theme.textTheme.labelMedium?.copyWith(
+                    style: zoomed.labelMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -599,7 +649,7 @@ class _CampusGrid extends StatelessWidget {
                   alignment: Alignment.topLeft,
                   child: Text(
                     'against ${formatLifecycleMoney(peak, campus.currency)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    style: zoomed.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -624,6 +674,7 @@ class _CampusGrid extends StatelessWidget {
                           asOf: campus.asOf,
                           currency: campus.currency,
                           tooltip: '${j.name} - $y',
+                          label: zoomed.labelMedium,
                         ),
                     ],
                   ),
@@ -643,6 +694,7 @@ class _CampusGrid extends StatelessWidget {
                         currency: campus.currency,
                         bold: true,
                         tooltip: 'The whole campus in $y',
+                        label: zoomed.labelMedium,
                       ),
                   ],
                 ),
@@ -689,6 +741,12 @@ class _MoneyCell extends StatelessWidget {
   final String tooltip;
   final bool bold;
 
+  /// The type the money is set in, handed down rather than read off the theme:
+  /// the calendar on screen zooms, and the figure has to move with the box it
+  /// is in. Null takes the theme's own - the flat sheet a picture is made from
+  /// does not zoom.
+  final TextStyle? label;
+
   const _MoneyCell({
     required this.width,
     required this.height,
@@ -698,6 +756,7 @@ class _MoneyCell extends StatelessWidget {
     required this.currency,
     required this.tooltip,
     this.bold = false,
+    this.label,
   });
 
   @override
@@ -723,7 +782,7 @@ class _MoneyCell extends StatelessWidget {
         child: Text(
           formatLifecycleMoney(money, currency),
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelMedium?.copyWith(
+          style: (label ?? theme.textTheme.labelMedium)?.copyWith(
             color: equipmentTimingColor(context, timing),
             fontWeight: bold ? FontWeight.bold : null,
           ),

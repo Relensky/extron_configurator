@@ -146,6 +146,59 @@ Future<Uint8List?> captureOffscreenSheet(
   }
 }
 
+/// Photographs [boundary] and writes it where somebody says.
+///
+/// The one place a lifecycle picture becomes a file: the preview dialog's Save
+/// button and the walkthrough's both come through here, so the extension
+/// check, the "saved" message and the failure message cannot drift apart
+/// between them.
+///
+/// Returns true when a file was written. False covers both halves of "no file"
+/// - a capture that failed, which says so, and a save somebody cancelled,
+/// which says nothing.
+Future<bool> saveSheetPicture(
+  BuildContext context, {
+  required GlobalKey boundary,
+  required String fileStem,
+  required String what,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final provider = context.read<AppStateProvider>();
+  final bytes = await captureBoundary(
+    boundary,
+    // Asked of the boundary itself: the caller knows what it drew, not how
+    // big it came out.
+    pixelRatio: captureRatioFor(boundary.currentContext?.size),
+  );
+  if (bytes == null) {
+    showTimedSnackBar(
+      messenger,
+      const SnackBar(content: Text('The plan could not be captured.')),
+    );
+    return false;
+  }
+
+  final picked = await FilePicker.saveFile(
+    dialogTitle: 'Save ${what.toLowerCase()}',
+    fileName: '$fileStem.png',
+    type: FileType.custom,
+    allowedExtensions: const ['png'],
+  );
+  if (picked == null) return false;
+  final target = picked.toLowerCase().endsWith('.png') ? picked : '$picked.png';
+  try {
+    await File(target).writeAsBytes(bytes);
+    if (context.mounted) showSavedFileSnack(context, provider, what, target);
+    return true;
+  } catch (e) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(content: Text('The picture could not be written: $e')),
+    );
+    return false;
+  }
+}
+
 /// Shows [sheet] the way it will be PICTURED, and offers to save the picture.
 ///
 /// The preview is what gets photographed - not a smaller stand-in - so what
@@ -222,44 +275,20 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
   bool _colour = true;
 
   Future<void> _save() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final provider = context.read<AppStateProvider>();
     setState(() => _saving = true);
-    Uint8List? bytes;
     try {
-      bytes = await captureBoundary(
-        _boundary,
-        pixelRatio: captureRatioFor(_boundary.currentContext?.size),
+      await saveSheetPicture(
+        context,
+        boundary: _boundary,
+        // The mono copy is a different document from the colour one and is
+        // filed as such.
+        fileStem: '${widget.fileStem}${_colour ? '' : '_mono'}',
+        what: widget.what,
       );
     } finally {
+      // In a finally: a button left spinning is worse than a picture nobody
+      // saved, and the dialog stays open either way.
       if (mounted) setState(() => _saving = false);
-    }
-    if (bytes == null) {
-      showTimedSnackBar(
-        messenger,
-        const SnackBar(content: Text('The plan could not be captured.')),
-      );
-      return;
-    }
-
-    final picked = await FilePicker.saveFile(
-      dialogTitle: 'Save ${widget.what.toLowerCase()}',
-      fileName: '${widget.fileStem}${_colour ? '' : '_mono'}.png',
-      type: FileType.custom,
-      allowedExtensions: const ['png'],
-    );
-    if (picked == null) return;
-    final target =
-        picked.toLowerCase().endsWith('.png') ? picked : '$picked.png';
-    try {
-      await File(target).writeAsBytes(bytes);
-      if (!mounted) return;
-      showSavedFileSnack(context, provider, widget.what, target);
-    } catch (e) {
-      showTimedSnackBar(
-        messenger,
-        SnackBar(content: Text('The picture could not be written: $e')),
-      );
     }
   }
 

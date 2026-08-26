@@ -7,7 +7,9 @@ import 'av_flow_model.dart';
 import 'av_flow_view.dart' show buildAvFlowModel;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
-import 'project_lifecycle_view.dart' show LifecycleYearGrid;
+import 'lifecycle_picture.dart' show showLifecycleSheetPicture;
+import 'project_lifecycle_view.dart'
+    show LifecyclePlanSheet, LifecycleYearGrid, lifecycleFileStemFor;
 import 'pinned_grid.dart' show gridMetric;
 import 'project_estimate.dart' show roomCodeFromConfig;
 import 'stepped_date_picker.dart';
@@ -112,6 +114,7 @@ class _LifecycleViewState extends State<LifecycleView> {
           SliverToBoxAdapter(
             child: _RoomActions(
               room: room,
+              currency: provider.currencySymbol,
               showNever: _showNever,
               onShowNever: () => setState(() => _showNever = !_showNever),
             ),
@@ -416,6 +419,9 @@ ButtonStyle lifecycleButtonStyle(BuildContext context) {
 class _RoomActions extends StatelessWidget {
   final RoomLifecycle room;
 
+  /// What the picture prints its money in.
+  final String currency;
+
   /// Whether the positions off the cycle are on screen, and the way to change
   /// it. Owned by the screen — see [_LifecycleViewState._showNever].
   final bool showNever;
@@ -423,9 +429,25 @@ class _RoomActions extends StatelessWidget {
 
   const _RoomActions({
     required this.room,
+    required this.currency,
     required this.showNever,
     required this.onShowNever,
   });
+
+  /// This room's plan as the flat sheet the picture is taken of.
+  ///
+  /// A BUILDING OF ONE - the same widget the Project tab photographs, handed
+  /// one room. Nothing in it cares how many rooms it is given, and building
+  /// the picture this way means the room's own copy and the building's copy
+  /// cannot come out saying different things about the same room.
+  Widget get _sheet => LifecyclePlanSheet(
+    building: BuildingLifecycle(
+      rooms: [room],
+      asOf: room.asOf,
+      currency: currency,
+    ),
+    title: room.roomName,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -440,6 +462,24 @@ class _RoomActions extends StatelessWidget {
       onPressed: () => showRoomInstallDateDialog(context),
       icon: Icon(Icons.event_repeat, size: gridMetric(context, 20)),
       label: const Text('Date the whole room…'),
+    );
+
+    // THE WAY OUT OF THE SCREEN. The Project tab has had this since the plan
+    // did; the room's own tab draws the same sheet for one room and had no way
+    // to hand it over, which is the tab somebody is on when they are asked
+    // what this room needs and when.
+    final picture = OutlinedButton.icon(
+      key: const ValueKey('lifecycle_room_picture'),
+      style: lifecycleButtonStyle(context),
+      onPressed: () => showLifecycleSheetPicture(
+        context,
+        dialogTitle: 'The replacement plan as a picture',
+        fileStem: lifecycleFileStemFor(room.roomName),
+        what: 'The replacement plan',
+        sheet: _sheet,
+      ),
+      icon: Icon(Icons.image_outlined, size: gridMetric(context, 20)),
+      label: const Text('Picture…'),
     );
 
     final note = Text(
@@ -494,7 +534,7 @@ class _RoomActions extends StatelessWidget {
                 Wrap(
                   spacing: gap,
                   runSpacing: gap * 0.5,
-                  children: [date, ?reveal],
+                  children: [date, picture, ?reveal],
                 ),
                 SizedBox(height: gap * 0.6),
                 note,
@@ -504,6 +544,8 @@ class _RoomActions extends StatelessWidget {
           return Row(
             children: [
               date,
+              SizedBox(width: gap),
+              picture,
               SizedBox(width: gap),
               Expanded(child: note),
               if (reveal != null) ...[SizedBox(width: gap), reveal],

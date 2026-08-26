@@ -73140,7 +73140,14 @@
       "ports": [
         {
           "id": "in_hdmi_1",
-          "label": "HDMI IN",
+          "label": "HDMI IN 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI IN 2",
           "signal": "hdmi",
           "direction": "input",
           "side": "left"
@@ -73374,7 +73381,14 @@
       "ports": [
         {
           "id": "in_hdmi_1",
-          "label": "HDMI IN",
+          "label": "HDMI IN 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI IN 2",
           "signal": "hdmi",
           "direction": "input",
           "side": "left"
@@ -73626,7 +73640,14 @@
       "ports": [
         {
           "id": "in_hdmi_1",
-          "label": "HDMI IN",
+          "label": "HDMI IN 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI IN 2",
           "signal": "hdmi",
           "direction": "input",
           "side": "left"
@@ -73867,7 +73888,14 @@
       "ports": [
         {
           "id": "in_hdmi_1",
-          "label": "HDMI IN",
+          "label": "HDMI IN 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI IN 2",
           "signal": "hdmi",
           "direction": "input",
           "side": "left"

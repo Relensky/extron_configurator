@@ -279,6 +279,95 @@ void main() {
   //  GETTING THERE FROM THE WARNING
   // -------------------------------------------------------------------------
 
+  testWidgets('the project total switches between the two published prices',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final p = withProject()
+      ..settingsLoaded = true
+      ..firstRunSetupNeeded = false;
+    // A part with both prices on it, so the switch has something to move.
+    p.avDeviceLibrary.upsert(const AvDeviceTemplate(
+      model: 'Display X',
+      manufacturer: 'Generic',
+      category: 'Display',
+      price: 1000,
+      educationPrice: 600,
+      ports: [],
+    ));
+    p.selectTab(AppTab.project.index);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: const RoomConfigApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final atList = p.priceProject().grandTotal;
+    expect(atList, greaterThan(0));
+
+    await tester.tap(find.text('Edu'));
+    await tester.pumpAndSettle();
+
+    expect(p.pricingTier, PricingTier.education);
+    expect(
+      p.priceProject().grandTotal,
+      lessThan(atList),
+      reason: 'the education price is the cheaper of the two',
+    );
+  });
+
+  testWidgets('a part no vendor claims is one of the things to check',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final p = withProject()
+      ..settingsLoaded = true
+      ..firstRunSetupNeeded = false;
+    p.selectTab(AppTab.project.index);
+
+    final estimate = p.priceProject();
+    // The fixture's parts are untagged, and one of them has no control module
+    // behind it - both were counted as nothing.
+    expect(estimate.untaggedParts, greaterThan(0));
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: p,
+        child: const RoomConfigApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final expected =
+        estimate.failedRooms +
+        estimate.unpricedParts +
+        estimate.untaggedParts +
+        estimate.undrivenDevices +
+        (estimate.mixedCurrency ? 1 : 0);
+    expect(
+      find.text('$expected to check'),
+      findsOneWidget,
+      reason: 'the count has to cover everything the tooltip lists',
+    );
+    // ...and the tooltip names them, so the count is not a mystery number.
+    final tip = tester.widget<Tooltip>(
+      find
+          .ancestor(
+            of: find.byKey(const ValueKey('project_warnings')),
+            matching: find.byType(Tooltip),
+          )
+          .first,
+    );
+    expect(tip.message, contains('tagged to no vendor'));
+  });
+
   testWidgets('the warning opens the list of parts with no price',
       (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);

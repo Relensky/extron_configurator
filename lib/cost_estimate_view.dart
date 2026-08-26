@@ -529,14 +529,23 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                   ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Quantities are the devices on the AV diagram; unit prices come '
-              'from the device catalog at the '
-              '${kPricingTierLabels[provider.pricingTier]?.toLowerCase()}. '
-              'A price typed here applies to this room only. The currency '
-              'symbol is set in App Config.',
-              style: theme.textTheme.bodySmall,
+            // WHO THIS PARAGRAPH IS FOR. It explains the page to the person
+            // working on it - where the quantities come from, what a typed
+            // price does, where the currency lives - and none of that is
+            // anybody's business on the emailed copy. The image is a quote:
+            // headings, what is being bought, and what it costs.
+            PrintHide(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Quantities are the devices on the AV diagram; unit prices '
+                  'come from the device catalog at the '
+                  '${kPricingTierLabels[provider.pricingTier]?.toLowerCase()}. '
+                  'A price typed here applies to this room only. The currency '
+                  'symbol is set in App Config.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
             ),
             // A budgeted room is the one that has gear on the diagram and no
             // control blocks behind it, and this is the page somebody is on
@@ -566,20 +575,11 @@ class _CostEstimateViewState extends State<CostEstimateView> {
             const SizedBox(height: 12),
             Row(
               children: [
-                // On the image these three are settings, not figures — the
-                // tier and the tax rate both say themselves again down in the
-                // totals. One line of prose instead of a button and two boxes.
-                if (_capturing)
-                  Text(
-                    [
-                      'Priced at '
-                          '${kPricingTierLabels[provider.pricingTier] ?? ''}',
-                      if (settings.taxPercent > 0)
-                        '${settings.taxLabel} '
-                            '${formatPercent(settings.taxPercent)}',
-                    ].join('  ·  '),
-                    style: theme.textTheme.bodySmall,
-                  ),
+                // The tier and the tax rate used to print here as a line of
+                // prose. Both say themselves again where they belong - the
+                // tax on its own line in the totals - and a quote that opens
+                // by describing its own settings is a quote with a sentence
+                // at the top that nobody it is sent to asked for.
                 // Which of the catalog's two published prices this estimate is
                 // costed from. On the page rather than only in App Config
                 // because it is a question about THIS quote, and the answer
@@ -1110,12 +1110,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               children: [
                 Text('Rack hardware', style: theme.textTheme.titleSmall),
                 const SizedBox(width: 8),
+                // Where these come from, for whoever is filling the estimate
+                // in - see [_CardHeading], which drops its own subtitle for
+                // the same reason. This card builds its heading by hand.
                 Expanded(
-                  child: Text(
-                    'placed on the Racks tab, plus anything added here that '
-                    'is bought but not racked',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.disabledColor,
+                  child: PrintHide(
+                    child: Text(
+                      'placed on the Racks tab, plus anything added here that '
+                      'is bought but not racked',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.disabledColor,
+                      ),
                     ),
                   ),
                 ),
@@ -1128,13 +1133,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             if (estimate.hardware.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'None yet. A rack of gear also has blanks, vents and a shelf '
-                  'or two in it - add them on the Racks tab, or add one '
-                  'here when it is bought without going in a frame.',
-                  style: theme.textTheme.bodySmall,
+              // An empty section prints as an empty section. What to do about
+              // it is an instruction to the person filling the estimate in,
+              // and the copy that gets sent out is not addressed to them.
+              PrintHide(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'None yet. A rack of gear also has blanks, vents and a '
+                    'shelf or two in it - add them on the Racks tab, or add '
+                    'one here when it is bought without going in a frame.',
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
               )
             else ...[
@@ -1433,15 +1443,17 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 ),
               )
             else if (types.isEmpty && settings.extraCables.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'No cables drawn yet. Draw the runs on the Signal Flow page '
-                  'and they are counted and priced here; prices per cable type '
-                  'live on the Catalog tab under "Cable". Cable that is not a '
-                  'run on the drawing - a spool, a bag of patch leads - '
-                  'goes in with "Add cable".',
-                  style: theme.textTheme.bodySmall,
+              PrintHide(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No cables drawn yet. Draw the runs on the Signal Flow '
+                    'page and they are counted and priced here; prices per '
+                    'cable type live on the Catalog tab under "Cable". Cable '
+                    'that is not a run on the drawing - a spool, a bag of '
+                    'patch leads - goes in with "Add cable".',
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
               )
             else ...[
@@ -3922,7 +3934,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             if (book.allUnset)
-              Padding(
+              // A rate card nobody has filled in is a job to do, not a line on
+              // a quote.
+              PrintHide(
+                child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   children: [
@@ -3943,6 +3958,7 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
             if (lines.isNotEmpty) ...[
@@ -4831,7 +4847,13 @@ class _CardHeading extends StatelessWidget {
           textBaseline: TextBaseline.alphabetic,
           children: [
             Text(title, style: titleStyle ?? theme.textTheme.titleSmall),
-            if (subtitle != null && subtitle!.isNotEmpty) ...[
+            // Not on the image. Every one of these says what the section is
+            // for - "counted off the signal flow diagram", "each a percentage
+            // of the subtotal before tax" - which is help for somebody filling
+            // the estimate in and clutter on the copy that gets sent out.
+            if (!PrintMode.of(context) &&
+                subtitle != null &&
+                subtitle!.isNotEmpty) ...[
               const SizedBox(width: 8),
               Flexible(
                 child: Text(

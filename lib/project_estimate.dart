@@ -771,6 +771,15 @@ class ProjectEstimate {
   final double feeTotal;
   final double taxTotal;
 
+  /// What the spares the JOB bought come to.
+  ///
+  /// The ones added on the spares page rather than typed into a room's own
+  /// cost sheet - see [ProjectSpare]. They are inside [grandTotal] and inside
+  /// the section totals, and are broken out here because they are the one part
+  /// of the money that belongs to no room and so cannot be found by adding the
+  /// rooms up.
+  final double projectSpareTotal;
+
   /// Rooms whose file could not be read.
   final int failedRooms;
 
@@ -816,6 +825,7 @@ class ProjectEstimate {
     required this.laborHours,
     required this.feeTotal,
     required this.taxTotal,
+    this.projectSpareTotal = 0,
     required this.failedRooms,
     required this.unpricedParts,
     required this.untaggedParts,
@@ -1315,6 +1325,17 @@ ProjectEstimate computeProjectEstimate({
   //  Folded in AFTER the rooms, because a project spare is counted onto the
   //  line the rooms built and priced at the price they established. See
   //  [ProjectSpare] for why these do not live in a room file.
+  //
+  //  AND THE MONEY IS KEPT. These reach the parts list and the vendor packages
+  //  through the accumulator, and for a long time that was the only place they
+  //  reached: the project total is the sum of the ROOMS' totals, and a spare
+  //  that belongs to no room was in every order and in none of the figures.
+  //  So it is counted here, against the section of the line it lands on, and
+  //  added back into the totals below.
+  final spareMoney = <MasterPartKind, double>{};
+  void countSpare(MasterPartKind kind, double money) =>
+      spareMoney[kind] = (spareMoney[kind] ?? 0) + money;
+
   for (final spare in project.spares) {
     // A spare pointed at a room that has left the job, or at one excluded from
     // the total, is not on this quote. It stays on the project - the room may
@@ -1327,6 +1348,7 @@ ProjectEstimate computeProjectEstimate({
     final existing = acc[spare.partKey];
     if (existing != null) {
       existing.addProjectSpare(spare, unitPrice: existing.lowUnitPrice);
+      countSpare(existing.kind, spare.qty * existing.lowUnitPrice);
       continue;
     }
 
@@ -1353,6 +1375,7 @@ ProjectEstimate computeProjectEstimate({
       }
     }
     fresh.addProjectSpare(spare, unitPrice: fresh.lowUnitPrice);
+    countSpare(fresh.kind, spare.qty * fresh.lowUnitPrice);
     acc[spare.partKey] = fresh;
   }
 
@@ -1431,6 +1454,9 @@ ProjectEstimate computeProjectEstimate({
   double sum(double Function(CostEstimate) of) =>
       included.fold(0.0, (s, r) => s + of(r.estimate!));
 
+  double sparesFor(MasterPartKind kind) => spareMoney[kind] ?? 0;
+  final projectSpareTotal = spareMoney.values.fold(0.0, (s, m) => s + m);
+
   return ProjectEstimate(
     project: project,
     currency: currency,
@@ -1439,11 +1465,18 @@ ProjectEstimate computeProjectEstimate({
     costedRooms: included,
     master: master,
     vendors: packages,
-    grandTotal: sum((e) => e.grandTotal),
-    equipmentTotal: sum((e) => e.equipmentTotal),
-    hardwareTotal: sum((e) => e.hardwareTotal),
-    cablingTotal: sum((e) => e.cablingTotal),
-    extrasTotal: sum((e) => e.extrasTotal),
+    // The rooms' own totals, plus the spares the JOB bought on top of them.
+    // Not taxed: a tax rate on this job is a ROOM's setting, and a switcher on
+    // a shelf for the building belongs to no room to borrow one from.
+    grandTotal: sum((e) => e.grandTotal) + projectSpareTotal,
+    projectSpareTotal: projectSpareTotal,
+    equipmentTotal:
+        sum((e) => e.equipmentTotal) + sparesFor(MasterPartKind.equipment),
+    hardwareTotal:
+        sum((e) => e.hardwareTotal) + sparesFor(MasterPartKind.hardware),
+    cablingTotal:
+        sum((e) => e.cablingTotal) + sparesFor(MasterPartKind.cabling),
+    extrasTotal: sum((e) => e.extrasTotal) + sparesFor(MasterPartKind.other),
     laborTotal: sum((e) => e.laborTotal),
     laborHours: sum((e) => e.laborHours),
     feeTotal: sum((e) => e.feeTotal),

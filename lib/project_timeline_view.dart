@@ -766,25 +766,81 @@ class _TrackStrip extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final track in project.tracks)
-            _TrackCard(
-              track: track,
-              parts: byTrack[track.id] ?? const [],
-              asOf: schedule.asOf,
+          // HOW THE PHASES ARE ORDERED, and the two dates that can order them.
+          // The order is a decision - the work happens in a sequence, which is
+          // not always the sequence of the dates - so dragging is the primary
+          // way and the sorts are one press that rewrites it.
+          if (project.tracks.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.drag_indicator,
+                    size: 15,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Drag a phase by its handle to reorder',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  TextButton.icon(
+                    key: const ValueKey('timeline_sort_delivery'),
+                    onPressed: () =>
+                        provider.sortProjectTracks(byCompletion: false),
+                    icon: const Icon(Icons.event, size: 16),
+                    label: const Text('By delivery date'),
+                  ),
+                  TextButton.icon(
+                    key: const ValueKey('timeline_sort_completion'),
+                    onPressed: () =>
+                        provider.sortProjectTracks(byCompletion: true),
+                    icon: const Icon(Icons.flag_outlined, size: 16),
+                    label: const Text('By completion date'),
+                  ),
+                ],
+              ),
             ),
-          if ((byTrack[''] ?? const []).isNotEmpty)
-            _TrackCard(track: null, parts: byTrack['']!, asOf: schedule.asOf),
-          // Whatever this job is actually divided into — "Phase 2",
-          // "Furniture", "Owner-furnished".
-          ActionChip(
-            key: const ValueKey('timeline_add_track'),
-            avatar: const Icon(Icons.add, size: 18),
-            label: const Text('Add a phase'),
-            onPressed: () => _addTrack(context, provider),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (i, track) in project.tracks.indexed)
+                _DraggablePhase(
+                  index: i,
+                  onMove: provider.moveProjectTrack,
+                  child: _TrackCard(
+                    track: track,
+                    parts: byTrack[track.id] ?? const [],
+                    asOf: schedule.asOf,
+                    dragIndex: project.tracks.length > 1 ? i : null,
+                  ),
+                ),
+              // Not draggable and not a drop target: it is not a phase, it is
+              // everything nobody put on one, and it has no place in an order
+              // somebody arranged.
+              if ((byTrack[''] ?? const []).isNotEmpty)
+                _TrackCard(
+                  track: null,
+                  parts: byTrack['']!,
+                  asOf: schedule.asOf,
+                ),
+              // Whatever this job is actually divided into — "Phase 2",
+              // "Furniture", "Owner-furnished".
+              ActionChip(
+                key: const ValueKey('timeline_add_track'),
+                avatar: const Icon(Icons.add, size: 18),
+                label: const Text('Add a phase'),
+                onPressed: () => _addTrack(context, provider),
+              ),
+            ],
           ),
         ],
       ),
@@ -833,6 +889,65 @@ class _TrackStrip extends StatelessWidget {
   }
 }
 
+/// One phase card, as something that can be picked up and dropped on another.
+///
+/// A [Draggable] on a HANDLE rather than on the whole card: the card carries a
+/// menu button and a date, and a card that started a drag anywhere on itself
+/// would make those two controls a lottery on a trackpad. The whole card is a
+/// drop TARGET though - the thing being aimed at is the phase, and asking
+/// somebody to hit a 16-pixel handle with a card already in hand is a drop
+/// that misses.
+class _DraggablePhase extends StatefulWidget {
+  final int index;
+  final void Function(int from, int to) onMove;
+  final Widget child;
+
+  const _DraggablePhase({
+    required this.index,
+    required this.onMove,
+    required this.child,
+  });
+
+  @override
+  State<_DraggablePhase> createState() => _DraggablePhaseState();
+}
+
+class _DraggablePhaseState extends State<_DraggablePhase> {
+  /// Whether a phase is hovering over this one, so the card can say where the
+  /// drop would land before it lands.
+  bool _over = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DragTarget<int>(
+      onWillAcceptWithDetails: (d) {
+        if (d.data == widget.index) return false;
+        setState(() => _over = true);
+        return true;
+      },
+      onLeave: (_) => setState(() => _over = false),
+      onAcceptWithDetails: (d) {
+        setState(() => _over = false);
+        widget.onMove(d.data, widget.index);
+      },
+      builder: (context, candidate, rejected) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _over ? theme.colorScheme.primary : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        // The card as it is. What STARTS a drag is the handle inside it - see
+        // [_TrackCard.dragIndex].
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 /// One phase: its date, what is on it, and when its first order goes in.
 class _TrackCard extends StatelessWidget {
   /// Null for the parts delivered with the job rather than on a phase — they
@@ -841,10 +956,17 @@ class _TrackCard extends StatelessWidget {
   final List<PartScheduleLine> parts;
   final DateTime asOf;
 
+  /// Where this phase sits in the timeline, when it is one that can be moved.
+  /// Null on the "with the job" card and on a job with a single phase, and
+  /// then no handle is drawn - a control that cannot do anything is one more
+  /// thing to try.
+  final int? dragIndex;
+
   const _TrackCard({
     required this.track,
     required this.parts,
     required this.asOf,
+    this.dragIndex,
   });
 
   @override
@@ -878,6 +1000,24 @@ class _TrackCard extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  if (dragIndex != null)
+                    Draggable<int>(
+                      data: dragIndex,
+                      dragAnchorStrategy: pointerDragAnchorStrategy,
+                      feedback: _DragLabel(name: t?.name ?? ''),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.grab,
+                        child: Tooltip(
+                          message: 'Drag to move this phase',
+                          child: Icon(
+                            Icons.drag_indicator,
+                            key: ValueKey('track_drag_${t?.id ?? ''}'),
+                            size: 16,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
                   Icon(
                     t == null ? Icons.work_outline : Icons.alt_route,
                     size: 15,
@@ -911,6 +1051,15 @@ class _TrackCard extends StatelessWidget {
                             child: Text('Use the job deadline'),
                           ),
                         const PopupMenuItem(
+                          value: 'done',
+                          child: Text('Set the completion date…'),
+                        ),
+                        if (t.completion != null)
+                          const PopupMenuItem(
+                            value: 'cleardone',
+                            child: Text('Clear the completion date'),
+                          ),
+                        const PopupMenuItem(
                           value: 'remove',
                           child: Text('Remove this phase'),
                         ),
@@ -922,6 +1071,20 @@ class _TrackCard extends StatelessWidget {
                         }
                         if (v == 'cleardate') {
                           provider.setProjectTrackDeadline(t.id, null);
+                          return;
+                        }
+                        if (v == 'cleardone') {
+                          provider.setProjectTrackCompletion(t.id, null);
+                          return;
+                        }
+                        if (v == 'done') {
+                          final done = await showProjectDatePicker(
+                            context,
+                            initial: t.completion,
+                            title: '${t.name} - finished by',
+                          );
+                          if (done == null) return;
+                          provider.setProjectTrackCompletion(t.id, done.date);
                           return;
                         }
                         final picked = await showProjectDatePicker(
@@ -951,6 +1114,15 @@ class _TrackCard extends StatelessWidget {
                     ? 'nothing scheduled yet'
                     : 'first order ${formatScheduleDate(firstOrder)}',
               ),
+              // The other end of the phase. Only once somebody has committed
+              // to one: a line saying "no completion date" on every phase of
+              // every job is a line nobody reads.
+              if (t?.completion != null)
+                _line(
+                  theme,
+                  Icons.flag_outlined,
+                  'finished ${formatScheduleDate(t!.completion!)}',
+                ),
               _line(
                 theme,
                 Icons.inventory_2_outlined,
@@ -1965,5 +2137,32 @@ class _BulkPartScheduleDialogState extends State<_BulkPartScheduleDialog> {
     final names = widget.lines.take(shown).map((l) => l.description).join(', ');
     if (_count <= shown) return names;
     return '$names, and ${_count - shown} more';
+  }
+}
+
+/// What a phase looks like under the pointer while it is being moved.
+///
+/// A label rather than the card itself: the card is 252 wide and carries three
+/// lines of dates, and a full-size copy of it following the cursor covers the
+/// phases it is being dropped between.
+class _DragLabel extends StatelessWidget {
+  final String name;
+
+  const _DragLabel({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: Opacity(
+        opacity: 0.9,
+        child: Chip(
+          avatar: const Icon(Icons.alt_route, size: 16),
+          label: Text(name),
+          backgroundColor: theme.colorScheme.secondaryContainer,
+        ),
+      ),
+    );
   }
 }

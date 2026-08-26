@@ -90,15 +90,20 @@ class CampusLifecycle {
   /// still has a column to say so in, and capped the same way a single
   /// building's span is - a plan that runs to 2061 because one item was given
   /// a forty-year life is a plan nobody reads.
-  late final List<int> years = () {
+  late final List<int> years = yearsWithin(kCampusMaxYears);
+
+  /// The calendar capped at [maxYears] either side of today.
+  ///
+  /// The cap is a property of the WINDOW rather than of the plan, which is why
+  /// it is asked for rather than fixed: the sheet on screen zooms, and a
+  /// reader who has pushed it down to half size has room for twice the years.
+  List<int> yearsWithin(int maxYears) {
     var first = _span.first;
     var last = _span.last;
-    if (first < asOf.year - kCampusMaxYears) {
-      first = asOf.year - kCampusMaxYears;
-    }
-    if (last > asOf.year + kCampusMaxYears) last = asOf.year + kCampusMaxYears;
+    if (first < asOf.year - maxYears) first = asOf.year - maxYears;
+    if (last > asOf.year + maxYears) last = asOf.year + maxYears;
     return [for (var y = first; y <= last; y++) y];
-  }();
+  }
 
   /// EVERY YEAR THE ESTATE TOUCHES, uncapped.
   ///

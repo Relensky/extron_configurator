@@ -11353,6 +11353,54 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  /// Sets one phase's completion date - when it is finished and handed over,
+  /// as opposed to when its equipment has to arrive.
+  void setProjectTrackCompletion(String id, DateTime? date) {
+    project.setTrackCompletion(id, date);
+    _logProjectEdit(
+      itemKey: 'track:$id',
+      itemName: project.trackById(id)?.name ?? '',
+      field: 'Phase completion',
+      summary: date == null
+          ? 'no completion date'
+          : 'set to ${formatIsoDate(dateOnly(date))}',
+    );
+    _projectChanged();
+  }
+
+  /// Moves a phase to a new place in the timeline - what a drag lands as.
+  void moveProjectTrack(int from, int to) {
+    if (from == to) return;
+    final moved = from >= 0 && from < project.tracks.length
+        ? project.tracks[from].name
+        : '';
+    project.moveTrack(from, to);
+    _logProjectEdit(
+      itemKey: 'track:order',
+      itemName: moved,
+      field: 'Phase order',
+      summary: 'moved to position ${to + 1}',
+    );
+    _projectChanged();
+  }
+
+  /// Puts the phases in order of one of their two dates.
+  ///
+  /// A one-press ACTION on the stored order rather than a way of looking at
+  /// it: the timeline is read in the order the work happens in, and a sort
+  /// that only lived in the window would leave the file, the workbook and the
+  /// screen disagreeing about what that order is.
+  void sortProjectTracks({required bool byCompletion}) {
+    project.sortTracksByDate(byCompletion: byCompletion);
+    _logProjectEdit(
+      itemKey: 'track:order',
+      itemName: '',
+      field: 'Phase order',
+      summary: byCompletion ? 'sorted by completion date' : 'sorted by delivery date',
+    );
+    _projectChanged();
+  }
+
   void removeProjectTrack(String id) {
     final was = project.trackById(id)?.name ?? '';
     project.removeTrack(id);

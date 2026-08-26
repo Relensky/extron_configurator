@@ -425,6 +425,17 @@ class ProjectTrack {
   /// said and it should fall back to the job's own deadline.
   final DateTime? deadline;
 
+  /// When this phase is FINISHED - installed, commissioned and handed over -
+  /// or null while nobody has committed to one.
+  ///
+  /// A second date rather than a second meaning for [deadline], because they
+  /// are two different promises to two different people: the delivery date is
+  /// what the supplier is held to and the one every order date is worked back
+  /// from, and this is what the building is told. On a phased job they can be
+  /// weeks apart, and a timeline sorted by one is not the timeline sorted by
+  /// the other.
+  final DateTime? completion;
+
   /// A line of explanation for the people reading the timeline — what belongs
   /// in this phase and why it is separate.
   final String notes;
@@ -433,6 +444,7 @@ class ProjectTrack {
     required this.id,
     required this.name,
     this.deadline,
+    this.completion,
     this.notes = '',
   });
 
@@ -440,11 +452,14 @@ class ProjectTrack {
     String? name,
     DateTime? deadline,
     bool clearDeadline = false,
+    DateTime? completion,
+    bool clearCompletion = false,
     String? notes,
   }) => ProjectTrack(
     id: id,
     name: name ?? this.name,
     deadline: clearDeadline ? null : (deadline ?? this.deadline),
+    completion: clearCompletion ? null : (completion ?? this.completion),
     notes: notes ?? this.notes,
   );
 
@@ -452,6 +467,7 @@ class ProjectTrack {
     'id': id,
     'name': name,
     if (deadline != null) 'deadline': formatIsoDate(deadline!),
+    if (completion != null) 'completion': formatIsoDate(completion!),
     if (notes.trim().isNotEmpty) 'notes': notes.trim(),
   };
 
@@ -459,6 +475,7 @@ class ProjectTrack {
     id: json['id']?.toString() ?? '',
     name: json['name']?.toString() ?? '',
     deadline: parseIsoDate(json['deadline']),
+    completion: parseIsoDate(json['completion']),
     notes: json['notes']?.toString() ?? '',
   );
 }
@@ -1903,6 +1920,50 @@ class BuildingProject {
       deadline: date == null ? null : dateOnly(date),
       clearDeadline: date == null,
     );
+  }
+
+  /// Sets one phase's completion date, or clears it.
+  void setTrackCompletion(String id, DateTime? date) {
+    final i = tracks.indexWhere((t) => t.id == id);
+    if (i < 0) return;
+    tracks[i] = tracks[i].copyWith(
+      completion: date == null ? null : dateOnly(date),
+      clearCompletion: date == null,
+    );
+  }
+
+  /// Moves the phase at [from] to sit at [to], the way somebody dragged it.
+  ///
+  /// THE ORDER IS A DECISION, not a derivation: a job's phases are read in the
+  /// order the work happens in, which is not always the order of their dates -
+  /// a long-lead order can be placed for a phase that lands last. So the list
+  /// keeps whatever order it was put in, and sorting by a date is an ACTION
+  /// that rewrites it rather than a view that hides it.
+  void moveTrack(int from, int to) {
+    if (from < 0 || from >= tracks.length) return;
+    if (to < 0 || to >= tracks.length || to == from) return;
+    final moved = tracks.removeAt(from);
+    tracks.insert(to, moved);
+  }
+
+  /// Puts the phases in date order. Undated ones keep to the end rather than
+  /// sorting as the beginning of time, which would put every phase nobody has
+  /// committed to yet in front of the ones that are booked.
+  void sortTracksByDate({required bool byCompletion}) {
+    DateTime? keyOf(ProjectTrack t) => byCompletion ? t.completion : t.deadline;
+    tracks.sort((a, b) {
+      final da = keyOf(a);
+      final db = keyOf(b);
+      if (da == null && db == null) {
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      }
+      if (da == null) return 1;
+      if (db == null) return -1;
+      final byDate = da.compareTo(db);
+      return byDate != 0
+          ? byDate
+          : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
   }
 
   /// Drops a track and every part pinned to it. Leaving the pins would file
