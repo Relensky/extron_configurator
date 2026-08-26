@@ -582,14 +582,23 @@ void main() {
     testWidgets('the room names stay put while the years scroll', (
       tester,
     ) async {
-      // Narrow enough that thirteen years of columns run well past the edge.
-      await pumpPlan(tester, building(2), size: const Size(760, 900));
+      // Narrow enough that thirteen years of columns run well past the edge,
+      // and tall enough that the pane's header - which is a summary strip, a
+      // row of exports and a pane switcher - is not what this test is about.
+      await pumpPlan(tester, building(2), size: const Size(760, 1100));
 
       final name = find.text('BSS 101').first;
       final before = tester.getTopLeft(name);
       final yearBefore = tester.getTopLeft(find.text('2014').first);
 
-      await tester.drag(find.byType(PinnedGrid), const Offset(-240, 0));
+      // FROM A POINT INSIDE THE GRID, not from its centre. The frame is
+      // deliberately taller than what is left of the window below the header
+      // - that is what "it scrolls in its own frame" means - so its centre can
+      // sit below the bottom edge, and a drag aimed there lands on nothing.
+      await tester.dragFrom(
+        tester.getTopLeft(find.byType(PinnedGrid)) + const Offset(300, 60),
+        const Offset(-240, 0),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -606,7 +615,7 @@ void main() {
 
     testWidgets('a tall plan scrolls inside the grid rather than pushing the '
         'room list off the page', (tester) async {
-      const size = Size(1000, 900);
+      const size = Size(1000, 1100);
       await pumpPlan(tester, building(14), size: size);
 
       // Fourteen rooms at full size would be most of the window. The frame is
@@ -617,7 +626,10 @@ void main() {
       );
 
       final before = tester.getTopLeft(find.text('BSS 101').first);
-      await tester.drag(find.byType(PinnedGrid), const Offset(0, -120));
+      await tester.dragFrom(
+        tester.getTopLeft(find.byType(PinnedGrid)) + const Offset(300, 60),
+        const Offset(0, -120),
+      );
       await tester.pumpAndSettle();
       expect(
         tester.getTopLeft(find.text('BSS 101').first).dy,

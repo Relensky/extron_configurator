@@ -1,16 +1,22 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'av_flow_model.dart' show formatEquipmentDate;
 import 'building_project.dart' show kProjectFileSuffix;
 import 'campus_lifecycle.dart';
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
+import 'lifecycle_export.dart';
+import 'lifecycle_picture.dart';
 import 'lifecycle_view.dart'
     show
         EquipmentTimingKey,
+        LifecycleEverythingChunk,
         equipmentConditionColor,
         equipmentTimingColor,
         equipmentTimingFill;
@@ -76,6 +82,9 @@ class _CampusViewState extends State<_CampusView> {
 
   CampusLifecycle? _campus;
   bool _reading = false;
+
+  /// True while the sheet is being drawn off screen for a spreadsheet.
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -172,6 +181,57 @@ class _CampusViewState extends State<_CampusView> {
     }
   }
 
+  // -------------------------------------------------------------------------
+  //  WHAT LEAVES THE SCREEN
+  // -------------------------------------------------------------------------
+
+  /// The campus as it is read, laid out flat so it can be photographed whole.
+  Widget get _sheet => CampusPlanSheet(campus: _campus!);
+
+  /// The file both documents are named after.
+  ///
+  /// The campus has no name of its own - it is whichever jobs somebody put on
+  /// the sheet this afternoon - so it is dated instead. Two exports on
+  /// different days are two different documents and have to be filed as such.
+  String get _fileStem {
+    final at = _campus?.asOf ?? DateTime.now();
+    final month = at.month.toString().padLeft(2, '0');
+    final day = at.day.toString().padLeft(2, '0');
+    return 'campus_refresh_plan_${at.year}-$month-$day';
+  }
+
+  void _picture() => showLifecycleSheetPicture(
+    context,
+    dialogTitle: 'The campus plan as a picture',
+    fileStem: _fileStem,
+    what: 'The campus refresh plan',
+    sheet: _sheet,
+  );
+
+  Future<void> _spreadsheet() async {
+    final campus = _campus;
+    if (campus == null) return;
+    setState(() => _exporting = true);
+    Uint8List? picture;
+    try {
+      // Only when there is something to draw. A campus where every job failed
+      // to read still writes a book - it has to, that is the sheet that says
+      // WHY - but there is no calendar to illustrate it with.
+      if (!campus.isEmpty) {
+        picture = await captureOffscreenSheet(context, _sheet);
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+    if (!mounted) return;
+    await saveLifecycleWorkbook(
+      context,
+      fileStem: _fileStem,
+      what: 'The campus refresh plan',
+      bytes: buildCampusLifecycleXlsx(campus: campus, picture: picture),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -198,6 +258,28 @@ class _CampusViewState extends State<_CampusView> {
             onPressed: _reading ? null : _addFolder,
             icon: const Icon(Icons.create_new_folder_outlined, size: 18),
             label: const Text('Add a folder…'),
+          ),
+          // WHAT LEAVES THE ROOM. This view exists to be quoted at a budget
+          // meeting, and until now the only way to quote it was to describe
+          // it: nothing on it could be attached to a mail or pasted onto a
+          // slide. Disabled until there is a campus to picture - the buttons
+          // are visible so somebody knows they are coming.
+          const SizedBox(width: 8),
+          TextButton.icon(
+            key: const ValueKey('campus_picture'),
+            onPressed: _reading || campus == null || campus.isEmpty
+                ? null
+                : _picture,
+            icon: const Icon(Icons.image_outlined, size: 18),
+            label: const Text('Picture…'),
+          ),
+          TextButton.icon(
+            key: const ValueKey('campus_spreadsheet'),
+            onPressed: _reading || _exporting || campus == null || campus.jobs.isEmpty
+                ? null
+                : _spreadsheet,
+            icon: const Icon(Icons.table_view, size: 18),
+            label: Text(_exporting ? 'Drawing…' : 'Spreadsheet…'),
           ),
           const SizedBox(width: 12),
         ],
@@ -347,15 +429,22 @@ class _CampusHeadline extends StatelessWidget {
                 label: 'Worst single year',
                 value: formatLifecycleMoney(campus.peakYear, currency),
               ),
-            _Figure(
-              key: const ValueKey('campus_everything'),
-              label: 'Everything, whatever its age',
-              value: formatEquipmentBand(
-                campus.items.length,
-                campus.refreshCost,
-                currency,
+            // AND THEN A GAP, AND THE WHOLE-ESTATE FIGURE BEHIND A RULE.
+            //
+            // Everything to the left of the rule is money somebody is being
+            // asked to find. This is not an ask at all - it is what the estate
+            // is worth in replacement terms - and it is always the biggest
+            // number on the screen. Read along the same unbroken row as the
+            // asks, the biggest number reads as the biggest ask.
+            if (campus.items.isNotEmpty)
+              LifecycleEverythingChunk(
+                key: const ValueKey('campus_everything'),
+                items: campus.items.length,
+                cost: campus.refreshCost,
+                currency: currency,
+                scope: 'this campus',
+                undated: campus.undated,
               ),
-            ),
           ],
         ),
         // The survey's own to-do list, said out loud: a campus plan built on an
@@ -692,6 +781,298 @@ class _YearBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// THE WHOLE CAMPUS CALENDAR AT ITS FULL SIZE, for a picture of it.
+///
+/// [_CampusGrid] is the version for reading: it scrolls in its own frame with
+/// the building names and the year headings pinned, and a photograph of that
+/// is a photograph of the frame - four buildings and six years of an estate of
+/// eleven. This is the same sheet laid out flat, nothing scrolling and nothing
+/// clipped, with its own heading and figures so it can be understood in a
+/// document that has no app around it.
+///
+/// The cells and the bars are the SAME widgets the screen draws, so the
+/// picture cannot come out saying something the sheet does not.
+class CampusPlanSheet extends StatelessWidget {
+  final CampusLifecycle campus;
+
+  const CampusPlanSheet({super.key, required this.campus});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final years = campus.years;
+    final jobs = campus.ok;
+    final currency = campus.currency;
+    final thisYear = campus.asOf.year;
+    final peak = campus.peakYear;
+
+    final yearColumn = gridMetric(context, 92);
+    final rowHeight = gridMetric(context, 30);
+    final nameColumn = gridMetric(context, 210);
+    final barRow = gridMetric(context, 46);
+
+    final headStyle = theme.textTheme.labelMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Campus refresh plan', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 2),
+            Text(
+              'As of ${formatEquipmentDate(campus.asOf)}  ·  '
+              '${jobs.length} building${jobs.length == 1 ? '' : 's'}  ·  '
+              '${campus.rooms} room${campus.rooms == 1 ? '' : 's'}  ·  '
+              '${campus.items.length} item'
+              '${campus.items.length == 1 ? '' : 's'}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 28,
+              runSpacing: 6,
+              children: [
+                if (campus.toReplaceCount > 0)
+                  _SheetFigure(
+                    label: 'Recommended now',
+                    value: formatEquipmentBand(
+                      campus.toReplaceCount,
+                      campus.toReplaceCost,
+                      currency,
+                    ),
+                    color: equipmentConditionColor(
+                      context,
+                      campus.overdueCost > 0
+                          ? EquipmentCondition.overdue
+                          : EquipmentCondition.ageing,
+                    ),
+                  ),
+                if (campus.overdueCost > 0)
+                  _SheetFigure(
+                    label: 'Past its life today',
+                    value: formatLifecycleMoney(campus.overdueCost, currency),
+                    color: equipmentConditionColor(
+                      context,
+                      EquipmentCondition.overdue,
+                    ),
+                  ),
+                if (peak > 0)
+                  _SheetFigure(
+                    label: 'Worst single year',
+                    value: formatLifecycleMoney(peak, currency),
+                  ),
+                _SheetFigure(
+                  label: 'Everything, whatever its age',
+                  value: formatEquipmentBand(
+                    campus.items.length,
+                    campus.refreshCost,
+                    currency,
+                  ),
+                ),
+              ],
+            ),
+            if (campus.undated > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                '${campus.undated} item${campus.undated == 1 ? '' : 's'} '
+                'across the campus have no install date, so they fall due in '
+                'no year on this sheet and are in none of the figures above.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            const EquipmentTimingKey(),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: nameColumn,
+                  child: Text('BUILDING', style: headStyle),
+                ),
+                for (final y in years)
+                  SizedBox(
+                    width: yearColumn,
+                    child: Center(
+                      child: Text(
+                        '$y',
+                        style: headStyle?.copyWith(
+                          fontWeight: y == thisYear
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: y == thisYear
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: 2),
+            for (final job in jobs)
+              Row(
+                children: [
+                  SizedBox(
+                    width: nameColumn,
+                    height: rowHeight,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          job.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ),
+                  ),
+                  for (final y in years)
+                    _MoneyCell(
+                      width: yearColumn,
+                      height: rowHeight,
+                      money: campus.costIn(job, y),
+                      year: y,
+                      asOf: campus.asOf,
+                      currency: currency,
+                      tooltip: '${job.name} - $y',
+                    ),
+                ],
+              ),
+            // THE LINE THE BUDGET IS ACTUALLY SET FROM, and the same figures
+            // as a shape under it: a row of numbers says what each year costs
+            // and does not say which year is twice the one beside it.
+            Row(
+              children: [
+                SizedBox(
+                  width: nameColumn,
+                  height: rowHeight,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'CAMPUS',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                for (final y in years)
+                  _MoneyCell(
+                    width: yearColumn,
+                    height: rowHeight,
+                    money: campus.totalIn(y),
+                    year: y,
+                    asOf: campus.asOf,
+                    currency: currency,
+                    bold: true,
+                    tooltip: 'The whole campus in $y',
+                  ),
+              ],
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: nameColumn,
+                  height: barRow,
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      'against ${formatLifecycleMoney(peak, currency)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+                for (final y in years)
+                  _YearBar(
+                    width: yearColumn,
+                    height: barRow,
+                    money: campus.totalIn(y),
+                    peak: peak,
+                    year: y,
+                    asOf: campus.asOf,
+                    currency: currency,
+                  ),
+              ],
+            ),
+            // A JOB THAT COULD NOT BE READ IS STILL ON THE PICTURE. The whole
+            // value of the sheet is that the total is complete, and a picture
+            // that quietly leaves out the building nobody could open is a
+            // picture that overstates how complete it is.
+            if (campus.failed.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                'COULD NOT BE READ',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              for (final job in campus.failed)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '${job.name} - ${job.error}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: errorTextOn(
+                        theme.colorScheme,
+                        theme.colorScheme.surface,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One figure in a sheet's heading block: the screen's [_Figure] with no
+/// interaction behind it.
+class _SheetFigure extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+
+  const _SheetFigure({required this.label, required this.value, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(value, style: theme.textTheme.titleMedium?.copyWith(color: color)),
+      ],
     );
   }
 }

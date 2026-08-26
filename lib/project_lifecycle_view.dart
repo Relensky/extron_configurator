@@ -1,13 +1,19 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'av_flow_model.dart' show formatEquipmentDate;
 import 'campus_lifecycle_view.dart' show showCampusLifecycle;
 import 'equipment_lifecycle.dart';
+import 'lifecycle_export.dart';
+import 'lifecycle_picture.dart';
 import 'lifecycle_view.dart'
     show
         EquipmentTimingKey,
+        LifecycleEverythingChunk,
         equipmentConditionColor,
         equipmentConditionIcon,
         equipmentTimingColor,
@@ -79,7 +85,13 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
   }
 
   return [
-    SliverToBoxAdapter(child: _Summary(building: building)),
+    SliverToBoxAdapter(
+      child: _Summary(
+        building: building,
+        title: lifecycleDocumentTitle(estimate),
+        fileStem: lifecycleFileStem(estimate),
+      ),
+    ),
     SliverToBoxAdapter(child: LifecycleYearGrid(building: building)),
     const SliverToBoxAdapter(child: Divider(height: 1)),
     // ROOM BY ROOM, WITH THE MONEY BROKEN OUT BY THE YEAR IT LANDS. The grid
@@ -96,11 +108,46 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
   ];
 }
 
+/// What the documents this pane writes are headed with: the job, the building,
+/// or failing both something that is at least not blank.
+String lifecycleDocumentTitle(ProjectEstimate estimate) {
+  final name = estimate.project.name.trim();
+  final building = estimate.project.building.trim();
+  if (name.isNotEmpty && building.isNotEmpty && name != building) {
+    return '$name - $building - replacement plan';
+  }
+  final one = name.isNotEmpty ? name : building;
+  return one.isEmpty ? 'Replacement plan' : '$one - replacement plan';
+}
+
+/// What they are CALLED on disk. The same rule the workbook uses, so a folder
+/// holding both reads as one job rather than two.
+String lifecycleFileStem(ProjectEstimate estimate) {
+  final raw = estimate.project.name.trim().isNotEmpty
+      ? estimate.project.name
+      : estimate.project.building.trim().isNotEmpty
+      ? estimate.project.building
+      : 'project';
+  final clean = raw
+      .trim()
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+      .replaceAll(RegExp(r'\s+'), '_');
+  return '${clean}_replacement_plan';
+}
+
 /// What the building reads as, in one strip.
 class _Summary extends StatelessWidget {
   final BuildingLifecycle building;
 
-  const _Summary({required this.building});
+  /// What the picture and the spreadsheet are headed with, and called.
+  final String title;
+  final String fileStem;
+
+  const _Summary({
+    required this.building,
+    required this.title,
+    required this.fileStem,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -166,17 +213,22 @@ class _Summary extends StatelessWidget {
                     EquipmentCondition.overdue,
                   ),
                 ),
-              // In the quiet ink, deliberately: it is the biggest number on
-              // the strip and the least urgent one, and drawn in a warning
-              // colour it would read as a bill somebody owes this year.
-              if (building.refreshCost > 0)
-                _Figure(
-                  label: 'Everything, whatever its age',
-                  value: formatEquipmentBand(
-                    building.items.length,
-                    building.refreshCost,
-                    building.currency,
-                  ),
+              // AND THEN A GAP, AND THE WHOLE-BUILDING FIGURE BEHIND A RULE.
+              //
+              // It used to be the last chip on this strip, in the quiet ink,
+              // and quiet ink was not separation enough: it is the biggest
+              // number on the screen and the least urgent one, and read along
+              // a row with two asks it was being quoted back as a third ask.
+              // Behind a gap and a rule, with its items and its money as two
+              // figures rather than one run-on line, it reads as what it is -
+              // see [LifecycleEverythingChunk].
+              if (building.items.isNotEmpty)
+                LifecycleEverythingChunk(
+                  items: building.items.length,
+                  cost: building.refreshCost,
+                  currency: building.currency,
+                  scope: 'this building',
+                  undated: undated,
                 ),
             ],
           ),
@@ -189,9 +241,27 @@ class _Summary extends StatelessWidget {
           // is a year the campus can afford. The answer needs the other jobs
           // on the same calendar, and this is where somebody is standing when
           // they want it.
-          const Padding(
-            padding: EdgeInsets.only(top: 10),
-            child: _CampusButton(),
+          // THE WAYS OUT OF THE SCREEN, ON ONE LINE.
+          //
+          // A picture of the plan, the plan as a spreadsheet, and the same
+          // question one building wider. All three are "I have read this, now
+          // what do I do with it", which is why they sit under the figures
+          // rather than up in the tab's toolbar with Workbook and Quote
+          // requests - those write the JOB, these write this sheet.
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _PlanExportButtons(
+                  building: building,
+                  title: title,
+                  fileStem: fileStem,
+                ),
+                const _CampusButton(),
+              ],
+            ),
           ),
           // The survey's own to-do list. Said out loud rather than left to be
           // inferred from a column of blanks, because a plan built on a
@@ -226,6 +296,322 @@ class _CampusButton extends StatelessWidget {
     icon: const Icon(Icons.location_city, size: 18),
     label: const Text('Compare across the campus…'),
   );
+}
+
+/// The two documents this pane hands over: a picture of the plan, and the plan
+/// as a spreadsheet with a chart of the money against the years.
+///
+/// BOTH ARE DEALT FROM THE [BuildingLifecycle] ON SCREEN, not re-derived. A
+/// spreadsheet that priced the building a second time would be a document that
+/// could disagree with the sheet it was exported from, which is exactly the
+/// drift the whole feature exists to remove.
+class _PlanExportButtons extends StatefulWidget {
+  final BuildingLifecycle building;
+  final String title;
+  final String fileStem;
+
+  const _PlanExportButtons({
+    required this.building,
+    required this.title,
+    required this.fileStem,
+  });
+
+  @override
+  State<_PlanExportButtons> createState() => _PlanExportButtonsState();
+}
+
+class _PlanExportButtonsState extends State<_PlanExportButtons> {
+  bool _busy = false;
+
+  Widget get _sheet =>
+      LifecyclePlanSheet(building: widget.building, title: widget.title);
+
+  void _picture() => showLifecycleSheetPicture(
+    context,
+    dialogTitle: 'The replacement plan as a picture',
+    fileStem: widget.fileStem,
+    what: 'The replacement plan',
+    sheet: _sheet,
+  );
+
+  Future<void> _spreadsheet() async {
+    setState(() => _busy = true);
+    Uint8List? picture;
+    try {
+      // The sheet as it reads, dropped in under the tables. Rendered off the
+      // side of the screen rather than grabbed off this one: the grid on this
+      // page is a window onto eight rooms and six years, and a workbook
+      // illustrated with that is a workbook illustrated with a fragment.
+      picture = await captureOffscreenSheet(context, _sheet);
+    } finally {
+      // In a finally: a button left spinning is worse than a book with no
+      // picture in it, and the book is written either way.
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted) return;
+    await saveLifecycleWorkbook(
+      context,
+      fileStem: widget.fileStem,
+      what: 'The replacement plan',
+      bytes: buildBuildingLifecycleXlsx(
+        building: widget.building,
+        title: widget.title,
+        picture: picture,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      OutlinedButton.icon(
+        key: const ValueKey('lifecycle_picture'),
+        onPressed: _busy ? null : _picture,
+        icon: const Icon(Icons.image_outlined, size: 18),
+        label: const Text('Picture…'),
+      ),
+      FilledButton.tonalIcon(
+        key: const ValueKey('lifecycle_spreadsheet'),
+        onPressed: _busy ? null : _spreadsheet,
+        icon: const Icon(Icons.table_view, size: 18),
+        label: Text(_busy ? 'Drawing…' : 'Spreadsheet…'),
+      ),
+    ],
+  );
+}
+
+/// THE WHOLE PLAN AT ITS FULL SIZE, for a picture of it.
+///
+/// [LifecycleYearGrid] is the version for READING: it scrolls in its own
+/// frame, builds its rows a screenful at a time, and pins the room names and
+/// the year headings so a cell always has the thing it is about beside it.
+/// None of that survives being photographed - a capture of a scrolling frame
+/// is a capture of the frame.
+///
+/// So this is the same sheet laid out flat: nothing scrolls, nothing is lazy,
+/// nothing is pinned because nothing moves. It carries its own heading and
+/// figures too, because a picture ends up in a document with no app around it
+/// and a grid of coloured cells with no title on it explains nothing.
+///
+/// The CELLS are the same widgets the screen draws - see [_GridRow] and
+/// [_TimelineRow] - so the picture cannot come out saying something different
+/// from the sheet it is a picture of.
+class LifecyclePlanSheet extends StatelessWidget {
+  final BuildingLifecycle building;
+  final String title;
+
+  const LifecyclePlanSheet({
+    super.key,
+    required this.building,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final years = building.years(maxColumns: 20);
+    final lines = LifecycleYearGrid.linesOf(building);
+    final currency = building.currency;
+    final thisYear = building.asOf.year;
+    final undated = building.countOf(EquipmentCondition.unknown);
+
+    final yearColumn = gridMetric(context, 76);
+    final rowHeight = gridMetric(context, 28);
+    final roomColumn = gridMetric(context, 200);
+
+    final headStyle = theme.textTheme.labelMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 2),
+            Text(
+              'As of ${formatEquipmentDate(building.asOf)}  ·  '
+              '${building.rooms.length} room'
+              '${building.rooms.length == 1 ? '' : 's'}  ·  '
+              '${building.items.length} item'
+              '${building.items.length == 1 ? '' : 's'}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // The figures, in words. A picture that carries the grid and none
+            // of the totals is a picture somebody has to be told the totals
+            // for, which defeats handing it over at all.
+            Wrap(
+              spacing: 28,
+              runSpacing: 6,
+              children: [
+                if (building.toReplaceCount > 0)
+                  _SheetFigure(
+                    label: 'Recommended now',
+                    value: formatEquipmentBand(
+                      building.toReplaceCount,
+                      building.toReplaceCost,
+                      currency,
+                    ),
+                    color: equipmentConditionColor(
+                      context,
+                      building.countOf(EquipmentCondition.overdue) > 0
+                          ? EquipmentCondition.overdue
+                          : EquipmentCondition.ageing,
+                    ),
+                  ),
+                if (building.overdueCost > 0)
+                  _SheetFigure(
+                    label: 'Past its life today',
+                    value: formatLifecycleMoney(building.overdueCost, currency),
+                    color: equipmentConditionColor(
+                      context,
+                      EquipmentCondition.overdue,
+                    ),
+                  ),
+                _SheetFigure(
+                  label: 'Everything, whatever its age',
+                  value: formatEquipmentBand(
+                    building.items.length,
+                    building.refreshCost,
+                    currency,
+                  ),
+                ),
+              ],
+            ),
+            if (undated > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                '$undated item${undated == 1 ? '' : 's'} carry no install '
+                'date, so they fall due in no year on this sheet and are in '
+                'none of the figures above.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            const EquipmentTimingKey(),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(width: roomColumn, child: Text('ROOM', style: headStyle)),
+                for (final y in years)
+                  SizedBox(
+                    width: yearColumn,
+                    child: Center(
+                      child: Text(
+                        '$y',
+                        style: headStyle?.copyWith(
+                          fontWeight: y == thisYear
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: y == thisYear
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: 2),
+            for (final line in lines)
+              Row(
+                children: [
+                  SizedBox(
+                    width: roomColumn,
+                    height: rowHeight,
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        // Indented under the room it belongs to, exactly as on
+                        // screen, so the block reads as one room and not four.
+                        left: line.group == null ? 0 : 12,
+                        right: 8,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: line.group == null
+                            ? Text(
+                                line.room.roomName,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium,
+                              )
+                            : Text(
+                                '${line.group!.items.length} item'
+                                '${line.group!.items.length == 1 ? '' : 's'} '
+                                'due ${line.group!.dueYear}',
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                  if (line.group == null)
+                    _GridRow(
+                      room: line.room,
+                      years: years,
+                      currency: currency,
+                      columnWidth: yearColumn,
+                      rowHeight: rowHeight,
+                    )
+                  else
+                    _TimelineRow(
+                      room: line.room,
+                      group: line.group!,
+                      years: years,
+                      currency: currency,
+                      columnWidth: yearColumn,
+                      rowHeight: rowHeight,
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One figure in a sheet's heading block. The screen's [_Figure] with no
+/// interaction behind it.
+class _SheetFigure extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+
+  const _SheetFigure({required this.label, required this.value, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(value, style: theme.textTheme.titleMedium?.copyWith(color: color)),
+      ],
+    );
+  }
 }
 
 class _Band extends StatelessWidget {
@@ -316,7 +702,7 @@ class _Figure extends StatelessWidget {
 /// year it lands. So a room with more than one due date is drawn as its
 /// summary row PLUS one line per date, each a leading line from the year that
 /// equipment went in to the year it falls due.
-typedef _GridLine = ({RoomLifecycle room, RoomDueGroup? group});
+typedef LifecycleGridLine = ({RoomLifecycle room, RoomDueGroup? group});
 
 /// The RYG grid itself: rooms down, years across.
 ///
@@ -362,7 +748,7 @@ class LifecycleYearGrid extends StatelessWidget {
   /// The rooms, opened out into one line per due date where there is more than
   /// one. A room whose whole contents fall due together is one line: a second
   /// row saying the same thing as the first is a row to read past.
-  static List<_GridLine> _linesOf(BuildingLifecycle building) => [
+  static List<LifecycleGridLine> linesOf(BuildingLifecycle building) => [
     for (final room in building.rooms) ...[
       (room: room, group: null),
       if (room.dueGroups.length > 1)
@@ -377,7 +763,7 @@ class LifecycleYearGrid extends StatelessWidget {
     final thisYear = building.asOf.year;
     if (years.isEmpty || building.rooms.isEmpty) return const SizedBox.shrink();
 
-    final lines = _linesOf(building);
+    final lines = linesOf(building);
 
     // EVERY BOX ON THE SHEET IS THE READER'S SIZE. These were fixed pixels,
     // which on a machine at 150% gave the same 62-wide cell with a larger

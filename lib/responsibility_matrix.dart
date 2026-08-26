@@ -1,6 +1,8 @@
 import 'package:path/path.dart' as path;
 
+import 'name_colors.dart' show nameSheetTint;
 import 'report_tools.dart';
+import 'xlsx_writer.dart' show XlsxTint;
 
 /// ============================================================================
 ///  WHO FURNISHES IT, WHO INSTALLS IT
@@ -308,6 +310,45 @@ const List<({String scope, String furnishedBy, String installedBy, String work})
 //  THE SHEET
 // ---------------------------------------------------------------------------
 
+/// A party's name in the colour it reads in everywhere else.
+///
+/// WHY THE SPREADSHEET GETS THE COLOURS TOO. This matrix is read by whose name
+/// is on the line - the whole reason the screen tints every party - and the
+/// exported copy is the one that goes to the contractor, gets printed, and is
+/// argued from at the pre-installation meeting. Black on white there sent the
+/// reader back to reading every cell, which is the job the colour was doing.
+///
+/// The hue comes from the SAME [nameSheetTint] the screen and the picture use,
+/// so 'CTS Chico' is the same colour in the app, in the PNG and in the .xlsx.
+/// A blank party is deliberately grey and says so out loud: an unagreed line
+/// must not read as a decided one.
+/// [missingLabel] is what an unnamed party reads as. The grid's columns are
+/// narrow and take the short form the screen uses; the table underneath has
+/// room for the one that says it is not finished yet.
+XlsxTint responsibilityPartyCell(
+  String party, {
+  String missingLabel = 'NOBODY',
+}) {
+  if (party.trim().isEmpty) {
+    // NOT the neutral grey the other unsettled answers get. 'N/A' on the
+    // install column is a real answer - the PC monitors sit on a desk and
+    // nobody hangs them - and a blank is not. Printed in the same grey, the
+    // one that needs chasing hides among the ones that do not.
+    return XlsxTint(
+      text: missingLabel,
+      fillHex: kResponsibilityMissingFill,
+      inkHex: kResponsibilityMissingInk,
+    );
+  }
+  final tint = nameSheetTint(party);
+  return XlsxTint(text: party.trim(), fillHex: tint.fill, inkHex: tint.ink);
+}
+
+/// The wash and ink a party nobody has named prints in: a pale red and a dark
+/// one, the spreadsheet's version of the error colour the screen uses.
+const String kResponsibilityMissingFill = 'FBE4E4';
+const String kResponsibilityMissingInk = 'A21C1C';
+
 /// A quantity with no trailing `.0` on it — a matrix counts screens and
 /// speakers, and '2.0 screens' reads as a measurement rather than a count.
 String formatResponsibilityQty(double qty) {
@@ -338,8 +379,8 @@ List<ReportSection> responsibilityMatrixSections(
     for (final item in items)
       [
         item.scope,
-        item.furnishedBy,
-        item.installedBy,
+        responsibilityPartyCell(item.furnishedBy),
+        responsibilityPartyCell(item.installedBy),
         item.neededBy,
         for (final room in roomNames)
           formatResponsibilityQty(item.qtyByRoom[room.id] ?? 0),
@@ -419,8 +460,10 @@ List<ReportSection> responsibilityMatrixSections(
         for (final item in open)
           [
             item.scope,
-            item.furnishedBy.isEmpty ? 'NOT AGREED' : item.furnishedBy,
-            item.installedBy.isEmpty ? 'NOT AGREED' : item.installedBy,
+            responsibilityPartyCell(item.furnishedBy,
+                missingLabel: 'NOT AGREED'),
+            responsibilityPartyCell(item.installedBy,
+                missingLabel: 'NOT AGREED'),
           ],
       ],
     ));

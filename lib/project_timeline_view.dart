@@ -1620,3 +1620,350 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+//  ONE ANSWER, MANY PARTS
+// ---------------------------------------------------------------------------
+
+/// Sets one lead time - and one on-site date, and one phase - across a whole
+/// selection of parts.
+///
+/// WHY THIS EXISTS. A lead time is learned one phone call at a time and it is
+/// almost never learned about one PART: the answer that comes back is "six to
+/// eight weeks on anything of ours", for a vendor with nineteen lines on the
+/// job. Typed one row at a time that is nineteen dialogs, and what actually
+/// happened is that the first three got the figure and the rest stayed blank -
+/// which reads on the timeline as sixteen parts nobody has to think about.
+///
+/// EVERY FIELD IS OPTIONAL, AND UNTOUCHED MEANS UNTOUCHED. A bulk edit that
+/// wrote all three fields whether or not they were filled in would quietly
+/// wipe the early on-site date somebody set on the two screens in the
+/// selection, and there is nothing on the screen afterwards that would say so.
+Future<void> showBulkPartScheduleDialog(
+  BuildContext context,
+  AppStateProvider provider,
+  List<MasterPartLine> lines, {
+  /// What the selection IS, when it is a group rather than a hand-picked set -
+  /// 'Extron', 'Parts with no lead time'. Shown so the dialog says what it is
+  /// about to change rather than only how many.
+  String scopeLabel = '',
+}) async {
+  if (lines.isEmpty) return;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _BulkPartScheduleDialog(
+      provider: provider,
+      lines: lines,
+      scopeLabel: scopeLabel,
+    ),
+  );
+}
+
+class _BulkPartScheduleDialog extends StatefulWidget {
+  final AppStateProvider provider;
+  final List<MasterPartLine> lines;
+  final String scopeLabel;
+
+  const _BulkPartScheduleDialog({
+    required this.provider,
+    required this.lines,
+    required this.scopeLabel,
+  });
+
+  @override
+  State<_BulkPartScheduleDialog> createState() =>
+      _BulkPartScheduleDialogState();
+}
+
+class _BulkPartScheduleDialogState extends State<_BulkPartScheduleDialog> {
+  /// Which of the three fields this edit is about.
+  ///
+  /// The lead time is on, because it is what somebody opened this for. The
+  /// other two are off: they are the fields a bulk edit can do real damage
+  /// with, and each one has to be asked for.
+  bool _setLead = true;
+  bool _setNeedBy = false;
+  bool _setTrack = false;
+
+  final TextEditingController _days = TextEditingController();
+  DateTime? _needBy;
+  String _trackId = '';
+
+  @override
+  void dispose() {
+    _days.dispose();
+    super.dispose();
+  }
+
+  /// True when at least one field is armed - what Apply is gated on.
+  bool get _anything => _setLead || _setNeedBy || _setTrack;
+
+  int get _count => widget.lines.length;
+
+  void _apply() {
+    final text = _days.text.trim();
+    // Blank means "nobody has asked the vendor yet", exactly as it does on the
+    // single-part dialog: it puts them back on the unscheduled list rather
+    // than pretending they are in stock.
+    final days = text.isEmpty ? null : int.tryParse(text);
+
+    for (final line in widget.lines) {
+      // The part's DESCRIPTION goes into each history entry, so the trail
+      // still reads correctly after the part is renamed or drops off the job.
+      final name = line.description;
+      if (_setLead) {
+        widget.provider.setProjectPartLeadTime(line.key, days, partName: name);
+      }
+      if (_setNeedBy) {
+        widget.provider.setProjectPartNeedBy(line.key, _needBy, partName: name);
+      }
+      if (_setTrack) {
+        widget.provider.setProjectPartTrack(line.key, _trackId, partName: name);
+      }
+    }
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final project = widget.provider.project;
+    final track = _setTrack ? project.trackById(_trackId) : null;
+    final deadline = track?.deadline ?? project.deliveryDeadline;
+    final typed = int.tryParse(_days.text.trim());
+    final effectiveNeed = (_setNeedBy ? _needBy : null) ?? deadline;
+    final preview = (_setLead && typed != null && effectiveNeed != null)
+        ? addDays(effectiveNeed, -typed)
+        : null;
+    final plural = _count == 1 ? '' : 's';
+
+    /// One armed field: the box that turns it on, and the control it turns on.
+    ///
+    /// Greyed rather than hidden, so the dialog does not resize itself under
+    /// the pointer every time a box is ticked - and so somebody can see what
+    /// the other two fields WOULD do before deciding to use them.
+    Widget field({
+      required String label,
+      required bool on,
+      required ValueChanged<bool> onChanged,
+      required Widget child,
+      Key? boxKey,
+    }) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Checkbox(
+              key: boxKey,
+              value: on,
+              onChanged: (v) => setState(() => onChanged(v ?? false)),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: theme.textTheme.labelMedium),
+                const SizedBox(height: 4),
+                IgnorePointer(
+                  ignoring: !on,
+                  child: Opacity(opacity: on ? 1 : 0.45, child: child),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return AlertDialog(
+      key: const ValueKey('bulk_part_schedule_dialog'),
+      title: Text('Lead time for $_count part$plural'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // WHAT IS ABOUT TO CHANGE, NAMED. A bulk edit whose scope is
+              // only a count is one nobody can check before pressing it, and
+              // this one writes to every part on the list at once.
+              if (widget.scopeLabel.trim().isNotEmpty)
+                Text(
+                  widget.scopeLabel.trim(),
+                  key: const ValueKey('bulk_scope_label'),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                _named,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              field(
+                label: 'Lead time (calendar days)',
+                on: _setLead,
+                boxKey: const ValueKey('bulk_lead_on'),
+                onChanged: (v) => _setLead = v,
+                child: TextField(
+                  key: const ValueKey('bulk_lead_days'),
+                  controller: _days,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    hintText: 'blank puts them all back to "not asked"',
+                    helperText: '0 means on the shelf. 42 is six weeks.',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              field(
+                label: 'Has to be on site by',
+                on: _setNeedBy,
+                boxKey: const ValueKey('bulk_needby_on'),
+                onChanged: (v) => _setNeedBy = v,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('bulk_need_by'),
+                        icon: const Icon(Icons.event, size: 18),
+                        label: Text(
+                          _needBy != null
+                              ? formatScheduleDate(_needBy!)
+                              : 'Back to the job deadline',
+                        ),
+                        onPressed: () async {
+                          final picked = await showProjectDatePicker(
+                            context,
+                            initial: _needBy ?? deadline,
+                            title: 'On site by',
+                          );
+                          if (picked == null) return;
+                          setState(() => _needBy = picked.date);
+                        },
+                      ),
+                    ),
+                    if (_needBy != null)
+                      TextButton(
+                        key: const ValueKey('bulk_need_by_clear'),
+                        onPressed: () => setState(() => _needBy = null),
+                        child: const Text('Use the deadline'),
+                      ),
+                  ],
+                ),
+              ),
+              if (project.tracks.isNotEmpty)
+                field(
+                  label: 'Delivered in',
+                  on: _setTrack,
+                  boxKey: const ValueKey('bulk_track_on'),
+                  onChanged: (v) => _setTrack = v,
+                  child: DropdownButtonFormField<String>(
+                    key: const ValueKey('bulk_track'),
+                    initialValue: _trackId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text('With the job'),
+                      ),
+                      for (final t in project.tracks)
+                        DropdownMenuItem(
+                          value: t.id,
+                          child: Text(
+                            t.deadline == null
+                                ? t.name
+                                : '${t.name} - '
+                                      '${formatScheduleDate(t.deadline!)}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => setState(() => _trackId = v ?? ''),
+                  ),
+                ),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      preview == null
+                          ? 'Order by - needs a lead time and a delivery date.'
+                          : 'Ordered by ${formatScheduleDate(preview)}'
+                                '  ·  '
+                                '${formatDayGap(daysBetween(today(), preview))}',
+                      key: const ValueKey('bulk_order_preview'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: preview == null ? null : FontWeight.w600,
+                        color: preview == null
+                            ? theme.colorScheme.onSurfaceVariant
+                            : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // The parts carrying their OWN on-site date do not land on that
+              // date, and saying so here is cheaper than somebody finding it
+              // out from the timeline afterwards.
+              if (!_setNeedBy)
+                Text(
+                  'Parts that carry their own on-site date keep it, so those '
+                  'order earlier than the date above.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('bulk_part_schedule_save'),
+          onPressed: _anything ? _apply : null,
+          child: Text('Apply to $_count part$plural'),
+        ),
+      ],
+    );
+  }
+
+  /// The first few by name, then a count.
+  ///
+  /// NAMED RATHER THAN COUNTED. "19 parts" is a number somebody has to trust;
+  /// four names and "and 15 more" is a selection they can recognise as the one
+  /// they meant to make.
+  String get _named {
+    const shown = 4;
+    final names = widget.lines.take(shown).map((l) => l.description).join(', ');
+    if (_count <= shown) return names;
+    return '$names, and ${_count - shown} more';
+  }
+}

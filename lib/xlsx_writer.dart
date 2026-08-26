@@ -29,6 +29,11 @@ import 'package:archive/archive.dart';
 ///
 ///  One PNG image per sheet can be anchored to a cell ([XlsxImage]) — used to
 ///  drop the schematic diagram into the report.
+///
+///  A sheet can also carry native Excel charts ([XlsxChart]), bound to the
+///  cells printed under them rather than drawn as a picture: a refresh plan is
+///  argued with by dragging a figure, and a chart that does not move when the
+///  figure does is a chart that gets ignored.
 /// ============================================================================
 
 /// Style ids usable in [XlsxSheet.rowStyles] (indexes into cellXfs).
@@ -65,6 +70,40 @@ class XlsxMoney {
   String toString() => text;
 }
 
+/// A cell whose FILL says whose it is.
+///
+/// The responsibility matrix is read by WHOSE NAME IS ON THE LINE, and on
+/// screen every party carries its own colour so the contractor's rows can be
+/// told from the owner's without reading a cell. Exported, that document was
+/// black text on white and the reader was back to reading every line.
+///
+/// The colour is passed in already resolved rather than derived here: the app
+/// has one place that decides what a name reads in - see `name_colors.dart` -
+/// and a spreadsheet that picked its own hues would be a second answer to the
+/// same question, disagreeing with the screen and with the picture export.
+///
+/// [text] is what the cell says, and what a plain-text report prints, so a
+/// tinted cell degrades to exactly the string it replaced.
+class XlsxTint {
+  final String text;
+
+  /// The wash behind the text, 'RRGGBB'.
+  final String fillHex;
+
+  /// The ink on top of it, 'RRGGBB', already chosen to be legible on [fillHex].
+  final String inkHex;
+
+  const XlsxTint({
+    required this.text,
+    required this.fillHex,
+    required this.inkHex,
+  });
+
+  /// What sorts the column widths, and what a text report prints.
+  @override
+  String toString() => text;
+}
+
 /// A PNG image anchored with its top-left corner at (anchorCol, anchorRow),
 /// displayed at widthPx x heightPx (96-dpi pixels).
 class XlsxImage {
@@ -92,6 +131,84 @@ class XlsxImage {
     final data = ByteData.sublistView(png);
     return (data.getUint32(16), data.getUint32(20));
   }
+}
+
+/// One bar on a chart: a column of numbers already written on the sheet.
+///
+/// The chart never carries its own copy of the figures. It points at the cells
+/// the reader can see, so changing one in Excel redraws the bar — a chart whose
+/// numbers were stored separately from the table under it is a chart that goes
+/// out of date the first time somebody edits the sheet.
+class XlsxChartSeries {
+  /// What the legend calls it.
+  final String name;
+
+  /// 0-based column on the same sheet holding this series' values.
+  final int column;
+
+  /// 'RRGGBB'. Explicit rather than left to the theme: this writer produces no
+  /// theme part, and a series with no colour of its own comes out black.
+  final String colorHex;
+
+  const XlsxChartSeries({
+    required this.name,
+    required this.column,
+    required this.colorHex,
+  });
+}
+
+/// A bar chart over a block of cells on the sheet it sits on.
+///
+/// WHY A REAL CHART AND NOT A PICTURE OF ONE. A budget meeting argues with the
+/// shape of the spike — it drags a year, drops a building, and asks what the
+/// bar does. A PNG pasted into a sheet cannot answer that; a chart bound to the
+/// cells can, and it re-scales itself when somebody widens it to fit a slide.
+class XlsxChart {
+  /// The heading over the plot.
+  final String title;
+
+  /// 0-based column holding the category labels — the years.
+  final int categoryColumn;
+
+  /// The data rows, 0-based and INCLUSIVE. The header row is not one of them.
+  final int firstRow;
+  final int lastRow;
+
+  final List<XlsxChartSeries> series;
+
+  /// True to stack the series on one bar per year rather than clustering them
+  /// side by side. What makes a campus chart answer "which building is driving
+  /// that year" instead of just "which year is worst".
+  final bool stacked;
+
+  /// The value axis' number format, e.g. `"$"#,##0`.
+  final String numberFormat;
+
+  /// What the axes are called. Null leaves the axis unlabelled.
+  final String? valueAxisTitle;
+  final String? categoryAxisTitle;
+
+  /// Where it sits, and how big it is drawn (96-dpi pixels).
+  final int anchorCol;
+  final int anchorRow;
+  final int widthPx;
+  final int heightPx;
+
+  const XlsxChart({
+    required this.title,
+    required this.categoryColumn,
+    required this.firstRow,
+    required this.lastRow,
+    required this.series,
+    this.stacked = false,
+    this.numberFormat = '#,##0',
+    this.valueAxisTitle,
+    this.categoryAxisTitle,
+    this.anchorCol = 0,
+    this.anchorRow = 0,
+    this.widthPx = 900,
+    this.heightPx = 420,
+  });
 }
 
 class XlsxSheet {
@@ -124,6 +241,9 @@ class XlsxSheet {
   /// Optional embedded PNG (e.g. the schematic diagram).
   final XlsxImage? image;
 
+  /// Charts drawn from this sheet's own cells. Empty on a sheet of tables.
+  final List<XlsxChart> charts;
+
   XlsxSheet({
     required this.name,
     required this.rows,
@@ -132,6 +252,7 @@ class XlsxSheet {
     this.overflowRows = const {},
     this.merges = const [],
     this.image,
+    this.charts = const [],
   });
 }
 
@@ -147,6 +268,21 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
 
   final bool anyImage = sheets.any((s) => s.image != null);
 
+  /// The name each sheet ends up carrying in the book, settled once.
+  ///
+  /// Settled HERE rather than where workbook.xml is written, because a chart's
+  /// cell references name the sheet they read — and a reference to a name the
+  /// workbook clipped differently is a chart Excel opens empty.
+  final sheetNames = <String>[
+    for (int i = 0; i < sheets.length; i++)
+      () {
+        // Excel sheet names: max 31 chars, no : \ / ? * [ ]
+        final safe = sheets[i].name.replaceAll(RegExp(r'[:\\/?*\[\]]'), ' ').trim();
+        final clipped = safe.length > 31 ? safe.substring(0, 31) : safe;
+        return clipped.isEmpty ? 'Sheet${i + 1}' : clipped;
+      }(),
+  ];
+
   // --- [Content_Types].xml ---
   final contentTypes = StringBuffer()
     ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -160,13 +296,22 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
       '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>');
   int drawingCount = 0;
+  int chartCount = 0;
   for (int i = 1; i <= sheets.length; i++) {
     contentTypes.write(
         '<Override PartName="/xl/worksheets/sheet$i.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>');
-    if (sheets[i - 1].image != null) {
+    final sheet = sheets[i - 1];
+    // One drawing part per sheet that has anything to draw — a picture, a
+    // chart, or both on the same page.
+    if (sheet.image != null || sheet.charts.isNotEmpty) {
       drawingCount++;
       contentTypes.write(
           '<Override PartName="/xl/drawings/drawing$drawingCount.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>');
+    }
+    for (var c = 0; c < sheet.charts.length; c++) {
+      chartCount++;
+      contentTypes.write(
+          '<Override PartName="/xl/charts/chart$chartCount.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>');
     }
   }
   contentTypes.write('</Types>');
@@ -182,12 +327,8 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
   // --- xl/workbook.xml ---
   final sheetTags = StringBuffer();
   for (int i = 0; i < sheets.length; i++) {
-    // Excel sheet names: max 31 chars, no : \ / ? * [ ]
-    final safeName =
-        sheets[i].name.replaceAll(RegExp(r'[:\\/?*\[\]]'), ' ').trim();
-    final clipped = safeName.length > 31 ? safeName.substring(0, 31) : safeName;
     sheetTags.write(
-        '<sheet name="${esc(clipped.isEmpty ? 'Sheet${i + 1}' : clipped)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>');
+        '<sheet name="${esc(sheetNames[i])}" sheetId="${i + 1}" r:id="rId${i + 1}"/>');
   }
   archive.add(ArchiveFile.string('xl/workbook.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -266,7 +407,43 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       value != null &&
       value is! num &&
       value is! XlsxMoney &&
+      value is! XlsxTint &&
       value.toString().contains('\n');
+
+  // --- the party and vendor colours ---
+  // One font and one fill per distinct pair in the book, so a name that
+  // appears on nine rows and two sheets costs one style rather than eleven.
+  final tints = <String>[];
+  String tintKey(XlsxTint t) => '${t.fillHex}|${t.inkHex}';
+  for (final sheet in sheets) {
+    for (final row in sheet.rows) {
+      for (final value in row) {
+        if (value is XlsxTint && !tints.contains(tintKey(value))) {
+          tints.add(tintKey(value));
+        }
+      }
+    }
+  }
+  final int firstTintStyle = firstWrapStyle + 5;
+
+  /// The cellXfs index for a tinted cell. Its own fill IS the point, so it
+  /// ignores the row's banding rather than being washed over by it.
+  int tintStyle(XlsxTint t) => firstTintStyle + tints.indexOf(tintKey(t));
+
+  final tintFonts = StringBuffer();
+  final tintFills = StringBuffer();
+  final tintXfs = StringBuffer();
+  for (final key in tints) {
+    final parts = key.split('|');
+    tintFills.write('<fill><patternFill patternType="solid">'
+        '<fgColor rgb="FF${parts[0]}"/><bgColor indexed="64"/>'
+        '</patternFill></fill>');
+    tintFonts.write('<font><sz val="11"/><color rgb="FF${parts[1]}"/>'
+        '<name val="Calibri"/></font>');
+    tintXfs.write(
+        '<xf fontId="${3 + tints.indexOf(key)}" fillId="${5 + tints.indexOf(key)}" '
+        'applyFont="1" applyFill="1" xfId="0"/>');
+  }
 
   /// The five wrapped variants: the same fonts and fills as [XlsxRowStyle],
   /// plus top-aligned wrapText so a two-line cell sits against the top of its
@@ -280,7 +457,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '<xf fontId="1" fillId="3" applyFont="1" applyFill="1" applyAlignment="1" xfId="0">$wrapAlign</xf>'
       '<xf fillId="4" applyFill="1" applyAlignment="1" xfId="0">$wrapAlign</xf>';
 
-  final int cellXfCount = firstWrapStyle + 5;
+  final int cellXfCount = firstTintStyle + tints.length;
 
   // --- xl/styles.xml ---
   // fonts:  0 normal, 1 bold, 2 bold white
@@ -291,17 +468,19 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
       '$numFmts'
-      '<fonts count="3">'
+      '<fonts count="${3 + tints.length}">'
       '<font><sz val="11"/><name val="Calibri"/></font>'
       '<font><b/><sz val="11"/><name val="Calibri"/></font>'
       '<font><b/><sz val="12"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>'
+      '$tintFonts'
       '</fonts>'
-      '<fills count="5">'
+      '<fills count="${5 + tints.length}">'
       '<fill><patternFill patternType="none"/></fill>'
       '<fill><patternFill patternType="gray125"/></fill>'
       '<fill><patternFill patternType="solid"><fgColor rgb="FF1F4E79"/><bgColor indexed="64"/></patternFill></fill>'
       '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/><bgColor indexed="64"/></patternFill></fill>'
       '<fill><patternFill patternType="solid"><fgColor rgb="FFEFEFEF"/><bgColor indexed="64"/></patternFill></fill>'
+      '$tintFills'
       '</fills>'
       '<borders count="1"><border/></borders>'
       '<cellStyleXfs count="1"><xf/></cellStyleXfs>'
@@ -313,6 +492,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
       '<xf fillId="4" applyFill="1" xfId="0"/>'
       '$moneyXfs'
       '$wrapXfs'
+      '$tintXfs'
       '</cellXfs>'
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
       '</styleSheet>'));
@@ -350,7 +530,165 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     );
   }
 
+  // -------------------------------------------------------------------------
+  //  CHARTS
+  // -------------------------------------------------------------------------
+
+  /// An A1 reference to a column of cells on [sheetName], for a chart to read.
+  ///
+  /// The sheet name is quoted whether or not it needs to be: "Refresh by Year"
+  /// has a space in it, and an unquoted reference to it is a chart Excel
+  /// reports as broken.
+  String cellRange(String sheetName, int col, int firstRow, int lastRow) {
+    final quoted = sheetName.replaceAll("'", "''");
+    final letter = colLetter(col);
+    return esc(
+        "'$quoted'!\$$letter\$${firstRow + 1}:\$$letter\$${lastRow + 1}");
+  }
+
+  /// The chart part: a bar per year, bound to the cells under it.
+  String chartXml(XlsxSheet sheet, String sheetName, XlsxChart chart) {
+    /// One cell as a number, or null when it is blank or text.
+    double? numberAt(int row, int col) {
+      if (row < 0 || row >= sheet.rows.length) return null;
+      final cells = sheet.rows[row];
+      if (col < 0 || col >= cells.length) return null;
+      final value = cells[col];
+      if (value is XlsxMoney) return value.value;
+      if (value is num) return value.toDouble();
+      return null;
+    }
+
+    String textAt(int row, int col) {
+      if (row < 0 || row >= sheet.rows.length) return '';
+      final cells = sheet.rows[row];
+      if (col < 0 || col >= cells.length) return '';
+      return cells[col]?.toString() ?? '';
+    }
+
+    final rows = [
+      for (var r = chart.firstRow; r <= chart.lastRow; r++) r,
+    ];
+
+    // THE FIGURES TRAVEL WITH THE CHART AS WELL AS BEING POINTED AT.
+    //
+    // Excel recalculates a chart from its references the moment the file
+    // opens, so the cache is redundant there. Everything else that reads an
+    // .xlsx — a preview pane, a viewer on a phone, the thing that turns it
+    // into a PDF for the packet — draws the cache and nothing else, and a
+    // chart that is blank everywhere except in Excel is a chart nobody trusts.
+    String numCache(String formatCode, List<double?> values) {
+      final buffer = StringBuffer()
+        ..write('<c:numCache><c:formatCode>${esc(formatCode)}</c:formatCode>'
+            '<c:ptCount val="${values.length}"/>');
+      for (var i = 0; i < values.length; i++) {
+        final v = values[i];
+        if (v != null) buffer.write('<c:pt idx="$i"><c:v>$v</c:v></c:pt>');
+      }
+      return (buffer..write('</c:numCache>')).toString();
+    }
+
+    // The years. Numbers when they are numbers — which keeps the axis labels
+    // as "2031" rather than as a string Excel right-aligns oddly.
+    final catNumbers = [for (final r in rows) numberAt(r, chart.categoryColumn)];
+    final catRef = cellRange(
+        sheetName, chart.categoryColumn, chart.firstRow, chart.lastRow);
+    final String cat;
+    if (catNumbers.every((v) => v != null)) {
+      cat = '<c:numRef><c:f>$catRef</c:f>'
+          '${numCache('General', catNumbers)}</c:numRef>';
+    } else {
+      final buffer = StringBuffer()
+        ..write('<c:strRef><c:f>$catRef</c:f><c:strCache>'
+            '<c:ptCount val="${rows.length}"/>');
+      for (var i = 0; i < rows.length; i++) {
+        buffer.write(
+            '<c:pt idx="$i"><c:v>${esc(textAt(rows[i], chart.categoryColumn))}'
+            '</c:v></c:pt>');
+      }
+      cat = (buffer..write('</c:strCache></c:strRef>')).toString();
+    }
+
+    final series = StringBuffer();
+    for (var s = 0; s < chart.series.length; s++) {
+      final spec = chart.series[s];
+      final values = [for (final r in rows) numberAt(r, spec.column)];
+      series.write(
+          '<c:ser><c:idx val="$s"/><c:order val="$s"/>'
+          '<c:tx><c:v>${esc(spec.name)}</c:v></c:tx>'
+          '<c:spPr><a:solidFill><a:srgbClr val="${spec.colorHex}"/></a:solidFill>'
+          '<a:ln><a:noFill/></a:ln></c:spPr>'
+          '<c:invertIfNegative val="0"/>'
+          '<c:cat>$cat</c:cat>'
+          '<c:val><c:numRef><c:f>'
+          '${cellRange(sheetName, spec.column, chart.firstRow, chart.lastRow)}'
+          '</c:f>${numCache(chart.numberFormat, values)}</c:numRef></c:val>'
+          '</c:ser>');
+    }
+
+    /// An axis label, laid on its side on the value axis.
+    String axisTitle(String? text, {required bool rotated}) => text == null
+        ? ''
+        : '<c:title><c:tx><c:rich>'
+            '<a:bodyPr${rotated ? ' rot="-5400000" vert="horz"' : ''}/>'
+            '<a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900"/>'
+            '<a:t>${esc(text)}</a:t></a:r></a:p>'
+            '</c:rich></c:tx><c:overlay val="0"/></c:title>';
+
+    const catAxId = 411000001;
+    const valAxId = 411000002;
+
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<c:chartSpace '
+        'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<c:chart>'
+        '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>'
+        '<a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr>'
+        '<a:r><a:rPr lang="en-US" sz="1200" b="1"/>'
+        '<a:t>${esc(chart.title)}</a:t></a:r></a:p>'
+        '</c:rich></c:tx><c:overlay val="0"/></c:title>'
+        '<c:autoTitleDeleted val="0"/>'
+        '<c:plotArea><c:layout/>'
+        '<c:barChart><c:barDir val="col"/>'
+        '<c:grouping val="${chart.stacked ? 'stacked' : 'clustered'}"/>'
+        '<c:varyColors val="0"/>'
+        '$series'
+        '<c:gapWidth val="${chart.stacked ? 40 : 60}"/>'
+        '<c:overlap val="${chart.stacked ? 100 : -20}"/>'
+        '<c:axId val="$catAxId"/><c:axId val="$valAxId"/>'
+        '</c:barChart>'
+        '<c:catAx><c:axId val="$catAxId"/>'
+        '<c:scaling><c:orientation val="minMax"/></c:scaling>'
+        '<c:delete val="0"/><c:axPos val="b"/>'
+        '${axisTitle(chart.categoryAxisTitle, rotated: false)}'
+        '<c:numFmt formatCode="General" sourceLinked="0"/>'
+        '<c:majorTickMark val="none"/><c:minorTickMark val="none"/>'
+        '<c:tickLblPos val="nextTo"/>'
+        '<c:crossAx val="$valAxId"/><c:crosses val="autoZero"/>'
+        '<c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/>'
+        '<c:noMultiLvlLbl val="0"/></c:catAx>'
+        '<c:valAx><c:axId val="$valAxId"/>'
+        '<c:scaling><c:orientation val="minMax"/></c:scaling>'
+        '<c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/>'
+        '${axisTitle(chart.valueAxisTitle, rotated: true)}'
+        '<c:numFmt formatCode="${esc(chart.numberFormat)}" sourceLinked="0"/>'
+        '<c:majorTickMark val="none"/><c:minorTickMark val="none"/>'
+        '<c:tickLblPos val="nextTo"/>'
+        '<c:crossAx val="$catAxId"/><c:crosses val="autoZero"/>'
+        '<c:crossBetween val="between"/></c:valAx>'
+        '</c:plotArea>'
+        // One series needs no legend: the title already says what the bars
+        // are, and a key naming the only thing on the chart is furniture.
+        '${chart.series.length > 1 ? '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>' : ''}'
+        '<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>'
+        '</c:chart>'
+        '</c:chartSpace>';
+  }
+
   int drawingIndex = 0;
+  int chartPart = 0;
   for (int i = 0; i < sheets.length; i++) {
     final sheet = sheets[i];
     final body = StringBuffer();
@@ -440,7 +778,12 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
           continue;
         }
         if (value == null) continue;
-        if (value is XlsxMoney) {
+        if (value is XlsxTint) {
+          // Its own fill and its own ink, whatever band the row is in.
+          body.write(
+              '<c r="$ref" s="${tintStyle(value)}" t="inlineStr">'
+              '<is><t xml:space="preserve">${esc(value.text)}</t></is></c>');
+        } else if (value is XlsxMoney) {
           // Its own style id: the row's banding plus the currency format.
           body.write(
               '<c r="$ref" s="${moneyStyle(value.symbol, style)}"><v>${value.value}</v></c>');
@@ -467,39 +810,89 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     }
 
     String drawingTag = '';
-    if (sheet.image != null) {
+    if (sheet.image != null || sheet.charts.isNotEmpty) {
       drawingIndex++;
-      final img = sheet.image!;
-      final cx = img.widthPx * 9525; // px -> EMU
-      final cy = img.heightPx * 9525;
+      // One drawing part holds everything on the page. The picture, when there
+      // is one, keeps rId1 so a book written before charts existed lays out
+      // byte for byte the way it always did.
+      final anchors = StringBuffer();
+      final drawingRels = StringBuffer();
+      var relId = 0;
+      var shapeId = 0;
 
-      archive.add(ArchiveFile('xl/media/image$drawingIndex.png',
-          img.pngBytes.length, img.pngBytes));
+      if (sheet.image != null) {
+        final img = sheet.image!;
+        final cx = img.widthPx * 9525; // px -> EMU
+        final cy = img.heightPx * 9525;
+        relId++;
+        shapeId++;
+
+        archive.add(ArchiveFile('xl/media/image$drawingIndex.png',
+            img.pngBytes.length, img.pngBytes));
+
+        anchors.write(
+            '<xdr:oneCellAnchor>'
+            '<xdr:from><xdr:col>${img.anchorCol}</xdr:col><xdr:colOff>0</xdr:colOff>'
+            '<xdr:row>${img.anchorRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
+            '<xdr:ext cx="$cx" cy="$cy"/>'
+            '<xdr:pic>'
+            '<xdr:nvPicPr><xdr:cNvPr id="$shapeId" name="Schematic"/><xdr:cNvPicPr/></xdr:nvPicPr>'
+            '<xdr:blipFill><a:blip r:embed="rId$relId"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
+            '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="$cx" cy="$cy"/></a:xfrm>'
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>'
+            '</xdr:pic>'
+            '<xdr:clientData/>'
+            '</xdr:oneCellAnchor>');
+        drawingRels.write(
+            '<Relationship Id="rId$relId" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image$drawingIndex.png"/>');
+      }
+
+      for (final chart in sheet.charts) {
+        chartPart++;
+        relId++;
+        shapeId++;
+        final cx = chart.widthPx * 9525;
+        final cy = chart.heightPx * 9525;
+
+        archive.add(ArchiveFile.string('xl/charts/chart$chartPart.xml',
+            chartXml(sheet, sheetNames[i], chart)));
+
+        anchors.write(
+            '<xdr:oneCellAnchor>'
+            '<xdr:from><xdr:col>${chart.anchorCol}</xdr:col><xdr:colOff>0</xdr:colOff>'
+            '<xdr:row>${chart.anchorRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
+            '<xdr:ext cx="$cx" cy="$cy"/>'
+            '<xdr:graphicFrame macro="">'
+            '<xdr:nvGraphicFramePr>'
+            '<xdr:cNvPr id="$shapeId" name="Chart $chartPart"/>'
+            '<xdr:cNvGraphicFramePr/>'
+            '</xdr:nvGraphicFramePr>'
+            '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="$cx" cy="$cy"/></xdr:xfrm>'
+            '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">'
+            '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'r:id="rId$relId"/>'
+            '</a:graphicData></a:graphic>'
+            '</xdr:graphicFrame>'
+            '<xdr:clientData/>'
+            '</xdr:oneCellAnchor>');
+        drawingRels.write(
+            '<Relationship Id="rId$relId" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart$chartPart.xml"/>');
+      }
 
       archive.add(ArchiveFile.string('xl/drawings/drawing$drawingIndex.xml',
           '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
           '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" '
           'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
           'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-          '<xdr:oneCellAnchor>'
-          '<xdr:from><xdr:col>${img.anchorCol}</xdr:col><xdr:colOff>0</xdr:colOff>'
-          '<xdr:row>${img.anchorRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
-          '<xdr:ext cx="$cx" cy="$cy"/>'
-          '<xdr:pic>'
-          '<xdr:nvPicPr><xdr:cNvPr id="1" name="Schematic"/><xdr:cNvPicPr/></xdr:nvPicPr>'
-          '<xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
-          '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="$cx" cy="$cy"/></a:xfrm>'
-          '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>'
-          '</xdr:pic>'
-          '<xdr:clientData/>'
-          '</xdr:oneCellAnchor>'
+          '$anchors'
           '</xdr:wsDr>'));
 
       archive.add(ArchiveFile.string(
           'xl/drawings/_rels/drawing$drawingIndex.xml.rels',
           '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image$drawingIndex.png"/>'
+          '$drawingRels'
           '</Relationships>'));
 
       archive.add(ArchiveFile.string('xl/worksheets/_rels/sheet${i + 1}.xml.rels',

@@ -17,6 +17,7 @@ import 'contrast.dart';
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'name_colors.dart';
+import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
 import 'project_briefing_dialog.dart';
 import 'project_estimate.dart';
@@ -357,6 +358,54 @@ class _ProjectViewState extends State<ProjectView> {
 
   String _search = '';
 
+  // -------------------------------------------------------------------------
+  //  HOW THE PARTS LIST IS BEING READ
+  // -------------------------------------------------------------------------
+  //  Both of these are ways of LOOKING at the master list rather than facts
+  //  about the job, so both live here and neither is written to the file. A
+  //  project that reopened sorted by price, with four rows still ticked from
+  //  last Tuesday, would be handing the next reader a different document.
+
+  /// Which column the list is ordered by, and which way - see [PartSortKey].
+  PartSortKey _partSort = PartSortKey.natural;
+  bool _partSortAscending = true;
+
+  /// The parts ticked for a bulk edit, by [MasterPartLine.key].
+  final Set<String> _selectedParts = <String>{};
+
+  /// Sorts by the column that was pressed, or unsorts when it was already
+  /// pointing down - see [nextPartSort].
+  void _sortParts(PartSortKey pressed) => setState(() {
+    final next = nextPartSort(
+      current: _partSort,
+      ascending: _partSortAscending,
+      pressed: pressed,
+    );
+    _partSort = next.key;
+    _partSortAscending = next.ascending;
+  });
+
+  /// Ticks or unticks one part.
+  void _toggleSelectedPart(String key) => setState(() {
+    if (!_selectedParts.remove(key)) _selectedParts.add(key);
+  });
+
+  /// Ticks everything currently on screen, or clears it when it is all ticked.
+  ///
+  /// SCOPED TO WHAT IS SHOWING, deliberately. The filters above the list are
+  /// how somebody says "the Extron parts" or "the ones with no price", and a
+  /// Select all that reached past them into the other hundred and eighty rows
+  /// would be a bulk edit nobody could see the scope of.
+  void _selectShownParts(List<String> keys) => setState(() {
+    if (keys.every(_selectedParts.contains)) {
+      _selectedParts.removeAll(keys);
+    } else {
+      _selectedParts.addAll(keys);
+    }
+  });
+
+  void _clearSelectedParts() => setState(_selectedParts.clear);
+
   /// One controller for the whole tab, so the scrollbar has something to drag
   /// and switching panes can put the view back at the top — landing halfway
   /// down a different list is disorienting.
@@ -528,6 +577,13 @@ class _ProjectViewState extends State<ProjectView> {
               onVendorFilter: _setVendorFilter,
               onSpareRoom: (id) => setState(() => _spareRoom = id),
               onSearch: (s) => setState(() => _search = s),
+              sort: _partSort,
+              sortAscending: _partSortAscending,
+              onSort: _sortParts,
+              selected: _selectedParts,
+              onToggleSelected: _toggleSelectedPart,
+              onSelectShown: _selectShownParts,
+              onClearSelected: _clearSelectedParts,
             ),
             _ProjectPane.plans => plansSlivers(context, estimate),
             _ProjectPane.timeline => timelineSlivers(context, estimate),
@@ -2032,6 +2088,20 @@ List<Widget> partsSlivers(
   required ValueChanged<String> onSearch,
   String spareRoom = '',
   ValueChanged<String>? onSpareRoom,
+
+  /// Which column the list is ordered by, and which way. See [PartSortKey]:
+  /// the default is the grouped order the estimate built.
+  PartSortKey sort = PartSortKey.natural,
+  bool sortAscending = true,
+  ValueChanged<PartSortKey>? onSort,
+
+  /// The parts ticked for a bulk edit, by [MasterPartLine.key], and the three
+  /// ways that set changes. Null callbacks turn the tick boxes off entirely,
+  /// which is what a caller that has nowhere to keep a selection wants.
+  Set<String> selected = const {},
+  ValueChanged<String>? onToggleSelected,
+  ValueChanged<List<String>>? onSelectShown,
+  VoidCallback? onClearSelected,
 }) {
   final theme = Theme.of(context);
   final needle = search.trim().toLowerCase();
@@ -2120,7 +2190,7 @@ List<Widget> partsSlivers(
   // The master list is grouped so a vendor can read it; a spares list is read
   // to find the big asks, and a part with six spares on it has no business
   // sitting below one with a single spare because of what category it is in.
-  if (sparesOnly) {
+  if (sparesOnly && sort == PartSortKey.natural) {
     double spareOf(MasterPartLine l) =>
         room.isEmpty ? l.spareQty : (l.spareByRoom[room] ?? 0);
     lines.sort((a, b) {
@@ -2130,6 +2200,22 @@ List<Widget> partsSlivers(
           : a.description.toLowerCase().compareTo(b.description.toLowerCase());
     });
   }
+
+  // AND THEN WHATEVER COLUMN SOMEBODY PRESSED. Applied last so an explicit
+  // sort wins over both the grouped order and the spares list's own - a
+  // heading that did nothing on one filter would be a control that works
+  // sometimes, which is worse than one that is not there.
+  final shown = sortMasterParts(
+    lines,
+    key: sort,
+    ascending: sortAscending,
+    project: estimate.project,
+  );
+  final shownKeys = [for (final l in shown) l.key];
+  final selectedLines = [
+    for (final l in estimate.master)
+      if (selected.contains(l.key)) l,
+  ];
 
   // Built once for the whole list rather than per row — see [_PartRow].
   final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
@@ -2253,29 +2339,174 @@ List<Widget> partsSlivers(
         ),
       )
     else ...[
+      // WHAT IS TICKED, AND WHAT CAN BE DONE TO IT. Above the headings rather
+      // than floating over the list: it appears and disappears as rows are
+      // ticked, and a bar that pushed the list up and down under the pointer
+      // while somebody was ticking would make the next tick land on the wrong
+      // row.
+      if (onToggleSelected != null && selectedLines.isNotEmpty)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: _PartSelectionBar(
+              selected: selectedLines,
+              scopeLabel: _selectionScope(selectedLines),
+              onClear: onClearSelected ?? () {},
+            ),
+          ),
+        ),
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _PartsHeaderRow(theme: theme),
+          child: _PartsHeaderRow(
+            theme: theme,
+            sort: sort,
+            ascending: sortAscending,
+            onSort: onSort,
+            selectable: onToggleSelected != null,
+            // Three states, and the box says which: none of the shown rows are
+            // ticked, all of them are, or some are.
+            allShownSelected:
+                shownKeys.isNotEmpty && shownKeys.every(selected.contains),
+            someShownSelected: shownKeys.any(selected.contains),
+            onSelectShown: onSelectShown == null
+                ? null
+                : () => onSelectShown(shownKeys),
+          ),
         ),
       ),
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         sliver: SliverList.builder(
-          itemCount: lines.length,
+          itemCount: shown.length,
           itemBuilder: (context, index) => _PartRow(
-            line: lines[index],
+            line: shown[index],
             estimate: estimate,
             roomNames: roomNames,
             spareRoom: room,
             sparesOnly: sparesOnly,
-            installedUnspared: unspared[lines[index].key] ?? 0,
+            installedUnspared: unspared[shown[index].key] ?? 0,
             askingAboutSpares: vendorFilter == kNoSpareFilter,
+            selected: selected.contains(shown[index].key),
+            onSelect: onToggleSelected == null
+                ? null
+                : () => onToggleSelected(shown[index].key),
           ),
         ),
       ),
     ],
   ];
+}
+
+/// What the ticked rows ARE, in words, for the bar and the bulk dialog.
+///
+/// DERIVED FROM THE SELECTION, not from the filter that produced it. The usual
+/// way to select a vendor's parts is to press that vendor's chip and tick them
+/// all - but the selection outlives the chip, and a label that went on saying
+/// 'Extron' after somebody switched to Shure would be describing a scope that
+/// is no longer what is about to be edited.
+String _selectionScope(List<MasterPartLine> selected) {
+  final vendors = <String>{};
+  var untagged = 0;
+  for (final line in selected) {
+    final name = line.vendor?.name.trim() ?? '';
+    if (name.isEmpty) {
+      untagged++;
+    } else {
+      vendors.add(name);
+    }
+  }
+  if (vendors.length == 1 && untagged == 0) return vendors.single;
+  if (vendors.isEmpty && untagged > 0) return 'Not tagged to a vendor';
+  final bits = [
+    '${vendors.length} vendor${vendors.length == 1 ? '' : 's'}',
+    if (untagged > 0) '$untagged untagged',
+  ];
+  return bits.join('  ·  ');
+}
+
+/// The bar that appears once anything is ticked: what is selected, and the one
+/// thing worth doing to a handful of parts at once.
+///
+/// ONE ACTION, NOT A MENU OF THEM. Bulk-editing a master list is a loaded gun,
+/// and the lead time is the field that genuinely arrives in batches - a vendor
+/// quotes "six to eight weeks on anything of ours" for nineteen lines at once.
+/// Everything else on a part is a per-part decision and stays one.
+class _PartSelectionBar extends StatelessWidget {
+  final List<MasterPartLine> selected;
+  final String scopeLabel;
+  final VoidCallback onClear;
+
+  const _PartSelectionBar({
+    required this.selected,
+    required this.scopeLabel,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.read<AppStateProvider>();
+    final count = selected.length;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_box_outlined,
+            size: 18,
+            color: foregroundOn(
+              theme.colorScheme,
+              theme.colorScheme.secondaryContainer,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$count part${count == 1 ? '' : 's'} selected'
+              '${scopeLabel.isEmpty ? '' : '  ·  $scopeLabel'}',
+              key: const ValueKey('parts_selected_count'),
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: foregroundOn(
+                  theme.colorScheme,
+                  theme.colorScheme.secondaryContainer,
+                ),
+              ),
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('parts_selection_clear'),
+            onPressed: onClear,
+            child: const Text('Clear'),
+          ),
+          const SizedBox(width: 4),
+          FilledButton.icon(
+            key: const ValueKey('parts_selection_lead'),
+            icon: const Icon(Icons.schedule, size: 18),
+            label: const Text('Set lead time…'),
+            onPressed: () async {
+              await showBulkPartScheduleDialog(
+                context,
+                provider,
+                selected,
+                scopeLabel: scopeLabel,
+              );
+              // The selection survives the dialog on purpose: the usual next
+              // move after "six weeks on all of these" is "and they are all
+              // wanted for the second phase", and having to tick nineteen
+              // rows again is how the second edit does not get made.
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// The spares, isolated: what the job is buying for the shelf, what it costs,
@@ -2438,45 +2669,156 @@ class _SparesPanel extends StatelessWidget {
   }
 }
 
+/// The column headings, which are also how the list is sorted.
+///
+/// EVERY HEADING IS A BUTTON, including the ones that look like labels. A list
+/// where three of the seven columns sort is a list where somebody presses the
+/// other four and concludes that none of them do - see part_sort.dart for what
+/// a press cycles through.
 class _PartsHeaderRow extends StatelessWidget {
   final ThemeData theme;
-  const _PartsHeaderRow({required this.theme});
+  final PartSortKey sort;
+  final bool ascending;
+  final ValueChanged<PartSortKey>? onSort;
+
+  /// Whether the tick column is there at all.
+  final bool selectable;
+  final bool allShownSelected;
+  final bool someShownSelected;
+
+  /// Ticks every row currently on screen, or clears them.
+  final VoidCallback? onSelectShown;
+
+  const _PartsHeaderRow({
+    required this.theme,
+    this.sort = PartSortKey.natural,
+    this.ascending = true,
+    this.onSort,
+    this.selectable = false,
+    this.allShownSelected = false,
+    this.someShownSelected = false,
+    this.onSelectShown,
+  });
 
   @override
   Widget build(BuildContext context) {
-    Text label(String text, TextAlign align) => Text(
-      text,
-      textAlign: align,
-      style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
-    );
+    /// One heading, carrying the arrow when the list is ordered by it.
+    Widget label(String text, TextAlign align, PartSortKey key) {
+      final active = sort == key;
+      final style = theme.textTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: active ? theme.colorScheme.primary : null,
+      );
+      final arrow = Icon(
+        ascending ? Icons.arrow_upward : Icons.arrow_downward,
+        size: 12,
+        color: theme.colorScheme.primary,
+      );
+      // The arrow goes on the OUTSIDE of the column: left of a right-aligned
+      // heading, right of a left-aligned one, so it never sits between the
+      // heading and the figures it is about.
+      final content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (active && align == TextAlign.right) ...[
+            arrow,
+            const SizedBox(width: 2),
+          ],
+          Flexible(
+            child: Text(
+              text,
+              textAlign: align,
+              style: style,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (active && align != TextAlign.right) ...[
+            const SizedBox(width: 2),
+            arrow,
+          ],
+        ],
+      );
+      final aligned = Align(
+        alignment:
+            align == TextAlign.right ? Alignment.centerRight : Alignment.centerLeft,
+        child: content,
+      );
+      if (onSort == null) return aligned;
+      return InkWell(
+        key: ValueKey('parts_sort_${key.name}'),
+        borderRadius: BorderRadius.circular(4),
+        onTap: () => onSort!(key),
+        child: Tooltip(
+          message: !active
+              ? 'Sort by ${kPartSortLabels[key]}'
+              : ascending
+              ? 'Sorted by ${kPartSortLabels[key]}. Press again to reverse it.'
+              : 'Sorted by ${kPartSortLabels[key]}, largest first. Press again '
+                    'for the grouped order back.',
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: aligned,
+          ),
+        ),
+      );
+    }
 
-    Widget h(String text, int flex, {TextAlign align = TextAlign.left}) =>
-        Expanded(flex: flex, child: label(text, align));
+    Widget h(
+      String text,
+      int flex,
+      PartSortKey key, {
+      TextAlign align = TextAlign.left,
+    }) => Expanded(flex: flex, child: label(text, align, key));
 
-    Widget fixed(String text, double width) =>
-        SizedBox(width: width, child: label(text, TextAlign.right));
+    Widget fixed(String text, double width, PartSortKey key) =>
+        SizedBox(width: width, child: label(text, TextAlign.right, key));
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: Row(
         children: [
-          h('Part', 5),
-          h('Qty', 1, align: TextAlign.right),
-          h('Unit', 2, align: TextAlign.right),
-          h('Extended', 2, align: TextAlign.right),
+          if (selectable)
+            SizedBox(
+              width: kPartTickWidth,
+              child: Tooltip(
+                message: allShownSelected
+                    ? 'Clear the selection'
+                    : 'Select every part on this list - whatever the filters '
+                          'above have narrowed it to',
+                child: Checkbox(
+                  key: const ValueKey('parts_select_shown'),
+                  // Three states, and the box says which: none of the rows on
+                  // screen are ticked, all of them are, or some are.
+                  value: allShownSelected
+                      ? true
+                      : someShownSelected
+                      ? null
+                      : false,
+                  tristate: true,
+                  visualDensity: VisualDensity.compact,
+                  onChanged:
+                      onSelectShown == null ? null : (_) => onSelectShown!(),
+                ),
+              ),
+            ),
+          h('Part', 5, PartSortKey.part),
+          h('Qty', 1, PartSortKey.qty, align: TextAlign.right),
+          h('Unit', 2, PartSortKey.unit, align: TextAlign.right),
+          h('Extended', 2, PartSortKey.extended, align: TextAlign.right),
           // The gap the row has in front of its vendor cell. Without it every
           // heading from here rightwards sat eight pixels left of the column
           // it names.
           const SizedBox(width: 8),
-          h('Vendor', 3),
+          h('Vendor', 3, PartSortKey.vendor),
           // When it has to be bought, beside who buys it — the two halves of
           // placing one order, and the reason the lead time lives on this list
           // rather than on a screen of its own. Fixed widths rather than flex,
           // to line up with [_ScheduleCells], which cannot flex: a date is a
           // fixed amount of text and a column that shrinks below it would
           // ellipsize the one thing the column is for.
-          fixed('Lead time', 84),
+          fixed('Lead time', 84, PartSortKey.leadTime),
           const SizedBox(width: 8),
-          fixed('Order by', 132),
+          fixed('Order by', 132, PartSortKey.orderBy),
           const SizedBox(width: 40),
           const SizedBox(width: 40),
         ],
@@ -2484,6 +2826,11 @@ class _PartsHeaderRow extends StatelessWidget {
     );
   }
 }
+
+/// The tick column's width, shared by the heading and every row so the two
+/// line up. A row whose first column is two pixels off the heading's is a
+/// table that reads as broken however right the figures on it are.
+const double kPartTickWidth = 34;
 
 /// The room a part-level flag is really about: the FIRST of [ids] that is
 /// still on the job.
@@ -2540,6 +2887,12 @@ class _PartRow extends StatelessWidget {
   /// act on it.
   final bool askingAboutSpares;
 
+  /// True when this row is ticked for a bulk edit.
+  final bool selected;
+
+  /// Ticks or unticks it. Null turns the tick column off entirely.
+  final VoidCallback? onSelect;
+
   const _PartRow({
     required this.line,
     required this.estimate,
@@ -2548,6 +2901,8 @@ class _PartRow extends StatelessWidget {
     this.sparesOnly = false,
     this.installedUnspared = 0,
     this.askingAboutSpares = false,
+    this.selected = false,
+    this.onSelect,
   });
 
   @override
@@ -2620,9 +2975,29 @@ class _PartRow extends StatelessWidget {
       // Blended rather than laid over: a Card's fill is what its text was
       // measured against, and a translucent one would put the row's ink on
       // whatever happens to be behind the list.
-      color: tagged
-          ? Color.alphaBlend(tintFill(tint, alpha: 0.10), theme.cardColor)
-          : null,
+      // A TICKED ROW IS A DIFFERENT PAPER, not a different edge: the vendor
+      // colour already owns this row's border, and a selection drawn there
+      // would be competing with the thing the border is for.
+      //
+      // A WASH, at the same weight the vendor tint uses. Every colour inside
+      // this row is measured against [ThemeData.cardColor] - see the
+      // accentTextOn and errorTextOn calls below - and a selection that
+      // repainted the card in a container colour would carry that ink onto a
+      // background it was never checked against. Blended in the same order it
+      // is read: paper, then vendor, then selection.
+      color: () {
+        var paper = theme.cardColor;
+        if (tagged) {
+          paper = Color.alphaBlend(tintFill(tint, alpha: 0.10), paper);
+        }
+        if (selected) {
+          paper = Color.alphaBlend(
+            theme.colorScheme.primary.withValues(alpha: 0.12),
+            paper,
+          );
+        }
+        return tagged || selected ? paper : null;
+      }(),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -2637,6 +3012,24 @@ class _PartRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // THE TICK, ON EVERY ROW RATHER THAN BEHIND A MODE.
+            //
+            // A "select" mode that has to be turned on first is a feature
+            // nobody finds: the moment somebody wants it is the moment they
+            // are already looking at the four rows they want, and being sent
+            // to a toolbar to enable ticking loses that. It costs the row
+            // thirty-four pixels of a column that was already the widest on
+            // the list.
+            if (onSelect != null)
+              SizedBox(
+                width: kPartTickWidth,
+                child: Checkbox(
+                  key: ValueKey('part_select_${line.key}'),
+                  value: selected,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (_) => onSelect!(),
+                ),
+              ),
             Expanded(
               flex: 5,
               child: Column(

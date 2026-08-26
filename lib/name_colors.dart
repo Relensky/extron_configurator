@@ -141,6 +141,28 @@ Color nameTextColor(String name, Color background) =>
 Color nameFill(String name, {double alpha = 0.16}) =>
     tintForName(name).withValues(alpha: alpha);
 
+/// [name]'s colour as a spreadsheet cell would print it: a pale wash and an
+/// ink dark enough to read on it, both as 'RRGGBB'.
+///
+/// ON WHITE, ALWAYS. A spreadsheet has no theme and no dark mode - it is a
+/// white page, and the tone that reads on this app's dark surfaces would be a
+/// pale grey nobody can read there. Same hue, printed for paper.
+///
+/// The wash is the same weight the screen uses ([nameFill]), composited onto
+/// white here because an Excel fill has no alpha to composite with.
+({String fill, String ink}) nameSheetTint(String name) {
+  final tint = tintForName(name);
+  final fill = Color.lerp(Colors.white, tint, 0.16) ?? Colors.white;
+  return (
+    fill: _hex(fill),
+    ink: _hex(legibleTone(tint, fill)),
+  );
+}
+
+/// 'RRGGBB', which is what an Office Open XML colour wants after its FF.
+String _hex(Color color) =>
+    (color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+
 /// The chip a party or a vendor is named in: its colour, its name, and nothing
 /// else.
 ///

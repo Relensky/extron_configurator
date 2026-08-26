@@ -838,6 +838,155 @@ class EquipmentTimingKey extends StatelessWidget {
   }
 }
 
+/// WHAT REPLACING THE LOT COMES TO, IN A BLOCK OF ITS OWN.
+///
+/// This figure was the last chip on the same strip as "recommended now" and
+/// "past its life today", and it does not belong beside them. Those two are
+/// asks: money somebody is being requested to find, this year, for equipment
+/// that is late or nearly late. This one is not an ask at all - it is what the
+/// building or the estate is WORTH in replacement terms, the number a ten-year
+/// budget is sized against and the one "we cannot do it all at once" is about.
+///
+/// Read along one row they average into each other, and the biggest figure on
+/// the strip - which is always this one - reads as the biggest ask. So it is
+/// lifted out behind a gap, given its own heading, and the two halves it is
+/// made of are printed as two figures rather than run together on one line:
+/// how many positions there are, and what they come to.
+class LifecycleEverythingChunk extends StatelessWidget {
+  /// Every position counted, whatever its age.
+  final int items;
+
+  /// What replacing all of them would come to.
+  final double cost;
+  final String currency;
+
+  /// What the block is about: 'this building', 'this campus'.
+  final String scope;
+
+  /// Positions carrying no install date. Named here because they ARE counted
+  /// in [items] and in [cost] - unlike every other figure on these screens,
+  /// which can say nothing about an undated box.
+  final int undated;
+
+  const LifecycleEverythingChunk({
+    super.key,
+    required this.items,
+    required this.cost,
+    required this.currency,
+    required this.scope,
+    this.undated = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // A SEGMENT OF THE STRIP, NOT A PANEL UNDER IT.
+    //
+    // The separation has to cost nothing vertically. This pane's whole point
+    // is the grid below, and a block that pushes it under the fold to make a
+    // presentational point about one figure has traded the document for the
+    // caption. So: a wide gap, a rule, and the figures - the same two lines
+    // tall as the chips it stands beside, and it only drops to its own line
+    // on a window too narrow to hold the row.
+    return Tooltip(
+      message:
+          'What it would cost to replace every position in $scope at once, '
+          'whatever its age. Not a request - this is the figure a long-range '
+          'budget is sized against, and what "we cannot do it all at once" is '
+          'about.'
+          '${undated > 0 ? '\n\nCounts the $undated undated item'
+                '${undated == 1 ? '' : 's'} too: they have a price even '
+                'though they fall due in no year.' : ''}',
+      // A FIXED RULE RATHER THAN A STRETCHED ONE. This sits in a [Wrap], which
+      // hands its children unbounded height - so a divider told to match its
+      // siblings has nothing to match, and asking for the row's intrinsic
+      // height to settle it makes the block taller than the chips beside it
+      // for no visible gain. The rule is simply as tall as a chip.
+      child: Row(
+        key: const ValueKey('lifecycle_everything_chunk'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // The gap the eye reads the break at, and the rule that makes it a
+          // break rather than a wide space.
+          const SizedBox(width: 12),
+          Container(width: 1, height: 34, color: theme.colorScheme.outlineVariant),
+          const SizedBox(width: 14),
+          // The heading set over two short lines rather than one long one, so
+          // the block is no taller than the chips it stands beside. A strip
+          // item that is half again as tall as its neighbours is a strip that
+          // gains a whole extra row on any window narrow enough to wrap it.
+          SizedBox(
+            width: 132,
+            child: Center(
+              child: Text(
+                'EVERYTHING,\nWHATEVER ITS AGE',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontSize: 10,
+                  height: 1.25,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 18),
+          // THE ITEMS AND THE MONEY AS TWO FIGURES, not one run-on line.
+          // "142 items, $284,000" reads as a single quantity; the pair is two
+          // answers - how much there is, and what it is worth - and they get
+          // quoted separately.
+          _EverythingFigure(
+            label: 'Items',
+            value: '$items',
+            valueKey: const ValueKey('lifecycle_everything_items'),
+          ),
+          const SizedBox(width: 20),
+          _EverythingFigure(
+            label: 'Replacement value',
+            value: cost > 0
+                ? formatLifecycleMoney(cost, currency)
+                : 'not priced',
+            valueKey: const ValueKey('lifecycle_everything_money'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One labelled figure inside [LifecycleEverythingChunk].
+class _EverythingFigure extends StatelessWidget {
+  final String label;
+  final String value;
+  final Key valueKey;
+
+  const _EverythingFigure({
+    required this.label,
+    required this.value,
+    required this.valueKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontSize: 10,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(value, key: valueKey, style: theme.textTheme.titleSmall),
+      ],
+    );
+  }
+}
+
 /// The header strip: what the room reads as, HOW MANY ITEMS have to be
 /// replaced, and what they cost.
 ///

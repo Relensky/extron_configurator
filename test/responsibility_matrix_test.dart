@@ -272,8 +272,13 @@ void main() {
         'BSS 103',
         'Total',
       ]);
-      expect(grid.rows[0], ['Screens', 'Owner', 'Contractor', '', '2', '', '2']);
-      expect(grid.rows[1], [
+      // As TEXT: the two party cells carry their colour as well as their name
+      // now - see [responsibilityPartyCell] - and a tinted cell prints exactly
+      // the string it replaced.
+      List<String> text(List<dynamic> row) => [for (final c in row) '$c'];
+      expect(text(grid.rows[0]),
+          ['Screens', 'Owner', 'Contractor', '', '2', '', '2']);
+      expect(text(grid.rows[1]), [
         'Speakers',
         'Owner',
         'Contractor',
@@ -345,7 +350,8 @@ void main() {
         roomNames: project.responsibilityRoomColumns(),
       );
       final open = sections.firstWhere((s) => s.title == 'Still To Be Agreed');
-      expect(open.rows.single, ['Screens', 'Owner', 'NOT AGREED']);
+      expect([for (final c in open.rows.single) '$c'],
+          ['Screens', 'Owner', 'NOT AGREED']);
     });
 
     test('a settled matrix has nothing outstanding to say', () {
