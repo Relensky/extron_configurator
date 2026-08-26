@@ -300,22 +300,28 @@ class _SelectedTick extends StatelessWidget {
   }
 }
 
-/// A colour chip whose selected state is A CHECKBOX ON THE COLOUR, and nothing
-/// else.
+/// A colour chip marked as chosen by A CHECKBOX ON THE COLOUR AND A GLOW
+/// BEHIND IT.
 ///
-/// IT USED TO BE A BOX AROUND THE COLOUR: a three-pixel ring in the theme's
-/// primary with a coloured glow spreading out behind it. That reads as
-/// selected, and it costs more than it is worth on a row of swatches. The ring
-/// is a second colour laid against the one being chosen - on a palette of
-/// twelve, the chosen swatch is the one seen through a border of a completely
-/// different hue - and the glow pushes its neighbours apart, so the row
-/// reflows by a few pixels every time somebody picks a different colour.
+/// THE BOX AROUND IT IS WHAT WENT. It used to draw a three-pixel ring in the
+/// theme's primary as well, and a ring is a second colour laid hard against
+/// the one being chosen - on a palette of twelve, the chosen swatch was the
+/// one you could no longer judge, because it was being read through a thick
+/// border of a completely different hue.
 ///
-/// So the chosen swatch is now marked ON ITSELF: [_SelectedTick], drawn in
-/// whichever of white or near-black reads on that colour, with the colour
-/// itself as the ground behind it. Every swatch keeps the same hairline edge
-/// whether it is chosen or not - a white swatch on a white card needs one, and
-/// an edge every chip has is a cell boundary rather than a selection mark.
+/// The glow stays, and is the reason the ring is not missed. It sits BEHIND
+/// the chip rather than on top of it, so it says "this one" from across the
+/// row without touching the colour itself, and being a shadow it costs no
+/// layout - the row does not reflow when the choice moves along it.
+///
+/// The tick is the other half: [_SelectedTick], drawn in whichever of white or
+/// near-black reads on that colour, with the colour itself as its ground. It
+/// is what still answers the question in a screenshot, on a monochrome
+/// display, or for anybody who cannot pick the glow out.
+///
+/// Every swatch keeps the same hairline edge whether it is chosen or not - a
+/// white swatch on a white card needs one, and an edge every chip has is a
+/// cell boundary rather than a selection mark.
 class ColorSwatchButton extends StatelessWidget {
   final Color color;
   final bool selected;
@@ -355,8 +361,18 @@ class ColorSwatchButton extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(5),
         // THE SAME HAIRLINE ON EVERY CHIP. It is there so a pale swatch has an
-        // edge at all, not to say which one is chosen - the tick says that.
+        // edge at all, not to say which one is chosen - the glow and the tick
+        // say that.
         border: Border.all(color: theme.dividerColor),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.55),
+                  blurRadius: 7,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
       alignment: Alignment.center,
       child: selected
