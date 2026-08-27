@@ -5,6 +5,7 @@
       "model": "Assisted Listening",
       "category": "Audio",
       "rackUnits": 0,
+      "neverControlled": true,
       "notes": "Assisted listening transmitter. Gets the same audio tie as the program feed on every source change, from the switcher output named in SYSTEM_SETUP output_audio_ald.",
       "ports": [
         {
@@ -64,6 +65,7 @@
       "category": "Audio",
       "rackUnits": 0,
       "powerInput": "none",
+      "neverControlled": true,
       "notes": "The room's ceiling speaker run, drawn as one load. What drives it is the amplifier in the switcher (an SA or MA build) or a separate amp fed from the DSP.",
       "ports": [
         {
@@ -1469,6 +1471,46 @@
           "direction": "bidirectional",
           "side": "left"
         },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Advantage Electrol Motorized Screen 58\" x 104\"",
+      "manufacturer": "Da-Lite",
+      "partNumber": "84327LS",
+      "category": "Screen",
+      "rackUnits": 0,
+      "price": 3200.0,
+      "educationPrice": 2670.7,
+      "leadTimeDays": 60,
+      "notes": "\"S\" - Denotes silent motor",
+      "ports": [
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Advantage Electrol Motorized Screen 78 x 139\"",
+      "manufacturer": "Da-Lite",
+      "partNumber": "84329LC",
+      "category": "Screen",
+      "rackUnits": 0,
+      "price": 4000.0,
+      "educationPrice": 3000.0,
+      "leadTimeDays": 60,
+      "notes": "\"C\" denotes custom order- Use to request extra black drop.",
+      "ports": [
         {
           "id": "in_power",
           "label": "POWER",

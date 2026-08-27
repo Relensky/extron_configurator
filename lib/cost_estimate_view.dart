@@ -1016,6 +1016,15 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       // The row's buttons, as ONE cell: the grid reserves the
                       // column, and what goes in it is this row's business.
                       Row(
+                        // HARD AGAINST THE RIGHT-HAND EDGE, by construction.
+                        // The slots happen to add up to the column width today
+                        // - six buttons at forty each - and relying on that
+                        // arithmetic is how the cluster drifts off the edge the
+                        // first time somebody adds a button or changes
+                        // [kRowIconWidth]. Aligning to the end pins it there
+                        // whatever the numbers do, which is what keeps this
+                        // row's trash can under every other table's.
+                        mainAxisAlignment: MainAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _configFlag(
@@ -1329,8 +1338,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                               : mutedInk(context, theme),
                         ),
                       ),
-                      // The row's buttons, as one cell.
+                      // The row's buttons, as one cell, hard against the
+                      // right-hand edge - see the equipment table's.
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           // A shelf out of the store, a plate the cabinet shop
@@ -1639,11 +1650,13 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           ),
                           // Extended
                           _extendedCell(context, line, currency),
-                          // The row's buttons, as one cell.
+                          // The row's buttons, as one cell, hard against the
+                          // right-hand edge - see the equipment table's.
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-// THE RUNS SOMEBODY ELSE PULLS. The commonest
+                              // THE RUNS SOMEBODY ELSE PULLS. The commonest
                               // one there is: the network department provides
                               // and terminates the cat6, and the room still
                               // has every one of those runs on its schedule.
@@ -1835,10 +1848,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                   ),
                                 )
                               : _extendedCell(context, line, currency),
-                          // The row's buttons. A miscellaneous line is not a
-                          // length of anything, so it has no base cost to set
-                          // — the empty slot keeps the column square.
+                          // The row's buttons, hard against the right-hand
+                          // edge - see the equipment table's.
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (line != null)
@@ -4833,8 +4846,10 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         item.copyWith(taxable: v ?? true),
                       ),
                     ),
-                    // The row's buttons, as one cell.
+                    // The row's buttons, as one cell, hard against the
+                    // right-hand edge - see the equipment table's.
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         avRowIcon(

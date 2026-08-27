@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:file_picker/file_picker.dart';
@@ -141,7 +142,13 @@ Future<void> showAnnotationEditor(BuildContext context, Uint8List pngBytes,
   );
 }
 
-enum AnnotationTool { pen, highlighter, arrow, rect, text }
+/// The tools on the annotation toolbar.
+///
+/// [pan] draws nothing. It is the hand: with a drawing tool selected the
+/// canvas claims the drag so a stroke is a stroke, which leaves no way to move
+/// a picture that is bigger than the window - see
+/// [_AnnotationEditorState.build].
+enum AnnotationTool { pen, highlighter, arrow, rect, text, pan }
 
 class _Annotation {
   final AnnotationTool tool;
@@ -183,6 +190,23 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   double _strokeWidth = 6.0;
   bool _saving = false;
 
+  /// The two axes of the canvas, held rather than left to the scroll views so
+  /// the bars have something to attach to and the wheel has something to move.
+  final ScrollController _across = ScrollController();
+  final ScrollController _down = ScrollController();
+
+  /// null means "fit the whole picture in the window"; a number is that scale.
+  ///
+  /// Fitted to start with, which is what this canvas has always done - and for
+  /// a screenshot of a whole cost estimate that is a picture too small to draw
+  /// on accurately, which is the reason the rest of this exists. A mark is
+  /// stored in IMAGE coordinates whatever the canvas is showing, so a circle
+  /// drawn at 300% lands in the file exactly where it was put.
+  double? _zoom;
+
+  static const double _minZoom = 0.1;
+  static const double _maxZoom = 8.0;
+
   static const List<Color> _palette = [
     Colors.red,
     Colors.orange,
@@ -212,8 +236,24 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
 
   @override
   void dispose() {
+    _across.dispose();
+    _down.dispose();
     _image?.dispose();
     super.dispose();
+  }
+
+  /// The scale that puts the whole picture inside a [viewW] x [viewH] window.
+  ///
+  /// Never above 1: a small capture is left at its own size rather than blown
+  /// up into a poster of six pixels.
+  double _fitScale(ui.Image image, double viewW, double viewH) {
+    if (image.width <= 0 || image.height <= 0) return 1;
+    final double fit = [
+      viewW / image.width,
+      viewH / image.height,
+      1.0,
+    ].reduce((a, b) => a < b ? a : b);
+    return fit.clamp(_minZoom, 1.0);
   }
 
   // --------------------------------------------------------------------------
@@ -221,8 +261,22 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   // annotation is stored in image-pixel coordinates (resolution independent).
   // --------------------------------------------------------------------------
 
+  /// Moves [controller] by [delta], clamped to what there is to scroll.
+  ///
+  /// [ScrollController.jumpTo] rather than a drag, because the scroll views
+  /// are refusing drags whenever a drawing tool is selected - see the physics
+  /// in [build] - and the wheel has to keep working regardless.
+  void _wheel(ScrollController controller, double delta) {
+    if (delta == 0 || !controller.hasClients) return;
+    final position = controller.position;
+    if (position.maxScrollExtent <= 0) return;
+    controller.jumpTo(
+      (position.pixels + delta).clamp(0.0, position.maxScrollExtent),
+    );
+  }
+
   void _onPanStart(Offset imagePos) {
-    if (_tool == AnnotationTool.text) return;
+    if (_tool == AnnotationTool.text || _tool == AnnotationTool.pan) return;
     setState(() {
       _active = _Annotation(
         tool: _tool,
@@ -456,36 +510,64 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                 : Colors.grey[200],
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
           ),
+          // THE WAYS OUT ARE PINNED; THE TOOLS SCROLL.
+          //
+          // This bar was a plain Row of everything, and it had no slack left:
+          // adding one tool pushed Save and Close off the right-hand edge
+          // behind a yellow-and-black overflow bar, where they could not be
+          // pressed. An editor somebody cannot leave - or cannot save from -
+          // is worse than one with a tool they have to scroll to.
+          //
+          // So the left-hand group is given whatever room is left over and
+          // scrolls inside it, and the buttons that finish the job keep their
+          // places. On a dialog wide enough for everything - which is most of
+          // them - this looks exactly as it always did.
           child: Row(
             children: [
-              const Icon(Icons.photo_camera_outlined, size: 18),
-              const SizedBox(width: 8),
-              const Text('Annotate Screenshot',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 16),
-              _toolButton(AnnotationTool.pen, Icons.edit, 'Pen'),
-              _toolButton(AnnotationTool.highlighter, Icons.border_color,
-                  'Highlighter'),
-              _toolButton(
-                  AnnotationTool.arrow, Icons.north_east, 'Arrow'),
-              _toolButton(AnnotationTool.rect,
-                  Icons.check_box_outline_blank, 'Rectangle'),
-              _toolButton(
-                  AnnotationTool.text, Icons.text_fields, 'Text (click to place)'),
-              const SizedBox(width: 12),
-              ..._palette.map(_colorSwatch),
-              const SizedBox(width: 12),
-              const Icon(Icons.line_weight, size: 16),
-              SizedBox(
-                width: 110,
-                child: Slider(
-                  value: _strokeWidth,
-                  min: 2,
-                  max: 20,
-                  onChanged: (val) => setState(() => _strokeWidth = val),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.photo_camera_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      const Text('Annotate Screenshot',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 16),
+                      _toolButton(AnnotationTool.pen, Icons.edit, 'Pen'),
+                      _toolButton(AnnotationTool.highlighter,
+                          Icons.border_color, 'Highlighter'),
+                      _toolButton(
+                          AnnotationTool.arrow, Icons.north_east, 'Arrow'),
+                      _toolButton(AnnotationTool.rect,
+                          Icons.check_box_outline_blank, 'Rectangle'),
+                      _toolButton(AnnotationTool.text, Icons.text_fields,
+                          'Text (click to place)'),
+                      // THE HAND. Every other tool on this bar claims the drag
+                      // so a stroke is a stroke; this one gives it back to the
+                      // canvas, so a picture bigger than the window can be
+                      // moved under the pen.
+                      _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
+                          'Move the picture'),
+                      const SizedBox(width: 12),
+                      ..._palette.map(_colorSwatch),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.line_weight, size: 16),
+                      SizedBox(
+                        width: 110,
+                        child: Slider(
+                          value: _strokeWidth,
+                          min: 2,
+                          max: 20,
+                          onChanged: (val) =>
+                              setState(() => _strokeWidth = val),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.undo, size: 20),
                 tooltip: 'Undo last annotation',
@@ -537,45 +619,155 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
             child: image == null
                 ? const Center(child: CircularProgressIndicator())
                 : LayoutBuilder(builder: (context, constraints) {
-                    final double scale = [
-                      constraints.maxWidth / image.width,
-                      constraints.maxHeight / image.height,
-                      1.0,
-                    ].reduce((a, b) => a < b ? a : b);
+                    final double viewW =
+                        (constraints.maxWidth - _kBarRoom).clamp(0.0, 1 / 0);
+                    final double viewH =
+                        (constraints.maxHeight - _kBarRoom).clamp(0.0, 1 / 0);
+                    final double scale =
+                        _zoom ?? _fitScale(image, viewW, viewH);
                     final double dispW = image.width * scale;
                     final double dispH = image.height * scale;
 
+                    // A MARK IS STORED IN IMAGE PIXELS, always. The canvas is
+                    // whatever size the zoom says; dividing by that scale is
+                    // what makes a stroke drawn at 300% land in the file where
+                    // it was actually put, and survive being drawn again at a
+                    // different zoom.
                     Offset toImage(Offset local) => Offset(
                         (local.dx / scale).clamp(0, image.width.toDouble()),
                         (local.dy / scale).clamp(0, image.height.toDouble()));
 
-                    return Center(
-                      child: SizedBox(
-                        width: dispW,
-                        height: dispH,
-                        child: MouseRegion(
-                          cursor: _tool == AnnotationTool.text
-                              ? SystemMouseCursors.text
-                              : SystemMouseCursors.precise,
-                          child: GestureDetector(
-                            onTapUp: (d) => _onTapForText(
-                                toImage(d.localPosition)),
-                            onPanStart: (d) =>
-                                _onPanStart(toImage(d.localPosition)),
-                            onPanUpdate: (d) =>
-                                _onPanUpdate(toImage(d.localPosition)),
-                            onPanEnd: (_) => _onPanEnd(),
-                            child: CustomPaint(
-                              painter: _AnnotationPainter(
-                                image: image,
-                                annotations: _annotations,
-                                active: _active,
-                                scale: scale,
-                              ),
+                    // WHO GETS THE DRAG. There is only one, and both the pen
+                    // and the scroll views want it. Rather than put the two in
+                    // a gesture arena and hope - which is how a stroke turns
+                    // into a scroll halfway through a circle - the hand tool
+                    // decides it outright: while a drawing tool is selected
+                    // the scroll views take no drags at all, and the hand
+                    // gives them back. The bars and the wheel move the picture
+                    // either way, so nothing is unreachable mid-drawing.
+                    final bool drawing = _tool != AnnotationTool.pan;
+                    final ScrollPhysics physics = drawing
+                        ? const NeverScrollableScrollPhysics()
+                        : const ClampingScrollPhysics();
+
+                    final Widget plate = SizedBox(
+                      key: const ValueKey('annotation_canvas'),
+                      width: dispW,
+                      height: dispH,
+                      child: MouseRegion(
+                        cursor: switch (_tool) {
+                          AnnotationTool.pan => SystemMouseCursors.grab,
+                          AnnotationTool.text => SystemMouseCursors.text,
+                          _ => SystemMouseCursors.precise,
+                        },
+                        child: GestureDetector(
+                          onTapUp: drawing
+                              ? (d) => _onTapForText(toImage(d.localPosition))
+                              : null,
+                          onPanStart: drawing
+                              ? (d) => _onPanStart(toImage(d.localPosition))
+                              : null,
+                          onPanUpdate: drawing
+                              ? (d) => _onPanUpdate(toImage(d.localPosition))
+                              : null,
+                          onPanEnd: drawing ? (_) => _onPanEnd() : null,
+                          child: CustomPaint(
+                            painter: _AnnotationPainter(
+                              image: image,
+                              annotations: _annotations,
+                              active: _active,
+                              scale: scale,
                             ),
                           ),
                         ),
                       ),
+                    );
+
+                    return Stack(
+                      key: const ValueKey('annotation_canvas_area'),
+                      children: [
+                        Positioned.fill(
+                          child: Listener(
+                            // The wheel, through the controllers rather than
+                            // through the scroll views - so it keeps working
+                            // while the views are refusing drags for the pen.
+                            onPointerSignal: (event) {
+                              if (event is! PointerScrollEvent) return;
+                              _wheel(_down, event.scrollDelta.dy);
+                              _wheel(_across, event.scrollDelta.dx);
+                            },
+                            child: Scrollbar(
+                              controller: _down,
+                              thumbVisibility: true,
+                              // The vertical bar watches a scroll view one
+                              // level DOWN inside the horizontal one, which
+                              // the default predicate - depth zero only -
+                              // would never hear from.
+                              notificationPredicate: (n) => n.depth <= 1,
+                              child: Scrollbar(
+                                controller: _across,
+                                thumbVisibility: true,
+                                notificationPredicate: (n) => n.depth <= 1,
+                                child: SingleChildScrollView(
+                                  controller: _across,
+                                  scrollDirection: Axis.horizontal,
+                                  physics: physics,
+                                  padding: const EdgeInsets.only(
+                                    right: _kBarRoom,
+                                    bottom: _kBarRoom,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    controller: _down,
+                                    physics: physics,
+                                    child: Container(
+                                      // Centred while it fits, hard against
+                                      // the top-left once it does not: nested
+                                      // scroll views hand their child
+                                      // unbounded space and would otherwise
+                                      // park a small capture in the corner.
+                                      constraints: BoxConstraints(
+                                        minWidth: viewW,
+                                        minHeight: viewH,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: plate,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Over the picture, in the same corner the preview
+                        // dialog puts it - this is the same furniture around
+                        // the same kind of picture.
+                        Positioned(
+                          top: 6,
+                          right: _kBarRoom + 6,
+                          child: _ZoomBar(
+                            keyPrefix: 'annotation',
+                            scale: scale,
+                            fitted: _zoom == null,
+                            onOut: () => setState(
+                              () => _zoom =
+                                  (scale / 1.25).clamp(_minZoom, _maxZoom),
+                            ),
+                            onIn: () => setState(
+                              () => _zoom =
+                                  (scale * 1.25).clamp(_minZoom, _maxZoom),
+                            ),
+                            onFit: () => setState(() {
+                              _zoom = null;
+                              // The whole picture is about to be on screen, so
+                              // an offset into a version of it three times the
+                              // size is not a place to be left looking at.
+                              if (_across.hasClients) _across.jumpTo(0);
+                              if (_down.hasClients) _down.jumpTo(0);
+                            }),
+                            onActual: () => setState(() => _zoom = 1.0),
+                          ),
+                        ),
+                      ],
                     );
                   }),
           ),
@@ -606,6 +798,12 @@ void _paintAnnotationsOnCanvas(
       ..strokeJoin = StrokeJoin.round;
 
     switch (a.tool) {
+      // Never reaches here: the hand draws nothing, so no annotation is ever
+      // recorded carrying it. Named rather than left to a default, so adding a
+      // real tool later is a compile error here instead of a silent no-op.
+      case AnnotationTool.pan:
+        break;
+
       case AnnotationTool.pen:
       case AnnotationTool.highlighter:
         if (a.points.length < 2) break;
@@ -850,6 +1048,14 @@ Future<void> copyPictureToClipboard(
 // what is in the file.
 // ============================================================================
 
+/// Room kept clear along the two edges the scroll bars run down, so neither
+/// one sits on top of the last column of the document under it.
+///
+/// One figure for both the preview and the annotation canvas: they are the
+/// same furniture around the same kind of picture, and a reader moving between
+/// them should not find the bars in two different places.
+const double _kBarRoom = 16;
+
 /// [child] at whatever size it wants to be, inside bars, with zoom over it.
 ///
 /// The child is always LAID OUT at its natural size and only ever DRAWN
@@ -899,9 +1105,7 @@ class _ZoomablePicturePreviewState extends State<ZoomablePicturePreview> {
   static const double _minZoom = 0.1;
   static const double _maxZoom = 6.0;
 
-  /// Room kept clear along the two edges the bars run down, so neither one
-  /// sits on top of the last column or the bottom row.
-  static const double _barRoom = 16;
+  static const double _barRoom = _kBarRoom;
 
   @override
   void dispose() {
