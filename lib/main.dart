@@ -1078,11 +1078,28 @@ class _MainDashboardState extends State<MainDashboard> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 24,
-              runSpacing: 24,
-              children: [
+            // THE TWO BUTTONS SIT ON ONE LINE.
+            //
+            // They did not. Each card was as tall as its own words, and the
+            // two blurbs are different lengths - so Start a New Project sat a
+            // line below Create a New File. Two buttons that do the same KIND
+            // of thing, at two different heights, read as a mistake before
+            // they read as anything else.
+            //
+            // Making the CARDS equal height does not fix it, which is the
+            // trap: the slack then lands wherever the column happens to put
+            // it, and the subtitles wrap to different line counts too, so the
+            // buttons move apart again from below. What has to match is
+            // everything ABOVE the button, and everything below it, exactly.
+            //
+            // So the two variable blocks are MEASURED - at the width they will
+            // be drawn at, in the reader's own text size - and both cards
+            // reserve the taller. Every row of both cards is then the same
+            // height as its opposite number, which puts the buttons on one
+            // line at any scale and makes the cards the same height into the
+            // bargain. See [_startCardTextWidth] and [_tallestBlock].
+            Builder(
+              builder: (context) {
                 // THE PROJECT HALF ONLY WHEN THERE IS NO PROJECT.
                 //
                 // Somebody with a job already open is not looking for a way to
@@ -1091,28 +1108,59 @@ class _MainDashboardState extends State<MainDashboard> {
                 // throw away the job they just opened. The Project button in
                 // the banner is still one click away; what this screen owes
                 // them is the room.
-                if (!projectOpen)
-                  _StartCard(
-                    icon: Icons.account_tree,
-                    title: 'Project',
-                    blurb: 'A building and the rooms in it, with the vendor '
-                        'split and the totals across the whole job.',
-                    primaryLabel: 'Start a New Project',
-                    primaryIcon: Icons.create_new_folder,
-                    onPrimary: () => startNewProject(context, provider),
-                    subtitle: 'No project open',
-                  ),
-                _StartCard(
-                  icon: Icons.description,
-                  title: 'Room file',
-                  blurb: 'One room: its config, its drawings, its rack and '
-                      'its estimate.',
-                  primaryLabel: 'Create a New File',
-                  primaryIcon: Icons.note_add,
-                  onPrimary: () => _createNewConfig(context, provider),
-                  subtitle: 'New files start from the template in App Config',
-                ),
-              ],
+                const projectBlurb =
+                    'A building and the rooms in it, with the vendor split '
+                    'and the totals across the whole job.';
+                const projectSub = 'No project open';
+                const roomBlurb =
+                    'One room: its config, its drawings, its rack and its '
+                    'estimate.';
+                const roomSub =
+                    'New files start from the template in App Config';
+
+                // Only over the cards actually on screen: reserving room for a
+                // blurb nobody can see would leave a hole in the one card that
+                // is left.
+                final blurbs = [roomBlurb, if (!projectOpen) projectBlurb];
+                final subs = [roomSub, if (!projectOpen) projectSub];
+                final subStyle = theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.disabledColor);
+                final blurbHeight =
+                    _tallestBlock(context, blurbs, theme.textTheme.bodyMedium);
+                final subtitleHeight =
+                    _tallestBlock(context, subs, subStyle);
+
+                return Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 24,
+                  runSpacing: 24,
+                  children: [
+                    if (!projectOpen)
+                      _StartCard(
+                        icon: Icons.account_tree,
+                        title: 'Project',
+                        blurb: projectBlurb,
+                        primaryLabel: 'Start a New Project',
+                        primaryIcon: Icons.create_new_folder,
+                        onPrimary: () => startNewProject(context, provider),
+                        subtitle: projectSub,
+                        blurbHeight: blurbHeight,
+                        subtitleHeight: subtitleHeight,
+                      ),
+                    _StartCard(
+                      icon: Icons.description,
+                      title: 'Room file',
+                      blurb: roomBlurb,
+                      primaryLabel: 'Create a New File',
+                      primaryIcon: Icons.note_add,
+                      onPrimary: () => _createNewConfig(context, provider),
+                      subtitle: roomSub,
+                      blurbHeight: blurbHeight,
+                      subtitleHeight: subtitleHeight,
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 24),
             // THE ONE DOOR IN, FOR ANY OF THE THREE.
@@ -1314,6 +1362,16 @@ class _StartCard extends StatelessWidget {
   /// file on disk already knows which of the three documents it is, and asking
   /// the reader to classify it first was asking a question the app answers
   /// better.
+  /// How much room to leave for the blurb and for the subtitle, whatever this
+  /// card's own words need.
+  ///
+  /// Handed DOWN rather than worked out here, because the question is not
+  /// about this card: it is "how tall is the tallest of the cards on screen",
+  /// and only the screen that lays them out knows the others. See
+  /// [_tallestBlock] and the layout in [_buildLandingScreen].
+  final double blurbHeight;
+  final double subtitleHeight;
+
   const _StartCard({
     required this.icon,
     required this.title,
@@ -1322,13 +1380,15 @@ class _StartCard extends StatelessWidget {
     required this.primaryIcon,
     required this.primaryLabel,
     required this.onPrimary,
+    required this.blurbHeight,
+    required this.subtitleHeight,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      width: 340,
+      width: _startCardWidth,
       child: Card(
         elevation: 2,
         child: Padding(
@@ -1347,7 +1407,17 @@ class _StartCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(blurb, style: theme.textTheme.bodyMedium),
+              // Reserved rather than natural, so a three-line blurb and a
+              // two-line one leave their buttons at the same height. Top
+              // aligned - the spare line belongs under the words, not around
+              // them.
+              SizedBox(
+                height: blurbHeight,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(blurb, style: theme.textTheme.bodyMedium),
+                ),
+              ),
               const SizedBox(height: 20),
               FilledButton.icon(
                 icon: Icon(primaryIcon),
@@ -1358,10 +1428,17 @@ class _StartCard extends StatelessWidget {
                 onPressed: onPrimary,
               ),
               const SizedBox(height: 14),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.disabledColor),
+              // Reserved for the same reason, so the cards END level too.
+              SizedBox(
+                height: subtitleHeight,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.disabledColor),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1369,6 +1446,40 @@ class _StartCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How wide a start card is, and how wide the words inside it get to be.
+///
+/// The text width is the card less the [Card]'s own margin and the padding
+/// around its column, and it has to be right: it is what the blocks below are
+/// measured at, and a measurement taken at the wrong width reserves the wrong
+/// number of lines.
+const double _startCardWidth = 340;
+const double _startCardTextWidth = _startCardWidth - 8 - 48;
+
+/// The height of the tallest of [blocks] when wrapped inside a start card.
+///
+/// Measured rather than guessed at a line count: the same sentence is three
+/// lines at normal size and five at 200%, and a card that reserved three would
+/// clip the reader who most needs to read it. Everything that affects the
+/// answer - the style, the reader's text scale, the width - goes into the
+/// painter, so the number is the one the [Text] will actually take.
+double _tallestBlock(
+  BuildContext context,
+  Iterable<String> blocks,
+  TextStyle? style,
+) {
+  var tallest = 0.0;
+  for (final block in blocks) {
+    final painter = TextPainter(
+      text: TextSpan(text: block, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout(maxWidth: _startCardTextWidth);
+    if (painter.height > tallest) tallest = painter.height;
+    painter.dispose();
+  }
+  return tallest;
 }
 
 //// THE TWO THINGS THAT ARE NOT VIEWS OF A ROOM.
