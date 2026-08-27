@@ -74,7 +74,9 @@ void main() {
     final dsp = catalog.templateForModel('DMP 128 Plus C AT')!;
     expect(dsp.manufacturer, 'Extron');
     expect(dsp.partNumber, isNotEmpty);
-    expect(dsp.category, 'Audio');
+    // 'DSP' rather than the stencil library's 'Audio' aisle: this model has a
+    // driver, and the driver's DEVICE_INFO device_type says what it is.
+    expect(dsp.category, 'DSP');
     expect(dsp.notes, contains('ProDSP'));
     expect(
       dsp.ports.where((p) => p.signal == SignalType.micLine).length,

@@ -1641,18 +1641,33 @@ class _ResponsibilityImageDialogState
   /// be photocopied.
   bool _colour = true;
 
-  Future<void> _save() async {
+  /// The matrix as pixels, at the size it will actually be read at.
+  ///
+  /// Two device pixels per logical one: the picture goes into a submittal and
+  /// is read on paper, where a screen-resolution capture of a table of small
+  /// type is unreadable. The boundary is the FULL table whatever the preview
+  /// happens to be zoomed to, so the file is the document and not the window
+  /// over it.
+  Future<Uint8List?> _capture() async {
     setState(() => _saving = true);
-    final provider = context.read<AppStateProvider>();
-    Uint8List? bytes;
     try {
-      // Two pixels per logical one: the picture goes into a submittal and is
-      // read on paper, where a screen-resolution capture of a table of small
-      // type is unreadable.
-      bytes = await captureBoundary(_boundary, pixelRatio: 2.0);
+      return await captureBoundary(_boundary, pixelRatio: 2.0);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// The matrix straight onto the clipboard, for the mail that is going out
+  /// now rather than the file that goes in the folder.
+  Future<void> _copy() async {
+    final bytes = await _capture();
+    if (!mounted) return;
+    await copyPictureToClipboard(context, bytes, what: 'The matrix');
+  }
+
+  Future<void> _save() async {
+    final provider = context.read<AppStateProvider>();
+    final bytes = await _capture();
     if (bytes == null) {
       if (mounted) {
         showTimedSnackBar(
@@ -1706,17 +1721,22 @@ class _ResponsibilityImageDialogState
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         height: MediaQuery.of(context).size.height * 0.7,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-            child: RepaintBoundary(
-              key: _boundary,
-              // On white either way. The only question is whether the party
-              // colours survive — see [_colour].
-              child: printSkin(
-                enabled: !_colour,
-                child: _MatrixTable(project: project, columns: columns),
-              ),
+        // A matrix is as wide as the project has parties and as long as it has
+        // lines, and both of those routinely beat the dialog. Bars down the
+        // edges say so, and the zoom is how somebody reads a forty-line table
+        // scaled to fit before they commit it to a submittal.
+        child: ZoomablePicturePreview(
+          keyPrefix: 'responsibility_image',
+          backdrop: Theme.of(context).brightness == Brightness.dark
+              ? Colors.black45
+              : Colors.grey[350],
+          child: RepaintBoundary(
+            key: _boundary,
+            // On white either way. The only question is whether the party
+            // colours survive - see [_colour].
+            child: printSkin(
+              enabled: !_colour,
+              child: _MatrixTable(project: project, columns: columns),
             ),
           ),
         ),
@@ -1740,6 +1760,12 @@ class _ResponsibilityImageDialogState
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('responsibility_copy_png'),
+          onPressed: _saving ? null : _copy,
+          icon: const Icon(Icons.copy_all_outlined, size: 18),
+          label: const Text('Copy to clipboard'),
         ),
         FilledButton.icon(
           key: const ValueKey('responsibility_save_png'),

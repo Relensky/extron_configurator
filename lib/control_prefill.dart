@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' show Offset;
 
 import 'app_logger.dart';
 import 'app_state.dart';
@@ -511,4 +512,153 @@ PresetControlResult buildControlSideForPreset(
     unplaceable: result.skipped,
     settings: settings,
   );
+}
+
+/// The device family a MODEL belongs in, or null when nothing claims it.
+///
+/// The same question [familyForNode] answers, asked about a product rather
+/// than about a box on a drawing: a swap has a model in hand and no node to
+/// read it off. The probe carries the model and nothing else, which is what
+/// makes the answer depend on the catalog entry and the model's own words
+/// rather than on whatever the old box happened to be called.
+DeviceTypeSpec? familyForModel(AppStateProvider provider, String model) {
+  if (model.trim().isEmpty) return null;
+  return familyForNode(
+    provider,
+    AvNode(
+      id: '',
+      label: '',
+      model: model.trim(),
+      pos: Offset.zero,
+      ports: const [],
+    ),
+  );
+}
+
+/// The keys that describe THIS INSTALL rather than the product on the end of
+/// it, carried across when a device changes family.
+///
+/// An address, a port, a control id and a serial line are facts about the
+/// cable in the wall and the row in somebody's IP plan. The box in front of
+/// them turning out to be a switcher rather than a DSP is not a reason to
+/// throw them away and make somebody look them up again.
+///
+/// Deliberately short. Everything else about a block - what it can be told to
+/// do, what its defaults are, which fields it even has - belongs to the family
+/// and the driver, and carrying those across is how a switcher ends up with a
+/// DSP's audio group numbers on it.
+const List<String> kInstallFacts = [
+  'ip_address',
+  'ipaddress',
+  'host',
+  'port',
+  'serial_port',
+  'baud_rate',
+  'control_id',
+  'device_id',
+  'username',
+  'password',
+  'gve_id',
+];
+
+/// Moves the block at [fromKey] into the family [model] actually belongs to.
+///
+/// THE GAP THIS CLOSES. A swap rewrites the model and the driver on the block
+/// it finds, and for the ordinary swap - one projector for another - that is
+/// the whole job. But a swap is also how somebody answers "what if we used a
+/// switcher instead of the DSP", and that block stayed a DSPDEVICE: the wrong
+/// family's fields on the Devices tab, the wrong count in the Setup Wizard,
+/// the wrong section on the schematic, and a room that reports a DSP it does
+/// not have and no switcher at all.
+///
+/// So the block moves. A block in a new family is a NEW block - built the way
+/// [applyControlSide] builds one, off the family's own defaults and the
+/// driver's DEVICE_INFO - because the old family's fields do not apply to it.
+/// What comes across is [kInstallFacts] and nothing else, and only when
+/// [applyDefaults] is false; the drawn box comes across too, so the diagram
+/// and the config stay one device.
+///
+/// The family it LEAVES is renumbered and its count comes down, by the same
+/// call the Cost tab's delete uses - see [AppStateProvider.removeDeviceBlocks].
+///
+/// Returns the new section key, or '' when nothing moved: no block there, no
+/// family claims the model, or it is already in the right one. A '' return
+/// means the caller should go on and rewrite the block where it stands.
+String moveControlBlockToFamily(
+  AppStateProvider provider,
+  String fromKey,
+  String model, {
+  bool applyDefaults = false,
+}) {
+  final old = provider.roomConfig[fromKey];
+  if (old is! Map) return '';
+  final target = familyForModel(provider, model);
+  if (target == null) return '';
+  final current = provider.uiSchema.deviceTypeForSection(fromKey);
+  if (current == null || current.prefix == target.prefix) return '';
+
+  // Asked before anything is written, so the new device numbers past whatever
+  // the target family already holds.
+  final index = _existingCount(provider, target) + 1;
+  final toKey = '${target.prefix}$index';
+  if (provider.roomConfig[toKey] != null) return '';
+
+  final module = provider.moduleForModel(model);
+  final block = Map<String, dynamic>.from(
+    jsonDecode(jsonEncode(provider.getDefaultDeviceBlock(target.prefix))),
+  );
+  block['name'] = sequentialName(target, index);
+  if (model.trim().isNotEmpty) block['model'] = model.trim();
+  // Blank rather than the old family's driver. A block naming the DSP's driver
+  // under a switcher's name reads as configured and commissions the room as
+  // the wrong device; an empty module reads as the open question it is, and
+  // the Devices tab shows it in red until somebody answers it.
+  block['module'] = module;
+
+  provider.roomConfig[toKey] = block;
+  // Same order as [applyControlSide], and for the same reason: the family's
+  // `device_defaults` are filtered by what the block's connection can use, so
+  // the driver has to have said how this model is reached before the baud rate
+  // is offered.
+  if (module.isNotEmpty && model.trim().isNotEmpty) {
+    provider.applyModuleDefaults(toKey, model.trim());
+  }
+  provider.applyDeviceBlockDefaults(toKey);
+
+  // LAST, over the top of both. The defaults above are what the family and the
+  // driver say this kind of box usually needs; these are what this particular
+  // one is actually plugged into.
+  if (!applyDefaults) {
+    final written = provider.roomConfig[toKey];
+    if (written is Map) {
+      for (final field in kInstallFacts) {
+        final value = old[field];
+        if (value == null) continue;
+        if (!written.containsKey(field)) continue;
+        if (value.toString().trim().isEmpty) continue;
+        written[field] = value;
+      }
+    }
+  }
+
+  // The drawn box follows the block, so the two stay one device. Done BEFORE
+  // the old block goes: removing a block whose box is still keyed to it is
+  // what puts that key on the "taken off the canvas by hand" list.
+  provider.rekeyAvNode(fromKey, toKey);
+  // The family it left: renumbered, recounted, and its now-meaningless
+  // SYSTEM_SETUP keys dropped if it emptied.
+  provider.removeDeviceBlocks([fromKey]);
+
+  // The family it joined. Written after the removal, because that call sets
+  // the count of every family it touched and this one is not among them.
+  final setup = provider.roomConfig['SYSTEM_SETUP'];
+  if (setup is Map) setup[target.countKey] = index.toString();
+
+  AppLogger.logInfo(
+    '$fromKey became $toKey: $model is a ${target.label.toLowerCase()}, not a '
+    '${current.label.toLowerCase()}'
+    '${module.isEmpty ? ' - and no module claims it' : ' (module $module)'}.',
+  );
+  provider.roomConfigChanged();
+  return toKey;
 }

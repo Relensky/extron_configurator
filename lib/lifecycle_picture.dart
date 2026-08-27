@@ -292,6 +292,24 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
     }
   }
 
+  /// The sheet straight onto the clipboard.
+  ///
+  /// The same boundary the file is written from, so the pasted picture is the
+  /// full-size sheet whichever way the preview is currently showing it.
+  Future<void> _copy() async {
+    setState(() => _saving = true);
+    try {
+      final bytes = await captureBoundary(
+        _boundary,
+        pixelRatio: captureRatioFor(_boundary.currentContext?.size),
+      );
+      if (!mounted) return;
+      await copyPictureToClipboard(context, bytes, what: widget.what);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   /// The sheet itself, at its natural size, inside the boundary that gets
   /// photographed. The same widget in both views - the fit switch scales what
   /// is DRAWN and never what is laid out, so [_save] photographs the full-size
@@ -398,6 +416,12 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('lifecycle_picture_copy'),
+          onPressed: _saving ? null : _copy,
+          icon: const Icon(Icons.copy_all_outlined, size: 18),
+          label: const Text('Copy to clipboard'),
         ),
         FilledButton.icon(
           key: const ValueKey('lifecycle_picture_save'),

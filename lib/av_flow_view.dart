@@ -857,20 +857,18 @@ class _AvFlowViewState extends State<AvFlowView>
       _snack('Could not render the diagram to an image.', error: true);
       return;
     }
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save AV Flow Image',
+    if (!mounted) return;
+    // The picture first, the file second. A diagram is captured at its full
+    // extent rather than at the window over it, so the preview is where
+    // somebody sees what actually came out - and the drawing more often goes
+    // into a message than into a folder, which is what the Copy button is for.
+    await showCapturedPicture(
+      context,
+      bytes,
+      title: 'The AV flow diagram as a picture',
       fileName: '${_fileStem(provider, 'av_flow')}.png',
-      type: FileType.custom,
-      allowedExtensions: ['png'],
+      what: 'The diagram image',
     );
-    if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
-    try {
-      await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(provider, 'Diagram image', outputFile);
-    } catch (e) {
-      _snack('Failed to save image: $e', error: true);
-    }
   }
 
   Future<void> _copyReportText(AppStateProvider provider) async {

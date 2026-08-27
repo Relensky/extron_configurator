@@ -9851,6 +9851,98 @@ class AppStateProvider extends ChangeNotifier {
     _applyKeepAliveDefaults(newKeys);
   }
 
+  /// Takes device blocks out of the room config and closes the gap they leave.
+  ///
+  /// The inverse of the Cost tab's "add this line to the room config", and
+  /// deliberately NOT [setDeviceCount]: that rebuilds a whole family from the
+  /// template to reach a number, which would throw away the addresses and
+  /// module choices on every OTHER device in the family to remove one of them.
+  ///
+  /// Three things have to happen together or the room is left inconsistent:
+  ///
+  ///   * the blocks go;
+  ///   * what is left is RENUMBERED to run 1..N with no hole in it. Every
+  ///     reader of a room walks the count and takes the sections that exist up
+  ///     to it - see [activeDeviceKeysIn] - so a room left holding
+  ///     PROJECTORDEVICE_1 and _3 reports one projector and hides the other
+  ///     from the Devices tab, the schematic and the missing-module check;
+  ///   * the family's count follows the blocks, so the Setup Wizard's dropdown
+  ///     says what the room actually has.
+  ///
+  /// Any drawn box keyed onto a renumbered block moves with it, so the diagram
+  /// and the config stay one device rather than two records of it.
+  ///
+  /// Returns the keys that actually went - a key naming no block is ignored
+  /// rather than treated as an error, because the caller is usually working
+  /// from a list that a previous removal may already have covered.
+  List<String> removeDeviceBlocks(Iterable<String> sectionKeys) {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return const [];
+
+    final doomed = <String>{
+      for (final key in sectionKeys)
+        if (roomConfig[key] is Map) key,
+    };
+    if (doomed.isEmpty) return const [];
+
+    // The families that have to be renumbered and recounted afterwards.
+    final families = <DeviceTypeSpec>{};
+    for (final key in doomed) {
+      final spec = uiSchema.deviceTypeForSection(key);
+      if (spec != null) families.add(spec);
+    }
+
+    for (final key in doomed) {
+      roomConfig.remove(key);
+    }
+
+    // BEFORE the renumbering, not after. A device taken off the canvas by hand
+    // is remembered by its section key so the next seed leaves it off; the
+    // renumbering below is about to hand one of those keys to a DIFFERENT
+    // device, which would make the survivor vanish from the diagram for a
+    // reason nobody could see. A remembered key naming no block means nothing
+    // anyway, so this is the moment it stops meaning anything.
+    avDismissedDevices.removeWhere((id) => roomConfig[id] is! Map);
+
+    for (final spec in families) {
+      // What the family still holds, in its own numeric order - which is not
+      // the map's order once a block has been removed and re-added.
+      final survivors = <int, dynamic>{};
+      for (final key in roomConfig.keys.toList()) {
+        if (!key.startsWith(spec.prefix)) continue;
+        final n = int.tryParse(key.substring(spec.prefix.length));
+        if (n == null) continue;
+        survivors[n] = roomConfig.remove(key);
+      }
+      final order = survivors.keys.toList()..sort();
+      for (int i = 0; i < order.length; i++) {
+        final from = '${spec.prefix}${order[i]}';
+        final to = '${spec.prefix}${i + 1}';
+        roomConfig[to] = survivors[order[i]];
+        // Ascending, so a block only ever moves DOWN onto a number that has
+        // already been vacated - the one order in which no rekey collides.
+        if (from != to) rekeyAvNode(from, to);
+      }
+
+      // The count follows the blocks. Written in the wizard's own form - a
+      // plain number - because that is what its dropdown reads back.
+      setup[spec.countKey] = order.length.toString();
+      // A family that has just emptied drops the SYSTEM_SETUP keys that only
+      // configure its hardware, exactly as setting the wizard's count to none
+      // does.
+      _pruneSystemKeysForCount(spec.countKey, order.length);
+    }
+
+    // A room that has just lost its last camera has lost its camera input too.
+    pruneUnusedSourceInputs();
+
+    AppLogger.logInfo(
+      'Removed ${doomed.length} device block(s): ${doomed.join(', ')}',
+    );
+    notifyListeners();
+    return doomed.toList();
+  }
+
   /// The keep-alive command [deviceKey] should poll on [moduleName], or '' when
   /// the module's .py can't be parsed. Only commands the module actually
   /// defines are ever returned. Sources, in order of authority:

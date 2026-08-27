@@ -744,20 +744,14 @@ class _SchematicViewState extends State<SchematicView> {
           error: true);
       return;
     }
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save Control Schematic Image',
+    if (!mounted) return;
+    await showCapturedPicture(
+      context,
+      bytes,
+      title: 'The control schematic as a picture',
       fileName: '${_fileStem(provider, 'control_schematic')}.png',
-      type: FileType.custom,
-      allowedExtensions: ['png'],
+      what: 'The control schematic image',
     );
-    if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
-    try {
-      await File(outputFile).writeAsBytes(bytes);
-      _savedSnack(provider, 'Control schematic image', outputFile);
-    } catch (e) {
-      _snack('Failed to save image: $e', error: true);
-    }
   }
 
 

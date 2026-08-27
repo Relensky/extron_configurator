@@ -522,22 +522,19 @@ class _FloorPlanViewState extends State<FloorPlanView> {
       _snack('Could not render the plan to an image.', error: true);
       return;
     }
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: monochrome
-          ? 'Save the floor plan for printing'
-          : 'Save the floor plan image',
+    if (!mounted) return;
+    // Only the one-sheet case comes through the preview. A room with several
+    // storeys writes the SET into a folder, and standing a dialog in front of
+    // each sheet in turn would turn one press into five.
+    await showCapturedPicture(
+      context,
+      drawings.first.bytes,
+      title: monochrome
+          ? 'The floor plan for printing'
+          : 'The floor plan as a picture',
       fileName: '$stem.png',
-      type: FileType.custom,
-      allowedExtensions: const ['png'],
+      what: what,
     );
-    if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
-    try {
-      await File(outputFile).writeAsBytes(drawings.first.bytes);
-      _savedSnack(provider, what, outputFile);
-    } catch (e) {
-      _snack('Failed to save the image: $e', error: true);
-    }
   }
 
   /// The location report as plain text on the clipboard.

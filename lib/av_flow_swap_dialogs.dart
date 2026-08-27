@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'av_device_library.dart';
+import 'control_prefill.dart' show moveControlBlockToFamily;
 import 'av_flow_model.dart';
 import 'model_swap.dart';
 import 'search_match.dart';
@@ -345,13 +346,37 @@ void applyControlSwap(
   bool applyDefaults = false,
 }) {
   final module = provider.moduleForModel(model);
-  for (final key in deviceKeys) {
+  // HIGHEST NUMBER FIRST. A block that changes family is removed from the one
+  // it left, and that family is renumbered behind it — so walking a list of
+  // ['DSPDEVICE_1', 'DSPDEVICE_2'] upwards would move the first, slide the
+  // second down onto _1, and then look for a _2 that is no longer there.
+  // Descending, nothing a later step needs has moved yet.
+  final keys = deviceKeys.toList()
+    ..sort((a, b) => _sectionIndex(b).compareTo(_sectionIndex(a)));
+
+  for (final key in keys) {
     final block = provider.roomConfig[key];
     if (block is! Map) continue;
     // The block's OWN record of what it is, read before the setter below
     // rewrites it — that is the name to look for in the device's name, and it
     // is not always the model the drawing or the estimate grouped on.
     final was = block['model']?.toString().trim() ?? '';
+
+    // THE FAMILY CAN CHANGE UNDER A SWAP. Trading a DSP for a switcher is a
+    // question somebody asks with this button, and rewriting the model in
+    // place would leave a switcher sitting in DSPDEVICE_1 — the wrong fields
+    // on the Devices tab, the wrong count in the Setup Wizard, and a room
+    // reporting a DSP it does not have. Moving it is a new block in the right
+    // family, so it does its own naming and its own module and there is
+    // nothing left here to rewrite.
+    final moved = moveControlBlockToFamily(
+      provider,
+      key,
+      model,
+      applyDefaults: applyDefaults,
+    );
+    if (moved.isNotEmpty) continue;
+
     if (module.isEmpty) {
       provider.setModelWithoutModule(key, model);
     } else if (applyDefaults) {
@@ -361,6 +386,14 @@ void applyControlSwap(
     }
     provider.renameDeviceForModel(key, was, model);
   }
+}
+
+/// The number on the end of a section key ('DSPDEVICE_2' -> 2), or 0 when
+/// there isn't one — which sorts a key with no index first and costs nothing,
+/// since a key with no index names no family either.
+int _sectionIndex(String sectionKey) {
+  final match = RegExp(r'(\d+)$').firstMatch(sectionKey);
+  return match == null ? 0 : (int.tryParse(match.group(1)!) ?? 0);
 }
 
 /// ============================================================================

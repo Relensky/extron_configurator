@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import 'contrast.dart';
+import 'app_logger.dart';
 import 'app_snack.dart';
 import 'app_state.dart';
 
@@ -21,6 +22,14 @@ import 'app_state.dart';
 //   * showAnnotationEditor() - full annotation editor (pen, highlighter,
 //                              arrow, rectangle, text) over the captured
 //                              image, with undo/clear and Save-as-PNG.
+//   * copyImageToClipboard() - puts a PNG on the system clipboard as an
+//                              IMAGE, so a picture can go straight into an
+//                              email without becoming a file first.
+//   * ZoomablePicturePreview - a preview that can be read: scroll bars down
+//                              both edges and zoom over the top, for
+//                              documents wider or taller than the dialog.
+//   * showCapturedPicture()  - the one "here is the picture" dialog every
+//                              Save-as-PNG button in the app comes through.
 // ============================================================================
 
 /// True while a drawing is being rendered to an image.
@@ -286,6 +295,42 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   // Save — composes the original image + annotations at full resolution.
   // --------------------------------------------------------------------------
 
+  /// The screenshot with the marks burnt into it, at full resolution.
+  ///
+  /// The one place the annotations become pixels: Save writes these bytes to a
+  /// file and Copy hands the same bytes to the clipboard, so what gets pasted
+  /// and what gets filed can never be two different pictures.
+  Future<Uint8List?> _flatten() async {
+    final image = _image;
+    if (image == null) return null;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawImage(image, Offset.zero, Paint());
+    _paintAnnotationsOnCanvas(canvas, _annotations, null);
+    final picture = recorder.endRecording();
+    final ui.Image outImage = await picture.toImage(image.width, image.height);
+    final byteData = await outImage.toByteData(format: ui.ImageByteFormat.png);
+    outImage.dispose();
+    return byteData?.buffer.asUint8List();
+  }
+
+  /// The marked-up screenshot straight onto the clipboard.
+  ///
+  /// The dialog stays open afterwards: a paste that went somewhere wrong is
+  /// one Ctrl-V away from being redone, and closing the editor would have
+  /// thrown the marks away to find out.
+  Future<void> _copy() async {
+    if (_image == null || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final bytes = await _flatten();
+      if (!mounted) return;
+      await copyPictureToClipboard(context, bytes, what: 'The screenshot');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _save() async {
     final image = _image;
     if (image == null || _saving) return;
@@ -297,17 +342,8 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     setState(() => _saving = true);
 
     try {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      canvas.drawImage(image, Offset.zero, Paint());
-      _paintAnnotationsOnCanvas(canvas, _annotations, null);
-      final picture = recorder.endRecording();
-      final ui.Image outImage =
-          await picture.toImage(image.width, image.height);
-      final byteData =
-          await outImage.toByteData(format: ui.ImageByteFormat.png);
-      outImage.dispose();
-      if (byteData == null) throw Exception('PNG encode failed');
+      final bytes = await _flatten();
+      if (bytes == null) throw Exception('PNG encode failed');
 
       String? outputFile = await FilePicker.saveFile(
         dialogTitle: 'Save Screenshot',
@@ -317,7 +353,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
       );
       if (outputFile == null) return;
       if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
-      await File(outputFile).writeAsBytes(byteData.buffer.asUint8List());
+      await File(outputFile).writeAsBytes(bytes);
 
       final saved = outputFile;
       if (mounted) Navigator.of(context).pop();
@@ -463,6 +499,13 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                 onPressed: _annotations.isEmpty
                     ? null
                     : () => setState(() => _annotations.clear()),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                key: const ValueKey('annotation_copy'),
+                onPressed: _saving ? null : _copy,
+                icon: const Icon(Icons.copy_all_outlined, size: 16),
+                label: const Text('Copy'),
               ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
@@ -645,4 +688,564 @@ class _AnnotationPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AnnotationPainter oldDelegate) => true;
+}
+
+// ============================================================================
+// [FEATURE - COPY THE PICTURE]
+// Every screenshot in this app ends up in one of two places: a file somebody
+// attaches, and a paste into an email, a ticket or a chat. Only the first of
+// those had a button, so the second one meant saving a PNG nobody wanted to
+// keep, pasting it, and then remembering to go and delete it.
+// ============================================================================
+
+/// The PowerShell that hands a PNG to the Windows clipboard.
+///
+/// Two formats go on at once deliberately. Anything modern - Outlook, Word,
+/// Teams, a browser - asks for `PNG` and gets the transparency; everything
+/// older asks for the bitmap, which has no alpha at all, so the bitmap copy is
+/// flattened onto white first. Without that a drawing with a transparent
+/// background pastes as a black rectangle.
+const String _windowsClipboardScript = r'''
+param([Parameter(Mandatory = $true)][string]$Path)
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$bytes = [System.IO.File]::ReadAllBytes($Path)
+$stream = New-Object -TypeName System.IO.MemoryStream -ArgumentList (,$bytes)
+$source = [System.Drawing.Image]::FromStream($stream)
+$flat = New-Object -TypeName System.Drawing.Bitmap -ArgumentList $source.Width, $source.Height
+$canvas = [System.Drawing.Graphics]::FromImage($flat)
+$canvas.Clear([System.Drawing.Color]::White)
+$canvas.DrawImage($source, 0, 0, $source.Width, $source.Height)
+$canvas.Dispose()
+$data = New-Object System.Windows.Forms.DataObject
+$data.SetData('PNG', $false, $stream)
+$data.SetImage($flat)
+# $true: the picture has to outlive this process, which exits a line later.
+# The 10 x 100ms retry is not optional on Windows - the clipboard is a single
+# global lock, and any app that happens to be reading it at this instant makes
+# the first attempt throw "Requested Clipboard operation did not succeed".
+[System.Windows.Forms.Clipboard]::SetDataObject($data, $true, 10, 100)
+''';
+
+/// Puts [png] on the system clipboard as an IMAGE.
+///
+/// Flutter's own [Clipboard] only carries text, so this goes out to the tool
+/// every desktop already ships with rather than adding a plugin: the bytes are
+/// written to a scratch file and the platform is asked to read it back.
+///
+/// Returns null when it worked, else a message fit to show somebody.
+Future<String?> copyImageToClipboard(Uint8List png) async {
+  Directory? scratch;
+  try {
+    scratch = await Directory.systemTemp.createTemp('rcb_clipboard');
+    final picture = File(p.join(scratch.path, 'clipboard.png'));
+    await picture.writeAsBytes(png);
+
+    if (Platform.isWindows) {
+      // A script FILE rather than -Command: the script has quotes, backticks
+      // and dollars in it, and every one of them would otherwise have to
+      // survive two levels of escaping on the way through a command line.
+      final script = File(p.join(scratch.path, 'clipboard.ps1'));
+      await script.writeAsString(_windowsClipboardScript);
+      final run = await Process.run('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        // The Windows clipboard is a single-threaded-apartment API and throws
+        // outright when it is called from anywhere else.
+        '-STA',
+        '-File',
+        script.path,
+        '-Path',
+        picture.path,
+      ]);
+      if (run.exitCode != 0) return _clipboardFailure(run.stderr.toString());
+      return null;
+    }
+
+    if (Platform.isMacOS) {
+      final run = await Process.run('osascript', [
+        '-e',
+        'set the clipboard to '
+            '(read (POSIX file "${picture.path}") as «class PNGf»)',
+      ]);
+      if (run.exitCode != 0) return _clipboardFailure(run.stderr.toString());
+      return null;
+    }
+
+    // Linux has two display servers and one clipboard tool for each. Try
+    // Wayland's first, then X11's, and only complain when neither is there.
+    String trouble = '';
+    for (final tool in const [
+      ('wl-copy', ['--type', 'image/png']),
+      ('xclip', ['-selection', 'clipboard', '-t', 'image/png', '-i']),
+    ]) {
+      try {
+        final process = await Process.start(tool.$1, tool.$2);
+        process.stdin.add(png);
+        await process.stdin.close();
+        if (await process.exitCode == 0) return null;
+        trouble = '${tool.$1} failed';
+      } catch (_) {
+        trouble = '${tool.$1} is not installed';
+      }
+    }
+    AppLogger.logInfo('Clipboard image copy failed on Linux: $trouble');
+    return 'Copying a picture needs wl-copy or xclip installed.';
+  } catch (e, stack) {
+    AppLogger.logError('Could not copy a picture to the clipboard', e, stack);
+    return 'The picture could not be copied to the clipboard.';
+  } finally {
+    // The scratch file is a copy of something that may be commercially
+    // sensitive; it does not get left behind in the temp folder.
+    try {
+      await scratch?.delete(recursive: true);
+    } catch (_) {}
+  }
+}
+
+/// Turns whatever the platform tool complained about into one line on screen,
+/// and the whole of it into the log.
+String _clipboardFailure(String stderr) {
+  final trimmed = stderr.trim();
+  AppLogger.logInfo(
+    'Clipboard image copy failed: '
+    '${trimmed.isEmpty ? '(no output)' : trimmed}',
+  );
+  return 'The picture could not be copied to the clipboard.';
+}
+
+/// Copies [png] and says so, in the one wording every screenshot uses.
+///
+/// [what] names the picture in the message - "The estimate", "The matrix".
+Future<void> copyPictureToClipboard(
+  BuildContext context,
+  Uint8List? png, {
+  String what = 'The picture',
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (png == null) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(content: Text('$what could not be captured.')),
+    );
+    return;
+  }
+  final failure = await copyImageToClipboard(png);
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      content: Text(failure ?? '$what is on the clipboard - paste it in.'),
+    ),
+  );
+}
+
+// ============================================================================
+// [FEATURE - LOOK AT THE PICTURE BEFORE IT GOES]
+// A preview is only a preview if it can actually be read. A responsibility
+// matrix is wider than the dialog, a cost estimate is taller than the screen,
+// and a preview that silently clips either one is a preview that lies about
+// what is in the file.
+// ============================================================================
+
+/// [child] at whatever size it wants to be, inside bars, with zoom over it.
+///
+/// The child is always LAID OUT at its natural size and only ever DRAWN
+/// scaled, which is the whole point: a [RepaintBoundary] inside it photographs
+/// the full-size document however the preview happens to be showing it, so the
+/// zoom changes the view and never the picture.
+class ZoomablePicturePreview extends StatefulWidget {
+  final Widget child;
+
+  /// Prefixes the widget keys on the zoom controls, so a test can reach the
+  /// ones belonging to a particular dialog.
+  final String keyPrefix;
+
+  /// The colour behind the picture. The plate is white or near-black
+  /// depending on the capture, and it needs something to sit ON for its edges
+  /// to be visible.
+  final Color? backdrop;
+
+  const ZoomablePicturePreview({
+    super.key,
+    required this.child,
+    this.keyPrefix = 'picture',
+    this.backdrop,
+  });
+
+  @override
+  State<ZoomablePicturePreview> createState() => _ZoomablePicturePreviewState();
+}
+
+class _ZoomablePicturePreviewState extends State<ZoomablePicturePreview> {
+  /// Held rather than left to the scroll views, so the bars have something to
+  /// attach to - a document wider than the window with no bar down its edge
+  /// is a document that LOOKS like it stops at the frame.
+  final ScrollController _across = ScrollController();
+  final ScrollController _down = ScrollController();
+
+  /// The child's own size, learned from the first layout. Null until then.
+  Size? _natural;
+
+  /// null means "fit the whole thing in the window"; a number is that scale.
+  ///
+  /// Fitted to start with. Most of what comes through here is wider or taller
+  /// than the dialog, and opening on the top-left corner of a document reads
+  /// as a picture that got cut off rather than one that needs scrolling.
+  double? _zoom;
+
+  static const double _minZoom = 0.1;
+  static const double _maxZoom = 6.0;
+
+  /// Room kept clear along the two edges the bars run down, so neither one
+  /// sits on top of the last column or the bottom row.
+  static const double _barRoom = 16;
+
+  @override
+  void dispose() {
+    _across.dispose();
+    _down.dispose();
+    super.dispose();
+  }
+
+  /// The scale that puts the whole picture inside [box].
+  ///
+  /// Never above 1: a small picture is left at its own size rather than blown
+  /// up into a poster of six cells.
+  double _fitScale(BoxConstraints box) {
+    final natural = _natural;
+    if (natural == null || natural.width <= 0 || natural.height <= 0) return 1;
+    final double wide = (box.maxWidth - _barRoom) / natural.width;
+    final double tall = (box.maxHeight - _barRoom) / natural.height;
+    final double fit = wide < tall ? wide : tall;
+    return fit.clamp(_minZoom, 1.0);
+  }
+
+  void _step(double factor, BoxConstraints box) {
+    final double from = _zoom ?? _fitScale(box);
+    setState(() => _zoom = (from * factor).clamp(_minZoom, _maxZoom));
+  }
+
+  void _measured(Size size) {
+    if (!mounted || size == _natural) return;
+    setState(() => _natural = size);
+  }
+
+  Widget _plate(BoxConstraints box) {
+    final natural = _natural;
+    // First frame: nothing knows how big the child is yet, so it is laid out
+    // unconstrained inside the scroll views and measured on the way past.
+    if (natural == null || natural.width <= 0 || natural.height <= 0) {
+      return _MeasureSize(onChange: _measured, child: widget.child);
+    }
+    final double scale = _zoom ?? _fitScale(box);
+    return SizedBox(
+      width: natural.width * scale,
+      height: natural.height * scale,
+      // FittedBox rather than Transform: a Transform is DRAWN scaled but is
+      // still MEASURED at full size, so the scroll views would go on offering
+      // to scroll a picture that already fits.
+      child: FittedBox(
+        fit: BoxFit.fill,
+        child: _MeasureSize(onChange: _measured, child: widget.child),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final double scale = _zoom ?? _fitScale(box);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Container(
+                color: widget.backdrop,
+                child: Scrollbar(
+                  controller: _down,
+                  thumbVisibility: true,
+                  // The vertical bar watches a scroll view one level DOWN
+                  // inside the horizontal one, which the default predicate -
+                  // depth zero only - would never hear from.
+                  notificationPredicate: (n) => n.depth <= 1,
+                  child: Scrollbar(
+                    controller: _across,
+                    thumbVisibility: true,
+                    notificationPredicate: (n) => n.depth <= 1,
+                    child: SingleChildScrollView(
+                      controller: _across,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(
+                        right: _barRoom,
+                        bottom: _barRoom,
+                      ),
+                      child: SingleChildScrollView(
+                        controller: _down,
+                        child: _plate(box),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Over the picture rather than beside it: the dialogs this sits in
+            // have their button row spoken for already, and a control that
+            // moves the view belongs on the view.
+            Positioned(
+              top: 6,
+              right: _barRoom + 6,
+              child: _ZoomBar(
+                keyPrefix: widget.keyPrefix,
+                scale: scale,
+                fitted: _zoom == null,
+                onOut: () => _step(1 / 1.25, box),
+                onIn: () => _step(1.25, box),
+                onFit: () => setState(() => _zoom = null),
+                onActual: () => setState(() => _zoom = 1.0),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Zoom out / the percentage / zoom in / fit / actual size.
+class _ZoomBar extends StatelessWidget {
+  final String keyPrefix;
+  final double scale;
+  final bool fitted;
+  final VoidCallback onOut;
+  final VoidCallback onIn;
+  final VoidCallback onFit;
+  final VoidCallback onActual;
+
+  const _ZoomBar({
+    required this.keyPrefix,
+    required this.scale,
+    required this.fitted,
+    required this.onOut,
+    required this.onIn,
+    required this.onFit,
+    required this.onActual,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget button(String suffix, IconData icon, String tip, VoidCallback tap) =>
+        IconButton(
+          key: ValueKey('${keyPrefix}_zoom_$suffix'),
+          icon: Icon(icon, size: 18),
+          tooltip: tip,
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.zero,
+          onPressed: tap,
+        );
+
+    return Material(
+      elevation: 2,
+      // Opaque: this floats over the document, and a translucent bar with
+      // table rules showing through it is unreadable.
+      color: theme.colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            button('out', Icons.zoom_out, 'Zoom out', onOut),
+            SizedBox(
+              width: 46,
+              child: Text(
+                '${(scale * 100).round()}%',
+                key: ValueKey('${keyPrefix}_zoom_level'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall,
+              ),
+            ),
+            button('in', Icons.zoom_in, 'Zoom in', onIn),
+            const SizedBox(width: 2),
+            button(
+              'fit',
+              fitted ? Icons.fit_screen : Icons.fit_screen_outlined,
+              'Fit the whole picture in the window',
+              onFit,
+            ),
+            button('actual', Icons.crop_free, 'Actual size', onActual),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Reports its child's laid-out size, once, and again whenever it changes.
+class _MeasureSize extends SingleChildRenderObjectWidget {
+  final ValueChanged<Size> onChange;
+
+  const _MeasureSize({required this.onChange, required Widget child})
+    : super(child: child);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderMeasureSize(onChange);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderMeasureSize renderObject,
+  ) => renderObject.onChange = onChange;
+}
+
+class _RenderMeasureSize extends RenderProxyBox {
+  ValueChanged<Size> onChange;
+  Size? _last;
+
+  _RenderMeasureSize(this.onChange);
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (size == _last) return;
+    _last = size;
+    // After the frame, not during it: telling a State to rebuild in the middle
+    // of a layout is the "setState() called during build" crash.
+    final reported = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onChange(reported));
+  }
+}
+
+// ============================================================================
+// [FEATURE - THE CAPTURED PICTURE, BEFORE IT LANDS ANYWHERE]
+// One dialog for "here is the picture that was just taken - keep it, copy it,
+// or think better of it". Every Save-as-PNG button in the app comes through
+// it, so the zoom, the bars and the Copy button cannot drift apart between
+// one tab and the next.
+// ============================================================================
+
+/// Shows [png] full size, and offers to save it or copy it.
+///
+/// [what] names the picture in the messages ("The cabling drawing"), and
+/// [fileName] is what the save dialog offers. Returns true when a file was
+/// actually written, for a caller that wants to know.
+Future<bool> showCapturedPicture(
+  BuildContext context,
+  Uint8List png, {
+  required String title,
+  required String fileName,
+  required String what,
+}) async {
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (_) => _CapturedPictureDialog(
+      png: png,
+      title: title,
+      fileName: fileName,
+      what: what,
+    ),
+  );
+  return saved ?? false;
+}
+
+class _CapturedPictureDialog extends StatefulWidget {
+  final Uint8List png;
+  final String title;
+  final String fileName;
+  final String what;
+
+  const _CapturedPictureDialog({
+    required this.png,
+    required this.title,
+    required this.fileName,
+    required this.what,
+  });
+
+  @override
+  State<_CapturedPictureDialog> createState() => _CapturedPictureDialogState();
+}
+
+class _CapturedPictureDialogState extends State<_CapturedPictureDialog> {
+  bool _busy = false;
+
+  Future<void> _copy() async {
+    setState(() => _busy = true);
+    try {
+      await copyPictureToClipboard(context, widget.png, what: widget.what);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _save() async {
+    // Read before the first await: a provider looked up after one is a
+    // BuildContext used across an async gap.
+    final provider = context.read<AppStateProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      String? picked = await FilePicker.saveFile(
+        dialogTitle: 'Save ${widget.what.toLowerCase()}',
+        fileName: widget.fileName,
+        type: FileType.custom,
+        allowedExtensions: const ['png'],
+      );
+      if (picked == null) return;
+      if (!picked.toLowerCase().endsWith('.png')) picked += '.png';
+      await File(picked).writeAsBytes(widget.png);
+      if (!mounted) return;
+      showSavedFileSnack(context, provider, widget.what, picked);
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('The picture could not be written: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return AlertDialog(
+      key: const ValueKey('captured_picture_dialog'),
+      title: Text(widget.title),
+      content: SizedBox(
+        width: media.size.width * 0.9,
+        height: media.size.height * 0.72,
+        child: ZoomablePicturePreview(
+          keyPrefix: 'captured_picture',
+          backdrop: Theme.of(context).brightness == Brightness.dark
+              ? Colors.black45
+              : Colors.grey[350],
+          child: Image.memory(widget.png, filterQuality: FilterQuality.medium),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('captured_picture_copy'),
+          onPressed: _busy ? null : _copy,
+          icon: const Icon(Icons.copy_all_outlined, size: 18),
+          label: const Text('Copy to clipboard'),
+        ),
+        FilledButton.icon(
+          key: const ValueKey('captured_picture_save'),
+          onPressed: _busy ? null : _save,
+          icon: const Icon(Icons.download, size: 18),
+          label: const Text('Save as PNG'),
+        ),
+      ],
+    );
+  }
 }

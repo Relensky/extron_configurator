@@ -1369,30 +1369,19 @@ class _CablingViewState extends State<CablingView> {
       _snack('Could not render the cabling drawing to an image.');
       return;
     }
-    String? out = await FilePicker.saveFile(
-      dialogTitle: monochrome
-          ? 'Save the cabling drawing for printing'
-          : 'Save the cabling drawing',
+    if (!mounted) return;
+    await showCapturedPicture(
+      context,
+      bytes,
+      title: monochrome
+          ? 'The cabling drawing for printing'
+          : 'The cabling drawing as a picture',
       fileName:
           '${roomFileStem(provider, monochrome ? 'cabling_bw' : 'cabling')}.png',
-      type: FileType.custom,
-      allowedExtensions: const ['png'],
+      what: monochrome
+          ? 'The cabling drawing (black & white)'
+          : 'The cabling drawing',
     );
-    if (out == null) return;
-    if (!out.toLowerCase().endsWith('.png')) out += '.png';
-    try {
-      await File(out).writeAsBytes(bytes);
-      if (mounted) {
-        showSavedFileSnack(
-          context,
-          provider,
-          monochrome ? 'Cabling drawing (black & white)' : 'Cabling drawing',
-          out,
-        );
-      }
-    } catch (e) {
-      _snack('Failed to save the image: $e');
-    }
   }
 
   /// The run schedule as plain text on the clipboard.

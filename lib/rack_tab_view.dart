@@ -1,10 +1,7 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
-import 'package:path/path.dart' as path;
 
 import 'app_snack.dart';
 import 'app_state.dart';
@@ -141,7 +138,6 @@ class _RackTabViewState extends State<RackTabView> {
     // Taken before the first await: a messenger captured after one is a
     // BuildContext used across an async gap.
     final messenger = ScaffoldMessenger.of(context);
-    final theme = Theme.of(context);
     final bytes = await captureBoundary(_captureKey, pixelRatio: 2.0);
     if (bytes == null) {
       messenger.showSnackBar(
@@ -152,31 +148,13 @@ class _RackTabViewState extends State<RackTabView> {
       );
       return;
     }
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save Rack Elevation Image',
+    if (!mounted) return;
+    await showCapturedPicture(
+      context,
+      bytes,
+      title: 'The rack elevation as a picture',
       fileName: '${roomFileStem(provider, 'racks')}.png',
-      type: FileType.custom,
-      allowedExtensions: ['png'],
+      what: 'The rack elevation',
     );
-    if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
-    final saved = outputFile;
-    try {
-      await File(saved).writeAsBytes(bytes);
-      showSavedSnackBar(
-        messenger: messenger,
-        theme: theme,
-        provider: provider,
-        message: 'Rack elevation saved as ${path.basename(saved)}',
-        savedPath: saved,
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to save image: $e'),
-          backgroundColor: snackErrorFillOn(messenger),
-        ),
-      );
-    }
   }
 }

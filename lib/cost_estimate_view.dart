@@ -19,6 +19,7 @@ import 'av_rack_view.dart' show iconForRackItem;
 import 'base_costs.dart';
 import 'base_costs_dialog.dart';
 import 'control_prefill.dart';
+import 'ui_schema.dart' show DeviceTypeSpec;
 import 'control_prefill_dialog.dart';
 import 'cost_estimate.dart';
 import 'export_tools.dart';
@@ -88,12 +89,19 @@ const List<_Col> _kEquipmentCols = [
     numeric: true,
     stepper: true,
   ),
-  _Col('Total', gap: 8, width: 52, align: TextAlign.right),
-  _Col.field('Unit price', gap: 12, width: 120, numeric: true),
-  _Col('Extended', gap: 12, width: 106, align: TextAlign.right),
-  _Col('Price from', gap: 8, width: 88),
-  // Five row buttons, 40 wide as they render.
-  _Col('', width: 200),
+  // THE FOUR NUMBER COLUMNS ARE CUT TO THE BONE, and deliberately narrower
+  // than the same columns on the tables below. This is the widest row on the
+  // page - six row buttons, two steppers and four figures - and it has to lay
+  // out inside a 900-pixel window without a yellow-and-black bar down the
+  // right of it (see cost_layout_test.dart). Forty pixels came off these when
+  // the delete button was added; every one of them is still wide enough for
+  // the figure it holds at this table's type size.
+  _Col('Total', gap: 8, width: 46, align: TextAlign.right),
+  _Col.field('Unit price', gap: 12, width: 108, numeric: true),
+  _Col('Extended', gap: 12, width: 94, align: TextAlign.right),
+  _Col('Price from', gap: 8, width: 78),
+  // Six row buttons, 40 wide as they render.
+  _Col('', width: 240),
 ];
 
 /// The rack-hardware table's columns — see [_kEquipmentCols].
@@ -245,7 +253,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     required Brightness brightness,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
-    final theme = Theme.of(context);
     setState(() {
       _captureBrightness = brightness;
       _capturing = true;
@@ -275,32 +282,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
       return;
     }
 
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save the cost estimate image',
+    if (!mounted) return;
+    // The picture rather than the file dialog. An estimate runs several
+    // screens long and the capture is the WHOLE of it, so what was on screen
+    // when the button was pressed is never what came out - the preview is
+    // where somebody finds the fee card they forgot to fill in, before the
+    // quote is in somebody else's inbox. Save and Copy both live on it.
+    await showCapturedPicture(
+      context,
+      bytes,
+      title: 'The estimate as a picture',
       fileName: '${roomFileStem(provider, 'cost_estimate')}'
           '${brightness == Brightness.dark ? '_dark' : ''}.png',
-      type: FileType.custom,
-      allowedExtensions: const ['png'],
+      what: 'The cost estimate image',
     );
-    if (outputFile == null) return;
-    if (!outputFile.toLowerCase().endsWith('.png')) outputFile += '.png';
-    try {
-      await File(outputFile).writeAsBytes(bytes);
-      showSavedSnackBar(
-        messenger: messenger,
-        theme: theme,
-        provider: provider,
-        message: 'Cost estimate image saved as ${path.basename(outputFile)}',
-        savedPath: outputFile,
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to save the image: $e'),
-          backgroundColor: snackErrorFillOn(messenger),
-        ),
-      );
-    }
   }
 
   /// True when this room has priced equipment that no control block backs.
@@ -1083,23 +1078,44 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                         : null,
                                   ),
                           ),
-                          if (extra == null)
-                            avRowIcon(
-                              Icons.restart_alt,
-                              'Back to the catalog price',
-                              line.source == PriceSource.override
-                                  ? () =>
-                                      provider.setAvCostPrice(line.key, null)
-                                  : null,
-                            )
-                          else
-                            avRowIcon(
+                          // Both kinds of line can carry a typed figure, so
+                          // both get the way back off it - and the two rows
+                          // keep the same buttons in the same places, which is
+                          // what stops the delete below landing under
+                          // somebody's cursor a column early.
+                          avRowIcon(
+                            Icons.restart_alt,
+                            'Back to the catalog price',
+                            line.source == PriceSource.override
+                                ? () => provider.setAvCostPrice(line.key, null)
+                                : null,
+                          ),
+                          // LAST, and red. A typed line is only a price and
+                          // goes on its own; a drawn one takes its boxes, its
+                          // cables, its rack slots and its control blocks with
+                          // it, and the wizard's count comes down to match.
+                          // Both ask first - see [_deleteLine].
+                          KeyedSubtree(
+                            key: ValueKey('eqp_delete_${line.key}'),
+                            child: avRowIcon(
                               Icons.delete_outline,
-                              'Remove this line',
-                              () => provider
-                                  .removeAvCostExtraEquipment(extra.id),
+                              extra != null
+                                  ? 'Remove this line from the quote'
+                                  : line.qty > 1
+                                  ? 'Delete all '
+                                        '${line.drawnQty.toStringAsFixed(0)} '
+                                        'from the room'
+                                  : 'Delete this from the room',
+                              () => _deleteLine(
+                                context,
+                                provider,
+                                line,
+                                model,
+                                extra: extra,
+                              ),
                               danger: true,
                             ),
+                          ),
                         ],
                       ),
                     ], rowKey: ValueKey('gridrow_eqp_${line.key}')),
@@ -2969,6 +2985,201 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// for a DTP CrossPoint 84 is not the price of a 108, and carrying it across
   /// would leave the new product silently quoted at the old product's price —
   /// the one mistake this button exists to stop.
+
+  /// Takes an equipment line off the quote, and off everything behind it.
+  ///
+  /// The two kinds of line are at different depths, and the button has to mean
+  /// the same thing on both:
+  ///
+  ///   * A LINE TYPED HERE is only a price. It goes, and nothing else moves.
+  ///   * A BOX ON THE DIAGRAM is the room's record of a device. Deleting it
+  ///     from the quote and leaving it drawn would put the row straight back
+  ///     on the next rebuild - the estimate is COUNTED off the diagram - so
+  ///     the boxes go, their cables and rack slots go with them, and any
+  ///     control block behind them goes too. The family is renumbered and the
+  ///     wizard's count follows, which is what makes the Devices tab and the
+  ///     Setup Wizard agree with the quote instead of listing a device nobody
+  ///     is buying any more.
+  ///
+  /// Asked first, always. This is the one button on the row that reaches
+  /// outside the estimate, and a drawn device carries an address, a module and
+  /// a place in a rack that took somebody an afternoon.
+  Future<void> _deleteLine(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line,
+    AvFlowModel model, {
+    CostLineItem? extra,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final what = line.description.trim().isEmpty
+        ? (line.model.trim().isEmpty ? 'this line' : line.model.trim())
+        : line.description.trim();
+
+    if (extra != null) {
+      final ok = await _confirmDelete(
+        context,
+        title: 'Remove $what?',
+        detail: const [
+          'The line comes off the quote. Nothing is drawn for it and no '
+              'device block is behind it, so nothing else in the room '
+              'changes.',
+        ],
+      );
+      if (!ok) return;
+      provider.removeAvCostExtraEquipment(extra.id);
+      showTimedSnackBar(
+        messenger,
+        SnackBar(content: Text('$what is off the quote.')),
+      );
+      return;
+    }
+
+    final group = groupDevices(
+      model,
+    ).where((g) => g.key == line.key).firstOrNull;
+    if (group == null) return;
+
+    // Which of these boxes the control system actually knows about. A node
+    // seeded from the config carries the config's own section key as its id,
+    // so the two line up without anything having to be stored to link them.
+    final configured = activeDeviceKeysIn(
+      provider.roomConfig,
+      provider.uiSchema.deviceCountMap,
+    ).toSet();
+    final controlKeys = [
+      for (final node in group.nodes)
+        if (configured.contains(node.id)) node.id,
+    ];
+    // Everything that would go with them, counted before anything is written
+    // so the question can be specific about what it is asking.
+    final cables = provider.avCables
+        .where(
+          (c) => group.nodes.any(
+            (n) => c.fromNodeId == n.id || c.toNodeId == n.id,
+          ),
+        )
+        .length;
+    final racked = group.nodes
+        .where((n) => provider.avRackSlots.containsKey(n.id))
+        .length;
+    final qty = group.nodes.length;
+
+    final ok = await _confirmDelete(
+      context,
+      title: qty > 1 ? 'Delete all $qty × $what?' : 'Delete $what?',
+      detail: [
+        qty > 1
+            ? 'All $qty come off the signal flow diagram.'
+            : 'It comes off the signal flow diagram.',
+        if (cables > 0)
+          '$cables drawn cable${cables == 1 ? '' : 's'} '
+              '${cables == 1 ? 'goes' : 'go'} with '
+              '${qty > 1 ? 'them' : 'it'}.',
+        if (racked > 0)
+          '$racked rack slot${racked == 1 ? '' : 's'} '
+              '${racked == 1 ? 'is' : 'are'} freed and the rail re-packed.',
+        if (controlKeys.isNotEmpty)
+          '${controlKeys.length} device block'
+              '${controlKeys.length == 1 ? '' : 's'} '
+              '(${controlKeys.join(', ')}) '
+              '${controlKeys.length == 1 ? 'is' : 'are'} removed from the '
+              'room config, the rest of the family is renumbered, and the '
+              'Setup Wizard\'s count comes down to match.'
+        else
+          'No control block is behind '
+              '${qty > 1 ? 'these' : 'this'}, so the room config is '
+              'untouched.',
+        'This is one press of Undo on the Signal Flow tab for the drawing. '
+            'The room config is not on that history - save the room before '
+            'doing this if the blocks matter.',
+      ],
+    );
+    if (!ok) return;
+
+    // The drawing first. Removing a node whose id is a config section key
+    // remembers that key as "taken off the canvas by hand", and the block
+    // removal below is what clears that record - the other order leaves the
+    // renumbered survivor remembered as dismissed and it disappears off the
+    // diagram on the next seed.
+    for (final node in group.nodes) {
+      provider.removeAvNode(node.id);
+    }
+    final removed = controlKeys.isEmpty
+        ? const <String>[]
+        : provider.removeDeviceBlocks(controlKeys);
+
+    // The money typed against a line that no longer exists. Left behind, it
+    // would land on the next device that grouped onto the same key - a
+    // replacement of the same model, quoted at the old room's figure.
+    provider.setAvCostPrice(line.key, null);
+    if (line.spareQty != 0) provider.setAvEquipmentSpares(line.key, 0);
+
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          [
+            qty > 1 ? '$qty × $what deleted' : '$what deleted',
+            if (removed.isNotEmpty)
+              '${removed.length} device block'
+                  '${removed.length == 1 ? '' : 's'} removed and the family '
+                  'renumbered',
+          ].join('. '),
+        ),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
+  /// The one "are you sure" every delete on this page asks.
+  ///
+  /// Spelled out as a list of consequences rather than a sentence, because
+  /// what actually goes depends on the row - cables, a rack slot, a control
+  /// block - and a generic warning is one somebody stops reading.
+  Future<bool> _confirmDelete(
+    BuildContext context, {
+    required String title,
+    required List<String> detail,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('cost_delete_confirm'),
+        title: Text(title),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final line in detail) ...[
+                Text(line, style: Theme.of(ctx).textTheme.bodyMedium),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const ValueKey('cost_delete_confirm_go'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   Future<void> _swapUnit(
     BuildContext context,
     AppStateProvider provider,
@@ -3078,12 +3289,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         ? null
         : provider.previewModelSelection(controlKeys.first, picked.model);
 
+    // WHETHER THE DEVICE STOPS BEING WHAT IT WAS. Trading a DSP for a switcher
+    // does not rewrite a block, it MOVES it - a new block in the new family,
+    // off that family's defaults, with the old one's number given back. That
+    // is a bigger thing than a like-for-like swap and gets said out loud.
+    final leaving = controlKeys.isEmpty
+        ? null
+        : provider.uiSchema.deviceTypeForSection(controlKeys.first);
+    final joining = familyForModel(provider, picked.model);
+    final movesFamily =
+        leaving != null && joining != null && leaving.prefix != joining.prefix;
+
     // Silent when there is nothing to decide and nothing to warn about. It
-    // opens when the answer matters: no driver claims the new model, or the
-    // device moves to a different module whose defaults disagree with what
-    // this room has set.
+    // opens when the answer matters: no driver claims the new model, the
+    // device changes family, or it moves to a different module whose defaults
+    // disagree with what this room has set.
     var choice = _SwapControl.keepSettings;
     if (module.isEmpty ||
+        movesFamily ||
         (preview != null &&
             preview.moduleChanged &&
             preview.diffs.isNotEmpty)) {
@@ -3096,6 +3319,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
         controlKeys: controlKeys,
         module: module,
         preview: preview,
+        leaving: movesFamily ? leaving : null,
+        joining: movesFamily ? joining : null,
       );
       // Nothing has been written yet, so cancel really does mean nothing
       // happened — the price override is cleared below, after this.
@@ -3409,6 +3634,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
     required List<String> controlKeys,
     required String module,
     required ModelChangePreview? preview,
+
+    /// Set only when the new model belongs to a DIFFERENT device family from
+    /// the one the block is in — the swap that moves the block rather than
+    /// rewriting it. Null for the ordinary like-for-like swap.
+    DeviceTypeSpec? leaving,
+    DeviceTypeSpec? joining,
   }) {
     final theme = Theme.of(context);
     final asking =
@@ -3465,6 +3696,19 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         '${boxes == 1 ? 'this box was' : 'these boxes were'} '
                         'added to the drawing by hand rather than coming from '
                         'the room config.',
+                  ),
+                if (leaving != null && joining != null)
+                  bullet(
+                    Icons.swap_horiz,
+                    '$toModel is a ${joining.label.toLowerCase()}, not a '
+                        '${leaving.label.toLowerCase()}, so the block MOVES: '
+                        'it is rebuilt in the '
+                        '${joining.label.toLowerCase()} family off that '
+                        "family's defaults and the driver's own settings, and "
+                        'the Setup Wizard counts one fewer '
+                        '${leaving.label.toLowerCase()} and one more '
+                        '${joining.label.toLowerCase()}. Only the address and '
+                        'the port carry over.',
                   ),
                 if (module.isEmpty) ...[
                   const SizedBox(height: 10),
