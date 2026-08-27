@@ -16,6 +16,7 @@ import 'av_flow_swap_dialogs.dart' show pickCatalogModel;
 import 'building_project.dart';
 import 'color_wheel_picker.dart';
 import 'contrast.dart';
+import 'control_gaps.dart' show ControlGap;
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
 import 'name_colors.dart';
@@ -798,6 +799,15 @@ class _ProjectViewState extends State<ProjectView> {
                       : estimate.untaggedParts > 0
                       ? '${_warningTooltip(estimate)}'
                             '\n\nClick to list the parts with no vendor.'
+                      // A COUNT THAT COULD NOT BE PRESSED. The chip has always
+                      // linked the price and vendor faults to the rows they
+                      // are about, and left the undriven devices as a number -
+                      // so the one fault whose fix is in another room was the
+                      // one nothing would take you to.
+                      : estimate.undrivenDevices > 0
+                      ? '${_warningTooltip(estimate)}'
+                            '\n\nClick to list the parts with no control '
+                            'module, and the rooms they are in.'
                       : _warningTooltip(estimate),
                   // AN ACTION, not a label. A count of things to check that
                   // cannot be pressed leaves somebody hunting through a parts
@@ -829,12 +839,15 @@ class _ProjectViewState extends State<ProjectView> {
                     // merely on nobody's order yet.
                     onPressed:
                         estimate.unpricedParts > 0 ||
-                            estimate.untaggedParts > 0
+                            estimate.untaggedParts > 0 ||
+                            estimate.undrivenDevices > 0
                         ? () => setState(() {
                               _pane = _ProjectPane.parts;
                               _vendorFilter = estimate.unpricedParts > 0
                                   ? _unpricedFilter
-                                  : _untaggedFilter;
+                                  : estimate.untaggedParts > 0
+                                  ? _untaggedFilter
+                                  : _undrivenFilter;
                               _search = '';
                             })
                         : null,
@@ -2119,6 +2132,150 @@ class _BuildingTotals extends StatelessWidget {
 //  CORE COMPONENTS
 // ---------------------------------------------------------------------------
 
+/// THE ROOMS WITH DEVICES NOTHING WILL DRIVE, as rooms.
+///
+/// The master list answers "which parts have no driver" — the right question
+/// when the fix is to write a driver or retire a product, and the wrong one
+/// when the fix is to pick a module on a device. That fix happens in a ROOM,
+/// on its Devices page, one room at a time, and working out which rooms those
+/// are meant reading every filtered row and keeping a tally.
+///
+/// So the same facts, turned round: a room a line, what is undriven in it, and
+/// the way in. Shown only while the list is filtered to the undriven parts,
+/// because that is when it is the question being asked.
+class _DriverGapRooms extends StatelessWidget {
+  final ProjectEstimate estimate;
+
+  const _DriverGapRooms({required this.estimate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (estimate.controlGaps.isEmpty) return const SizedBox.shrink();
+
+    // Room -> what is undriven in it, worst first. A room with six is the one
+    // to open, and a list that ordered them by name would hide it.
+    final byRoom = <String, ({ProjectRoomCost room, List<ControlGap> gaps})>{};
+    for (final entry in estimate.controlGaps) {
+      final at = byRoom[entry.room.ref.id];
+      byRoom[entry.room.ref.id] = (
+        room: entry.room,
+        gaps: [...?at?.gaps, entry.gap],
+      );
+    }
+    final rooms = byRoom.values.toList()
+      ..sort((a, b) {
+        final byCount = b.gaps
+            .fold<int>(0, (s, g) => s + g.qty)
+            .compareTo(a.gaps.fold<int>(0, (s, g) => s + g.qty));
+        return byCount != 0
+            ? byCount
+            : a.room.name.toLowerCase().compareTo(b.room.name.toLowerCase());
+      });
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Rooms affected (${rooms.length})',
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'A module is picked on a device, on the room\'s own Devices '
+                'page. Open the room to fix its list.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final entry in rooms)
+                _DriverGapRoomRow(room: entry.room, gaps: entry.gaps),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One room on the undriven list: what is wrong in it, and the way in.
+class _DriverGapRoomRow extends StatelessWidget {
+  final ProjectRoomCost room;
+  final List<ControlGap> gaps;
+
+  const _DriverGapRoomRow({required this.room, required this.gaps});
+
+  /// How many devices are named before the row stops listing and starts
+  /// counting — the same rule the briefing follows.
+  static const int _named = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final devices = gaps.fold<int>(0, (s, g) => s + g.qty);
+    final names = [
+      for (final g in gaps.take(_named))
+        '${g.device}${g.qty > 1 ? ' ×${g.qty}' : ''}',
+      if (gaps.length > _named) 'and ${gaps.length - _named} more',
+    ].join(', ');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.link_off,
+            size: 15,
+            color: errorTextOn(theme.colorScheme, theme.cardColor),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${room.name}  ·  $devices device'
+                  '${devices == 1 ? '' : 's'}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                Text(
+                  names,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            key: ValueKey('gap_room_open_${room.ref.id}'),
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Open'),
+            onPressed: () => openProjectRoomOn(
+              context,
+              room.ref,
+              AppTab.devices,
+              'pick the control modules for this room here',
+              roomName: room.name,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Master-list filters that are not a vendor id. Ids are always `vendor<n>`,
 /// so these can never collide with one by accident.
 ///
@@ -2160,6 +2317,11 @@ List<Widget> partsSlivers(
   final needle = search.trim().toLowerCase();
   // Only ever a narrowing of the spares list — see [_ProjectViewState].
   final sparesOnly = vendorFilter == kSparedFilter;
+  // WHICH ROOMS, while the list is the undriven one. The rows name a part and
+  // the rooms that have it; the question somebody actually has next is the
+  // other way round - which rooms do I have to go and fix - and answering it
+  // off a filtered parts list means reading nine rows and keeping a tally.
+  final undrivenOnly = vendorFilter == undrivenFilter;
   final room = sparesOnly ? spareRoom : '';
 
   // WHAT EACH UNSPARED PART COVERS, built once for the whole list rather than
@@ -2366,6 +2528,8 @@ List<Widget> partsSlivers(
     // where a spare is added, scoped to a room or to the building, and moved
     // between the two — see project_spares_view.dart.
     if (sparesOnly) ...spareSectionSlivers(context, estimate),
+    if (undrivenOnly)
+      SliverToBoxAdapter(child: _DriverGapRooms(estimate: estimate)),
     // And the room filter under it, for reading the parts list itself as one
     // room's shelf list.
     if (sparesOnly)

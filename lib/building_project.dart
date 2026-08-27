@@ -936,6 +936,104 @@ const Set<String> kViewablePlanExtensions = {
 //  ROOMS IN THE PROJECT
 // ---------------------------------------------------------------------------
 
+/// A ROOM ON THE PLAN THAT HAS NO CONFIG.
+///
+/// Most of an estate has never been through this app. The rooms that have are
+/// the ones somebody rebuilt recently; the other forty are a projector, a
+/// screen and a wall plate that went in in 2014, and the only facts anybody
+/// has about them are the year and roughly what a room like that costs to do.
+///
+/// Those rooms are the LARGER half of a refresh plan, and leaving them off it
+/// because nobody has drawn them yet makes the plan read as a fraction of the
+/// real ask — which is the one direction a budget must not be wrong in.
+///
+/// So a room can be typed in: a name, when it was last done, how long it is
+/// expected to last, and what it costs to do again. No config, no diagram, no
+/// parts list. It ages on exactly the same cycle as a drawn room and lands in
+/// the same year columns; what it does NOT do is claim to know what is in it.
+///
+/// THE MONEY IS A BASE COST unless somebody types a figure. A room nobody has
+/// itemised is priced the way the rest of this app prices what it has not
+/// itemised — off the base-cost card, by category — and every figure derived
+/// from it says it is an estimate. See [replacementCost] and [category].
+class ManualRoom {
+  final String id;
+
+  /// What the room is called on the plan — 'BSS 214'.
+  final String name;
+
+  /// When it was last done, or null when nobody has recorded it. A room with
+  /// no date has nothing to age and shows up as unsurveyed, the same as a
+  /// drawn position with no install date.
+  final DateTime? installedOn;
+
+  /// How long this room is expected to last. 0 takes the blanket cycle, so a
+  /// room typed in without an opinion follows the same default everything
+  /// else does.
+  final int lifeYears;
+
+  /// What it costs to do the room again. 0 means "price it off the base-cost
+  /// card", which is what a room nobody has itemised gets.
+  final double replacementCost;
+
+  /// The base-cost line this room is priced from when [replacementCost] is 0 —
+  /// a category on the shared card. Empty falls back to the whole-room line if
+  /// the card has one, and to nothing if it does not, which reports as
+  /// unpriced rather than as free.
+  final String category;
+
+  final String notes;
+
+  const ManualRoom({
+    required this.id,
+    required this.name,
+    this.installedOn,
+    this.lifeYears = 0,
+    this.replacementCost = 0,
+    this.category = '',
+    this.notes = '',
+  });
+
+  ManualRoom copyWith({
+    String? name,
+    DateTime? installedOn,
+    bool clearInstalledOn = false,
+    int? lifeYears,
+    double? replacementCost,
+    String? category,
+    String? notes,
+  }) => ManualRoom(
+    id: id,
+    name: name ?? this.name,
+    installedOn:
+        clearInstalledOn ? null : (installedOn ?? this.installedOn),
+    lifeYears: lifeYears ?? this.lifeYears,
+    replacementCost: replacementCost ?? this.replacementCost,
+    category: category ?? this.category,
+    notes: notes ?? this.notes,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    if (installedOn != null) 'installedOn': formatIsoDate(installedOn!),
+    if (lifeYears > 0) 'lifeYears': lifeYears,
+    if (replacementCost > 0) 'replacementCost': replacementCost,
+    if (category.trim().isNotEmpty) 'category': category.trim(),
+    if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+  };
+
+  static ManualRoom fromJson(Map<String, dynamic> json) => ManualRoom(
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    installedOn: parseIsoDate(json['installedOn']),
+    lifeYears: (json['lifeYears'] as num?)?.toInt() ?? 0,
+    replacementCost: (json['replacementCost'] as num?)?.toDouble() ?? 0,
+    category: json['category']?.toString() ?? '',
+    notes: json['notes']?.toString() ?? '',
+  );
+}
+
 /// One room on the job: where its config lives, and whether it counts.
 class ProjectRoomRef {
   final String id;
@@ -1211,6 +1309,12 @@ class BuildingProject {
   String currency;
 
   final List<ProjectRoomRef> rooms;
+
+  /// Rooms on the refresh plan that have no config file — see [ManualRoom].
+  /// They are counted, aged and budgeted; they are not priced, ordered or
+  /// drawn, because there is nothing in them to price.
+  final List<ManualRoom> manualRooms;
+
   final List<ProjectVendor> vendors;
 
   /// Whose job each piece of scope is - see [ResponsibilityItem].
@@ -1329,6 +1433,7 @@ class BuildingProject {
   /// unique across sessions — a reused id would re-point somebody's hand
   /// vendor tags at a different room.
   int _roomCounter;
+  int _manualRoomCounter;
   int _vendorCounter;
   int _todoCounter;
   int _trackCounter;
@@ -1344,6 +1449,7 @@ class BuildingProject {
     this.notes = '',
     this.currency = r'$',
     List<ProjectRoomRef>? rooms,
+    List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
     List<ResponsibilityItem>? responsibility,
     Map<String, String>? partVendors,
@@ -1359,6 +1465,7 @@ class BuildingProject {
     List<ProjectPlan>? plans,
     List<ProjectEdit>? history,
     int roomCounter = 0,
+    int manualRoomCounter = 0,
     int vendorCounter = 0,
     int todoCounter = 0,
     int trackCounter = 0,
@@ -1366,6 +1473,7 @@ class BuildingProject {
     int planCounter = 0,
     int responsibilityCounter = 0,
   }) : rooms = rooms ?? [],
+       manualRooms = manualRooms ?? [],
        vendors = vendors ?? [],
        responsibility = responsibility ?? [],
        partVendors = partVendors ?? {},
@@ -1379,6 +1487,7 @@ class BuildingProject {
        plans = plans ?? [],
        history = history ?? [],
        _roomCounter = roomCounter,
+       _manualRoomCounter = manualRoomCounter,
        _vendorCounter = vendorCounter,
        _todoCounter = todoCounter,
        _trackCounter = trackCounter,
@@ -1388,6 +1497,7 @@ class BuildingProject {
 
   bool get isEmpty =>
       rooms.isEmpty &&
+      manualRooms.isEmpty &&
       vendors.isEmpty &&
       partVendors.isEmpty &&
       deliveryDeadline == null &&
@@ -1410,6 +1520,43 @@ class BuildingProject {
       [for (final r in rooms) if (r.included) r];
 
   String nextRoomId() => 'room${++_roomCounter}';
+
+  /// Ids for the rooms with no config. Their OWN counter, not the room one: a
+  /// manual room and a config room are two different things on two different
+  /// lists, and sharing a counter would make 'room7' mean either.
+  String nextManualRoomId() => 'manual${++_manualRoomCounter}';
+
+  /// Adds a room that has no config file, and returns it. See [ManualRoom].
+  ManualRoom addManualRoom({
+    required String name,
+    DateTime? installedOn,
+    int lifeYears = 0,
+    double replacementCost = 0,
+    String category = '',
+    String notes = '',
+  }) {
+    final room = ManualRoom(
+      id: nextManualRoomId(),
+      name: name.trim(),
+      installedOn: installedOn,
+      lifeYears: lifeYears,
+      replacementCost: replacementCost,
+      category: category.trim(),
+      notes: notes.trim(),
+    );
+    manualRooms.add(room);
+    return room;
+  }
+
+  /// Replaces one by id. Nothing happens for an id that is not on the job.
+  void updateManualRoom(ManualRoom room) {
+    final at = manualRooms.indexWhere((r) => r.id == room.id);
+    if (at < 0) return;
+    manualRooms[at] = room;
+  }
+
+  void removeManualRoom(String id) =>
+      manualRooms.removeWhere((r) => r.id == id);
   String nextVendorId() => 'vendor${++_vendorCounter}';
   String nextTodoId() => 'todo${++_todoCounter}';
   String nextTrackId() => 'track${++_trackCounter}';
@@ -2140,6 +2287,8 @@ class BuildingProject {
     if (notes.isNotEmpty) 'notes': notes,
     'currency': currency,
     'rooms': [for (final r in rooms) r.toJson()],
+    if (manualRooms.isNotEmpty)
+      'manualRooms': [for (final r in manualRooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
     if (responsibility.isNotEmpty)
       'responsibility': [for (final r in responsibility) r.toJson()],
@@ -2170,6 +2319,7 @@ class BuildingProject {
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
     'roomCounter': _roomCounter,
+    if (_manualRoomCounter > 0) 'manualRoomCounter': _manualRoomCounter,
     'vendorCounter': _vendorCounter,
     if (_todoCounter > 0) 'todoCounter': _todoCounter,
     if (_trackCounter > 0) 'trackCounter': _trackCounter,
@@ -2183,6 +2333,13 @@ class BuildingProject {
     final rooms = [
       for (final r in (json['rooms'] as List? ?? []))
         if (r is Map) ProjectRoomRef.fromJson(Map<String, dynamic>.from(r)),
+    ];
+    // A room with no name cannot be read on a plan or pointed at in a
+    // meeting, so it is dropped the way an empty note is.
+    final manualRooms = [
+      for (final r in (json['manualRooms'] as List? ?? []))
+        if (r is Map && r['name']?.toString().trim().isNotEmpty == true)
+          ManualRoom.fromJson(Map<String, dynamic>.from(r)),
     ];
     final vendors = [
       for (final v in (json['vendors'] as List? ?? []))
@@ -2312,6 +2469,7 @@ class BuildingProject {
           ? json['currency'].toString()
           : r'$',
       rooms: rooms,
+      manualRooms: manualRooms,
       vendors: vendors,
       responsibility: responsibility,
       partVendors: pins,
@@ -2369,6 +2527,10 @@ class BuildingProject {
         (json['roomCounter'] as num?)?.toInt() ?? 0,
         highest(rooms.map((r) => r.id), 'room'),
       ].reduce((a, b) => a > b ? a : b),
+      manualRoomCounter: [
+        (json['manualRoomCounter'] as num?)?.toInt() ?? 0,
+        highest(manualRooms.map((r) => r.id), 'manual'),
+      ].reduce((a, b) => a > b ? a : b),
       vendorCounter: [
         (json['vendorCounter'] as num?)?.toInt() ?? 0,
         highest(vendors.map((v) => v.id), 'vendor'),
@@ -2413,6 +2575,7 @@ class BuildingProject {
     notes: notes,
     currency: currency,
     rooms: List<ProjectRoomRef>.from(rooms),
+    manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
     responsibility: List<ResponsibilityItem>.from(responsibility),
     partVendors: Map<String, String>.from(partVendors),
@@ -2427,6 +2590,7 @@ class BuildingProject {
     plans: List<ProjectPlan>.from(plans),
     history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,
+    manualRoomCounter: _manualRoomCounter,
     vendorCounter: _vendorCounter,
     todoCounter: _todoCounter,
     trackCounter: _trackCounter,

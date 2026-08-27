@@ -92,8 +92,8 @@ const List<_Col> _kEquipmentCols = [
   _Col.field('Unit price', gap: 12, width: 120, numeric: true),
   _Col('Extended', gap: 12, width: 106, align: TextAlign.right),
   _Col('Price from', gap: 8, width: 88),
-  // Four row buttons, 40 wide as they render.
-  _Col('', width: 160),
+  // Five row buttons, 40 wide as they render.
+  _Col('', width: 200),
 ];
 
 /// The rack-hardware table's columns — see [_kEquipmentCols].
@@ -106,9 +106,9 @@ const List<_Col> _kHardwareCols = [
   _Col.field('Unit price', gap: 12, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
   _Col('Price from', gap: 12, width: 92),
-  // Three row buttons. They are constrained to 34 and render at
+  // Four row buttons. They are constrained to 34 and render at
   // 40, which is what the column actually takes.
-  _Col('', width: 120),
+  _Col('', width: 160),
 ];
 
 /// The cabling table's columns — see [_kEquipmentCols]. Both kinds of row
@@ -121,9 +121,9 @@ const List<_Col> _kCablingCols = [
   _Col('Total', gap: 12, width: 54, align: TextAlign.right),
   _Col.field('Unit price', gap: 12, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-  // Four row buttons. They are constrained to 34 and render at
+  // Five row buttons. They are constrained to 34 and render at
   // 40, which is what the column actually takes.
-  _Col('', width: 160),
+  _Col('', width: 200),
 ];
 
 /// The labor table's columns — see [_kEquipmentCols].
@@ -970,20 +970,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         },
                       ),
                       // Extended
+                      _extendedCell(context, line, currency),
+                      // Price from - or who is furnishing it instead, which is
+                      // the same question answered out of somebody else's
+                      // budget.
                       Text(
-                        formatMoney(line.total, currency),
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      // Price from
-                      Text(
-                        kPriceSourceLabels[line.source] ?? '',
+                        priceFromLabel(line),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
-                          color: line.source == PriceSource.none
+                          color:
+                              line.source == PriceSource.none && !line.furnished
                               ? theme.colorScheme.error
                               : mutedInk(context, theme),
                         ),
@@ -1000,6 +998,8 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             model,
                             extra: extra,
                           ),
+                          // Somebody else is buying this one.
+                          _furnishedButton(context, provider, line),
                           // WRONG BOX ON THE QUOTE. The commonest edit an
                           // estimate gets and the one that had to be made
                           // somewhere else: a display comes back at the wrong
@@ -1265,20 +1265,18 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                         },
                       ),
                       // Extended
+                      _extendedCell(context, line, currency),
+                      // Price from - or who is furnishing it instead, which is
+                      // the same question answered out of somebody else's
+                      // budget.
                       Text(
-                        formatMoney(line.total, currency),
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      // Price from
-                      Text(
-                        kPriceSourceLabels[line.source] ?? '',
+                        priceFromLabel(line),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
-                          color: line.source == PriceSource.none
+                          color:
+                              line.source == PriceSource.none && !line.furnished
                               ? theme.colorScheme.error
                               : mutedInk(context, theme),
                         ),
@@ -1287,6 +1285,9 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // A shelf out of the store, a plate the cabinet shop
+                          // provides: in the frame, and not on this invoice.
+                          _furnishedButton(context, provider, line),
                           // THE WRONG PLATE. A vent where a blank should be, a
                           // 1U shelf that has to be 2U, a plate from the maker
                           // the stakeholder will not have: the same edit the
@@ -1577,18 +1578,16 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             },
                           ),
                           // Extended
-                          Text(
-                            formatMoney(line.total, currency),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          _extendedCell(context, line, currency),
                           // The row's buttons, as one cell.
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // THE RUNS SOMEBODY ELSE PULLS. The commonest
+                              // one there is: the network department provides
+                              // and terminates the cat6, and the room still
+                              // has every one of those runs on its schedule.
+                              _furnishedButton(context, provider, line),
                               // WHICH LEAD THIS LENGTH IS BOUGHT AS. The
                               // estimate picks the shortest stock lead that
                               // reaches the run, which is right until the job
@@ -1760,20 +1759,29 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                             },
                           ),
                           // Extended
-                          Text(
-                            formatMoney(line?.total ?? 0, currency),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          line == null
+                              ? Text(
+                                  formatMoney(0, currency),
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                )
+                              : _extendedCell(context, line, currency),
                           // The row's buttons. A miscellaneous line is not a
                           // length of anything, so it has no base cost to set
                           // — the empty slot keeps the column square.
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (line != null)
+                                _furnishedButton(context, provider, line)
+                              else
+                                const SizedBox(
+                                  width: kRowIconWidth,
+                                  height: 34,
+                                ),
                               avRowIcon(
                                 item.catalogModel.isEmpty
                                     ? Icons.library_add_outlined
@@ -2220,6 +2228,226 @@ class _CostEstimateViewState extends State<CostEstimateView> {
   /// room has boxes whose honest answer to "why is this not in the config" is
   /// "it never will be", and a warning nobody can clear is a warning everybody
   /// learns to ignore.
+  /// The presets the "furnished from somewhere else" menu offers.
+  ///
+  /// The four answers this actually gets in practice, so the common case is
+  /// one click. The empty string is "by others" with nobody named, which is
+  /// what a quote says when the part is somebody else's problem and whose it
+  /// is is not this document's business.
+  static const List<({String source, String label, String why})>
+      _kFurnishedSources = [
+    (
+      source: 'stock',
+      label: 'Used from stock',
+      why: 'Already on the shelf. It goes in the room and no money changes '
+          'hands on this job.',
+    ),
+    (
+      source: 'another department',
+      label: 'Furnished by another department',
+      why: 'Somebody else buys and installs it - the network group pulling '
+          'the cat6, facilities providing the mount.',
+    ),
+    (
+      source: 'the owner',
+      label: 'Owner furnished',
+      why: 'The stakeholder already owns it and is handing it over.',
+    ),
+    (
+      source: '',
+      label: 'Furnished by others',
+      why: 'Not this job\'s money, and the quote does not need to say whose.',
+    ),
+  ];
+
+  /// The row button that takes a line off this quote WITHOUT taking it out of
+  /// the room.
+  ///
+  /// Deleting the line was the only way to say "somebody else is buying this",
+  /// and it said far too much: the part left the pack list, the cable schedule
+  /// and the replacement plan along with its price, so the room's own drawings
+  /// stopped describing the room. This keeps the line exactly where it is -
+  /// quantity, unit price, part number and all - and contributes nothing to
+  /// the total. The replacement plan still budgets for the day it dies, which
+  /// is the point: a display the campus handed over still has to be replaced
+  /// by somebody.
+  Widget _furnishedButton(
+    BuildContext context,
+    AppStateProvider provider,
+    CostLine line,
+  ) {
+    // An empty slot in the photograph, like every other row button.
+    if (PrintMode.of(context)) {
+      return const SizedBox(width: kRowIconWidth, height: 34);
+    }
+    final theme = Theme.of(context);
+    final by = provider.avCostFurnishedBy(line.key);
+    final what = line.description.trim().isEmpty
+        ? 'this line'
+        : line.description.trim();
+
+    return SizedBox(
+      key: ValueKey('furnished_${line.key}'),
+      width: kRowIconWidth,
+      child: Tooltip(
+        message: by == null
+            ? 'Bought on this job. Press to say it comes from somewhere else.'
+            : by.isEmpty
+                ? 'Furnished by others - listed here, priced at nothing'
+                : 'Furnished by $by - listed here, priced at nothing',
+        child: PopupMenuButton<String>(
+          icon: Icon(
+            by == null ? Icons.sell_outlined : Icons.handshake,
+            size: 18,
+            color: by == null
+                ? mutedInk(context, theme)
+                : theme.colorScheme.primary,
+          ),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 320, maxWidth: 460),
+          itemBuilder: (ctx) => [
+            for (final preset in _kFurnishedSources)
+              PopupMenuItem(
+                value: 'set:${preset.source}',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    by == preset.source
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                  ),
+                  title: Text(preset.label),
+                  subtitle: Text(preset.why),
+                ),
+              ),
+            const PopupMenuItem(
+              value: 'other',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.edit_outlined, size: 18),
+                title: Text('Furnished by someone else...'),
+                subtitle: Text('Name them, and the quote prints who.'),
+              ),
+            ),
+            PopupMenuItem(
+              value: 'clear',
+              enabled: by != null,
+              child: const ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.payments_outlined, size: 18),
+                title: Text('Quoted on this job'),
+                subtitle: Text('Put it back in the total at its own price.'),
+              ),
+            ),
+          ],
+          onSelected: (choice) async {
+            if (choice == 'clear') {
+              provider.setAvCostFurnished(line.key, null);
+              return;
+            }
+            if (choice.startsWith('set:')) {
+              provider.setAvCostFurnished(
+                line.key,
+                choice.substring('set:'.length),
+              );
+              return;
+            }
+            final typed = await _askFurnishedSource(context, by ?? '', what);
+            if (typed == null) return;
+            provider.setAvCostFurnished(line.key, typed);
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Who is furnishing it, typed. Null when the dialog was canceled.
+  Future<String?> _askFurnishedSource(
+    BuildContext context,
+    String current,
+    String what,
+  ) async {
+    final controller = TextEditingController(text: current);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Furnished from another source'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$what stays on the estimate with its quantity and its price, '
+                'and adds nothing to the total. The replacement plan still '
+                'carries it - somebody has to buy the next one.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Furnished by',
+                  hintText: 'e.g. Campus IT, the AV shop, stock',
+                ),
+                onSubmitted: (v) => Navigator.of(ctx).pop(v),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The Extended cell: the money, or what the line is furnished by instead.
+  ///
+  /// A hard zero next to a real unit price reads as a pricing fault rather
+  /// than as a decision. The word is the decision, and the tooltip names who.
+  Widget _extendedCell(
+    BuildContext context,
+    CostLine line,
+    String currency, {
+    double? total,
+  }) {
+    final theme = Theme.of(context);
+    if (line.furnished) {
+      return Tooltip(
+        message: priceFromLabel(line),
+        child: Text(
+          'furnished',
+          textAlign: TextAlign.right,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+            color: mutedInk(context, theme),
+          ),
+        ),
+      );
+    }
+    return Text(
+      formatMoney(total ?? line.total, currency),
+      textAlign: TextAlign.right,
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    );
+  }
+
   Widget _configFlag(
     BuildContext context,
     AppStateProvider provider,
@@ -4358,13 +4586,21 @@ class _CostEstimateViewState extends State<CostEstimateView> {
               ],
             ),
             if (settings.fees.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'No fees. Add one for freight, installation, contingency or '
-                  'overhead - several are fine, and each is worked out on the '
-                  'same pre-tax subtotal rather than on top of each other.',
-                  style: theme.textTheme.bodySmall,
+              // NOT ON THE IMAGE. It is an instruction to the person filling
+              // the estimate in - what a fee is for and how several of them
+              // work out - and the copy that gets sent out is not addressed to
+              // them. The same rule the hardware card's empty note follows,
+              // and the one that drops every card's subtitle from the capture.
+              PrintHide(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No fees. Add one for freight, installation, contingency '
+                    'or overhead - several are fine, and each is worked out on '
+                    'the same pre-tax subtotal rather than on top of each '
+                    'other.',
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
               ),
             for (final fee in settings.fees)

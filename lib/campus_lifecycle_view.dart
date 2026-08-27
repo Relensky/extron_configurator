@@ -11,6 +11,7 @@ import 'av_flow_model.dart' show formatEquipmentDate;
 import 'building_project.dart' show kProjectFileSuffix;
 import 'campus_file.dart';
 import 'campus_lifecycle.dart';
+import 'manual_rooms_dialog.dart';
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
@@ -151,6 +152,29 @@ class _CampusViewState extends State<_CampusView> {
       _campus = campus;
       _reading = false;
     });
+  }
+
+  /// THE ROOMS NOBODY HAS DRAWN, on the building they belong to.
+  ///
+  /// Most of an estate has never been through this app, and a refresh plan
+  /// that covered only the rooms that have is a plan for a fraction of the
+  /// building. Typing those rooms in is the difference between a plan and a
+  /// sample of one - see [showManualRoomsDialog], which writes them into the
+  /// JOB rather than into the campus, because the room belongs to the building
+  /// and the campus is a list that gets thrown away.
+  Future<void> _manualRooms(String file, String name) async {
+    final provider = context.read<AppStateProvider>();
+    final saved = await showManualRoomsDialog(
+      context,
+      provider,
+      file,
+      buildingName: name,
+    );
+    if (!saved || !mounted) return;
+    // Re-read rather than patch: every figure on this sheet came from one pass
+    // over disk, and one row updated in place would be the only one that did
+    // not.
+    await _reread();
   }
 
   Future<void> _addFiles() async {
@@ -612,6 +636,7 @@ class _CampusViewState extends State<_CampusView> {
                       campus: campus,
                       onRemove: _remove,
                       onOpen: _openJob,
+                      onManualRooms: _manualRooms,
                     ),
                     if (campus.failed.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -818,8 +843,9 @@ class _CampusGridState extends State<_CampusGrid> {
   double _zoom = kGridZoomNormal;
 
   /// Whether the size is taken from the window rather than from the steps -
-  /// see [_LifecycleYearGridState], which does the same for one building.
-  bool _fit = false;
+  /// see [_LifecycleYearGridState], which does the same for one building and
+  /// carries the reasoning for opening fitted.
+  bool _fit = true;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -831,9 +857,9 @@ class _CampusGridState extends State<_CampusGrid> {
     final theme = Theme.of(context);
     // A fitted calendar keeps the window it opens with and only changes size,
     // or every year it let in would be another column to fit.
-    final years = campus.yearsWithin(
-      _fit ? kCampusMaxYears : gridYearWindow(kCampusMaxYears, _zoom),
-    );
+    final years = _fit
+        ? campus.yearsThroughDue()
+        : campus.yearsWithin(gridYearWindow(kCampusMaxYears, _zoom));
     final jobs = campus.ok;
     if (years.isEmpty || jobs.isEmpty) return const SizedBox.shrink();
 
@@ -1464,10 +1490,14 @@ class _JobList extends StatelessWidget {
   /// Opens one of them as the job it is - see [_CampusViewState._openJob].
   final ValueChanged<String> onOpen;
 
+  /// Types rooms into one of them - see [_CampusViewState._manualRooms].
+  final void Function(String path, String name) onManualRooms;
+
   const _JobList({
     required this.campus,
     required this.onRemove,
     required this.onOpen,
+    required this.onManualRooms,
   });
 
   @override
@@ -1527,6 +1557,14 @@ class _JobList extends StatelessWidget {
                 // The way from the overview into the job it is about. Only
                 // on a job that could be read - a file that failed to open
                 // as a campus entry will not open as a project either.
+                if (j.error.isEmpty)
+                  IconButton(
+                    key: ValueKey('campus_rooms_${path.basename(j.path)}'),
+                    tooltip: 'Rooms with no config: add them to this building '
+                        'so they are on the plan',
+                    icon: const Icon(Icons.add_home_outlined, size: 18),
+                    onPressed: () => onManualRooms(j.path, j.name),
+                  ),
                 if (j.error.isEmpty)
                   TextButton.icon(
                     key: ValueKey('campus_open_${path.basename(j.path)}'),

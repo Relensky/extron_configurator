@@ -4460,6 +4460,25 @@ class AppStateProvider extends ChangeNotifier {
   double avEquipmentSpares(String lineKey) =>
       avCost.equipmentSpares[lineKey] ?? 0;
 
+  /// Says who is furnishing one estimate line instead of this job, or clears
+  /// it back to "this quote is buying it" when [source] is null.
+  ///
+  /// An empty [source] is a real answer — "by others", nobody named — so it is
+  /// stored rather than treated as a clear. See [RoomCostSettings.furnishedLines].
+  void setAvCostFurnished(String lineKey, String? source) {
+    if (source == null) {
+      if (avCost.furnishedLines.remove(lineKey) == null) return;
+    } else {
+      final trimmed = source.trim();
+      if (avCost.furnishedLines[lineKey] == trimmed) return;
+      avCost.furnishedLines[lineKey] = trimmed;
+    }
+    notifyListeners();
+  }
+
+  /// Who is furnishing [lineKey], or null when this job is buying it.
+  String? avCostFurnishedBy(String lineKey) => avCost.furnishedLines[lineKey];
+
   /// The color a signal type is drawn in for this room.
   Color avSignalColor(SignalType s) => signalColor(s, avSignalColors);
 

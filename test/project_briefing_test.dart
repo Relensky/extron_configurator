@@ -624,4 +624,80 @@ void main() {
       expect(text.split('\n').first, 'Project');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  //  THE JOB'S CALENDAR
+  // ---------------------------------------------------------------------------
+  //  The same facts the rows carry, in the order they happen. A list of rows
+  //  cannot answer "is there room between the last order and the delivery",
+  //  which is the question a briefing is opened to settle.
+
+  group('the dates, as a calendar', () {
+    test('today, the order dates and the delivery, earliest first', () {
+      final screen = part('Projection screen');
+      final project = BuildingProject(
+        deliveryDeadline: DateTime(2026, 12, 1),
+        partLeadTimes: {screen.key: 30},
+      );
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(project, master: [screen]),
+        asOf: march,
+      );
+
+      final dates = briefingMilestones(briefing);
+      expect(dates, isNotEmpty);
+      // In date order, whatever order the briefing itself lists them in.
+      for (var i = 1; i < dates.length; i++) {
+        expect(
+          dates[i].date.isBefore(dates[i - 1].date),
+          isFalse,
+          reason: 'a calendar is read left to right',
+        );
+      }
+      // Today is on it, and so is the delivery date.
+      expect(
+        dates.any((d) => d.kind == BriefingDateKind.today),
+        isTrue,
+      );
+      final delivery = dates.firstWhere(
+        (d) => d.kind == BriefingDateKind.delivery,
+      );
+      expect(delivery.date, DateTime(2026, 12, 1));
+      expect(delivery.late, isFalse);
+      // And the order date the parts are worked back to.
+      expect(
+        dates.any((d) => d.kind == BriefingDateKind.order),
+        isTrue,
+      );
+    });
+
+    test('a date that has gone past is marked late', () {
+      final screen = part('Projection screen');
+      final project = BuildingProject(
+        // Delivery is behind us, so both it and the order date for it are.
+        deliveryDeadline: DateTime(2026, 2, 1),
+        partLeadTimes: {screen.key: 30},
+      );
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(project, master: [screen]),
+        asOf: march,
+      );
+
+      final delivery = briefingMilestones(briefing).firstWhere(
+        (d) => d.kind == BriefingDateKind.delivery,
+      );
+      expect(delivery.late, isTrue);
+    });
+
+    test('a job with no dates at all is today and nothing else', () {
+      final briefing = buildProjectBriefing(
+        estimate: estimateOf(BuildingProject()),
+        asOf: march,
+      );
+      final dates = briefingMilestones(briefing);
+      expect(dates, hasLength(1));
+      expect(dates.single.kind, BriefingDateKind.today);
+      expect(dates.single.date, march);
+    });
+  });
 }

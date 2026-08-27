@@ -105,6 +105,15 @@ class CampusLifecycle {
     return [for (var y = first; y <= last; y++) y];
   }
 
+  /// THE WHOLE PLAN, from [pastYears] back to the last year anything on the
+  /// estate falls due — see [BuildingLifecycle.yearsThroughDue], which is the
+  /// same rule one building down.
+  List<int> yearsThroughDue({int pastYears = kCampusMaxYears}) {
+    var first = _span.first;
+    if (first < asOf.year - pastYears) first = asOf.year - pastYears;
+    return [for (var y = first; y <= _span.last; y++) y];
+  }
+
   /// EVERY YEAR THE ESTATE TOUCHES, uncapped.
   ///
   /// What a DOCUMENT gets. The cap on [years] exists because a screen is a
@@ -233,7 +242,10 @@ Future<CampusLifecycle> readCampus({
           tier: provider.pricingTier,
           asOf: day,
         ),
-        rooms: project.rooms.length,
+        // Rooms typed in by hand count as rooms: they are on the plan, in
+        // the year columns and in the money, and a count that left them out
+        // would disagree with the sheet under it.
+        rooms: project.rooms.length + project.manualRooms.length,
         error: '',
       ));
     } catch (e, stack) {

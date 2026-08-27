@@ -945,4 +945,73 @@ void main() {
       expect(formatLifecycleMoney(0, r'$'), '');
     });
   });
+
+  // -------------------------------------------------------------------------
+  //  WHAT THE ROOM COSTS IF IT IS DONE IN A GIVEN YEAR
+  // -------------------------------------------------------------------------
+  //  A room with two dates is not two separate budget requests. The 2022 money
+  //  is still owed in 2026 unless somebody spent it, so the room's own row on
+  //  the plan carries the RUNNING total and the lines under it carry what each
+  //  date adds. Reading the columns as separate asks is how a refresh gets
+  //  approved at half its cost and comes back for the rest two years later.
+
+  group('the running total for a room', () {
+    RoomLifecycle phased() => buildRoomLifecycle(
+      model: roomOf([
+        // Eight-year cycle: 2014 + 8 = 2022, 2018 + 8 = 2026.
+        box('DISPLAYDEVICE_1', model: 'DISP-1', installedOn: DateTime(2014, 5, 1)),
+        box('PROJECTORDEVICE_1', model: 'PROJ-1', installedOn: DateTime(2018, 5, 1)),
+      ]),
+      library: AvDeviceLibrary.empty()
+        ..upsert(
+          const AvDeviceTemplate(model: 'DISP-1', price: 2499, ports: []),
+        )
+        ..upsert(
+          const AvDeviceTemplate(model: 'PROJ-1', price: 4173, ports: []),
+        ),
+      asOf: asOf,
+    );
+
+    test('each date still says what it adds on its own', () {
+      final room = phased();
+      expect(room.dueGroups.map((g) => g.dueYear), [2022, 2026]);
+      expect(room.costDueIn(2022), 2499);
+      expect(room.costDueIn(2026), 4173);
+    });
+
+    test('the room carries everything owed by that year', () {
+      final room = phased();
+      expect(room.costDueBy(2021), 0);
+      expect(room.costDueBy(2022), 2499);
+      // The one the whole change is about: 4,173 lands in 2026 and 2,499 is
+      // still owed from 2022, so doing the room that year costs both.
+      expect(room.costDueBy(2026), 2499 + 4173);
+      // And it does not keep growing after the last date.
+      expect(room.costDueBy(2030), 2499 + 4173);
+    });
+
+    test('the items behind the figure are the ones owed by then', () {
+      final room = phased();
+      expect(room.dueBy(2021), isEmpty);
+      expect(room.dueBy(2022).map((i) => i.node.id), ['DISPLAYDEVICE_1']);
+      expect(
+        room.dueBy(2026).map((i) => i.node.id),
+        containsAll(['DISPLAYDEVICE_1', 'PROJECTORDEVICE_1']),
+      );
+    });
+
+    test('a room that falls due once reads the same either way', () {
+      final room = buildRoomLifecycle(
+        model: roomOf([
+          box('PROJECTORDEVICE_1', installedOn: DateTime(2018, 5, 1)),
+        ]),
+        baseCosts: BaseCostBook(
+          costs: const [BaseCost(category: 'Projector', price: 3000)],
+        ),
+        asOf: asOf,
+      );
+      expect(room.costDueIn(2026), 3000);
+      expect(room.costDueBy(2026), 3000);
+    });
+  });
 }

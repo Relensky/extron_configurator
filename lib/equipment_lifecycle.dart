@@ -1,6 +1,9 @@
+import 'dart:ui' show Offset;
+
 import 'av_device_library.dart';
 import 'base_costs.dart';
 import 'av_flow_model.dart';
+import 'building_project.dart' show ManualRoom;
 import 'project_estimate.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
@@ -689,6 +692,33 @@ class RoomLifecycle {
   List<EquipmentLife> dueIn(int year) =>
       _index.byDueYear[year] ?? const <EquipmentLife>[];
 
+  /// WHAT THE ROOM COSTS IF IT IS BROUGHT UP TO DATE IN [year]: everything due
+  /// that year, plus everything that fell due before it and was not done.
+  ///
+  /// The figure a budget is actually written against. A room whose displays
+  /// land in 2022 and whose projector lands in 2026 is not a 4,173-dollar job
+  /// in 2026 — it is a 6,672-dollar job, because the 2022 money is still owed
+  /// unless somebody spent it. Reading the year columns as separate asks is
+  /// how a refresh gets approved at half its cost and comes back for the rest
+  /// two years later.
+  ///
+  /// The tranches themselves still say what each one adds — that is what the
+  /// lines under a room are for. This is the room's own row: the running
+  /// total, which is the number the room is worth planning around.
+  double costDueBy(int year) {
+    double total = 0;
+    _index.costByDueYear.forEach((due, cost) {
+      if (due <= year) total += cost;
+    });
+    return total;
+  }
+
+  /// Everything owed by [year], earliest first — what [costDueBy] is made of.
+  List<EquipmentLife> dueBy(int year) => [
+    for (final entry in (_index.byDueYear.keys.toList()..sort()))
+      if (entry <= year) ..._index.byDueYear[entry]!,
+  ];
+
   /// How many items carry no install date. The survey's to-do list.
   int get undated => countOf(EquipmentCondition.unknown);
 }
@@ -1021,6 +1051,25 @@ class BuildingLifecycle {
     for (var y = _span.first; y <= _span.last; y++) y,
   ];
 
+  /// THE WHOLE PLAN, from [pastYears] back to the last year anything falls
+  /// due — however far out that is.
+  ///
+  /// What a sheet opens on. The cap on [years] is there so a single unit
+  /// installed in 1998 does not push the useful part of the sheet off the
+  /// right-hand edge; capping the FUTURE the same way was a different thing
+  /// entirely, because the future is the half being planned. A room that falls
+  /// due in fourteen years was simply not on the sheet, and nothing said so —
+  /// the plan looked complete and ended in a column of blanks.
+  ///
+  /// The past still has a limit: years before anything was installed are years
+  /// nothing can be said about, and scrolling past twelve of them to reach the
+  /// first real column is a sheet that opens in the wrong place.
+  List<int> yearsThroughDue({int pastYears = 12}) {
+    var first = _span.first;
+    if (first < asOf.year - pastYears) first = asOf.year - pastYears;
+    return [for (var y = first; y <= _span.last; y++) y];
+  }
+
   /// Capped at [maxColumns] years from today, because a single unit installed
   /// in 1998 should not stretch the grid across thirty columns of nothing.
   List<int> years({int maxColumns = 12}) {
@@ -1065,9 +1114,99 @@ BuildingLifecycle buildProjectLifecycle({
             asOf: day,
             defaultLifeYears: defaultLifeYears,
           ),
+      // THE ROOMS NOBODY HAS DRAWN. Most of an estate has never been through
+      // this app, and a refresh plan that covered only the rooms that have is
+      // a plan for a fraction of the building - short in the one direction
+      // nobody checks. See [ManualRoom].
+      for (final room in estimate.project.manualRooms)
+        buildManualRoomLifecycle(
+          room: room,
+          baseCosts: baseCosts,
+          tier: tier,
+          asOf: day,
+          defaultLifeYears: defaultLifeYears,
+        ),
     ],
     asOf: day,
     currency: estimate.currency,
+  );
+}
+
+/// The base-cost line a room with nothing itemised in it is priced from.
+///
+/// A whole room is not a device, so it is not any of the card's device
+/// categories. This is its own line, added to the card the moment somebody
+/// types a room in without a figure — a rough "what does a room like that cost
+/// to do", which is exactly the sort of number this card exists to hold.
+const String kRoomRefreshCategory = 'Room refresh';
+
+/// Ages one room that has no config file — see [ManualRoom].
+///
+/// It is a room like any other on the plan: a date, a life, and a figure. What
+/// it is not is a list of boxes, so it carries ONE position standing for the
+/// whole room, named after the room itself. That keeps every count on the
+/// sheet honest — a manually added room is one thing falling due, not eleven
+/// invented ones — while the year columns, the colours and the money work
+/// exactly as they do for a drawn room.
+///
+/// THE FIGURE IS AN ESTIMATE unless somebody typed it. With no cost on the
+/// room the base-cost card answers: the room's own category if it has one,
+/// else [kRoomRefreshCategory]. Nothing anywhere gets an invented number - a
+/// room the card cannot price reports as unpriced, the same as a drawn box the
+/// catalog has never heard of.
+RoomLifecycle buildManualRoomLifecycle({
+  required ManualRoom room,
+  BaseCostBook? baseCosts,
+  PricingTier tier = PricingTier.msrp,
+  DateTime? asOf,
+  int defaultLifeYears = kDefaultEquipmentLifeYears,
+}) {
+  final now = asOf ?? DateTime.now();
+  final day = DateTime(now.year, now.month, now.day);
+
+  double cost = room.replacementCost;
+  var estimated = false;
+  if (cost <= 0 && baseCosts != null) {
+    final wanted = room.category.trim().isEmpty
+        ? kRoomRefreshCategory
+        : room.category.trim();
+    final base = baseCosts.priceFor(wanted, tier);
+    if (base.price > 0) {
+      cost = base.price;
+      estimated = true;
+    }
+  }
+
+  final life = room.lifeYears > 0 ? room.lifeYears : defaultLifeYears;
+  return RoomLifecycle(
+    roomName: room.name,
+    asOf: day,
+    items: [
+      EquipmentLife(
+        // A position that stands for the room. It is not on any diagram and
+        // never will be, so it carries the manual room's own id rather than a
+        // node id anything could try to look up.
+        node: AvNode(
+          id: room.id,
+          label: room.name,
+          model: '',
+          pos: const Offset(0, 0),
+          ports: const [],
+          installedOn: room.installedOn,
+          lifeYears: room.lifeYears,
+        ),
+        locationName: '',
+        zone: RoomZone.unspecified,
+        installedOn: room.installedOn,
+        lifeYears: life,
+        lifeSource: room.lifeYears > 0
+            ? EquipmentLifeSource.position
+            : EquipmentLifeSource.fallback,
+        asOf: day,
+        replacementCost: cost,
+        costIsEstimate: estimated,
+      ),
+    ],
   );
 }
 
@@ -1331,8 +1470,13 @@ List<ReportSection> buildingLifecycleSections(
   /// year as a plain number — 1, 2, 3 — which is what the colours on the
   /// original sheet were counting.
   String cell(RoomLifecycle room, int year) {
-    final due = room.costDueIn(year);
-    if (due > 0) return formatLifecycleMoney(due, currency);
+    // The RUNNING total, the same figure the screen's room row carries: what
+    // the room costs if it is brought up to date that year, which is this
+    // year's tranche plus anything still owed from an earlier one.
+    final due = room.costDueBy(year);
+    if (room.dueIn(year).isNotEmpty && due > 0) {
+      return formatLifecycleMoney(due, currency);
+    }
     if (room.dueIn(year).isNotEmpty) return 'due';
     final installed = room.oldestInstall?.year;
     if (installed == null || year < installed) return '';

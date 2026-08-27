@@ -193,6 +193,10 @@ void main() {
       // Built, because the capture frame is not lazy — and still hidden.
       expect(find.widgetWithText(TextButton, 'Add fee'), findsNothing);
       expect(find.text('Fees'), findsOneWidget);
+      // The card keeps its heading and loses its explanation. What a fee is
+      // for and how several of them work out is addressed to whoever is
+      // filling the estimate in, and this image is addressed to the customer.
+      expect(find.textContaining('No fees. Add one for freight'), findsNothing);
       expect(find.byType(Checkbox), findsNothing);
       expect(find.byType(Switch), findsNothing);
       expect(find.byType(IconButton), findsNothing);

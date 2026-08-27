@@ -397,6 +397,12 @@ class _BriefingDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              // THE JOB'S DATES, IN THE ORDER THEY HAPPEN. Above the facts
+              // because it is the shape of the job rather than a fact about
+              // it: whether the buying finishes before the delivery date, and
+              // how much room is left, is a question a list of rows cannot
+              // answer however carefully each row is written.
+              BriefingCalendar(briefing: briefing),
               // WHAT THE JOB IS, before what is wrong with it. Five warnings
               // mean something different on a nine-room building due in March
               // than on a one-room job with no date on it, and the reader
@@ -559,4 +565,272 @@ class _BriefingDialog extends StatelessWidget {
     BriefingUrgency.open => Icons.radio_button_unchecked,
     BriefingUrgency.clear => Icons.check_circle_outline,
   };
+}
+
+
+/// ============================================================================
+///  THE JOB'S CALENDAR
+/// ============================================================================
+///  Every date on the briefing, laid out in the order it happens: today, the
+///  order dates, the phases, the delivery, and the job notes that carry a date.
+///
+///  WHY A CALENDAR AND NOT ANOTHER LIST. The rows above are each true and each
+///  answer a different question, and between them they cannot answer the one
+///  everybody actually asks: is there room. "Order by 18 Jul" and "Delivery
+///  12 Aug" three rows apart are two facts; the same two on a line are three
+///  weeks of slack you can see, or a date that lands after the one it feeds.
+///
+///  IT IS DRAWN TO SCALE, so the gaps are real. A marker whose label will not
+///  fit keeps its dot and loses its words rather than being dropped: a date
+///  that is on the job is on the calendar, and hovering it says what it is.
+///
+///  A job with no dates at all draws nothing. One marker on a line is a line
+///  that says nothing a date on a row does not, and today on its own is not a
+///  schedule.
+/// ============================================================================
+class BriefingCalendar extends StatelessWidget {
+  final ProjectBriefing briefing;
+
+  const BriefingCalendar({super.key, required this.briefing});
+
+  /// How tall the band is: a row for labels above, the line, a row below.
+  static const double _height = 104;
+
+  /// The vertical middle, where the axis sits.
+  static const double _axisY = 52;
+
+  /// How wide a label is allowed to be, and how much air two of them need
+  /// between them before they read as two labels.
+  static const double _labelWidth = 118;
+  static const double _labelGap = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final milestones = briefingMilestones(briefing);
+    // Today plus nothing is not a schedule.
+    if (milestones.length < 2) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    final first = milestones.first.date;
+    final last = milestones.last.date;
+    // A job whose dates all land in one week still needs a line with two ends.
+    final span = last.difference(first).inDays;
+    final start = span < 14
+        ? first.subtract(Duration(days: (14 - span) ~/ 2 + 1))
+        : first.subtract(Duration(days: (span * 0.06).ceil()));
+    final end = span < 14
+        ? last.add(Duration(days: (14 - span) ~/ 2 + 1))
+        : last.add(Duration(days: (span * 0.06).ceil()));
+    final total = end.difference(start).inDays.toDouble();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final width = box.maxWidth;
+          double xOf(DateTime d) =>
+              (d.difference(start).inDays / total * width).clamp(0.0, width);
+
+          // Labels are laid out in date order, alternating above and below the
+          // line, and a label that would sit on top of its neighbour on both
+          // rows is dropped to a dot. The alternative — squeezing the type or
+          // sliding the label off its own marker — is a calendar that points
+          // at the wrong day.
+          final placed =
+              <({BriefingMilestone m, double x, bool above, bool labelled})>[];
+          final lastRight = <bool, double>{true: -1e9, false: -1e9};
+          var above = true;
+          for (final m in milestones) {
+            final x = xOf(m.date);
+            final left = (x - _labelWidth / 2).clamp(0.0, width - _labelWidth);
+            bool fits(bool row) => left >= lastRight[row]! + _labelGap;
+            bool? row;
+            if (fits(above)) {
+              row = above;
+            } else if (fits(!above)) {
+              row = !above;
+            }
+            if (row == null) {
+              // No room on either side: the date keeps its dot and loses its
+              // words. Dropping the marker itself would take a date off the
+              // job; the tooltip still says what it is.
+              placed.add((m: m, x: x, above: above, labelled: false));
+              continue;
+            }
+            lastRight[row] = left + _labelWidth;
+            placed.add((m: m, x: x, above: row, labelled: true));
+            above = !row;
+          }
+
+          return SizedBox(
+            height: _height,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // The months the job runs through, so a marker can be read
+                // against a real calendar rather than against its neighbours.
+                for (final month in _months(start, end))
+                  Positioned(
+                    left: xOf(month),
+                    top: _axisY - 10,
+                    child: Container(
+                      width: 1,
+                      height: 20,
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                for (final month in _months(start, end))
+                  Positioned(
+                    left: (xOf(month) + 3).clamp(0.0, width - 46),
+                    top: _axisY + 10,
+                    child: Text(
+                      _monthLabel(month),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: muted,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                // The line itself.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: _axisY,
+                  child: Container(
+                    height: 2,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+                ),
+                for (final p in placed) ..._marker(context, p, width),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// One date: its dot, its stalk and (where there is room) its words.
+  List<Widget> _marker(
+    BuildContext context,
+    ({BriefingMilestone m, double x, bool above, bool labelled}) placed,
+    double width,
+  ) {
+    final theme = Theme.of(context);
+    final m = placed.m;
+    final colour = _colourFor(context, m);
+    final today = m.kind == BriefingDateKind.today;
+    final dot = today ? 11.0 : 9.0;
+    final left = (placed.x - _labelWidth / 2).clamp(0.0, width - _labelWidth);
+
+    return [
+      // TODAY IS A LINE, not a dot: it is the one marker that is not something
+      // to do, and the whole calendar is read as "before this" and "after it".
+      if (today)
+        Positioned(
+          left: placed.x - 0.5,
+          top: 14,
+          child: Container(height: _height - 34, width: 1, color: colour),
+        ),
+      Positioned(
+        left: placed.x - dot / 2,
+        top: _axisY + 1 - dot / 2,
+        child: Tooltip(
+          message: m.detail,
+          child: Container(
+            key: ValueKey('briefing_marker_${m.kind.name}_'
+                '${m.date.toIso8601String().split('T').first}'),
+            width: dot,
+            height: dot,
+            decoration: BoxDecoration(
+              color: colour,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: theme.dialogTheme.backgroundColor ??
+                    theme.colorScheme.surface,
+                width: 1.5,
+              ),
+            ),
+          ),
+        ),
+      ),
+      if (placed.labelled)
+      Positioned(
+        left: left,
+        top: placed.above ? 6 : _axisY + 26,
+        width: _labelWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              m.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colour,
+                fontSize: 11,
+              ),
+            ),
+            Text(
+              formatScheduleDate(m.date),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Color _colourFor(BuildContext context, BriefingMilestone m) {
+    final theme = Theme.of(context);
+    if (m.late) {
+      return errorTextOn(
+        theme.colorScheme,
+        theme.dialogTheme.backgroundColor ?? theme.colorScheme.surface,
+      );
+    }
+    return switch (m.kind) {
+      BriefingDateKind.today => theme.colorScheme.onSurfaceVariant,
+      BriefingDateKind.order => theme.colorScheme.primary,
+      BriefingDateKind.phase => theme.colorScheme.tertiary,
+      BriefingDateKind.delivery => theme.colorScheme.secondary,
+      BriefingDateKind.todo => theme.colorScheme.onSurfaceVariant,
+    };
+  }
+
+  /// The first of each month the calendar covers, capped so a job spanning
+  /// three years does not draw thirty-six gridlines into 600 pixels.
+  static List<DateTime> _months(DateTime start, DateTime end) {
+    final out = <DateTime>[];
+    var at = DateTime(start.year, start.month + 1);
+    while (!at.isAfter(end) && out.length < 240) {
+      out.add(at);
+      at = DateTime(at.year, at.month + 1);
+    }
+    if (out.length <= 14) return out;
+    // Every third month on a long job, so the labels stay apart.
+    final step = (out.length / 12).ceil();
+    return [
+      for (var i = 0; i < out.length; i += step) out[i],
+    ];
+  }
+
+  static String _monthLabel(DateTime month) {
+    const names = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final name = names[month.month - 1];
+    // The year on January, and only there: repeating it on twelve gridlines is
+    // eleven repetitions of a fact that changes once.
+    return month.month == 1 ? '$name ${month.year}' : name;
+  }
 }

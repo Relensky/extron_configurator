@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:extron_configurator/app_state.dart';
 import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
+import 'package:extron_configurator/base_costs.dart';
 import 'package:extron_configurator/equipment_lifecycle.dart';
 import 'package:extron_configurator/lifecycle_view.dart';
 import 'package:extron_configurator/project_lifecycle_view.dart';
@@ -620,6 +621,58 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    /// THE SHEET OPENS FITTED - see [_LifecycleYearGridState._fit]. The tests
+    /// below are about what the sheet does at its natural size, so they let go
+    /// of the window first: the level button is both "100%" and "stop
+    /// fitting", which is exactly the state they were written against.
+    Future<void> atNaturalSize(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_level')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('opens fitted, with the last replacement year on screen',
+        (tester) async {
+      // A room that falls due WELL past the twelve-year window the sheet used
+      // to stop at: two years old, on a twenty-year cycle.
+      final dueYear = DateTime.now().year + 18;
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Bessey Hall');
+      final file = '${dir.path}/bss150_config.json';
+      File(file).writeAsStringSync(
+        '{"SYSTEM_SETUP":{"gve_bldg":"BSS","gve_room":"150"}}',
+      );
+      File('${dir.path}/bss150_config_av_flow.json').writeAsStringSync(
+        '{"nodes":[{"id":"PROJECTORDEVICE_1","label":"Projector 1",'
+        '"model":"PROJ-1","installedOn":"${dueYear - 20}-05-01",'
+        '"lifeYears":20,"ports":[]}],"cables":[]}',
+      );
+      p.addRoomToProject(file);
+
+      // Narrow enough that a sheet at 100% would run off the edge.
+      await pumpPlan(tester, p, size: const Size(760, 1100));
+
+      // THE FAR END OF THE PLAN IS ON THE SHEET. The window used to stop
+      // twelve years out, so this column did not exist at all - the plan
+      // looked complete and ended in a row of blanks.
+      expect(
+        find.text('$dueYear'),
+        findsWidgets,
+        reason: 'the sheet runs to the last replacement year',
+      );
+
+      // And it opens FITTED rather than at full size: the cells are smaller
+      // than the ones the level button gives back.
+      final key = ValueKey('lifecycle_cell_BSS 150_${DateTime.now().year}');
+      final fitted = tester.getSize(find.byKey(key));
+      await atNaturalSize(tester);
+      expect(
+        fitted.width,
+        lessThan(tester.getSize(find.byKey(key)).width),
+        reason: 'the sheet opens fitted to the window',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('the room names stay put while the years scroll', (
       tester,
     ) async {
@@ -627,6 +680,7 @@ void main() {
       // and tall enough that the pane's header - which is a summary strip, a
       // row of exports and a pane switcher - is not what this test is about.
       await pumpPlan(tester, building(2), size: const Size(760, 1100));
+      await atNaturalSize(tester);
 
       final name = find.text('BSS 101').first;
       final before = tester.getTopLeft(name);
@@ -704,6 +758,7 @@ void main() {
 
     testWidgets('the sheet zooms, and comes back to 100%', (tester) async {
       await pumpPlan(tester, building(2));
+      await atNaturalSize(tester);
       const cell = ValueKey('lifecycle_cell_BSS 101_2014');
       final natural = tester.getSize(find.byKey(cell));
 
@@ -728,6 +783,7 @@ void main() {
     testWidgets('fit puts the whole sheet inside the frame', (tester) async {
       // Narrow enough that thirteen years of columns run well past the edge.
       await pumpPlan(tester, building(2), size: const Size(760, 1100));
+      await atNaturalSize(tester);
       final grid = find.byType(PinnedGrid);
       final frame = tester.getSize(grid).width;
 
@@ -752,6 +808,7 @@ void main() {
 
     testWidgets('leaving the fit keeps the size it fitted to', (tester) async {
       await pumpPlan(tester, building(2), size: const Size(760, 1100));
+      await atNaturalSize(tester);
       const cell = ValueKey('lifecycle_cell_BSS 101_2014');
 
       await tester.tap(find.byKey(const ValueKey('lifecycle_zoom_fit')));
@@ -775,6 +832,7 @@ void main() {
 
     testWidgets('the figures go down with the boxes', (tester) async {
       await pumpPlan(tester, building(2));
+      await atNaturalSize(tester);
       // The age in the 2014 cell, which is the figure a shrunk cell would
       // have put an ellipsis through.
       final year = find.descendant(
@@ -791,11 +849,13 @@ void main() {
 
     testWidgets('at 150% the cells grow rather than clip', (tester) async {
       await pumpPlan(tester, building(2));
+      await atNaturalSize(tester);
       final plain = tester.getSize(
         find.byKey(const ValueKey('lifecycle_cell_BSS 101_2014')),
       );
 
       await pumpPlan(tester, building(2), textScale: 1.5);
+      await atNaturalSize(tester);
       final scaled = tester.getSize(
         find.byKey(const ValueKey('lifecycle_cell_BSS 101_2014')),
       );
@@ -906,6 +966,91 @@ void main() {
         find.byKey(const ValueKey('lifecycle_due_BSS 101_2027')),
         findsOneWidget,
       );
+    });
+
+    testWidgets('the room row folds its dates away and opens again',
+        (tester) async {
+      await pumpPlan(tester, phased());
+
+      // Open by default: the room's own row plus one line per date.
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 101_2024_2016')),
+        findsOneWidget,
+      );
+
+      final fold = find.byKey(const ValueKey('lifecycle_fold_BSS 101'));
+      expect(fold, findsOneWidget);
+      await tester.tap(fold);
+      await tester.pumpAndSettle();
+
+      // Folded: the tranche lines are gone and the room is still there,
+      // carrying its own figures.
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 101_2024_2016')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('lifecycle_cell_BSS 101_2024')),
+        findsOneWidget,
+      );
+
+      await tester.tap(fold);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('lifecycle_span_BSS 101_2024_2016')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a room that falls due once has nothing to fold',
+        (tester) async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      p.newProject(name: 'Bessey Hall');
+      final file = '${dir.path}/bss104_config.json';
+      File(file).writeAsStringSync(
+        '{"SYSTEM_SETUP":{"gve_bldg":"BSS","gve_room":"104"}}',
+      );
+      File('${dir.path}/bss104_config_av_flow.json').writeAsStringSync(
+        '{"nodes":['
+        '{"id":"PROJECTORDEVICE_1","label":"Projector 1","model":"PROJ-1",'
+        '"installedOn":"2019-05-01","ports":[]}'
+        '],"cables":[]}',
+      );
+      p.addRoomToProject(file);
+      await pumpPlan(tester, p);
+
+      // A control that does nothing is a control somebody presses twice to
+      // find that out.
+      expect(
+        find.byKey(const ValueKey('lifecycle_fold_BSS 104')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('the room row carries the running total, the lines the add-on',
+        (tester) async {
+      final p = phased();
+      // Two figures that cannot be confused with each other or with a sum of
+      // anything else on the sheet.
+      p.baseCosts.upsert(const BaseCost(category: 'Projector', price: 2499));
+      p.baseCosts.upsert(const BaseCost(category: 'Display', price: 4173));
+      await pumpPlan(tester, p);
+
+      // The projector lands first, on its own: both rows agree there.
+      expect(find.text(r'$2,499'), findsWidgets);
+
+      // The display's year: the room row shows what the WHOLE room costs if it
+      // is done then - 2,499 still owed plus 4,173 landing - while the line
+      // under it says what that date adds.
+      final roomCell = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const ValueKey('lifecycle_cell_BSS 101_2027')),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(roomCell.data, r'$6,672');
+      expect(find.textContaining(r'+$4,173'), findsWidgets);
     });
 
     testWidgets('a room that falls due all at once stays one line',

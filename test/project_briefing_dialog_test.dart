@@ -70,6 +70,67 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// The calendar only draws when there is more than one date to draw.
+  Future<void> openDatedBriefing(WidgetTester tester) async {
+    final provider = AppStateProvider(autoLoadSettings: false)
+      ..newProject(name: 'Bessey refresh', building: 'BSS');
+    provider.setProjectDeadline(DateTime(2026, 12, 1));
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppStateProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showProjectBriefing(
+                  context,
+                  provider,
+                  force: true,
+                  asOf: DateTime(2026, 3, 4),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('the dates are drawn on a calendar, not only listed',
+      (tester) async {
+    await openDatedBriefing(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(BriefingCalendar), findsOneWidget);
+    // Today and the delivery date, each with its own marker on the line.
+    expect(
+      find.byKey(const ValueKey('briefing_marker_today_2026-03-04')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('briefing_marker_delivery_2026-12-01')),
+      findsOneWidget,
+    );
+    // Read against a real calendar rather than against its neighbours.
+    expect(find.text('Delivery'), findsWidgets);
+  });
+
+  testWidgets('a job with one date and nothing else draws no calendar',
+      (tester) async {
+    // The plain fixture: a new job with no deadline, so today is the only
+    // date there is. One marker on a line says nothing a row does not.
+    await openBriefing(tester);
+    expect(find.byType(BriefingCalendar), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('briefing_marker_today_2026-03-04')),
+      findsNothing,
+    );
+  });
+
   testWidgets('the briefing offers a copy beside its dismissal',
       (tester) async {
     await openBriefing(tester);

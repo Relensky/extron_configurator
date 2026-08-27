@@ -567,7 +567,11 @@ class LifecyclePlanSheet extends StatelessWidget {
                               : Text(
                                   '${line.group!.items.length} item'
                                   '${line.group!.items.length == 1 ? '' : 's'} '
-                                  'due ${line.group!.dueYear}',
+                                  'due ${line.group!.dueYear}'
+                                  // What this date adds; the room row above
+                                  // carries the running total.
+                                  '${line.group!.cost > 0 ? '  +'
+                                      '${formatLifecycleMoney(line.group!.cost, currency)}' : ''}',
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
@@ -778,10 +782,18 @@ class LifecycleYearGrid extends StatefulWidget {
   /// The rooms, opened out into one line per due date where there is more than
   /// one. A room whose whole contents fall due together is one line: a second
   /// row saying the same thing as the first is a row to read past.
-  static List<LifecycleGridLine> linesOf(BuildingLifecycle building) => [
+  ///
+  /// [collapsed] names the rooms folded shut — see
+  /// [_LifecycleYearGridState._collapsed]. A folded room keeps its own row and
+  /// loses its tranche lines, which is a building of forty rooms fitting on a
+  /// screen again.
+  static List<LifecycleGridLine> linesOf(
+    BuildingLifecycle building, {
+    Set<String> collapsed = const {},
+  }) => [
     for (final room in building.rooms) ...[
       (room: room, group: null),
-      if (room.dueGroups.length > 1)
+      if (room.dueGroups.length > 1 && !collapsed.contains(room.roomName))
         for (final g in room.dueGroups) (room: room, group: g),
     ],
   ];
@@ -791,13 +803,33 @@ class LifecycleYearGrid extends StatefulWidget {
 }
 
 class _LifecycleYearGridState extends State<LifecycleYearGrid> {
+  /// Rooms whose tranche lines are folded away, by name.
+  ///
+  /// A ROOM IS A BLOCK OF ROWS, and a building of forty rooms with three dates
+  /// each is a hundred and sixty of them — a sheet nobody can see the shape of
+  /// without scrolling past the room they are looking for. Folded, a room is
+  /// one row carrying its running total, which is the figure a budget meeting
+  /// asks for; opened, it is that row plus what each date adds.
+  ///
+  /// Session-only, and by NAME rather than by index, so it survives the plan
+  /// being rebuilt underneath it — which happens on every date somebody
+  /// changes on the room's own tab.
+  final Set<String> _collapsed = {};
+
   /// How big the sheet is being read at. See [GridZoomControls].
   double _zoom = kGridZoomNormal;
 
   /// Whether the size is being taken from the WINDOW rather than from the
   /// steps: while this is on, the sheet is re-fitted on every layout, so it
   /// keeps fitting when the window is resized or the rail is folded away.
-  bool _fit = false;
+  ///
+  /// ON BY DEFAULT, and the whole plan is what it fits to. A replacement plan
+  /// is read for its SHAPE first — which years are heavy, how far out the last
+  /// one is — and a sheet that opened at 100% on a twelve-year window answered
+  /// neither: the far end of the plan was off the right edge, and nothing on
+  /// screen said there was more of it. It still scrolls, and the steps are one
+  /// press away for reading a figure.
+  bool _fit = true;
 
   /// How many years either side of today the grid opens on.
   static const int _naturalWindow = 12;
@@ -816,15 +848,19 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
     // "show me more" - but it would make fitting chase its own tail, since
     // every year it let in is another column to fit. So a fitted sheet keeps
     // the window it opens with and only changes size.
-    final years = building.years(
-      maxColumns: _fit
-          ? _naturalWindow
-          : gridYearWindow(_naturalWindow, _zoom),
-    );
+    // Fitted, the sheet carries the plan to its LAST replacement year however
+    // far out that is; zoomed by hand it keeps the window the steps widen and
+    // narrow, because that is what the steps are for.
+    final years = _fit
+        ? building.yearsThroughDue(pastYears: _naturalWindow)
+        : building.years(maxColumns: gridYearWindow(_naturalWindow, _zoom));
     final thisYear = building.asOf.year;
     if (years.isEmpty || building.rooms.isEmpty) return const SizedBox.shrink();
 
-    final lines = LifecycleYearGrid.linesOf(building);
+    // The picture of this sheet is built from the same lines with nothing
+    // folded - a document is the whole document - so only the screen passes a
+    // collapsed set.
+    final lines = LifecycleYearGrid.linesOf(building, collapsed: _collapsed);
 
     // EVERY BOX ON THE SHEET IS THE READER'S SIZE. These were fixed pixels,
     // which on a machine at 150% gave the same 62-wide cell with a larger
@@ -895,11 +931,12 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
             SizedBox(height: gap * 0.5),
           ],
           Text(
-            'A room with more than one replacement date opens into a line per '
-            'date - the run from when that equipment went in to when it falls '
-            'due. Hover any cell for what is in it, and the end of a line for '
-            'what refreshing the whole room comes to. Click a line to play it '
-            'through, year by year.',
+            'A room row carries what the WHOLE room costs if it is brought up '
+            'to date in that year - this date plus anything still owed from an '
+            'earlier one. Under it, a line per replacement date shows what '
+            'that date adds on its own; the chevron beside a room name folds '
+            'them away. Hover any cell for what is in it, and click a line to '
+            'play it through, year by year.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -957,15 +994,30 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: line.group == null
-                        ? Text(
-                            line.room.roomName,
-                            overflow: TextOverflow.ellipsis,
+                        ? _RoomNameCell(
+                            room: line.room,
+                            collapsed: _collapsed.contains(line.room.roomName),
+                            onToggle: line.room.dueGroups.length > 1
+                                ? () => setState(() {
+                                    final name = line.room.roomName;
+                                    if (!_collapsed.remove(name)) {
+                                      _collapsed.add(name);
+                                    }
+                                  })
+                                : null,
                             style: zoomed.bodyMedium,
+                            size: rowHeight,
                           )
                         : Text(
                             '${line.group!.items.length} item'
                             '${line.group!.items.length == 1 ? '' : 's'} '
-                            'due ${line.group!.dueYear}',
+                            'due ${line.group!.dueYear}'
+                            // What this date ADDS. The room's own row carries
+                            // the running total, so a line that only said
+                            // "3 items due 2026" left the two figures looking
+                            // like a disagreement.
+                            '${line.group!.cost > 0 ? '  +'
+                                '${formatLifecycleMoney(line.group!.cost, building.currency)}' : ''}',
                             overflow: TextOverflow.ellipsis,
                             style: zoomed.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
@@ -1110,6 +1162,74 @@ List<String> lineEndFooter(RoomLifecycle room, String currency) => [
   'Click the row to play the plan through.',
 ];
 
+/// A room's name in the frozen column, with the control that folds its tranche
+/// lines away.
+///
+/// The chevron is only there on a room that HAS lines to fold: a room whose
+/// contents all fall due together is one row already, and a control that does
+/// nothing is a control somebody presses twice to find that out.
+class _RoomNameCell extends StatelessWidget {
+  final RoomLifecycle room;
+  final bool collapsed;
+  final VoidCallback? onToggle;
+  final TextStyle? style;
+
+  /// The row's own height, so the chevron cannot make the row taller than the
+  /// body half of the sheet it lines up with.
+  final double size;
+
+  const _RoomNameCell({
+    required this.room,
+    required this.collapsed,
+    required this.onToggle,
+    required this.style,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final name = Text(
+      room.roomName,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    if (onToggle == null) {
+      return Padding(
+        // Indented to where a room WITH a chevron starts, so the names line up
+        // down the column whether or not they carry one.
+        padding: EdgeInsets.only(left: size),
+        child: name,
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: size,
+          height: size,
+          child: InkWell(
+            key: ValueKey('lifecycle_fold_${room.roomName}'),
+            onTap: onToggle,
+            child: Tooltip(
+              message: collapsed
+                  ? '${room.roomName}: show what each date adds '
+                      '(${room.dueGroups.length} dates)'
+                  : '${room.roomName}: fold its dates away',
+              child: Icon(
+                collapsed ? Icons.chevron_right : Icons.expand_more,
+                size: size * 0.7,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+        Flexible(child: name),
+      ],
+    );
+  }
+}
+
 /// One room's years, as cells. The room's NAME is not here: it is in the
 /// frozen half, laid out on the same [rowHeight] so the two line up.
 class _GridRow extends StatelessWidget {
@@ -1134,9 +1254,15 @@ class _GridRow extends StatelessWidget {
   });
 
   String _label(int year) {
-    final money = room.costDueIn(year);
-    if (money > 0) return formatLifecycleMoney(money, currency);
-    if (room.dueIn(year).isNotEmpty) return 'due';
+    // THE RUNNING TOTAL, not this year's tranche. The room's own row answers
+    // "what does this room cost if it is done in this year", which for the
+    // second date on a room is that date PLUS everything still owed from the
+    // first — see [RoomLifecycle.costDueBy]. The tranche lines underneath
+    // carry what each date adds on its own.
+    if (room.dueIn(year).isNotEmpty) {
+      final money = room.costDueBy(year);
+      return money > 0 ? formatLifecycleMoney(money, currency) : 'due';
+    }
     final installed = room.oldestInstall?.year;
     final due = room.firstDueYear;
     if (installed == null || year < installed) return '';
@@ -1177,6 +1303,11 @@ class _GridRow extends StatelessWidget {
     final timing = room.timingIn(year);
     final due = room.dueIn(year);
 
+    // A figure that is bigger than the items named under it needs saying out
+    // loud, or it reads as a mistake in the arithmetic.
+    final carried = room.costDueBy(year) -
+        due.fold<double>(0, (sum, i) => sum + i.replacementCost);
+
     return Tooltip(
       message: equipmentDueTooltip(
         roomName: room.roomName,
@@ -1185,11 +1316,17 @@ class _GridRow extends StatelessWidget {
         currency: currency,
         fallback: '${room.roomName} in $year: '
             '${kEquipmentTimingLabels[timing]!}',
-        // The room's row runs from when it went in to when it first falls due,
-        // so THAT year is the end of this line.
-        footer: year == room.firstDueYear
-            ? lineEndFooter(room, currency)
-            : const [],
+        footer: [
+          if (carried > 0)
+            'Room total if it is all done in $year: '
+                '${formatLifecycleMoney(room.costDueBy(year), currency)}'
+                '  ·  including '
+                '${formatLifecycleMoney(carried, currency)} still owed from '
+                'earlier years',
+          // The room's row runs from when it went in to when it first falls
+          // due, so THAT year is the end of this line.
+          if (year == room.firstDueYear) ...lineEndFooter(room, currency),
+        ],
       ),
       child: Container(
         key: ValueKey('lifecycle_cell_${room.roomName}_$year'),

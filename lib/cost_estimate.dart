@@ -274,6 +274,28 @@ class RoomCostSettings {
   /// acted on is worse than no decision at all.
   final Map<String, String> cableEntries;
 
+  /// LINE KEY -> where a line is coming from instead of this quote.
+  ///
+  /// FURNISHED FROM SOMEWHERE ELSE. Not every part in a room is bought on the
+  /// job that installs it: the network department pulls and terminates the
+  /// cat6, the displays come out of a campus stock order, the owner hands over
+  /// a codec they already own. Those parts ARE in the room — they get racked,
+  /// cabled, drawn and replaced on the same cycle as everything else — and
+  /// they are not money on this quote.
+  ///
+  /// Deleting the line was the only way to say so, and it said too much: the
+  /// part vanished from the pack list, from the cable schedule and from the
+  /// replacement plan along with its price. So the line stays exactly where it
+  /// is, with its quantity and its unit price, and contributes NOTHING to the
+  /// total. See [CostLine.furnishedBy], which is what carries it onto the page
+  /// and into the exports.
+  ///
+  /// The value is who is furnishing it — 'From stock', 'Campus IT', whatever
+  /// somebody typed — or '' for "by others" with nobody named. Keyed per LINE
+  /// like the spares and the price overrides, because that is the grain the
+  /// decision is made at: the cat6 is somebody else's and the HDMI is not.
+  final Map<String, String> furnishedLines;
+
   /// Cabling LINE KEY -> extra runs to buy beyond what the diagram shows.
   /// Spares are a decision, not a diagram fact, so they live here rather than
   /// being inferred: "three more HDMI leads because two always go missing" is
@@ -299,6 +321,7 @@ class RoomCostSettings {
     Map<String, double>? cableSpares,
     Map<String, String>? cableEntries,
     Map<String, double>? equipmentSpares,
+    Map<String, String>? furnishedLines,
     List<CostLineItem>? extraEquipment,
     List<CostLineItem>? extraHardware,
     List<CostLineItem>? extraCables,
@@ -309,6 +332,7 @@ class RoomCostSettings {
        cableSpares = cableSpares ?? {},
        cableEntries = cableEntries ?? {},
        equipmentSpares = equipmentSpares ?? {},
+       furnishedLines = furnishedLines ?? {},
        extraEquipment = extraEquipment ?? [],
        extraHardware = extraHardware ?? [],
        extraCables = extraCables ?? [];
@@ -323,6 +347,7 @@ class RoomCostSettings {
       cableSpares.isEmpty &&
       cableEntries.isEmpty &&
       equipmentSpares.isEmpty &&
+      furnishedLines.isEmpty &&
       extraEquipment.isEmpty &&
       extraHardware.isEmpty &&
       extraCables.isEmpty;
@@ -340,6 +365,7 @@ class RoomCostSettings {
     cableSpares.clear();
     cableEntries.clear();
     equipmentSpares.clear();
+    furnishedLines.clear();
     extraEquipment.clear();
     extraHardware.clear();
     extraCables.clear();
@@ -366,6 +392,8 @@ class RoomCostSettings {
       'cableEntries': Map<String, String>.of(cableEntries),
     if (equipmentSpares.isNotEmpty)
       'equipmentSpares': Map<String, double>.of(equipmentSpares),
+    if (furnishedLines.isNotEmpty)
+      'furnishedLines': Map<String, String>.of(furnishedLines),
     if (extraEquipment.isNotEmpty)
       'extraEquipment': [for (final i in extraEquipment) i.toJson()],
     if (extraHardware.isNotEmpty)
@@ -432,6 +460,15 @@ class RoomCostSettings {
         final qty = (value as num?)?.toDouble();
         if (qty == null || qty <= 0) return;
         equipmentSpares[key.toString()] = qty;
+      });
+    }
+    final furnished = json['furnishedLines'];
+    if (furnished is Map) {
+      furnished.forEach((key, value) {
+        // '' is a real value here — "by others, nobody named" — so only a
+        // missing entry means the line is priced on this quote.
+        if (value == null) return;
+        furnishedLines[key.toString()] = value.toString().trim();
       });
     }
     final entries = json['cableEntries'];
@@ -735,6 +772,16 @@ class CostLine {
   final bool taxable;
   final PriceSource source;
 
+  /// Who is furnishing this line instead of this quote, or null when the quote
+  /// is paying for it. '' means "by others" with nobody named. See
+  /// [RoomCostSettings.furnishedLines].
+  ///
+  /// The line keeps its quantity and its unit price — the part is in the room,
+  /// it goes on the pack list, and the replacement plan still budgets for the
+  /// day it dies. What it does not do is add money to THIS job's total, which
+  /// is what [total] returning zero says.
+  final String? furnishedBy;
+
   const CostLine({
     required this.key,
     required this.description,
@@ -748,9 +795,44 @@ class CostLine {
     this.source = PriceSource.none,
     this.spare = false,
     this.spareQty = 0,
+    this.furnishedBy,
   });
 
-  double get total => qty * unitPrice;
+  /// True when somebody else is buying this.
+  bool get furnished => furnishedBy != null;
+
+  /// What this line costs the job: nothing at all when somebody else is
+  /// furnishing it. Zeroed HERE rather than at each total, so every figure
+  /// derived from the estimate — the section subtotals, the tax, the fees, the
+  /// project rollup and every export — agrees without being told twice.
+  double get total => furnished ? 0 : qty * unitPrice;
+
+  /// What the line would have cost if the job were buying it. The pack list
+  /// and the "what is this room worth" figures want this; the quote does not.
+  double get listTotal => qty * unitPrice;
+}
+
+/// What the "Price from" column says about [line] — the pricing ladder's own
+/// answer, or who is furnishing it when the job is not buying it.
+///
+/// One function because three places print that column (the page, the report
+/// and the workbook) and a line that reads "furnished by Campus IT" on screen
+/// and "nothing, catalog price" in the exported quote is how a part gets
+/// bought twice.
+String priceFromLabel(CostLine line) {
+  final by = line.furnishedBy;
+  if (by == null) return kPriceSourceLabels[line.source] ?? '';
+  return by.isEmpty ? 'Furnished by others' : 'Furnished by $by';
+}
+
+/// The note that goes on a furnished line's description, or '' when the job is
+/// buying it. Kept out of [CostLine.description] itself so the name of the
+/// part stays the name of the part — for matching, for sorting and for the box
+/// on screen that edits it.
+String furnishedNote(CostLine line) {
+  final by = line.furnishedBy;
+  if (by == null) return '';
+  return by.isEmpty ? 'furnished by others' : 'furnished by $by';
 }
 
 /// One fee with the money it works out to.
@@ -987,12 +1069,16 @@ CostEstimate computeRoomCost({
     // splitting it out is how a quote ends up with two prices for one box.
     final spares = settings.equipmentSpares[group.key] ?? 0;
     final qty = group.qty + (spares > 0 ? spares : 0.0);
-    if (source == PriceSource.none) {
+    // A line somebody else is furnishing is not an unpriced line: it has no
+    // figure on this quote BY DECISION, and counting it as a hole would leave
+    // the page reporting work to do that is already done.
+    final furnishedBy = settings.furnishedLines[group.key];
+    if (source == PriceSource.none && furnishedBy == null) {
       unpricedLines++;
       unpricedDevices += qty.round();
     }
-    if (isEstimatedSource(source)) estimatedLines++;
-    if (otherTier) otherTierLines++;
+    if (isEstimatedSource(source) && furnishedBy == null) estimatedLines++;
+    if (otherTier && furnishedBy == null) otherTierLines++;
 
     equipment.add(
       CostLine(
@@ -1006,6 +1092,7 @@ CostEstimate computeRoomCost({
         spareQty: spares > 0 ? spares : 0,
         unitPrice: price,
         source: source,
+        furnishedBy: furnishedBy,
       ),
     );
   }
@@ -1041,13 +1128,17 @@ CostEstimate computeRoomCost({
       price = 0;
       source = PriceSource.none;
     }
-    if (source == PriceSource.none) {
+    final furnishedBy = settings.furnishedLines[line.key];
+    if (source == PriceSource.none && furnishedBy == null) {
       unpricedLines++;
       unpricedDevices += line.qty.toInt();
     }
-    if (source == PriceSource.catalogOtherTier) otherTierLines++;
+    if (source == PriceSource.catalogOtherTier && furnishedBy == null) {
+      otherTierLines++;
+    }
     final costLine = CostLine(
       key: line.key,
+      furnishedBy: furnishedBy,
       description: line.description,
       model: line.catalogModel,
       // The catalog's number, or — when the entry it came from is gone —
@@ -1093,14 +1184,18 @@ CostEstimate computeRoomCost({
       price = 0;
       source = PriceSource.none;
     }
-    if (source == PriceSource.none) {
+    final furnishedBy = settings.furnishedLines[item.id];
+    if (source == PriceSource.none && furnishedBy == null) {
       unpricedLines++;
       unpricedDevices += item.qty.round();
     }
-    if (source == PriceSource.catalogOtherTier) otherTierLines++;
+    if (source == PriceSource.catalogOtherTier && furnishedBy == null) {
+      otherTierLines++;
+    }
 
     return CostLine(
       key: item.id,
+      furnishedBy: furnishedBy,
       description: item.description.trim().isEmpty
           ? (item.catalogModel.trim().isEmpty
                 ? '(unnamed)'
@@ -1351,12 +1446,14 @@ CostEstimate computeRoomCost({
           price = 0;
           source = PriceSource.none;
         }
-        if (source == PriceSource.none) {
+        final furnishedBy = settings.furnishedLines[key];
+        if (source == PriceSource.none && furnishedBy == null) {
           unpricedLines++;
           unpricedDevices += qty.round();
         }
-        if (isEstimatedSource(source)) estimatedLines++;
-        if (source == PriceSource.catalogOtherTier || otherTierCable) {
+        if (isEstimatedSource(source) && furnishedBy == null) estimatedLines++;
+        if ((source == PriceSource.catalogOtherTier || otherTierCable) &&
+            furnishedBy == null) {
           otherTierLines++;
         }
 
@@ -1406,6 +1503,7 @@ CostEstimate computeRoomCost({
             qty: qty,
             unitPrice: price,
             source: source,
+            furnishedBy: furnishedBy,
           ),
         );
       }
@@ -1624,7 +1722,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             line.qty,
             cash(line.unitPrice),
             cash(line.total),
-            kPriceSourceLabels[line.source] ?? '',
+            priceFromLabel(line),
           ],
       ],
     ),
@@ -1650,7 +1748,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             line.qty,
             cash(line.unitPrice),
             cash(line.total),
-            kPriceSourceLabels[line.source] ?? '',
+            priceFromLabel(line),
           ],
       ],
     ),
@@ -1672,7 +1770,7 @@ List<ReportSection> costReportSections(CostEstimate estimate) {
             line.qty,
             cash(line.unitPrice),
             cash(line.total),
-            kPriceSourceLabels[line.source] ?? '',
+            priceFromLabel(line),
           ],
       ],
     ),

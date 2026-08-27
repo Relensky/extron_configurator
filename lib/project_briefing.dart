@@ -250,6 +250,133 @@ class ProjectBriefing {
   bool get isEmpty => lines.isEmpty;
 }
 
+/// What kind of date a milestone is — which is what its marker looks like on
+/// the calendar and what it means when it has gone past.
+enum BriefingDateKind {
+  /// The day the briefing was worked out on.
+  today,
+
+  /// A date something has to be ORDERED by, worked back from when it is
+  /// needed and how long it takes to arrive.
+  order,
+
+  /// A delivery phase's own date.
+  phase,
+
+  /// The job's delivery deadline.
+  delivery,
+
+  /// A dated job note.
+  todo,
+}
+
+/// One date on the job's calendar.
+typedef BriefingMilestone = ({
+  DateTime date,
+  BriefingDateKind kind,
+
+  /// The few words that go on the calendar itself.
+  String label,
+
+  /// The whole sentence, for the marker's tooltip.
+  String detail,
+
+  /// Past its date and not done.
+  bool late,
+});
+
+/// How many dated job notes reach the calendar.
+///
+/// A job list is not a schedule. Three is enough to show that the notes have
+/// dates at all and where they sit against the buying; the rest are on the To
+/// do pane, which is the place to read them.
+const int _maxTodoMilestones = 3;
+
+/// EVERY DATE ON THIS JOB, ON ONE LINE.
+///
+/// The briefing is a list of facts, each true and each on its own row, and a
+/// list is the one shape that cannot answer the question everybody actually
+/// asks of a job: does the buying finish before the delivery date, and how
+/// much room is there. Two dates three rows apart are two dates; the same two
+/// on a calendar are a gap you can see.
+///
+/// So this is the same facts as [BriefingOverview], sorted into the order they
+/// happen: today, the order dates, the phase dates, the delivery, and the job
+/// notes that carry a date. Nothing is invented — a job with no dates on it
+/// produces today and nothing else, and the calendar stands down.
+List<BriefingMilestone> briefingMilestones(ProjectBriefing briefing) {
+  final o = briefing.overview;
+  final out = <BriefingMilestone>[
+    (
+      date: dateOnly(briefing.asOf),
+      kind: BriefingDateKind.today,
+      label: 'Today',
+      detail: 'Today - ${formatScheduleDate(briefing.asOf)}',
+      late: false,
+    ),
+  ];
+
+  for (final day in o.nextOrders) {
+    out.add((
+      date: dateOnly(day.date),
+      kind: BriefingDateKind.order,
+      label: '${day.parts} part${day.parts == 1 ? '' : 's'}',
+      detail: [
+        'Order by ${formatScheduleDate(day.date)}',
+        '${day.parts} part${day.parts == 1 ? '' : 's'}',
+        if (day.late) 'this date has passed',
+      ].join('  -  '),
+      late: day.late,
+    ));
+  }
+
+  for (final phase in o.phases) {
+    final when = phase.deadline;
+    if (when == null) continue;
+    out.add((
+      date: dateOnly(when),
+      kind: BriefingDateKind.phase,
+      label: phase.name,
+      detail: [
+        '${phase.name} - ${formatScheduleDate(when)}',
+        '${phase.parts} part${phase.parts == 1 ? '' : 's'}',
+      ].join('  -  '),
+      late: when.isBefore(dateOnly(briefing.asOf)),
+    ));
+  }
+
+  final deadline = o.deadline;
+  if (deadline != null) {
+    out.add((
+      date: dateOnly(deadline),
+      kind: BriefingDateKind.delivery,
+      label: 'Delivery',
+      detail: 'Delivery - ${formatScheduleDate(deadline)}',
+      late: deadline.isBefore(dateOnly(briefing.asOf)),
+    ));
+  }
+
+  int todos = 0;
+  for (final todo in o.todos) {
+    final due = todo.due;
+    if (due == null) continue;
+    if (todos++ >= _maxTodoMilestones) break;
+    out.add((
+      date: dateOnly(due),
+      kind: BriefingDateKind.todo,
+      label: todo.text,
+      detail: [
+        '${todo.text} - due ${formatScheduleDate(due)}',
+        if (todo.scope.isNotEmpty) todo.scope,
+      ].join('  -  '),
+      late: todo.late,
+    ));
+  }
+
+  out.sort((a, b) => a.date.compareTo(b.date));
+  return out;
+}
+
 /// How many specifics a line names before it stops listing and starts counting.
 ///
 /// Three, because the point of the detail is to make a line actionable without
