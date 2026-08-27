@@ -1665,6 +1665,30 @@ class _ResponsibilityImageDialogState
     await copyPictureToClipboard(context, bytes, what: 'The matrix');
   }
 
+  /// The pen and the arrow over the matrix, for the copy that is being sent to
+  /// ask a question about one line of it.
+  Future<void> _annotate() async {
+    final bytes = await _capture();
+    if (bytes == null) {
+      if (mounted) {
+        showTimedSnackBar(
+          ScaffoldMessenger.of(context),
+          const SnackBar(content: Text('The matrix could not be captured.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final stem = widget.project.name.trim().isEmpty
+        ? 'project'
+        : widget.project.name.trim().replaceAll(RegExp(r'[^\w\-]+'), '_');
+    await showAnnotationEditor(
+      context,
+      bytes,
+      defaultFileName: '${stem}_responsibility.png',
+    );
+  }
+
   Future<void> _save() async {
     final provider = context.read<AppStateProvider>();
     final bytes = await _capture();
@@ -1760,6 +1784,12 @@ class _ResponsibilityImageDialogState
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('responsibility_annotate'),
+          onPressed: _saving ? null : _annotate,
+          icon: const Icon(Icons.draw_outlined, size: 18),
+          label: const Text('Annotate'),
         ),
         OutlinedButton.icon(
           key: const ValueKey('responsibility_copy_png'),

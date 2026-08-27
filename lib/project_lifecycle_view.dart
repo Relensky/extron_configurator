@@ -328,15 +328,25 @@ class _PlanExportButtons extends StatefulWidget {
 class _PlanExportButtonsState extends State<_PlanExportButtons> {
   bool _busy = false;
 
-  Widget get _sheet =>
-      LifecyclePlanSheet(building: widget.building, title: widget.title);
+  /// The sheet at [expanded] detail. The workbook's illustration takes the
+  /// opened-out one, which is the level the book's own tables are at.
+  Widget _sheetAt(bool expanded) => LifecyclePlanSheet(
+    building: widget.building,
+    title: widget.title,
+    expanded: expanded,
+  );
+
+  Widget get _sheet => _sheetAt(true);
 
   void _picture() => showLifecycleSheetPicture(
     context,
     dialogTitle: 'The replacement plan as a picture',
     fileStem: widget.fileStem,
     what: 'The replacement plan',
-    sheet: _sheet,
+    sheetBuilder: _sheetAt,
+    // A room with three replacement dates is three lines under its own row,
+    // or none of them.
+    detailLabel: 'Every date',
   );
 
   Future<void> _spreadsheet() async {
@@ -407,10 +417,20 @@ class LifecyclePlanSheet extends StatelessWidget {
   final BuildingLifecycle building;
   final String title;
 
+  /// Whether a room with several replacement dates is opened out into a line
+  /// per date, or folded to the one row carrying its running total.
+  ///
+  /// True is how this sheet has always been pictured, and is right for the
+  /// copy somebody works from. False is the budget-meeting copy: forty rooms
+  /// on one page instead of a hundred and sixty lines, each carrying the total
+  /// the meeting is actually asking about.
+  final bool expanded;
+
   const LifecyclePlanSheet({
     super.key,
     required this.building,
     required this.title,
+    this.expanded = true,
   });
 
   @override
@@ -420,7 +440,14 @@ class LifecyclePlanSheet extends StatelessWidget {
     // - it is the whole document or it is a fragment of one - and the grid it
     // is a picture of caps its columns precisely because a screen IS a window.
     final years = building.allYears;
-    final lines = LifecycleYearGrid.linesOf(building);
+    final lines = LifecycleYearGrid.linesOf(
+      building,
+      // Folded means EVERY room folded - the same set the grid on screen keeps
+      // a room at a time, filled in wholesale.
+      collapsed: expanded
+          ? const {}
+          : {for (final room in building.rooms) room.roomName},
+    );
     final banded = bandedLines(lines);
     final currency = building.currency;
     final thisYear = building.asOf.year;

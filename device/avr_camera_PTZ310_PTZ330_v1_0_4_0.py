@@ -800,14 +800,14 @@ class DeviceEthernetClass:
         }
 
         if (
-            1 <= qualifier["Pan Speed"] <= 24
-            and 1 <= qualifier["Tilt Speed"] <= 24
+            1 <= int(qualifier["Pan Speed"]) <= 24
+            and 1 <= int(qualifier["Tilt Speed"]) <= 24
             and value in ValueStateValues
         ):
             PanTiltCmdString = self.SetHeader(
                 self._DeviceID
                 + b"\x01\x06\x01"
-                + bytes([qualifier["Pan Speed"], qualifier["Tilt Speed"]])
+                + bytes([int(qualifier["Pan Speed"]), int(qualifier["Tilt Speed"])])
                 + ValueStateValues[value]
                 + b"\xff"
             )

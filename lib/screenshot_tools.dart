@@ -1182,6 +1182,27 @@ class _CapturedPictureDialogState extends State<_CapturedPictureDialog> {
     }
   }
 
+  /// The pen, the highlighter, the arrow and the callout, over this picture.
+  ///
+  /// Opened OVER the preview rather than instead of it, so closing the editor
+  /// puts somebody back where they were rather than at nothing. The editor
+  /// carries its own Save and Copy, because a marked-up picture is a different
+  /// picture from the one underneath it and is usually the one that was
+  /// wanted: "the fee card is the line I am asking about" is the whole reason
+  /// the screenshot is being sent.
+  Future<void> _annotate() async {
+    setState(() => _busy = true);
+    try {
+      await showAnnotationEditor(
+        context,
+        widget.png,
+        defaultFileName: widget.fileName,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _save() async {
     // Read before the first await: a provider looked up after one is a
     // BuildContext used across an async gap.
@@ -1232,6 +1253,12 @@ class _CapturedPictureDialogState extends State<_CapturedPictureDialog> {
         TextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('captured_picture_annotate'),
+          onPressed: _busy ? null : _annotate,
+          icon: const Icon(Icons.draw_outlined, size: 18),
+          label: const Text('Annotate'),
         ),
         OutlinedButton.icon(
           key: const ValueKey('captured_picture_copy'),

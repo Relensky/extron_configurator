@@ -82,10 +82,23 @@ class DeviceClass:
         self._cmd_busy  = False  # true while a command is "in flight"
         self._default_gap = 0.05 # small gap between ordinary commands (after reply)
 
-        # Commands that require a long "cool-down" AFTER reply
+        # Commands that require a long "cool-down" AFTER reply.
+        #
+        # Power only. The monitor stops answering while it powers up or down,
+        # so anything sent into that window is lost, and 15 s is what it takes
+        # to come back.
+        #
+        # 'Input' used to sit here at 10 s and does not belong: a VCP-00-60 set
+        # is answered immediately and the panel accepts the next command while
+        # the picture is still changing over. Nothing in the module's
+        # communication sheet asks for a wait, and the pre-queue version of
+        # this driver sent input sets straight out for two years without one.
+        # Because the queue is one-at-a-time for the whole device, that 10 s
+        # was charged to whatever came next: in a room where the display IS the
+        # router -- BSS259 -- a second source press sat in the queue for the
+        # rest of the cool-down before it was even sent.
         self._post_wait_map = {
             'Power'        : 15,   # CTL power on/off
-            'Input'        : 10,   # VCP-00-60
         }
 
     @property
@@ -317,12 +330,23 @@ class DeviceClass:
         self._cmd_busy = True
         fn, post_wait = self._cmd_queue.pop(0)
 
-        # Run the task (it blocks until SendAndWait returns or times out).
-        fn()
-
-        # After the reply, enforce the mandatory cool-down (or a tiny gap).
-        gap = max(post_wait, self._default_gap)
-        Wait(gap, self.___queue_release)
+        # try/finally, because the release is the only thing that ever clears
+        # _cmd_busy. A raise out of fn() -- a socket error on a panel that
+        # dropped is enough -- used to skip the Wait below, so _cmd_busy stayed
+        # set for good and every later command to this display queued up behind
+        # it and was never sent. Silent, and only a program restart cleared it.
+        try:
+            # Run the task (it blocks until SendAndWait returns or times out).
+            fn()
+        except Exception as e:
+            ProgramLog(
+                'NEC display {}: command failed: {}'.format(self._DeviceID, e),
+                'error',
+            )
+        finally:
+            # After the reply, enforce the mandatory cool-down (or a tiny gap).
+            gap = max(post_wait, self._default_gap)
+            Wait(gap, self.___queue_release)
 
     def ___queue_release(self):
         self._cmd_busy = False

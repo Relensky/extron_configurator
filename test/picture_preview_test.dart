@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -156,4 +158,113 @@ void main() {
     expect(shownZoom(tester), 100);
     expect(drawnSize(tester), const Size(120, 80));
   });
+
+  testWidgets('the captured picture offers save, copy and the pen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showCapturedPicture(
+                context,
+                _tinyPng,
+                title: 'The estimate as a picture',
+                fileName: 'estimate.png',
+                what: 'The cost estimate image',
+              ),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('captured_picture_dialog')), findsOne);
+    // The three things somebody does with a screenshot, on the screen where
+    // they are looking at it: keep it, paste it, or mark it up first.
+    expect(find.byKey(const ValueKey('captured_picture_save')), findsOne);
+    expect(find.byKey(const ValueKey('captured_picture_copy')), findsOne);
+    expect(find.byKey(const ValueKey('captured_picture_annotate')), findsOne);
+    // And it can be read while it is being decided about.
+    expect(find.byType(ZoomablePicturePreview), findsOne);
+  });
+
+  testWidgets('the pen opens the annotation editor over the picture', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showCapturedPicture(
+                context,
+                _tinyPng,
+                title: 'The estimate as a picture',
+                fileName: 'estimate.png',
+                what: 'The cost estimate image',
+              ),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('captured_picture_annotate')));
+    // Pumped rather than settled, all the way down this test. The editor
+    // decodes the PNG through the real image codec and shows a spinner while
+    // it does, and a spinner is an animation that never finishes - so
+    // pumpAndSettle would sit here until it timed out.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(AnnotationEditor), findsOne);
+    expect(find.text('Annotate Screenshot'), findsOne);
+    // The marked-up picture is a different picture from the one underneath,
+    // and is usually the one that was wanted - so it has its own way out.
+    expect(find.byKey(const ValueKey('annotation_copy')), findsOne);
+    // The tools themselves.
+    expect(find.byTooltip('Pen'), findsOne);
+    expect(find.byTooltip('Highlighter'), findsOne);
+    expect(find.byTooltip('Arrow'), findsOne);
+    expect(find.byTooltip('Rectangle'), findsOne);
+    expect(find.byTooltip('Text (click to place)'), findsOne);
+
+    // OVER the preview, not instead of it: closing the pen puts somebody back
+    // where they were rather than at nothing.
+    await tester.tap(find.byTooltip('Close without saving'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(AnnotationEditor), findsNothing);
+    expect(find.byKey(const ValueKey('captured_picture_dialog')), findsOne);
+  });
 }
+
+/// A real 4x4 PNG, so the dialog has something it can actually decode without
+/// a fixture file on disk.
+final Uint8List _tinyPng = Uint8List.fromList(<int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0xA9, 0xF1, 0x9E,
+  0x7E, 0x00, 0x00, 0x00, 0x12, 0x49, 0x44, 0x41,
+  0x54, 0x78, 0x9C, 0x63, 0x38, 0xA1, 0xA1, 0xF1,
+  0x1F, 0x19, 0x33, 0x90, 0x2E, 0x00, 0x00, 0x6C,
+  0x38, 0x21, 0x71, 0x4B, 0x5E, 0xD7, 0x1C, 0x00,
+  0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+  0x42, 0x60, 0x82,
+]);

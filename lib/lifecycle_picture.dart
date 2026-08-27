@@ -215,14 +215,34 @@ Future<void> showLifecycleSheetPicture(
 
   /// What the "saved" message calls it.
   required String what,
-  required Widget sheet,
+
+  /// The sheet at the level of detail asked for.
+  ///
+  /// A BUILDER rather than a widget, because the detail switch below has to be
+  /// able to draw it the other way. A plan is read at two levels and both are
+  /// legitimate documents: the summary a budget meeting wants - one line per
+  /// room, or per building - and the full one somebody works from, with every
+  /// date or every room opened out under it. The sheet on screen has that
+  /// choice a fold at a time; the picture had it made for it, and whichever
+  /// way it was made was wrong for half the people it was handed to.
+  required Widget Function(bool expanded) sheetBuilder,
+
+  /// What the detail switch is called on this particular sheet - 'Every date'
+  /// on a building's plan, 'Every room' on a campus one.
+  required String detailLabel,
+
+  /// Which way the switch starts, which is whichever way that sheet has always
+  /// been pictured.
+  bool startExpanded = true,
 }) => showDialog<void>(
   context: context,
   builder: (_) => _LifecyclePictureDialog(
     dialogTitle: dialogTitle,
     fileStem: fileStem,
     what: what,
-    sheet: sheet,
+    sheetBuilder: sheetBuilder,
+    detailLabel: detailLabel,
+    startExpanded: startExpanded,
   ),
 );
 
@@ -230,13 +250,17 @@ class _LifecyclePictureDialog extends StatefulWidget {
   final String dialogTitle;
   final String fileStem;
   final String what;
-  final Widget sheet;
+  final Widget Function(bool expanded) sheetBuilder;
+  final String detailLabel;
+  final bool startExpanded;
 
   const _LifecyclePictureDialog({
     required this.dialogTitle,
     required this.fileStem,
     required this.what,
-    required this.sheet,
+    required this.sheetBuilder,
+    required this.detailLabel,
+    required this.startExpanded,
   });
 
   @override
@@ -274,6 +298,15 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
   /// fill, so a grey one still reads.
   bool _colour = true;
 
+  /// Whether every line is opened out, or the sheet is one line per room.
+  ///
+  /// Starts wherever that sheet has always been pictured, so nobody's existing
+  /// export changes shape underneath them; the other way is one press away.
+  /// Changing it re-lays-out the sheet at its new full size, which is why the
+  /// preview is built from a BUILDER - the picture that gets saved is the one
+  /// on screen, at whatever detail is showing.
+  late bool _expanded = widget.startExpanded;
+
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
@@ -310,13 +343,46 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
     }
   }
 
+  /// The pen and the arrow over the sheet, for the copy that is being sent to
+  /// ask about one row of it.
+  Future<void> _annotate() async {
+    setState(() => _saving = true);
+    try {
+      final bytes = await captureBoundary(
+        _boundary,
+        pixelRatio: captureRatioFor(_boundary.currentContext?.size),
+      );
+      if (bytes == null) {
+        if (mounted) {
+          showTimedSnackBar(
+            ScaffoldMessenger.of(context),
+            const SnackBar(content: Text('The plan could not be captured.')),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+      await showAnnotationEditor(
+        context,
+        bytes,
+        defaultFileName:
+            '${widget.fileStem}${_colour ? '' : '_mono'}.png',
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   /// The sheet itself, at its natural size, inside the boundary that gets
   /// photographed. The same widget in both views - the fit switch scales what
   /// is DRAWN and never what is laid out, so [_save] photographs the full-size
   /// sheet whichever way the preview happens to be showing it.
   Widget get _plate => RepaintBoundary(
     key: _boundary,
-    child: printSkin(enabled: !_colour, child: widget.sheet),
+    child: printSkin(
+      enabled: !_colour,
+      child: widget.sheetBuilder(_expanded),
+    ),
   );
 
   /// The whole sheet, scaled down to the window.
@@ -410,12 +476,39 @@ class _LifecyclePictureDialogState extends State<_LifecyclePictureDialog> {
             ),
             const SizedBox(width: 4),
             const Text('Plan colours'),
+            const SizedBox(width: 16),
+            // A switch rather than two buttons, like the two beside it: it
+            // changes the preview, so what is saved is what was looked at.
+            // Turning it off can change the sheet's shape a great deal - a
+            // building of forty rooms with three dates each is a hundred and
+            // sixty lines opened and forty folded - so the fit switch above is
+            // usually the next press.
+            Switch(
+              key: const ValueKey('lifecycle_picture_expand'),
+              value: _expanded,
+              onChanged: (v) => setState(() {
+                _expanded = v;
+                // Folding forty rooms shut leaves the view scrolled to a row
+                // that is no longer there, and the scroll views keep the
+                // offset. Back to the top, where the sheet now starts.
+                if (_across.hasClients) _across.jumpTo(0);
+                if (_down.hasClients) _down.jumpTo(0);
+              }),
+            ),
+            const SizedBox(width: 4),
+            Text(widget.detailLabel),
           ],
         ),
         const SizedBox(width: 12),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('lifecycle_picture_annotate'),
+          onPressed: _saving ? null : _annotate,
+          icon: const Icon(Icons.draw_outlined, size: 18),
+          label: const Text('Annotate'),
         ),
         OutlinedButton.icon(
           key: const ValueKey('lifecycle_picture_copy'),

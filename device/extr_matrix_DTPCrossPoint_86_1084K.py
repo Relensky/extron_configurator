@@ -17,6 +17,8 @@ DEVICE_INFO = {
         "DTP CrossPoint 86 4K",
         "DTP CrossPoint 86 4K IPCP SA",
         "DTP CrossPoint 86 4K IPCP MA 70",
+        "DTP CrossPoint 108 4K IPCP Q MA 70",
+        "DTP CrossPoint 108 4K IPCP Q SA",
     ],
     "connection": {
         "com_type": "Network",

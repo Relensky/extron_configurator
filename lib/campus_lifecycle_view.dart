@@ -397,7 +397,12 @@ class _CampusViewState extends State<_CampusView> {
   // -------------------------------------------------------------------------
 
   /// The campus as it is read, laid out flat so it can be photographed whole.
-  Widget get _sheet => CampusPlanSheet(campus: _campus!);
+  Widget _sheetAt(bool expanded) =>
+      CampusPlanSheet(campus: _campus!, expanded: expanded);
+
+  /// The workbook's illustration: one line per building, which is the level
+  /// its own tables are at.
+  Widget get _sheet => _sheetAt(false);
 
   /// The file both documents are named after.
   ///
@@ -421,7 +426,12 @@ class _CampusViewState extends State<_CampusView> {
     dialogTitle: 'The campus plan as a picture',
     fileStem: _fileStem,
     what: 'The campus refresh plan',
-    sheet: _sheet,
+    sheetBuilder: _sheetAt,
+    detailLabel: 'Every room',
+    // Buildings only, which is how this sheet has always been pictured and
+    // what a budget meeting asks for. An estate of eleven jobs opened out is
+    // several hundred rooms.
+    startExpanded: false,
   );
 
   Future<void> _spreadsheet() async {
@@ -1216,7 +1226,21 @@ class _YearBar extends StatelessWidget {
 class CampusPlanSheet extends StatelessWidget {
   final CampusLifecycle campus;
 
-  const CampusPlanSheet({super.key, required this.campus});
+  /// Whether each building is opened out into a line per room, or is the one
+  /// row carrying the whole job's figures.
+  ///
+  /// False is how this sheet has always been pictured, and is the one a budget
+  /// meeting wants: eleven buildings, one line each, and the campus total
+  /// under them. True is the copy somebody takes back to a building to say
+  /// WHICH rooms are the years that hurt - the same question the building's
+  /// own plan answers, asked across the estate.
+  final bool expanded;
+
+  const CampusPlanSheet({
+    super.key,
+    required this.campus,
+    this.expanded = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1352,34 +1376,89 @@ class CampusPlanSheet extends StatelessWidget {
             // wash is what a ruled ledger did about that.
             for (final (i, job) in jobs.indexed)
               SheetBand(
+                // The building AND its rooms under one wash. Shading a room at
+                // a time would cut a building of six rooms into six buildings
+                // of one - the same reason the building's own plan bands a
+                // room at a time rather than a line at a time.
                 shaded: i.isOdd,
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
-                      width: nameColumn,
-                      height: rowHeight,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Text(
-                            job.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium,
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: nameColumn,
+                          height: rowHeight,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Text(
+                                job.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        for (final y in years)
+                          _MoneyCell(
+                            width: yearColumn,
+                            height: rowHeight,
+                            money: campus.costIn(job, y),
+                            year: y,
+                            asOf: campus.asOf,
+                            currency: currency,
+                            tooltip: '${job.name} - $y',
+                          ),
+                      ],
                     ),
-                    for (final y in years)
-                      _MoneyCell(
-                        width: yearColumn,
-                        height: rowHeight,
-                        money: campus.costIn(job, y),
-                        year: y,
-                        asOf: campus.asOf,
-                        currency: currency,
-                        tooltip: '${job.name} - $y',
-                      ),
+                    // WHICH ROOMS THE BUILDING'S BAD YEAR IS. The row above
+                    // says a building needs $80k in 2031 and does not say
+                    // whether that is one lecture hall or twelve seminar
+                    // rooms - which is the first thing anybody asks, and the
+                    // difference between a plan that can be phased and one
+                    // that cannot.
+                    if (expanded)
+                      for (final room in job.lifecycle?.rooms ?? const [])
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: nameColumn,
+                              height: rowHeight,
+                              child: Padding(
+                                // Indented under the building it belongs to,
+                                // exactly as a due-date line is indented under
+                                // its room on the building's own plan.
+                                padding: const EdgeInsets.only(
+                                  left: 12,
+                                  right: 8,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    room.roomName,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color:
+                                          theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            for (final y in years)
+                              _MoneyCell(
+                                width: yearColumn,
+                                height: rowHeight,
+                                money: room.costDueIn(y),
+                                year: y,
+                                asOf: campus.asOf,
+                                currency: currency,
+                                tooltip: '${job.name} - ${room.roomName} - $y',
+                              ),
+                          ],
+                        ),
                   ],
                 ),
               ),

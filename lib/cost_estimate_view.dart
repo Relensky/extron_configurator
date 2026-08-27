@@ -62,6 +62,35 @@ enum _SwapControl { keepSettings, applyDefaults }
 
 /// The equipment table's columns. Declared once and read by both the caption
 /// row and every data row — see [_CostEstimateViewState._gridRow].
+/// ============================================================================
+///  THE ROW BUTTONS LINE UP DOWN THE PAGE, NOT JUST ACROSS A ROW
+/// ============================================================================
+///  Every table on this page ends in the same cluster of buttons, and they are
+///  laid out as FIXED SLOTS counted from the RIGHT-HAND EDGE:
+///
+///      ... | replace | add to catalog | back to catalog price | delete |
+///
+///  right-aligned, so the rightmost slot of every table lands on the same
+///  pixel whatever else that table's row is made of. The trash can on the
+///  labor card sits directly under the trash can on the rack-hardware card and
+///  under the delete on the equipment card; somebody who has learned where the
+///  delete is on one table has learned it on all of them.
+///
+///  It was not like this. Each table put its buttons on in whatever order the
+///  row happened to need them, and a slot was SHARED between two buttons that
+///  only one kind of row could use - the rack-hardware column ended in "back to
+///  the catalog price" on a placed line and a trash can on a typed one, in the
+///  same place. The result was a column of buttons that changed meaning line by
+///  line, which is how somebody deletes a row meaning to reset its price.
+///
+///  So a row that cannot offer one of the shared buttons leaves its slot BLANK
+///  rather than closing the gap - see [_rowSlotGap]. The blank is the point:
+///  it is what keeps the button to its left where it belongs.
+/// ============================================================================
+
+/// The blank a row puts in a shared button slot it has nothing to put in.
+const Widget _rowSlotGap = SizedBox(width: kRowIconWidth, height: 34);
+
 const List<_Col> _kEquipmentCols = [
   // MIXED COLUMNS. A device off the diagram prints its name and its count as
   // plain text; a line added here has a box for both. Both cells carry the
@@ -114,9 +143,10 @@ const List<_Col> _kHardwareCols = [
   _Col.field('Unit price', gap: 12, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
   _Col('Price from', gap: 12, width: 92),
-  // Four row buttons. They are constrained to 34 and render at
-  // 40, which is what the column actually takes.
-  _Col('', width: 160),
+  // Five row buttons, 40 wide as they render: replace, add to catalog, back to
+  // the price list, delete. Five rather than four because the last two used to
+  // share a slot - see the note above [_kEquipmentCols].
+  _Col('', width: 200),
 ];
 
 /// The cabling table's columns — see [_kEquipmentCols]. Both kinds of row
@@ -129,9 +159,10 @@ const List<_Col> _kCablingCols = [
   _Col('Total', gap: 12, width: 54, align: TextAlign.right),
   _Col.field('Unit price', gap: 12, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
-  // Five row buttons. They are constrained to 34 and render at
-  // 40, which is what the column actually takes.
-  _Col('', width: 200),
+  // Six row buttons, 40 wide as they render. A counted run and a spool quoted
+  // by hand can each use four of the six, and they are not the same four - so
+  // the column holds all six and each row blanks the ones it cannot use.
+  _Col('', width: 240),
 ];
 
 /// The labor table's columns — see [_kEquipmentCols].
@@ -157,9 +188,10 @@ const List<_Col> _kItemsCols = [
   _Col.field('Unit price', gap: 8, width: 130, numeric: true),
   _Col('Extended', gap: 12, width: 110, align: TextAlign.right),
   _Col('Taxable', width: 92, align: TextAlign.center),
-  // Two row buttons. They are constrained to 34 and render at
-  // 40, which is what the column actually takes.
-  _Col('', width: 80),
+  // Three slots for two buttons. An item has no catalog price to fall back to,
+  // so the "back to catalog price" slot is blank - and blanking it is what
+  // puts "add to catalog" in the same column it occupies on every other table.
+  _Col('', width: 120),
 ];
 
 /// The ink the quiet columns are set in - the model number beside a device,
@@ -1377,23 +1409,35 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     priceKey: line.key,
                                   ),
                           ),
-                          if (extra == null)
-                            avRowIcon(
-                              Icons.restart_alt,
-                              'Back to the parts list price',
-                              line.source == PriceSource.override
-                                  ? () =>
-                                      provider.setAvCostPrice(line.key, null)
-                                  : null,
+                          // Both kinds of line can carry a typed figure, so
+                          // both get the way back off it - in its OWN slot,
+                          // rather than the one the trash can wants.
+                          avRowIcon(
+                            Icons.restart_alt,
+                            'Back to the parts list price',
+                            line.source == PriceSource.override
+                                ? () => provider.setAvCostPrice(line.key, null)
+                                : null,
+                          ),
+                          // LAST, under every other table's delete. Placed
+                          // hardware has no trash can of its own - where a
+                          // blank goes is a rack decision, made on the Racks
+                          // tab - so it blanks the slot rather than closing
+                          // the gap and walking the four buttons beside it
+                          // out of line with the rest of the page.
+                          if (extra != null)
+                            KeyedSubtree(
+                              key: ValueKey('hw_delete_${line.key}'),
+                              child: avRowIcon(
+                                Icons.delete_outline,
+                                'Remove this line from the quote',
+                                () => provider
+                                    .removeAvCostExtraHardware(extra.id),
+                                danger: true,
+                              ),
                             )
                           else
-                            avRowIcon(
-                              Icons.delete_outline,
-                              'Remove this line',
-                              () => provider
-                                  .removeAvCostExtraHardware(extra.id),
-                              danger: true,
-                            ),
+                            _rowSlotGap,
                         ],
                       ),
                     ], rowKey: ValueKey('gridrow_hw_${line.key}')),
@@ -1599,12 +1643,30 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // THE RUNS SOMEBODY ELSE PULLS. The commonest
+// THE RUNS SOMEBODY ELSE PULLS. The commonest
                               // one there is: the network department provides
                               // and terminates the cat6, and the room still
                               // has every one of those runs on its schedule.
                               _furnishedButton(context, provider, line),
-                              // WHICH LEAD THIS LENGTH IS BOUGHT AS. The
+                              // The shop's typical figure for a lead of this
+                              // type and length, on the shared card rather
+                              // than on this room — see [_setCableBaseCost].
+                              avRowIcon(
+                                Icons.price_change_outlined,
+                                line.source == PriceSource.baseCost
+                                    ? 'Priced off the base-cost card - edit '
+                                          'that figure'
+                                    : 'Set a base cost for this cable length',
+                                () => _setCableBaseCost(
+                                  context,
+                                  provider,
+                                  signal: signal,
+                                  lengthFt: (catalog?.cableLengthFt ?? 0) > 0
+                                      ? catalog!.cableLengthFt
+                                      : cableKeyParts(line.key).lengthFt,
+                                ),
+                              ),
+// WHICH LEAD THIS LENGTH IS BOUGHT AS. The
                               // estimate picks the shortest stock lead that
                               // reaches the run, which is right until the job
                               // is plenum, or the stakeholder takes one brand
@@ -1657,24 +1719,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                           priceKey: line.key,
                                         ),
                               ),
-                              // The shop's typical figure for a lead of this
-                              // type and length, on the shared card rather
-                              // than on this room — see [_setCableBaseCost].
-                              avRowIcon(
-                                Icons.price_change_outlined,
-                                line.source == PriceSource.baseCost
-                                    ? 'Priced off the base-cost card - edit '
-                                          'that figure'
-                                    : 'Set a base cost for this cable length',
-                                () => _setCableBaseCost(
-                                  context,
-                                  provider,
-                                  signal: signal,
-                                  lengthFt: (catalog?.cableLengthFt ?? 0) > 0
-                                      ? catalog!.cableLengthFt
-                                      : cableKeyParts(line.key).lengthFt,
-                                ),
-                              ),
                               avRowIcon(
                                 Icons.restart_alt,
                                 'Back to the catalog price',
@@ -1683,6 +1727,12 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                         provider.setAvCostPrice(line.key, null)
                                     : null,
                               ),
+                              // No trash can on a counted run: the runs are
+                              // the drawing's to say, and one is removed by
+                              // deleting it on the Signal Flow page. The slot
+                              // stays, so the four buttons beside it keep
+                              // their places under the other cards'.
+                              _rowSlotGap,
                             ],
                           ),
                         ], rowKey: ValueKey('gridrow_cbl_${line.key}')),
@@ -1798,6 +1848,24 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                   width: kRowIconWidth,
                                   height: 34,
                                 ),
+                              // A spool is not a length of anything, so there
+                              // is no base cost to set - and blanking that
+                              // slot is what keeps the three buttons after it
+                              // under the counted run's above.
+                              _rowSlotGap,
+                              KeyedSubtree(
+                                key: ValueKey('cbl_swap_${item.id}'),
+                                child: avRowIcon(
+                                  Icons.find_replace,
+                                  'Quote a different cable on this line',
+                                  () => _swapExtraLine(
+                                    context,
+                                    provider,
+                                    item,
+                                    kind: _ExtraPart.cable,
+                                  ),
+                                ),
+                              ),
                               avRowIcon(
                                 item.catalogModel.isEmpty
                                     ? Icons.library_add_outlined
@@ -1819,26 +1887,27 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                           kind: _ExtraPart.cable,
                                         ),
                               ),
-                              KeyedSubtree(
-                                key: ValueKey('cbl_swap_${item.id}'),
-                                child: avRowIcon(
-                                  Icons.find_replace,
-                                  'Quote a different cable on this line',
-                                  () => _swapExtraLine(
-                                    context,
-                                    provider,
-                                    item,
-                                    kind: _ExtraPart.cable,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: kRowIconWidth),
+                              // A typed line carries a typed figure too, so it
+                              // gets the way back off it in the same slot the
+                              // counted run has it.
                               avRowIcon(
-                                Icons.delete_outline,
-                                'Remove this line',
-                                () =>
-                                    provider.removeAvCostExtraCable(item.id),
-                                danger: true,
+                                Icons.restart_alt,
+                                'Back to the catalog price',
+                                line != null &&
+                                        line.source == PriceSource.override
+                                    ? () =>
+                                        provider.setAvCostPrice(line.key, null)
+                                    : null,
+                              ),
+                              KeyedSubtree(
+                                key: ValueKey('cbl_delete_${item.id}'),
+                                child: avRowIcon(
+                                  Icons.delete_outline,
+                                  'Remove this line from the quote',
+                                  () =>
+                                      provider.removeAvCostExtraCable(item.id),
+                                  danger: true,
+                                ),
                               ),
                             ],
                           ),
@@ -4788,11 +4857,20 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                                     kind: _ExtraPart.misc,
                                   ),
                         ),
-                        avRowIcon(
-                          Icons.delete_outline,
-                          'Remove item',
-                          () => provider.removeAvCostItem(item.id),
-                          danger: true,
+                        // An item is priced on its own line and has no
+                        // catalog figure to fall back to, so it has nothing
+                        // for this slot - and leaving it blank is what puts
+                        // the button before it and the trash can after it in
+                        // the columns every other table uses.
+                        _rowSlotGap,
+                        KeyedSubtree(
+                          key: ValueKey('item_delete_${item.id}'),
+                          child: avRowIcon(
+                            Icons.delete_outline,
+                            'Remove item',
+                            () => provider.removeAvCostItem(item.id),
+                            danger: true,
+                          ),
                         ),
                       ],
                     ),

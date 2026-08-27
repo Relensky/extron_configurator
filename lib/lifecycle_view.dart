@@ -440,13 +440,14 @@ class _RoomActions extends StatelessWidget {
   /// one room. Nothing in it cares how many rooms it is given, and building
   /// the picture this way means the room's own copy and the building's copy
   /// cannot come out saying different things about the same room.
-  Widget get _sheet => LifecyclePlanSheet(
+  Widget _sheetAt(bool expanded) => LifecyclePlanSheet(
     building: BuildingLifecycle(
       rooms: [room],
       asOf: room.asOf,
       currency: currency,
     ),
     title: room.roomName,
+    expanded: expanded,
   );
 
   @override
@@ -476,7 +477,8 @@ class _RoomActions extends StatelessWidget {
         dialogTitle: 'The replacement plan as a picture',
         fileStem: lifecycleFileStemFor(room.roomName),
         what: 'The replacement plan',
-        sheet: _sheet,
+        sheetBuilder: _sheetAt,
+        detailLabel: 'Every date',
       ),
       icon: Icon(Icons.image_outlined, size: gridMetric(context, 20)),
       label: const Text('Picture…'),

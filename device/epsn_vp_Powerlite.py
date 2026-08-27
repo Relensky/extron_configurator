@@ -26,6 +26,7 @@ DEVICE_INFO = {
         "PowerLite L610U",
         "PowerLite L615U",
         "PowerLite L630U",
+        "PowerLite L730U",
     ],
     "connection": {
         "com_type": "Network",
