@@ -470,15 +470,33 @@ class _CampusViewState extends State<_CampusView> {
   /// again is the step this removes. Same prompt about unsaved edits and same
   /// briefing as every other way of opening a project - see
   /// [openProjectAtPath].
-  Future<void> _openJob(String file) async {
+  /// [pane] is which pane of the Project tab to land on, '' for the usual one.
+  /// Asked for only once the job is actually open: a request made before the
+  /// unsaved-work prompt would move the pane of the job somebody chose to KEEP.
+  Future<void> _openJob(String file, {String pane = ''}) async {
     final provider = context.read<AppStateProvider>();
     if (!await confirmLeavingProject(context, provider)) return;
     if (!mounted) return;
     final opened = await openProjectAtPath(context, provider, file);
     // Only on the way in: a job that would not open leaves the campus where
     // it was, with the message about why on top of it.
-    if (opened && mounted) Navigator.of(context).pop();
+    if (!opened || !mounted) return;
+    if (pane.isNotEmpty) provider.requestProjectPane(pane);
+    Navigator.of(context).pop();
   }
+
+  /// Opens one job ON ITS REPLACEMENT PLAN - what a figure on this calendar is
+  /// asking about.
+  ///
+  /// A cell on the campus grid says "SCI owes 84,000 in 2031". Everything a
+  /// reader wants next is one level down: which rooms make that up, what is
+  /// already overdue, what the year either side looks like. Opening the job on
+  /// the Rooms pane - which is what every other route into a project does -
+  /// handed them a list of config files and left them to find the plan.
+  ///
+  /// The same load as [_openJob], with the pane said out loud. See
+  /// [AppStateProvider.requestProjectPane].
+  Future<void> _openJobPlan(String file) => _openJob(file, pane: 'lifecycle');
 
   void _remove(String file) {
     _paths.removeWhere((p) => path.equals(p, file));
@@ -737,7 +755,7 @@ class _CampusViewState extends State<_CampusView> {
                     const SizedBox(height: 12),
                     const EquipmentTimingKey(),
                     const SizedBox(height: 12),
-                    _CampusGrid(campus: campus),
+                    CampusYearGrid(campus: campus, onOpenJob: _openJobPlan),
                     const SizedBox(height: 16),
                     _JobList(
                       campus: campus,
@@ -936,16 +954,29 @@ class _Figure extends StatelessWidget {
 
 /// The calendar: a building a row, a year a column, and the campus total under
 /// it as a figure AND as a bar.
-class _CampusGrid extends StatefulWidget {
+/// THE CALENDAR ITSELF: one row per building, one column per year.
+///
+/// Public, and built from a [CampusLifecycle] rather than from a list of paths,
+/// for the same reason [CampusPlanSheet] and [LifecycleYearGrid] are: reading
+/// the estate off disk and DRAWING it are two jobs, and a grid that did its own
+/// reading could only ever be looked at by opening the whole screen. Handed the
+/// figures, it can be put on a page on its own - which is what a test does, and
+/// what the export sheet does with the flat version.
+class CampusYearGrid extends StatefulWidget {
   final CampusLifecycle campus;
 
-  const _CampusGrid({required this.campus});
+  /// Opens one building on its own replacement plan - see
+  /// [_CampusViewState._openJobPlan]. Null leaves the figures as figures,
+  /// which is what a picture of the sheet wants.
+  final ValueChanged<String>? onOpenJob;
+
+  const CampusYearGrid({super.key, required this.campus, this.onOpenJob});
 
   @override
-  State<_CampusGrid> createState() => _CampusGridState();
+  State<CampusYearGrid> createState() => _CampusYearGridState();
 }
 
-class _CampusGridState extends State<_CampusGrid> {
+class _CampusYearGridState extends State<CampusYearGrid> {
   /// How big the calendar is being read at. See [GridZoomControls].
   double _zoom = kGridZoomNormal;
 
@@ -1140,6 +1171,19 @@ class _CampusGridState extends State<_CampusGrid> {
                           currency: campus.currency,
                           tooltip: '${j.name} - $y',
                           label: zoomed.labelMedium,
+                          // DOUBLE-CLICK GOES TO THE PLAN BEHIND THE FIGURE.
+                          //
+                          // A cell is one building in one year, which is
+                          // exactly the row of that building's replacement
+                          // plan - so the figure opens the plan it came from.
+                          // Double rather than single: this closes the campus
+                          // and swaps the open job, which is far too big a
+                          // move for a stray click on a grid somebody is
+                          // reading across.
+                          onOpen: widget.onOpenJob == null
+                              ? null
+                              : () => widget.onOpenJob!(j.path),
+                          openLabel: j.name,
                         ),
                     ],
                   ),
@@ -1212,6 +1256,15 @@ class _MoneyCell extends StatelessWidget {
   /// does not zoom.
   final TextStyle? label;
 
+  /// Double-clicked: opens the building this figure belongs to, on its own
+  /// replacement plan. Null on the campus total row, which is not any one
+  /// building, and on the flat export sheet, which is a picture.
+  final VoidCallback? onOpen;
+
+  /// What that would open, for the tooltip. A gesture nothing announces is a
+  /// gesture nobody uses.
+  final String openLabel;
+
   const _MoneyCell({
     required this.width,
     required this.height,
@@ -1222,6 +1275,8 @@ class _MoneyCell extends StatelessWidget {
     required this.tooltip,
     this.bold = false,
     this.label,
+    this.onOpen,
+    this.openLabel = '',
   });
 
   @override
@@ -1233,26 +1288,45 @@ class _MoneyCell extends StatelessWidget {
       lifeYears: kDefaultEquipmentLifeYears,
     );
 
-    return Tooltip(
-      message: '$tooltip\n${formatLifecycleMoney(money, currency)}',
-      child: Container(
-        width: width - 2,
-        height: height - 2,
-        margin: const EdgeInsets.only(right: 2, bottom: 2),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: equipmentTimingFill(context, timing),
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Text(
-          formatLifecycleMoney(money, currency),
-          overflow: TextOverflow.ellipsis,
-          style: (label ?? theme.textTheme.labelMedium)?.copyWith(
-            color: equipmentTimingColor(context, timing),
-            fontWeight: bold ? FontWeight.bold : null,
-          ),
+    final cell = Container(
+      width: width - 2,
+      height: height - 2,
+      margin: const EdgeInsets.only(right: 2, bottom: 2),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: equipmentTimingFill(context, timing),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        formatLifecycleMoney(money, currency),
+        overflow: TextOverflow.ellipsis,
+        style: (label ?? theme.textTheme.labelMedium)?.copyWith(
+          color: equipmentTimingColor(context, timing),
+          fontWeight: bold ? FontWeight.bold : null,
         ),
       ),
+    );
+
+    return Tooltip(
+      message: [
+        tooltip,
+        formatLifecycleMoney(money, currency),
+        if (onOpen != null)
+          'Double-click to open '
+              '${openLabel.isEmpty ? 'this building' : openLabel} on its '
+              'replacement plan',
+      ].join('\n'),
+      child: onOpen == null
+          ? cell
+          : MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                key: ValueKey('campus_cell_${openLabel}_$year'),
+                behavior: HitTestBehavior.opaque,
+                onDoubleTap: onOpen,
+                child: cell,
+              ),
+            ),
     );
   }
 }

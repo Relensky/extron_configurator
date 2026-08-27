@@ -88,6 +88,16 @@ void main() {
       );
     }
 
+    // ...and Open says all three documents it takes. It has accepted a campus
+    // since campus files existed; a tooltip that named two of them left the
+    // third to be found by accident.
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('open_config')))
+          .tooltip,
+      'Open a room config, a project or a campus',
+    );
+
     // The title bar: the things that are about the application, plus the
     // three that begin or write a file — New (a menu over the two things
     // there are to start), Open, and Save.
@@ -482,9 +492,10 @@ void main() {
     await pump(tester, p);
 
     expect(find.text('Create a New File'), findsOneWidget);
-    expect(find.text('Open a File'), findsOneWidget);
     expect(find.text('Start a New Project'), findsNothing);
-    expect(find.text('Open a Project'), findsNothing);
+    // Open stays: it is not the project half of the screen, it is the way in
+    // for any of the three documents.
+    expect(find.byKey(const ValueKey('start_open_any')), findsOneWidget);
     // ...and it says which job is open rather than leaving them wondering.
     expect(find.textContaining('Bessey Hall is open'), findsOneWidget);
   });

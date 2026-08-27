@@ -263,6 +263,35 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // --------------------------------------------------------------------------
+  //  WHICH PANE OF THE PROJECT TAB
+  // --------------------------------------------------------------------------
+  //  The same problem [requestedDeviceKey] solves one level up. The Project tab
+  //  is nine panes, and every route into it landed on Rooms - so a reader who
+  //  pressed a figure on the campus calendar, which is a replacement-plan
+  //  question, arrived at a list of room files and had to find the plan
+  //  themselves. The thing that sent them there knows which pane it meant.
+  //
+  //  BY NAME, not by the enum: the panes are private to project_view.dart and
+  //  should stay that way. A name that pane list does not have is ignored, so
+  //  a rename cannot crash a caller - it just stops steering.
+
+  /// The pane the Project tab should open on, by its enum name ('lifecycle').
+  String requestedProjectPane = '';
+
+  /// Bumped on every request, so asking for the SAME pane twice still moves
+  /// the tab. Without it, a reader who pressed a campus figure, wandered off to
+  /// Parts and pressed another figure would be handed Parts again: the request
+  /// would not have changed, and the tab honours changes.
+  int projectPaneRequestId = 0;
+
+  /// Opens the Project tab on [pane] — see [requestedProjectPane].
+  void requestProjectPane(String pane) {
+    requestedProjectPane = pane;
+    projectPaneRequestId++;
+    notifyListeners();
+  }
+
   /// Devices in this room with no python module chosen — the list the app
   /// nags about.
   ///

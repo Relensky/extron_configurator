@@ -1,9 +1,11 @@
 {
-    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "__readme": "Room Config Builder project: a building quoted as one job. The rooms are references to config.json files, not copies - editing a room edits it here too. Paths are relative to this file when the room sits under the same folder.",
+    "version": 1,
     "name": "Sapp Hall refresh",
     "building": "SAPP",
     "currency": "$",
     "rooms": [],
+    "campusFile": "Chico_campus_RYG_campus.json",
     "manualRooms": [
         {
             "id": "manual1",
@@ -11,7 +13,7 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 3878.38,
-            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart"
+            "notes": "conference  ·  Conf 1 Display cart  ·  RYG estimate for Conf 1 Display cart"
         }
     ],
     "vendors": [],

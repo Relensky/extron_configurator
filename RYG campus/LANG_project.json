@@ -1,9 +1,11 @@
 {
-    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "__readme": "Room Config Builder project: a building quoted as one job. The rooms are references to config.json files, not copies - editing a room edits it here too. Paths are relative to this file when the room sits under the same folder.",
+    "version": 1,
     "name": "Langdon Engineering Center refresh",
     "building": "LANG",
     "currency": "$",
     "rooms": [],
+    "campusFile": "Chico_campus_RYG_campus.json",
     "manualRooms": [
         {
             "id": "manual1",
@@ -11,7 +13,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 45  \u00b7  ECC  \u00b7  MMEM  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 45  ·  ECC  ·  MMEM  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual2",
@@ -19,7 +21,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 45  \u00b7  ECC  \u00b7  CIVL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 45  ·  ECC  ·  CIVL  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual3",
@@ -27,7 +29,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-lecture  \u00b7  capacity 45  \u00b7  HFA  \u00b7  PHIL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 45  ·  HFA  ·  PHIL  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual4",
@@ -35,7 +37,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-lecture  \u00b7  capacity 45  \u00b7  HFA  \u00b7  ART, PHIL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 45  ·  HFA  ·  ART, PHIL  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual5",
@@ -43,7 +45,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LAB-Laboratory  \u00b7  capacity 20  \u00b7  ECC  \u00b7  MMEM  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "LAB-Laboratory  ·  capacity 20  ·  ECC  ·  MMEM  ·  1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual6",
@@ -51,7 +53,7 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-lecture  \u00b7  capacity 21  \u00b7  ECC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "LEC-lecture  ·  capacity 21  ·  ECC  ·  1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual7",
@@ -59,7 +61,7 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 31670.6,
-            "notes": "2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+            "notes": "2 Projector 1 Cam 1 Mic  ·  RYG estimate for 2 Projector 1 Cam 1 Mic"
         },
         {
             "id": "manual8",
@@ -67,7 +69,7 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "LAB-Laboratory  \u00b7  capacity 50  \u00b7  ECC  \u00b7  CONSTR MGMT  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "LAB-Laboratory  ·  capacity 50  ·  ECC  ·  CONSTR MGMT  ·  2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
         },
         {
             "id": "manual9",
@@ -75,7 +77,7 @@
             "installedOn": "2022-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LAB-Laboratory  \u00b7  capacity 20  \u00b7  ECC  \u00b7  CIVL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LAB-Laboratory  ·  capacity 20  ·  ECC  ·  CIVL  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual10",
@@ -83,7 +85,7 @@
             "installedOn": "2013-07-01",
             "lifeYears": 8,
             "replacementCost": 31670.6,
-            "notes": "LEC-lecture  \u00b7  capacity 120  \u00b7  All School  \u00b7  2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 120  ·  All School  ·  2 Projector 1 Cam 1 Mic  ·  RYG estimate for 2 Projector 1 Cam 1 Mic"
         },
         {
             "id": "manual11",
@@ -91,7 +93,7 @@
             "installedOn": "2013-07-01",
             "lifeYears": 8,
             "replacementCost": 31670.6,
-            "notes": "LEC-lecture  \u00b7  capacity 120  \u00b7  All School  \u00b7  2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 120  ·  All School  ·  2 Projector 1 Cam 1 Mic  ·  RYG estimate for 2 Projector 1 Cam 1 Mic"
         },
         {
             "id": "manual12",
@@ -99,7 +101,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-lecture  \u00b7  capacity 40  \u00b7  HFA  \u00b7  ART, CORH, PHIL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-lecture  ·  capacity 40  ·  HFA  ·  ART, CORH, PHIL  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         }
     ],
     "vendors": [],

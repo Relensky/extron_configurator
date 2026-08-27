@@ -543,10 +543,18 @@ void main() {
         ..selectTab(AppTab.wizard.index);
       await pump(tester, p);
 
+      // ONE OF EACH KIND TO MAKE, AND ONE DOOR IN FOR ALL THREE. Opening
+      // does not need the reader to say which document it is - the file knows.
       expect(find.text('Start a New Project'), findsOneWidget);
-      expect(find.text('Open a Project'), findsOneWidget);
       expect(find.text('Create a New File'), findsOneWidget);
+      expect(find.byKey(const ValueKey('start_open_any')), findsOneWidget);
       expect(find.text('Open a File'), findsOneWidget);
+      expect(find.text('Open a Project'), findsNothing);
+      expect(
+        find.textContaining('a project or a campus'),
+        findsOneWidget,
+        reason: 'the one Open says all three, or nobody learns the third',
+      );
     });
 
     testWidgets('the Save button renames itself for the tab you are on', (

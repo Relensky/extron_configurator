@@ -856,10 +856,16 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
             ],
           ),
+          // ONE BUTTON, THREE DOCUMENTS - and it says so. It has taken a
+          // campus since campus files existed (see [_openExistingConfig],
+          // which sorts the three out by what the file is), but the tooltip
+          // still named two of them, so the only way to learn the third was to
+          // try it and find out. A door that does more than its label admits
+          // is a door nobody opens.
           IconButton(
             key: const ValueKey('open_config'),
             icon: const Icon(Icons.folder_open),
-            tooltip: 'Open a room config or a project',
+            tooltip: 'Open a room config, a project or a campus',
             onPressed: () => _openExistingConfig(context, provider),
           ),
           IconButton(
@@ -1025,11 +1031,19 @@ class _MainDashboardState extends State<MainDashboard> {
   /// THE START SCREEN — the two questions a session actually begins with.
   ///
   /// A job is a building, and a building is a list of rooms. So the project
-  /// comes first and the room file second, each as a card that offers both of
-  /// the only two things anybody ever does with one: start a new one, or open
-  /// one that exists. The old screen offered only the room half, which is why
-  /// people who had a project on disk started by opening a room from it and
-  /// then went looking for where the job itself lived.
+  /// comes first and the room file second, each as a card. The old screen
+  /// offered only the room half, which is why people who had a project on disk
+  /// started by opening a room from it and then went looking for where the job
+  /// itself lived.
+  ///
+  /// MAKING IS PER CARD; OPENING IS NOT. A new document has to be told which
+  /// kind it is - the two Create buttons are the whole of that question. But
+  /// opening one does not: the file on disk already knows whether it is a
+  /// room, a job or a campus, and [_openExistingConfig] reads it and does the
+  /// right thing. Two Open buttons asked the reader to classify a file the app
+  /// classifies better, and a reader who guessed wrong was told their campus
+  /// was not a project - about a file that opens perfectly well. So there is
+  /// ONE Open, under both cards, and it names all three.
   ///
   /// The cards are in a [Wrap], so on a narrow window they stack instead of
   /// being clipped, and the whole thing scrolls — at 150% text two cards side
@@ -1086,9 +1100,6 @@ class _MainDashboardState extends State<MainDashboard> {
                     primaryLabel: 'Start a New Project',
                     primaryIcon: Icons.create_new_folder,
                     onPrimary: () => startNewProject(context, provider),
-                    secondaryLabel: 'Open a Project',
-                    secondaryIcon: Icons.folder_open,
-                    onSecondary: () => openProjectFromFile(context, provider),
                     subtitle: 'No project open',
                   ),
                 _StartCard(
@@ -1099,12 +1110,46 @@ class _MainDashboardState extends State<MainDashboard> {
                   primaryLabel: 'Create a New File',
                   primaryIcon: Icons.note_add,
                   onPrimary: () => _createNewConfig(context, provider),
-                  secondaryLabel: 'Open a File',
-                  secondaryIcon: Icons.folder_open,
-                  onSecondary: () => _openExistingConfig(context, provider),
                   subtitle: 'New files start from the template in App Config',
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+            // THE ONE DOOR IN, FOR ANY OF THE THREE.
+            //
+            // Under both cards rather than inside either, because it belongs to
+            // neither: it is the same button as the folder in the title bar,
+            // and it takes whichever of the three documents it is handed. Sized
+            // to the pair of cards on a wide window so it reads as the floor
+            // under them, and it says the three out loud - a reader who does
+            // not know a campus is a file it will take is a reader who never
+            // finds out.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 704),
+              child: Column(
+                children: [
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('start_open_any'),
+                    icon: const Icon(Icons.folder_open),
+                    label: const Text(
+                      'Open a File',
+                      textAlign: TextAlign.center,
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                    onPressed: () => _openExistingConfig(context, provider),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'A room config, a project or a campus - it reads the file '
+                    'and opens whichever it is.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.disabledColor),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 28),
             // The recovery copies, mentioned exactly where somebody who has
@@ -1261,10 +1306,14 @@ class _StartCard extends StatelessWidget {
   final IconData primaryIcon;
   final String primaryLabel;
   final VoidCallback onPrimary;
-  final IconData secondaryIcon;
-  final String secondaryLabel;
-  final VoidCallback onSecondary;
 
+  /// ONE BUTTON PER CARD, and it is the one that MAKES something.
+  ///
+  /// The card used to carry an Open under its Create. Opening moved out to the
+  /// single button under both cards - see [_buildLandingScreen] - because the
+  /// file on disk already knows which of the three documents it is, and asking
+  /// the reader to classify it first was asking a question the app answers
+  /// better.
   const _StartCard({
     required this.icon,
     required this.title,
@@ -1273,9 +1322,6 @@ class _StartCard extends StatelessWidget {
     required this.primaryIcon,
     required this.primaryLabel,
     required this.onPrimary,
-    required this.secondaryIcon,
-    required this.secondaryLabel,
-    required this.onSecondary,
   });
 
   @override
@@ -1310,15 +1356,6 @@ class _StartCard extends StatelessWidget {
                   minimumSize: const Size.fromHeight(48),
                 ),
                 onPressed: onPrimary,
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                icon: Icon(secondaryIcon),
-                label: Text(secondaryLabel, textAlign: TextAlign.center),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                ),
-                onPressed: onSecondary,
               ),
               const SizedBox(height: 14),
               Text(

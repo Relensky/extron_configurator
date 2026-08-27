@@ -2,7 +2,7 @@
   "__readme": "A campus is a LIST OF JOBS, not a set of figures. Opening it re-reads every project below off disk, so the plan is always today's. Paths are relative to this file where the job sits under it.",
   "kind": "campus",
   "name": "Chico campus RYG",
-  "saved": "2026-08-26",
+  "saved": "2026-08-27",
   "projects": [
     "AGYM_project.json",
     "AJH_project.json",

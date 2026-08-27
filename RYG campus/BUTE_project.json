@@ -1,9 +1,11 @@
 {
-    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "__readme": "Room Config Builder project: a building quoted as one job. The rooms are references to config.json files, not copies - editing a room edits it here too. Paths are relative to this file when the room sits under the same folder.",
+    "version": 1,
     "name": "Butte Hall refresh",
     "building": "BUTE",
     "currency": "$",
     "rooms": [],
+    "campusFile": "Chico_campus_RYG_campus.json",
     "manualRooms": [
         {
             "id": "manual1",
@@ -11,7 +13,7 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual2",
@@ -19,7 +21,7 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual3",
@@ -27,7 +29,7 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual4",
@@ -35,7 +37,7 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual5",
@@ -43,7 +45,7 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual6",
@@ -51,7 +53,7 @@
             "installedOn": "2013-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual7",
@@ -59,7 +61,7 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual8",
@@ -67,21 +69,21 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual9",
             "name": "BUTE 205",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet"
         },
         {
             "id": "manual10",
             "name": "BUTE 207",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet"
         },
         {
             "id": "manual11",
@@ -97,7 +99,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual13",
@@ -105,7 +107,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual14",
@@ -113,7 +115,7 @@
             "installedOn": "2014-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual15",
@@ -121,7 +123,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual16",
@@ -129,7 +131,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual17",
@@ -137,7 +139,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual18",
@@ -145,7 +147,7 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual19",
@@ -153,7 +155,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual20",
@@ -161,7 +163,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual21",
@@ -169,7 +171,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual22",
@@ -177,7 +179,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual23",
@@ -185,7 +187,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual24",
@@ -193,7 +195,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual25",
@@ -201,7 +203,7 @@
             "installedOn": "2012-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual26",
@@ -209,7 +211,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual27",
@@ -217,14 +219,14 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual28",
             "name": "BUTE 503",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+            "notes": "1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet"
         },
         {
             "id": "manual29",
@@ -232,7 +234,7 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 25486.93,
-            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+            "notes": "1 Projector 1 Cam  ·  RYG estimate for 1 Projector 1 Cam"
         },
         {
             "id": "manual30",
@@ -240,7 +242,7 @@
             "installedOn": "2011-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "conference  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "conference  ·  1 Projector  ·  RYG estimate for 1 Projector"
         }
     ],
     "vendors": [],

@@ -415,6 +415,31 @@ class _ProjectViewState extends State<ProjectView> {
   /// down a different list is disorienting.
   final ScrollController _scroll = ScrollController();
 
+  /// The last pane request this tab acted on — see
+  /// [AppStateProvider.projectPaneRequestId].
+  ///
+  /// Compared rather than cleared: clearing it would be a write to the provider
+  /// from inside a build, and leaving it unread would snap the tab back to the
+  /// requested pane on every rebuild, which is a reader who cannot move off it.
+  int _honouredPaneRequest = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Called whenever the provider notifies, because build() watches it. Safe
+    // to set _pane here without setState: this runs immediately before build.
+    final provider = context.read<AppStateProvider>();
+    if (provider.projectPaneRequestId == _honouredPaneRequest) return;
+    _honouredPaneRequest = provider.projectPaneRequestId;
+    final wanted = provider.requestedProjectPane;
+    for (final pane in _ProjectPane.values) {
+      if (pane.name == wanted) {
+        _pane = pane;
+        break;
+      }
+    }
+  }
+
   @override
   void dispose() {
     _scroll.dispose();

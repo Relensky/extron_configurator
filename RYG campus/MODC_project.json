@@ -1,9 +1,11 @@
 {
-    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "__readme": "Room Config Builder project: a building quoted as one job. The rooms are references to config.json files, not copies - editing a room edits it here too. Paths are relative to this file when the room sits under the same folder.",
+    "version": 1,
     "name": "Modoc Hall refresh",
     "building": "MODC",
     "currency": "$",
     "rooms": [],
+    "campusFile": "Chico_campus_RYG_campus.json",
     "manualRooms": [
         {
             "id": "manual1",
@@ -11,7 +13,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 64  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 64  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual2",
@@ -19,7 +21,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  CME  \u00b7  EDUC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "LEC-Lecture  ·  capacity 36  ·  CME  ·  EDUC  ·  1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual3",
@@ -27,14 +29,14 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  CME  \u00b7  EDUC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 36  ·  CME  ·  EDUC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual4",
             "name": "MODC 118A",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "needs infrastructure  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+            "notes": "needs infrastructure  ·  1 Projector  ·  RYG estimate for 1 Projector  ·  last update unknown on the master sheet"
         },
         {
             "id": "manual5",
@@ -42,7 +44,7 @@
             "installedOn": "2016-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  BSS  \u00b7  CHLD  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 49  ·  BSS  ·  CHLD  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual6",
@@ -50,7 +52,7 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 42  \u00b7  CME  \u00b7  EDUC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 42  ·  CME  ·  EDUC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual7",
@@ -58,7 +60,7 @@
             "installedOn": "2020-07-01",
             "lifeYears": 8,
             "replacementCost": 40000.0,
-            "notes": "LAB-Laboratory  \u00b7  capacity 20  \u00b7  BSS  \u00b7  figure typed on the master sheet"
+            "notes": "LAB-Laboratory  ·  capacity 20  ·  BSS  ·  figure typed on the master sheet"
         },
         {
             "id": "manual8",
@@ -66,7 +68,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 49  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual9",
@@ -74,7 +76,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LAB-Laboratory  \u00b7  capacity 36  \u00b7  CME  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LAB-Laboratory  ·  capacity 36  ·  CME  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual10",
@@ -82,7 +84,7 @@
             "installedOn": "2017-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LEC-Lecture  ·  capacity 49  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual11",
@@ -90,7 +92,7 @@
             "installedOn": "2015-07-01",
             "lifeYears": 8,
             "replacementCost": 19048.83,
-            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+            "notes": "LEC-Lecture  ·  capacity 49  ·  BSS  ·  PSYC  ·  1 Projector  ·  RYG estimate for 1 Projector"
         },
         {
             "id": "manual12",
@@ -98,7 +100,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LAB-Laboratory  \u00b7  capacity 49  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LAB-Laboratory  ·  capacity 49  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         },
         {
             "id": "manual13",
@@ -106,7 +108,7 @@
             "installedOn": "2018-07-01",
             "lifeYears": 8,
             "replacementCost": 26134.78,
-            "notes": "LAB-Laboratory  \u00b7  capacity 24  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+            "notes": "LAB-Laboratory  ·  capacity 24  ·  BSS  ·  PSYC  ·  1 Proj 1 Cam 1 Mic  ·  RYG estimate for 1 Proj 1 Cam 1 Mic"
         }
     ],
     "vendors": [],

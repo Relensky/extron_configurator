@@ -1,9 +1,11 @@
 {
-    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "__readme": "Room Config Builder project: a building quoted as one job. The rooms are references to config.json files, not copies - editing a room edits it here too. Paths are relative to this file when the room sits under the same folder.",
+    "version": 1,
     "name": "Selvester's Cafe refresh",
     "building": "SELV",
     "currency": "$",
     "rooms": [],
+    "campusFile": "Chico_campus_RYG_campus.json",
     "manualRooms": [
         {
             "id": "manual1",
@@ -11,7 +13,7 @@
             "installedOn": "2023-07-01",
             "lifeYears": 8,
             "replacementCost": 67516.5,
-            "notes": "conference  \u00b7  4 Projector 2 Cam Multimic  \u00b7  RYG estimate for 4 Projector 2 Cam Multimic"
+            "notes": "conference  ·  4 Projector 2 Cam Multimic  ·  RYG estimate for 4 Projector 2 Cam Multimic"
         },
         {
             "id": "manual2",
@@ -19,7 +21,7 @@
             "installedOn": "2023-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
         }
     ],
     "vendors": [],

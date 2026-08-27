@@ -1,9 +1,11 @@
 {
-    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "__readme": "Room Config Builder project: a building quoted as one job. The rooms are references to config.json files, not copies - editing a room edits it here too. Paths are relative to this file when the room sits under the same folder.",
+    "version": 1,
     "name": "Behavioral And Social Science refresh",
     "building": "BSS",
     "currency": "$",
     "rooms": [],
+    "campusFile": "Chico_campus_RYG_campus.json",
     "manualRooms": [
         {
             "id": "manual1",
@@ -11,7 +13,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 86853.75,
-            "notes": "!3 Projector 3 Cam Multimic  \u00b7  RYG estimate for !3 Projector 3 Cam Multimic"
+            "notes": "!3 Projector 3 Cam Multimic  ·  RYG estimate for !3 Projector 3 Cam Multimic"
         },
         {
             "id": "manual2",
@@ -19,7 +21,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "conference  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "conference  ·  1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual3",
@@ -27,7 +29,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual4",
@@ -35,7 +37,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual5",
@@ -43,7 +45,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual6",
@@ -51,7 +53,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual7",
@@ -59,7 +61,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual8",
@@ -67,7 +69,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
         },
         {
             "id": "manual9",
@@ -75,7 +77,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual10",
@@ -83,7 +85,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
         },
         {
             "id": "manual11",
@@ -91,7 +93,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual12",
@@ -99,7 +101,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual13",
@@ -107,7 +109,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 127349.0,
-            "notes": "!7 Disp 2 Proj 2 Cam Multimic  \u00b7  RYG estimate for !7 Disp 2 Proj 2 Cam Multimic"
+            "notes": "!7 Disp 2 Proj 2 Cam Multimic  ·  RYG estimate for !7 Disp 2 Proj 2 Cam Multimic"
         },
         {
             "id": "manual14",
@@ -115,7 +117,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 45216.39,
-            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
         },
         {
             "id": "manual15",
@@ -123,7 +125,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 45216.39,
-            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
         },
         {
             "id": "manual16",
@@ -131,7 +133,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual17",
@@ -139,7 +141,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
         },
         {
             "id": "manual18",
@@ -147,7 +149,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 45216.39,
-            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  ·  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
         },
         {
             "id": "manual19",
@@ -155,7 +157,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual20",
@@ -163,7 +165,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual21",
@@ -171,7 +173,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual22",
@@ -179,7 +181,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual23",
@@ -187,7 +189,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
         },
         {
             "id": "manual24",
@@ -195,7 +197,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
         },
         {
             "id": "manual25",
@@ -203,7 +205,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
         },
         {
             "id": "manual26",
@@ -211,7 +213,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "conference  \u00b7  2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "conference  ·  2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
         },
         {
             "id": "manual27",
@@ -219,7 +221,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
         },
         {
             "id": "manual28",
@@ -227,7 +229,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 17151.16,
-            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+            "notes": "conference  ·  1 Display Conf Complex  ·  RYG estimate for 1 Display Conf Complex"
         },
         {
             "id": "manual29",
@@ -235,7 +237,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual30",
@@ -243,7 +245,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual31",
@@ -251,7 +253,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "conference  \u00b7  2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "conference  ·  2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
         },
         {
             "id": "manual32",
@@ -259,7 +261,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual33",
@@ -267,7 +269,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual34",
@@ -275,7 +277,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 37568.89,
-            "notes": "2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+            "notes": "2 Display 2 Cam Multimic  ·  RYG estimate for 2 Display 2 Cam Multimic"
         },
         {
             "id": "manual35",
@@ -283,7 +285,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 48832.57,
-            "notes": "!suraudio 1 Proj 2 Cam Multimic  \u00b7  RYG estimate for !suraudio 1 Proj 2 Cam Multimic"
+            "notes": "!suraudio 1 Proj 2 Cam Multimic  ·  RYG estimate for !suraudio 1 Proj 2 Cam Multimic"
         },
         {
             "id": "manual36",
@@ -291,7 +293,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 29106.38,
-            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+            "notes": "1 Projector 2 Cam Multimic  ·  RYG estimate for 1 Projector 2 Cam Multimic"
         },
         {
             "id": "manual37",
@@ -299,7 +301,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual38",
@@ -307,7 +309,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 3550.62,
-            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+            "notes": "conference  ·  Conf 1 Display  ·  RYG estimate for Conf 1 Display"
         },
         {
             "id": "manual39",
@@ -315,7 +317,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 41506.26,
-            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+            "notes": "2 Projector 2 Cam Multimic  ·  RYG estimate for 2 Projector 2 Cam Multimic"
         },
         {
             "id": "manual40",
@@ -323,7 +325,7 @@
             "installedOn": "2024-07-01",
             "lifeYears": 8,
             "replacementCost": 8912.61,
-            "notes": "!2X (separate) Display Conf  \u00b7  RYG estimate for !2X (separate) Display Conf"
+            "notes": "!2X (separate) Display Conf  ·  RYG estimate for !2X (separate) Display Conf"
         }
     ],
     "vendors": [],
