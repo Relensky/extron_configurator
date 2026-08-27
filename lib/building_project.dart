@@ -1310,6 +1310,27 @@ class BuildingProject {
 
   final List<ProjectRoomRef> rooms;
 
+  // -------------------------------------------------------------------------
+  //  THE ESTATE THIS JOB IS PART OF
+  // -------------------------------------------------------------------------
+  //  A campus is a list of jobs somebody assembled and named — see
+  //  campus_file.dart. The assembly was one-way: the campus knew its jobs and
+  //  a job knew nothing about the campus, so opening the campus from inside a
+  //  building started a sheet of ONE building and left somebody to go and find
+  //  the other thirty-three on disk. Every time.
+  //
+  //  So the job remembers which sheet it is on, and Campus opens THAT sheet.
+  //  It is a path and nothing else: no names, no totals, no copy of the list.
+  //  The campus file is still the document, still re-read off disk, and a job
+  //  whose campus has been moved or deleted falls back to the sheet of one
+  //  rather than failing — the pointer is a convenience, never a dependency.
+
+  /// The campus sheet this job is on, RELATIVE to the project file wherever it
+  /// sits under the same folder tree — the same bargain the room paths make,
+  /// so a campus folder that is copied to a laptop still opens. '' for a job
+  /// nobody has put on a sheet.
+  String campusFile;
+
   /// Rooms on the refresh plan that have no config file — see [ManualRoom].
   /// They are counted, aged and budgeted; they are not priced, ordered or
   /// drawn, because there is nothing in them to price.
@@ -1449,6 +1470,7 @@ class BuildingProject {
     this.notes = '',
     this.currency = r'$',
     List<ProjectRoomRef>? rooms,
+    this.campusFile = '',
     List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
     List<ResponsibilityItem>? responsibility,
@@ -2264,10 +2286,39 @@ class BuildingProject {
     return rel;
   }
 
+  /// How the CAMPUS pointer is stored - see [campusFile].
+  ///
+  /// The same bargain [storePath] makes, with one difference: a campus is
+  /// allowed to sit ABOVE the jobs on it. `..\Chico_campus.json` is refused
+  /// for a room, and rightly - a config that climbs out of the job's folder is
+  /// a room that is not part of the job - but it is the ordinary shape of an
+  /// estate, where the sheet is at the top of the folder and the buildings are
+  /// in it.
+  ///
+  /// THREE LEVELS AND NO MORE. Past that the two documents are not in one tree
+  /// in any sense somebody would recognise - they are two files that happen to
+  /// be on one disk - and a chain of `..` that long breaks on any move at all,
+  /// which is the exact thing a relative path is for. Those store absolute,
+  /// which still opens; it simply does not survive the folder being copied.
+  static String storeCampusPath(String absolute, String projectPath) {
+    if (absolute.isEmpty || projectPath.isEmpty) return absolute;
+    final rel = path.relative(absolute, from: path.dirname(projectPath));
+    if (path.isAbsolute(rel)) return absolute;
+    final up = path.split(rel).where((s) => s == '..').length;
+    return up > 3 ? absolute : rel;
+  }
+
   /// This project's rooms as absolute config paths, in project order.
   List<String> resolvedRoomPaths(String projectPath) => [
     for (final r in rooms) resolvePath(r.configPath, projectPath),
   ];
+
+  /// The campus sheet this job is on, as an absolute path, or '' when it is on
+  /// none. Resolved against [projectPath] the same way a room is, because it
+  /// is stored the same way. See [campusFile].
+  String resolvedCampusFile(String projectPath) => campusFile.trim().isEmpty
+      ? ''
+      : resolvePath(campusFile.trim(), projectPath);
 
   // -------------------------------------------------------------------------
   //  PERSISTENCE
@@ -2287,6 +2338,10 @@ class BuildingProject {
     if (notes.isNotEmpty) 'notes': notes,
     'currency': currency,
     'rooms': [for (final r in rooms) r.toJson()],
+    // Which sheet this job is on - see [campusFile]. Written only when there
+    // is one, so a job that has never been on a campus does not grow a key
+    // saying so.
+    if (campusFile.trim().isNotEmpty) 'campusFile': campusFile.trim(),
     if (manualRooms.isNotEmpty)
       'manualRooms': [for (final r in manualRooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
@@ -2469,6 +2524,7 @@ class BuildingProject {
           ? json['currency'].toString()
           : r'$',
       rooms: rooms,
+      campusFile: json['campusFile']?.toString().trim() ?? '',
       manualRooms: manualRooms,
       vendors: vendors,
       responsibility: responsibility,
@@ -2575,6 +2631,7 @@ class BuildingProject {
     notes: notes,
     currency: currency,
     rooms: List<ProjectRoomRef>.from(rooms),
+    campusFile: campusFile,
     manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
     responsibility: List<ResponsibilityItem>.from(responsibility),

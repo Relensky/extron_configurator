@@ -261,14 +261,12 @@ class _ManualRoomsDialogState extends State<_ManualRoomsDialog> {
     });
   }
 
-  Future<ManualRoom?> _askRoom({ManualRoom? existing}) => showDialog<ManualRoom>(
-    context: context,
-    builder: (_) => _ManualRoomForm(
-      existing: existing,
-      baseCosts: widget.baseCosts,
-      currency: widget.currency,
-      id: existing?.id ?? '',
-    ),
+  Future<ManualRoom?> _askRoom({ManualRoom? existing}) => showManualRoomForm(
+    context,
+    existing: existing,
+    baseCosts: widget.baseCosts,
+    currency: widget.currency,
+    id: existing?.id ?? '',
   );
 
   Future<void> _save() async {
@@ -292,14 +290,44 @@ class _ManualRoomsDialogState extends State<_ManualRoomsDialog> {
   }
 }
 
+/// Asks for one hand-typed room: the name, when it was last done, how long it
+/// lasts, what it costs to do again.
+///
+/// Public because there are now TWO places a line like this is edited — the
+/// campus's per-job dialog above, and the open job's own pages, where the room
+/// is edited against the project already in memory rather than one loaded off
+/// disk (see manual_room_lines.dart). One form for both: a date picker that
+/// stepped differently, or a cost box that fell back to a different base-cost
+/// line, would make the same room mean two things depending on which door was
+/// used.
+///
+/// Returns null when it is cancelled. The returned room carries [id] through
+/// unchanged, so an edit comes back as the SAME room rather than as a new one.
+Future<ManualRoom?> showManualRoomForm(
+  BuildContext context, {
+  ManualRoom? existing,
+  required BaseCostBook baseCosts,
+  required String currency,
+  String id = '',
+}) => showDialog<ManualRoom>(
+  context: context,
+  builder: (_) => ManualRoomForm(
+    existing: existing,
+    baseCosts: baseCosts,
+    currency: currency,
+    id: id,
+  ),
+);
+
 /// One room, typed in.
-class _ManualRoomForm extends StatefulWidget {
+class ManualRoomForm extends StatefulWidget {
   final ManualRoom? existing;
   final BaseCostBook baseCosts;
   final String currency;
   final String id;
 
-  const _ManualRoomForm({
+  const ManualRoomForm({
+    super.key,
     required this.existing,
     required this.baseCosts,
     required this.currency,
@@ -307,10 +335,10 @@ class _ManualRoomForm extends StatefulWidget {
   });
 
   @override
-  State<_ManualRoomForm> createState() => _ManualRoomFormState();
+  State<ManualRoomForm> createState() => _ManualRoomFormState();
 }
 
-class _ManualRoomFormState extends State<_ManualRoomForm> {
+class _ManualRoomFormState extends State<ManualRoomForm> {
   late final TextEditingController _name = TextEditingController(
     text: widget.existing?.name ?? '',
   );

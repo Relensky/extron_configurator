@@ -10574,6 +10574,14 @@ class AppStateProvider extends ChangeNotifier {
     if (target.isEmpty) return 'The project has no file to save to yet.';
 
     if (to.isNotEmpty && to != currentProjectPath) {
+      // The campus pointer is stored relative to the project file too, so it
+      // is re-homed with the rooms. A job saved into another folder without
+      // this would keep a pointer that resolves somewhere it never was, and
+      // Campus would open the wrong sheet or none.
+      final campus = project.resolvedCampusFile(currentProjectPath);
+      if (campus.isNotEmpty) {
+        project.campusFile = BuildingProject.storeCampusPath(campus, to);
+      }
       for (int i = 0; i < project.rooms.length; i++) {
         final room = project.rooms[i];
         final absolute = BuildingProject.resolvePath(
@@ -10802,6 +10810,230 @@ class AppStateProvider extends ChangeNotifier {
     final room = project.rooms.removeAt(from);
     project.rooms.insert(to, room);
     _projectChanged();
+  }
+
+  // --- the rooms nobody has drawn ------------------------------------------
+  //
+  //  A job whose building has never been through this app still has a refresh
+  //  plan to answer for, and the RYG imports are exactly that: thirty-four
+  //  buildings of rooms with a date, a life and a figure, and not one config
+  //  file between them. See [ManualRoom].
+  //
+  //  WHY THESE GO THROUGH THE PROVIDER AND NOT THROUGH THE DIALOG THAT LOADS
+  //  OFF DISK. [showManualRoomsDialog] exists for the campus sheet, where no
+  //  project is open and the only copy of the job is the one on disk. On the
+  //  Project tab the job IS open, and editing a second copy read off disk
+  //  would produce two versions of the same file - the one on screen and the
+  //  one the dialog wrote - with whichever was saved last winning. So the open
+  //  project is edited in memory, marked dirty, and written by the same Save
+  //  the rest of the tab uses.
+
+  /// Adds a room with no config to the open job. Returns the room.
+  ManualRoom addProjectManualRoom({
+    String name = '',
+    DateTime? installedOn,
+    int lifeYears = 0,
+    double replacementCost = 0,
+    String category = '',
+    String notes = '',
+  }) {
+    final room = project.addManualRoom(
+      name: name,
+      installedOn: installedOn,
+      lifeYears: lifeYears,
+      replacementCost: replacementCost,
+      category: category,
+      notes: notes,
+    );
+    _logProjectEdit(
+      itemKey: 'manual:${room.id}',
+      itemName: room.name,
+      field: 'Line item',
+      summary: 'added to the plan',
+    );
+    _projectChanged();
+    return room;
+  }
+
+  /// Writes a changed line item back onto the job - a date, a life, a figure.
+  ///
+  /// Logged by WHAT MOVED rather than as "edited", because those three fields
+  /// are the whole of the room: a plan that shifted by four years and a plan
+  /// that got eight thousand dearer are different events, and a history that
+  /// called both of them "line item changed" would be a history nobody could
+  /// read back.
+  void updateProjectManualRoom(ManualRoom room) {
+    final at = project.manualRooms.indexWhere((r) => r.id == room.id);
+    if (at < 0) return;
+    final before = project.manualRooms[at];
+    project.updateManualRoom(room);
+
+    void logged(String field, String summary) => _logProjectEdit(
+      itemKey: 'manual:${room.id}',
+      itemName: room.name,
+      field: field,
+      summary: summary,
+    );
+
+    if (before.name.trim() != room.name.trim()) {
+      logged('Line item', 'renamed from ${before.name.trim()}');
+    }
+    if (before.installedOn != room.installedOn) {
+      logged(
+        'Last done',
+        room.installedOn == null ? 'cleared' : formatIsoDate(room.installedOn!),
+      );
+    }
+    if (before.lifeYears != room.lifeYears) {
+      logged(
+        'Years in service',
+        room.lifeYears > 0 ? '${room.lifeYears} years' : 'the standard cycle',
+      );
+    }
+    if ((before.replacementCost - room.replacementCost).abs() > 1e-9) {
+      logged(
+        'Cost to do again',
+        room.replacementCost > 0
+            ? '${project.currency}${room.replacementCost.toStringAsFixed(2)}'
+            : 'off the base-cost card',
+      );
+    }
+    if (before.category.trim() != room.category.trim()) {
+      logged(
+        'Priced from',
+        room.category.trim().isEmpty ? 'the room line' : room.category.trim(),
+      );
+    }
+    if (before.notes.trim() != room.notes.trim()) {
+      logged('Notes', room.notes.trim().isEmpty ? 'cleared' : 'written');
+    }
+    _projectChanged();
+  }
+
+  /// Takes a line off the plan, and hands it BACK so the caller can offer an
+  /// undo. Null when there was no such line.
+  ///
+  /// Returned rather than discarded because a line item is not a reference to
+  /// anything: removing a drawn room leaves its config file on disk untouched,
+  /// and removing a typed one destroys the only record of that room's date,
+  /// life and figure. A mis-click there is a survey entry retyped from memory.
+  /// See [restoreProjectManualRoom].
+  ManualRoom? removeProjectManualRoom(String id) {
+    final at = project.manualRooms.indexWhere((r) => r.id == id);
+    if (at < 0) return null;
+    final was = project.manualRooms[at];
+    project.removeManualRoom(id);
+    _logProjectEdit(
+      itemKey: 'manual:$id',
+      itemName: was.name,
+      field: 'Line item',
+      summary: 'taken off the plan',
+    );
+    _projectChanged();
+    return was;
+  }
+
+  /// Puts a removed line back where it was - the undo of
+  /// [removeProjectManualRoom]. Its id comes back with it, so anything that
+  /// referred to the line still refers to the same line.
+  void restoreProjectManualRoom(ManualRoom room, {int at = -1}) {
+    if (project.manualRooms.any((r) => r.id == room.id)) return;
+    final index = at < 0 || at > project.manualRooms.length
+        ? project.manualRooms.length
+        : at;
+    project.manualRooms.insert(index, room);
+    _logProjectEdit(
+      itemKey: 'manual:${room.id}',
+      itemName: room.name,
+      field: 'Line item',
+      summary: 'put back on the plan',
+    );
+    _projectChanged();
+  }
+
+  /// Where a line sits on the plan, or -1. What an undo needs to put it back
+  /// in the same place rather than at the bottom.
+  int projectManualRoomIndex(String id) =>
+      project.manualRooms.indexWhere((r) => r.id == id);
+
+  /// Replaces a typed-in line with the REAL room: the config file somebody has
+  /// since drawn for it. Returns the message to show - '' when it went in.
+  ///
+  /// This is the point of a line item. A building arrives as thirty-four
+  /// estimates and gets rebuilt one room at a time over several years, and the
+  /// moment a room is drawn its estimate is the wrong number on the plan.
+  /// Substituting is ONE action rather than two, because doing it as two - add
+  /// the config, remember to delete the estimate - is how a room ends up
+  /// counted twice in its own building's refresh total, at a figure that looks
+  /// entirely plausible.
+  ///
+  /// THE LINE IS ONLY DROPPED IF THE CONFIG WENT ON. A room already on the job,
+  /// or a file that is not there, leaves the plan exactly as it was: the
+  /// estimate is the only record of that room, and losing it to a failed swap
+  /// would take the room off the budget altogether.
+  ///
+  /// The typed name is carried onto the room as its label, because the plan is
+  /// read by the code on the door - 'AGYM 129' - and the config's own name is
+  /// as likely to be 'copy of lecture hall'.
+  String swapManualRoomForConfig(String manualId, String configPath) {
+    final at = project.manualRooms.indexWhere((r) => r.id == manualId);
+    if (at < 0) return 'That line is no longer on the plan.';
+    final line = project.manualRooms[at];
+
+    final error = addRoomToProject(configPath, label: line.name.trim());
+    if (error.isNotEmpty) return error;
+
+    project.removeManualRoom(manualId);
+    _logProjectEdit(
+      itemKey: 'manual:$manualId',
+      itemName: line.name,
+      field: 'Line item',
+      summary: 'replaced by ${path.basename(configPath)}',
+    );
+    AppLogger.logInfo(
+      'Line item "${line.name}" swapped for the room config $configPath.',
+    );
+    _projectChanged();
+    return '';
+  }
+
+  // --- the campus this job is on -------------------------------------------
+
+  /// The campus sheet this job remembers, as an absolute path, or '' when it
+  /// remembers none or the file it remembers is gone.
+  ///
+  /// CHECKED FOR EXISTENCE HERE rather than at the button. A campus folder that
+  /// was renamed leaves every job in it pointing at nothing, and the honest
+  /// behaviour then is the sheet of one - not an error about a file nobody
+  /// asked to open. See [BuildingProject.campusFile].
+  String get projectCampusFile {
+    final resolved = project.resolvedCampusFile(currentProjectPath);
+    if (resolved.isEmpty) return '';
+    return File(resolved).existsSync() ? resolved : '';
+  }
+
+  /// Remembers [absolute] as the campus this job is on. '' forgets it.
+  ///
+  /// Not repricing: a pointer to another document cannot move a figure on this
+  /// one.
+  void setProjectCampusFile(String absolute) {
+    final next = absolute.trim().isEmpty
+        ? ''
+        : BuildingProject.storeCampusPath(
+            path.normalize(absolute.trim()),
+            currentProjectPath,
+          );
+    if (next == project.campusFile) return;
+    project.campusFile = next;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Campus',
+      summary: next.isEmpty
+          ? 'no longer on a campus sheet'
+          : 'on ${path.basename(next)}',
+    );
+    _projectChanged(repricing: false);
   }
 
   // --- building plans ------------------------------------------------------

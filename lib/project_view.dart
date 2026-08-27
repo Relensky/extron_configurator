@@ -19,6 +19,7 @@ import 'contrast.dart';
 import 'control_gaps.dart' show ControlGap;
 import 'cost_estimate.dart';
 import 'live_text_field.dart';
+import 'manual_room_lines.dart';
 import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
@@ -1351,89 +1352,116 @@ class _TotalChip extends StatelessWidget {
 List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
   final provider = context.read<AppStateProvider>();
   final theme = Theme.of(context);
+  // The rooms with no config file behind them - see manual_room_lines.dart.
+  // Off the project rather than off the estimate: they are not priced from
+  // parts, so the estimate has nothing to say about them.
+  final lines = provider.project.manualRooms;
 
   return [
     SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-        child: Row(
+        // WRAPPED, AND THE SENTENCE ON ITS OWN LINE.
+        //
+        // It used to be a Row of two buttons with the note Expanded into
+        // whatever was left. A third button is one more than that arrangement
+        // can carry: at 700px the note had no room to shrink into and the Row
+        // overflowed, which paints the striped bar over the button rather than
+        // moving it. A Wrap drops whatever does not fit onto the next line, so
+        // every door is still reachable on a narrow window, and the note sits
+        // under them where it reads as a note rather than as a fourth control.
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            FilledButton.tonalIcon(
-              onPressed: () async {
-                final picked = await FilePicker.pickFiles(
-                  dialogTitle: 'Add room configs to the project',
-                  type: FileType.custom,
-                  allowedExtensions: const ['json'],
-                  allowMultiple: true,
-                );
-                if (picked == null) return;
-                final problems = <String>[];
-                var added = 0;
-                for (final f in picked.files) {
-                  if (f.path == null) continue;
-                  final error = provider.addRoomToProject(f.path!);
-                  if (error.isEmpty) {
-                    added++;
-                  } else {
-                    problems.add(error);
-                  }
-                }
-                if (!context.mounted) return;
-                showTimedSnackBar(
-                  ScaffoldMessenger.of(context),
-                  SnackBar(
-                    duration: const Duration(seconds: 5),
-                    content: Text(
-                      problems.isEmpty
-                          ? '$added room${added == 1 ? '' : 's'} added.'
-                          : '$added added. ${problems.join(' ')}',
-                    ),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add rooms…'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () {
-                final error = provider.addCurrentRoomToProject();
-                if (!context.mounted) return;
-                showTimedSnackBar(
-                  ScaffoldMessenger.of(context),
-                  SnackBar(
-                    duration: const Duration(seconds: 5),
-                    content: Text(
-                      error.isEmpty ? 'Added the open room.' : error,
-                    ),
-                    backgroundColor: error.isEmpty
-                        ? null
-                        : errorTextOn(Theme.of(context).colorScheme,
-                            Theme.of(context).cardColor),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.playlist_add, size: 18),
-              label: const Text('Add the open room'),
-            ),
-            // Expanded, not a Spacer: the sentence is longer than the space
-            // left beside two buttons on a laptop, and an unconstrained Text
-            // simply runs off the edge.
-            Expanded(
-              child: Text(
-                'Rooms are references. Fix a price on the room’s own Cost '
-                'tab, then Refresh.',
-                textAlign: TextAlign.right,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: () async {
+                    final picked = await FilePicker.pickFiles(
+                      dialogTitle: 'Add room configs to the project',
+                      type: FileType.custom,
+                      allowedExtensions: const ['json'],
+                      allowMultiple: true,
+                    );
+                    if (picked == null) return;
+                    final problems = <String>[];
+                    var added = 0;
+                    for (final f in picked.files) {
+                      if (f.path == null) continue;
+                      final error = provider.addRoomToProject(f.path!);
+                      if (error.isEmpty) {
+                        added++;
+                      } else {
+                        problems.add(error);
+                      }
+                    }
+                    if (!context.mounted) return;
+                    showTimedSnackBar(
+                      ScaffoldMessenger.of(context),
+                      SnackBar(
+                        duration: const Duration(seconds: 5),
+                        content: Text(
+                          problems.isEmpty
+                              ? '$added room${added == 1 ? '' : 's'} added.'
+                              : '$added added. ${problems.join(' ')}',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add rooms…'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final error = provider.addCurrentRoomToProject();
+                    if (!context.mounted) return;
+                    showTimedSnackBar(
+                      ScaffoldMessenger.of(context),
+                      SnackBar(
+                        duration: const Duration(seconds: 5),
+                        content: Text(
+                          error.isEmpty ? 'Added the open room.' : error,
+                        ),
+                        backgroundColor: error.isEmpty
+                            ? null
+                            : errorTextOn(Theme.of(context).colorScheme,
+                                Theme.of(context).cardColor),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.playlist_add, size: 18),
+                  label: const Text('Add the open room'),
+                ),
+                // THE THIRD KIND OF ROOM. Most of an estate has never
+                // been through this app, and a job imported off a refresh
+                // spreadsheet has no config files at all - see
+                // manual_room_lines.dart. Offered beside the other two
+                // rather than buried, because on those jobs it is the only
+                // one of the three that does anything.
+                const AddManualRoomLineButton(),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Rooms are references. Fix a price on the room’s own Cost tab, '
+              'then Refresh. A line item is priced here.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
         ),
       ),
     ),
-    if (estimate.rooms.isEmpty)
+    // A JOB CAN BE ALL LINE ITEMS. An empty room list used to be the end of
+    // this pane, which read as "there is nothing on this job" on the exact
+    // jobs where there are thirty-four rooms on a refresh plan - they simply
+    // have no config files behind them. The pane is empty only when BOTH
+    // lists are.
+    if (estimate.rooms.isEmpty && lines.isEmpty)
       const SliverFillRemaining(
         hasScrollBody: false,
         child: Center(
@@ -1442,31 +1470,65 @@ List<Widget> roomsSlivers(BuildContext context, ProjectEstimate estimate) {
             child: Text(
               'No rooms on this project yet.\n\n'
               'Add the config.json files for the rooms in this building and '
-              'they will be priced together.',
+              'they will be priced together. Or add a line item for a room '
+              'nobody has drawn, and it goes on the replacement plan with a '
+              'date, a life and a figure.',
               textAlign: TextAlign.center,
             ),
           ),
         ),
       )
     else ...[
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverList.separated(
-          itemCount: estimate.rooms.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 6),
-          itemBuilder: (context, index) => _RoomRow(
-            room: estimate.rooms[index],
-            currency: estimate.currency,
-            isFirst: index == 0,
-            isLast: index == estimate.rooms.length - 1,
+      if (estimate.rooms.isNotEmpty)
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList.separated(
+            itemCount: estimate.rooms.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
+            itemBuilder: (context, index) => _RoomRow(
+              room: estimate.rooms[index],
+              currency: estimate.currency,
+              isFirst: index == 0,
+              isLast: index == estimate.rooms.length - 1,
+            ),
           ),
         ),
-      ),
+      // THE ROOMS WITH NO CONFIG, ON A LIST OF THEIR OWN.
+      //
+      // Not mixed in with the drawn ones: the two are different kinds of row -
+      // one is priced from its parts and one is a figure somebody typed - and
+      // interleaving them would put an estimate and a quote under the same
+      // heading. Below rather than above, because on a job that has both, the
+      // drawn rooms are the ones with something to check.
+      if (lines.isNotEmpty) ...[
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            estimate.rooms.isEmpty ? 4 : 18,
+            16,
+            8,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: ManualRoomLinesHeading(count: lines.length),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList.separated(
+            itemCount: lines.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
+            itemBuilder: (context, index) => ManualRoomLineCard(
+              room: lines[index],
+              currency: estimate.currency,
+            ),
+          ),
+        ),
+      ],
       // Its own sliver rather than the last row of the list, so it is exactly
       // as tall as its contents and can never end up scrolling inside the
       // scroll it already sits in.
       SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         sliver: SliverToBoxAdapter(child: _BuildingTotals(estimate: estimate)),
       ),
     ],

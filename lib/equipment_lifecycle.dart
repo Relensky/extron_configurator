@@ -542,11 +542,23 @@ class RoomLifecycle {
 
   final DateTime asOf;
 
+  /// The [ManualRoom] this row IS, or '' for a room read off a config file.
+  ///
+  /// A plan row is one of two things and they are edited in two different
+  /// places: a drawn room's dates live on its equipment, and the only honest
+  /// way to change them is to open the room. A room that was typed in has no
+  /// equipment and no file — its date, its life and its figure are three
+  /// fields on the job, and carrying its id here is what lets the plan offer
+  /// to edit them in place rather than sending somebody to a room that does
+  /// not exist. See [buildManualRoomLifecycle].
+  final String manualRoomId;
+
   RoomLifecycle({
     required this.roomName,
     required this.items,
     required this.asOf,
     this.neverReplaced = const [],
+    this.manualRoomId = '',
   });
 
   // -------------------------------------------------------------------------
@@ -1181,6 +1193,9 @@ RoomLifecycle buildManualRoomLifecycle({
   return RoomLifecycle(
     roomName: room.name,
     asOf: day,
+    // What makes this row editable where it is read - see
+    // [RoomLifecycle.manualRoomId].
+    manualRoomId: room.id,
     items: [
       EquipmentLife(
         // A position that stands for the room. It is not on any diagram and

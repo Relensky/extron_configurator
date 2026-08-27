@@ -51,9 +51,43 @@ import 'save_actions.dart'
 ///       ten-year budget is sized against.
 /// ============================================================================
 
-/// Opens the campus overview, starting with the job that is open (if any).
+/// Opens the campus overview for the job that is open.
+///
+/// THE SHEET THE JOB IS ON, IF IT IS ON ONE. A building saved onto a named
+/// campus remembers which one - see [BuildingProject.campusFile] - and Campus
+/// opens THAT: the whole estate, re-read off disk, with this building on it.
+/// It used to open a sheet of one and leave somebody to find the other
+/// thirty-three, which on an estate that size is most of the work of asking
+/// the question.
+///
+/// A REMEMBERED CAMPUS THAT IS GONE IS NOT AN ERROR. Folders get renamed and
+/// jobs get copied out of them, and the honest answer then is the sheet this
+/// button always gave - this job, and an Open button - with one line saying
+/// why. See [AppStateProvider.projectCampusFile], which is what decides the
+/// file is actually there.
 Future<void> showCampusLifecycle(BuildContext context) async {
   final provider = context.read<AppStateProvider>();
+  final remembered = provider.projectCampusFile;
+  if (remembered.isNotEmpty) {
+    try {
+      final campus = await CampusFile.load(remembered);
+      if (!context.mounted) return;
+      await showCampusLifecycleFile(context, campus);
+      return;
+    } catch (e) {
+      if (!context.mounted) return;
+      showTimedSnackBar(
+        ScaffoldMessenger.of(context),
+        SnackBar(
+          content: Text(
+            'This job is on ${path.basename(remembered)}, which could not be '
+            'read: $e',
+          ),
+        ),
+      );
+    }
+  }
+  if (!context.mounted) return;
   await showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -80,6 +114,14 @@ Future<void> showCampusLifecycleFile(
   BuildContext context,
   CampusFile campus,
 ) async {
+  // THE FIRST TIME, AND ONLY THE FIRST TIME. A job that is on the sheet being
+  // opened and does not yet know it belongs to any campus is told - in memory,
+  // saved with the job's next Save - so pressing Campus again comes straight
+  // back here. A job that already names a DIFFERENT campus is left alone:
+  // repointing somebody's estate because they glanced at another one is the
+  // sort of quiet edit nobody would think to look for. Saving a campus is how
+  // that is changed on purpose - see [_CampusViewState._saveCampus].
+  rememberCampusOnOpenProject(context, campus);
   await showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -91,6 +133,17 @@ Future<void> showCampusLifecycleFile(
       ),
     ),
   );
+}
+
+/// Tells the OPEN job which campus sheet it is on, when it is on this one and
+/// does not already name another. See [BuildingProject.campusFile].
+void rememberCampusOnOpenProject(BuildContext context, CampusFile campus) {
+  if (campus.file.trim().isEmpty) return;
+  final provider = context.read<AppStateProvider>();
+  if (provider.currentProjectPath.isEmpty) return;
+  if (provider.project.campusFile.trim().isNotEmpty) return;
+  if (!campusListsProject(campus, provider.currentProjectPath)) return;
+  provider.setProjectCampusFile(campus.file);
 }
 
 class _CampusView extends StatefulWidget {
@@ -282,6 +335,7 @@ class _CampusViewState extends State<_CampusView> {
       });
       showSavedFileSnack(context, context.read<AppStateProvider>(),
           'The campus', target);
+      if (mounted) await _rememberInEveryJob(target);
     } catch (e) {
       showTimedSnackBar(
         messenger,
@@ -291,6 +345,48 @@ class _CampusViewState extends State<_CampusView> {
         ),
       );
     }
+  }
+
+  /// Points every job on this sheet back at it, so Campus opens the estate
+  /// from any of the buildings on it rather than a sheet of one.
+  ///
+  /// AFTER THE CAMPUS IS SAVED, NEVER BEFORE. These are other people's files;
+  /// they are only worth touching once the assembly they would point at is
+  /// actually on disk. See [stampCampusIntoProjects], which does the reading
+  /// and writing and skips the job this session has open - that one is told in
+  /// memory, so unsaved work in front of it is neither lost nor overwritten.
+  Future<void> _rememberInEveryJob(String target) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final provider = context.read<AppStateProvider>();
+    final open = provider.currentProjectPath;
+
+    final result = await stampCampusIntoProjects(
+      campusPath: target,
+      projects: _paths,
+      skip: open,
+    );
+
+    if (!mounted) return;
+    if (open.isNotEmpty && _paths.any((p) => path.equals(p, open))) {
+      provider.setProjectCampusFile(target);
+    }
+    if (result.failed.isEmpty && result.written == 0) return;
+
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(
+          [
+            if (result.written > 0)
+              '${result.written} job${result.written == 1 ? '' : 's'} now open '
+                  'this campus from their own Campus button.',
+            if (result.failed.isNotEmpty)
+              'These could not be told: ${result.failed.join(', ')}.',
+          ].join(' '),
+        ),
+      ),
+    );
   }
 
   /// Opens a saved campus over this one.
@@ -306,6 +402,7 @@ class _CampusViewState extends State<_CampusView> {
     try {
       final campus = await CampusFile.load(file);
       if (!mounted) return;
+      rememberCampusOnOpenProject(context, campus);
       setState(() {
         _paths
           ..clear()

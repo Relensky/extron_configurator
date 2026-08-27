@@ -142,3 +142,104 @@ class CampusFile {
     return words.isEmpty ? 'Campus' : words;
   }
 }
+
+/// ============================================================================
+///  WHICH SHEET A JOB IS ON
+/// ============================================================================
+///  The link between a campus and its jobs used to run one way. The campus
+///  named its projects; a project named nothing. So opening the campus from
+///  inside a building gave a sheet of ONE building, and the other thirty-three
+///  had to be found on disk again - every session, by whoever was in it.
+///
+///  The other direction is a single path written into each project file - see
+///  [BuildingProject.campusFile]. It is a POINTER AND NOT A COPY: the campus
+///  file is still the list, still re-read off disk, and a job whose campus has
+///  been deleted falls back to the sheet of one rather than failing. Nothing
+///  here caches a name, a job list or a figure, for the same reason the campus
+///  itself caches none: a second copy of the list is a copy that can disagree.
+/// ============================================================================
+
+/// True when [projectPath] is one of the jobs on [campus].
+///
+/// Compared with [path.equals] rather than as strings: the same file reached
+/// as `C:\jobs\AGYM_project.json` and `C:/jobs/./AGYM_project.json` is the same
+/// job, and on Windows it is the same job in either case.
+bool campusListsProject(CampusFile campus, String projectPath) {
+  if (projectPath.trim().isEmpty) return false;
+  for (final p in campus.projects) {
+    if (path.equals(p, projectPath)) return true;
+  }
+  return false;
+}
+
+/// What [stampCampusIntoProjects] managed.
+class CampusStampResult {
+  /// Files written - jobs that did not already point at this campus.
+  final int written;
+
+  /// Jobs that already pointed here, so nothing was rewritten.
+  final int unchanged;
+
+  /// Jobs that could not be read or written, by file name.
+  final List<String> failed;
+
+  const CampusStampResult({
+    this.written = 0,
+    this.unchanged = 0,
+    this.failed = const [],
+  });
+}
+
+/// Writes [campusPath] into every project on it, so Campus opens this sheet
+/// from any of them.
+///
+/// WHY THIS TOUCHES OTHER PEOPLE'S FILES AT ALL, and why only on save. Saving a
+/// campus is the one moment somebody has said, deliberately and by name, that
+/// these jobs are one estate. Doing it on open would stamp thirty-four files
+/// for a glance; doing it never would mean the association only ever worked
+/// from the job that happened to be open.
+///
+/// IT WRITES ONE KEY AND LEAVES THE REST OF THE FILE ALONE - each job is read,
+/// given its pointer and written back through the same loader and saver the app
+/// uses everywhere, so a project that is opened afterwards is the project that
+/// was there before plus one line.
+///
+/// [skip] is the job that is OPEN in the session doing the saving. Its file on
+/// disk is stale by definition - there may be unsaved work in front of it - and
+/// writing underneath it would either lose that work or be lost by it. The
+/// caller sets the pointer on the in-memory job instead.
+Future<CampusStampResult> stampCampusIntoProjects({
+  required String campusPath,
+  required Iterable<String> projects,
+  String skip = '',
+}) async {
+  var written = 0;
+  var unchanged = 0;
+  final failed = <String>[];
+
+  for (final job in projects) {
+    if (skip.trim().isNotEmpty && path.equals(job, skip)) continue;
+    try {
+      final project = await BuildingProject.load(job);
+      final stored = BuildingProject.storeCampusPath(campusPath, job);
+      if (project.campusFile == stored) {
+        unchanged++;
+        continue;
+      }
+      project.campusFile = stored;
+      await project.save(job);
+      written++;
+    } catch (_) {
+      // A job that cannot be read is a job that cannot be told. Named rather
+      // than thrown: one unreadable file out of thirty-four must not undo the
+      // thirty-three that were fine.
+      failed.add(path.basename(job));
+    }
+  }
+
+  return CampusStampResult(
+    written: written,
+    unchanged: unchanged,
+    failed: failed,
+  );
+}

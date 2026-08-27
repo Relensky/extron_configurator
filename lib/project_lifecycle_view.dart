@@ -5,11 +5,13 @@ import 'package:provider/provider.dart';
 
 import 'app_snack.dart';
 import 'app_state.dart';
+import 'building_project.dart' show ManualRoom;
 import 'av_flow_model.dart' show formatEquipmentDate;
 import 'campus_lifecycle_view.dart' show showCampusLifecycle;
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
 import 'lifecycle_picture.dart';
+import 'manual_room_lines.dart';
 import 'lifecycle_view.dart'
     show
         EquipmentTimingKey,
@@ -67,10 +69,19 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
                   'Nothing to age yet.\n\n'
                   'The replacement plan is built from the equipment in each '
                   'room and the date it went in. Open a room, go to its '
-                  'Lifecycle tab, and record the dates - they roll up here.',
+                  'Lifecycle tab, and record the dates - they roll up here.\n\n'
+                  'Or put the building on the plan without drawing it: a line '
+                  'item is a room name, when it was last done, how many years '
+                  'it is good for and what it costs to do again.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
+                // THE ONLY WAY ONTO THIS SCREEN THAT DOES NOT GO THROUGH A
+                // DRAWING. Most of an estate has never been through this app,
+                // and a plan that could only be started by drawing forty rooms
+                // is a plan nobody starts. See manual_room_lines.dart.
+                const AddManualRoomLineButton(filled: true),
+                const SizedBox(height: 12),
                 // OFFERED HERE TOO. A job with nothing dated on it is exactly
                 // the job somebody opens in order to look at the OTHER
                 // buildings - and a door that only appears once this one has
@@ -90,6 +101,7 @@ List<Widget> lifecycleSlivers(BuildContext context, ProjectEstimate estimate) {
         building: building,
         title: lifecycleDocumentTitle(estimate),
         fileStem: lifecycleFileStem(estimate),
+        linesOnly: estimate.rooms.isEmpty,
       ),
     ),
     SliverToBoxAdapter(child: LifecycleYearGrid(building: building)),
@@ -148,10 +160,15 @@ class _Summary extends StatelessWidget {
   final String title;
   final String fileStem;
 
+  /// True when nothing on this job came from a config file - see the actions
+  /// strip below, which is the only thing that reads it.
+  final bool linesOnly;
+
   const _Summary({
     required this.building,
     required this.title,
     required this.fileStem,
+    required this.linesOnly,
   });
 
   @override
@@ -265,6 +282,16 @@ class _Summary extends StatelessWidget {
                   fileStem: fileStem,
                 ),
                 const _CampusButton(),
+                // A ROOM THAT IS ON THE PLAN AND NOT IN THE APP.
+                //
+                // ONLY ON A JOB THAT IS ALL LINE ITEMS. On a building whose
+                // rooms have been drawn, this sheet is derived from those
+                // drawings and the way to change it is to change them - a
+                // button here would offer a second, looser way to put a room
+                // on a plan that already has the real one. On a building that
+                // has never been drawn it is the only way there is, and the
+                // room list is a pane away. See manual_room_lines.dart.
+                if (linesOnly) const AddManualRoomLineButton(),
               ],
             ),
           ),
@@ -1559,8 +1586,24 @@ class _RoomRow extends StatelessWidget {
     final gap = gridMetric(context, 8);
     final groups = room.dueGroups;
 
+    // THE ROW THAT CAN BE EDITED WHERE IT IS READ. A row built from a config
+    // file is the sum of that room's equipment and is corrected on the room;
+    // a row that was typed in is three fields and there is nowhere else to
+    // correct it. See [RoomLifecycle.manualRoomId] and manual_room_lines.dart.
+    final ManualRoom? line = () {
+      if (room.manualRoomId.isEmpty) return null;
+      final lines = context.read<AppStateProvider>().project.manualRooms;
+      final at = lines.indexWhere((r) => r.id == room.manualRoomId);
+      return at < 0 ? null : lines[at];
+    }();
+
     final facts = [
-      '${room.items.length} item${room.items.length == 1 ? '' : 's'}',
+      // A line item is ONE thing falling due, not a box count somebody could
+      // read as a parts list, so it says what it is instead.
+      if (line != null)
+        'line item'
+      else
+        '${room.items.length} item${room.items.length == 1 ? '' : 's'}',
       room.oldestInstall == null
           ? 'never surveyed'
           : 'last done ${room.oldestInstall!.year}',
@@ -1649,6 +1692,13 @@ class _RoomRow extends StatelessWidget {
                 ),
             ],
           ),
+          // Change the date, the years in service or the cost; or swap the
+          // room config in once somebody has drawn it. Only on the rows where
+          // those three fields ARE the room.
+          if (line != null) ...[
+            SizedBox(width: gap * 0.5),
+            ManualRoomLineActions(room: line, iconSize: 18),
+          ],
         ],
       ),
     );
