@@ -243,6 +243,26 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The device the Devices tab should open on, by config section key.
+  ///
+  /// A ROOM IS FOURTEEN TABS. Every list in this app that reports a fault in a
+  /// device ends with somebody opening the room to fix it, and "open the room"
+  /// landed on the first tab — so the last step of acting on a flag was
+  /// reading fourteen tab labels to find the device the flag was about. The
+  /// lists know which device they mean; this is how they say so.
+  ///
+  /// Session-only, and a REQUEST rather than a selection: the tab honours it
+  /// when it next builds and the reader is free to move off it, which is why
+  /// nothing clears it afterwards. A key this room does not have is ignored.
+  String requestedDeviceKey = '';
+
+  /// Opens the Devices tab on [deviceKey] — see [requestedDeviceKey].
+  void requestDevice(String deviceKey) {
+    if (requestedDeviceKey == deviceKey) return;
+    requestedDeviceKey = deviceKey;
+    notifyListeners();
+  }
+
   /// Devices in this room with no python module chosen — the list the app
   /// nags about.
   ///

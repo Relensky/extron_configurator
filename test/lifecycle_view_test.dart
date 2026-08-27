@@ -733,25 +733,57 @@ void main() {
       );
     });
 
+    testWidgets('the frame grows with the plan instead of stopping halfway',
+        (tester) async {
+      // THE SHEET IS THE PAGE. A frame fixed at half the window showed eight
+      // rows of a twenty-four room building however much empty screen was
+      // under it, so the reader scrolled a small window inside a large one to
+      // see a picture that would have fitted.
+      const size = Size(1000, 1100);
+      await pumpPlan(tester, building(3), size: size);
+      final small = tester.getSize(find.byType(PinnedGrid)).height;
+
+      // Forty rooms is taller than any window this is read on, so the frame
+      // is what limits it rather than the content.
+      await pumpPlan(tester, building(40), size: size);
+      final big = tester.getSize(find.byType(PinnedGrid)).height;
+
+      expect(big, greaterThan(small), reason: 'more rooms, more sheet');
+      expect(
+        big,
+        greaterThan(size.height * 0.6),
+        reason: 'a tall plan uses the screen it is being read on',
+      );
+      expect(
+        big,
+        lessThan(size.height),
+        reason: 'and still leaves a page around it',
+      );
+    });
+
     testWidgets('builds the rows on screen and not the rest', (tester) async {
       // THE SHEET IS BUILT A ROW AT A TIME. A building with several
       // replacement dates per room is hundreds of rows of a dozen cells, and
       // the frame shows eight of them - building the other two hundred is what
       // made this tab take a second to open.
+      // EIGHTY ROOMS, because the frame grows with the sheet now - it takes
+      // most of the window rather than half of it, so a plan has to be
+      // properly taller than the window for "only what is on screen" to be a
+      // claim worth checking.
       const size = Size(1000, 900);
-      await pumpPlan(tester, building(30), size: size);
+      await pumpPlan(tester, building(80), size: size);
 
       final cells = find.byWidgetPredicate((w) {
         final key = w.key;
         return key is ValueKey<String> &&
             key.value.startsWith('lifecycle_cell_');
       });
-      // Thirty rooms across a thirteen-year span is getting on for four
-      // hundred cells; the frame holds a fraction of them.
+      // Eighty rooms across a thirteen-year span is over a thousand cells; the
+      // frame holds a fraction of them.
       expect(cells, findsWidgets);
       expect(
         cells.evaluate().length,
-        lessThan(30 * 13 ~/ 2),
+        lessThan(80 * 13 ~/ 2),
         reason: 'only the rows in the frame should have been built',
       );
     });

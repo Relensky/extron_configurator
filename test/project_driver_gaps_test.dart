@@ -146,14 +146,73 @@ void main() {
     expect(find.textContaining('Room A'), findsWidgets);
     expect(find.textContaining('Room B'), findsWidgets);
 
-    // Each with the way in.
+    // A WAY IN PER DEVICE, not per room. A room is not a destination: the
+    // reader who presses "open" on a room lands on the first of fourteen
+    // device tabs and starts hunting for the ones the list was about.
     final opens = find.byWidgetPredicate((w) {
       final key = w.key;
       return key is ValueKey<String> &&
-          key.value.startsWith('gap_room_open_');
+          key.value.startsWith('gap_device_open_');
     });
-    expect(opens, findsNWidgets(2), reason: 'one per affected room');
+    expect(opens, findsNWidgets(3), reason: 'two devices in A, one in B');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the flagged products are listed, with a way to unflag one',
+      (tester) async {
+    final p = withProject();
+    // What the "this product never needs a module" action leaves behind.
+    p.avDeviceLibrary.upsert(
+      const AvDeviceTemplate(
+        model: 'Camera Y',
+        manufacturer: 'Generic',
+        category: 'Camera',
+        price: 900,
+        neverControlled: true,
+        ports: [],
+      ),
+    );
+    await pumpProject(tester, p);
+
+    await tester.tap(find.byKey(const ValueKey('project_warnings')));
+    await tester.pumpAndSettle();
+
+    // THE ACKNOWLEDGEMENT LIST. What has already been decided, under what has
+    // not - and the camera is off the undriven rooms because of it.
+    expect(find.textContaining('Flagged as needing no module'), findsOneWidget);
+    expect(find.textContaining('Camera Y'), findsWidgets);
+
+    final unflag = find.byWidgetPredicate((w) {
+      final key = w.key;
+      return key is ValueKey<String> && key.value.startsWith('unflag_');
+    });
+    expect(unflag, findsOneWidget);
+
+    await tester.tap(unflag);
+    await tester.pumpAndSettle();
+
+    // Back on the list of things that need a driver, in the catalog and so in
+    // every room on the estate.
+    expect(p.avModelNeverControlled('Camera Y'), isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a flagged product is not on the rooms list at all',
+      (tester) async {
+    final p = withProject();
+    p.avDeviceLibrary.upsert(
+      const AvDeviceTemplate(
+        model: 'Camera Y',
+        category: 'Camera',
+        neverControlled: true,
+        ports: [],
+      ),
+    );
+    final estimate = p.priceProject();
+    expect(
+      estimate.controlGaps.map((g) => g.gap.model),
+      isNot(contains('Camera Y')),
+    );
   });
 
   testWidgets('a job with nothing undriven has no rooms list to show',

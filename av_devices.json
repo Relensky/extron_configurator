@@ -490,6 +490,7 @@
       "model": "HDMI Laptop",
       "rackUnits": 0,
       "powerInput": "none",
+      "neverControlled": true,
       "ports": [
         {
           "id": "out_1",
@@ -581,6 +582,7 @@
       "model": "USB-C Laptop",
       "rackUnits": 0,
       "powerInput": "none",
+      "neverControlled": true,
       "notes": "A laptop on the room's USB-C plate - one lead carrying picture, USB for the room's camera and mic, and charge. Which of USB-C and VGA a room has is SYSTEM_SETUP gui_usb_or_vga; both land on the same switcher input, input_usb.",
       "ports": [
         {
@@ -596,6 +598,7 @@
       "model": "VGA Laptop",
       "rackUnits": 0,
       "powerInput": "none",
+      "neverControlled": true,
       "ports": [
         {
           "id": "out_1",

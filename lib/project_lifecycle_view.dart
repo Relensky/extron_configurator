@@ -871,17 +871,30 @@ class _LifecycleYearGridState extends State<LifecycleYearGrid> {
     // this minute, which is a different question with a different answer.
     // What the sheet would take at its natural size, which is what a fit is
     // measured against - the frame's own padding comes off the frame first.
+    // Wide enough for the room names it actually carries - see
+    // [PinnedGrid.frozenWidthFor]. A room called 'Lecture Hall (north)' in a
+    // column sized for 'BSS 103' is a row nobody can identify.
+    final naturalRoom = PinnedGrid.frozenWidthFor(
+      context,
+      [for (final room in building.rooms) room.roomName],
+      theme.textTheme.bodyMedium,
+      min: gridMetric(context, 168),
+      max: gridMetric(context, 340),
+      // The tranche lines under a room are indented, and their own text is
+      // longer than the room's; the indent plus that is what has to fit.
+      padding: 44,
+    );
+
     final zoom = _fit
         ? gridFitZoom(
-            natural:
-                gridMetric(context, 168) + gridMetric(context, 72) * years.length,
+            natural: naturalRoom + gridMetric(context, 72) * years.length,
             available: available - 32,
           )
         : _zoom;
 
     final yearColumn = gridMetric(context, 72) * zoom;
     final rowHeight = gridMetric(context, 28) * zoom;
-    final roomColumn = gridMetric(context, 168) * zoom;
+    final roomColumn = naturalRoom * zoom;
     final headHeight = gridMetric(context, 26) * zoom;
     final gap = gridMetric(context, 8);
 

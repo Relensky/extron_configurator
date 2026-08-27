@@ -42,7 +42,17 @@ class _DynamicDevicesTabsViewState extends State<DynamicDevicesTabsView> {
         getActiveDeviceKeys(config, provider.uiSchema.deviceCountMap);
     if (activeKeys.isEmpty) return const Center(child: Text("No devices found based on dev_ parameters."));
 
+    // WHICH TAB THIS OPENS ON. A flag on the project tab, a row on the
+    // undriven list, a device on the estimate: all of them name a device, and
+    // landing on the first of fourteen tabs threw that away. The controller is
+    // keyed on the request, so asking for another device rebuilds it there;
+    // moving between tabs by hand does not rebuild it at all.
+    final wanted = provider.requestedDeviceKey;
+    final at = activeKeys.indexOf(wanted);
+
     return DefaultTabController(
+      key: ValueKey('devices_tabs_${at < 0 ? '' : wanted}_${activeKeys.length}'),
+      initialIndex: at < 0 ? 0 : at,
       length: activeKeys.length,
       child: Builder(
         builder: (context) {

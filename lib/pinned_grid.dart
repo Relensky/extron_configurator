@@ -208,8 +208,15 @@ class PinnedGrid extends StatefulWidget {
   final double bodyHeight;
 
   /// How tall the whole frame may grow before the rows start scrolling inside
-  /// it. Defaults to about half the window, which leaves the sheet as the
-  /// biggest thing on the tab without letting it become the only thing.
+  /// it.
+  ///
+  /// GROWS WITH THE SHEET, up to most of the window. A replacement plan is
+  /// read for its shape, and a frame fixed at half the window showed eight
+  /// rows of a twenty-four room building however much empty screen was under
+  /// it - so the reader scrolled a small window inside a large one to see a
+  /// picture that would have fitted. The sheet takes the room it needs and
+  /// stops just short of the window, which leaves the page it sits on still
+  /// recognisably a page.
   final double? maxHeight;
 
   /// Top-left: what the frozen column is. Never moves.
@@ -252,6 +259,41 @@ class PinnedGrid extends StatefulWidget {
 
   /// One row of the cells, [bodyWidth] wide by [rowExtent] tall.
   final IndexedWidgetBuilder? bodyRowBuilder;
+
+  /// How wide a frozen column has to be to hold [lines] set in [style].
+  ///
+  /// A NAME THAT IS ELLIPSISED IS NOT A LABEL. The column was a fixed width
+  /// chosen for a room number, and the campus sheet puts BUILDING names down
+  /// it - 'Farm Agricultural Education Center' in 126 pixels is 'Farm Agri…',
+  /// which names nothing. So the column is measured against what actually goes
+  /// in it, between a floor (a short list must not give a stripe of a column)
+  /// and a ceiling (one absurd name must not eat the sheet).
+  ///
+  /// Measured at the sheet's NATURAL size and scaled by the caller's zoom, so
+  /// it can be fed into the fit calculation that decides that zoom.
+  static double frozenWidthFor(
+    BuildContext context,
+    Iterable<String> lines,
+    TextStyle? style, {
+    required double min,
+    required double max,
+    double padding = 20,
+  }) {
+    final scaler = MediaQuery.textScalerOf(context);
+    var widest = 0.0;
+    for (final line in lines) {
+      if (line.trim().isEmpty) continue;
+      final painter = TextPainter(
+        text: TextSpan(text: line, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      if (painter.width > widest) widest = painter.width;
+      painter.dispose();
+    }
+    return (widest + padding).clamp(min, max);
+  }
 
   const PinnedGrid({
     super.key,
@@ -342,7 +384,7 @@ class _PinnedGridState extends State<PinnedGrid> {
 
         final cap =
             widget.maxHeight ??
-            math.max(240.0, MediaQuery.sizeOf(context).height * 0.5);
+            math.max(240.0, MediaQuery.sizeOf(context).height * 0.82);
         final viewHeight = math.max(
           0.0,
           math.min(contentHeight, cap - widget.headerHeight),

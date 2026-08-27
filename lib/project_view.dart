@@ -1508,9 +1508,16 @@ Future<void> openProjectRoomOn(
   /// What to call the room in the confirmation — the name the reader was just
   /// looking at, which is not always the file's own.
   String roomName = '',
+
+  /// The config section the page should open ON, when the flag is about one
+  /// device rather than about the room — see
+  /// [AppStateProvider.requestedDeviceKey]. Landing on the first of fourteen
+  /// device tabs is most of the work of acting on a flag.
+  String deviceKey = '',
 }) async {
   final provider = context.read<AppStateProvider>();
   final messenger = ScaffoldMessenger.of(context);
+  if (deviceKey.isNotEmpty) provider.requestDevice(deviceKey);
 
   if (provider.openProjectRoom?.id != ref.id) {
     if (!await confirmLeavingRoom(context, provider)) return;
@@ -2205,72 +2212,241 @@ class _DriverGapRooms extends StatelessWidget {
   }
 }
 
-/// One room on the undriven list: what is wrong in it, and the way in.
+/// One room on the undriven list: which devices, and the way into each.
+///
+/// A ROOM IS NOT A DESTINATION. "BSS 103 has four undriven devices" and a
+/// button that opens the room is two steps short: the reader lands on the
+/// first of fourteen device tabs and starts hunting for the four the list was
+/// about. So the devices are named one to a line, and each line opens the page
+/// that fixes THAT device — its own tab under Devices when it has a config
+/// block, the signal flow when it is a box somebody drew and never added.
 class _DriverGapRoomRow extends StatelessWidget {
   final ProjectRoomCost room;
   final List<ControlGap> gaps;
 
   const _DriverGapRoomRow({required this.room, required this.gaps});
 
-  /// How many devices are named before the row stops listing and starts
-  /// counting — the same rule the briefing follows.
-  static const int _named = 4;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final devices = gaps.fold<int>(0, (s, g) => s + g.qty);
-    final names = [
-      for (final g in gaps.take(_named))
-        '${g.device}${g.qty > 1 ? ' ×${g.qty}' : ''}',
-      if (gaps.length > _named) 'and ${gaps.length - _named} more',
-    ].join(', ');
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.link_off,
-            size: 15,
-            color: errorTextOn(theme.colorScheme, theme.cardColor),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${room.name}  ·  $devices device'
-                  '${devices == 1 ? '' : 's'}',
-                  style: theme.textTheme.bodyMedium,
+          Row(
+            children: [
+              Icon(
+                Icons.link_off,
+                size: 15,
+                color: errorTextOn(theme.colorScheme, theme.cardColor),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${room.name}  ·  $devices device'
+                '${devices == 1 ? '' : 's'}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                Text(
-                  names,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+          for (final gap in gaps)
+            Padding(
+              padding: const EdgeInsets.only(left: 23, top: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${gap.device}${gap.qty > 1 ? '  ×${gap.qty}' : ''}'
+                          '${gap.model.trim().isEmpty ? '' : '  ·  '
+                              '${gap.model}'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        // WHY it is on the list, which decides what to do
+                        // about it: a driver to pick, a model to set, or a
+                        // product that never had one.
+                        Text(
+                          gap.note,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    key: ValueKey(
+                      'gap_device_open_${room.ref.id}_'
+                      '${gap.sectionKey.isEmpty ? gap.device : gap.sectionKey}',
+                    ),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: Text(
+                      gap.sectionKey.isEmpty ? 'Signal flow' : 'Open device',
+                    ),
+                    onPressed: () => gap.sectionKey.isEmpty
+                        ? openProjectRoomOn(
+                            context,
+                            room.ref,
+                            AppTab.avFlow,
+                            '${gap.device} is drawn here with no config block '
+                                'behind it',
+                            roomName: room.name,
+                          )
+                        : openProjectRoomOn(
+                            context,
+                            room.ref,
+                            AppTab.devices,
+                            'pick the control module for ${gap.device} here',
+                            roomName: room.name,
+                            deviceKey: gap.sectionKey,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// THE PRODUCTS SOMEBODY HAS ALREADY SETTLED, and the way to unsettle one.
+///
+/// "This product never needs a module" is a decision about a PRODUCT, saved to
+/// the catalog, and it silences the flag in every room on the estate. That is
+/// what makes it useful and what makes it worth checking: a laptop plate
+/// marked by mistake is a device that never gets a driver and never gets
+/// reported again.
+///
+/// So the job's own settled products are listed where the undriven ones are —
+/// what is flagged, how many of it this job has, and one button to take the
+/// flag off and put it back on the list. It reads as an acknowledgement: go
+/// down it, agree with each line, and undo the one that is wrong.
+class _SettledProducts extends StatelessWidget {
+  final ProjectEstimate estimate;
+
+  const _SettledProducts({required this.estimate});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppStateProvider>();
+    final theme = Theme.of(context);
+
+    final settled = [
+      for (final line in estimate.master)
+        if (line.model.trim().isNotEmpty &&
+            provider.avModelNeverControlled(line.model))
+          line,
+    ];
+    if (settled.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Flagged as needing no module (${settled.length})',
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'These products are marked in the catalog as having no control '
+                'interface, so no room asks for a driver for them. Check each '
+                'one - and take the flag off any that does need driving.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final line in settled)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.block,
+                        size: 15,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              line.description.trim().isEmpty
+                                  ? line.model
+                                  : line.description,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            Text(
+                              [
+                                line.model,
+                                '${trimNumber(line.qty)} on this job',
+                                '${line.qtyByRoom.length} room'
+                                    '${line.qtyByRoom.length == 1 ? '' : 's'}',
+                              ].join('  ·  '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        key: ValueKey('unflag_${line.key}'),
+                        icon: const Icon(Icons.undo, size: 16),
+                        label: const Text('Needs a module'),
+                        onPressed: () => _unflag(context, provider, line.model),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            key: ValueKey('gap_room_open_${room.ref.id}'),
-            icon: const Icon(Icons.open_in_new, size: 16),
-            label: const Text('Open'),
-            onPressed: () => openProjectRoomOn(
-              context,
-              room.ref,
-              AppTab.devices,
-              'pick the control modules for this room here',
-              roomName: room.name,
-            ),
-          ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// Takes the flag off, and says what that did.
+  ///
+  /// Straight through rather than behind a confirmation: putting a product
+  /// BACK on the list of things to check is the safe direction, and the button
+  /// that set the flag is one row away for anybody who changes their mind.
+  Future<void> _unflag(
+    BuildContext context,
+    AppStateProvider provider,
+    String model,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await provider.setModelNeverControlled(model, false);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : snackErrorFillOn(messenger),
       ),
     );
   }
@@ -2528,8 +2704,13 @@ List<Widget> partsSlivers(
     // where a spare is added, scoped to a room or to the building, and moved
     // between the two — see project_spares_view.dart.
     if (sparesOnly) ...spareSectionSlivers(context, estimate),
-    if (undrivenOnly)
+    if (undrivenOnly) ...[
       SliverToBoxAdapter(child: _DriverGapRooms(estimate: estimate)),
+      // What has already been decided, under what has not. Both belong to the
+      // same question - which devices need a driver - and the settled half is
+      // the half nothing else in the app will ever show again.
+      SliverToBoxAdapter(child: _SettledProducts(estimate: estimate)),
+    ],
     // And the room filter under it, for reading the parts list itself as one
     // room's shelf list.
     if (sparesOnly)

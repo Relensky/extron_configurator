@@ -863,10 +863,22 @@ class _CampusGridState extends State<_CampusGrid> {
     final jobs = campus.ok;
     if (years.isEmpty || jobs.isEmpty) return const SizedBox.shrink();
 
+    // THE NAME COLUMN IS AS WIDE AS THE NAMES. Buildings are called things
+    // like 'Farm Agricultural Education Center', and a column sized for a room
+    // number turned every one of them into three words and an ellipsis. See
+    // [PinnedGrid.frozenWidthFor] - measured at the natural size so the fit
+    // below is worked out against the sheet that will actually be drawn.
+    final naturalName = PinnedGrid.frozenWidthFor(
+      context,
+      [for (final j in jobs) j.name, 'CAMPUS'],
+      theme.textTheme.bodyMedium,
+      min: gridMetric(context, 210),
+      max: gridMetric(context, 420),
+    );
+
     final zoom = _fit
         ? gridFitZoom(
-            natural: gridMetric(context, 210) +
-                gridMetric(context, 92) * years.length,
+            natural: naturalName + gridMetric(context, 92) * years.length,
             available: available - 8,
           )
         : _zoom;
@@ -875,7 +887,7 @@ class _CampusGridState extends State<_CampusGrid> {
     // - see [LifecycleYearGrid] for why those are two different questions.
     final yearColumn = gridMetric(context, 92) * zoom;
     final rowHeight = gridMetric(context, 30) * zoom;
-    final nameColumn = gridMetric(context, 210) * zoom;
+    final nameColumn = naturalName * zoom;
     final headHeight = gridMetric(context, 26) * zoom;
     final barRow = gridMetric(context, 46) * zoom;
     final thisYear = campus.asOf.year;
@@ -960,10 +972,20 @@ class _CampusGridState extends State<_CampusGrid> {
                   height: rowHeight,
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      j.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: zoomed.bodyMedium,
+                    child: Padding(
+                      // Clear of the frame's own edge, so a name never runs
+                      // under the bar the cells beside it are scrolled with.
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Tooltip(
+                        // A name too long even for the widened column still
+                        // says itself in full on hover.
+                        message: j.name,
+                        child: Text(
+                          j.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: zoomed.bodyMedium,
+                        ),
+                      ),
                     ),
                   ),
                 ),

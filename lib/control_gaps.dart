@@ -74,6 +74,15 @@ class ControlGap {
   /// The sentence the table prints, which says what to do about it.
   final String note;
 
+  /// The config section this device is - 'PROJECTORDEVICE_2' - or '' when it
+  /// has no block at all.
+  ///
+  /// WHERE THE FIX IS, as an address rather than as a sentence. Every list
+  /// built from these ends in somebody opening the room, and "open the room"
+  /// landed them on the first of fourteen device tabs to go hunting for the
+  /// one the list was about. With the key, the page opens on the device.
+  final String sectionKey;
+
   const ControlGap({
     required this.device,
     required this.model,
@@ -81,6 +90,7 @@ class ControlGap {
     required this.fromConfig,
     required this.kind,
     required this.note,
+    this.sectionKey = '',
   });
 
   String get sourceLabel => fromConfig ? 'Room config' : 'Added by hand';
@@ -149,6 +159,7 @@ List<ControlGap> controlGapsForRoom({
         fromConfig: configModule != null,
         kind: ControlGapKind.noModel,
         note: 'No model recorded, so no module can be matched',
+        sectionKey: configModule != null ? node.id : '',
       ));
       continue;
     }
@@ -163,6 +174,7 @@ List<ControlGap> controlGapsForRoom({
         fromConfig: true,
         kind: ControlGapKind.moduleUnset,
         note: 'No module set on the device - $claimed matches this model',
+        sectionKey: node.id,
       ));
       continue;
     }
@@ -173,6 +185,7 @@ List<ControlGap> controlGapsForRoom({
       fromConfig: configModule != null,
       kind: ControlGapKind.noModuleClaims,
       note: 'No Python module claims this model',
+      sectionKey: configModule != null ? node.id : '',
     ));
   }
 
@@ -196,6 +209,7 @@ List<ControlGap> controlGapsForRoom({
       continue;
     }
     gaps.add(ControlGap(
+      sectionKey: key,
       device: dev['name']?.toString() ?? key,
       model: dev['model']?.toString() ?? '',
       qty: 1,
