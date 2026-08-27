@@ -1,0 +1,60 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Farm Modular Classrooms & Restrooms refresh",
+    "building": "FAMC",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "FAMC 101",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "capacity 36  \u00b7  AGR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual2",
+            "name": "FAMC 102",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "capacity 24  \u00b7  AGR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual3",
+            "name": "FAMC 103",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "capacity 36  \u00b7  AGR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual4",
+            "name": "FAMC 104",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "capacity 36  \u00b7  AGR  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual5",
+            "name": "FAMC 106",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-lecture  \u00b7  capacity 36  \u00b7  AGR  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual6",
+            "name": "FAMC 107",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  AGR  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 6,
+    "vendorCounter": 0
+}

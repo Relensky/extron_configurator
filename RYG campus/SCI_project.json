@@ -1,0 +1,403 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Science Building refresh",
+    "building": "SCI",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "SCI 100",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual2",
+            "name": "SCI 124",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "treat as proj  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual3",
+            "name": "SCI 125",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual4",
+            "name": "SCI 126a/b",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 67516.5,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  4 Projector 2 Cam Multimic  \u00b7  RYG estimate for 4 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual5",
+            "name": "SCI 130",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual6",
+            "name": "SCI 131",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 67516.5,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  4 Projector 2 Cam Multimic  \u00b7  RYG estimate for 4 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual7",
+            "name": "SCI 140",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual8",
+            "name": "SCI 141",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual9",
+            "name": "SCI 142",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual10",
+            "name": "SCI 201C",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "Special Instructional  \u00b7  capacity ?  \u00b7  NSC  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual11",
+            "name": "SCI 201D",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual12",
+            "name": "SCI 212",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "Special Instructional  \u00b7  capacity ?  \u00b7  NSC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual13",
+            "name": "SCI 216",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "conference  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual14",
+            "name": "SCI 240",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "Special Instructional  \u00b7  capacity ?  \u00b7  NSC  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual15",
+            "name": "SCI 241",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "Special Instructional  \u00b7  NSC  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual16",
+            "name": "SCI 242",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual17",
+            "name": "SCI 243",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual18",
+            "name": "SCI 244",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual19",
+            "name": "SCI 245",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual20",
+            "name": "SCI 247",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual21",
+            "name": "SCI 248",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual22",
+            "name": "SCI 250",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual23",
+            "name": "SCI 260",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual24",
+            "name": "SCI 300H",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "Special Instructional  \u00b7  NSC  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual25",
+            "name": "SCI 301C",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual26",
+            "name": "SCI 312",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual27",
+            "name": "SCI 314",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual28",
+            "name": "SCI 316",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "conference  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual29",
+            "name": "SCI 341",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual30",
+            "name": "SCI 342",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual31",
+            "name": "SCI 345",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual32",
+            "name": "SCI 349",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual33",
+            "name": "SCI 350",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual34",
+            "name": "SCI 351",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "Special Instructional  \u00b7  NSC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual35",
+            "name": "SCI 354",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual36",
+            "name": "SCI 360",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "Special Instructional  \u00b7  NSC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual37",
+            "name": "SCI 361",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "Special Instructional  \u00b7  NSC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual38",
+            "name": "SCI 400H",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual39",
+            "name": "SCI 401B",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual40",
+            "name": "SCI 416",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual41",
+            "name": "SCI 420",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual42",
+            "name": "SCI 425",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual43",
+            "name": "SCI 426",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "Research  \u00b7  NSC  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual44",
+            "name": "SCI 451",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual45",
+            "name": "SCI 453",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 157940.36,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  figure typed on the master sheet"
+        },
+        {
+            "id": "manual46",
+            "name": "SCI 455",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  no estimate on the master sheet"
+        },
+        {
+            "id": "manual47",
+            "name": "SCI 457",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "Special Instructional  \u00b7  NSC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual48",
+            "name": "SCI 458",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 157940.36,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  figure typed on the master sheet"
+        },
+        {
+            "id": "manual49",
+            "name": "SCI 460",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "notes": "LAB-Laboratory  \u00b7  NSC  \u00b7  no estimate on the master sheet"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 49,
+    "vendorCounter": 0
+}

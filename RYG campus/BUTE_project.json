@@ -1,0 +1,250 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Butte Hall refresh",
+    "building": "BUTE",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "BUTE 101",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual2",
+            "name": "BUTE 102",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual3",
+            "name": "BUTE 103",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual4",
+            "name": "BUTE 104",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual5",
+            "name": "BUTE 109",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual6",
+            "name": "BUTE 111",
+            "installedOn": "2013-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual7",
+            "name": "BUTE 113",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual8",
+            "name": "BUTE 201",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual9",
+            "name": "BUTE 205",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual10",
+            "name": "BUTE 207",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual11",
+            "name": "BUTE 209",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "figure typed on the master sheet"
+        },
+        {
+            "id": "manual12",
+            "name": "BUTE 211",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual13",
+            "name": "BUTE 219",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual14",
+            "name": "BUTE 221",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual15",
+            "name": "BUTE 223",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual16",
+            "name": "BUTE 225",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual17",
+            "name": "BUTE 227",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual18",
+            "name": "BUTE 229",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual19",
+            "name": "BUTE 301",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual20",
+            "name": "BUTE 307",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual21",
+            "name": "BUTE 309",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual22",
+            "name": "BUTE 319",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual23",
+            "name": "BUTE 321",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual24",
+            "name": "BUTE 323",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual25",
+            "name": "BUTE 325",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual26",
+            "name": "BUTE 327",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual27",
+            "name": "BUTE 329",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual28",
+            "name": "BUTE 503",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual29",
+            "name": "BUTE 505",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual30",
+            "name": "BUTE 601",
+            "installedOn": "2011-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "conference  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 30,
+    "vendorCounter": 0
+}

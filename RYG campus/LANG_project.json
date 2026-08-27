@@ -1,0 +1,109 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Langdon Engineering Center refresh",
+    "building": "LANG",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "LANG 104",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 45  \u00b7  ECC  \u00b7  MMEM  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual2",
+            "name": "LANG 105",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 45  \u00b7  ECC  \u00b7  CIVL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual3",
+            "name": "LANG 106",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-lecture  \u00b7  capacity 45  \u00b7  HFA  \u00b7  PHIL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual4",
+            "name": "LANG 107",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-lecture  \u00b7  capacity 45  \u00b7  HFA  \u00b7  ART, PHIL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual5",
+            "name": "LANG 117A",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 20  \u00b7  ECC  \u00b7  MMEM  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual6",
+            "name": "LANG 119B",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-lecture  \u00b7  capacity 21  \u00b7  ECC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual7",
+            "name": "LANG 200",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 31670.6,
+            "notes": "2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual8",
+            "name": "LANG 204",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LAB-Laboratory  \u00b7  capacity 50  \u00b7  ECC  \u00b7  CONSTR MGMT  \u00b7  2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual9",
+            "name": "LANG 205",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 20  \u00b7  ECC  \u00b7  CIVL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual10",
+            "name": "LANG 300",
+            "installedOn": "2013-07-01",
+            "lifeYears": 8,
+            "replacementCost": 31670.6,
+            "notes": "LEC-lecture  \u00b7  capacity 120  \u00b7  All School  \u00b7  2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "LANG 302",
+            "installedOn": "2013-07-01",
+            "lifeYears": 8,
+            "replacementCost": 31670.6,
+            "notes": "LEC-lecture  \u00b7  capacity 120  \u00b7  All School  \u00b7  2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual12",
+            "name": "LANG 303",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-lecture  \u00b7  capacity 40  \u00b7  HFA  \u00b7  ART, CORH, PHIL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 12,
+    "vendorCounter": 0
+}

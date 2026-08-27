@@ -1,0 +1,171 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Yolo Hall refresh",
+    "building": "YOLO",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "YOLO 109",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 50  \u00b7  CME  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual2",
+            "name": "YOLO 119",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 27  \u00b7  CME  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual3",
+            "name": "YOLO 124",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 26  \u00b7  CME  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual4",
+            "name": "YOLO 132",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 16  \u00b7  CME  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual5",
+            "name": "YOLO 142",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 24  \u00b7  CME  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual6",
+            "name": "YOLO 143",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  CME  \u00b7  KINE  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual7",
+            "name": "YOLO 145",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual8",
+            "name": "YOLO 146",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 25  \u00b7  CME  \u00b7  KINE  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual9",
+            "name": "YOLO 150",
+            "lifeYears": 8,
+            "replacementCost": 5462.5,
+            "notes": "LAB-Laboratory  \u00b7  capacity 25  \u00b7  CME  \u00b7  KINE  \u00b7  !sound system only  \u00b7  RYG estimate for !sound system only  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual10",
+            "name": "YOLO 171",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  CME  \u00b7  RECR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "YOLO 173",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual12",
+            "name": "YOLO 178",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 32  \u00b7  CME  \u00b7  RECR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual13",
+            "name": "YOLO 206",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 12  \u00b7  CME  \u00b7  KINE  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual14",
+            "name": "YOLO 213",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "capacity 60  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual15",
+            "name": "YOLO 217",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 24  \u00b7  CME  \u00b7  KINE  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual16",
+            "name": "YOLO 218",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 16  \u00b7  CME  \u00b7  KINE  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual17",
+            "name": "YOLO 224",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 35  \u00b7  CME  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual18",
+            "name": "YOLO 234",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 70000.0,
+            "notes": "LEC-Lecture  \u00b7  capacity 54  \u00b7  All School  \u00b7  figure typed on the master sheet"
+        },
+        {
+            "id": "manual19",
+            "name": "YOLO 259",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "conference  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual20",
+            "name": "YOLO 261",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 20,
+    "vendorCounter": 0
+}

@@ -1,0 +1,61 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "University Services Building refresh",
+    "building": "USB",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "USB 115A",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual2",
+            "name": "USB 132",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual3",
+            "name": "USB 140",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual4",
+            "name": "USB 209",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 22242.21,
+            "notes": "conference  \u00b7  2 Display 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Display 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual5",
+            "name": "USB 221",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual6",
+            "name": "USB 232",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 6,
+    "vendorCounter": 0
+}

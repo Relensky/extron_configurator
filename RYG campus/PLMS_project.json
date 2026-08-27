@@ -1,0 +1,109 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Plumas Hall refresh",
+    "building": "PLMS",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "PLMS 106",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 60  \u00b7  BSS  \u00b7  HCSV/SOCI/SOSC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual2",
+            "name": "PLMS 112",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 31670.6,
+            "notes": "LAB-Laboratory  \u00b7  capacity 49  \u00b7  ECC  \u00b7  Mecha  \u00b7  2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual3",
+            "name": "PLMS 117",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual4",
+            "name": "PLMS 201",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 75  \u00b7  BSS  \u00b7  HCSV  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual5",
+            "name": "PLMS 203B",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual6",
+            "name": "PLMS 205",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 77  \u00b7  All School  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual7",
+            "name": "PLMS 301",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "LAB-Laboratory  \u00b7  capacity 24  \u00b7  AGR  \u00b7  AGR  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart"
+        },
+        {
+            "id": "manual8",
+            "name": "PLMS 303",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 27  \u00b7  AGR  \u00b7  AGR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual9",
+            "name": "PLMS 312",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 30  \u00b7  All School  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual10",
+            "name": "PLMS 315",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "LAB-Laboratory  \u00b7  capacity 24  \u00b7  AGR  \u00b7  AGR  \u00b7  1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "PLMS 329",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 52  \u00b7  AGR  \u00b7  AGR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual12",
+            "name": "PLMS 333",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 12,
+    "vendorCounter": 0
+}

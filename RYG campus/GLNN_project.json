@@ -1,0 +1,204 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Glenn Hall refresh",
+    "building": "GLNN",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "GLNN 102",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 44  \u00b7  COB  \u00b7  MGMT  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual2",
+            "name": "GLNN 104",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 36  \u00b7  COB  \u00b7  BSIS  \u00b7  needs infrastructure  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual3",
+            "name": "GLNN 106",
+            "installedOn": "2026-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "conference  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual4",
+            "name": "GLNN 112",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "LEC-lecture  \u00b7  capacity 62  \u00b7  All School  \u00b7  1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual5",
+            "name": "GLNN 123",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 45  \u00b7  COB  \u00b7  ACCT  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual6",
+            "name": "GLNN 125",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 47  \u00b7  COB  \u00b7  MGMT  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual7",
+            "name": "GLNN 202",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "LEC-lecture  \u00b7  capacity 40  \u00b7  COB  \u00b7  1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual8",
+            "name": "GLNN 206D",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual9",
+            "name": "GLNN 210",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 34  \u00b7  COB  \u00b7  BSIS  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual10",
+            "name": "GLNN 212",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 99  \u00b7  All School  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "GLNN 214",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  COB  \u00b7  MGMT  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual12",
+            "name": "GLNN 216",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 44  \u00b7  COB  \u00b7  BSIS  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual13",
+            "name": "GLNN 223",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 42  \u00b7  COB  \u00b7  ACCT  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual14",
+            "name": "GLNN 225",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  COB  \u00b7  FNMK  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual15",
+            "name": "GLNN 302",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 40  \u00b7  COB  \u00b7  MGMT  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual16",
+            "name": "GLNN 304",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 40  \u00b7  COB  \u00b7  BSIS  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual17",
+            "name": "GLNN 306",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 48  \u00b7  All School  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual18",
+            "name": "GLNN 308",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  COB  \u00b7  MGMT  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual19",
+            "name": "GLNN 310",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 48  \u00b7  COB  \u00b7  FNMK  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual20",
+            "name": "GLNN 312",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 48  \u00b7  COB  \u00b7  FNMK  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual21",
+            "name": "GLNN 314",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  COB  \u00b7  FNMK  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual22",
+            "name": "GLNN 316",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual23",
+            "name": "GLNN 321",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual24",
+            "name": "GLNN 327",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 30  \u00b7  COB  \u00b7  ACCT/BSIS/FNMK  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 24,
+    "vendorCounter": 0
+}

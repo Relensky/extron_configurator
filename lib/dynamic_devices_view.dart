@@ -443,6 +443,60 @@ class DeviceConfigurationForm extends StatelessWidget {
     final fault = provider.deviceModelModuleFault(deviceKey);
     if (fault == null) return null;
     final theme = Theme.of(context);
+    // ALREADY ANSWERED. The catalog says this product never needs a driver, so
+    // the block is finished and the page says which decision made it finished
+    // - it does not ask for a module in red. Same slot, same key, different
+    // sentence: somebody checking the room file against the rack still wants
+    // to SEE that the laptop plate is deliberately driverless.
+    if (fault.fault == ModelModuleFault.noModuleNeeded) {
+      return Container(
+        key: ValueKey('model_module_banner_$deviceKey'),
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.block,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No module needed for "${fault.model}"',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'The catalog says this product has no control interface, '
+                    'so nothing drives it anywhere and this block is finished '
+                    'without one. It is not on the room\'s missing-module '
+                    'list. Change that on the Catalog tab if the product does '
+                    'need a driver after all.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final noModule = fault.fault == ModelModuleFault.noModule;
     return Container(
       key: ValueKey('model_module_banner_$deviceKey'),

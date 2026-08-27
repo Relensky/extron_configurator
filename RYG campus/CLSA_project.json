@@ -1,0 +1,36 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Colusa Hall refresh",
+    "building": "CLSA",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "CLSA 100A",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "replacementCost": 157940.36,
+            "notes": "conference  \u00b7  figure typed on the master sheet"
+        },
+        {
+            "id": "manual2",
+            "name": "CLSA 100B",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "notes": "conference  \u00b7  no estimate on the master sheet"
+        },
+        {
+            "id": "manual3",
+            "name": "CLSA 115",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "CONF  \u00b7  capacity 16  \u00b7  RCE  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 3,
+    "vendorCounter": 0
+}

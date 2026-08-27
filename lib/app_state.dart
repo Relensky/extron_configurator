@@ -170,6 +170,16 @@ enum ModelModuleFault {
   /// them. The device the config describes and the device the processor would
   /// talk to are two different products.
   unclaimedModel,
+
+  /// No module, and none is wanted: the CATALOG says this product never needs
+  /// one. A laptop plate, a passive splitter, a mount.
+  ///
+  /// NOT A FAULT, and the only member here that is not. It is on this list
+  /// because the device page has one slot for "what is the story with this
+  /// block's module", and the answer "somebody has already decided this needs
+  /// none" belongs in it — quietly, as a note, so the block can be confirmed
+  /// against the room file without being nagged about.
+  noModuleNeeded,
 }
 
 /// A device whose model and module disagree, with everything the message
@@ -241,17 +251,40 @@ class AppStateProvider extends ChangeNotifier {
   /// missing when the control side finally gets built is which driver each of
   /// them runs. A processor cannot talk to a device with no module, so an
   /// unanswered entry here is a room that will not commission.
-  List<UnmodularDevice> get devicesMissingModules {
+  List<UnmodularDevice> get devicesMissingModules =>
+      _unmodularDevices(needingOne: true);
+
+  /// Devices with no module that are not SUPPOSED to have one.
+  ///
+  /// A NOTE, NOT A WARNING. Somebody has already been through these and said
+  /// so — the catalog entry carries `neverControlled` (see
+  /// [avModelNeverControlled]), which is a decision about the product and not
+  /// about this room. Carrying them on the nag list made that decision
+  /// worthless: the count stayed up, the banner stayed red, and the only way
+  /// to clear it was to leave the room wrong.
+  ///
+  /// They are still listed, because "the laptop plates have no driver" is a
+  /// thing somebody checking a room file wants confirmed rather than
+  /// discovered. See the Devices tab, which prints the same fact on the block
+  /// itself as [ModelModuleFault.noModuleNeeded].
+  List<UnmodularDevice> get devicesNeedingNoModule =>
+      _unmodularDevices(needingOne: false);
+
+  /// The config's module-less device blocks, split by whether the catalog says
+  /// a module is wanted at all.
+  List<UnmodularDevice> _unmodularDevices({required bool needingOne}) {
     final out = <UnmodularDevice>[];
     for (final key in activeDeviceKeysIn(roomConfig, uiSchema.deviceCountMap)) {
       final dev = roomConfig[key];
       if (dev is! Map) continue;
       final module = dev['module']?.toString().trim() ?? '';
       if (module.isNotEmpty) continue;
+      final model = dev['model']?.toString() ?? '';
+      if (avModelNeverControlled(model) == needingOne) continue;
       out.add((
         key: key,
         name: dev['name']?.toString() ?? key,
-        model: dev['model']?.toString() ?? '',
+        model: model,
       ));
     }
     return out;
@@ -285,7 +318,12 @@ class AppStateProvider extends ChangeNotifier {
     final module = dev['module']?.toString().trim() ?? '';
     if (module.isEmpty) {
       return (
-        fault: ModelModuleFault.noModule,
+        // A product the catalog says never needs one. The block is finished;
+        // the page says so instead of asking for a driver that will never
+        // exist.
+        fault: avModelNeverControlled(model)
+            ? ModelModuleFault.noModuleNeeded
+            : ModelModuleFault.noModule,
         model: model,
         module: '',
         claims: const <String>[],

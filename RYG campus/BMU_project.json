@@ -1,0 +1,37 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Bell Memorial Union refresh",
+    "building": "BMU",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "BMU 203",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 24434.6,
+            "notes": "2 Projector  \u00b7  RYG estimate for 2 Projector"
+        },
+        {
+            "id": "manual2",
+            "name": "BMU 205",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual3",
+            "name": "BMU 309",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 3,
+    "vendorCounter": 0
+}

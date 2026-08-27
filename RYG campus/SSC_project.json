@@ -1,0 +1,216 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Student Services Center refresh",
+    "building": "SSC",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "SSC 120",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "digital signage  \u00b7  1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual2",
+            "name": "SSC 122",
+            "lifeYears": 8,
+            "replacementCost": 24434.6,
+            "notes": "2 Projector  \u00b7  RYG estimate for 2 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual3",
+            "name": "SSC 140",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual4",
+            "name": "SSC 150",
+            "installedOn": "2020-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic  \u00b7  master sheet says '20' - read as 2020"
+        },
+        {
+            "id": "manual5",
+            "name": "SSC 162B",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual6",
+            "name": "SSC 170",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual7",
+            "name": "SSC 206",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual8",
+            "name": "SSC 220",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual9",
+            "name": "SSC 240",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual10",
+            "name": "SSC 264",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual11",
+            "name": "SSC 270",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual12",
+            "name": "SSC 276",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual13",
+            "name": "SSC 280",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "conference  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual14",
+            "name": "SSC 290B",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual15",
+            "name": "SSC 304",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual16",
+            "name": "SSC 306",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual17",
+            "name": "SSC 342",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual18",
+            "name": "SSC 376",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual19",
+            "name": "SSC 390",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual20",
+            "name": "SSC 394A",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual21",
+            "name": "SSC 406 student",
+            "installedOn": "2026-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual22",
+            "name": "SSC 406 conf",
+            "installedOn": "2026-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual23",
+            "name": "SSC 426",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "conference  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual24",
+            "name": "SSC 450A",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual25",
+            "name": "SSC 466",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual26",
+            "name": "SSC 476",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual27",
+            "name": "SSC 490",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "capacity 80  \u00b7  All School  \u00b7  conference  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 27,
+    "vendorCounter": 0
+}

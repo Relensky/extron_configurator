@@ -186,6 +186,15 @@ List<ControlGap> controlGapsForRoom({
     final dev = config[key];
     if (dev is! Map) continue;
     if ((dev['module']?.toString().trim() ?? '').isNotEmpty) continue;
+    // A product the catalog says is never driven is not a gap, drawn or not.
+    // The drawn half of this rule is above; without the same test here, a
+    // laptop plate that never made it onto the diagram came back onto the
+    // undriven list by the other door.
+    final blockModel = dev['model']?.toString().trim() ?? '';
+    if (blockModel.isNotEmpty &&
+        (library.templateForModel(blockModel)?.neverControlled ?? false)) {
+      continue;
+    }
     gaps.add(ControlGap(
       device: dev['name']?.toString() ?? key,
       model: dev['model']?.toString() ?? '',

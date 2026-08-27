@@ -1,0 +1,195 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Tehama Hall refresh",
+    "building": "THMA",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "THMA 105",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual2",
+            "name": "THMA 106",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 85  \u00b7  All School  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual3",
+            "name": "THMA 107",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 40  \u00b7  CME  \u00b7  CDES  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual4",
+            "name": "THMA 108",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 75  \u00b7  All School  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual5",
+            "name": "THMA 111",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual6",
+            "name": "THMA 113",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 42  \u00b7  CME  \u00b7  CMAS  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual7",
+            "name": "THMA 115",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 40  \u00b7  CME  \u00b7  CMAS  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual8",
+            "name": "THMA 116",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 127349.0,
+            "notes": "LEC-Lecture  \u00b7  capacity 120  \u00b7  All School  \u00b7  !7 Disp 2 Proj 2 Cam Multimic  \u00b7  RYG estimate for !7 Disp 2 Proj 2 Cam Multimic"
+        },
+        {
+            "id": "manual9",
+            "name": "THMA 117",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 26  \u00b7  COB  \u00b7  ACCT  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual10",
+            "name": "THMA 119",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  CME  \u00b7  CMAS  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "THMA 121",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 49  \u00b7  CME  \u00b7  RECR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual12",
+            "name": "THMA 130",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  CME  \u00b7  JOUR  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual13",
+            "name": "THMA 131",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 43  \u00b7  VP Academic Affairs  \u00b7  IRES  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual14",
+            "name": "THMA 134",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 32  \u00b7  NSC  \u00b7  NFSC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual15",
+            "name": "THMA 200",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual16",
+            "name": "THMA 210",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-lecture  \u00b7  capacity 40  \u00b7  HFA  \u00b7  ILLC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual17",
+            "name": "THMA 214",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual18",
+            "name": "THMA 224",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 25  \u00b7  CME  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual19",
+            "name": "THMA 226",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 45216.39,
+            "notes": "LEC-Lecture  \u00b7  capacity 21  \u00b7  CME  \u00b7  2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+        },
+        {
+            "id": "manual20",
+            "name": "THMA 230",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 45216.39,
+            "notes": "LEC-Lecture  \u00b7  capacity 45  \u00b7  CME  \u00b7  2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+        },
+        {
+            "id": "manual21",
+            "name": "THMA 303",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual22",
+            "name": "THMA 312",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 25  \u00b7  CME  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual23",
+            "name": "THMA 346",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 50000.0,
+            "notes": "LAB-Laboratory  \u00b7  capacity 25  \u00b7  CME  \u00b7  figure typed on the master sheet"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 23,
+    "vendorCounter": 0
+}

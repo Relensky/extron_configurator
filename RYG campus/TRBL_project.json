@@ -1,0 +1,37 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Tribal Relations refresh",
+    "building": "TRBL",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "TRBL 101",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual2",
+            "name": "TRBL 105",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual3",
+            "name": "TRBL 107",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 3,
+    "vendorCounter": 0
+}

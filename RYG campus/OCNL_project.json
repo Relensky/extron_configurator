@@ -1,0 +1,141 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "O'Connell Technology Center refresh",
+    "building": "OCNL",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "OCNL 104",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 2589.22,
+            "notes": "digital signage  \u00b7  1 Display signage  \u00b7  RYG estimate for 1 Display signage"
+        },
+        {
+            "id": "manual2",
+            "name": "OCNL 120",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-lecture  \u00b7  capacity 30  \u00b7  HFA  \u00b7  ILLC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual3",
+            "name": "OCNL 121",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 30  \u00b7  ECC  \u00b7  CIVL  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual4",
+            "name": "OCNL 123",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 32  \u00b7  ECC  \u00b7  EECE  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual5",
+            "name": "OCNL 124",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "LEC-Lecture  \u00b7  capacity 68  \u00b7  All School  \u00b7  1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual6",
+            "name": "OCNL 127",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LEC-Lecture  \u00b7  capacity ??  \u00b7  ECC  \u00b7  figure typed on the master sheet"
+        },
+        {
+            "id": "manual7",
+            "name": "OCNL 237",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 30  \u00b7  All School  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual8",
+            "name": "OCNL 239",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 31  \u00b7  All School  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual9",
+            "name": "OCNL 244",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 24  \u00b7  ECC  \u00b7  CSCI, EECE  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual10",
+            "name": "OCNL 254",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 75  \u00b7  All School  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "OCNL 334",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual12",
+            "name": "OCNL 340",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual13",
+            "name": "OCNL 346",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "LEC-Lecture  \u00b7  capacity ??  \u00b7  ECC  \u00b7  figure typed on the master sheet"
+        },
+        {
+            "id": "manual14",
+            "name": "OCNL 431",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual15",
+            "name": "OCNL 434",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual16",
+            "name": "OCNL 438",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 24434.6,
+            "notes": "LAB-Laboratory  \u00b7  capacity 27  \u00b7  ECC  \u00b7  MMEM  \u00b7  2 Projector  \u00b7  RYG estimate for 2 Projector"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 16,
+    "vendorCounter": 0
+}

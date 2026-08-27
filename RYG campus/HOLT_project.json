@@ -1,0 +1,221 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Holt Hall refresh",
+    "building": "HOLT",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "HOLT 111",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  CME  \u00b7  EDUC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual2",
+            "name": "HOLT 113",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  CME  \u00b7  EDUC  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual3",
+            "name": "HOLT 155",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "SLF-Self-Instr Laborat  \u00b7  capacity 30  \u00b7  NSC  \u00b7  NSC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual4",
+            "name": "HOLT 170",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 150  \u00b7  All School  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual5",
+            "name": "HOLT 171",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 31670.6,
+            "notes": "LEC-Lecture  \u00b7  capacity 40  \u00b7  NSC  \u00b7  MATH  \u00b7  2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual6",
+            "name": "HOLT 173",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  NSC  \u00b7  MATH  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual7",
+            "name": "HOLT 175",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 31670.6,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  NSC  \u00b7  MATH  \u00b7  2 Projector 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Projector 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual8",
+            "name": "HOLT 181",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual9",
+            "name": "HOLT 185",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 44  \u00b7  NSC  \u00b7  MATH  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual10",
+            "name": "HOLT 187",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  NSC  \u00b7  MATH  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "HOLT 251",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual12",
+            "name": "HOLT 257",
+            "installedOn": "2014-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual13",
+            "name": "HOLT 261",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual14",
+            "name": "HOLT 266",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual15",
+            "name": "HOLT 268",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual16",
+            "name": "HOLT 277",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual17",
+            "name": "HOLT 291",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual18",
+            "name": "HOLT 307",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual19",
+            "name": "HOLT 329",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual20",
+            "name": "HOLT 337",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual21",
+            "name": "HOLT 350",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 65  \u00b7  All School  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual22",
+            "name": "HOLT 352",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-Lecture  \u00b7  capacity 65  \u00b7  All School  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual23",
+            "name": "HOLT 357",
+            "installedOn": "2021-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "SLF-Self-Instr Laborat  \u00b7  capacity 20  \u00b7  NSC  \u00b7  NSC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual24",
+            "name": "HOLT 363",
+            "installedOn": "2012-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LAB-Laboratory  \u00b7  capacity 26  \u00b7  NSC  \u00b7  NSC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual25",
+            "name": "HOLT 365",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual26",
+            "name": "HOLT 381",
+            "installedOn": "2019-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 26,
+    "vendorCounter": 0
+}

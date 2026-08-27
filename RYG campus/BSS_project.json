@@ -1,0 +1,333 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Behavioral And Social Science refresh",
+    "building": "BSS",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "BSS 101",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 86853.75,
+            "notes": "!3 Projector 3 Cam Multimic  \u00b7  RYG estimate for !3 Projector 3 Cam Multimic"
+        },
+        {
+            "id": "manual2",
+            "name": "BSS 103",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "conference  \u00b7  1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual3",
+            "name": "BSS 104",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual4",
+            "name": "BSS 106",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual5",
+            "name": "BSS 107",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual6",
+            "name": "BSS 108",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual7",
+            "name": "BSS 109",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual8",
+            "name": "BSS 110",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 37568.89,
+            "notes": "2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+        },
+        {
+            "id": "manual9",
+            "name": "BSS 111a",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual10",
+            "name": "BSS 112",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual11",
+            "name": "BSS 121b",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual12",
+            "name": "BSS 121f",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual13",
+            "name": "BSS 122",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 127349.0,
+            "notes": "!7 Disp 2 Proj 2 Cam Multimic  \u00b7  RYG estimate for !7 Disp 2 Proj 2 Cam Multimic"
+        },
+        {
+            "id": "manual14",
+            "name": "BSS 237",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 45216.39,
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+        },
+        {
+            "id": "manual15",
+            "name": "BSS 238",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 45216.39,
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+        },
+        {
+            "id": "manual16",
+            "name": "BSS 239",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual17",
+            "name": "BSS 240",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual18",
+            "name": "BSS 241",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 45216.39,
+            "notes": "2 Proj 2 Rr Disp 2 Cam Multimic  \u00b7  RYG estimate for 2 Proj 2 Rr Disp 2 Cam Multimic"
+        },
+        {
+            "id": "manual19",
+            "name": "BSS 242",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual20",
+            "name": "BSS 243",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual21",
+            "name": "BSS 244",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual22",
+            "name": "BSS 245",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual23",
+            "name": "BSS 246",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual24",
+            "name": "BSS 247",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual25",
+            "name": "BSS 248",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 37568.89,
+            "notes": "2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+        },
+        {
+            "id": "manual26",
+            "name": "BSS 249",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 37568.89,
+            "notes": "conference  \u00b7  2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+        },
+        {
+            "id": "manual27",
+            "name": "BSS 251",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual28",
+            "name": "BSS 258",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual29",
+            "name": "BSS 259",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual30",
+            "name": "BSS 261",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual31",
+            "name": "BSS 333",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 37568.89,
+            "notes": "conference  \u00b7  2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+        },
+        {
+            "id": "manual32",
+            "name": "BSS 356",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual33",
+            "name": "BSS 357",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual34",
+            "name": "BSS 358",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 37568.89,
+            "notes": "2 Display 2 Cam Multimic  \u00b7  RYG estimate for 2 Display 2 Cam Multimic"
+        },
+        {
+            "id": "manual35",
+            "name": "BSS 359",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 48832.57,
+            "notes": "!suraudio 1 Proj 2 Cam Multimic  \u00b7  RYG estimate for !suraudio 1 Proj 2 Cam Multimic"
+        },
+        {
+            "id": "manual36",
+            "name": "BSS 365",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 29106.38,
+            "notes": "1 Projector 2 Cam Multimic  \u00b7  RYG estimate for 1 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual37",
+            "name": "BSS 371",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual38",
+            "name": "BSS 372",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual39",
+            "name": "BSS 375",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 41506.26,
+            "notes": "2 Projector 2 Cam Multimic  \u00b7  RYG estimate for 2 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual40",
+            "name": "BSS 376",
+            "installedOn": "2024-07-01",
+            "lifeYears": 8,
+            "replacementCost": 8912.61,
+            "notes": "!2X (separate) Display Conf  \u00b7  RYG estimate for !2X (separate) Display Conf"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 40,
+    "vendorCounter": 0
+}

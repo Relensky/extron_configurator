@@ -1,0 +1,84 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Performing Arts Center refresh",
+    "building": "PAC",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "PAC 112",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual2",
+            "name": "PAC 113",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual3",
+            "name": "PAC 114",
+            "installedOn": "2016-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 24  \u00b7  HFA  \u00b7  MUTA  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual4",
+            "name": "PAC 116",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-lecture  \u00b7  capacity 49  \u00b7  HFA  \u00b7  MUTA  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual5",
+            "name": "PAC 134",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "Auditorium  \u00b7  capacity 210  \u00b7  HFA  \u00b7  MUTA  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual6",
+            "name": "PAC 144",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 25486.93,
+            "notes": "Auditorium  \u00b7  capacity 463  \u00b7  HFA  \u00b7  MUTA  \u00b7  1 Projector 1 Cam  \u00b7  RYG estimate for 1 Projector 1 Cam"
+        },
+        {
+            "id": "manual7",
+            "name": "PAC 206",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 76  \u00b7  All School  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual8",
+            "name": "PAC 210",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LEC-lecture  \u00b7  capacity 49  \u00b7  HFA  \u00b7  MUTA  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual9",
+            "name": "PAC 261",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 18  \u00b7  HFA  \u00b7  ART/THEA/MUTA  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector  \u00b7  last update unknown on the master sheet"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 9,
+    "vendorCounter": 0
+}

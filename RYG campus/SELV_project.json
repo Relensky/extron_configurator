@@ -1,0 +1,29 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Selvester's Cafe refresh",
+    "building": "SELV",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "SELV 100",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 67516.5,
+            "notes": "conference  \u00b7  4 Projector 2 Cam Multimic  \u00b7  RYG estimate for 4 Projector 2 Cam Multimic"
+        },
+        {
+            "id": "manual2",
+            "name": "SELV 104",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "conference  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 2,
+    "vendorCounter": 0
+}

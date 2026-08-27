@@ -1,0 +1,49 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Farm Agricultural Education Center refresh",
+    "building": "FAEC",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "FAEC 111",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 256212.47,
+            "notes": "figure typed on the master sheet"
+        },
+        {
+            "id": "manual2",
+            "name": "FAEC 112",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "notes": "no estimate on the master sheet"
+        },
+        {
+            "id": "manual3",
+            "name": "FAEC 113",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "notes": "no estimate on the master sheet"
+        },
+        {
+            "id": "manual4",
+            "name": "FAEC 114",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "notes": "no estimate on the master sheet"
+        },
+        {
+            "id": "manual5",
+            "name": "FAEC 117",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "notes": "conference  \u00b7  no estimate on the master sheet"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 5,
+    "vendorCounter": 0
+}

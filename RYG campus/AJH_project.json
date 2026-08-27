@@ -1,0 +1,68 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Aymer Jay Hamilton Building refresh",
+    "building": "AJH",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "AJH 108",
+            "installedOn": "2018-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "LAB-Laboratory  \u00b7  capacity 30  \u00b7  BSS  \u00b7  PSYCH  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual2",
+            "name": "AJH 110C",
+            "installedOn": "2023-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40000.0,
+            "notes": "Special Space Education  \u00b7  capacity 4  \u00b7  Child Dev Lab  \u00b7  figure typed on the master sheet"
+        },
+        {
+            "id": "manual3",
+            "name": "AJH 112",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "LEC-Lecture  \u00b7  capacity 26  \u00b7  CME  \u00b7  CMAS  \u00b7  Exist?  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual4",
+            "name": "AJH 112F",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual5",
+            "name": "AJH 124",
+            "lifeYears": 8,
+            "replacementCost": 3878.38,
+            "notes": "Special Instructional  \u00b7  capacity 28  \u00b7  CME  \u00b7  Education  \u00b7  conference  \u00b7  Conf 1 Display cart  \u00b7  RYG estimate for Conf 1 Display cart  \u00b7  last update unknown on the master sheet"
+        },
+        {
+            "id": "manual6",
+            "name": "AJH 125A",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 28  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual7",
+            "name": "AJH 125B",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 26134.78,
+            "notes": "LEC-Lecture  \u00b7  capacity 32  \u00b7  BSS  \u00b7  PSYC  \u00b7  1 Proj 1 Cam 1 Mic  \u00b7  RYG estimate for 1 Proj 1 Cam 1 Mic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 7,
+    "vendorCounter": 0
+}

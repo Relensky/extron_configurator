@@ -1,0 +1,45 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Acker Gymnasium refresh",
+    "building": "AGYM",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "AGYM 129",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 24434.6,
+            "notes": "LEC-Lecture  \u00b7  capacity 44  \u00b7  CME  \u00b7  KINE  \u00b7  2 Projector  \u00b7  RYG estimate for 2 Projector"
+        },
+        {
+            "id": "manual2",
+            "name": "AGYM 202",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 5462.5,
+            "notes": "!sound system only  \u00b7  RYG estimate for !sound system only"
+        },
+        {
+            "id": "manual3",
+            "name": "AGYM 204",
+            "installedOn": "2022-07-01",
+            "lifeYears": 8,
+            "replacementCost": 5462.5,
+            "notes": "!sound system only  \u00b7  RYG estimate for !sound system only"
+        },
+        {
+            "id": "manual4",
+            "name": "AGYM 205",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 24434.6,
+            "notes": "LEC-Lecture  \u00b7  capacity 36  \u00b7  CME  \u00b7  KINE  \u00b7  2 Projector  \u00b7  RYG estimate for 2 Projector"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 4,
+    "vendorCounter": 0
+}

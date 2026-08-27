@@ -1,0 +1,21 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Estom Jamani Hall And Program Building refresh",
+    "building": "ESTM",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "ESTM 119",
+            "installedOn": "2025-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "conference  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 1,
+    "vendorCounter": 0
+}

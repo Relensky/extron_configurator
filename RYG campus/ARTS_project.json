@@ -1,0 +1,181 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "Arts & Humanities Building refresh",
+    "building": "ARTS",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "ARTS 105",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 22242.21,
+            "notes": "LEC-lecture  \u00b7  capacity 44  \u00b7  HFA  \u00b7  CORH  \u00b7  2 Display 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Display 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual2",
+            "name": "ARTS 106",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 22242.21,
+            "notes": "LEC-lecture  \u00b7  capacity 44  \u00b7  HFA  \u00b7  HIST  \u00b7  2 Display 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Display 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual3",
+            "name": "ARTS 107",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 22242.21,
+            "notes": "LEC-lecture  \u00b7  capacity 44  \u00b7  HFA  \u00b7  PHIL  \u00b7  2 Display 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Display 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual4",
+            "name": "ARTS 108",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 19048.83,
+            "notes": "Dance  \u00b7  capacity 112  \u00b7  HFA  \u00b7  MUTA  \u00b7  1 Projector  \u00b7  RYG estimate for 1 Projector"
+        },
+        {
+            "id": "manual5",
+            "name": "ARTS 111",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 37869.33,
+            "notes": "LEC-Lecture  \u00b7  capacity 112  \u00b7  HFA  \u00b7  4 projector 1 Cam 1 Mic  \u00b7  RYG estimate for 4 Projector 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual6",
+            "name": "ARTS 112",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 31729.48,
+            "notes": "LEC-Lecture  \u00b7  capacity 112  \u00b7  HFA  \u00b7  4 projector  \u00b7  RYG estimate for 4 Projector"
+        },
+        {
+            "id": "manual7",
+            "name": "ARTS 115",
+            "installedOn": "2026-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual8",
+            "name": "ARTS 116",
+            "installedOn": "2026-07-01",
+            "lifeYears": 8,
+            "replacementCost": 40267.36,
+            "notes": "1 Proj 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual9",
+            "name": "ARTS 206A",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 15820.49,
+            "notes": "Resource Ctr.  \u00b7  capacity 32  \u00b7  HFA  \u00b7  ENGL  \u00b7  2 Display  \u00b7  RYG estimate for 2 Display"
+        },
+        {
+            "id": "manual10",
+            "name": "ARTS 206B",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 22242.21,
+            "notes": "LEC-lecture  \u00b7  capacity 32  \u00b7  HFA  \u00b7  ENGL  \u00b7  2 Display 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Display 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual11",
+            "name": "ARTS 208",
+            "installedOn": "2026-07-01",
+            "lifeYears": 8,
+            "replacementCost": 34894.45,
+            "notes": "LAB-Laboratory  \u00b7  capacity 26  \u00b7  HFA  \u00b7  ART  \u00b7  1 Proj 1 Display 2 Cam 2 Mic  \u00b7  RYG estimate for 1 Proj 1 Display 2 Cam 2 Mic"
+        },
+        {
+            "id": "manual12",
+            "name": "ARTS 209",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 17151.16,
+            "notes": "LAB-Laboratory  \u00b7  capacity 24  \u00b7  HFA  \u00b7  ART  \u00b7  1 Display Conf Complex  \u00b7  RYG estimate for 1 Display Conf Complex"
+        },
+        {
+            "id": "manual13",
+            "name": "ARTS 227",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual14",
+            "name": "ARTS 227B",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual15",
+            "name": "ARTS 228",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual16",
+            "name": "ARTS 229",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual17",
+            "name": "ARTS 271",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual18",
+            "name": "ARTS 283",
+            "installedOn": "2017-07-01",
+            "lifeYears": 8,
+            "replacementCost": 3550.62,
+            "notes": "conference  \u00b7  Conf 1 Display  \u00b7  RYG estimate for Conf 1 Display"
+        },
+        {
+            "id": "manual19",
+            "name": "ARTS 306A",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 15820.49,
+            "notes": "LEC-lecture  \u00b7  capacity 32  \u00b7  HFA  \u00b7  ENGL  \u00b7  2 Display  \u00b7  RYG estimate for 2 Display"
+        },
+        {
+            "id": "manual20",
+            "name": "ARTS 306B",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 22242.21,
+            "notes": "LEC-lecture  \u00b7  capacity 32  \u00b7  HFA  \u00b7  ILLC  \u00b7  2 Display 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Display 1 Cam 1 Mic"
+        },
+        {
+            "id": "manual21",
+            "name": "ARTS 309",
+            "installedOn": "2015-07-01",
+            "lifeYears": 8,
+            "replacementCost": 22242.21,
+            "notes": "LAB-Laboratory  \u00b7  capacity 32  \u00b7  HFA  \u00b7  ILLC  \u00b7  2 Display 1 Cam 1 Mic  \u00b7  RYG estimate for 2 Display 1 Cam 1 Mic"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 21,
+    "vendorCounter": 0
+}

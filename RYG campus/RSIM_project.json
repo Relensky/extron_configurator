@@ -1,0 +1,43 @@
+{
+    "__readme": "Rooms from the Master RYG sheet, priced from the RYG category estimates. Every room here is a room with no config: it is on the replacement plan and in its totals, and carries no parts list.",
+    "name": "RSIM refresh",
+    "building": "RSIM",
+    "currency": "$",
+    "rooms": [],
+    "manualRooms": [
+        {
+            "id": "manual1",
+            "name": "RSIM 602",
+            "lifeYears": 8,
+            "notes": "Simulation Rm  \u00b7  NSC  \u00b7  NURS/NFSC  \u00b7  no estimate on the master sheet  \u00b7  no last-update date on the master sheet"
+        },
+        {
+            "id": "manual2",
+            "name": "RSIM 604",
+            "lifeYears": 8,
+            "notes": "Simulation Rm  \u00b7  NSC  \u00b7  NURS/NFSC  \u00b7  no estimate on the master sheet  \u00b7  no last-update date on the master sheet"
+        },
+        {
+            "id": "manual3",
+            "name": "RSIM A",
+            "lifeYears": 8,
+            "notes": "Simulation Clsrm  \u00b7  NSC  \u00b7  NURS/NFSC  \u00b7  no estimate on the master sheet  \u00b7  no last-update date on the master sheet"
+        },
+        {
+            "id": "manual4",
+            "name": "RSIM B",
+            "lifeYears": 8,
+            "notes": "Simulation Clsrm  \u00b7  NSC  \u00b7  NURS/NFSC  \u00b7  no estimate on the master sheet  \u00b7  no last-update date on the master sheet"
+        },
+        {
+            "id": "manual5",
+            "name": "RSIM NURS",
+            "lifeYears": 8,
+            "notes": "Nursing Station  \u00b7  NSC  \u00b7  NURS/NFSC  \u00b7  no estimate on the master sheet  \u00b7  no last-update date on the master sheet"
+        }
+    ],
+    "vendors": [],
+    "roomCounter": 0,
+    "manualRoomCounter": 5,
+    "vendorCounter": 0
+}

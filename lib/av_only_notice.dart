@@ -122,6 +122,83 @@ class ControlSystemPlaceholder extends StatelessWidget {
   }
 }
 
+/// The devices that are DELIBERATELY driverless, on their own.
+///
+/// Shown where the red card would be when the red card has nothing to say: a
+/// room whose only module-less blocks are ones somebody has already settled is
+/// a room with no warning to give - and the settling is still worth printing,
+/// because checking a room file means confirming the things that look wrong
+/// and are not.
+class _SettledModulesNote extends StatelessWidget {
+  final List<UnmodularDevice> devices;
+  final bool compact;
+
+  const _SettledModulesNote({required this.devices, required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final shown = compact ? devices.take(8).toList() : devices;
+
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.block, size: 18, color: muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${devices.length} device'
+                    '${devices.length == 1 ? '' : 's'} flagged as needing no '
+                    'module',
+                    style: theme.textTheme.titleSmall?.copyWith(color: muted),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'The catalog says these products have no control interface, so '
+              'nothing drives them anywhere. They are listed to be confirmed '
+              'against the room, not to be fixed.',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final d in shown)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      d.model.isEmpty ? d.name : '${d.name} · ${d.model}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                if (compact && devices.length > shown.length)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      '+${devices.length - shown.length} more',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Lists the devices whose python module has not been chosen.
 ///
 /// Shown on the Wizard tab and on the control-system placeholder. Renders
@@ -145,8 +222,15 @@ class MissingModulesBanner extends StatelessWidget {
     final uncontrolled = provider.isAvOnlyRoom
         ? provider.avDevicesWithoutControl
         : const <UnmodularDevice>[];
+    // Devices somebody has already been through and marked as needing no
+    // driver. Not part of the count and not on the red card - they are a note
+    // under it, because "the laptop plates are deliberately driverless" is
+    // worth confirming and worth nothing as a warning.
+    final settled = provider.devicesNeedingNoModule;
     if (missing.isEmpty && uncontrolled.isEmpty) {
-      return const SizedBox.shrink();
+      return settled.isEmpty
+          ? const SizedBox.shrink()
+          : _SettledModulesNote(devices: settled, compact: compact);
     }
 
     final theme = Theme.of(context);
@@ -216,6 +300,16 @@ class MissingModulesBanner extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               chips(missing),
+            ],
+            if (settled.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                '${settled.length} more '
+                '${settled.length == 1 ? 'device is' : 'devices are'} flagged '
+                'in the catalog as needing no module, and are not counted '
+                'above.',
+                style: theme.textTheme.bodySmall?.copyWith(color: onError),
+              ),
             ],
             if (uncontrolled.isNotEmpty) ...[
               const SizedBox(height: 10),
