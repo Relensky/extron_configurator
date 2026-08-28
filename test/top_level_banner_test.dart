@@ -158,9 +158,12 @@ void main() {
 
     // Scoped to the banner: the start screen's Project card names the open job
     // too, and this test is about the strip along the top.
+    //
+    // CONTAINING, not equal to: on a room page the line names the room after
+    // the job - see the group below - so the job's name is one half of it.
     Finder inBanner(String text) => find.descendant(
           of: find.byType(TopLevelBar),
-          matching: find.text(text),
+          matching: find.textContaining(text),
         );
 
     expect(inBanner('Bessey Hall'), findsOneWidget);
@@ -498,6 +501,160 @@ void main() {
     expect(find.byKey(const ValueKey('start_open_any')), findsOneWidget);
     // ...and it says which job is open rather than leaving them wondering.
     expect(find.textContaining('Bessey Hall is open'), findsOneWidget);
+  });
+
+  // ==========================================================================
+  //  WHICH DOCUMENT THE PAGE UNDERNEATH IS ABOUT
+  // ==========================================================================
+  //  With a job open the strip named the job and nothing else, on every tab -
+  //  so a reader who opened a building and then went to a room page was
+  //  looking at a drawing with the BUILDING's name over it. On a job whose
+  //  rooms have never been drawn - the refresh imports, where every room is a
+  //  line item and there is no config anywhere - that page was a room editor
+  //  with nothing on it and nothing saying so.
+  // ==========================================================================
+
+  group('the banner names the page it is over', () {
+    /// A job with one real room file on it, and that room open.
+    Future<AppStateProvider> jobWithRoom(WidgetTester tester) async {
+      final p = fresh();
+      p.newProject(name: 'Bessey Hall');
+      final roomPath = path.join(dir.path, 'bss103_config.json');
+      File(roomPath).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {
+          'gve_bldg': 'BSS',
+          'gve_room': '103',
+          'gui_full_room_name': 'Bessey Hall 103',
+        },
+      }));
+      expect(p.addRoomToProject(roomPath), isEmpty);
+      await tester.runAsync(() => p.openConfigAtPath(roomPath));
+      return p;
+    }
+
+    String bannerLine(WidgetTester tester) {
+      // The one Text inside the strip that is neither a button nor the mode
+      // chip: the widest one, which is the name line.
+      final texts = tester
+          .widgetList<Text>(
+            find.descendant(
+              of: find.byType(TopLevelBar),
+              matching: find.byType(Text),
+            ),
+          )
+          .map((t) => t.data ?? '')
+          .where((t) => t.isNotEmpty)
+          .toList();
+      return texts.firstWhere(
+        (t) => t.contains('Bessey Hall'),
+        orElse: () => texts.join(' | '),
+      );
+    }
+
+    testWidgets('a room page under a job names them both', (tester) async {
+      final p = await jobWithRoom(tester);
+      p.selectTab(AppTab.cost.index);
+      await pump(tester, p);
+
+      final line = bannerLine(tester);
+      expect(line, contains('Bessey Hall'), reason: 'the job is still named');
+      expect(
+        line,
+        contains('Bessey Hall 103'),
+        reason: 'and so is the room the page is actually about',
+      );
+      expect(line, contains('bss103_config.json'));
+    });
+
+    testWidgets('the Project tab names the job alone', (tester) async {
+      final p = await jobWithRoom(tester);
+      p.selectTab(AppTab.project.index);
+      await pump(tester, p);
+
+      // That page IS the job, so a room name on it would be naming something
+      // the reader is not looking at.
+      expect(bannerLine(tester), isNot(contains('bss103_config.json')));
+    });
+
+    testWidgets('a job with no room open says so on a room page', (
+      tester,
+    ) async {
+      // The refresh imports exactly: thirty-four buildings of line items and
+      // not one config file. The job's own name standing over an empty room
+      // editor reads as that being the document on screen.
+      final p = fresh();
+      p.newProject(name: 'Acker Gymnasium refresh');
+      p.addProjectManualRoom(name: 'AGYM 129');
+      p.selectTab(AppTab.cost.index);
+      await pump(tester, p);
+
+      expect(find.textContaining('no room open'), findsOneWidget);
+    });
+  });
+
+  // ==========================================================================
+  //  THE WAY OUT OF A ROOM
+  // ==========================================================================
+  //  A job could be closed and a room could only ever be SWAPPED - for another
+  //  room, or for a new one off the template. So the empty session this app
+  //  starts the day on could not be got back to without restarting it.
+  // ==========================================================================
+
+  group('closing the room', () {
+    testWidgets('a room on its own closes to the start screen', (tester) async {
+      final p = fresh();
+      final roomPath = path.join(dir.path, 'bss103_config.json');
+      File(roomPath).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+      }));
+      await tester.runAsync(() => p.openConfigAtPath(roomPath));
+      p.selectTab(AppTab.cost.index);
+      await pump(tester, p);
+
+      expect(find.byKey(const ValueKey('banner_room')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('banner_room_close')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(p.roomConfig, isEmpty);
+      expect(p.currentConfigPath, isEmpty);
+      // Nothing open is the start screen, which is what this app shows when
+      // there is no config and the tab needs one.
+      expect(find.text('Create a New File'), findsOneWidget);
+      expect(find.byKey(const ValueKey('start_open_any')), findsOneWidget);
+      // Past the "closed" bar, which is a timer that would otherwise still be
+      // running when the tree comes down.
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('closing the room leaves the job open', (tester) async {
+      final p = fresh();
+      p.newProject(name: 'Bessey Hall');
+      final roomPath = path.join(dir.path, 'bss103_config.json');
+      File(roomPath).writeAsStringSync(jsonEncode({
+        'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+      }));
+      expect(p.addRoomToProject(roomPath), isEmpty);
+      await tester.runAsync(() => p.openConfigAtPath(roomPath));
+      p.selectTab(AppTab.cost.index);
+      await pump(tester, p);
+
+      await tester.tap(find.byKey(const ValueKey('banner_room_close')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Closing means the room, not everything on screen - the same bargain
+      // closing a job makes with the room.
+      expect(p.roomConfig, isEmpty);
+      expect(p.hasOpenProject, isTrue);
+      expect(find.byKey(const ValueKey('banner_project')), findsOneWidget);
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('nothing open offers no room to close', (tester) async {
+      await pump(tester, fresh());
+      expect(find.byKey(const ValueKey('banner_room_close')), findsNothing);
+    });
   });
 
   test('the rail and the banner between them cover every tab, once', () {

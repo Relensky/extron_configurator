@@ -625,6 +625,45 @@ Future<bool> closeProjectFile(
   return true;
 }
 
+/// Puts the open room away, asking about unsaved work first.
+///
+/// WHERE IT LEAVES YOU. With no job open, nothing at all is open afterwards -
+/// which is the start screen, because that is what this app shows when there
+/// is no config and the tab needs one. That was the missing half: a job could
+/// be closed and a room could only be swapped, so the empty session somebody
+/// starts the day on could not be got back to without restarting.
+///
+/// With a job still open the job stays open, exactly as closing a job leaves
+/// the room alone. Closing means the room, not everything on screen.
+Future<bool> closeRoomFile(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  if (!await confirmLeavingRoom(context, provider)) return false;
+  if (!context.mounted) return false;
+
+  final was = provider.currentConfigPath.isEmpty
+      ? 'the room'
+      : path.basename(provider.currentConfigPath);
+  final hasProject = provider.hasOpenProject;
+  provider.closeRoom();
+
+  showTimedSnackBar(
+    ScaffoldMessenger.of(context),
+    SnackBar(
+      content: Text(
+        hasProject
+            // Said out loud, for the same reason closing a job says the room
+            // is still open: the half that stayed is the half that otherwise
+            // looks like a close that did not work.
+            ? 'Closed $was. ${provider.projectDisplayName} is still open.'
+            : 'Closed $was.',
+      ),
+    ),
+  );
+  return true;
+}
+
 /// Opens a project file. Returns true when one was opened.
 Future<bool> openProjectFromFile(
   BuildContext context,

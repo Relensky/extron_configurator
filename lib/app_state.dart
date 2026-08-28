@@ -7395,6 +7395,43 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
+  /// Puts the room away, leaving nothing open.
+  ///
+  /// THE COUNTERPART OF CLOSING A JOB, which this app has had for a long time
+  /// while a room could only ever be REPLACED - by another room, or by a new
+  /// one from the template. There was no way back to an empty session, so
+  /// somebody who had finished with a room and wanted the start screen had to
+  /// close the whole application to get it.
+  ///
+  /// It resets exactly what [createNewConfig] resets, and then does not read a
+  /// template: everything that belongs to the room that was open goes with it -
+  /// the file it came from, the processor it was going to, the conversion log,
+  /// the stashed keys and both drawings. A leftover here is worse than useless,
+  /// because it would show up as a fact about whichever room is opened next.
+  ///
+  /// SAYS NOTHING ABOUT UNSAVED WORK - that is the caller's to ask, before
+  /// this is reached. See [closeRoomFile].
+  void closeRoom() {
+    final was = currentConfigPath;
+    roomConfig = {};
+    currentConfigPath = '';
+    clearDeploymentTarget();
+    _clearConversionProvenance();
+    systemLogs.clear();
+    lastLoadHadChanges = false;
+    conversionAcknowledged = false;
+    _prunedSystemKeys.clear();
+    _prunedSourceInputs.clear();
+    _omittedConfigKeys.clear();
+    _resetSchematicLayout();
+    _resetAvFlow();
+    _bumpConfigRevision();
+    AppLogger.logInfo(
+      was.isEmpty ? 'Room closed.' : 'Room closed ($was).',
+    );
+    notifyListeners();
+  }
+
   /// Fills anything the UI schema calls a baseline that the working config is
   /// missing — SYSTEM_SETUP "system_defaults" and whole "section_defaults"
   /// blocks (ENVIRONMENT, METRICS_CONFIG). Existing values are NEVER touched,

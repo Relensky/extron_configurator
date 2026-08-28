@@ -1,10 +1,10 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -144,18 +144,32 @@ Future<void> showAnnotationEditor(BuildContext context, Uint8List pngBytes,
 
 /// The tools on the annotation toolbar.
 ///
-/// [pan] draws nothing. It is the hand: with a drawing tool selected the
-/// canvas claims the drag so a stroke is a stroke, which leaves no way to move
-/// a picture that is bigger than the window - see
-/// [_AnnotationEditorState.build].
-enum AnnotationTool { pen, highlighter, arrow, rect, text, pan }
+/// Two of them draw nothing:
+///
+///   * [pan] is the hand. With a drawing tool selected the canvas claims the
+///     drag so a stroke is a stroke, which leaves no way to move a picture
+///     bigger than the window - see [_AnnotationEditorState.build].
+///   * [select] is the pointer, and it is what makes the marks EDITABLE rather
+///     than final. Everything on this canvas is a mark until Save turns it
+///     into pixels; until then a mark can be picked up, moved, recoloured,
+///     retyped or thrown away, however many other marks have been made since.
+///     See [_AnnotationEditorState._selected].
+enum AnnotationTool { pen, highlighter, arrow, rect, text, pan, select }
 
+/// One mark on the picture.
+///
+/// MUTABLE, deliberately. It used to be write-once - drawn, appended, and
+/// beyond reach except by undoing everything after it - which meant a typo in
+/// a label was fixed by deleting the three arrows that came after it. The
+/// fields that a reader can change after the fact are the ones that can be
+/// changed here; [points] was always mutated in place while a stroke was being
+/// drawn, and moving a finished mark is the same operation later on.
 class _Annotation {
   final AnnotationTool tool;
-  final Color color;
-  final double strokeWidth;
+  Color color;
+  double strokeWidth;
   final List<Offset> points; // In IMAGE pixel coordinates.
-  final String? text;
+  String? text;
 
   _Annotation({
     required this.tool,
@@ -164,6 +178,103 @@ class _Annotation {
     required this.points,
     this.text,
   });
+
+  /// Shifts the whole mark by [delta], in image pixels.
+  void move(Offset delta) {
+    for (var i = 0; i < points.length; i++) {
+      points[i] = points[i] + delta;
+    }
+  }
+}
+
+/// How a text mark is set, in one place.
+///
+/// Shared by the painter and by the hit test, because a label somebody cannot
+/// click is a label that is not really editable - and a hit box worked out
+/// from a second, slightly different font is exactly how that happens.
+TextPainter _textPainterFor(_Annotation a) => TextPainter(
+  text: TextSpan(
+    text: a.text,
+    style: TextStyle(
+      color: a.color,
+      fontSize: (a.strokeWidth * 4).clamp(16.0, 96.0),
+      fontWeight: FontWeight.bold,
+      shadows: const [Shadow(blurRadius: 3, color: Colors.black54)],
+    ),
+  ),
+  textDirection: TextDirection.ltr,
+)..layout();
+
+/// The box a mark occupies, in image pixels - what the selection halo is drawn
+/// round, and what a click on a text label is measured against.
+Rect _annotationBounds(_Annotation a) {
+  if (a.tool == AnnotationTool.text) {
+    if (a.points.isEmpty || a.text == null) return Rect.zero;
+    final painter = _textPainterFor(a);
+    final rect = a.points.first & painter.size;
+    painter.dispose();
+    return rect;
+  }
+  if (a.points.isEmpty) return Rect.zero;
+  var rect = Rect.fromPoints(a.points.first, a.points.first);
+  for (final point in a.points.skip(1)) {
+    rect = rect.expandToInclude(Rect.fromPoints(point, point));
+  }
+  // The ink is as wide as the pen, and an arrowhead reaches past the last
+  // point it was drawn to.
+  final width = a.tool == AnnotationTool.highlighter
+      ? a.strokeWidth * 3
+      : a.strokeWidth;
+  return rect.inflate(width);
+}
+
+/// How far [point] is from the segment [a]-[b]. The whole of the hit test for
+/// anything drawn as a line.
+double _distanceToSegment(Offset point, Offset a, Offset b) {
+  final ab = b - a;
+  final lengthSquared = ab.dx * ab.dx + ab.dy * ab.dy;
+  if (lengthSquared == 0) return (point - a).distance;
+  final t = (((point - a).dx * ab.dx + (point - a).dy * ab.dy) / lengthSquared)
+      .clamp(0.0, 1.0);
+  return (point - (a + ab * t)).distance;
+}
+
+/// True when [point] (image pixels) lands on [a], within [tolerance].
+///
+/// MEASURED AGAINST THE SHAPE, not against its bounding box. A rectangle is
+/// four lines and not a filled panel: grabbing it by the middle would make
+/// every mark underneath a large box unreachable, which on a screenshot of a
+/// table is most of them.
+bool _annotationHit(_Annotation a, Offset point, double tolerance) {
+  final reach =
+      tolerance +
+      (a.tool == AnnotationTool.highlighter
+          ? a.strokeWidth * 1.5
+          : a.strokeWidth / 2);
+  switch (a.tool) {
+    case AnnotationTool.pan:
+    case AnnotationTool.select:
+      return false;
+    case AnnotationTool.text:
+      return _annotationBounds(a).inflate(tolerance).contains(point);
+    case AnnotationTool.rect:
+      if (a.points.length < 2) return false;
+      final rect = Rect.fromPoints(a.points.first, a.points.last);
+      // On the frame: inside the outer edge and outside the inner one.
+      return rect.inflate(reach).contains(point) &&
+          !rect.deflate(reach).contains(point);
+    case AnnotationTool.arrow:
+      if (a.points.length < 2) return false;
+      return _distanceToSegment(point, a.points.first, a.points.last) <= reach;
+    case AnnotationTool.pen:
+    case AnnotationTool.highlighter:
+      for (var i = 0; i + 1 < a.points.length; i++) {
+        if (_distanceToSegment(point, a.points[i], a.points[i + 1]) <= reach) {
+          return true;
+        }
+      }
+      return a.points.length == 1 && (point - a.points.first).distance <= reach;
+  }
 }
 
 class AnnotationEditor extends StatefulWidget {
@@ -184,6 +295,27 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   ui.Image? _image;
   final List<_Annotation> _annotations = [];
   _Annotation? _active; // The annotation being drawn right now.
+
+  /// The mark the pointer has hold of, or null.
+  ///
+  /// NOTHING HERE IS FINAL UNTIL SAVE. The marks are a list right up to the
+  /// moment [_flatten] turns them into pixels, so one made ten marks ago is as
+  /// editable as the one just drawn - picked up with the pointer tool, moved,
+  /// recoloured, retyped, deleted. Before this, the only way back to a mark
+  /// was Undo, which meant a typo in the first label cost every arrow drawn
+  /// since.
+  _Annotation? _selected;
+
+  /// Where the pointer was, in image pixels, on the last drag frame - so a
+  /// mark moves BY the pointer rather than jumping its top-left corner to it.
+  Offset? _dragFrom;
+
+  /// Where a double-click landed. [GestureDetector.onDoubleTap] is not told a
+  /// position, so the down event that preceded it has to remember one.
+  Offset? _doubleTapAt;
+
+  /// Keyboard focus for the canvas, so Delete removes what is selected.
+  final FocusNode _canvasFocus = FocusNode(debugLabel: 'annotation canvas');
 
   AnnotationTool _tool = AnnotationTool.pen;
   Color _color = Colors.red;
@@ -238,6 +370,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   void dispose() {
     _across.dispose();
     _down.dispose();
+    _canvasFocus.dispose();
     _image?.dispose();
     super.dispose();
   }
@@ -275,8 +408,13 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     );
   }
 
+  /// True while the selected tool is one that makes marks. The pointer and the
+  /// hand are the two that do not.
+  bool get _drawing =>
+      _tool != AnnotationTool.pan && _tool != AnnotationTool.select;
+
   void _onPanStart(Offset imagePos) {
-    if (_tool == AnnotationTool.text || _tool == AnnotationTool.pan) return;
+    if (_tool == AnnotationTool.text || !_drawing) return;
     setState(() {
       _active = _Annotation(
         tool: _tool,
@@ -309,14 +447,18 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     });
   }
 
-  Future<void> _onTapForText(Offset imagePos) async {
-    if (_tool != AnnotationTool.text) return;
-    final controller = TextEditingController();
-    final String? text = await showDialog<String>(
+  /// Asks for the words on a label. [existing] prefills it, which is what
+  /// makes the difference between adding one and correcting one.
+  Future<String?> _askText({String existing = ''}) async {
+    final controller = TextEditingController(text: existing);
+    final adding = existing.isEmpty;
+    return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Text'),
+        key: const ValueKey('annotation_text_dialog'),
+        title: Text(adding ? 'Add Text' : 'Edit Text'),
         content: TextField(
+          key: const ValueKey('annotation_text_field'),
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(
@@ -328,21 +470,121 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
               onPressed: () => Navigator.of(context).pop(null),
               child: const Text('Cancel')),
           ElevatedButton(
+              key: const ValueKey('annotation_text_ok'),
               onPressed: () => Navigator.of(context).pop(controller.text),
-              child: const Text('Add')),
+              child: Text(adding ? 'Add' : 'Save')),
         ],
       ),
     );
+  }
+
+  Future<void> _onTapForText(Offset imagePos) async {
+    if (_tool != AnnotationTool.text) return;
+    final text = await _askText();
     if (text == null || text.trim().isEmpty) return;
     setState(() {
-      _annotations.add(_Annotation(
+      final added = _Annotation(
         tool: AnnotationTool.text,
         color: _color,
         strokeWidth: _strokeWidth,
         points: [imagePos],
         text: text.trim(),
-      ));
+      );
+      _annotations.add(added);
+      // Left selected, so the label just placed is the one the next colour or
+      // size change lands on - and so it is obvious it can still be moved.
+      _selected = added;
     });
+  }
+
+  /// The topmost mark under [imagePos], or null.
+  ///
+  /// LAST DRAWN WINS. The list is painted in order, so the mark on top is the
+  /// one at the end - and picking anything else would hand back a mark the
+  /// reader cannot see under the one they clicked.
+  _Annotation? _markAt(Offset imagePos, double scale) {
+    // A tolerance in SCREEN pixels, converted: eight pixels of slack is eight
+    // pixels of slack whether the picture is at 30% or 300%.
+    final tolerance = 8 / (scale <= 0 ? 1 : scale);
+    for (final a in _annotations.reversed) {
+      if (_annotationHit(a, imagePos, tolerance)) return a;
+    }
+    return null;
+  }
+
+  /// Picks up whatever is under the pointer, or drops what was held.
+  void _selectAt(Offset imagePos, double scale) {
+    _canvasFocus.requestFocus();
+    setState(() => _selected = _markAt(imagePos, scale));
+  }
+
+  /// Retypes the label under the pointer - the double-click.
+  Future<void> _editTextAt(Offset imagePos, double scale) async {
+    final mark = _markAt(imagePos, scale);
+    if (mark == null || mark.tool != AnnotationTool.text) return;
+    setState(() => _selected = mark);
+    await _editSelectedText();
+  }
+
+  /// Retypes the label in hand. The reason the pointer tool exists at all:
+  /// reached by double-clicking a label, or by the button on the bar.
+  Future<void> _editSelectedText() async {
+    final mark = _selected;
+    if (mark == null || mark.tool != AnnotationTool.text) return;
+    final text = await _askText(existing: mark.text ?? '');
+    if (text == null) return;
+    setState(() {
+      if (text.trim().isEmpty) {
+        // Emptied means deleted: a label with nothing on it is an invisible
+        // mark that still catches clicks.
+        _annotations.remove(mark);
+        _selected = null;
+      } else {
+        mark.text = text.trim();
+      }
+    });
+  }
+
+  void _deleteSelected() {
+    final mark = _selected;
+    if (mark == null) return;
+    setState(() {
+      _annotations.remove(mark);
+      _selected = null;
+    });
+  }
+
+  /// Drags the held mark by [delta] image pixels.
+  void _moveSelected(Offset imagePos) {
+    final mark = _selected;
+    final from = _dragFrom;
+    if (mark == null || from == null) return;
+    setState(() {
+      mark.move(imagePos - from);
+      _dragFrom = imagePos;
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // THE HAND
+  // --------------------------------------------------------------------------
+  //  It did nothing at all, and the reason is a Flutter default rather than
+  //  anything on this screen: a SingleChildScrollView on desktop does not
+  //  accept drags from a MOUSE - only from touch and stylus - so handing the
+  //  drag back to the scroll views handed it to something that was never going
+  //  to take it. The bars and the wheel worked, which is why it looked like
+  //  the tool was simply inert.
+  //
+  //  So the hand moves the picture itself, through the same controllers the
+  //  wheel already uses. The scroll views now refuse drags whatever tool is
+  //  selected, which also settles the arena question outright: no drag on this
+  //  canvas is ever contested.
+
+  /// Moves the picture under the pointer. [delta] is in SCREEN pixels, which is
+  /// what the scroll offsets are in - so this one does not get converted.
+  void _dragPicture(Offset delta) {
+    _wheel(_across, -delta.dx);
+    _wheel(_down, -delta.dy);
   }
 
   // --------------------------------------------------------------------------
@@ -475,7 +717,13 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2.0),
       child: InkWell(
-        onTap: () => setState(() => _color = color),
+        // A colour is both a setting for the next mark and an edit to the one
+        // in hand. Picking one while a mark is held recolours it, which is the
+        // obvious reading of pressing red with something selected.
+        onTap: () => setState(() {
+          _color = color;
+          _selected?.color = color;
+        }),
         borderRadius: BorderRadius.circular(10),
         child: Container(
           width: 20,
@@ -543,10 +791,17 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           Icons.check_box_outline_blank, 'Rectangle'),
                       _toolButton(AnnotationTool.text, Icons.text_fields,
                           'Text (click to place)'),
-                      // THE HAND. Every other tool on this bar claims the drag
-                      // so a stroke is a stroke; this one gives it back to the
-                      // canvas, so a picture bigger than the window can be
-                      // moved under the pen.
+                      // THE POINTER. Nothing here is final until Save, and
+                      // this is how that is reached: click a mark to pick it
+                      // up, drag to move it, double-click a label to retype
+                      // it. See [_selected].
+                      _toolButton(
+                          AnnotationTool.select,
+                          Icons.near_me_outlined,
+                          'Select - move, recolour or retype a mark'),
+                      // THE HAND. Moves the picture under the pointer, itself
+                      // - see [_dragPicture] for why it cannot leave that to
+                      // the scroll views.
                       _toolButton(AnnotationTool.pan, Icons.pan_tool_outlined,
                           'Move the picture'),
                       const SizedBox(width: 12),
@@ -559,8 +814,11 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           value: _strokeWidth,
                           min: 2,
                           max: 20,
-                          onChanged: (val) =>
-                              setState(() => _strokeWidth = val),
+                          // Resizes the held mark as well - see [_colorSwatch].
+                          onChanged: (val) => setState(() {
+                            _strokeWidth = val;
+                            _selected?.strokeWidth = val;
+                          }),
                         ),
                       ),
                     ],
@@ -573,14 +831,44 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                 tooltip: 'Undo last annotation',
                 onPressed: _annotations.isEmpty
                     ? null
-                    : () => setState(() => _annotations.removeLast()),
+                    : () => setState(() {
+                        final gone = _annotations.removeLast();
+                        if (identical(gone, _selected)) _selected = null;
+                      }),
+              ),
+              // RETYPING, SAID OUT LOUD. Double-clicking the label does the
+              // same thing and is quicker, but a gesture is not an
+              // affordance: somebody who has just clicked a label and can see
+              // it is held needs to be told that its words can be changed.
+              // Lit only for a label, because it is the only mark that has
+              // any.
+              IconButton(
+                key: const ValueKey('annotation_edit_text'),
+                icon: const Icon(Icons.edit_note, size: 20),
+                tooltip: 'Edit the selected text',
+                onPressed: _selected?.tool == AnnotationTool.text
+                    ? () => _editSelectedText()
+                    : null,
+              ),
+              // The one mark in hand, thrown away without touching the
+              // others - the counterpart of the pointer tool, and what the
+              // Delete key does. Undo only ever reaches the LAST mark, which
+              // is no use for the label three arrows ago.
+              IconButton(
+                key: const ValueKey('annotation_delete_selected'),
+                icon: const Icon(Icons.backspace_outlined, size: 18),
+                tooltip: 'Delete the selected mark',
+                onPressed: _selected == null ? null : _deleteSelected,
               ),
               IconButton(
                 icon: const Icon(Icons.delete_outline, size: 20),
                 tooltip: 'Clear all annotations',
                 onPressed: _annotations.isEmpty
                     ? null
-                    : () => setState(() => _annotations.clear()),
+                    : () => setState(() {
+                        _annotations.clear();
+                        _selected = null;
+                      }),
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
@@ -637,18 +925,14 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                         (local.dx / scale).clamp(0, image.width.toDouble()),
                         (local.dy / scale).clamp(0, image.height.toDouble()));
 
-                    // WHO GETS THE DRAG. There is only one, and both the pen
-                    // and the scroll views want it. Rather than put the two in
-                    // a gesture arena and hope - which is how a stroke turns
-                    // into a scroll halfway through a circle - the hand tool
-                    // decides it outright: while a drawing tool is selected
-                    // the scroll views take no drags at all, and the hand
-                    // gives them back. The bars and the wheel move the picture
-                    // either way, so nothing is unreachable mid-drawing.
-                    final bool drawing = _tool != AnnotationTool.pan;
-                    final ScrollPhysics physics = drawing
-                        ? const NeverScrollableScrollPhysics()
-                        : const ClampingScrollPhysics();
+                    // WHO GETS THE DRAG. There is only one, and the pen, the
+                    // pointer, the hand and the scroll views all want it.
+                    // Rather than put them in a gesture arena and hope - which
+                    // is how a stroke turns into a scroll halfway through a
+                    // circle - the canvas takes every drag and decides what it
+                    // meant. The scroll views never take one; the bars, the
+                    // wheel and the hand move the picture instead.
+                    const physics = NeverScrollableScrollPhysics();
 
                     final Widget plate = SizedBox(
                       key: const ValueKey('annotation_canvas'),
@@ -656,26 +940,71 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                       height: dispH,
                       child: MouseRegion(
                         cursor: switch (_tool) {
-                          AnnotationTool.pan => SystemMouseCursors.grab,
+                          AnnotationTool.pan => _dragFrom == null
+                              ? SystemMouseCursors.grab
+                              : SystemMouseCursors.grabbing,
+                          AnnotationTool.select => SystemMouseCursors.click,
                           AnnotationTool.text => SystemMouseCursors.text,
                           _ => SystemMouseCursors.precise,
                         },
                         child: GestureDetector(
-                          onTapUp: drawing
-                              ? (d) => _onTapForText(toImage(d.localPosition))
+                          onTapUp: switch (_tool) {
+                            AnnotationTool.select => (d) =>
+                                _selectAt(toImage(d.localPosition), scale),
+                            AnnotationTool.pan => null,
+                            _ => (d) => _onTapForText(toImage(d.localPosition)),
+                          },
+                          // RETYPING A LABEL, which is the whole of "still
+                          // editable until you save". Only on the pointer, so
+                          // a fast pair of pen strokes is never mistaken for
+                          // it.
+                          onDoubleTapDown: _tool == AnnotationTool.select
+                              ? (d) => _doubleTapAt = toImage(d.localPosition)
                               : null,
-                          onPanStart: drawing
-                              ? (d) => _onPanStart(toImage(d.localPosition))
+                          onDoubleTap: _tool == AnnotationTool.select
+                              ? () {
+                                  final at = _doubleTapAt;
+                                  if (at != null) _editTextAt(at, scale);
+                                }
                               : null,
-                          onPanUpdate: drawing
-                              ? (d) => _onPanUpdate(toImage(d.localPosition))
-                              : null,
-                          onPanEnd: drawing ? (_) => _onPanEnd() : null,
+                          onPanStart: (d) {
+                            final at = toImage(d.localPosition);
+                            switch (_tool) {
+                              case AnnotationTool.pan:
+                                // Only so the cursor can say it is holding on.
+                                setState(() => _dragFrom = at);
+                              case AnnotationTool.select:
+                                _selectAt(at, scale);
+                                if (_selected != null) _dragFrom = at;
+                              default:
+                                _onPanStart(at);
+                            }
+                          },
+                          onPanUpdate: (d) {
+                            switch (_tool) {
+                              case AnnotationTool.pan:
+                                _dragPicture(d.delta);
+                              case AnnotationTool.select:
+                                _moveSelected(toImage(d.localPosition));
+                              default:
+                                _onPanUpdate(toImage(d.localPosition));
+                            }
+                          },
+                          onPanEnd: (_) {
+                            switch (_tool) {
+                              case AnnotationTool.pan:
+                              case AnnotationTool.select:
+                                setState(() => _dragFrom = null);
+                              default:
+                                _onPanEnd();
+                            }
+                          },
                           child: CustomPaint(
                             painter: _AnnotationPainter(
                               image: image,
                               annotations: _annotations,
                               active: _active,
+                              selected: _selected,
                               scale: scale,
                             ),
                           ),
@@ -683,7 +1012,23 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                       ),
                     );
 
-                    return Stack(
+                    return Focus(
+                      focusNode: _canvasFocus,
+                      // Delete throws away the mark in hand. The button beside
+                      // Undo does the same thing for anybody who does not
+                      // think to try the key.
+                      onKeyEvent: (node, event) {
+                        if (event is! KeyDownEvent || _selected == null) {
+                          return KeyEventResult.ignored;
+                        }
+                        if (event.logicalKey == LogicalKeyboardKey.delete ||
+                            event.logicalKey == LogicalKeyboardKey.backspace) {
+                          _deleteSelected();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: Stack(
                       key: const ValueKey('annotation_canvas_area'),
                       children: [
                         Positioned.fill(
@@ -768,6 +1113,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           ),
                         ),
                       ],
+                      ),
                     );
                   }),
           ),
@@ -798,10 +1144,12 @@ void _paintAnnotationsOnCanvas(
       ..strokeJoin = StrokeJoin.round;
 
     switch (a.tool) {
-      // Never reaches here: the hand draws nothing, so no annotation is ever
-      // recorded carrying it. Named rather than left to a default, so adding a
-      // real tool later is a compile error here instead of a silent no-op.
+      // Never reaches here: neither the hand nor the pointer draws anything,
+      // so no annotation is ever recorded carrying one. Named rather than left
+      // to a default, so adding a real tool later is a compile error here
+      // instead of a silent no-op.
       case AnnotationTool.pan:
+      case AnnotationTool.select:
         break;
 
       case AnnotationTool.pen:
@@ -862,12 +1210,20 @@ class _AnnotationPainter extends CustomPainter {
   final ui.Image image;
   final List<_Annotation> annotations;
   final _Annotation? active;
+
+  /// The mark in hand, drawn with a halo round it. ON SCREEN ONLY - see
+  /// [paint]: this is furniture for editing, and burning it into the saved
+  /// picture would put a dashed box round whichever mark happened to be
+  /// selected when somebody pressed Save.
+  final _Annotation? selected;
+
   final double scale;
 
   _AnnotationPainter({
     required this.image,
     required this.annotations,
     required this.active,
+    required this.selected,
     required this.scale,
   });
 
@@ -882,6 +1238,35 @@ class _AnnotationPainter extends CustomPainter {
     );
     _paintAnnotationsOnCanvas(
         canvas, [...annotations, ?active], scale);
+
+    final held = selected;
+    if (held == null) return;
+    // Outside the scaled block above, so the halo is the same weight at every
+    // zoom - it is a handle, not part of the picture.
+    final box = _annotationBounds(held);
+    if (box.isEmpty) return;
+    final rect = Rect.fromLTRB(
+      box.left * scale,
+      box.top * scale,
+      box.right * scale,
+      box.bottom * scale,
+    ).inflate(4);
+    // Two strokes, light over dark, so the halo is visible on a screenshot of
+    // anything - a white dialog or a black diagram.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(4)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.7)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(4)),
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
   }
 
   @override

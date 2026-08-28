@@ -1538,6 +1538,13 @@ class TopLevelBar extends StatelessWidget {
     final hasRoom = provider.roomConfig.isNotEmpty ||
         provider.currentConfigPath.isNotEmpty;
 
+    // Whether the page underneath is about the ROOM. Every tab that needs a
+    // config is one, which is the same question the start screen asks to
+    // decide whether it has anything to show - see [AppTab.worksWithoutConfig].
+    final onRoomTab = selectedIndex >= 0 &&
+        selectedIndex < AppTab.values.length &&
+        !AppTab.values[selectedIndex].worksWithoutConfig;
+
     // THE STRIP IS A DIFFERENT COLOUR IN EACH MODE.
     //
     // Room and project are the two states this app is ever in, and until now
@@ -1612,6 +1619,18 @@ class TopLevelBar extends StatelessWidget {
                 ),
                 onPressed: () => closeProjectFile(context, provider),
               ),
+              // AND THE ROOM'S OWN WAY OUT, on the pages that are about the
+              // room. A job stays open behind it - closing means the room, not
+              // everything on screen - so this is how somebody finishes with
+              // one room of a building without putting the building away.
+              if (onRoomTab && hasRoom)
+                _BannerClose(
+                  keyValue: 'banner_room_close',
+                  tooltip: 'Close the room (the job stays open)',
+                  fill: bannerFill,
+                  icon: Icons.meeting_room_outlined,
+                  onPressed: () => closeRoomFile(context, provider),
+                ),
               // ONE LEVEL UP FROM THE JOB. The campus is the same session in a
               // wider frame - this job and the others on one calendar - and it
               // is reached from here rather than only from a button inside the
@@ -1652,6 +1671,17 @@ class TopLevelBar extends StatelessWidget {
                 label: Text('Room', style: theme.textTheme.titleMedium),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               ),
+              // THE WAY OUT OF A ROOM, beside the way it is named - the same
+              // place, and the same shape, as the job's own close one mode up.
+              // A job could be closed and a room could only ever be swapped for
+              // another, so the empty session this app starts on could not be
+              // got back to without restarting it. See [closeRoomFile].
+              _BannerClose(
+                keyValue: 'banner_room_close',
+                tooltip: 'Close the room and go back to the start screen',
+                fill: bannerFill,
+                onPressed: () => closeRoomFile(context, provider),
+              ),
               const SizedBox(width: 12),
             ],
             // Which job, and whether it is on disk. Flexible so a long job name
@@ -1671,14 +1701,14 @@ class TopLevelBar extends StatelessWidget {
             // corner, and the name still ellipsises when it is long.
             Expanded(
               child: Text(
-                // The name of whatever this strip is about. With no job open
-                // that is the room's file - naming a project that does not
-                // exist is how somebody ends up believing their room is on one.
-                !hasProject
-                    ? (hasRoom ? _roomFileName(provider) : '')
-                    : provider.projectDirty
-                        ? '${provider.projectDisplayName} - unsaved'
-                        : provider.projectDisplayName,
+                // The name of whatever this strip is about - see
+                // [_bannerDocumentName].
+                _bannerDocumentName(
+                  provider,
+                  hasProject: hasProject,
+                  hasRoom: hasRoom,
+                  onRoomTab: onRoomTab,
+                ),
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: hasProject && provider.projectDirty
@@ -1704,6 +1734,83 @@ class TopLevelBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One of the banner's close buttons, measured against the strip it sits on.
+///
+/// Its own widget because there are now three of them - the job's, the room's,
+/// and the room's again on a job - and a close that was a different size or a
+/// different ink on one of them would read as a different kind of action.
+class _BannerClose extends StatelessWidget {
+  final String keyValue;
+  final String tooltip;
+  final Color fill;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _BannerClose({
+    required this.keyValue,
+    required this.tooltip,
+    required this.fill,
+    required this.onPressed,
+    this.icon = Icons.close,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IconButton(
+      key: ValueKey(keyValue),
+      icon: Icon(icon, size: 18),
+      iconSize: 18,
+      visualDensity: VisualDensity.compact,
+      tooltip: tooltip,
+      // The strip is a container colour, and in the Classic theme container
+      // colours are tinted from an accent somebody picks out of a wheel.
+      color: readableOn(
+        fill,
+        prefer: [
+          theme.textTheme.bodySmall?.color ?? theme.colorScheme.onSurfaceVariant,
+          theme.colorScheme.onSurface,
+        ],
+        minRatio: kContrastLarge,
+      ),
+      onPressed: onPressed,
+    );
+  }
+}
+
+/// What the banner is about, in one line.
+///
+/// THE JOB IS NOT ALWAYS THE ANSWER. With a job open the strip named the job
+/// and nothing else, on every tab - so a reader who opened a building and then
+/// went to a room page was looking at a drawing with the BUILDING's name over
+/// it. On a job whose rooms have never been drawn - the refresh imports, where
+/// every room is a line item and there is no config anywhere - that page was a
+/// room editor with nothing on it and nothing saying so.
+///
+/// So on a page that is about the room, the room is named too: the job first,
+/// because that is the wider thing and it is what a reader checks they are
+/// still inside of, then the room. A job with no room open says so out loud,
+/// rather than leaving its own name standing over an empty page as though that
+/// were the document on screen.
+///
+/// With no job it is the room alone, and on a cold start it is nothing at all -
+/// naming a project that does not exist is how somebody ends up believing their
+/// room is on one.
+String _bannerDocumentName(
+  AppStateProvider provider, {
+  required bool hasProject,
+  required bool hasRoom,
+  required bool onRoomTab,
+}) {
+  if (!hasProject) return hasRoom ? _roomFileName(provider) : '';
+  final job = provider.projectDirty
+      ? '${provider.projectDisplayName} - unsaved'
+      : provider.projectDisplayName;
+  if (!onRoomTab) return job;
+  final room = hasRoom ? _roomFileName(provider) : 'no room open';
+  return '$job  \u00b7  $room';
 }
 
 /// What the banner calls the open room when there is no job to name.
