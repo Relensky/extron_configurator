@@ -142,6 +142,36 @@ void main() {
     );
   });
 
+  test('a preset prices from the catalog, not from a figure of its own', () {
+    // A preset carries MODELS and no money, so a price corrected in the
+    // catalog reaches every room type that draws that device without any of
+    // them being rebuilt. The conferencing cart is the case that proved it:
+    // the Neat bar was priced after the presets were written, and the cart
+    // picked the figure up with no change to its own file.
+    final devices = catalogDevices();
+    final neat = devices.firstWhere((d) => d['model'] == 'Bar BYOD');
+    expect(neat['manufacturer'], 'Neat');
+    expect(neat['price'], 700.0);
+    expect(neat['educationPrice'], 399.0);
+
+    final cart = RoomPreset.fromJson(
+      Map<String, dynamic>.from(
+        jsonDecode(
+          File('room_presets/1 Display Conference _cart_'
+                  '$kRoomPresetExtension')
+              .readAsStringSync(),
+        ) as Map,
+      ),
+    );
+    expect(cart.nodes.any((n) => n.model == 'Bar BYOD'), isTrue);
+    // ...and the preset itself says nothing about what any of it costs.
+    final raw = jsonDecode(
+      File('room_presets/1 Display Conference _cart_$kRoomPresetExtension')
+          .readAsStringSync(),
+    ) as Map;
+    expect(jsonEncode(raw).contains('"price"'), isFalse);
+  });
+
   test('the two room types with no bill of materials are still room types', () {
     // '!CDL' and '!sound system only' have no equipment on the master sheet.
     // They are real room types all the same - three rooms on the estate are

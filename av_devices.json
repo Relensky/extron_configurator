@@ -914,6 +914,30 @@
       ]
     },
     {
+      "model": "ADP-USBC-AU-2X2",
+      "manufacturer": "Audinate",
+      "category": "USB interface",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "notes": "Dante AVIO USB-C adapter, 2x2. The RYG sheet's \"Dante In\" - a PC on the Dante network without a card in it.",
+      "ports": [
+        {
+          "id": "dante_1",
+          "label": "DANTE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB-C",
+          "signal": "usbC",
+          "direction": "bidirectional",
+          "side": "left"
+        }
+      ]
+    },
+    {
       "model": "Cam570",
       "manufacturer": "AVer",
       "category": "Camera",
@@ -1377,6 +1401,43 @@
       ]
     },
     {
+      "model": "TR335",
+      "manufacturer": "AVer",
+      "category": "Camera",
+      "rackUnits": 0,
+      "notes": "30x auto-tracking presenter camera. The RYG sheet's \"Camera: Presenter 30x\"; the catalog's TR333 is the 12x.",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "AverMedia USB Interface",
       "manufacturer": "AVerMedia",
       "category": "Recorder / streamer",
@@ -1403,6 +1464,30 @@
           "signal": "power",
           "direction": "input",
           "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "BU113G2-BLACK",
+      "manufacturer": "AVerMedia",
+      "category": "USB interface",
+      "rackUnits": 0,
+      "powerInput": "none",
+      "notes": "HDMI to USB capture. The RYG sheet's \"Capture Card: Basic\" - what puts a room camera into a soft codec.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
         }
       ]
     },
@@ -12160,16 +12245,6 @@
           "side": "bottom"
         }
       ]
-    },
-    {
-      "model": "AAP",
-      "manufacturer": "Extron",
-      "partNumber": "70-940-31",
-      "category": "Architectural",
-      "rackUnits": 0,
-      "powerInput": "none",
-      "notes": "AAP Plate - Configurable",
-      "ports": []
     },
     {
       "model": "AC 102 AUS",
@@ -42152,30 +42227,6 @@
       ]
     },
     {
-      "model": "DTP3 R 201 D, White",
-      "manufacturer": "Extron",
-      "partNumber": "60-2072-53",
-      "category": "DTP Systems",
-      "rackUnits": 0,
-      "notes": "4K/60 HDMI DTP3 Receiver - Decorator-Style Wallplate - HDMI 4K/60 Wallplate Rx, White - 330 feet (100 m)",
-      "ports": [
-        {
-          "id": "hdmi",
-          "label": "HDMI",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "DTP3 R 301",
       "manufacturer": "Extron",
       "partNumber": "60-1773-53",
@@ -53690,90 +53741,6 @@
       ]
     },
     {
-      "model": "IN1608",
-      "manufacturer": "Extron",
-      "partNumber": "60-1238-81",
-      "category": "Switcher",
-      "rackUnits": 1,
-      "btuPerHour": 123.0,
-      "price": 4320.0,
-      "educationPrice": 2505.6,
-      "url": "https://www.extron.com/product/in1608xi",
-      "notes": "Driven by extr_scaler_IN1606_IN1608_Series_v1_7_0_0.py",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI IN 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_2",
-          "label": "HDMI IN 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_3",
-          "label": "HDMI IN 3",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_4",
-          "label": "HDMI IN 4",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI OUT",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_dtp_1",
-          "label": "DTP OUT",
-          "signal": "hdbaset",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "in_aud_1",
-          "label": "AUDIO IN",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_aud_1",
-          "label": "AUDIO OUT",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "IN1608 HDBT",
       "manufacturer": "Extron",
       "category": "Switcher",
@@ -54745,7 +54712,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1238-81",
       "category": "Switcher",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "btuPerHour": 123.0,
       "price": 4320.0,
       "educationPrice": 2505.6,
@@ -58326,494 +58293,12 @@
       ]
     },
     {
-      "model": "IN1808 IPCP MA",
-      "manufacturer": "Extron",
-      "partNumber": "60-1615-03",
-      "category": "Switcher",
-      "rackUnits": 0,
-      "notes": "Eight Input 4K/60 Seamless Presentation Switchers - Control Processor and 70 V Mono Amp - Retired product",
-      "ports": [
-        {
-          "id": "dp_001",
-          "label": "DP 001",
-          "signal": "displayPort",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_002",
-          "label": "HDMI 002",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_003",
-          "label": "HDMI 003",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_004",
-          "label": "HDMI 004",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_005",
-          "label": "HDMI 005",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_006",
-          "label": "HDMI 006",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "dtp2_xtp_007",
-          "label": "DTP2/XTP 007",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "dtp2_xtp_008",
-          "label": "DTP2/XTP 008",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "aux_audio",
-          "label": "AUX AUDIO",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_001",
-          "label": "MIC/LINE 001",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_002",
-          "label": "MIC/LINE 002",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio",
-          "label": "AUDIO",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "ebus",
-          "label": "eBUS",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "rs_232",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_loop",
-          "label": "HDMI LOOP",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "hdmi",
-          "label": "HDMI",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "dtp2_xtp_hdbt",
-          "label": "DTP2/XTP/HDBT",
-          "signal": "hdbaset",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_dtp",
-          "label": "IR DTP",
-          "signal": "hdbaset",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ma_out_70v",
-          "label": "MA OUT 70V",
-          "signal": "speaker",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_1",
-          "label": "AUDIO 1",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_2",
-          "label": "AUDIO 2",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com1",
-          "label": "COM1",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com2",
-          "label": "COM2",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com3",
-          "label": "COM3",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "relay_1",
-          "label": "RELAY 1",
-          "signal": "other",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "relay_3",
-          "label": "RELAY 3",
-          "signal": "other",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_serial_1",
-          "label": "IR/SERIAL 1",
-          "signal": "ir",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_serial_2",
-          "label": "IR/SERIAL 2",
-          "signal": "ir",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "av_lan_1",
-          "label": "AV LAN 1",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "av_lan_2",
-          "label": "AV LAN 2",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "av_lan_3",
-          "label": "AV LAN 3",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "lan",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "IN1808 IPCP MA 70",
       "manufacturer": "Extron",
       "partNumber": "60-1615-03",
       "category": "Switcher",
       "rackUnits": 0,
       "notes": "Eight Input 4K/60 Seamless Presentation Switchers - Control Processor and 70 V Mono Amp - Retired product",
-      "ports": [
-        {
-          "id": "dp_001",
-          "label": "DP 001",
-          "signal": "displayPort",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_002",
-          "label": "HDMI 002",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_003",
-          "label": "HDMI 003",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_004",
-          "label": "HDMI 004",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_005",
-          "label": "HDMI 005",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_006",
-          "label": "HDMI 006",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "dtp2_xtp_007",
-          "label": "DTP2/XTP 007",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "dtp2_xtp_008",
-          "label": "DTP2/XTP 008",
-          "signal": "hdbaset",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "aux_audio",
-          "label": "AUX AUDIO",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_001",
-          "label": "MIC/LINE 001",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "mic_line_002",
-          "label": "MIC/LINE 002",
-          "signal": "micLine",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio",
-          "label": "AUDIO",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "ebus",
-          "label": "eBUS",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "rs_232",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_loop",
-          "label": "HDMI LOOP",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "hdmi",
-          "label": "HDMI",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "dtp2_xtp_hdbt",
-          "label": "DTP2/XTP/HDBT",
-          "signal": "hdbaset",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_dtp",
-          "label": "IR DTP",
-          "signal": "hdbaset",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ma_out_70v",
-          "label": "MA OUT 70V",
-          "signal": "speaker",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_1",
-          "label": "AUDIO 1",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "audio_2",
-          "label": "AUDIO 2",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com1",
-          "label": "COM1",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com2",
-          "label": "COM2",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "com3",
-          "label": "COM3",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "relay_1",
-          "label": "RELAY 1",
-          "signal": "other",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "relay_3",
-          "label": "RELAY 3",
-          "signal": "other",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_serial_1",
-          "label": "IR/SERIAL 1",
-          "signal": "ir",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "ir_serial_2",
-          "label": "IR/SERIAL 2",
-          "signal": "ir",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "av_lan_1",
-          "label": "AV LAN 1",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "av_lan_2",
-          "label": "AV LAN 2",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "av_lan_3",
-          "label": "AV LAN 3",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "lan",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "IN1808 IPCP MA 70 LL",
-      "manufacturer": "Extron",
-      "partNumber": "60-1615-03A",
-      "category": "Switcher",
-      "rackUnits": 0,
-      "notes": "Eight Input 4K/60 Seamless Presentation Switchers - Control Processor and 70 V Mono Amp, LL UI Upgrade - Retired product",
       "ports": [
         {
           "id": "dp_001",
@@ -64709,68 +64194,6 @@
       ]
     },
     {
-      "model": "IPL T PCS4i",
-      "manufacturer": "Extron",
-      "partNumber": "60-544-09",
-      "category": "Power controller",
-      "rackUnits": 0,
-      "price": 1780.0,
-      "educationPrice": 1032.4,
-      "url": "https://www.extron.com/product/ipltpcs4i",
-      "notes": "Four Port Power Control and Current Sensor - 220 VAC IEC",
-      "ports": [
-        {
-          "id": "switched_ac_1",
-          "label": "SWITCHED AC 1",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "switched_ac_2",
-          "label": "SWITCHED AC 2",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "switched_ac_3",
-          "label": "SWITCHED AC 3",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "switched_ac_4",
-          "label": "SWITCHED AC 4",
-          "signal": "power",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "alarm",
-          "label": "Alarm",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "ISS 608",
       "manufacturer": "Extron",
       "partNumber": "60-1684-01",
@@ -65630,101 +65053,6 @@
       "rackUnits": 0,
       "price": 12590.0,
       "notes": "5K Multi-Window Processor with DTP3 Extension - Four Windows, with HDMI and 12G-SDI Inputs",
-      "ports": [
-        {
-          "id": "hdmi_1",
-          "label": "HDMI 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "sdi_1",
-          "label": "SDI 1",
-          "signal": "sdi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_2",
-          "label": "HDMI 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "sdi_2",
-          "label": "SDI 2",
-          "signal": "sdi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_3",
-          "label": "HDMI 3",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "sdi_3",
-          "label": "SDI 3",
-          "signal": "sdi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "hdmi_4",
-          "label": "HDMI 4",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "sdi_4",
-          "label": "SDI 4",
-          "signal": "sdi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "audio",
-          "label": "AUDIO",
-          "signal": "analogAudio",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "rs_232",
-          "label": "RS-232",
-          "signal": "serial",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "lan",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "MGP 641 xi SDI",
-      "manufacturer": "Extron",
-      "partNumber": "60-1574-12",
-      "category": "Scalers Switchers",
-      "rackUnits": 0,
-      "price": 12590.0,
-      "notes": "4K/60 HDMI Multi-Window Processor with DTP3 Extension - Four Windows, with HDMI and 12G-SDI Inputs",
       "ports": [
         {
           "id": "hdmi_1",
@@ -71683,16 +71011,6 @@
       ]
     },
     {
-      "model": "Retractor",
-      "manufacturer": "Extron",
-      "partNumber": "70-940-31",
-      "category": "Architectural",
-      "rackUnits": 0,
-      "powerInput": "none",
-      "notes": "Retractor - Configurable",
-      "ports": []
-    },
-    {
       "model": "SB 33 A 46-55",
       "manufacturer": "Extron",
       "partNumber": "60-1737-11",
@@ -73476,60 +72794,6 @@
       ]
     },
     {
-      "model": "SMP 351",
-      "manufacturer": "Extron",
-      "partNumber": "60-1324-01",
-      "category": "Recorder / streamer",
-      "rackUnits": 1,
-      "price": 5820.0,
-      "url": "https://www.extron.com/product/smp351",
-      "notes": "Driven by extr_sm_SMP_300_Series_v1_19_15_0.py",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI IN 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_2",
-          "label": "HDMI IN 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_aud_1",
-          "label": "AUDIO IN",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI LOOP",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "SMP 351 - 400 GB SSD",
       "manufacturer": "Extron",
       "partNumber": "60-1324-11",
@@ -73628,10 +72892,11 @@
       "model": "SMP 351 - 80 GB SSD",
       "manufacturer": "Extron",
       "partNumber": "60-1324-01",
-      "category": "Streaming",
-      "rackUnits": 0,
+      "category": "Recorder / streamer",
+      "rackUnits": 1,
+      "price": 5820.0,
       "url": "https://www.extron.com/product/smp351",
-      "notes": "H.264 Streaming Media Processor - Standard Version - 80 GB SSD",
+      "notes": "Driven by extr_sm_SMP_300_Series_v1_19_15_0.py",
       "ports": [
         {
           "id": "hdmi_1",
@@ -73975,61 +73240,6 @@
       ]
     },
     {
-      "model": "SMP 352",
-      "manufacturer": "Extron",
-      "partNumber": "60-1634-01",
-      "category": "Recorder / streamer",
-      "rackUnits": 1,
-      "price": 5350.0,
-      "educationPrice": 3099.81,
-      "url": "https://www.extron.com/product/smp352",
-      "notes": "Driven by extr_sm_SMP_300_Series_v1_19_15_0.py",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI IN 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_2",
-          "label": "HDMI IN 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_aud_1",
-          "label": "AUDIO IN",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI LOOP",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "SMP 352 - 400 GB SSD",
       "manufacturer": "Extron",
       "partNumber": "60-1634-11",
@@ -74130,7 +73340,7 @@
       "manufacturer": "Extron",
       "partNumber": "60-1634-01",
       "category": "Streaming",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 5350.0,
       "educationPrice": 3099.81,
       "url": "https://www.extron.com/product/smp352",
@@ -74223,66 +73433,11 @@
       ]
     },
     {
-      "model": "SMP 352 3G-SDI",
-      "manufacturer": "Extron",
-      "partNumber": "60-1634-12",
-      "category": "Recorder / streamer",
-      "rackUnits": 1,
-      "price": 8390.0,
-      "educationPrice": 4582.41,
-      "url": "https://www.extron.com/product/smp352",
-      "notes": "Driven by extr_sm_SMP_300_Series_v1_19_15_0.py",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI IN 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_2",
-          "label": "HDMI IN 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_aud_1",
-          "label": "AUDIO IN",
-          "signal": "analogAudio",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI LOOP",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "SMP 352 3G-SDI - 400 GB SSD",
       "manufacturer": "Extron",
       "partNumber": "60-1634-12",
       "category": "Streaming",
-      "rackUnits": 0,
+      "rackUnits": 1,
       "price": 8390.0,
       "educationPrice": 4582.41,
       "url": "https://www.extron.com/product/smp352",
@@ -76162,6 +75317,29 @@
       ]
     },
     {
+      "model": "TLP Pro 1025",
+      "manufacturer": "Extron",
+      "category": "Control Systems",
+      "rackUnits": 0,
+      "notes": "10\" Tabletop TouchLink Pro touchpanel. The panel the RYG categories sheet prices as Touch Panel: 10\".",
+      "ports": [
+        {
+          "id": "lan_xtp",
+          "label": "LAN/ XTP",
+          "signal": "hdbaset",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "TLP Pro 1025M Black",
       "manufacturer": "Extron",
       "partNumber": "60-1566-12",
@@ -77121,6 +76299,29 @@
           "id": "lan_poe",
           "label": "LAN PoE",
           "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TLP Pro 725",
+      "manufacturer": "Extron",
+      "category": "Control Systems",
+      "rackUnits": 0,
+      "notes": "7\" Tabletop TouchLink Pro touchpanel. The panel the RYG categories sheet prices as Touch Panel: 7\".",
+      "ports": [
+        {
+          "id": "lan_xtp",
+          "label": "LAN/ XTP",
+          "signal": "hdbaset",
           "direction": "bidirectional",
           "side": "left"
         },
@@ -86198,6 +85399,45 @@
       "rackUnits": 1,
       "price": 3.99,
       "ports": [
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Bar BYOD",
+      "manufacturer": "Neat",
+      "category": "Collaboration Systems",
+      "rackUnits": 0,
+      "price": 700.0,
+      "educationPrice": 399.0,
+      "notes": "All-in-one bring-your-own-device conferencing bar: camera, mics and speakers in one, joined to a laptop over USB.",
+      "ports": [
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
         {
           "id": "in_power",
           "label": "POWER",
@@ -103348,6 +102588,30 @@
       ]
     },
     {
+      "model": "MXA920",
+      "manufacturer": "Shure",
+      "category": "Audio",
+      "rackUnits": 0,
+      "powerInput": "poe",
+      "notes": "Ceiling array microphone with automatic coverage. Dante over a single PoE run - no analogue tail, so the only thing to draw is the network.",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER (PoE)",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "MXWAPXD2",
       "manufacturer": "Shure",
       "category": "DSP",
@@ -104286,6 +103550,57 @@
       ]
     },
     {
+      "model": "FW-75EZ20L",
+      "manufacturer": "Sony",
+      "category": "Display",
+      "rackUnits": 0,
+      "notes": "75\" Bravia professional display, EZ20L series. Priced on the RYG categories sheet as the standard flat panel.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "FW-85BZ30L",
       "manufacturer": "Sony",
       "category": "Display",
@@ -104534,6 +103849,57 @@
           "label": "RS-232",
           "signal": "serial",
           "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "FW-85EZ20L",
+      "manufacturer": "Sony",
+      "category": "Display",
+      "rackUnits": 0,
+      "notes": "85\" Bravia professional display, EZ20L series. Priced on the RYG categories sheet as the standard flat panel.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
           "side": "left"
         },
         {
@@ -105179,6 +104545,50 @@
       ]
     },
     {
+      "model": "TL-SG108PE",
+      "manufacturer": "TP-Link",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "notes": "8-port easy-smart PoE switch. The small AV-LAN switch the RYG sheet puts in every room.",
+      "ports": [
+        {
+          "id": "lan_uplink",
+          "label": "UPLINK",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_2",
+          "label": "PORT 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_3",
+          "label": "PORT 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_4",
+          "label": "PORT 4",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
       "model": "AV Bridge",
       "manufacturer": "Vaddio",
       "category": "Recorder / streamer",
@@ -105302,154 +104712,6 @@
       ]
     },
     {
-      "model": "FW-75EZ20L",
-      "manufacturer": "Sony",
-      "category": "Display",
-      "rackUnits": 0,
-      "notes": "75\" Bravia professional display, EZ20L series. Priced on the RYG categories sheet as the standard flat panel.",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_2",
-          "label": "HDMI 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_3",
-          "label": "HDMI 3",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_rs232",
-          "label": "RS-232C",
-          "signal": "serial",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "FW-85EZ20L",
-      "manufacturer": "Sony",
-      "category": "Display",
-      "rackUnits": 0,
-      "notes": "85\" Bravia professional display, EZ20L series. Priced on the RYG categories sheet as the standard flat panel.",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI 1",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_2",
-          "label": "HDMI 2",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_hdmi_3",
-          "label": "HDMI 3",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "in_rs232",
-          "label": "RS-232C",
-          "signal": "serial",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "TLP Pro 725",
-      "manufacturer": "Extron",
-      "category": "Control Systems",
-      "rackUnits": 0,
-      "notes": "7\" Tabletop TouchLink Pro touchpanel. The panel the RYG categories sheet prices as Touch Panel: 7\".",
-      "ports": [
-        {
-          "id": "lan_xtp",
-          "label": "LAN/ XTP",
-          "signal": "hdbaset",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "TLP Pro 1025",
-      "manufacturer": "Extron",
-      "category": "Control Systems",
-      "rackUnits": 0,
-      "notes": "10\" Tabletop TouchLink Pro touchpanel. The panel the RYG categories sheet prices as Touch Panel: 10\".",
-      "ports": [
-        {
-          "id": "lan_xtp",
-          "label": "LAN/ XTP",
-          "signal": "hdbaset",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "MRX7-D",
       "manufacturer": "Yamaha",
       "category": "DSP",
@@ -105508,74 +104770,6 @@
       ]
     },
     {
-      "model": "MXA920",
-      "manufacturer": "Shure",
-      "category": "Audio",
-      "rackUnits": 0,
-      "notes": "Ceiling array microphone with automatic coverage. Dante over a single PoE run - no analogue tail, so the only thing to draw is the network.",
-      "ports": [
-        {
-          "id": "dante_poe",
-          "label": "DANTE / PoE",
-          "signal": "dante",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "PoE",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ],
-      "powerInput": "poe"
-    },
-    {
-      "model": "TL-SG108PE",
-      "manufacturer": "TP-Link",
-      "category": "AV / Misc",
-      "rackUnits": 0,
-      "notes": "8-port easy-smart PoE switch. The small AV-LAN switch the RYG sheet puts in every room.",
-      "ports": [
-        {
-          "id": "lan_uplink",
-          "label": "UPLINK",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "lan_2",
-          "label": "PORT 2",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "lan_3",
-          "label": "PORT 3",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "lan_4",
-          "label": "PORT 4",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
       "model": "RoomCast",
       "manufacturer": "Yealink",
       "category": "Wireless presentation",
@@ -105586,128 +104780,6 @@
           "id": "out_hdmi_1",
           "label": "HDMI OUT",
           "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "Bar BYOD",
-      "manufacturer": "Neat",
-      "category": "Collaboration Systems",
-      "rackUnits": 0,
-      "notes": "All-in-one bring-your-own-device conferencing bar: camera, mics and speakers in one, joined to a laptop over USB.",
-      "ports": [
-        {
-          "id": "out_usb_1",
-          "label": "USB",
-          "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI OUT",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "lan_1",
-          "label": "LAN",
-          "signal": "network",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "in_power",
-          "label": "POWER",
-          "signal": "power",
-          "direction": "input",
-          "side": "bottom"
-        }
-      ]
-    },
-    {
-      "model": "BU113G2-BLACK",
-      "manufacturer": "AVerMedia",
-      "category": "USB interface",
-      "rackUnits": 0,
-      "notes": "HDMI to USB capture. The RYG sheet's \"Capture Card: Basic\" - what puts a room camera into a soft codec.",
-      "ports": [
-        {
-          "id": "in_hdmi_1",
-          "label": "HDMI IN",
-          "signal": "hdmi",
-          "direction": "input",
-          "side": "left"
-        },
-        {
-          "id": "out_usb_1",
-          "label": "USB",
-          "signal": "usbData",
-          "direction": "output",
-          "side": "right"
-        }
-      ],
-      "powerInput": "none"
-    },
-    {
-      "model": "ADP-USBC-AU-2X2",
-      "manufacturer": "Audinate",
-      "category": "USB interface",
-      "rackUnits": 0,
-      "notes": "Dante AVIO USB-C adapter, 2x2. The RYG sheet's \"Dante In\" - a PC on the Dante network without a card in it.",
-      "ports": [
-        {
-          "id": "dante_1",
-          "label": "DANTE",
-          "signal": "dante",
-          "direction": "bidirectional",
-          "side": "left"
-        },
-        {
-          "id": "out_usb_1",
-          "label": "USB-C",
-          "signal": "usbC",
-          "direction": "bidirectional",
-          "side": "left"
-        }
-      ],
-      "powerInput": "none"
-    },
-    {
-      "model": "TR335",
-      "manufacturer": "AVer",
-      "category": "Camera",
-      "rackUnits": 0,
-      "notes": "30x auto-tracking presenter camera. The RYG sheet's \"Camera: Presenter 30x\"; the catalog's TR333 is the 12x.",
-      "ports": [
-        {
-          "id": "out_hdmi_1",
-          "label": "HDMI OUT",
-          "signal": "hdmi",
-          "direction": "output",
-          "side": "right"
-        },
-        {
-          "id": "out_usb_1",
-          "label": "USB",
-          "signal": "usbData",
           "direction": "output",
           "side": "right"
         },
