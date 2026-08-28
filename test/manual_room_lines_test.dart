@@ -214,6 +214,41 @@ void main() {
     });
   });
 
+  group('the responsibility matrix', () {
+    test('gets a column for every line item, not just the drawn rooms', () {
+      final project = BuildingProject(name: 'Glenn refresh', building: 'GLNN');
+      project.addManualRoom(name: 'GLNN 100');
+      project.addManualRoom(name: 'GLNN 205');
+
+      // A matrix is agreed for a BUILDING, and on a job imported off a refresh
+      // spreadsheet every room in it is a line item. The sheet used to have
+      // its headings, its parties and its scope lines - and no columns at all,
+      // so the one thing it exists to settle could not be written down.
+      final columns = project.responsibilityRoomColumns();
+      expect(columns.map((c) => c.name), ['GLNN 100', 'GLNN 205']);
+    });
+
+    test('a line item id can never collide with a drawn room id', () {
+      final project = BuildingProject(name: 'Glenn refresh');
+      final line = project.addManualRoom(name: 'GLNN 100');
+      // Their ids are their own - 'manual1', never 'room1' - so the two lists
+      // can never collide in [ResponsibilityItem.qtyByRoom].
+      expect(line.id.startsWith('manual'), isTrue);
+      expect(project.nextRoomId().startsWith('room'), isTrue);
+    });
+
+    test('drawn rooms come first, then the line items', () {
+      final project = BuildingProject(name: 'Glenn refresh');
+      project.rooms.add(
+        ProjectRoomRef(id: 'room1', configPath: 'a_config.json', label: 'GLNN 1'),
+      );
+      project.addManualRoom(name: 'GLNN 205');
+
+      final columns = project.responsibilityRoomColumns();
+      expect(columns.map((c) => c.name), ['GLNN 1', 'GLNN 205']);
+    });
+  });
+
   test('line items survive the trip to disk with the job', () async {
     final dir = Directory.systemTemp.createTempSync('rcb_lines_io');
     addTearDown(() {

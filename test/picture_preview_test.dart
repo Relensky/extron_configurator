@@ -687,6 +687,142 @@ void main() {
     );
   });
 
+  /// Paints the canvas as it stands into an image, and gives back the box that
+  /// encloses every pixel that is not the flat backdrop.
+  ///
+  /// The only way to ask "is the halo actually ON the mark". The halo is drawn
+  /// by a CustomPainter and has no widget of its own to measure, so the painter
+  /// is run again into a recorder and the result is read back as pixels.
+  Future<Rect> inkBounds(WidgetTester tester) async {
+    final canvas = find.byKey(const ValueKey('annotation_canvas'));
+    final size = tester.getSize(canvas);
+    final painter = tester
+        .widget<CustomPaint>(
+          find.descendant(of: canvas, matching: find.byType(CustomPaint)),
+        )
+        .painter!;
+
+    late Rect bounds;
+    await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      painter.paint(Canvas(recorder), size);
+      final w = size.width.round();
+      final h = size.height.round();
+      final image = await recorder.endRecording().toImage(w, h);
+      final data = (await image.toByteData())!;
+      image.dispose();
+
+      // The picture underneath is one flat colour, so anything else on it is
+      // either the mark or the halo.
+      const backdrop = 0xFF2E7D6F;
+      var left = w, top = h, right = -1, bottom = -1;
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          final i = (y * w + x) * 4;
+          final argb =
+              (data.getUint8(i + 3) << 24) |
+              (data.getUint8(i) << 16) |
+              (data.getUint8(i + 1) << 8) |
+              data.getUint8(i + 2);
+          if (argb == backdrop) continue;
+          if (x < left) left = x;
+          if (x > right) right = x;
+          if (y < top) top = y;
+          if (y > bottom) bottom = y;
+        }
+      }
+      bounds = right < 0
+          ? Rect.zero
+          : Rect.fromLTRB(
+              left.toDouble(),
+              top.toDouble(),
+              right.toDouble(),
+              bottom.toDouble(),
+            );
+    });
+    return bounds;
+  }
+
+  testWidgets('the halo lands on the mark at every zoom', (tester) async {
+    await openEditor(tester);
+    await addLabel(tester, 'Screen', at: const Offset(120, 90));
+    await pickTool(tester, 'Select - move, recolour or retype a mark');
+
+    final canvas = find.byKey(const ValueKey('annotation_canvas'));
+    final onLabel = tester.getTopLeft(canvas) + const Offset(130, 100);
+    await tester.tapAt(onLabel);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // Fitted, which for a 600x400 picture in this window is well under 100%.
+    expect(editorZoom(tester), lessThan(100));
+    final fitted = await inkBounds(tester);
+
+    // THE BUG THIS GUARDS. The shared mark painter used to scale the canvas
+    // and never put it back, so the halo - drawn afterwards - was scaled a
+    // second time. It landed on the mark at 100% and slid towards the
+    // top-left corner at every other zoom, which is the one place a selection
+    // box must never be.
+    //
+    // The halo surrounds the label with a few pixels to spare, so the two
+    // together are barely bigger than the label. Painted twice-scaled they
+    // would be a box stretching from the corner to the label instead.
+    expect(
+      fitted.left,
+      greaterThan(100),
+      reason: 'a halo scaled twice slides towards the origin',
+    );
+    expect(fitted.top, greaterThan(70));
+    expect(
+      fitted.width,
+      lessThan(200),
+      reason: 'the halo hugs the label rather than spanning to the corner',
+    );
+
+    // ...and again at 100%, where the two scalings used to agree.
+    await press(tester, 'annotation_zoom_actual');
+    expect(editorZoom(tester), 100);
+    final actual = await inkBounds(tester);
+
+    // The label was placed at the same image point, so at 100% its ink starts
+    // further out than it did fitted - and the halo has to have gone with it.
+    expect(actual.left, greaterThan(fitted.left));
+    expect(actual.top, greaterThan(fitted.top));
+    // Both are the label plus a handful of pixels of handle: at 100% the
+    // lettering is bigger, so the box is bigger, but neither is a box that
+    // reaches back to the corner.
+    expect(actual.width, lessThan(250));
+  });
+
+  testWidgets('the halo is never saved into the picture', (tester) async {
+    await openEditor(tester);
+    await addLabel(tester, 'Screen', at: const Offset(120, 90));
+    await pickTool(tester, 'Select - move, recolour or retype a mark');
+    await tester.tapAt(
+      tester.getTopLeft(find.byKey(const ValueKey('annotation_canvas'))) +
+          const Offset(130, 100),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final held = await inkBounds(tester);
+
+    // Dropping what is held is the only difference, so anything left over is
+    // the halo - and the saved file is the picture with the halo gone. A
+    // dashed box round whichever mark happened to be selected at the moment
+    // somebody pressed Save is not a mark anybody made.
+    await tester.tapAt(
+      tester.getTopLeft(find.byKey(const ValueKey('annotation_canvas'))) +
+          const Offset(400, 300),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final dropped = await inkBounds(tester);
+
+    expect(dropped.width, lessThan(held.width));
+    expect(dropped.height, lessThan(held.height));
+  });
+
   testWidgets('the mark in hand is deleted without touching the others', (
     tester,
   ) async {

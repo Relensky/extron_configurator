@@ -79,6 +79,22 @@ class RoomPreset {
   /// into a room with a different number can renumber them.
   final String jackPrefix;
 
+  /// What this room type is called on the document it was built FROM, when it
+  /// was built from one. '' for a preset somebody drew.
+  ///
+  /// The estate's refresh plan prices every room against a room type on a
+  /// master spreadsheet, and each line item on a job carries that type in its
+  /// notes - 'RYG estimate for 2 Projector'. The name in the picker is written
+  /// out for a reader ('2 Projector, 2 Camera, Multi-mic'); this is the name
+  /// the SHEET uses, and it is what lets a line item find the preset it was
+  /// priced from without anybody matching prose. See
+  /// [AppStateProvider.presetForSourceName].
+  ///
+  /// Kept as its own field rather than inferred from the name, because the two
+  /// drift on purpose: the picker's names are meant to be readable and the
+  /// sheet's are meant to be stable.
+  final String sourceName;
+
   /// SYSTEM_SETUP values this room TYPE decides, written into the config when
   /// the preset is applied.
   ///
@@ -112,6 +128,7 @@ class RoomPreset {
     this.screenSwitches = const [],
     this.floorPlans = const [],
     this.jackPrefix = '',
+    this.sourceName = '',
     this.systemSetup = const {},
   });
 
@@ -135,6 +152,7 @@ class RoomPreset {
     if (description.isNotEmpty) 'description': description,
     if (builtIn) 'builtIn': true,
     if (jackPrefix.isNotEmpty) 'jackPrefix': jackPrefix,
+    if (sourceName.isNotEmpty) 'sourceName': sourceName,
     if (systemSetup.isNotEmpty) 'systemSetup': systemSetup,
     'locations': [for (final l in locations) l.toJson()],
     'nodes': [for (final n in nodes) n.toJson()],
@@ -175,6 +193,7 @@ class RoomPreset {
       description: json['description']?.toString() ?? '',
       builtIn: json['builtIn'] == true,
       jackPrefix: json['jackPrefix']?.toString() ?? '',
+      sourceName: json['sourceName']?.toString() ?? '',
       systemSetup: settings,
       locations: [
         for (final l in (json['locations'] as List? ?? []))

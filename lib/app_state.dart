@@ -3818,6 +3818,46 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Every preset on disk, with the four built-ins written out first if the
   /// folder has never been used.
+  /// Writes the building code and room number into the open room.
+  ///
+  /// The two fields the Wizard asks for first, set from somewhere other than
+  /// the Wizard - which is what building a room from a line item needs, since
+  /// the line already says which room it is. Blank values are left alone
+  /// rather than written as blanks: a name that could not be read is not a
+  /// reason to clear one that was already there.
+  void setRoomIdentity({String building = '', String room = ''}) {
+    final setup = roomConfig['SYSTEM_SETUP'];
+    if (setup is! Map) return;
+    if (building.trim().isNotEmpty) setup['gve_bldg'] = building.trim();
+    if (room.trim().isNotEmpty) setup['gve_room'] = room.trim();
+    // The full room name is generated from the two, the same way the Wizard
+    // generates it - so a room built this way is named like every other.
+    updateFullRoomName();
+  }
+
+  /// The room type on the master refresh sheet called [sourceName], or null.
+  ///
+  /// How a LINE ITEM finds the preset it was priced from - see
+  /// [ManualRoom.sourceType] and [RoomPreset.sourceName]. Matched on the
+  /// sheet's own name rather than on the picker's, because the picker's names
+  /// are written out for a reader and are meant to be able to change.
+  ///
+  /// Falls back to the preset's display name, so a room type somebody has
+  /// since drawn by hand - with no sheet behind it - can still be found by
+  /// what it is called.
+  RoomPreset? presetForSourceName(String sourceName) {
+    final wanted = sourceName.trim().toLowerCase();
+    if (wanted.isEmpty) return null;
+    final presets = availableRoomPresets();
+    for (final preset in presets) {
+      if (preset.sourceName.trim().toLowerCase() == wanted) return preset;
+    }
+    for (final preset in presets) {
+      if (preset.name.trim().toLowerCase() == wanted) return preset;
+    }
+    return null;
+  }
+
   List<RoomPreset> availableRoomPresets() {
     ensureBuiltInRoomPresets(effectiveRootFolder);
     return loadRoomPresets(effectiveRootFolder);

@@ -1,0 +1,329 @@
+{
+  "__readme": "Built from the RYG categories estimates spreadsheet, sheet \"1 Display Conf Complex\". The equipment this room type is priced on; the cabling is drawn per room. Rebuild with tools/build_ryg_presets.py.",
+  "name": "1 Display Conference (complex)",
+  "description": "RYG room type \"1 Display Conf Complex\": 5 devices, 4 priced lines with no box to draw. Cabling is drawn per room.",
+  "jackPrefix": "",
+  "sourceName": "1 Display Conf Complex",
+  "locations": [
+    {
+      "id": "LOC_1",
+      "name": "Lectern",
+      "zone": "lectern"
+    },
+    {
+      "id": "LOC_2",
+      "name": "Front wall",
+      "zone": "front"
+    },
+    {
+      "id": "LOC_4",
+      "name": "Rack",
+      "zone": "rack"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "N1",
+      "label": "Display",
+      "model": "FW-75EZ20L",
+      "x": 560.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_2",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N2",
+      "label": "Wireless Mirroring",
+      "model": "ShareLink Pro 2000",
+      "x": 1000.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 1,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "hdmi",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio",
+          "label": "AUDIO",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_2",
+          "label": "AUDIO",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N3",
+      "label": "Touch Panel: 7\"",
+      "model": "TLP Pro 725",
+      "x": 340.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_1",
+      "ports": [
+        {
+          "id": "lan_xtp",
+          "label": "LAN/ XTP",
+          "signal": "hdbaset",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N4",
+      "label": "Switcher: 42",
+      "model": "DTP3 CrossPoint 42",
+      "x": 1000.0,
+      "y": 270.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "usb_c_60w_1",
+          "label": "USB-C 60W 1",
+          "signal": "usbC",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_cec",
+          "label": "HDMI/CEC",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dtp3out",
+          "label": "DTP3OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_cec_2",
+          "label": "HDMI/CEC 2",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_3",
+          "label": "AUDIO 3",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N5",
+      "label": "PDU: 1x Switched 1x Surge",
+      "model": "AP7900B",
+      "x": 1000.0,
+      "y": 420.0,
+      "fromConfig": false,
+      "rackUnits": 1,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "out_pwr_1",
+          "label": "OUTLET 1",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_2",
+          "label": "OUTLET 2",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_3",
+          "label": "OUTLET 3",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_4",
+          "label": "OUTLET 4",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_5",
+          "label": "OUTLET 5",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_6",
+          "label": "OUTLET 6",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_7",
+          "label": "OUTLET 7",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_8",
+          "label": "OUTLET 8",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    }
+  ],
+  "cables": [],
+  "racks": [],
+  "rackItems": [],
+  "rackSlots": {},
+  "screenSwitches": []
+}

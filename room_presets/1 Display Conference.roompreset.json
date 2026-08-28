@@ -1,0 +1,75 @@
+{
+  "__readme": "Built from the RYG categories estimates spreadsheet, sheet \"Conf 1 Display\". The equipment this room type is priced on; the cabling is drawn per room. Rebuild with tools/build_ryg_presets.py.",
+  "name": "1 Display Conference",
+  "description": "RYG room type \"Conf 1 Display\": 1 device, 4 priced lines with no box to draw. Cabling is drawn per room.",
+  "jackPrefix": "",
+  "sourceName": "Conf 1 Display",
+  "locations": [
+    {
+      "id": "LOC_2",
+      "name": "Front wall",
+      "zone": "front"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "N1",
+      "label": "Display",
+      "model": "FW-75EZ20L",
+      "x": 560.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_2",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    }
+  ],
+  "cables": [],
+  "racks": [],
+  "rackItems": [],
+  "rackSlots": {},
+  "screenSwitches": []
+}

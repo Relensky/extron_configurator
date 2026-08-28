@@ -9,6 +9,8 @@ import 'app_state.dart';
 import 'building_project.dart';
 import 'contrast.dart';
 import 'cost_estimate.dart' show trimNumber;
+import 'equipment_lifecycle.dart'
+    show RoomLifecycle, buildProjectLifecycle, formatLifecycleMoney;
 import 'project_estimate.dart';
 import 'project_history_view.dart' show ItemHistory;
 import 'project_reminders.dart';
@@ -39,6 +41,195 @@ import 'stepped_date_picker.dart';
 ///  is what turns a hundred-row table into the half-dozen dates somebody
 ///  actually has to put in a calendar.
 /// ============================================================================
+
+/// The timeline for a job that has a replacement plan and no parts.
+///
+/// Everything here comes off the SAME lifecycle the plan is drawn from - see
+/// [buildProjectLifecycle] - so the year a room is listed under here and the
+/// year its cell is coloured in there can never disagree.
+List<Widget> _lifecycleSlivers(
+  BuildContext context,
+  ProjectEstimate estimate,
+  ProjectSchedule schedule,
+) {
+  final theme = Theme.of(context);
+  final provider = context.watch<AppStateProvider>();
+  final building = buildProjectLifecycle(
+    estimate: estimate,
+    library: provider.avDeviceLibrary,
+    baseCosts: provider.baseCosts,
+    tier: provider.pricingTier,
+  );
+
+  // One entry per year anything is due, earliest first. A room with no date is
+  // not on a year and is counted separately - it is a survey to do, not a year
+  // to budget.
+  final byYear = <int, List<RoomLifecycle>>{};
+  var undated = 0;
+  for (final room in building.rooms) {
+    final year = room.firstDueYear;
+    if (year == null) {
+      undated++;
+      continue;
+    }
+    byYear.putIfAbsent(year, () => []).add(room);
+  }
+  final years = byYear.keys.toList()..sort();
+
+  return [
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+        child: Text(
+          'This building is on the plan and not yet drawn, so there is nothing '
+          'to order and no lead times to work back from. What it does have is '
+          'a year per room. Set the phases below to break the refresh up; the '
+          'order dates appear as rooms get built.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    ),
+    // THE PHASES, which are the thing a refresh is actually planned in and the
+    // one part of this pane that never needed a part to exist.
+    SliverToBoxAdapter(child: _TrackStrip(schedule: schedule)),
+    SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 12, 16, 4),
+        child: Text(
+          'DUE BY YEAR',
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    ),
+    SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      sliver: SliverList.builder(
+        itemCount: years.length,
+        itemBuilder: (context, index) => _DueYearCard(
+          year: years[index],
+          rooms: byYear[years[index]]!,
+          currency: building.currency,
+          thisYear: building.asOf.year,
+          first: index == 0,
+          last: index == years.length - 1,
+        ),
+      ),
+    ),
+    if (undated > 0)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Text(
+            '$undated room${undated == 1 ? '' : 's'} on this job '
+            '${undated == 1 ? 'has' : 'have'} no date, so nothing can be said '
+            'about when ${undated == 1 ? 'it falls' : 'they fall'} due. Put a '
+            'last-done date on the line item and it lands on a year here.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+  ];
+}
+
+/// One year of the replacement plan: what falls due, and what it comes to.
+///
+/// Deliberately the shape of an [_OrderDayCard] - a date, a total, and the
+/// things that land on it - because it is read for the same reason: this is
+/// the year somebody has to find the money in.
+class _DueYearCard extends StatelessWidget {
+  final int year;
+  final List<RoomLifecycle> rooms;
+  final String currency;
+  final int thisYear;
+  final bool first;
+  final bool last;
+
+  const _DueYearCard({
+    required this.year,
+    required this.rooms,
+    required this.currency,
+    required this.thisYear,
+    required this.first,
+    required this.last,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final total = rooms.fold<double>(0, (sum, r) => sum + r.costDueIn(year));
+    // A year already gone is money that is late, and reads as late.
+    final overdue = year < thisYear;
+    final ink = overdue
+        ? errorTextOn(theme.colorScheme, theme.cardColor)
+        : theme.colorScheme.onSurface;
+
+    return Card(
+      key: ValueKey('timeline_due_$year'),
+      margin: EdgeInsets.fromLTRB(0, first ? 4 : 2, 0, last ? 4 : 2),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  overdue ? Icons.warning_amber : Icons.event,
+                  size: 18,
+                  color: ink,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$year',
+                  style: theme.textTheme.titleMedium?.copyWith(color: ink),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '${rooms.length} room${rooms.length == 1 ? '' : 's'}'
+                    '${overdue ? '  ·  already past' : ''}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Text(
+                  formatLifecycleMoney(total, currency),
+                  style: theme.textTheme.titleSmall?.copyWith(color: ink),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final room in rooms)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    label: Text(
+                      '${room.roomName}  '
+                      '${formatLifecycleMoney(room.costDueIn(year), currency)}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// The project deadline, as a chip that sets it.
 ///
@@ -249,22 +440,40 @@ List<Widget> timelineSlivers(BuildContext context, ProjectEstimate estimate) {
   final schedule = buildProjectSchedule(estimate: estimate);
 
   if (estimate.master.isEmpty) {
-    return const [
-      SliverFillRemaining(
-        hasScrollBody: false,
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Nothing to schedule yet.\n\n'
-              'The timeline is built from the Equipment list - add '
-              'rooms that have equipment on them.',
-              textAlign: TextAlign.center,
+    // A JOB CAN HAVE A CALENDAR AND NO PARTS.
+    //
+    // The order dates on this pane are worked back from lead times, and a lead
+    // time is a fact about a part - so a building whose rooms are all line
+    // items has nothing to order and this pane said "nothing to schedule".
+    // Which was true about the parts and quite wrong about the job: a refresh
+    // plan is the one kind of work that is ALL calendar, and the year each
+    // room falls due is the only date anybody is planning against.
+    //
+    // So when there are no parts but there is a replacement plan, the pane
+    // shows the plan: the phases, which are what a refresh gets broken into,
+    // and the rooms under the year they come due. The deadline chip in the
+    // header still sets the job's date, and both survive the first room being
+    // drawn - at which point the parts arrive and the order dates with them.
+    if (provider.project.manualRooms.isEmpty) {
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Nothing to schedule yet.\n\n'
+                'The timeline is built from the Equipment list - add '
+                'rooms that have equipment on them, or add line items on the '
+                'Rooms pane and this becomes the replacement calendar.',
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ),
-      ),
-    ];
+      ];
+    }
+    return _lifecycleSlivers(context, estimate, schedule);
   }
 
   return [

@@ -602,7 +602,9 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     canvas.drawImage(image, Offset.zero, Paint());
-    _paintAnnotationsOnCanvas(canvas, _annotations, null);
+    // Image space, at full resolution: this is the file, and a mark is stored
+    // in image pixels, so there is nothing to convert.
+    _paintAnnotationsOnCanvas(canvas, _annotations);
     final picture = recorder.endRecording();
     final ui.Image outImage = await picture.toImage(image.width, image.height);
     final byteData = await outImage.toByteData(format: ui.ImageByteFormat.png);
@@ -1123,13 +1125,20 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   }
 }
 
-// Paints [annotations] (given in image coordinates) on [canvas]. Pass a
-// non-null [scale] to pre-scale the canvas for on-screen display; null keeps
-// full image resolution (used when saving).
-void _paintAnnotationsOnCanvas(
-    Canvas canvas, List<_Annotation> annotations, double? scale) {
-  if (scale != null) canvas.scale(scale);
-
+/// Paints [annotations] on [canvas], in IMAGE coordinates.
+///
+/// IT DOES NOT TOUCH THE TRANSFORM. It used to take a scale and apply it - and
+/// never put it back, so the canvas came out of here still scaled. Anything
+/// drawn afterwards was then scaled a second time, which is exactly what
+/// happened to the selection halo: right at 100% and adrift at every other
+/// zoom, drifting towards the top-left corner the further out you went.
+///
+/// So the scaling belongs to the CALLER, which is the only one that knows
+/// which space it wants to be in - see [_AnnotationPainter.paint], which
+/// scales inside a save/restore for the marks and then draws the halo in
+/// screen space, and [_AnnotationEditorState._flatten], which wants image
+/// space and so scales nothing at all.
+void _paintAnnotationsOnCanvas(Canvas canvas, List<_Annotation> annotations) {
   for (final a in annotations) {
     final paint = Paint()
       ..color = a.tool == AnnotationTool.highlighter
@@ -1236,13 +1245,19 @@ class _AnnotationPainter extends CustomPainter {
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()..filterQuality = FilterQuality.medium,
     );
-    _paintAnnotationsOnCanvas(
-        canvas, [...annotations, ?active], scale);
+    // THE MARKS, IN IMAGE SPACE. Saved and restored around, so the canvas
+    // comes back in screen space for the halo below - see
+    // [_paintAnnotationsOnCanvas], which no longer does this for itself.
+    canvas.save();
+    canvas.scale(scale);
+    _paintAnnotationsOnCanvas(canvas, [...annotations, ?active]);
+    canvas.restore();
 
     final held = selected;
     if (held == null) return;
-    // Outside the scaled block above, so the halo is the same weight at every
-    // zoom - it is a handle, not part of the picture.
+    // THE HALO, IN SCREEN SPACE. Converted once, here, so it lands on the mark
+    // at any zoom - and so its stroke and its margin stay the same weight
+    // however far out the picture is: it is a handle, not part of the picture.
     final box = _annotationBounds(held);
     if (box.isEmpty) return;
     final rect = Rect.fromLTRB(

@@ -53,14 +53,26 @@ typedef NewRoomChoice = ({
   RoomPreset? preset,
 });
 
-Future<NewRoomChoice?> showNewRoomDialog(BuildContext context) =>
+/// [initialPreset] is the room type to open ON.
+///
+/// Offered rather than imposed, and it is still the same dialog: a line item on
+/// a refresh plan already knows which room type it was priced against, so
+/// building the room from it should not start by asking the reader to find that
+/// type in a list of twenty-seven. They can still change it - the estimate is
+/// how the room was PRICED, not a promise about what will go in it.
+Future<NewRoomChoice?> showNewRoomDialog(
+  BuildContext context, {
+  RoomPreset? initialPreset,
+}) =>
     showDialog<NewRoomChoice>(
       context: context,
-      builder: (ctx) => const _NewRoomDialog(),
+      builder: (ctx) => _NewRoomDialog(initialPreset: initialPreset),
     );
 
 class _NewRoomDialog extends StatefulWidget {
-  const _NewRoomDialog();
+  final RoomPreset? initialPreset;
+
+  const _NewRoomDialog({this.initialPreset});
 
   @override
   State<_NewRoomDialog> createState() => _NewRoomDialogState();
@@ -69,7 +81,7 @@ class _NewRoomDialog extends StatefulWidget {
 class _NewRoomDialogState extends State<_NewRoomDialog> {
   RoomMode _mode = RoomMode.full;
   bool _startFromEstimator = false;
-  RoomPreset? _preset;
+  late RoomPreset? _preset = widget.initialPreset;
 
   /// Read once. Touching the disk on every rebuild of a dialog that rebuilds
   /// on every radio press is not something to do to a network drive.

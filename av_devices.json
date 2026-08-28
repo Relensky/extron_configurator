@@ -105300,6 +105300,432 @@
           "side": "bottom"
         }
       ]
+    },
+    {
+      "model": "FW-75EZ20L",
+      "manufacturer": "Sony",
+      "category": "Display",
+      "rackUnits": 0,
+      "notes": "75\" Bravia professional display, EZ20L series. Priced on the RYG categories sheet as the standard flat panel.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "FW-85EZ20L",
+      "manufacturer": "Sony",
+      "category": "Display",
+      "rackUnits": 0,
+      "notes": "85\" Bravia professional display, EZ20L series. Priced on the RYG categories sheet as the standard flat panel.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TLP Pro 725",
+      "manufacturer": "Extron",
+      "category": "Control Systems",
+      "rackUnits": 0,
+      "notes": "7\" Tabletop TouchLink Pro touchpanel. The panel the RYG categories sheet prices as Touch Panel: 7\".",
+      "ports": [
+        {
+          "id": "lan_xtp",
+          "label": "LAN/ XTP",
+          "signal": "hdbaset",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "TLP Pro 1025",
+      "manufacturer": "Extron",
+      "category": "Control Systems",
+      "rackUnits": 0,
+      "notes": "10\" Tabletop TouchLink Pro touchpanel. The panel the RYG categories sheet prices as Touch Panel: 10\".",
+      "ports": [
+        {
+          "id": "lan_xtp",
+          "label": "LAN/ XTP",
+          "signal": "hdbaset",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "MRX7-D",
+      "manufacturer": "Yamaha",
+      "category": "DSP",
+      "rackUnits": 2,
+      "notes": "Open-architecture Dante DSP, configured in ProVisionaire. The RYG sheet's \"Audio DSP: Open Architecture\".",
+      "ports": [
+        {
+          "id": "dante_1",
+          "label": "DANTE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_1",
+          "label": "MIC/LINE 1",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_2",
+          "label": "MIC/LINE 2",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_line_1",
+          "label": "OUT 1",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_line_2",
+          "label": "OUT 2",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "MXA920",
+      "manufacturer": "Shure",
+      "category": "Audio",
+      "rackUnits": 0,
+      "notes": "Ceiling array microphone with automatic coverage. Dante over a single PoE run - no analogue tail, so the only thing to draw is the network.",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ],
+      "powerInput": "poe"
+    },
+    {
+      "model": "TL-SG108PE",
+      "manufacturer": "TP-Link",
+      "category": "AV / Misc",
+      "rackUnits": 0,
+      "notes": "8-port easy-smart PoE switch. The small AV-LAN switch the RYG sheet puts in every room.",
+      "ports": [
+        {
+          "id": "lan_uplink",
+          "label": "UPLINK",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_2",
+          "label": "PORT 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_3",
+          "label": "PORT 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_4",
+          "label": "PORT 4",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "RoomCast",
+      "manufacturer": "Yealink",
+      "category": "Wireless presentation",
+      "rackUnits": 0,
+      "notes": "Casting receiver / digital signage player. The RYG sheet's \"Digital Signage Player\".",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "Bar BYOD",
+      "manufacturer": "Neat",
+      "category": "Collaboration Systems",
+      "rackUnits": 0,
+      "notes": "All-in-one bring-your-own-device conferencing bar: camera, mics and speakers in one, joined to a laptop over USB.",
+      "ports": [
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "model": "BU113G2-BLACK",
+      "manufacturer": "AVerMedia",
+      "category": "USB interface",
+      "rackUnits": 0,
+      "notes": "HDMI to USB capture. The RYG sheet's \"Capture Card: Basic\" - what puts a room camera into a soft codec.",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        }
+      ],
+      "powerInput": "none"
+    },
+    {
+      "model": "ADP-USBC-AU-2X2",
+      "manufacturer": "Audinate",
+      "category": "USB interface",
+      "rackUnits": 0,
+      "notes": "Dante AVIO USB-C adapter, 2x2. The RYG sheet's \"Dante In\" - a PC on the Dante network without a card in it.",
+      "ports": [
+        {
+          "id": "dante_1",
+          "label": "DANTE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB-C",
+          "signal": "usbC",
+          "direction": "bidirectional",
+          "side": "left"
+        }
+      ],
+      "powerInput": "none"
+    },
+    {
+      "model": "TR335",
+      "manufacturer": "AVer",
+      "category": "Camera",
+      "rackUnits": 0,
+      "notes": "30x auto-tracking presenter camera. The RYG sheet's \"Camera: Presenter 30x\"; the catalog's TR333 is the 12x.",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
     }
   ]
 }

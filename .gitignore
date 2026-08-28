@@ -63,3 +63,12 @@ app_config.json.invalid
 /*.dll
 /native_assets.json
 /data/
+
+# The four presets the app SHIPS are written into this folder on startup, so
+# they come back after every run. The room types generated from the refresh
+# spreadsheet are committed; the built-ins are not, because the copy on disk is
+# a cache of what is already in room_presets.dart.
+/room_presets/Basic classroom.roompreset.json
+/room_presets/Hyflex.roompreset.json
+/room_presets/Huddle.roompreset.json
+/room_presets/Active learning.roompreset.json

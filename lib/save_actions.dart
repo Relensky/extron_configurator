@@ -586,6 +586,126 @@ Future<bool> createProjectRoom(
   return true;
 }
 
+// ---------------------------------------------------------------------------
+//  FROM AN ESTIMATE TO A ROOM
+// ---------------------------------------------------------------------------
+//  A building arrives on the refresh plan as a list of estimates: a room name,
+//  a date, a life and a figure off a master spreadsheet, with no config file
+//  anywhere under it. That is enough to budget with and not enough to build
+//  with, and the moment somebody is actually doing one of those rooms they
+//  need the other thing - a real room file, with the equipment that room type
+//  is priced on already in it.
+//
+//  This is that step, as ONE action. Done by hand it is: read the note to find
+//  which room type the estimate used, start a new room, find that type in a
+//  list of twenty-seven, apply it, type the building and the room number in,
+//  save it somewhere sensible, add it to the job, then remember to delete the
+//  estimate - and the last of those is the one that gets forgotten, which puts
+//  the room on its own building's plan twice.
+
+/// The building code and room number in a line item's name.
+///
+/// 'AGYM 129' is a building and a room; 'Ground floor teaching lab' is neither,
+/// and the honest answer there is the job's own building code and no number,
+/// which leaves the Wizard's fields blank rather than filled with a guess.
+({String building, String room}) splitLineItemName(
+  String name, {
+  String fallbackBuilding = '',
+}) {
+  final trimmed = name.trim();
+  final match = RegExp(r'^([A-Za-z]{2,6})[\s-]+([\w.-]+)$').firstMatch(trimmed);
+  if (match != null) {
+    return (building: match.group(1)!.toUpperCase(), room: match.group(2)!);
+  }
+  // A bare number with the building implied by the job it is on.
+  final number = RegExp(r'^([\w.-]+)$').firstMatch(trimmed);
+  if (number != null && fallbackBuilding.trim().isNotEmpty) {
+    return (building: fallbackBuilding.trim().toUpperCase(), room: number.group(1)!);
+  }
+  return (building: fallbackBuilding.trim().toUpperCase(), room: '');
+}
+
+/// Builds a real room file from one line item, and takes the estimate off the
+/// plan once the room is on the job.
+///
+/// THE ESTIMATE IS ONLY DROPPED IF THE ROOM WENT ON. Every way this can stop -
+/// the reader cancels, the template is missing, they close the save dialog,
+/// the config will not join the job - leaves the plan exactly as it was. The
+/// estimate is the only record of that room, and losing it to a half-finished
+/// conversion would take the room off the budget altogether.
+///
+/// Returns true when the room was created, saved and added.
+Future<bool> buildRoomFromLineItem(
+  BuildContext context,
+  AppStateProvider provider,
+  ManualRoom line,
+) async {
+  if (!await confirmLeavingRoom(context, provider)) return false;
+  if (!context.mounted) return false;
+
+  // The room type this estimate was priced against, so the dialog opens on it
+  // rather than on a list of twenty-seven - see [ManualRoom.sourceType].
+  final suggested = provider.presetForSourceName(line.sourceType);
+  final choice = await showNewRoomDialog(context, initialPreset: suggested);
+  if (choice == null || !context.mounted) return false;
+
+  if (!await createRoomFromChoice(context, provider, choice, announce: false)) {
+    return false;
+  }
+  if (!context.mounted) return false;
+  final messenger = ScaffoldMessenger.of(context);
+
+  // The code on the door, off the line item's own name. Written before the
+  // save so the file picker's suggested name is the room's.
+  final where = splitLineItemName(
+    line.name,
+    fallbackBuilding: provider.project.building,
+  );
+  provider.setRoomIdentity(building: where.building, room: where.room);
+
+  if (!await provider.exportRoomConfig()) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(
+          'The room was built but not saved, so ${line.name} is still an '
+          'estimate on the plan. Save the room and use Swap on the line to '
+          'put the two together.',
+        ),
+      ),
+    );
+    return false;
+  }
+
+  final error = provider.swapManualRoomForConfig(
+    line.id,
+    provider.currentConfigPath,
+  );
+  if (error.isNotEmpty) {
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        content: Text(error),
+        backgroundColor: snackErrorFillOn(messenger),
+      ),
+    );
+    return false;
+  }
+
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 8),
+      content: Text(
+        '${line.name} is a room now'
+        '${choice.preset == null ? '' : ', built from ${choice.preset!.name}'}'
+        '. Its estimate is off the plan and it is priced from its own parts.',
+      ),
+    ),
+  );
+  return true;
+}
+
 /// Puts the job away. Returns true when it was actually closed.
 ///
 /// Asks about unsaved work first, through the same prompt New and Open use, so

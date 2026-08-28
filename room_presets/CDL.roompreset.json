@@ -1,0 +1,14 @@
+{
+  "__readme": "Built from the RYG categories estimates spreadsheet, sheet \"!CDL\". The equipment this room type is priced on; the cabling is drawn per room. Rebuild with tools/build_ryg_presets.py.",
+  "name": "CDL",
+  "description": "RYG room type \"!CDL\": 0 devices. Cabling is drawn per room.",
+  "jackPrefix": "",
+  "sourceName": "!CDL",
+  "locations": [],
+  "nodes": [],
+  "cables": [],
+  "racks": [],
+  "rackItems": [],
+  "rackSlots": {},
+  "screenSwitches": []
+}

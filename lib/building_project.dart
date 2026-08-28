@@ -1023,6 +1023,23 @@ class ManualRoom {
     if (notes.trim().isNotEmpty) 'notes': notes.trim(),
   };
 
+  /// The room TYPE this estimate was priced against, off the master refresh
+  /// sheet, or '' when the note does not name one.
+  ///
+  /// The importer writes it into the notes - 'LEC-Lecture  ·  capacity 44  ·
+  /// RYG estimate for 2 Projector' - because a note is the one field on a line
+  /// item that survives every round trip and needs no schema. Read back out
+  /// here so it can be matched against [RoomPreset.sourceName] rather than
+  /// left as prose nobody parses.
+  ///
+  /// Anything after the type is an annotation the importer added about the
+  /// master sheet ('last update unknown'), so it stops at the separator.
+  String get sourceType {
+    final match = RegExp(r'RYG estimate for (.+)$').firstMatch(notes.trim());
+    if (match == null) return '';
+    return match.group(1)!.split('·').first.trim();
+  }
+
   static ManualRoom fromJson(Map<String, dynamic> json) => ManualRoom(
     id: json['id']?.toString() ?? '',
     name: json['name']?.toString() ?? '',
@@ -2061,6 +2078,23 @@ class BuildingProject {
           (_, final label) when label.isNotEmpty => label,
           _ => room.fallbackName,
         },
+      ),
+    // THE ROOMS WITH NO CONFIG ARE STILL ROOMS ON THE JOB - see [ManualRoom].
+    //
+    // A matrix is agreed for a BUILDING, and on a job imported off a refresh
+    // spreadsheet every room in that building is a line item: the sheet had
+    // its headings, its parties and its scope lines, and not one column to put
+    // them against. The thing the document exists to settle - whose job is
+    // this, in which room - could not be written down at all.
+    //
+    // Their ids are their own ('manual1', never 'room1'), so a quantity
+    // recorded against one can never be read as another room's - and a line
+    // item that is later replaced by a real room config takes its column with
+    // it rather than leaving a stray one behind.
+    for (final line in manualRooms)
+      (
+        id: line.id,
+        name: line.name.trim().isEmpty ? line.id : line.name.trim(),
       ),
   ];
 

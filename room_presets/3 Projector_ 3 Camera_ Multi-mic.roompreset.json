@@ -1,0 +1,2212 @@
+{
+  "__readme": "Built from the RYG categories estimates spreadsheet, sheet \"!3 Projector 3 Cam Multimic\". The equipment this room type is priced on; the cabling is drawn per room. Rebuild with tools/build_ryg_presets.py.",
+  "name": "3 Projector, 3 Camera, Multi-mic",
+  "description": "RYG room type \"!3 Projector 3 Cam Multimic\": 32 devices, 9 priced lines with no box to draw. Cabling is drawn per room.",
+  "jackPrefix": "",
+  "sourceName": "!3 Projector 3 Cam Multimic",
+  "locations": [
+    {
+      "id": "LOC_1",
+      "name": "Lectern",
+      "zone": "lectern"
+    },
+    {
+      "id": "LOC_2",
+      "name": "Front wall",
+      "zone": "front"
+    },
+    {
+      "id": "LOC_3",
+      "name": "Ceiling",
+      "zone": "ceiling"
+    },
+    {
+      "id": "LOC_4",
+      "name": "Rack",
+      "zone": "rack"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "N1",
+      "label": "Audio DSP: Open Architecture",
+      "model": "MRX7-D",
+      "x": 1000.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 2,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "dante_1",
+          "label": "DANTE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_1",
+          "label": "MIC/LINE 1",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_2",
+          "label": "MIC/LINE 2",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_line_1",
+          "label": "OUT 1",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_line_2",
+          "label": "OUT 2",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N2",
+      "label": "Camera: Presenter 30x 1",
+      "model": "TR335",
+      "x": 560.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_2",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N3",
+      "label": "Camera: Presenter 30x 2",
+      "model": "TR335",
+      "x": 560.0,
+      "y": 270.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_2",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N4",
+      "label": "Camera: Presenter 30x 3",
+      "model": "TR335",
+      "x": 560.0,
+      "y": 420.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_2",
+      "ports": [
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N5",
+      "label": "Capture Card: AV Bridge",
+      "model": "AV Bridge 2x1",
+      "x": 1000.0,
+      "y": 270.0,
+      "fromConfig": false,
+      "rackUnits": 1,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI IN 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI IN 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_hdmi_1",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "AUDIO OUT",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "port_1786645836574383",
+          "label": "USB OUT",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N6",
+      "label": "Display 1",
+      "model": "FW-75EZ20L",
+      "x": 560.0,
+      "y": 570.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_2",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N7",
+      "label": "Display 2",
+      "model": "FW-75EZ20L",
+      "x": 560.0,
+      "y": 720.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_2",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_rs232",
+          "label": "RS-232C",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N8",
+      "label": "Doc Cam",
+      "model": "Document Camera (DC-13)",
+      "x": 340.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_1",
+      "ports": [
+        {
+          "id": "hdmi_out",
+          "label": "HDMI OUT",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "usb_out",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N9",
+      "label": "HDMI over Base-T: Tx or Rx 1",
+      "model": "DTP HDMI 4K 330 Tx",
+      "x": 1000.0,
+      "y": 420.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "hdmi",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio",
+          "label": "AUDIO",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N10",
+      "label": "HDMI over Base-T: Tx or Rx 2",
+      "model": "DTP HDMI 4K 330 Tx",
+      "x": 1000.0,
+      "y": 570.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "hdmi",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio",
+          "label": "AUDIO",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N11",
+      "label": "Microphone: Ceiling 1",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 120.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N12",
+      "label": "Microphone: Ceiling 2",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 270.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N13",
+      "label": "Microphone: Ceiling 3",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 420.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N14",
+      "label": "Microphone: Ceiling 4",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 570.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N15",
+      "label": "Microphone: Ceiling 5",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 720.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N16",
+      "label": "Microphone: Ceiling 6",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 870.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N17",
+      "label": "Microphone: Ceiling 7",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 1020.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N18",
+      "label": "Microphone: Ceiling 8",
+      "model": "MXA920",
+      "x": 780.0,
+      "y": 1170.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "dante_poe",
+          "label": "DANTE / PoE",
+          "signal": "dante",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "PoE",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N19",
+      "label": "Microphone: RF Kit",
+      "model": "MXWAPXD2",
+      "x": 1000.0,
+      "y": 720.0,
+      "fromConfig": false,
+      "rackUnits": 1,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "in_mic_1",
+          "label": "MIC/LINE 1",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_mic_2",
+          "label": "MIC/LINE 2",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_mic_3",
+          "label": "MIC/LINE 3",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_mic_4",
+          "label": "MIC/LINE 4",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_mic_5",
+          "label": "MIC/LINE 5",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_mic_6",
+          "label": "MIC/LINE 6",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_aud_1",
+          "label": "OUT 1",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_aud_2",
+          "label": "OUT 2",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_aud_3",
+          "label": "OUT 3",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_aud_4",
+          "label": "OUT 4",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N20",
+      "label": "Network Switch",
+      "model": "TL-SG108PE",
+      "x": 1000.0,
+      "y": 870.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "lan_uplink",
+          "label": "UPLINK",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_2",
+          "label": "PORT 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_3",
+          "label": "PORT 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan_4",
+          "label": "PORT 4",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N21",
+      "label": "PDU: 1x Switched 1x Surge 1",
+      "model": "AP7900B",
+      "x": 1000.0,
+      "y": 1020.0,
+      "fromConfig": false,
+      "rackUnits": 1,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "out_pwr_1",
+          "label": "OUTLET 1",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_2",
+          "label": "OUTLET 2",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_3",
+          "label": "OUTLET 3",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_4",
+          "label": "OUTLET 4",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_5",
+          "label": "OUTLET 5",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_6",
+          "label": "OUTLET 6",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_7",
+          "label": "OUTLET 7",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_8",
+          "label": "OUTLET 8",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N22",
+      "label": "PDU: 1x Switched 1x Surge 2",
+      "model": "AP7900B",
+      "x": 1000.0,
+      "y": 1170.0,
+      "fromConfig": false,
+      "rackUnits": 1,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "out_pwr_1",
+          "label": "OUTLET 1",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_2",
+          "label": "OUTLET 2",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_3",
+          "label": "OUTLET 3",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_4",
+          "label": "OUTLET 4",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_5",
+          "label": "OUTLET 5",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_6",
+          "label": "OUTLET 6",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_7",
+          "label": "OUTLET 7",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_pwr_8",
+          "label": "OUTLET 8",
+          "signal": "power",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N23",
+      "label": "Projector + Mount 1",
+      "model": "PT-VMZ62BU8",
+      "x": 780.0,
+      "y": 1320.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N24",
+      "label": "Projector + Mount 2",
+      "model": "PT-VMZ62BU8",
+      "x": 780.0,
+      "y": 1470.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N25",
+      "label": "Projector + Mount 3",
+      "model": "PT-VMZ62BU8",
+      "x": 780.0,
+      "y": 1620.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_3",
+      "ports": [
+        {
+          "id": "in_hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_hdbt_1",
+          "label": "HDBaseT",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_vga_1",
+          "label": "COMPUTER",
+          "signal": "vga",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_aud_1",
+          "label": "AUDIO IN",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "lan_1",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N26",
+      "label": "Touch Panel: 10\"",
+      "model": "TLP Pro 1025",
+      "x": 340.0,
+      "y": 270.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_1",
+      "ports": [
+        {
+          "id": "lan_xtp",
+          "label": "LAN/ XTP",
+          "signal": "hdbaset",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N27",
+      "label": "USB Toggle",
+      "model": "Toggle",
+      "x": 1000.0,
+      "y": 1320.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "in_usb_1",
+          "label": "USB DEVICE 1",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_usb_2",
+          "label": "USB DEVICE 2",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_usb_3",
+          "label": "USB DEVICE 3",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "out_usb_1",
+          "label": "USB HOST 1",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "out_usb_2",
+          "label": "USB HOST 2",
+          "signal": "usbData",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_ctrl_1",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N28",
+      "label": "USB-C to HDMI + Cable",
+      "model": "USB-C HD 101",
+      "x": 340.0,
+      "y": 420.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_1",
+      "ports": [
+        {
+          "id": "usb",
+          "label": "USB-C",
+          "signal": "usbC",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N29",
+      "label": "Wireless Mirroring",
+      "model": "ShareLink Pro 2000",
+      "x": 1000.0,
+      "y": 1470.0,
+      "fromConfig": false,
+      "rackUnits": 1,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "hdmi",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio",
+          "label": "AUDIO",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "usb",
+          "label": "USB",
+          "signal": "usbData",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_2",
+          "label": "AUDIO",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N30",
+      "label": "Distribution Amp",
+      "model": "DTP HD DA4 4K 330",
+      "x": 1000.0,
+      "y": 1620.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "hdmi",
+          "label": "HDMI",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio",
+          "label": "AUDIO",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_loop",
+          "label": "HDMI - LOOP",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_loop",
+          "label": "AUDIO - LOOP",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "ethernet",
+          "label": "ETHERNET",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out_001",
+          "label": "DTP OUT 001",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_1",
+          "label": "RS-232/IR 1",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out_002",
+          "label": "DTP OUT 002",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_2",
+          "label": "RS-232/IR 2",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out_003",
+          "label": "DTP OUT 003",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_3",
+          "label": "RS-232/IR 3",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out",
+          "label": "DTP OUT",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_4",
+          "label": "RS-232/IR 4",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N31",
+      "label": "Switcher: 84 1",
+      "model": "DTP CrossPoint 84 4K IPCP Q SA",
+      "x": 1000.0,
+      "y": 1770.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_1",
+          "label": "AUDIO 1",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_2",
+          "label": "AUDIO 2",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_3",
+          "label": "AUDIO 3",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_4",
+          "label": "AUDIO 4",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_5",
+          "label": "HDMI 5",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_5",
+          "label": "AUDIO 5",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_6",
+          "label": "HDMI 6",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_6",
+          "label": "AUDIO 6",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_1",
+          "label": "DTP IN 1",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_1",
+          "label": "RS-232/IR 1",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_2",
+          "label": "DTP IN 2",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_2",
+          "label": "RS-232/IR 2",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_1",
+          "label": "MIC/LINE 1",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_2",
+          "label": "MIC/LINE 2",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_3",
+          "label": "MIC/LINE 3",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_4",
+          "label": "MIC/LINE 4",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "ebus",
+          "label": "eBUS",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_001",
+          "label": "HDMI 001",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_002",
+          "label": "HDMI 002",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_003a",
+          "label": "HDMI 003A",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_004a",
+          "label": "HDMI 004A",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dtp_out_003b",
+          "label": "DTP OUT 003B",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_3",
+          "label": "RS-232/IR 3",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out_004b",
+          "label": "DTP OUT 004B",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_4",
+          "label": "RS-232/IR 4",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "s_pdif_004",
+          "label": "S/PDIF 004",
+          "signal": "digitalAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "sa_out_8_4",
+          "label": "SA OUT 8Ω/4Ω",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_001",
+          "label": "AUDIO 001",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_002",
+          "label": "AUDIO 002",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_003",
+          "label": "AUDIO 003",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_004",
+          "label": "AUDIO 004",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dmp_exp",
+          "label": "DMP EXP",
+          "signal": "network",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com1",
+          "label": "COM1",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com2",
+          "label": "COM2",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com3",
+          "label": "COM3",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "relay_1",
+          "label": "RELAY 1",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "relay_3",
+          "label": "RELAY 3",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_1",
+          "label": "IR/SERIAL 1",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_2",
+          "label": "IR/SERIAL 2",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_1",
+          "label": "AV LAN 1",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_2",
+          "label": "AV LAN 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_3",
+          "label": "AV LAN 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "N32",
+      "label": "Switcher: 84 2",
+      "model": "DTP CrossPoint 84 4K IPCP Q SA",
+      "x": 1000.0,
+      "y": 1920.0,
+      "fromConfig": false,
+      "rackUnits": 0,
+      "location": "LOC_4",
+      "ports": [
+        {
+          "id": "hdmi_1",
+          "label": "HDMI 1",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_1",
+          "label": "AUDIO 1",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_2",
+          "label": "HDMI 2",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_2",
+          "label": "AUDIO 2",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_3",
+          "label": "HDMI 3",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_3",
+          "label": "AUDIO 3",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_4",
+          "label": "HDMI 4",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_4",
+          "label": "AUDIO 4",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_5",
+          "label": "HDMI 5",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_5",
+          "label": "AUDIO 5",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_6",
+          "label": "HDMI 6",
+          "signal": "hdmi",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "audio_6",
+          "label": "AUDIO 6",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_1",
+          "label": "DTP IN 1",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_1",
+          "label": "RS-232/IR 1",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_in_2",
+          "label": "DTP IN 2",
+          "signal": "hdbaset",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "rs_232_ir_2",
+          "label": "RS-232/IR 2",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_1",
+          "label": "MIC/LINE 1",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_2",
+          "label": "MIC/LINE 2",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_3",
+          "label": "MIC/LINE 3",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "mic_line_4",
+          "label": "MIC/LINE 4",
+          "signal": "micLine",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "ebus",
+          "label": "eBUS",
+          "signal": "analogAudio",
+          "direction": "input",
+          "side": "left"
+        },
+        {
+          "id": "hdmi_001",
+          "label": "HDMI 001",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_002",
+          "label": "HDMI 002",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_003a",
+          "label": "HDMI 003A",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "hdmi_004a",
+          "label": "HDMI 004A",
+          "signal": "hdmi",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dtp_out_003b",
+          "label": "DTP OUT 003B",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_3",
+          "label": "RS-232/IR 3",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "dtp_out_004b",
+          "label": "DTP OUT 004B",
+          "signal": "hdbaset",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232_ir_4",
+          "label": "RS-232/IR 4",
+          "signal": "ir",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "s_pdif_004",
+          "label": "S/PDIF 004",
+          "signal": "digitalAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "sa_out_8_4",
+          "label": "SA OUT 8Ω/4Ω",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_001",
+          "label": "AUDIO 001",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_002",
+          "label": "AUDIO 002",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_003",
+          "label": "AUDIO 003",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "audio_004",
+          "label": "AUDIO 004",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "dmp_exp",
+          "label": "DMP EXP",
+          "signal": "network",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com1",
+          "label": "COM1",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com2",
+          "label": "COM2",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "com3",
+          "label": "COM3",
+          "signal": "analogAudio",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "relay_1",
+          "label": "RELAY 1",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "relay_3",
+          "label": "RELAY 3",
+          "signal": "other",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_1",
+          "label": "IR/SERIAL 1",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "ir_serial_2",
+          "label": "IR/SERIAL 2",
+          "signal": "ir",
+          "direction": "output",
+          "side": "right"
+        },
+        {
+          "id": "rs_232",
+          "label": "RS-232",
+          "signal": "serial",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_1",
+          "label": "AV LAN 1",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_2",
+          "label": "AV LAN 2",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "av_lan_3",
+          "label": "AV LAN 3",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "lan",
+          "label": "LAN",
+          "signal": "network",
+          "direction": "bidirectional",
+          "side": "left"
+        },
+        {
+          "id": "in_power",
+          "label": "POWER",
+          "signal": "power",
+          "direction": "input",
+          "side": "bottom"
+        }
+      ]
+    }
+  ],
+  "cables": [],
+  "racks": [],
+  "rackItems": [],
+  "rackSlots": {},
+  "screenSwitches": []
+}

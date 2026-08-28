@@ -12,6 +12,7 @@ import 'cost_estimate.dart' show formatMoney;
 import 'equipment_lifecycle.dart' show kRoomRefreshCategory;
 import 'manual_rooms_dialog.dart' show showManualRoomForm;
 import 'project_schedule.dart' show formatScheduleDate;
+import 'save_actions.dart' show buildRoomFromLineItem;
 
 /// ============================================================================
 ///  THE PLAN AS LINE ITEMS
@@ -101,6 +102,18 @@ void removeManualRoomLine(BuildContext context, ManualRoom room) {
       ),
     ),
   );
+}
+
+/// Builds a REAL ROOM from one line item, and takes the estimate off the plan.
+///
+/// The other half of [swapManualRoomLine]. That one is for a room somebody has
+/// already drawn; this is for the far more common case where nobody has, and
+/// the estimate is all there is. The room type the line was priced against is
+/// already known - it is in the line's own notes - so the new-room dialog opens
+/// on it instead of on a list of twenty-seven. See [buildRoomFromLineItem].
+Future<void> buildRoomFromLine(BuildContext context, ManualRoom room) async {
+  final provider = context.read<AppStateProvider>();
+  await buildRoomFromLineItem(context, provider, room);
 }
 
 /// Replaces one line item with the room config somebody has since drawn.
@@ -205,9 +218,22 @@ class ManualRoomLineActions extends StatelessWidget {
         icon: Icon(Icons.edit_outlined, size: iconSize),
         onPressed: () => editManualRoomLine(context, room),
       ),
+      // BUILD IT. The estimate becomes a room file with the equipment its own
+      // room type is priced on already in it - which is the point of having
+      // priced it that way. Before Swap, because on a refresh plan almost
+      // nothing has been drawn yet: the room that already exists is the rare
+      // case.
+      IconButton(
+        key: ValueKey('line_item_build_${room.id}'),
+        tooltip: room.sourceType.isEmpty
+            ? 'Build a room file from this line'
+            : 'Build a room file from this line (${room.sourceType})',
+        icon: Icon(Icons.construction_outlined, size: iconSize),
+        onPressed: () => buildRoomFromLine(context, room),
+      ),
       IconButton(
         key: ValueKey('line_item_swap_${room.id}'),
-        tooltip: 'Replace this estimate with the room config',
+        tooltip: 'Replace this estimate with a room config that already exists',
         icon: Icon(Icons.swap_horiz, size: iconSize),
         onPressed: () => swapManualRoomLine(context, room),
       ),
