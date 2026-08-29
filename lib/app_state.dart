@@ -12051,6 +12051,283 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged();
   }
 
+  // --- the purchase orders --------------------------------------------------
+
+  /// The log key for one purchase order and one delivery.
+  ///
+  /// Both are their own kind rather than filed under the part, because a PO
+  /// covers many parts and a delivery is a lot rather than a line — filing
+  /// either under 'part:' would put "PO-1188 raised" on the history of
+  /// whichever part happened to be first on it.
+  static String projectPoItemKey(String id) => 'po:$id';
+  static String projectDeliveryItemKey(String id) => 'delivery:$id';
+
+  /// What a PO is called in the log — its number, which is the only name it
+  /// has and the one everybody uses.
+  static String _poLogName(ProjectPo po) =>
+      po.number.trim().isEmpty ? 'PO' : po.number.trim();
+
+  /// Adds a purchase order, or hands back the row the job already has for that
+  /// number. See [BuildingProject.addPo].
+  ProjectPo addProjectPo({
+    String number = '',
+    String vendorId = '',
+    String vendor = '',
+    DateTime? issuedOn,
+    DateTime? expectedOn,
+    double amount = 0,
+  }) {
+    final before = project.poByNumber(number);
+    final po = project.addPo(
+      number: number,
+      vendorId: vendorId,
+      vendor: vendor,
+      issuedOn: issuedOn,
+      expectedOn: expectedOn,
+      amount: amount,
+    );
+    if (before == null) {
+      _logProjectEdit(
+        itemKey: projectPoItemKey(po.id),
+        itemName: _poLogName(po),
+        field: 'Purchase order',
+        summary: po.issuedOn == null
+            ? 'added to the job'
+            : 'raised ${formatIsoDate(po.issuedOn!)}',
+      );
+      _projectChanged(repricing: false);
+    }
+    return po;
+  }
+
+  /// Replaces a PO row. [summary] says what changed, in the words the history
+  /// will carry; nothing is logged without one, because a dialog that saves
+  /// four untouched fields should not put four lines in the log.
+  void updateProjectPo(ProjectPo po, {String summary = ''}) {
+    project.updatePo(po);
+    if (summary.isNotEmpty) {
+      _logProjectEdit(
+        itemKey: projectPoItemKey(po.id),
+        itemName: _poLogName(po),
+        field: 'Purchase order',
+        summary: summary,
+      );
+    }
+    _projectChanged(repricing: false);
+  }
+
+  /// Corrects a PO's number, carrying the parts and deliveries that named it
+  /// across. False when the number is blank or already on another row — see
+  /// [BuildingProject.renamePo].
+  bool renameProjectPo(String id, String number) {
+    final was = project.poById(id)?.number ?? '';
+    if (!project.renamePo(id, number)) return false;
+    final po = project.poById(id);
+    if (po != null && normalizePoNumber(was) != normalizePoNumber(po.number)) {
+      _logProjectEdit(
+        itemKey: projectPoItemKey(id),
+        itemName: _poLogName(po),
+        field: 'Purchase order',
+        summary: was.trim().isEmpty
+            ? 'numbered ${po.number.trim()}'
+            : 'renumbered from ${was.trim()}',
+      );
+    }
+    _projectChanged(repricing: false);
+    return true;
+  }
+
+  /// Takes a PO off the job's list. The parts keep the number they were bought
+  /// on — see the note above [ProjectPo].
+  void removeProjectPo(String id) {
+    final po = project.poById(id);
+    if (po == null) return;
+    final onIt = project.partsOnPo(po.number).length;
+    project.removePo(id);
+    _logProjectEdit(
+      itemKey: projectPoItemKey(id),
+      itemName: _poLogName(po),
+      field: 'Purchase order',
+      summary: onIt == 0
+          ? 'removed from the job'
+          : 'removed from the job - $onIt part'
+              '${onIt == 1 ? '' : 's'} still name it',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Signs a note onto a purchase order. The name and the time are taken, not
+  /// typed — see [ProjectNote].
+  void addProjectPoNote(String id, String text) {
+    if (text.trim().isEmpty) return;
+    if (!project.addPoNote(id, ProjectNote.now(text))) return;
+    final po = project.poById(id);
+    _logProjectEdit(
+      itemKey: projectPoItemKey(id),
+      itemName: po == null ? 'PO' : _poLogName(po),
+      field: 'Purchase order',
+      summary: 'note added',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  // --- what has arrived and where it is -------------------------------------
+
+  /// What a delivery is called in the log: what turned up, and how many.
+  static String _deliveryLogName(ProjectDelivery row) {
+    final name = row.itemName.trim();
+    final qty = formatUnits(row.qty);
+    if (name.isEmpty) return qty.isEmpty ? 'Delivery' : '$qty units';
+    return qty.isEmpty ? name : '$qty x $name';
+  }
+
+  /// Logs an arrival. See [BuildingProject.addDelivery].
+  ProjectDelivery addProjectDelivery({
+    String partKey = '',
+    String itemName = '',
+    String poNumber = '',
+    double qty = 0,
+    DateTime? deliveredOn,
+    DeliveryState state = DeliveryState.delivered,
+    String location = '',
+    String roomId = '',
+    DateTime? installedOn,
+    String note = '',
+  }) {
+    final row = project.addDelivery(
+      partKey: partKey,
+      itemName: itemName,
+      poNumber: poNumber,
+      qty: qty,
+      deliveredOn: deliveredOn,
+      state: state,
+      location: location,
+      roomId: roomId,
+      installedOn: installedOn,
+      note: note.trim().isEmpty ? null : ProjectNote.now(note),
+    );
+    // A PO NAMED ON A DELIVERY JOINS THE JOB'S PO LIST, the same as one typed
+    // onto a part - see [showPartScheduleDialog]. A packing slip is often the
+    // first place a PO number is read off, and a list that only knows the
+    // numbers somebody remembered to enter twice cannot answer what is on one.
+    if (row.poNumber.trim().isNotEmpty) {
+      project.addPo(number: row.poNumber);
+    }
+    _logProjectEdit(
+      itemKey: projectDeliveryItemKey(row.id),
+      itemName: _deliveryLogName(row),
+      field: 'Delivery',
+      summary: [
+        row.deliveredOn == null
+            ? 'arrived'
+            : 'arrived ${formatIsoDate(row.deliveredOn!)}',
+        if (row.poNumber.trim().isNotEmpty) 'on ${row.poNumber.trim()}',
+        '- ${row.state.phrase}',
+      ].join(' '),
+    );
+    _projectChanged(repricing: false);
+    return row;
+  }
+
+  /// Replaces a delivery row. [summary] says what changed; nothing is logged
+  /// without one, for the reason [updateProjectPo] gives.
+  void updateProjectDelivery(ProjectDelivery row, {String summary = ''}) {
+    project.updateDelivery(row);
+    if (summary.isNotEmpty) {
+      _logProjectEdit(
+        itemKey: projectDeliveryItemKey(row.id),
+        itemName: _deliveryLogName(row),
+        field: 'Delivery',
+        summary: summary,
+      );
+    }
+    _projectChanged(repricing: false);
+  }
+
+  /// Moves a lot to a new state — into storage, into a room, back to the
+  /// vendor. The one gesture the tracker is opened for, so it is one call
+  /// rather than a copyWith at every call site.
+  ///
+  /// GOING INTO A ROOM DATES ITSELF. An install with no date is a row that
+  /// cannot answer "when did that go in", and the day it is recorded is the
+  /// right answer often enough that asking for it every time would be friction
+  /// people route around by not recording the install at all. It can still be
+  /// corrected on the row.
+  void setProjectDeliveryState(
+    String id,
+    DeliveryState state, {
+    String location = '',
+    String roomId = '',
+    DateTime? on,
+  }) {
+    final row = project.deliveryById(id);
+    if (row == null) return;
+    final when = dateOnly(on ?? DateTime.now());
+    final moved = row.copyWith(
+      state: state,
+      // The location is only overwritten when one is given: a lot that goes
+      // from storage into a room keeps saying where it had been.
+      location: location.trim().isEmpty ? null : location.trim(),
+      roomId: state == DeliveryState.installed ? roomId : '',
+      installedOn: state == DeliveryState.installed ? when : null,
+      clearInstalledOn: state != DeliveryState.installed,
+    );
+    project.updateDelivery(moved);
+    if (row.state != state ||
+        row.roomId != moved.roomId ||
+        row.location != moved.location) {
+      _logProjectEdit(
+        itemKey: projectDeliveryItemKey(id),
+        itemName: _deliveryLogName(moved),
+        field: 'Delivery',
+        summary: switch (state) {
+          DeliveryState.installed =>
+            'installed ${formatIsoDate(when)}'
+                '${moved.roomId.isEmpty ? '' : ' in ${projectRoomLogName(moved.roomId)}'}',
+          DeliveryState.stored => moved.location.trim().isEmpty
+              ? 'moved into storage'
+              : 'moved into storage - ${moved.location.trim()}',
+          DeliveryState.returned => 'sent back to the vendor',
+          DeliveryState.delivered => 'marked as on site',
+        },
+      );
+    }
+    _projectChanged(repricing: false);
+  }
+
+  void removeProjectDelivery(String id) {
+    final row = project.deliveryById(id);
+    if (row == null) return;
+    project.removeDelivery(id);
+    _logProjectEdit(
+      itemKey: projectDeliveryItemKey(id),
+      itemName: _deliveryLogName(row),
+      field: 'Delivery',
+      summary: 'record removed',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Signs a note onto a delivery. The name and the time are taken, not typed
+  /// — see [ProjectNote].
+  void addProjectDeliveryNote(String id, String text) {
+    if (text.trim().isEmpty) return;
+    if (!project.addDeliveryNote(id, ProjectNote.now(text))) return;
+    final row = project.deliveryById(id);
+    _logProjectEdit(
+      itemKey: projectDeliveryItemKey(id),
+      itemName: row == null ? 'Delivery' : _deliveryLogName(row),
+      field: 'Delivery',
+      summary: 'note added',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  void removeProjectDeliveryNote(String id, int index) {
+    if (!project.removeDeliveryNote(id, index)) return;
+    _projectChanged(repricing: false);
+  }
+
   /// How many calendar exports this session has produced, incremented.
   ///
   /// Goes into the ICS SEQUENCE field, which is how a calendar recognises a

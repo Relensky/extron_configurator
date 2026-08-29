@@ -109,6 +109,19 @@ String formatIsoDate(DateTime when) =>
     '${when.month.toString().padLeft(2, '0')}-'
     '${when.day.toString().padLeft(2, '0')}';
 
+/// A count of units as somebody would write it: '6', '2.5', and '' for none.
+///
+/// Whole numbers lose the decimal, because '6.0 wall plates' reads as a
+/// measurement rather than a count. Nought comes back BLANK rather than as
+/// '0' - on a delivery row it means nobody said how many, and printing a
+/// zero would state that none arrived.
+String formatUnits(double qty) {
+  if (qty == 0) return '';
+  return qty == qty.roundToDouble()
+      ? qty.toStringAsFixed(0)
+      : qty.toStringAsFixed(1);
+}
+
 /// A `yyyy-mm-dd` back, or null when it is missing or not a date.
 ///
 /// Tolerant on the way in because a project file is a supported thing to hand
@@ -272,6 +285,81 @@ const int kMaxProjectHistory = 500;
 const Duration kEditCoalesceWindow = Duration(minutes: 2);
 
 // ---------------------------------------------------------------------------
+//  A NOTE WITH A NAME ON IT
+// ---------------------------------------------------------------------------
+//  The job's other notes are one text field per thing — a paragraph the whole
+//  team writes into, where the last person to type owns all of it. That is
+//  right for a fact that stays true ("the ceiling is asbestos"), and wrong for
+//  the running commentary a delivery attracts:
+//
+//    "2 of the 6 arrived damaged, Extron collecting"      — dstanley, 12 Mar
+//    "replacements promised for the 28th"                 — jperez,   19 Mar
+//    "swapped in, old ones on the pallet by the door"     — dstanley, 30 Mar
+//
+//  Three people, three days, three statements that are each true of the moment
+//  they were written and none of which should overwrite the others. So this
+//  kind of note is a LIST of signed entries rather than a field, and each one
+//  carries who wrote it and when.
+//
+//  THE NAME IS TAKEN, NOT TYPED. It is the Windows login the app is running
+//  under ([currentUserName]), for the same reason the edit log takes it: a
+//  field asking who you are is a field people leave on whoever set it last.
+//
+//  THE TIME IS PART OF IT, with the clock on — see the note above the edit
+//  log. Two notes on the same afternoon are two notes, and reducing them both
+//  to a day loses the order they were written in.
+//
+//  NOTHING IS EDITED IN PLACE. A note that turned out to be wrong is answered
+//  by another note or deleted outright; quietly rewriting one under somebody
+//  else's name is the one thing a signed record must not do.
+
+/// One signed note: what was said, who said it, when.
+class ProjectNote {
+  final String text;
+
+  /// The Windows login it was written under. '' when the environment gave
+  /// none — an honest blank, the same as [ProjectEdit.user].
+  final String user;
+
+  final DateTime at;
+
+  const ProjectNote({required this.text, required this.user, required this.at});
+
+  /// A note as it is written now: signed by whoever is at the keyboard, dated
+  /// to this moment. [user] and [at] are only ever passed by tests and by the
+  /// reader, which have their own answers.
+  factory ProjectNote.now(String text, {String? user, DateTime? at}) =>
+      ProjectNote(
+        text: text.trim(),
+        user: user ?? currentUserName(),
+        at: at ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'text': text,
+    if (user.isNotEmpty) 'user': user,
+    'at': at.toIso8601String(),
+  };
+
+  factory ProjectNote.fromJson(Map<String, dynamic> json) => ProjectNote(
+    text: json['text']?.toString() ?? '',
+    user: json['user']?.toString() ?? '',
+    // Dated to the epoch rather than dropped when the stamp is unreadable,
+    // for the reason [ProjectEdit.fromJson] gives: somebody wrote this.
+    at:
+        DateTime.tryParse(json['at']?.toString() ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+  );
+}
+
+/// Signed notes off a hand-editable list, empty ones dropped.
+List<ProjectNote> notesFromJson(Object? raw) => [
+  for (final n in (raw as List? ?? []))
+    if (n is Map && n['text']?.toString().trim().isNotEmpty == true)
+      ProjectNote.fromJson(Map<String, dynamic>.from(n)),
+];
+
+// ---------------------------------------------------------------------------
 //  WHAT HAS ACTUALLY BEEN BOUGHT
 // ---------------------------------------------------------------------------
 //  The schedule says what to order and when. It has no idea whether any of it
@@ -389,6 +477,335 @@ class PartOrder {
     qty: (json['qty'] as num?)?.toDouble() ?? 0,
     notes: json['notes']?.toString() ?? '',
   );
+}
+
+// ---------------------------------------------------------------------------
+//  THE PURCHASE ORDERS THE JOB WAS BOUGHT ON
+// ---------------------------------------------------------------------------
+//  A PO number was already recorded — on the PART, as free text, one field per
+//  line of the master list. That is the right place to answer "what did this
+//  switcher go out on", and it cannot answer any of the questions people
+//  actually ring up about:
+//
+//    "what is on PO-1188?"
+//    "PO-1188 was raised on the 4th — has any of it landed?"
+//    "which PO has the projector mounts on it?"
+//
+//  Those are questions about the PO, and a number retyped into forty part
+//  fields is not a thing that can be asked a question. So the job holds its
+//  purchase orders as rows of their own — the number, who it went to, the day
+//  it was raised, what it was raised for — and a part points at one.
+//
+//  THE NUMBER IS THE LINK, not the row's id. A PO number is the identifier the
+//  finance system, the vendor and the packing slip all already use, so it is
+//  what a part order and a delivery record store — which means a project file
+//  written before any of this existed already links up correctly the first
+//  time it is opened, and a delivery logged against a PO nobody has entered
+//  yet still says which PO it was. The row's [ProjectPo.id] exists so the
+//  number itself can be corrected without the row becoming a different row;
+//  see [BuildingProject.renamePo], which carries the parts and deliveries
+//  across with it.
+//
+//  DELETING A PO DOES NOT UNPICK ANYTHING. The parts keep the number they were
+//  bought on, because they WERE bought on it — removing the row removes the
+//  job's copy of the paperwork, not the history of what happened.
+
+/// One purchase order raised on the job.
+class ProjectPo {
+  /// Row identity — `po1`. Stable across a renumber, and referenced by nothing
+  /// except this list; see the note above on why the link is the number.
+  final String id;
+
+  /// What finance calls it — 'PO-1188', 'B24-0413'. Free text, because every
+  /// institution numbers these differently, and the one thing that must not
+  /// happen is a format this app insists on that nobody else uses.
+  final String number;
+
+  /// The vendor on the job's own list this went to, or '' when it went
+  /// somewhere that is not one of them.
+  final String vendorId;
+
+  /// Who it went to, typed. Used when [vendorId] is blank — a distributor or
+  /// a one-off supplier that never earned a row on the vendor list.
+  final String vendor;
+
+  /// The day it was raised. Null means somebody has noted the number before
+  /// the paperwork went through, which is the ordinary way round.
+  final DateTime? issuedOn;
+
+  /// What the vendor promised for the order as a whole. A part can still carry
+  /// its own promised date — this is the one quoted on the acknowledgement.
+  final DateTime? expectedOn;
+
+  /// What it was raised for, in the job's currency. 0 means nobody has said —
+  /// NOT that it was free.
+  final double amount;
+
+  /// The running commentary, each entry signed. See [ProjectNote].
+  final List<ProjectNote> notes;
+
+  ProjectPo({
+    required this.id,
+    this.number = '',
+    this.vendorId = '',
+    this.vendor = '',
+    this.issuedOn,
+    this.expectedOn,
+    this.amount = 0,
+    List<ProjectNote>? notes,
+  }) : notes = notes ?? [];
+
+  ProjectPo copyWith({
+    String? number,
+    String? vendorId,
+    String? vendor,
+    DateTime? issuedOn,
+    bool clearIssuedOn = false,
+    DateTime? expectedOn,
+    bool clearExpectedOn = false,
+    double? amount,
+    List<ProjectNote>? notes,
+  }) => ProjectPo(
+    id: id,
+    number: number ?? this.number,
+    vendorId: vendorId ?? this.vendorId,
+    vendor: vendor ?? this.vendor,
+    issuedOn: clearIssuedOn ? null : (issuedOn ?? this.issuedOn),
+    expectedOn: clearExpectedOn ? null : (expectedOn ?? this.expectedOn),
+    amount: amount ?? this.amount,
+    notes: notes ?? List<ProjectNote>.from(this.notes),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'number': number.trim(),
+    if (vendorId.isNotEmpty) 'vendorId': vendorId,
+    if (vendor.trim().isNotEmpty) 'vendor': vendor.trim(),
+    if (issuedOn != null) 'issuedOn': formatIsoDate(issuedOn!),
+    if (expectedOn != null) 'expectedOn': formatIsoDate(expectedOn!),
+    if (amount > 0) 'amount': amount,
+    if (notes.isNotEmpty) 'notes': [for (final n in notes) n.toJson()],
+  };
+
+  factory ProjectPo.fromJson(Map<String, dynamic> json) => ProjectPo(
+    id: json['id']?.toString() ?? '',
+    number: json['number']?.toString() ?? '',
+    vendorId: json['vendorId']?.toString() ?? '',
+    vendor: json['vendor']?.toString() ?? '',
+    issuedOn: parseIsoDate(json['issuedOn']),
+    expectedOn: parseIsoDate(json['expectedOn']),
+    amount: (json['amount'] as num?)?.toDouble() ?? 0,
+    notes: notesFromJson(json['notes']),
+  );
+}
+
+/// Two PO numbers compared the way a person reads them: trimmed, and without
+/// caring which case somebody typed. `po-1188` and `PO-1188 ` are one PO.
+String normalizePoNumber(String number) => number.trim().toUpperCase();
+
+// ---------------------------------------------------------------------------
+//  WHERE THE KIT ACTUALLY IS
+// ---------------------------------------------------------------------------
+//  An order ends at "it arrived". The job does not: between the loading dock
+//  and the finished room there are weeks in which somebody has to be able to
+//  answer "where is it" — and on a nine-room job the answer is different for
+//  every pallet.
+//
+//    18 wall plates arrived on the 4th
+//     6 of them went into BSS 103 on the 11th
+//    12 are still on the shelf in the basement of Bessey
+//
+//  That is THREE facts about one part, and the arrival date on the order
+//  record can hold exactly one of them. So an arrival is its own row: what
+//  came, how many, on which PO, when, and where it is now. A part that turns
+//  up in three shipments is three rows, which is what actually happened.
+//
+//  THE STATE IS ABOUT PLACE, not about progress. 'Delivered' is on site and
+//  nobody has said where; 'In storage' is somewhere with a name on it; and
+//  'Installed' is in a room, which is the only state that ends the question.
+//  'Returned' is here because kit does go back — damaged, over-shipped, wrong
+//  model — and a row that is deleted when it goes back takes the reason with
+//  it.
+//
+//  IT DOES NOT REPLACE THE ORDER RECORD, and neither one is derived from the
+//  other. [PartOrder] is what was BOUGHT — the PO, the dates, the promise — and
+//  is what the order schedule reads. This is what ARRIVED. A part can be
+//  received against its order and still have nothing logged here (nobody has
+//  said where it went), or have deliveries logged against no order at all
+//  (it turned up from stock). Both are true states of a real job.
+
+/// Where one delivered lot of a part is.
+enum DeliveryState {
+  /// On site. Nobody has said where it went yet — the state a row starts in
+  /// when it is logged off a packing slip.
+  delivered('Delivered', 'on site'),
+
+  /// Somewhere with a name on it — [ProjectDelivery.location] says where.
+  stored('In storage', 'held'),
+
+  /// In the room, on the wall, in the rack. The state that ends the question.
+  installed('Installed', 'in the room'),
+
+  /// Went back: damaged, wrong model, over-shipped. Still on the job's record
+  /// because the reason is the part worth keeping.
+  returned('Returned', 'sent back');
+
+  /// What the chip and the dropdown read.
+  final String label;
+
+  /// The half-sentence form, for a row that reads as prose.
+  final String phrase;
+
+  const DeliveryState(this.label, this.phrase);
+}
+
+/// A [DeliveryState] by name, defaulting to [DeliveryState.delivered].
+///
+/// Tolerant because a project file is a supported thing to hand edit, and
+/// "it is here" is the safe reading of a state this build does not know: the
+/// row still counts as arrived rather than vanishing off the tracker.
+DeliveryState deliveryStateFromName(Object? raw) {
+  final name = raw?.toString().trim().toLowerCase() ?? '';
+  for (final s in DeliveryState.values) {
+    if (s.name.toLowerCase() == name) return s;
+  }
+  return DeliveryState.delivered;
+}
+
+/// One lot of one part, arrived.
+class ProjectDelivery {
+  final String id;
+
+  /// The master-list part this is a delivery of — the same key a lead time, a
+  /// vendor pin and an order are filed under. '' for something that arrived
+  /// which is not on the list at all: a loaner, a tool, a box of connectors
+  /// somebody bought on a card.
+  final String partKey;
+
+  /// What it is, as it read when the row was written. Stored rather than
+  /// resolved, for the reason [ProjectEdit.itemName] is: the row still says
+  /// what turned up after the part is renamed or drops off the job.
+  final String itemName;
+
+  /// The PO it came in on — see the note above on why this is the number and
+  /// not a row id. '' when it arrived against no paperwork anybody has.
+  final String poNumber;
+
+  /// How many. The whole point of a per-arrival row: 6 of the 18.
+  final double qty;
+
+  /// The day it landed. Null only on a hand-edited row — everything that logs
+  /// a delivery through the app puts a date on it.
+  final DateTime? deliveredOn;
+
+  final DeliveryState state;
+
+  /// Where it is being held — 'Bessey basement, rack 3', 'the shipping
+  /// container', 'my office'. Free text, because a storage location is a place
+  /// somebody describes rather than a thing this app can enumerate.
+  ///
+  /// Meaningful when [state] is [DeliveryState.stored]; kept rather than
+  /// cleared when the state moves on, so a row that goes from storage to
+  /// installed still says where it had been.
+  final String location;
+
+  /// The room it went into, as a project room id. Set with
+  /// [DeliveryState.installed].
+  final String roomId;
+
+  /// The day it went in. Separate from [deliveredOn] because the gap between
+  /// the two is the thing storage exists to cover.
+  final DateTime? installedOn;
+
+  /// The running commentary, each entry signed. See [ProjectNote].
+  final List<ProjectNote> notes;
+
+  ProjectDelivery({
+    required this.id,
+    this.partKey = '',
+    this.itemName = '',
+    this.poNumber = '',
+    this.qty = 0,
+    this.deliveredOn,
+    this.state = DeliveryState.delivered,
+    this.location = '',
+    this.roomId = '',
+    this.installedOn,
+    List<ProjectNote>? notes,
+  }) : notes = notes ?? [];
+
+  /// True when these units are still the job's to account for. A returned lot
+  /// is not — counting it as on hand is how a delivery tracker ends up saying
+  /// a room has kit that went back to the vendor a month ago.
+  bool get isOnHand => state != DeliveryState.returned;
+
+  bool get isInstalled => state == DeliveryState.installed;
+
+  /// Where this lot is, in the fewest words that are still true.
+  String get whereText => switch (state) {
+    DeliveryState.stored => location.trim().isEmpty
+        ? 'In storage'
+        : 'In storage - ${location.trim()}',
+    DeliveryState.installed => 'Installed',
+    DeliveryState.returned => 'Returned',
+    DeliveryState.delivered => 'On site',
+  };
+
+  ProjectDelivery copyWith({
+    String? partKey,
+    String? itemName,
+    String? poNumber,
+    double? qty,
+    DateTime? deliveredOn,
+    bool clearDeliveredOn = false,
+    DeliveryState? state,
+    String? location,
+    String? roomId,
+    DateTime? installedOn,
+    bool clearInstalledOn = false,
+    List<ProjectNote>? notes,
+  }) => ProjectDelivery(
+    id: id,
+    partKey: partKey ?? this.partKey,
+    itemName: itemName ?? this.itemName,
+    poNumber: poNumber ?? this.poNumber,
+    qty: qty ?? this.qty,
+    deliveredOn: clearDeliveredOn ? null : (deliveredOn ?? this.deliveredOn),
+    state: state ?? this.state,
+    location: location ?? this.location,
+    roomId: roomId ?? this.roomId,
+    installedOn: clearInstalledOn ? null : (installedOn ?? this.installedOn),
+    notes: notes ?? List<ProjectNote>.from(this.notes),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    if (partKey.isNotEmpty) 'partKey': partKey,
+    if (itemName.trim().isNotEmpty) 'itemName': itemName.trim(),
+    if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
+    if (qty != 0) 'qty': qty,
+    if (deliveredOn != null) 'deliveredOn': formatIsoDate(deliveredOn!),
+    'state': state.name,
+    if (location.trim().isNotEmpty) 'location': location.trim(),
+    if (roomId.isNotEmpty) 'roomId': roomId,
+    if (installedOn != null) 'installedOn': formatIsoDate(installedOn!),
+    if (notes.isNotEmpty) 'notes': [for (final n in notes) n.toJson()],
+  };
+
+  factory ProjectDelivery.fromJson(Map<String, dynamic> json) =>
+      ProjectDelivery(
+        id: json['id']?.toString() ?? '',
+        partKey: json['partKey']?.toString() ?? '',
+        itemName: json['itemName']?.toString() ?? '',
+        poNumber: json['poNumber']?.toString() ?? '',
+        qty: (json['qty'] as num?)?.toDouble() ?? 0,
+        deliveredOn: parseIsoDate(json['deliveredOn']),
+        state: deliveryStateFromName(json['state']),
+        location: json['location']?.toString() ?? '',
+        roomId: json['roomId']?.toString() ?? '',
+        installedOn: parseIsoDate(json['installedOn']),
+        notes: notesFromJson(json['notes']),
+      );
 }
 
 // ---------------------------------------------------------------------------
@@ -1433,6 +1850,16 @@ class BuildingProject {
   /// schedule's warnings about it worth reading.
   final Map<String, PartOrder> partOrders;
 
+  /// The purchase orders raised on this job - see [ProjectPo]. In the order
+  /// they were entered, which is close enough to the order they were raised in
+  /// and is what somebody scanning the list expects.
+  final List<ProjectPo> purchaseOrders;
+
+  /// Everything that has ARRIVED, one row per lot - see [ProjectDelivery].
+  /// Empty on a job nobody is tracking deliveries on, which behaves exactly as
+  /// it did before this existed.
+  final List<ProjectDelivery> deliveries;
+
   /// The building's own drawings - see [ProjectPlan]. References, not copies,
   /// and in the order they were added, which on a drawing set is the order
   /// somebody wants to read them in.
@@ -1478,6 +1905,8 @@ class BuildingProject {
   int _spareCounter;
   int _planCounter;
   int _responsibilityCounter;
+  int _poCounter;
+  int _deliveryCounter;
 
   BuildingProject({
     this.name = '',
@@ -1502,6 +1931,8 @@ class BuildingProject {
     List<ProjectSpare>? spares,
     this.spareCoverTarget = kSuggestedSpareCover,
     List<ProjectPlan>? plans,
+    List<ProjectPo>? purchaseOrders,
+    List<ProjectDelivery>? deliveries,
     List<ProjectEdit>? history,
     int roomCounter = 0,
     int manualRoomCounter = 0,
@@ -1511,6 +1942,8 @@ class BuildingProject {
     int spareCounter = 0,
     int planCounter = 0,
     int responsibilityCounter = 0,
+    int poCounter = 0,
+    int deliveryCounter = 0,
   }) : rooms = rooms ?? [],
        manualRooms = manualRooms ?? [],
        vendors = vendors ?? [],
@@ -1524,6 +1957,8 @@ class BuildingProject {
        partOrders = partOrders ?? {},
        spares = spares ?? [],
        plans = plans ?? [],
+       purchaseOrders = purchaseOrders ?? [],
+       deliveries = deliveries ?? [],
        history = history ?? [],
        _roomCounter = roomCounter,
        _manualRoomCounter = manualRoomCounter,
@@ -1532,7 +1967,9 @@ class BuildingProject {
        _trackCounter = trackCounter,
        _spareCounter = spareCounter,
        _planCounter = planCounter,
-       _responsibilityCounter = responsibilityCounter;
+       _responsibilityCounter = responsibilityCounter,
+       _poCounter = poCounter,
+       _deliveryCounter = deliveryCounter;
 
   bool get isEmpty =>
       rooms.isEmpty &&
@@ -1548,6 +1985,8 @@ class BuildingProject {
       partOrders.isEmpty &&
       spares.isEmpty &&
       plans.isEmpty &&
+      purchaseOrders.isEmpty &&
+      deliveries.isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
       jobNumber.trim().isEmpty &&
@@ -1601,6 +2040,8 @@ class BuildingProject {
   String nextTrackId() => 'track${++_trackCounter}';
   String nextSpareId() => 'spare${++_spareCounter}';
   String nextPlanId() => 'plan${++_planCounter}';
+  String nextPoId() => 'po${++_poCounter}';
+  String nextDeliveryId() => 'del${++_deliveryCounter}';
   String nextResponsibilityId() => 'resp${++_responsibilityCounter}';
 
   // -------------------------------------------------------------------------
@@ -2249,6 +2690,303 @@ class BuildingProject {
       if (e.value.isOrdered && !e.value.isReceived) e.key,
   ];
 
+  // --- the purchase orders --------------------------------------------------
+
+  /// The PO row with [id], or null.
+  ProjectPo? poById(String id) {
+    for (final po in purchaseOrders) {
+      if (po.id == id) return po;
+    }
+    return null;
+  }
+
+  /// The PO row carrying [number], compared the way a person reads a PO
+  /// number — see [normalizePoNumber]. Null when the job has no row for it,
+  /// which is a normal state: a part can carry a number nobody has entered.
+  ProjectPo? poByNumber(String number) {
+    final needle = normalizePoNumber(number);
+    if (needle.isEmpty) return null;
+    for (final po in purchaseOrders) {
+      if (normalizePoNumber(po.number) == needle) return po;
+    }
+    return null;
+  }
+
+  /// Every PO number this job mentions ANYWHERE — the rows, the part orders
+  /// and the delivery log — each in the spelling it was first seen in, in the
+  /// order they turn up.
+  ///
+  /// What a "which PO?" dropdown offers, so a number typed onto a part before
+  /// anybody entered the PO is still one click away rather than something to
+  /// retype and mistype.
+  List<String> get poNumbersInUse {
+    final seen = <String>{};
+    final out = <String>[];
+    void take(String raw) {
+      final key = normalizePoNumber(raw);
+      if (key.isEmpty || !seen.add(key)) return;
+      out.add(raw.trim());
+    }
+
+    for (final po in purchaseOrders) {
+      take(po.number);
+    }
+    for (final order in partOrders.values) {
+      take(order.poNumber);
+    }
+    for (final d in deliveries) {
+      take(d.poNumber);
+    }
+    return out;
+  }
+
+  /// Adds a PO row, or returns the existing one when the job already has that
+  /// number. Never two rows for one number — the number is what everything
+  /// else points at, and two rows for it would be two answers to "what is on
+  /// this PO".
+  ProjectPo addPo({
+    String number = '',
+    String vendorId = '',
+    String vendor = '',
+    DateTime? issuedOn,
+    DateTime? expectedOn,
+    double amount = 0,
+  }) {
+    final existing = poByNumber(number);
+    if (existing != null) return existing;
+    final po = ProjectPo(
+      id: nextPoId(),
+      number: number.trim(),
+      vendorId: vendorId,
+      vendor: vendor,
+      issuedOn: issuedOn,
+      expectedOn: expectedOn,
+      amount: amount,
+    );
+    purchaseOrders.add(po);
+    return po;
+  }
+
+  /// Replaces the row with [po.id]. Does nothing when it has gone.
+  void updatePo(ProjectPo po) {
+    final at = purchaseOrders.indexWhere((p) => p.id == po.id);
+    if (at >= 0) purchaseOrders[at] = po;
+  }
+
+  /// Corrects a PO's number, carrying every part and delivery that referenced
+  /// the old one across with it.
+  ///
+  /// Not a plain [updatePo] with a new number, because the number IS the link:
+  /// changing it in one place would leave forty parts pointing at a PO that no
+  /// longer exists, which is exactly the state this list was added to prevent.
+  ///
+  /// Refuses when [number] is blank or already belongs to another row — a
+  /// second row for one number is the one shape this list must not take.
+  bool renamePo(String id, String number) {
+    final po = poById(id);
+    if (po == null) return false;
+    final trimmed = number.trim();
+    if (trimmed.isEmpty) return false;
+    final clash = poByNumber(trimmed);
+    if (clash != null && clash.id != id) return false;
+
+    final was = normalizePoNumber(po.number);
+    updatePo(po.copyWith(number: trimmed));
+    if (was.isEmpty || was == normalizePoNumber(trimmed)) return true;
+
+    for (final key in partOrders.keys.toList()) {
+      final order = partOrders[key]!;
+      if (normalizePoNumber(order.poNumber) == was) {
+        partOrders[key] = order.copyWith(poNumber: trimmed);
+      }
+    }
+    for (var i = 0; i < deliveries.length; i++) {
+      if (normalizePoNumber(deliveries[i].poNumber) == was) {
+        deliveries[i] = deliveries[i].copyWith(poNumber: trimmed);
+      }
+    }
+    return true;
+  }
+
+  /// Takes a PO row off the job. The parts and deliveries KEEP the number —
+  /// see the note above the class on why.
+  void removePo(String id) => purchaseOrders.removeWhere((p) => p.id == id);
+
+  /// Adds a signed note to a PO. Returns false when the row has gone.
+  bool addPoNote(String id, ProjectNote note) {
+    final po = poById(id);
+    if (po == null || note.text.trim().isEmpty) return false;
+    po.notes.add(note);
+    return true;
+  }
+
+  /// The master-list keys bought on [number].
+  List<String> partsOnPo(String number) {
+    final needle = normalizePoNumber(number);
+    if (needle.isEmpty) return const [];
+    return [
+      for (final e in partOrders.entries)
+        if (normalizePoNumber(e.value.poNumber) == needle) e.key,
+    ];
+  }
+
+  // --- what has arrived and where it is -------------------------------------
+
+  /// The delivery row with [id], or null.
+  ProjectDelivery? deliveryById(String id) {
+    for (final d in deliveries) {
+      if (d.id == id) return d;
+    }
+    return null;
+  }
+
+  /// Every arrival logged against one master-list part, newest first.
+  List<ProjectDelivery> deliveriesForPart(String partKey) {
+    final out = [for (final d in deliveries) if (d.partKey == partKey) d];
+    out.sort(_byDeliveredDescending);
+    return out;
+  }
+
+  /// Every arrival logged against one PO, newest first.
+  List<ProjectDelivery> deliveriesForPo(String number) {
+    final needle = normalizePoNumber(number);
+    if (needle.isEmpty) return const [];
+    final out = [
+      for (final d in deliveries)
+        if (normalizePoNumber(d.poNumber) == needle) d,
+    ];
+    out.sort(_byDeliveredDescending);
+    return out;
+  }
+
+  /// Newest arrival first, undated rows last. Undated rows are hand-edited
+  /// ones, and sorting them to the top would put the least certain rows above
+  /// everything somebody actually logged.
+  static int _byDeliveredDescending(ProjectDelivery a, ProjectDelivery b) {
+    final ad = a.deliveredOn;
+    final bd = b.deliveredOn;
+    if (ad == null && bd == null) return a.id.compareTo(b.id);
+    if (ad == null) return 1;
+    if (bd == null) return -1;
+    final byDate = bd.compareTo(ad);
+    return byDate != 0 ? byDate : a.id.compareTo(b.id);
+  }
+
+  /// How many units of [partKey] are on site — everything that arrived and did
+  /// not go back, installed or not.
+  double deliveredQty(String partKey) => _qtyWhere(
+    partKey,
+    (d) => d.isOnHand,
+  );
+
+  /// How many are in the room.
+  double installedQty(String partKey) => _qtyWhere(partKey, (d) => d.isInstalled);
+
+  /// How many are on site and NOT in a room yet — the figure the tracker
+  /// exists for. Counts both 'delivered' and 'in storage', because from the
+  /// job's point of view they are the same thing: kit somebody still has to
+  /// carry somewhere.
+  double awaitingInstallQty(String partKey) => _qtyWhere(
+    partKey,
+    (d) => d.isOnHand && !d.isInstalled,
+  );
+
+  double _qtyWhere(String partKey, bool Function(ProjectDelivery) test) {
+    var total = 0.0;
+    for (final d in deliveries) {
+      if (d.partKey == partKey && test(d)) total += d.qty;
+    }
+    return total;
+  }
+
+  /// Logs an arrival and returns the row it made.
+  ProjectDelivery addDelivery({
+    String partKey = '',
+    String itemName = '',
+    String poNumber = '',
+    double qty = 0,
+    DateTime? deliveredOn,
+    DeliveryState state = DeliveryState.delivered,
+    String location = '',
+    String roomId = '',
+    DateTime? installedOn,
+    ProjectNote? note,
+  }) {
+    final row = ProjectDelivery(
+      id: nextDeliveryId(),
+      partKey: partKey,
+      itemName: itemName.trim(),
+      poNumber: poNumber.trim(),
+      qty: qty,
+      deliveredOn: deliveredOn ?? today(),
+      state: state,
+      location: location,
+      roomId: roomId,
+      // An arrival that is already in the room happened on a day, and the day
+      // it went in is the day it was logged unless somebody says otherwise.
+      installedOn: installedOn ??
+          (state == DeliveryState.installed ? (deliveredOn ?? today()) : null),
+      notes: [
+        if (note != null && note.text.trim().isNotEmpty) note,
+      ],
+    );
+    deliveries.add(row);
+    return row;
+  }
+
+  /// Replaces the row with [row.id]. Does nothing when it has gone.
+  void updateDelivery(ProjectDelivery row) {
+    final at = deliveries.indexWhere((d) => d.id == row.id);
+    if (at >= 0) deliveries[at] = row;
+  }
+
+  void removeDelivery(String id) => deliveries.removeWhere((d) => d.id == id);
+
+  /// Adds a signed note to a delivery. Returns false when the row has gone.
+  bool addDeliveryNote(String id, ProjectNote note) {
+    final row = deliveryById(id);
+    if (row == null || note.text.trim().isEmpty) return false;
+    row.notes.add(note);
+    return true;
+  }
+
+  /// Takes one note back off a delivery, by its position. False when either
+  /// the row or the note has gone.
+  bool removeDeliveryNote(String id, int index) {
+    final row = deliveryById(id);
+    if (row == null || index < 0 || index >= row.notes.length) return false;
+    row.notes.removeAt(index);
+    return true;
+  }
+
+  /// Every storage place the job has used, in the order first seen.
+  ///
+  /// What the location field offers as suggestions: a job holds its kit in two
+  /// or three places, and retyping 'Bessey basement, rack 3' is how one place
+  /// becomes four spellings that no filter can bring back together.
+  List<String> get storageLocations {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final d in deliveries) {
+      final text = d.location.trim();
+      if (text.isEmpty) continue;
+      if (seen.add(text.toLowerCase())) out.add(text);
+    }
+    return out;
+  }
+
+  /// Adopts PO numbers that were typed onto parts before this job had a PO
+  /// list, so the list is populated the first time an older project is opened
+  /// rather than starting empty beside forty parts that all name a PO.
+  ///
+  /// Additive and idempotent: it only ever adds rows for numbers with none,
+  /// and never touches what the part orders say.
+  void _adoptPoNumbers() {
+    for (final number in poNumbersInUse) {
+      if (poByNumber(number) == null) addPo(number: number);
+    }
+  }
+
   /// Puts [partKey] on [trackId], or back with the job when it is blank.
   void setPartTrack(String partKey, String trackId) {
     if (trackId.isEmpty) {
@@ -2405,6 +3143,10 @@ class BuildingProject {
     if ((spareCoverTarget - kSuggestedSpareCover).abs() > 1e-9)
       'spareTargetPercent': spareCoverTarget * 100,
     if (plans.isNotEmpty) 'plans': [for (final p in plans) p.toJson()],
+    if (purchaseOrders.isNotEmpty)
+      'purchaseOrders': [for (final p in purchaseOrders) p.toJson()],
+    if (deliveries.isNotEmpty)
+      'deliveries': [for (final d in deliveries) d.toJson()],
     if (history.isNotEmpty)
       'history': [for (final h in history) h.toJson()],
     'roomCounter': _roomCounter,
@@ -2414,6 +3156,8 @@ class BuildingProject {
     if (_trackCounter > 0) 'trackCounter': _trackCounter,
     if (_spareCounter > 0) 'spareCounter': _spareCounter,
     if (_planCounter > 0) 'planCounter': _planCounter,
+    if (_poCounter > 0) 'poCounter': _poCounter,
+    if (_deliveryCounter > 0) 'deliveryCounter': _deliveryCounter,
     if (_responsibilityCounter > 0)
       'responsibilityCounter': _responsibilityCounter,
   };
@@ -2495,6 +3239,22 @@ class BuildingProject {
             entry['filePath']?.toString().trim().isNotEmpty == true)
           ProjectPlan.fromJson(Map<String, dynamic>.from(entry)),
     ];
+    // A PO with no number names nothing and can be pointed at by nothing, so
+    // it is dropped the way an empty note is.
+    final purchaseOrders = [
+      for (final entry in (json['purchaseOrders'] as List? ?? []))
+        if (entry is Map &&
+            entry['number']?.toString().trim().isNotEmpty == true)
+          ProjectPo.fromJson(Map<String, dynamic>.from(entry)),
+    ];
+    // A delivery row is kept whatever else is thin on it: an arrival that only
+    // says a date and a note is still somebody's record of something turning
+    // up, and the tracker's whole job is not to lose those.
+    final deliveries = [
+      for (final entry in (json['deliveries'] as List? ?? []))
+        if (entry is Map)
+          ProjectDelivery.fromJson(Map<String, dynamic>.from(entry)),
+    ];
     final trackPins = <String, String>{};
     final rawTracks = json['partTracks'];
     if (rawTracks is Map) {
@@ -2544,7 +3304,7 @@ class BuildingProject {
       return best;
     }
 
-    return BuildingProject(
+    final project = BuildingProject(
       name: json['name']?.toString() ?? '',
       building: json['building']?.toString() ?? '',
       jobNumber: json['jobNumber']?.toString() ?? '',
@@ -2589,6 +3349,8 @@ class BuildingProject {
             : percent / 100;
       }(),
       plans: plans,
+      purchaseOrders: purchaseOrders,
+      deliveries: deliveries,
       history: history,
       spareCounter: [
         (json['spareCounter'] as num?)?.toInt() ?? 0,
@@ -2597,6 +3359,14 @@ class BuildingProject {
       planCounter: [
         (json['planCounter'] as num?)?.toInt() ?? 0,
         highest(plans.map((p) => p.id), 'plan'),
+      ].reduce((a, b) => a > b ? a : b),
+      poCounter: [
+        (json['poCounter'] as num?)?.toInt() ?? 0,
+        highest(purchaseOrders.map((p) => p.id), 'po'),
+      ].reduce((a, b) => a > b ? a : b),
+      deliveryCounter: [
+        (json['deliveryCounter'] as num?)?.toInt() ?? 0,
+        highest(deliveries.map((d) => d.id), 'del'),
       ].reduce((a, b) => a > b ? a : b),
       responsibilityCounter: [
         (json['responsibilityCounter'] as num?)?.toInt() ?? 0,
@@ -2626,6 +3396,10 @@ class BuildingProject {
         highest(vendors.map((v) => v.id), 'vendor'),
       ].reduce((a, b) => a > b ? a : b),
     );
+    // A PO number typed onto a part under an older build becomes a row on the
+    // job's PO list the first time the file is opened - see [_adoptPoNumbers].
+    project._adoptPoNumbers();
+    return project;
   }
 
   /// Reads a project file. Throws with a readable message rather than a
@@ -2679,6 +3453,12 @@ class BuildingProject {
     partOrders: Map<String, PartOrder>.from(partOrders),
     spares: List<ProjectSpare>.from(spares),
     plans: List<ProjectPlan>.from(plans),
+    // The signed notes on a PO or a delivery are a LIST INSIDE the row, and a
+    // row is not immutable the way the others here are - see [addPoNote]. So
+    // each one is rebuilt with its own copy of its notes, or an undo would
+    // hand back rows that share their note lists with the ones it replaced.
+    purchaseOrders: [for (final p in purchaseOrders) p.copyWith()],
+    deliveries: [for (final d in deliveries) d.copyWith()],
     history: List<ProjectEdit>.from(history),
     roomCounter: _roomCounter,
     manualRoomCounter: _manualRoomCounter,
@@ -2688,6 +3468,8 @@ class BuildingProject {
     spareCounter: _spareCounter,
     planCounter: _planCounter,
     responsibilityCounter: _responsibilityCounter,
+    poCounter: _poCounter,
+    deliveryCounter: _deliveryCounter,
   );
 }
 

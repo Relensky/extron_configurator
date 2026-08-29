@@ -270,6 +270,8 @@ IconData editKindIcon(String kind) => switch (kind) {
   'todo' => Icons.checklist,
   'room' => Icons.meeting_room_outlined,
   'track' => Icons.alt_route,
+  'po' => Icons.receipt_long,
+  'delivery' => Icons.inventory,
   _ => Icons.apartment,
 };
 

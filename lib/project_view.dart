@@ -24,6 +24,7 @@ import 'name_colors.dart';
 import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
 import 'project_briefing_dialog.dart';
+import 'project_deliveries_view.dart';
 import 'project_estimate.dart';
 import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
@@ -80,6 +81,11 @@ enum _ProjectPane {
   // money was worked out from.
   plans('Plans', Icons.architecture),
   timeline('Timeline', Icons.event_available),
+  // WHAT HAPPENED AFTER THE ORDER WENT IN - the purchase orders it went out
+  // on, what has landed, and where that kit is now. Straight after the
+  // timeline because it is the other half of the same story: the timeline
+  // says when each part has to be bought, this says what turned up.
+  deliveries('Deliveries', Icons.inventory),
   // What the building already HAS and when it falls due - next to the
   // timeline, because both are the job read as a calendar: one for the work
   // being quoted, one for the work after it.
@@ -616,6 +622,8 @@ class _ProjectViewState extends State<ProjectView> {
             ),
             _ProjectPane.plans => plansSlivers(context, estimate),
             _ProjectPane.timeline => timelineSlivers(context, estimate),
+            _ProjectPane.deliveries =>
+              deliveriesSlivers(context, estimate),
             _ProjectPane.lifecycle => lifecycleSlivers(context, estimate),
             _ProjectPane.responsibility =>
               responsibilitySlivers(context, estimate),

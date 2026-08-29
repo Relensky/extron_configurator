@@ -704,10 +704,17 @@ class _OrderBlock extends StatefulWidget {
 
   final ValueChanged<PartOrder> onChanged;
 
+  /// The PO numbers this job already mentions - see
+  /// [BuildingProject.poNumbersInUse]. Offered beside the field so a number
+  /// that has already been typed on nine other parts is picked rather than
+  /// retyped, which is how one PO ends up on a job under three spellings.
+  final List<String> poNumbers;
+
   const _OrderBlock({
     required this.order,
     required this.needBy,
     required this.onChanged,
+    this.poNumbers = const [],
   });
 
   @override
@@ -787,10 +794,25 @@ class _OrderBlockState extends State<_OrderBlock> {
               child: TextField(
                 key: const ValueKey('part_po_number'),
                 controller: _po,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'PO number',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   isDense: true,
+                  suffixIcon: widget.poNumbers.isEmpty
+                      ? null
+                      : PopupMenuButton<String>(
+                          key: const ValueKey('part_po_pick'),
+                          tooltip: 'Pick a purchase order on the job',
+                          icon: const Icon(Icons.arrow_drop_down),
+                          itemBuilder: (_) => [
+                            for (final n in widget.poNumbers)
+                              PopupMenuItem(value: n, child: Text(n)),
+                          ],
+                          onSelected: (n) {
+                            _po.text = n;
+                            widget.onChanged(order.copyWith(poNumber: n));
+                          },
+                        ),
                 ),
                 onChanged: (v) => widget.onChanged(order.copyWith(poNumber: v)),
               ),
@@ -854,6 +876,88 @@ class _OrderBlockState extends State<_OrderBlock> {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// What of this part is on site, and how much of that is in a room.
+///
+/// Nothing when no arrival has been logged against it: a job that does not
+/// track deliveries should not grow a line on this dialog saying it has none.
+class _DeliveredHere extends StatelessWidget {
+  final AppStateProvider provider;
+  final String partKey;
+
+  /// How many the job is buying, so 'on site' can be read against something.
+  final double ordered;
+
+  const _DeliveredHere({
+    required this.provider,
+    required this.partKey,
+    required this.ordered,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final project = provider.project;
+    final rows = project.deliveriesForPart(partKey);
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final here = project.deliveredQty(partKey);
+    final installed = project.installedQty(partKey);
+    final waiting = here - installed;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory, size: 18, color: muted),
+              const SizedBox(width: 8),
+              Text('On site', style: theme.textTheme.labelMedium),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            [
+              '${formatUnits(here)} of ${formatUnits(ordered)} arrived',
+              if (installed > 0) '${formatUnits(installed)} installed',
+              if (waiting > 0) '${formatUnits(waiting)} not in a room yet',
+            ].join('  ·  '),
+            key: const ValueKey('part_delivered_summary'),
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          for (final row in rows.take(4))
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                [
+                  if (row.deliveredOn != null)
+                    formatScheduleDate(row.deliveredOn!),
+                  if (formatUnits(row.qty).isNotEmpty)
+                    '${formatUnits(row.qty)} units',
+                  // The code on the door - 'BSS 103' - the way every other
+                  // pane names a room, rather than the config's file stem.
+                  row.state == DeliveryState.installed &&
+                          provider.projectRoomCode(row.roomId).isNotEmpty
+                      ? 'installed in '
+                            '${provider.projectRoomCode(row.roomId)}'
+                      : row.whereText,
+                ].join(' - '),
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+            ),
+          if (rows.length > 4)
+            Text(
+              '+${rows.length - 4} more on the Deliveries pane',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1789,6 +1893,14 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
       _order,
       partName: name,
     );
+    // A PO NUMBER TYPED HERE JOINS THE JOB'S PO LIST. Otherwise the list is
+    // only ever as complete as somebody's memory of entering it twice, and
+    // "what is on PO-1188" answers nothing for the PO that was only ever
+    // typed onto a part. Adding one that is already there is a no-op - see
+    // [BuildingProject.addPo].
+    if (_order.poNumber.trim().isNotEmpty) {
+      widget.provider.addProjectPo(number: _order.poNumber);
+    }
     Navigator.of(context).pop();
   }
 
@@ -1973,7 +2085,18 @@ class _PartScheduleDialogState extends State<_PartScheduleDialog> {
             _OrderBlock(
               order: _order,
               needBy: effectiveNeed,
+              poNumbers: widget.provider.project.poNumbersInUse,
               onChanged: (o) => setState(() => _order = o),
+            ),
+
+            // WHAT OF IT IS ACTUALLY HERE. The order record says it was
+            // bought and the arrival date says it landed; neither says where
+            // it went, which on a part spread over five rooms is the question
+            // that follows straight after. See project_deliveries_view.dart.
+            _DeliveredHere(
+              provider: widget.provider,
+              partKey: widget.line.key,
+              ordered: widget.line.qty,
             ),
 
             // WHAT HAS HAPPENED TO THIS PART. The question people actually
