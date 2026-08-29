@@ -137,7 +137,7 @@ ReminderExport buildOrderReminders({
   final jobName = project.name.trim().isEmpty
       ? 'Room Config Builder project'
       : project.name.trim();
-  final slug = _uidSlug('$jobName-${project.jobNumber}');
+  final slug = _uidSlug('$jobName-${project.projectNumber}');
 
   final chosen = trackId.isEmpty
       ? schedule.lines
@@ -177,8 +177,8 @@ ReminderExport buildOrderReminders({
     if (parts.first.track != null) {
       body.write('\nPhase: ${parts.first.track!.name}');
     }
-    if (project.jobNumber.trim().isNotEmpty) {
-      body.write('\nJob number: ${project.jobNumber.trim()}');
+    if (project.projectNumber.trim().isNotEmpty) {
+      body.write('\nProject number: ${project.projectNumber.trim()}');
     }
 
     lines.addAll([

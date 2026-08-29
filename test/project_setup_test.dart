@@ -127,7 +127,7 @@ void main() {
       final message = applyProjectSetup(p, (
         name: 'Bessey refresh',
         building: 'BSS',
-        jobNumber: 'J-4412',
+        projectNumber: 'J-4412',
         stakeholder: 'Facilities',
         roomPaths: [room],
         deadline: DateTime(2026, 9, 14),
@@ -136,7 +136,7 @@ void main() {
 
       expect(p.project.name, 'Bessey refresh');
       expect(p.project.building, 'BSS');
-      expect(p.project.jobNumber, 'J-4412');
+      expect(p.project.projectNumber, 'J-4412');
       expect(p.project.stakeholder, 'Facilities');
       expect(p.project.rooms, hasLength(1));
       expect(p.project.deliveryDeadline, DateTime(2026, 9, 14));
@@ -151,7 +151,7 @@ void main() {
       applyProjectSetup(p, (
         name: 'Already named',
         building: '',
-        jobNumber: '',
+        projectNumber: '',
         stakeholder: '',
         roomPaths: const [],
         deadline: null,
@@ -174,7 +174,7 @@ void main() {
       final message = applyProjectSetup(p, (
         name: '',
         building: '',
-        jobNumber: '',
+        projectNumber: '',
         stakeholder: '',
         roomPaths: [room, room],
         deadline: null,

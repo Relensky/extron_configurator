@@ -73,9 +73,11 @@ List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
         child: Padding(
           padding: EdgeInsets.fromLTRB(28, 4, 16, 8),
           child: Text(
-            'No purchase orders on the job yet. A PO entered here can be '
-            'picked from the Bought? box on any part, so the number is typed '
-            'once instead of once per line.',
+            'No purchase orders on the job yet. Enter one and it can be '
+            'given the equipment it bought in one pass, picked from the '
+            'Bought? box on any part, and pulled onto a delivery off the '
+            'packing slip - so the number is typed once instead of once per '
+            'line.',
           ),
         ),
       )
@@ -134,13 +136,17 @@ List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
               'Log what turns up as it turns up: what came, how many, and '
               'where it went. A part that arrives in three shipments is three '
               'entries, so "six of the eighteen are in 103 and the rest are '
-              'in the basement" is something the job can actually say.',
+              'in the basement" is something the job can actually say.\n\n'
+              'A delivery does not need a PO or a part on the equipment list. '
+              'What went on a card is ticked as a one-off purchase and '
+              'tracked here like everything else.',
               textAlign: TextAlign.center,
             ),
           ),
         ),
       )
-    else
+    else ...[
+      SliverToBoxAdapter(child: _PaperworkLine(project: project)),
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         sliver: SliverList.builder(
@@ -154,8 +160,65 @@ List<Widget> deliveriesSlivers(BuildContext context, ProjectEstimate estimate) {
           ),
         ),
       ),
+    ],
     const SliverToBoxAdapter(child: SizedBox(height: 24)),
   ];
+}
+
+/// What the log is carrying that is not on a purchase order: the card
+/// purchases, and the rows nobody has said anything about.
+///
+/// At the TOP of the list rather than left to be found by scrolling. Both
+/// numbers are read at a glance and neither is visible any other way — one is
+/// spend that appears on no estimate and no PO, and the other is the set of
+/// rows that cannot be reconciled against anything at all.
+class _PaperworkLine extends StatelessWidget {
+  final BuildingProject project;
+
+  const _PaperworkLine({required this.project});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final oneOffs = project.oneOffDeliveries.length;
+    final loose = project.deliveriesNeedingPaperwork.length;
+    if (oneOffs == 0 && loose == 0) return const SizedBox.shrink();
+
+    String rows(int n) => n == 1 ? '1 delivery' : '$n deliveries';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 16, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (loose > 0) ...[
+            Icon(
+              Icons.warning_amber,
+              size: 16,
+              color: warningOn(theme.scaffoldBackgroundColor),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Text(
+              [
+                if (oneOffs > 0)
+                  '${rows(oneOffs)} bought as a one-off, outside the PO '
+                      'process.',
+                if (loose > 0)
+                  '${rows(loose)} on no PO and not marked as a one-off.',
+              ].join('  '),
+              key: const ValueKey('delivery_paperwork_line'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: loose > 0
+                    ? warningOn(theme.scaffoldBackgroundColor)
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// '14 units, 6 not in a room yet' - the figure the section heading carries,
@@ -369,6 +432,30 @@ class _PoCard extends StatelessWidget {
               ),
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
+            const SizedBox(height: 6),
+            // WHAT IT BOUGHT, from the PO. The Bought? box on a part answers
+            // "what did this go out on"; nothing answered "what went out on
+            // this", which is the question a PO is opened with and the one
+            // that has to be answered before a packing slip can be checked
+            // against anything.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: ValueKey('po_parts_${po.id}'),
+                icon: const Icon(Icons.playlist_add_check, size: 18),
+                label: Text(
+                  parts.isEmpty
+                      ? 'Put equipment on this PO'
+                      : 'Equipment on this PO (${parts.length})',
+                ),
+                onPressed: () => showPoPartsDialog(
+                  context,
+                  provider: provider,
+                  estimate: estimate,
+                  po: po,
+                ),
+              ),
+            ),
             if (parts.isNotEmpty) ...[
               const SizedBox(height: 6),
               Wrap(
@@ -419,8 +506,8 @@ String _poSummary({
   String deliveries(int n) => n == 1 ? '1 delivery' : '$n deliveries';
   if (parts == 0) {
     return landed == 0
-        ? 'Nothing points at this PO yet. Pick it in the Bought? box on a '
-              'part, on the Timeline.'
+        ? 'Nothing points at this PO yet. Tick what it bought below, or pick '
+              'it in the Bought? box on a part, on the Timeline.'
         : '${deliveries(landed)} logged against it.';
   }
   return '$parts part${parts == 1 ? '' : 's'} bought on it - $received marked '
@@ -644,6 +731,296 @@ class _PoDialogState extends State<_PoDialog> {
   }
 }
 
+/// Puts the equipment a purchase order bought ON that purchase order.
+///
+/// A PO goes to ONE vendor and covers that vendor's lines, which is why this
+/// is opened from the PO and opens filtered to that vendor: "everything Extron
+/// quoted went out on PO-1188" is one decision, and the Bought? box on each
+/// part makes it nineteen. What happened when it was nineteen is that the
+/// first three got the number and the other sixteen read on the timeline as
+/// parts nobody had ordered.
+///
+/// Ticking is the whole interaction. A part ticked is on the PO; a part
+/// unticked is off it and keeps everything else its order record says. See
+/// [BuildingProject.setPartsOnPo].
+Future<void> showPoPartsDialog(
+  BuildContext context, {
+  required AppStateProvider provider,
+  required ProjectEstimate estimate,
+  required ProjectPo po,
+}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _PoPartsDialog(
+      provider: provider,
+      estimate: estimate,
+      po: po,
+    ),
+  );
+}
+
+class _PoPartsDialog extends StatefulWidget {
+  final AppStateProvider provider;
+  final ProjectEstimate estimate;
+  final ProjectPo po;
+
+  const _PoPartsDialog({
+    required this.provider,
+    required this.estimate,
+    required this.po,
+  });
+
+  @override
+  State<_PoPartsDialog> createState() => _PoPartsDialogState();
+}
+
+class _PoPartsDialogState extends State<_PoPartsDialog> {
+  /// Every part that is to be on the PO when this is saved. Seeded with what
+  /// is on it already, so the box opens saying what the job currently thinks
+  /// rather than empty.
+  late final Set<String> _checked = {
+    ...widget.provider.project.partsOnPo(widget.po.number),
+  };
+
+  final TextEditingController _search = TextEditingController();
+
+  /// Show only the lines tagged to the PO's vendor.
+  ///
+  /// On by default when the PO names a vendor who has lines on the job: that
+  /// is the list somebody opened this to tick, and a hundred-line master list
+  /// with every other vendor mixed into it is one nobody reads to the bottom
+  /// of.
+  late bool _vendorOnly = _vendorLines().isNotEmpty;
+
+  /// The day the order went in, for the parts that do not already say. The
+  /// PO's own date to start with, because that is what it usually was.
+  late DateTime? _ordered = widget.po.issuedOn;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// The master lines tagged to this PO's vendor.
+  ///
+  /// Matched on the vendor ROW when the PO points at one and on the name
+  /// otherwise, so a PO raised on a distributor that never earned a vendor row
+  /// still lines up with the parts tagged to that name.
+  List<MasterPartLine> _vendorLines() {
+    final id = widget.po.vendorId.trim();
+    final name = widget.po.vendor.trim().toLowerCase();
+    if (id.isEmpty && name.isEmpty) return const [];
+    return [
+      for (final m in widget.estimate.master)
+        if (id.isNotEmpty
+            ? m.vendor?.id == id
+            : (m.vendor?.name.trim().toLowerCase() ?? '') == name)
+          m,
+    ];
+  }
+
+  /// What the list shows: the vendor's lines or all of them, narrowed by
+  /// whatever has been typed in the search box.
+  List<MasterPartLine> get _shown {
+    final base = _vendorOnly ? _vendorLines() : widget.estimate.master;
+    final needle = _search.text.trim().toLowerCase();
+    if (needle.isEmpty) return base;
+    return [
+      for (final m in base)
+        if (m.description.toLowerCase().contains(needle) ||
+            m.model.toLowerCase().contains(needle) ||
+            m.partNumber.toLowerCase().contains(needle))
+          m,
+    ];
+  }
+
+  /// The PO a part is already bought on, when it is not this one - the thing
+  /// that has to be said out loud before a tick moves it.
+  String _otherPo(String key) {
+    final number = widget.provider.project.orderForPart(key)?.poNumber ?? '';
+    if (number.trim().isEmpty) return '';
+    return normalizePoNumber(number) == normalizePoNumber(widget.po.number)
+        ? ''
+        : number.trim();
+  }
+
+  void _save() {
+    final master = widget.estimate.master;
+    final names = {for (final m in master) m.key: m.description};
+    // Only the parts on the MASTER LIST can be unticked here, because they are
+    // the only ones this box could have shown. A PO carrying a key that has
+    // since dropped off the job keeps it - that is history, not a mistake to
+    // tidy away behind somebody's back.
+    final onIt = <String>[];
+    final offIt = <String>[];
+    for (final m in master) {
+      (_checked.contains(m.key) ? onIt : offIt).add(m.key);
+    }
+    widget.provider.setProjectPartsOnPo(
+      widget.po.number,
+      onIt: onIt,
+      offIt: offIt,
+      orderedOn: _ordered,
+      expectedOn: widget.po.expectedOn,
+      partNames: names,
+    );
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final shown = _shown;
+    final vendor = _vendorName(widget.provider.project, widget.po);
+    final number = widget.po.number.trim().isEmpty
+        ? 'this PO'
+        : widget.po.number.trim();
+
+    var units = 0.0;
+    for (final m in widget.estimate.master) {
+      if (_checked.contains(m.key)) units += m.qty;
+    }
+
+    return AlertDialog(
+      key: const ValueKey('po_parts_dialog'),
+      title: Text('What is on $number'),
+      content: SizedBox(
+        width: 620,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              vendor.isEmpty
+                  ? 'Tick what this purchase order bought.'
+                  : 'Tick what $vendor is supplying on this purchase order.',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('po_parts_search'),
+                    controller: _search,
+                    decoration: const InputDecoration(
+                      labelText: 'Find a part',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 190,
+                  child: _DateField(
+                    label: 'Ordered',
+                    value: _ordered,
+                    buttonKey: const ValueKey('po_parts_ordered'),
+                    onPick: (d) => setState(() => _ordered = d),
+                  ),
+                ),
+              ],
+            ),
+            if (_vendorLines().isNotEmpty)
+              CheckboxListTile(
+                key: const ValueKey('po_parts_vendor_only'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _vendorOnly,
+                title: Text(
+                  vendor.isEmpty
+                      ? 'Only this vendor\'s parts'
+                      : 'Only $vendor\'s parts',
+                  style: theme.textTheme.bodySmall,
+                ),
+                onChanged: (v) => setState(() => _vendorOnly = v ?? false),
+              ),
+            const Divider(height: 8),
+            SizedBox(
+              height: 320,
+              child: shown.isEmpty
+                  ? Center(
+                      child: Text(
+                        widget.estimate.master.isEmpty
+                            ? 'There is no equipment on the job yet.'
+                            : 'Nothing matches.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: muted,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: shown.length,
+                      itemBuilder: (context, i) {
+                        final m = shown[i];
+                        final other = _otherPo(m.key);
+                        return CheckboxListTile(
+                          key: ValueKey('po_part_${m.key}'),
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: _checked.contains(m.key),
+                          title: Text(
+                            m.description,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            [
+                              '${formatUnits(m.qty)} on the job',
+                              if (m.vendor != null) m.vendor!.name,
+                              // Said out loud rather than silently moved: a
+                              // part bought on another PO is a fact somebody
+                              // entered, and a tick here overwrites it.
+                              if (other.isNotEmpty) 'currently on $other',
+                            ].join('  ·  '),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: muted,
+                            ),
+                          ),
+                          onChanged: (v) => setState(() {
+                            if (v == true) {
+                              _checked.add(m.key);
+                            } else {
+                              _checked.remove(m.key);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+            ),
+            const Divider(height: 8),
+            Text(
+              _checked.isEmpty
+                  ? 'Nothing on it.'
+                  : '${_checked.length} part'
+                        '${_checked.length == 1 ? '' : 's'}'
+                        '${units > 0 ? ', ${formatUnits(units)} units' : ''}'
+                        ' on $number.',
+              key: const ValueKey('po_parts_count'),
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('po_parts_save'),
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 //  THE DELIVERIES
 // ---------------------------------------------------------------------------
@@ -717,7 +1094,12 @@ class _DeliveryCard extends StatelessWidget {
                           if (row.deliveredOn != null)
                             'arrived ${formatScheduleDate(row.deliveredOn!)}',
                           if (row.poNumber.trim().isNotEmpty)
-                            'PO ${row.poNumber.trim()}',
+                            'PO ${row.poNumber.trim()}'
+                          // A card purchase says so where the PO would be:
+                          // "bought outside the process" is the answer to the
+                          // same question, not the absence of one.
+                          else if (row.oneOff)
+                            'one-off purchase - P-Card',
                           if (row.state == DeliveryState.installed &&
                               room.isNotEmpty)
                             'in $room',
@@ -753,6 +1135,36 @@ class _DeliveryCard extends StatelessWidget {
                 ),
               ],
             ),
+            // NOT ON ANYTHING. Said on the card rather than only in the
+            // dialog that made it, because the row somebody has to come back
+            // to is found by scrolling this list - and a delivery that names
+            // neither a PO nor a card is the one that cannot be reconciled
+            // against an order, an invoice or a statement later.
+            if (row.needsPaperwork)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.warning_amber,
+                      size: 16,
+                      color: warningOn(theme.cardColor),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Not on a PO or an order number. Edit it to pick one, '
+                        'or tick "one-off purchase" if it went on a card.',
+                        key: ValueKey('delivery_no_po_${row.id}'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: warningOn(theme.cardColor),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
             // WHERE IT IS, as one gesture. Moving a pallet from the dock to a
             // shelf to a room is the thing this pane is opened for, so it is a
@@ -793,7 +1205,7 @@ class _WhereRow extends StatelessWidget {
           label: 'Where is it being held?',
           hint: 'Bessey basement, rack 3',
           initial: row.location,
-          suggestions: provider.project.storageLocations,
+          suggestions: provider.project.deliveryLocations,
         );
         if (where == null) return;
         provider.setProjectDeliveryState(
@@ -1227,6 +1639,7 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
   late DeliveryState _state =
       widget.existing?.state ?? DeliveryState.delivered;
   late String _roomId = widget.existing?.roomId ?? '';
+  late bool _oneOff = widget.existing?.oneOff ?? false;
 
   @override
   void dispose() {
@@ -1249,6 +1662,32 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
     return _name.text.trim();
   }
 
+  /// What is missing from this row, said before it is saved rather than
+  /// discovered in June.
+  ///
+  /// IT DOES NOT STOP THE SAVE. A pallet that turned up is a fact whether or
+  /// not the paperwork has caught up, and a log that refuses the rows it does
+  /// not like is a log people keep somewhere else. It warns, and the row is
+  /// counted as unreconciled on the pane and in the workbook until somebody
+  /// says what bought it — see [ProjectDelivery.needsPaperwork].
+  String get _warning {
+    final noPaperwork = _po.text.trim().isEmpty && !_oneOff;
+    final noName = _itemName.trim().isEmpty;
+    if (!noPaperwork && !noName) return '';
+    if (noPaperwork && noName) {
+      return 'Nothing here says what this is or what bought it. Log it '
+          'anyway if that is all anybody knows - but a PO, a name, or the '
+          'one-off box is what makes it findable later.';
+    }
+    if (noPaperwork) {
+      return 'No PO on this row. Pick one above, or tick the one-off box if '
+          'it went on a card - a delivery that says neither is one nobody '
+          'can reconcile against an order later.';
+    }
+    return 'Nothing says what this is. It will read as "something not on the '
+        'equipment list" everywhere it appears.';
+  }
+
   void _save() {
     final key = _partKey == _kOffList ? '' : _partKey;
     final qty = double.tryParse(_qty.text.trim()) ?? 0;
@@ -1258,6 +1697,7 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
         partKey: key,
         itemName: _itemName,
         poNumber: _po.text,
+        oneOff: _oneOff,
         qty: qty,
         deliveredOn: _delivered,
         state: _state,
@@ -1274,6 +1714,7 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
           partKey: key,
           itemName: _itemName,
           poNumber: _po.text.trim(),
+          oneOff: _oneOff,
           qty: qty,
           deliveredOn: _delivered,
           clearDeliveredOn: _delivered == null,
@@ -1341,6 +1782,9 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                 TextField(
                   key: const ValueKey('delivery_name'),
                   controller: _name,
+                  // Keeps the warning below in step with what is typed: a name
+                  // that arrives makes half of it go away.
+                  onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'What is it',
                     hintText: 'a loaner, a box of connectors, a tool',
@@ -1375,7 +1819,12 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                     child: _PoField(
                       controller: _po,
                       numbers: poNumbers,
+                      // A one-off went on a card. There is no PO, there was
+                      // never going to be one, and a box that still invites a
+                      // number invites a made-up one.
+                      enabled: !_oneOff,
                       onPicked: (v) => setState(() => _po.text = v),
+                      onChanged: (_) => setState(() {}),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1397,6 +1846,66 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
+                  ),
+                ),
+              // BOUGHT ON A CARD. Not everything on a job is quoted: a box of
+              // connectors, a replacement supply, the adapter somebody drove
+              // out for on the Friday. Those never touch a quote, a vendor
+              // package or a PO — and they still land on a dock and still have
+              // to be found in June.
+              //
+              // Ticking it is what turns the warning below off, because the
+              // two say opposite things: no PO and nothing said is a row
+              // nobody has finished, and a one-off is a row that is COMPLETE
+              // with no PO to find.
+              CheckboxListTile(
+                key: const ValueKey('delivery_one_off'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _oneOff,
+                title: const Text('One-off purchase - P-Card'),
+                subtitle: const Text(
+                  'Bought outside the quote and the PO process. Tracked here, '
+                  'and on nothing else.',
+                ),
+                onChanged: (v) => setState(() {
+                  _oneOff = v ?? false;
+                  if (_oneOff) _po.clear();
+                }),
+              ),
+              if (_warning.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber,
+                        size: 18,
+                        color: warningOn(
+                          Theme.of(context).dialogTheme.backgroundColor ??
+                              Theme.of(context).colorScheme.surface,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _warning,
+                          key: const ValueKey('delivery_no_po_warning'),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: warningOn(
+                                  Theme.of(context)
+                                          .dialogTheme
+                                          .backgroundColor ??
+                                      Theme.of(context).colorScheme.surface,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               const SizedBox(height: 16),
@@ -1424,21 +1933,20 @@ class _DeliveryDialogState extends State<_DeliveryDialog> {
                 onChanged: (v) =>
                     setState(() => _state = v ?? DeliveryState.delivered),
               ),
-              if (_state == DeliveryState.stored) ...[
-                const SizedBox(height: 8),
-                TextField(
-                  key: const ValueKey('delivery_location'),
-                  controller: _location,
-                  decoration: InputDecoration(
-                    labelText: 'Held where',
-                    hintText: project.storageLocations.isEmpty
-                        ? 'Bessey basement, rack 3'
-                        : project.storageLocations.first,
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-              ],
+              // WHERE IT WENT, TYPED. On every state, not just storage: a
+              // pallet is delivered to an address before it is anything else,
+              // and the address is often not the building on the job - a
+              // central store, a contractor's warehouse, the dock on the far
+              // side of campus. Offered as suggestions and never as a fixed
+              // list, because the one delivery that went somewhere new is
+              // exactly the one worth writing down.
+              const SizedBox(height: 8),
+              _LocationField(
+                controller: _location,
+                stored: _state == DeliveryState.stored,
+                known: project.deliveryLocations,
+                onPicked: (v) => setState(() => _location.text = v),
+              ),
               if (_state == DeliveryState.installed) ...[
                 const SizedBox(height: 8),
                 Row(
@@ -1542,16 +2050,80 @@ String _alreadyHere(
   return parts.isEmpty ? '' : parts.join(' ');
 }
 
+/// Where a delivery went: an address, a dock, a shelf — typed, with the places
+/// this job has already used one click away.
+///
+/// TYPED, NOT PICKED. A job takes delivery wherever the vendor could get a
+/// truck that week, and the delivery that matters — the one that went to the
+/// wrong building, or to a store across campus — is precisely the one a
+/// dropdown of known places could not have recorded. The suggestions exist so
+/// the usual two or three do not get retyped into four spellings; see
+/// [BuildingProject.deliveryLocations].
+class _LocationField extends StatelessWidget {
+  final TextEditingController controller;
+
+  /// Whether this lot is in storage, which is the one state where the
+  /// question is 'held where' rather than 'delivered to'.
+  final bool stored;
+
+  final List<String> known;
+  final ValueChanged<String> onPicked;
+
+  const _LocationField({
+    required this.controller,
+    required this.stored,
+    required this.known,
+    required this.onPicked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      key: const ValueKey('delivery_location'),
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: stored ? 'Held where' : 'Delivered to',
+        hintText: stored
+            ? 'Bessey basement, rack 3'
+            : 'Bessey loading dock, Central Stores, 1 Campus Drive',
+        helperText: 'Any address or place - type one that is not on the list.',
+        border: const OutlineInputBorder(),
+        isDense: true,
+        suffixIcon: known.isEmpty
+            ? null
+            : PopupMenuButton<String>(
+                key: const ValueKey('delivery_location_pick'),
+                tooltip: 'Somewhere this job has taken delivery before',
+                icon: const Icon(Icons.arrow_drop_down),
+                itemBuilder: (_) => [
+                  for (final place in known)
+                    PopupMenuItem(value: place, child: Text(place)),
+                ],
+                onSelected: onPicked,
+              ),
+      ),
+    );
+  }
+}
+
 /// A PO number field with the job's existing numbers one click away.
 class _PoField extends StatelessWidget {
   final TextEditingController controller;
   final List<String> numbers;
   final ValueChanged<String> onPicked;
 
+  /// False for a purchase that went on a card: there is no PO to enter, and a
+  /// box that still invites a number invites a made-up one.
+  final bool enabled;
+
+  final ValueChanged<String>? onChanged;
+
   const _PoField({
     required this.controller,
     required this.numbers,
     required this.onPicked,
+    this.enabled = true,
+    this.onChanged,
   });
 
   @override
@@ -1559,11 +2131,14 @@ class _PoField extends StatelessWidget {
     return TextField(
       key: const ValueKey('delivery_po'),
       controller: controller,
+      enabled: enabled,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: 'PO',
+        hintText: enabled ? null : 'a one-off has none',
         border: const OutlineInputBorder(),
         isDense: true,
-        suffixIcon: numbers.isEmpty
+        suffixIcon: (numbers.isEmpty || !enabled)
             ? null
             : PopupMenuButton<String>(
                 key: const ValueKey('delivery_po_pick'),

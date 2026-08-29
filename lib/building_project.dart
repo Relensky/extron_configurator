@@ -691,6 +691,27 @@ class ProjectDelivery {
   /// not a row id. '' when it arrived against no paperwork anybody has.
   final String poNumber;
 
+  /// Bought outside the PO process — on the department card, as a one-off.
+  ///
+  /// NOT EVERYTHING ON A JOB IS QUOTED. A box of connectors, a replacement
+  /// power supply, an adapter somebody drove out for on the Friday: these are
+  /// bought on a P-Card in ten minutes, they never touch a quote, a vendor
+  /// package or a purchase order, and they still turn up on a loading dock and
+  /// still have to be found in June.
+  ///
+  /// It is a FLAG rather than the absence of a PO number, because those two
+  /// say opposite things. A row with no PO and nothing else said is a row
+  /// nobody has finished — somebody has the paperwork and it has not been
+  /// entered — and the log should say so. A row marked one-off is COMPLETE:
+  /// there is no PO, there was never going to be one, and it needs no chasing.
+  /// See [needsPaperwork], which is what the warning is hung on.
+  ///
+  /// It changes nothing about money. This pane records what happened to kit,
+  /// and a card purchase is no more part of the estimate than a delivery of
+  /// something that was quoted — see the note at the head of
+  /// project_deliveries_view.dart.
+  final bool oneOff;
+
   /// How many. The whole point of a per-arrival row: 6 of the 18.
   final double qty;
 
@@ -700,13 +721,19 @@ class ProjectDelivery {
 
   final DeliveryState state;
 
-  /// Where it is being held — 'Bessey basement, rack 3', 'the shipping
-  /// container', 'my office'. Free text, because a storage location is a place
-  /// somebody describes rather than a thing this app can enumerate.
+  /// WHERE IT WENT — the address it was delivered to, or the place it is being
+  /// held: 'Bessey loading dock', 'Central Stores, 1 Campus Drive', 'the
+  /// shipping container', 'my office'.
   ///
-  /// Meaningful when [state] is [DeliveryState.stored]; kept rather than
-  /// cleared when the state moves on, so a row that goes from storage to
-  /// installed still says where it had been.
+  /// Free text, and typed rather than picked. A job takes delivery wherever
+  /// the vendor could get a truck to that week, and a fixed list of places
+  /// would mean the one delivery that went somewhere else is the one that
+  /// cannot be written down. The places this job has already used are offered
+  /// as suggestions - see [BuildingProject.deliveryLocations] - so the usual
+  /// two or three are one tap away without the unusual one being refused.
+  ///
+  /// Kept rather than cleared when the state moves on, so a row that goes from
+  /// a dock to a shelf to a room still says where it had been.
   final String location;
 
   /// The room it went into, as a project room id. Set with
@@ -725,6 +752,7 @@ class ProjectDelivery {
     this.partKey = '',
     this.itemName = '',
     this.poNumber = '',
+    this.oneOff = false,
     this.qty = 0,
     this.deliveredOn,
     this.state = DeliveryState.delivered,
@@ -741,20 +769,45 @@ class ProjectDelivery {
 
   bool get isInstalled => state == DeliveryState.installed;
 
+  /// True when nothing on this row says what bought it: no PO, and nobody has
+  /// said it was a one-off.
+  ///
+  /// The one thing a delivery log cannot do is quietly hold rows that cannot
+  /// be reconciled against anything. This is what the pane warns on and what
+  /// the workbook calls out — not to refuse the row, because a pallet that
+  /// turned up is a fact whether or not the paperwork has caught up, but so
+  /// that "we have no idea what this was bought on" is a sentence the job says
+  /// out loud rather than one it hides.
+  bool get needsPaperwork => poNumber.trim().isEmpty && !oneOff;
+
+  /// What bought it, in the words the card and the sheet both use.
+  String get boughtOnText => poNumber.trim().isNotEmpty
+      ? 'PO ${poNumber.trim()}'
+      : oneOff
+      ? 'One-off purchase - P-Card'
+      : 'No PO recorded';
+
   /// Where this lot is, in the fewest words that are still true.
+  ///
+  /// The PLACE is named wherever there is one, in every state that has not
+  /// ended the question: 'on site' with nothing after it is the answer that
+  /// sends somebody walking round a campus looking for a pallet.
   String get whereText => switch (state) {
     DeliveryState.stored => location.trim().isEmpty
         ? 'In storage'
         : 'In storage - ${location.trim()}',
     DeliveryState.installed => 'Installed',
     DeliveryState.returned => 'Returned',
-    DeliveryState.delivered => 'On site',
+    DeliveryState.delivered => location.trim().isEmpty
+        ? 'On site'
+        : 'On site - ${location.trim()}',
   };
 
   ProjectDelivery copyWith({
     String? partKey,
     String? itemName,
     String? poNumber,
+    bool? oneOff,
     double? qty,
     DateTime? deliveredOn,
     bool clearDeliveredOn = false,
@@ -769,6 +822,7 @@ class ProjectDelivery {
     partKey: partKey ?? this.partKey,
     itemName: itemName ?? this.itemName,
     poNumber: poNumber ?? this.poNumber,
+    oneOff: oneOff ?? this.oneOff,
     qty: qty ?? this.qty,
     deliveredOn: clearDeliveredOn ? null : (deliveredOn ?? this.deliveredOn),
     state: state ?? this.state,
@@ -783,6 +837,7 @@ class ProjectDelivery {
     if (partKey.isNotEmpty) 'partKey': partKey,
     if (itemName.trim().isNotEmpty) 'itemName': itemName.trim(),
     if (poNumber.trim().isNotEmpty) 'poNumber': poNumber.trim(),
+    if (oneOff) 'oneOff': true,
     if (qty != 0) 'qty': qty,
     if (deliveredOn != null) 'deliveredOn': formatIsoDate(deliveredOn!),
     'state': state.name,
@@ -798,6 +853,7 @@ class ProjectDelivery {
         partKey: json['partKey']?.toString() ?? '',
         itemName: json['itemName']?.toString() ?? '',
         poNumber: json['poNumber']?.toString() ?? '',
+        oneOff: json['oneOff'] == true,
         qty: (json['qty'] as num?)?.toDouble() ?? 0,
         deliveredOn: parseIsoDate(json['deliveredOn']),
         state: deliveryStateFromName(json['state']),
@@ -1724,7 +1780,11 @@ class BuildingProject {
   /// a code that cannot be looked up should still come back out unchanged.
   String building;
 
-  String jobNumber;
+  /// The number this job is filed under - what a PO, an invoice and a
+  /// timesheet all quote back. Called a PROJECT number rather than a job
+  /// number because that is what it is called on the paperwork it has to
+  /// match.
+  String projectNumber;
 
   /// Who the job is FOR. A department, a dean, facilities - the people whose
   /// room this is and who have to agree to what is on the quote.
@@ -1764,6 +1824,48 @@ class BuildingProject {
   /// so a campus folder that is copied to a laptop still opens. '' for a job
   /// nobody has put on a sheet.
   String campusFile;
+
+  // -------------------------------------------------------------------------
+  //  THE COPY SOMEBODY ELSE CAN READ
+  // -------------------------------------------------------------------------
+  //  This app runs on one machine, and the people who ask about a job do not
+  //  sit at it. The stakeholder wants to see the number, the technician on
+  //  site wants to know whether the mounts landed, and the answer to both has
+  //  been "let me get back to you" or an .xlsx emailed round that is out of
+  //  date the moment anything changes.
+  //
+  //  So a job can PUBLISH itself: the workbook, written into a folder that
+  //  OneDrive or Google Drive already syncs, under the same file name every
+  //  time. That last part is the whole trick — a file that keeps its name
+  //  keeps its share link, so "here is the job" is a URL somebody sends once
+  //  and everybody afterwards opens on the current figures.
+  //
+  //  IT IS A COPY, AND IT ONLY GOES ONE WAY. Nothing is read back: an edit
+  //  made in Excel Online or Google Sheets changes the published sheet and
+  //  nothing else, and the next publish overwrites it. That is a deliberate
+  //  limit rather than an unfinished one — a document that quietly takes
+  //  changes back from a copy several people can edit is a document that
+  //  loses work without anybody being told.
+
+  /// The folder the published copy is written into — a local path, inside
+  /// whatever OneDrive or Google Drive keeps in step with the cloud. '' for a
+  /// job nobody has published.
+  ///
+  /// Absolute and machine-specific ON PURPOSE, unlike the room paths: it names
+  /// a sync client's folder on the machine doing the publishing, and rewriting
+  /// it relative to the project file would break the moment the project moved.
+  /// A job opened on another machine simply has nowhere to publish until
+  /// somebody points it at a folder there.
+  String onlineFolder;
+
+  /// When the published copy was last written, or null when it never has been.
+  ///
+  /// Kept so the app can say how stale the online version is. A published copy
+  /// that is three weeks behind is worse than none, because the person reading
+  /// it has no way to know — which is the whole reason this is recorded and
+  /// shown rather than left to be worked out from a file date somebody would
+  /// have to go and look at.
+  DateTime? onlinePublishedAt;
 
   /// Rooms on the refresh plan that have no config file — see [ManualRoom].
   /// They are counted, aged and budgeted; they are not priced, ordered or
@@ -1911,12 +2013,14 @@ class BuildingProject {
   BuildingProject({
     this.name = '',
     this.building = '',
-    this.jobNumber = '',
+    this.projectNumber = '',
     this.stakeholder = '',
     this.notes = '',
     this.currency = r'$',
     List<ProjectRoomRef>? rooms,
     this.campusFile = '',
+    this.onlineFolder = '',
+    this.onlinePublishedAt,
     List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
     List<ResponsibilityItem>? responsibility,
@@ -1987,9 +2091,10 @@ class BuildingProject {
       plans.isEmpty &&
       purchaseOrders.isEmpty &&
       deliveries.isEmpty &&
+      onlineFolder.trim().isEmpty &&
       name.trim().isEmpty &&
       building.trim().isEmpty &&
-      jobNumber.trim().isEmpty &&
+      projectNumber.trim().isEmpty &&
       stakeholder.trim().isEmpty &&
       notes.trim().isEmpty;
 
@@ -2830,6 +2935,74 @@ class BuildingProject {
     ];
   }
 
+  /// Puts equipment on a PO, and takes equipment off it, in one call.
+  ///
+  /// ONE DECISION, NOT NINETEEN. "Everything Extron quoted went out on
+  /// PO-1188" is a sentence about a SET of parts, and made one part at a time
+  /// it is nineteen trips through the Bought? box - of which, on a real job,
+  /// the first three get filled in and the rest stay blank. That reads on the
+  /// timeline as sixteen parts nobody has bought, which is worse than not
+  /// having recorded the PO at all.
+  ///
+  /// A part joining the PO keeps everything else its order record says and
+  /// gains an order date when it has none: a part bought on a PO IS ordered,
+  /// and a record carrying a number with no date does not count as one - see
+  /// [PartOrder.isOrdered]. [expectedOn] - what the vendor promised for the
+  /// order as a whole - is filled in the same way, only where the part has no
+  /// promise of its own, because a date typed against one line is a better
+  /// answer than the one on the acknowledgement.
+  ///
+  /// A part leaving loses the NUMBER, and when the number was the whole record
+  /// it loses the record: what would be left is an order date against no
+  /// paperwork, which reads on the timeline as a part somebody bought and
+  /// cannot say where from. A record carrying anything else - a vendor's
+  /// promise, an arrival, a quantity, a note - keeps all of it and loses only
+  /// the number, because that was typed by somebody who meant it.
+  ///
+  /// Returns what actually moved, so a caller can log what it did rather than
+  /// what it was asked to do.
+  ({List<String> added, List<String> removed}) setPartsOnPo(
+    String number, {
+    Iterable<String> onIt = const [],
+    Iterable<String> offIt = const [],
+    DateTime? orderedOn,
+    DateTime? expectedOn,
+  }) {
+    final trimmed = number.trim();
+    final needle = normalizePoNumber(trimmed);
+    final added = <String>[];
+    final removed = <String>[];
+    if (needle.isEmpty) return (added: added, removed: removed);
+
+    for (final key in onIt) {
+      final was = orderForPart(key);
+      if (was != null && normalizePoNumber(was.poNumber) == needle) continue;
+      setPartOrder(
+        key,
+        (was ?? const PartOrder()).copyWith(
+          poNumber: trimmed,
+          orderedOn: was?.orderedOn ?? orderedOn,
+          expectedOn: was?.expectedOn ?? expectedOn,
+        ),
+      );
+      added.add(key);
+    }
+
+    for (final key in offIt) {
+      final was = orderForPart(key);
+      if (was == null || normalizePoNumber(was.poNumber) != needle) continue;
+      final left = was.copyWith(poNumber: '');
+      final bare =
+          left.expectedOn == null &&
+          left.receivedOn == null &&
+          left.qty == 0 &&
+          left.notes.trim().isEmpty;
+      setPartOrder(key, bare ? null : left);
+      removed.add(key);
+    }
+    return (added: added, removed: removed);
+  }
+
   // --- what has arrived and where it is -------------------------------------
 
   /// The delivery row with [id], or null.
@@ -2843,6 +3016,27 @@ class BuildingProject {
   /// Every arrival logged against one master-list part, newest first.
   List<ProjectDelivery> deliveriesForPart(String partKey) {
     final out = [for (final d in deliveries) if (d.partKey == partKey) d];
+    out.sort(_byDeliveredDescending);
+    return out;
+  }
+
+  /// The one-off purchases: what was bought on a card rather than through the
+  /// quote and the PO. Newest first.
+  ///
+  /// Worth being able to list on its own, because it is the spend nothing else
+  /// in this app knows about — it is on no estimate, in no vendor package and
+  /// on no purchase order, and at the end of a job "what did we buy outside
+  /// the process" is a question somebody in finance asks.
+  List<ProjectDelivery> get oneOffDeliveries {
+    final out = [for (final d in deliveries) if (d.oneOff) d];
+    out.sort(_byDeliveredDescending);
+    return out;
+  }
+
+  /// Arrivals that say nothing about what bought them — no PO, and not marked
+  /// as a one-off. See [ProjectDelivery.needsPaperwork].
+  List<ProjectDelivery> get deliveriesNeedingPaperwork {
+    final out = [for (final d in deliveries) if (d.needsPaperwork) d];
     out.sort(_byDeliveredDescending);
     return out;
   }
@@ -2904,6 +3098,7 @@ class BuildingProject {
     String partKey = '',
     String itemName = '',
     String poNumber = '',
+    bool oneOff = false,
     double qty = 0,
     DateTime? deliveredOn,
     DeliveryState state = DeliveryState.delivered,
@@ -2917,6 +3112,7 @@ class BuildingProject {
       partKey: partKey,
       itemName: itemName.trim(),
       poNumber: poNumber.trim(),
+      oneOff: oneOff,
       qty: qty,
       deliveredOn: deliveredOn ?? today(),
       state: state,
@@ -2959,12 +3155,19 @@ class BuildingProject {
     return true;
   }
 
-  /// Every storage place the job has used, in the order first seen.
+  /// Every place the job has had kit delivered to or held at, in the order
+  /// first seen.
   ///
-  /// What the location field offers as suggestions: a job holds its kit in two
-  /// or three places, and retyping 'Bessey basement, rack 3' is how one place
-  /// becomes four spellings that no filter can bring back together.
-  List<String> get storageLocations {
+  /// What the location field offers as suggestions: a job takes delivery at
+  /// two or three addresses and holds kit in two or three places, and retyping
+  /// 'Bessey basement, rack 3' is how one place becomes four spellings that no
+  /// filter can bring back together.
+  ///
+  /// SUGGESTIONS, NOT A LIST TO PICK FROM. The next delivery can go to an
+  /// address nobody has used yet - a loading dock across campus, a contractor's
+  /// warehouse, somebody's office - so what this offers has to be typed over
+  /// rather than chosen between.
+  List<String> get deliveryLocations {
     final seen = <String>{};
     final out = <String>[];
     for (final d in deliveries) {
@@ -3105,7 +3308,7 @@ class BuildingProject {
     'version': 1,
     'name': name,
     'building': building,
-    if (jobNumber.isNotEmpty) 'jobNumber': jobNumber,
+    if (projectNumber.isNotEmpty) 'projectNumber': projectNumber,
     if (stakeholder.isNotEmpty) 'stakeholder': stakeholder,
     if (notes.isNotEmpty) 'notes': notes,
     'currency': currency,
@@ -3114,6 +3317,12 @@ class BuildingProject {
     // is one, so a job that has never been on a campus does not grow a key
     // saying so.
     if (campusFile.trim().isNotEmpty) 'campusFile': campusFile.trim(),
+    // Where the published copy goes, and when it last went. Written only when
+    // there is one, so a job nobody has published does not grow keys saying
+    // so - the same bargain campusFile makes above.
+    if (onlineFolder.trim().isNotEmpty) 'onlineFolder': onlineFolder.trim(),
+    if (onlinePublishedAt != null)
+      'onlinePublishedAt': onlinePublishedAt!.toIso8601String(),
     if (manualRooms.isNotEmpty)
       'manualRooms': [for (final r in manualRooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
@@ -3307,7 +3516,12 @@ class BuildingProject {
     final project = BuildingProject(
       name: json['name']?.toString() ?? '',
       building: json['building']?.toString() ?? '',
-      jobNumber: json['jobNumber']?.toString() ?? '',
+      // 'jobNumber' is what this was called before the app settled on
+      // "project" for the thing a building is quoted as. Read under both
+      // names, written under the new one - so the old key retires as each
+      // project is saved rather than on a migration nobody asked for.
+      projectNumber:
+          (json['projectNumber'] ?? json['jobNumber'])?.toString() ?? '',
       // 'client' is what this was called before, and a project file written
       // then is still the one somebody opens this afternoon. Read under both
       // names, written under the new one - so the old key retires as each
@@ -3319,6 +3533,10 @@ class BuildingProject {
           : r'$',
       rooms: rooms,
       campusFile: json['campusFile']?.toString().trim() ?? '',
+      onlineFolder: json['onlineFolder']?.toString().trim() ?? '',
+      onlinePublishedAt: DateTime.tryParse(
+        json['onlinePublishedAt']?.toString() ?? '',
+      ),
       manualRooms: manualRooms,
       vendors: vendors,
       responsibility: responsibility,
@@ -3434,12 +3652,14 @@ class BuildingProject {
   BuildingProject clone() => BuildingProject(
     name: name,
     building: building,
-    jobNumber: jobNumber,
+    projectNumber: projectNumber,
     stakeholder: stakeholder,
     notes: notes,
     currency: currency,
     rooms: List<ProjectRoomRef>.from(rooms),
     campusFile: campusFile,
+    onlineFolder: onlineFolder,
+    onlinePublishedAt: onlinePublishedAt,
     manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
     responsibility: List<ResponsibilityItem>.from(responsibility),

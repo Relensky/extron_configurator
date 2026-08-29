@@ -123,6 +123,99 @@ void main() {
     expect(find.text('18 x Wall plate'), findsOneWidget);
   });
 
+  testWidgets('a delivery with no PO warns, and is logged anyway', (
+    tester,
+  ) async {
+    final p = withProject();
+    await pumpPane(tester, p);
+
+    await tester.tap(find.byKey(const ValueKey('delivery_log_new')));
+    await tester.pumpAndSettle();
+
+    // Nothing said about what it is or what bought it: the box says so before
+    // it is saved rather than leaving it to be discovered in June.
+    expect(
+      find.byKey(const ValueKey('delivery_no_po_warning')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('delivery_name')),
+      'Two boxes, no paperwork',
+    );
+    await tester.pumpAndSettle();
+    // Named, still on nothing - the warning stays, and still does not block.
+    expect(
+      find.byKey(const ValueKey('delivery_no_po_warning')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('delivery_save')));
+    await tester.pumpAndSettle();
+
+    // A pallet that turned up is a fact whether or not the paperwork has
+    // caught up: the row is kept, and carries the question with it.
+    final row = p.project.deliveries.single;
+    expect(row.itemName, 'Two boxes, no paperwork');
+    expect(row.needsPaperwork, isTrue);
+    expect(find.byKey(ValueKey('delivery_no_po_${row.id}')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('delivery_paperwork_line')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a P-Card purchase is tagged, and stops being a question', (
+    tester,
+  ) async {
+    final p = withProject();
+    p.addProjectPo(number: 'PO-1188');
+    await pumpPane(tester, p);
+
+    await tester.tap(find.byKey(const ValueKey('delivery_log_new')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('delivery_name')),
+      'HDMI adapters',
+    );
+    await tester.enterText(find.byKey(const ValueKey('delivery_qty')), '4');
+    await tester.tap(find.byKey(const ValueKey('delivery_one_off')));
+    await tester.pumpAndSettle();
+
+    // Ticked, the warning goes: this row is COMPLETE, with no PO to find.
+    expect(find.byKey(const ValueKey('delivery_no_po_warning')), findsNothing);
+    // And the PO box is shut, because a one-off has no number to put in it.
+    expect(
+      tester.widget<TextField>(find.byKey(const ValueKey('delivery_po'))).enabled,
+      isFalse,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('delivery_save')));
+    await tester.pumpAndSettle();
+
+    final row = p.project.deliveries.single;
+    expect(row.oneOff, isTrue);
+    expect(row.poNumber, '');
+    expect(row.needsPaperwork, isFalse);
+    expect(p.project.oneOffDeliveries, hasLength(1));
+
+    // Said on the card, and counted at the top of the log - this is spend on
+    // no estimate, in no vendor package and on no purchase order.
+    expect(find.byKey(ValueKey('delivery_no_po_${row.id}')), findsNothing);
+    expect(
+      find.textContaining('bought as a one-off', findRichText: true),
+      findsOneWidget,
+    );
+
+    // AND IT IS IN THE HISTORY, saying what it was.
+    expect(
+      p.project.history.where(
+        (h) => h.summary.contains('as a one-off purchase'),
+      ),
+      isNotEmpty,
+    );
+  });
+
   testWidgets('the state buttons move the record, not just the chip', (
     tester,
   ) async {

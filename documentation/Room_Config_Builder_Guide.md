@@ -786,6 +786,20 @@ as plain text, or straight to the clipboard.
 **Screenshot & annotate** grabs the current tab, lets you draw on it, and copies
 or saves it - for the email that starts "the third output is wrong".
 
+**Online copy** is on the Project tab, beside Workbook. Point it once at a
+folder OneDrive or Google Drive already syncs and it writes the project workbook
+there - Excel Online opens it as a spreadsheet, Google Drive opens it as a
+Sheet - so the people who ask about the job can read it without the app and
+without you emailing anything. Tick the box and the project file goes with it,
+which makes the folder enough to *open* the job on another machine rather than
+only to read it.
+
+It rewrites the same file name every time, so a share link you send once keeps
+opening the current figures. It only goes one way: edits made in Excel Online or
+Google Sheets are not read back, and the next publish overwrites them. The box
+says when it last went out, because a copy three weeks behind is worse than none
+- whoever is reading it has no way to tell.
+
 
 # The Flow Rules builder
 

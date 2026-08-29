@@ -52,6 +52,11 @@ const String kProjectSparesSheet = 'Spares';
 /// The tab purchasing works down: what to order, in the order to order it.
 const String kProjectTimelineSheet = 'Order Timeline';
 
+/// The paperwork and the pallets: what each PO bought, what has landed against
+/// it, and where every lot is now. Added only when the job has a purchase
+/// order or a delivery on it.
+const String kProjectPurchasingSheet = 'Purchasing';
+
 /// Whose job each piece of scope is. Added only when the matrix has lines on
 /// it — a blank sheet headed "Roles and Responsibilities" in an issued
 /// workbook reads as "nothing is anybody's job".
@@ -88,8 +93,8 @@ List<ReportSection> projectSummarySections(ProjectEstimate estimate) {
       rows: [
         if (project.name.trim().isNotEmpty) ['Project', project.name],
         if (project.building.trim().isNotEmpty) ['Building', project.building],
-        if (project.jobNumber.trim().isNotEmpty)
-          ['Job number', project.jobNumber],
+        if (project.projectNumber.trim().isNotEmpty)
+          ['Project number', project.projectNumber],
         if (project.stakeholder.trim().isNotEmpty)
           ['Stakeholder', project.stakeholder],
         ['Rooms quoted', estimate.costedRooms.length],
@@ -701,6 +706,340 @@ List<ReportSection> projectTimelineSections(
   return sections;
 }
 
+/// The paperwork and the pallets: what was bought on each purchase order, what
+/// has turned up against it, and where every lot of it is now.
+///
+/// THE QUESTION THIS SHEET ANSWERS IS ASKED BY SOMEBODY STANDING IN A
+/// CORRIDOR. The Order Timeline says what to buy and when; it stops at the day
+/// a part arrives, and the weeks between the loading dock and the finished room
+/// are where a job actually loses things. Eighteen wall plates arrive in March,
+/// six go into 103 in April, and in June the workbook that was filed is the
+/// only record of whether the other twelve are in a basement or were never
+/// delivered at all.
+///
+/// ONE ROW PER LOT, NOT PER PART. A part that turned up in three shipments is
+/// three rows, each with its own date, its own quantity and its own place,
+/// because that is what happened and a single "received" tick cannot hold it.
+///
+/// THE PO IS THE SPINE. Every table here is filed under the number the vendor,
+/// the finance system and the packing slip all already use — see [ProjectPo] —
+/// so a PO on this sheet can be read straight against the paperwork in
+/// somebody's hand.
+List<ReportSection> projectPurchasingSections(ProjectEstimate estimate) {
+  final project = estimate.project;
+  final currency = estimate.currency;
+  XlsxMoney cash(double v) => money(v, currency);
+  final lines = {for (final m in estimate.master) m.key: m};
+  final vendorNames = {for (final v in project.vendors) v.id: v.name};
+  final roomNames = estimate.roomCodeNames;
+
+  /// Who a PO went to: the vendor row it points at, or whatever was typed.
+  String vendorOf(ProjectPo po) =>
+      vendorNames[po.vendorId] ?? po.vendor.trim();
+
+  /// What a part is called, as the job calls it now. A key that has dropped
+  /// off the master list still prints — as the key — rather than vanishing:
+  /// the PO bought it, and a purchase that no longer matches the equipment
+  /// list is the single most useful thing this sheet can say.
+  String partName(String key) => lines[key]?.description ?? key;
+
+  final sections = <ReportSection>[];
+
+  // Every PO number the job mentions anywhere, not just the rows somebody
+  // entered: a number typed onto a part or read off a packing slip is a PO
+  // this sheet has to account for. See [BuildingProject.poNumbersInUse].
+  final numbers = project.poNumbersInUse;
+
+  if (numbers.isNotEmpty) {
+    sections.add((
+      title: 'Purchase orders (${numbers.length})',
+      header: const [
+        'PO',
+        'Vendor',
+        'Raised',
+        'Vendor promised',
+        'Raised for',
+        'Parts on it',
+        'Marked arrived',
+        'Deliveries logged',
+        'Units landed',
+      ],
+      rows: [
+        for (final number in numbers)
+          () {
+            final po = project.poByNumber(number);
+            final parts = project.partsOnPo(number);
+            final landed = project.deliveriesForPo(number);
+            var units = 0.0;
+            for (final d in landed) {
+              if (d.isOnHand) units += d.qty;
+            }
+            return [
+              number,
+              po == null ? '' : vendorOf(po),
+              po?.issuedOn == null ? '' : formatScheduleDate(po!.issuedOn!),
+              po?.expectedOn == null ? '' : formatScheduleDate(po!.expectedOn!),
+              (po?.amount ?? 0) > 0 ? cash(po!.amount) : '',
+              parts.length,
+              [
+                for (final key in parts)
+                  if (project.orderForPart(key)?.isReceived == true) key,
+              ].length,
+              landed.length,
+              units == 0 ? '' : trimNumber(units),
+            ];
+          }(),
+      ],
+    ));
+  }
+
+  // WHAT EACH ONE BOUGHT. The Order Timeline's bought table is filed under the
+  // PART, which is the right way round for "has this been ordered" and the
+  // wrong way round for "what is on PO-1188" — the question somebody rings up
+  // with, holding the PO.
+  final byPo = <List<dynamic>>[];
+  for (final number in numbers) {
+    for (final key in project.partsOnPo(number)) {
+      final order = project.orderForPart(key);
+      final line = lines[key];
+      byPo.add([
+        number,
+        partName(key),
+        line == null ? '' : trimNumber(line.qty),
+        line?.vendor?.name ?? '',
+        order?.orderedOn == null ? '' : formatScheduleDate(order!.orderedOn!),
+        order?.expectedOn == null ? '' : formatScheduleDate(order!.expectedOn!),
+        order?.receivedOn == null ? '' : formatScheduleDate(order!.receivedOn!),
+        trimNumber(project.deliveredQty(key)),
+      ]);
+    }
+  }
+  if (byPo.isNotEmpty) {
+    sections.add((
+      title: 'What each PO bought (${byPo.length})',
+      header: const [
+        'PO',
+        'Part',
+        'Qty on the job',
+        'Vendor',
+        'Ordered',
+        'Vendor promised',
+        'Marked arrived',
+        'Units logged in',
+      ],
+      rows: byPo,
+    ));
+  }
+
+  // What was bought on a card, and what was bought against nothing anybody
+  // has written down. Worked out here because the rollup below counts them
+  // and the tables at the foot of the sheet list them.
+  final oneOffs = project.oneOffDeliveries;
+  final loose = project.deliveriesNeedingPaperwork;
+
+  // WHERE IT IS. Newest first, the way the pane reads and the way anybody
+  // scanning for "what landed this week" reads it.
+  final deliveries = [...project.deliveries]..sort((a, b) {
+    final ad = a.deliveredOn;
+    final bd = b.deliveredOn;
+    if (ad == null && bd == null) return b.id.compareTo(a.id);
+    if (ad == null) return 1;
+    if (bd == null) return -1;
+    final byDate = bd.compareTo(ad);
+    return byDate != 0 ? byDate : b.id.compareTo(a.id);
+  });
+
+  if (deliveries.isNotEmpty) {
+    sections.add((
+      title: 'Deliveries (${deliveries.length}, newest first)',
+      header: const [
+        'Arrived',
+        'What',
+        'Qty',
+        'Bought on',
+        'Where it is',
+        'Delivered to / held at',
+        'Room',
+        'Installed',
+        'Notes',
+      ],
+      rows: [
+        for (final d in deliveries)
+          [
+            d.deliveredOn == null ? '' : formatScheduleDate(d.deliveredOn!),
+            d.itemName.trim().isEmpty
+                ? (d.partKey.isEmpty
+                      ? 'not on the equipment list'
+                      : partName(d.partKey))
+                : d.itemName.trim(),
+            d.qty == 0 ? '' : trimNumber(d.qty),
+            // WHAT BOUGHT IT, in one column with three answers. A PO number;
+            // a card purchase that was never going to have one; or a row
+            // nobody has said anything about, which is called out in capitals
+            // rather than left as a blank cell that reads as "no data".
+            d.poNumber.trim().isNotEmpty
+                ? d.poNumber.trim()
+                : d.oneOff
+                ? 'One-off - P-Card'
+                : 'NOT RECORDED',
+            d.state.label,
+            // The ADDRESS, in its own column rather than folded into the
+            // state: 'delivered' with nowhere after it is the answer that
+            // sends somebody walking round a campus looking for a pallet.
+            d.location.trim(),
+            roomNames[d.roomId] ?? '',
+            d.installedOn == null ? '' : formatScheduleDate(d.installedOn!),
+            // One per line, so a lot with three notes on it reads as three
+            // lines in one cell rather than as one paragraph.
+            [
+              for (final n in d.notes)
+                '${formatIsoDate(n.at)} ${n.user.isEmpty ? '' : '${n.user}: '}'
+                    '${n.text}',
+            ].join('\n'),
+          ],
+      ],
+    ));
+
+    // THE ROLLUP. The tables above are read a row at a time; this is the
+    // paragraph somebody quotes in a meeting.
+    var onHand = 0.0;
+    var installed = 0.0;
+    var stored = 0.0;
+    var returned = 0.0;
+    for (final d in deliveries) {
+      if (!d.isOnHand) {
+        returned += d.qty;
+        continue;
+      }
+      onHand += d.qty;
+      if (d.isInstalled) {
+        installed += d.qty;
+      } else if (d.state == DeliveryState.stored) {
+        stored += d.qty;
+      }
+    }
+    sections.add((
+      title: 'Where the kit is',
+      header: const ['', ''],
+      rows: [
+        ['Units delivered and still the job\'s', trimNumber(onHand)],
+        ['In a room', trimNumber(installed)],
+        ['In storage', trimNumber(stored)],
+        ['On site, nowhere named', trimNumber(onHand - installed - stored)],
+        ['Sent back', trimNumber(returned)],
+        if (oneOffs.isNotEmpty)
+          ['Deliveries bought outside the PO process', oneOffs.length],
+        if (loose.isNotEmpty)
+          ['Deliveries on no PO and not marked one-off', loose.length],
+        for (final place in project.deliveryLocations)
+          [
+            'At $place',
+            trimNumber(
+              deliveries
+                  .where(
+                    (d) =>
+                        d.isOnHand &&
+                        !d.isInstalled &&
+                        d.location.trim() == place,
+                  )
+                  .fold<double>(0, (sum, d) => sum + d.qty),
+            ),
+          ],
+      ],
+    ));
+  }
+
+  // BOUGHT OUTSIDE THE PROCESS. Its own table because it is the spend nothing
+  // else in this app knows about: a card purchase is on no estimate, in no
+  // vendor package and on no purchase order, and "what did we buy outside the
+  // process" is a question somebody in finance asks at the end of a job.
+  if (oneOffs.isNotEmpty) {
+    sections.add((
+      title: 'Bought outside the PO process (${oneOffs.length})',
+      header: const [
+        'Arrived',
+        'What',
+        'Qty',
+        'Where it is',
+        'Delivered to / held at',
+        'Room',
+        'Notes',
+      ],
+      rows: [
+        for (final d in oneOffs)
+          [
+            d.deliveredOn == null ? '' : formatScheduleDate(d.deliveredOn!),
+            d.itemName.trim().isEmpty
+                ? (d.partKey.isEmpty
+                      ? 'not on the equipment list'
+                      : partName(d.partKey))
+                : d.itemName.trim(),
+            d.qty == 0 ? '' : trimNumber(d.qty),
+            d.state.label,
+            d.location.trim(),
+            roomNames[d.roomId] ?? '',
+            [
+              for (final n in d.notes)
+                '${formatIsoDate(n.at)} ${n.user.isEmpty ? '' : '${n.user}: '}'
+                    '${n.text}',
+            ].join('\n'),
+          ],
+      ],
+    ));
+  }
+
+  // AND THE ONES THAT SAY NOTHING. Listed rather than left in the log to be
+  // found by reading it: a row with no PO and no card behind it cannot be
+  // reconciled against an order, an invoice or a statement, and a document
+  // that quietly carries three of them reads as complete while being the
+  // opposite. See [ProjectDelivery.needsPaperwork].
+  if (loose.isNotEmpty) {
+    sections.add((
+      title: 'Arrived against nothing (${loose.length})',
+      header: const ['Arrived', 'What', 'Qty', 'Where it is', 'What is missing'],
+      rows: [
+        for (final d in loose)
+          [
+            d.deliveredOn == null ? '' : formatScheduleDate(d.deliveredOn!),
+            d.itemName.trim().isEmpty
+                ? (d.partKey.isEmpty
+                      ? 'not on the equipment list'
+                      : partName(d.partKey))
+                : d.itemName.trim(),
+            d.qty == 0 ? '' : trimNumber(d.qty),
+            d.whereText,
+            'no PO, and not marked as a one-off purchase',
+          ],
+      ],
+    ));
+  }
+
+  // The commentary a PO attracts, signed. Its own table rather than a column,
+  // because these are written by several people over several weeks and the
+  // name and the date on each are the reason they are worth keeping.
+  final poNotes = <List<dynamic>>[];
+  for (final po in project.purchaseOrders) {
+    for (final n in po.notes) {
+      poNotes.add([
+        formatIsoDate(n.at),
+        po.number.trim().isEmpty ? 'PO' : po.number.trim(),
+        n.text,
+        n.user,
+      ]);
+    }
+  }
+  if (poNotes.isNotEmpty) {
+    poNotes.sort((a, b) => b[0].toString().compareTo(a[0].toString()));
+    sections.add((
+      title: 'What has been said about the purchase orders (${poNotes.length})',
+      header: const ['Date', 'PO', 'Note', 'By'],
+      rows: poNotes,
+    ));
+  }
+
+  return sections;
+}
+
 /// Every recorded change on this job, newest first.
 ///
 /// The document answer to the question the History pane answers on screen:
@@ -1118,8 +1457,8 @@ List<ReportSection> vendorPackageSections(
           ['Contact', package.vendor!.contact],
         if (project.name.trim().isNotEmpty) ['Project', project.name],
         if (project.building.trim().isNotEmpty) ['Building', project.building],
-        if (project.jobNumber.trim().isNotEmpty)
-          ['Job number', project.jobNumber],
+        if (project.projectNumber.trim().isNotEmpty)
+          ['Project number', project.projectNumber],
         ['Line items', package.lines.length],
         ['Total units', trimNumber(package.qty)],
         if ((package.vendor?.notes ?? '').isNotEmpty)
@@ -1239,6 +1578,22 @@ Uint8List buildProjectWorkbookBytes({
       sheetName: tab(kProjectSparesSheet),
       title: '$title - spares',
       sections: projectSparesSections(estimate),
+      generated: stamp,
+    ));
+  }
+
+  // WHAT WAS BOUGHT AND WHERE IT IS. Its own sheet next to the timeline,
+  // because the two are the same job read at two different moments: the
+  // timeline is what has to be ordered, this is what was ordered and what
+  // came of it. Written only when there is something to write — a blank sheet
+  // headed "Purchasing" in an issued workbook reads as a job nobody has
+  // bought anything for.
+  final purchasing = projectPurchasingSections(estimate);
+  if (purchasing.isNotEmpty) {
+    sheets.add(buildStackedReportSheet(
+      sheetName: tab(kProjectPurchasingSheet),
+      title: '$title - purchase orders and deliveries',
+      sections: purchasing,
       generated: stamp,
     ));
   }

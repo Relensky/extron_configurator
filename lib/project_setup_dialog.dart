@@ -46,7 +46,7 @@ import 'project_timeline_view.dart' show showProjectDatePicker;
 typedef NewProjectSetup = ({
   String name,
   String building,
-  String jobNumber,
+  String projectNumber,
   String stakeholder,
 
   /// Absolute paths of the room configs to put on the job, in the order they
@@ -150,7 +150,7 @@ String applyProjectSetup(AppStateProvider provider, NewProjectSetup setup) {
   provider.setProjectField(
     name: setup.name.trim(),
     building: setup.building.trim(),
-    jobNumber: setup.jobNumber.trim(),
+    projectNumber: setup.projectNumber.trim(),
     stakeholder: setup.stakeholder.trim(),
   );
 
@@ -227,7 +227,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
   late final TextEditingController _building = TextEditingController(
     text: widget.building,
   );
-  final TextEditingController _jobNumber = TextEditingController();
+  final TextEditingController _projectNumber = TextEditingController();
   final TextEditingController _stakeholder = TextEditingController();
   final TextEditingController _todo = TextEditingController();
 
@@ -259,7 +259,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
   void dispose() {
     _name.dispose();
     _building.dispose();
-    _jobNumber.dispose();
+    _projectNumber.dispose();
     _stakeholder.dispose();
     _todo.dispose();
     super.dispose();
@@ -381,7 +381,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                       autofocus: true,
                       decoration: const InputDecoration(
                         labelText: 'Project name',
-                        hintText: 'Bessey Hall refresh',
+                        hintText: 'Holt Hall Refresh',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -406,10 +406,10 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
                 children: [
                   Expanded(
                     child: TextField(
-                      key: const ValueKey('setup_job_number'),
-                      controller: _jobNumber,
+                      key: const ValueKey('setup_project_number'),
+                      controller: _projectNumber,
                       decoration: const InputDecoration(
-                        labelText: 'Job number',
+                        labelText: 'Project number',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -624,7 +624,7 @@ class _ProjectSetupDialogState extends State<_ProjectSetupDialog> {
           onPressed: () => Navigator.of(context).pop((
             name: _name.text,
             building: _building.text,
-            jobNumber: _jobNumber.text,
+            projectNumber: _projectNumber.text,
             stakeholder: _stakeholder.text,
             roomPaths: _chosenRooms,
             deadline: _deadline,

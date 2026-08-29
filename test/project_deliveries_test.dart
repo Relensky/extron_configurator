@@ -85,6 +85,114 @@ void main() {
       expect(project.orderForPart('k')!.poNumber, 'PO-1188');
     });
 
+    // -----------------------------------------------------------------------
+    //  PUTTING THE EQUIPMENT ON THE PO
+    // -----------------------------------------------------------------------
+    //  A PO goes to one vendor and covers that vendor's lines, so what it
+    //  bought is a SET of parts. Recorded one part at a time it is nineteen
+    //  trips through the Bought? box, of which the last sixteen do not happen -
+    //  and sixteen parts that were bought reading as parts nobody has ordered
+    //  is worse than no PO record at all.
+
+    test('a set of parts goes on the PO in one call, dated', () {
+      final project = BuildingProject();
+      project.addPo(number: 'PO-1188', issuedOn: DateTime(2026, 3, 4));
+
+      final moved = project.setPartsOnPo(
+        'PO-1188',
+        onIt: ['a', 'b'],
+        orderedOn: DateTime(2026, 3, 4),
+        expectedOn: DateTime(2026, 5, 1),
+      );
+
+      expect(moved.added, ['a', 'b']);
+      expect(project.partsOnPo('PO-1188'), ['a', 'b']);
+      // A part bought on a PO IS ordered: a number with no date does not count
+      // as one, and would leave the part on the list of things to buy.
+      expect(project.orderForPart('a')!.isOrdered, isTrue);
+      expect(project.orderForPart('b')!.orderedOn, DateTime(2026, 3, 4));
+      expect(project.orderForPart('b')!.expectedOn, DateTime(2026, 5, 1));
+    });
+
+    test('what a part already says is what it keeps', () {
+      final project = BuildingProject();
+      project.setPartOrder(
+        'a',
+        PartOrder(
+          orderedOn: DateTime(2026, 2, 1),
+          expectedOn: DateTime(2026, 4, 1),
+          notes: 'confirmed by phone',
+        ),
+      );
+
+      project.setPartsOnPo(
+        'PO-1188',
+        onIt: ['a'],
+        orderedOn: DateTime(2026, 3, 4),
+        expectedOn: DateTime(2026, 5, 1),
+      );
+
+      final order = project.orderForPart('a')!;
+      expect(order.poNumber, 'PO-1188');
+      // The dates on the acknowledgement do not overwrite the ones somebody
+      // typed against this line - a promise about one part beats a promise
+      // about the order as a whole.
+      expect(order.orderedOn, DateTime(2026, 2, 1));
+      expect(order.expectedOn, DateTime(2026, 4, 1));
+      expect(order.notes, 'confirmed by phone');
+    });
+
+    test('unticking takes it off, and off the bought list with it', () {
+      final project = BuildingProject();
+      project.setPartsOnPo(
+        'PO-1188',
+        onIt: ['a', 'b'],
+        orderedOn: DateTime(2026, 3, 4),
+      );
+      // 'b' has since been received, so its record says more than "bought on
+      // PO-1188" and there is something to keep.
+      project.setPartOrder(
+        'b',
+        project.orderForPart('b')!.copyWith(receivedOn: DateTime(2026, 4, 2)),
+      );
+
+      final moved = project.setPartsOnPo('PO-1188', offIt: ['a', 'b']);
+
+      expect(moved.removed, ['a', 'b']);
+      expect(project.partsOnPo('PO-1188'), isEmpty);
+      // A part whose whole record was "bought on this PO" stops being bought.
+      // Left behind, an order date against no paperwork reads on the timeline
+      // as a part somebody bought and cannot say where from.
+      expect(project.orderForPart('a'), isNull);
+      // One that had arrived keeps everything except the number.
+      expect(project.orderForPart('b')!.receivedOn, DateTime(2026, 4, 2));
+      expect(project.orderForPart('b')!.poNumber, '');
+    });
+
+    test('a part already on the PO is not moved twice', () {
+      final project = BuildingProject();
+      project.setPartsOnPo('PO-1188', onIt: ['a'], orderedOn: DateTime(2026, 3, 4));
+
+      // Same part, saved again: nothing changed, so nothing is reported as
+      // changed and nothing gets a second line in the history.
+      final again = project.setPartsOnPo('po-1188 ', onIt: ['a']);
+      expect(again.added, isEmpty);
+      expect(again.removed, isEmpty);
+
+      // And a part on a DIFFERENT PO comes across, because a tick is somebody
+      // saying where it actually went.
+      project.setPartsOnPo('PO-1200', onIt: ['a']);
+      expect(project.partsOnPo('PO-1188'), isEmpty);
+      expect(project.partsOnPo('PO-1200'), ['a']);
+    });
+
+    test('a PO with no number moves nothing', () {
+      final project = BuildingProject();
+      final moved = project.setPartsOnPo('  ', onIt: ['a']);
+      expect(moved.added, isEmpty);
+      expect(project.orderForPart('a'), isNull);
+    });
+
     test('a PO typed onto a part before the list existed joins it', () {
       // A file written by the build that only had a per-part PO field.
       final back = BuildingProject.fromJson({
@@ -175,7 +283,7 @@ void main() {
       expect(project.deliveryById(row.id)!.installedOn, isNull);
     });
 
-    test('storage places are offered back, one spelling each', () {
+    test('places are offered back, one spelling each', () {
       final project = BuildingProject();
       project.addDelivery(
         partKey: 'a',
@@ -192,10 +300,87 @@ void main() {
         state: DeliveryState.stored,
         location: 'Shipping container',
       );
-      expect(project.storageLocations, [
+      expect(project.deliveryLocations, [
         'Bessey basement, rack 3',
         'Shipping container',
       ]);
+    });
+
+    // -----------------------------------------------------------------------
+    //  BOUGHT ON A CARD, AND BOUGHT AGAINST NOTHING
+    // -----------------------------------------------------------------------
+    //  Not everything on a job is quoted. A box of connectors, a replacement
+    //  power supply, the adapter somebody drove out for on the Friday: bought
+    //  on a P-Card in ten minutes, never near a quote or a PO, and still
+    //  landing on a dock and still having to be found in June.
+    //
+    //  The flag matters because "no PO" and "one-off" say OPPOSITE things. A
+    //  row with neither is one nobody has finished; a row marked one-off is
+    //  finished, with no paperwork to chase.
+
+    test('a one-off is complete without a PO; a bare row is not', () {
+      final project = BuildingProject();
+      final card = project.addDelivery(
+        itemName: 'HDMI adapters',
+        oneOff: true,
+        qty: 4,
+        deliveredOn: DateTime(2026, 4, 2),
+      );
+      final bare = project.addDelivery(
+        itemName: 'Two boxes, no paperwork',
+        qty: 1,
+        deliveredOn: DateTime(2026, 4, 3),
+      );
+      final bought = project.addDelivery(
+        itemName: 'RoboSHOT 12E',
+        poNumber: 'PO-1188',
+        qty: 1,
+        deliveredOn: DateTime(2026, 4, 4),
+      );
+
+      expect(card.needsPaperwork, isFalse);
+      expect(card.boughtOnText, 'One-off purchase - P-Card');
+      expect(bare.needsPaperwork, isTrue);
+      expect(bare.boughtOnText, 'No PO recorded');
+      expect(bought.needsPaperwork, isFalse);
+      expect(bought.boughtOnText, 'PO PO-1188');
+
+      // Both lists are what the pane and the workbook count off.
+      expect(project.oneOffDeliveries.map((d) => d.id), [card.id]);
+      expect(project.deliveriesNeedingPaperwork.map((d) => d.id), [bare.id]);
+    });
+
+    test('a one-off with nothing else on it is still a delivery', () {
+      final project = BuildingProject();
+      // No part, no name, no PO, no quantity: what somebody logs off a receipt
+      // when the box is already open. Refusing it is how a delivery log ends
+      // up being kept somewhere else.
+      final row = project.addDelivery(oneOff: true);
+
+      expect(project.deliveries, hasLength(1));
+      expect(row.partKey, '');
+      expect(row.itemName, '');
+      expect(row.deliveredOn, isNotNull, reason: 'it happened on a day');
+      expect(row.isOnHand, isTrue);
+      expect(project.deliveriesNeedingPaperwork, isEmpty);
+    });
+
+    test('the flag survives the file, and is written only when set', () {
+      final project = BuildingProject();
+      project.addDelivery(itemName: 'Adapters', oneOff: true, qty: 2);
+      project.addDelivery(itemName: 'Camera', poNumber: 'PO-1188', qty: 1);
+
+      final json = project.toJson();
+      final rows = (json['deliveries'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(rows.first['oneOff'], isTrue);
+      // Not written on a row that is not one: an absent key is the ordinary
+      // case and a file full of 'oneOff: false' says nothing.
+      expect(rows.last.containsKey('oneOff'), isFalse);
+
+      final back = BuildingProject.fromJson(json);
+      expect(back.oneOffDeliveries.single.itemName, 'Adapters');
+      expect(back.deliveries.last.oneOff, isFalse);
     });
 
     test('arrivals for one part come back newest first', () {

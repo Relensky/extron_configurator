@@ -523,6 +523,155 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  //  THE PURCHASING SHEET
+  // -------------------------------------------------------------------------
+  //  The Order Timeline stops at the day a part arrives. The weeks between the
+  //  loading dock and the finished room are where a job actually loses things,
+  //  and the workbook is what somebody reads a year later — so what was bought
+  //  on each PO, what has landed against it, and where every lot is now have to
+  //  be IN the document, not only on the screen.
+
+  group('the purchasing sheet', () {
+    /// The same job, bought on a PO and part-delivered.
+    ProjectEstimate jobWithPo() {
+      final estimate = job();
+      final project = estimate.project;
+      final camera = estimate.master
+          .firstWhere((m) => m.manufacturer == 'Vaddio')
+          .key;
+
+      project.addPo(
+        number: 'PO-1188',
+        vendorId: 'v2',
+        issuedOn: DateTime(2026, 3, 4),
+        expectedOn: DateTime(2026, 5, 1),
+        amount: 4000,
+      );
+      project.setPartsOnPo(
+        'PO-1188',
+        onIt: [camera],
+        orderedOn: DateTime(2026, 3, 4),
+        expectedOn: DateTime(2026, 5, 1),
+      );
+      project.addDelivery(
+        partKey: camera,
+        itemName: 'RoboSHOT 12E',
+        poNumber: 'PO-1188',
+        qty: 1,
+        deliveredOn: DateTime(2026, 4, 20),
+        location: 'Central Stores, 1 Campus Drive',
+        note: ProjectNote(
+          text: 'left on the dock, collected the same afternoon',
+          user: 'alice',
+          at: DateTime(2026, 4, 20, 15, 30),
+        ),
+      );
+      project.addPoNote(
+        project.poByNumber('PO-1188')!.id,
+        ProjectNote(
+          text: 'acknowledged, 6 week lead',
+          user: 'bob',
+          at: DateTime(2026, 3, 6, 11, 0),
+        ),
+      );
+      return estimate;
+    }
+
+    test('a job that has bought nothing does not grow the sheet', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: job()));
+
+      // A blank sheet headed "Purchasing" in an issued workbook reads as a job
+      // nobody has bought anything for.
+      expect(tabNames(archive), isNot(contains(kProjectPurchasingSheet)));
+    });
+
+    test('it is there, beside the timeline it continues', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: jobWithPo()));
+
+      expect(tabNames(archive), [
+        'Summary',
+        'Core Components',
+        'Order Timeline',
+        'Spares',
+        kProjectPurchasingSheet,
+        'Extron Direct',
+        'AV Reseller',
+        'Bessey 101',
+        'Bessey 103',
+      ]);
+    });
+
+    test('the PO carries its vendor, its dates and what is on it', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: jobWithPo()));
+      final sheet = sheetNamed(archive, kProjectPurchasingSheet);
+
+      expect(sheet, contains('PO-1188'));
+      expect(sheet, contains('AV Reseller'));
+      expect(sheet, contains('RoboSHOT 12E'));
+      // Raised, promised, and what it was raised for.
+      expect(sheet, contains('4000'));
+      // And the commentary, signed - the reason a note is worth keeping.
+      expect(sheet, contains('acknowledged, 6 week lead'));
+      expect(sheet, contains('bob'));
+    });
+
+    test('a card purchase and a bare row are both on it, told apart', () {
+      final estimate = jobWithPo();
+      final project = estimate.project;
+      // Bought on a P-Card: on no estimate, in no vendor package and on no
+      // purchase order, and still on a dock.
+      project.addDelivery(
+        itemName: 'HDMI adapters',
+        oneOff: true,
+        qty: 4,
+        deliveredOn: DateTime(2026, 4, 22),
+      );
+      // And one nobody has said anything about.
+      project.addDelivery(
+        itemName: 'Two boxes, no paperwork',
+        qty: 1,
+        deliveredOn: DateTime(2026, 4, 23),
+      );
+
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: estimate));
+      final sheet = sheetNamed(archive, kProjectPurchasingSheet);
+
+      // The spend nothing else in this app knows about, listed on its own.
+      expect(sheet, contains('Bought outside the PO process'));
+      expect(sheet, contains('HDMI adapters'));
+      expect(sheet, contains('One-off - P-Card'));
+
+      // And the row that can be reconciled against nothing, called out rather
+      // than left as a blank cell that reads as "no data".
+      expect(sheet, contains('Arrived against nothing'));
+      expect(sheet, contains('NOT RECORDED'));
+      expect(
+        sheet,
+        contains('no PO, and not marked as a one-off purchase'),
+      );
+    });
+
+    test('the delivery says where it is, by name', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: jobWithPo()));
+      final sheet = sheetNamed(archive, kProjectPurchasingSheet);
+
+      expect(sheet, contains('Deliveries'));
+      // THE ADDRESS. 'Delivered' with nowhere after it is the answer that
+      // sends somebody walking round a campus looking for a pallet — and an
+      // address nobody could have picked off a list is exactly the one worth
+      // having in the document.
+      expect(sheet, contains('Central Stores, 1 Campus Drive'));
+      expect(sheet, contains('Where the kit is'));
+      expect(sheet, contains('left on the dock, collected the same afternoon'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
   //  THE HISTORY SHEET
   // -------------------------------------------------------------------------
 

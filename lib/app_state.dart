@@ -18,6 +18,7 @@ import 'config_key_mapper.dart';
 import 'flow_rules.dart';
 import 'cabling_schematic.dart';
 import 'building_project.dart';
+import 'online_copy.dart';
 import 'cost_estimate.dart';
 import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
@@ -10747,14 +10748,14 @@ class AppStateProvider extends ChangeNotifier {
   void setProjectField({
     String? name,
     String? building,
-    String? jobNumber,
+    String? projectNumber,
     String? stakeholder,
     String? notes,
     String? currency,
   }) {
     if (name != null) project.name = name;
     if (building != null) project.building = building;
-    if (jobNumber != null) project.jobNumber = jobNumber;
+    if (projectNumber != null) project.projectNumber = projectNumber;
     if (stakeholder != null) project.stakeholder = stakeholder;
     if (notes != null && notes.trim() != project.notes.trim()) {
       project.notes = notes;
@@ -11168,6 +11169,90 @@ class AppStateProvider extends ChangeNotifier {
           : 'on ${path.basename(next)}',
     );
     _projectChanged(repricing: false);
+  }
+
+  // --- the copy somebody else can read --------------------------------------
+  //
+  //  The job, published into a folder OneDrive or Google Drive already syncs,
+  //  under the same file name every time so a share link keeps working. See
+  //  online_copy.dart for why it is a sync folder rather than an API, and why
+  //  nothing is ever read back.
+
+  /// Points the job at the folder its published copy goes into, or clears it.
+  ///
+  /// Not repricing: where a copy of the document goes cannot move a figure in
+  /// it. The path is stored as typed — absolute and machine-specific on
+  /// purpose, because it names a sync client's folder on THIS machine.
+  void setProjectOnlineFolder(String folder) {
+    final next = folder.trim();
+    if (next == project.onlineFolder) return;
+    project.onlineFolder = next;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Online copy',
+      summary: next.isEmpty
+          ? 'no longer published anywhere'
+          : 'published into ${path.basename(next)}',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Writes the published copy and records that it went.
+  ///
+  /// Returns what was written and what was not — see [OnlineCopyResult]. A
+  /// folder that cannot be written to comes back as a failure rather than an
+  /// exception: a sync folder is a place another program has its hands on, and
+  /// "OneDrive had the file open" is an ordinary Tuesday.
+  ///
+  /// THE STAMP IS ONLY SET WHEN SOMETHING ACTUALLY LANDED. A publish that
+  /// wrote nothing must not leave the job saying it was published just now —
+  /// that is the one lie this feature could tell that nobody could catch,
+  /// because the whole point of the stamp is to say how stale the copy people
+  /// are reading is.
+  Future<OnlineCopyResult> publishOnlineCopy({
+    String? folder,
+    bool includeProjectFile = true,
+    DateTime? at,
+  }) async {
+    final target = (folder ?? project.onlineFolder).trim();
+    if (target.isEmpty) {
+      return (
+        folder: '',
+        written: const <String>[],
+        failed: const ['no folder has been picked'],
+        at: at ?? DateTime.now(),
+      );
+    }
+    if (target != project.onlineFolder) setProjectOnlineFolder(target);
+
+    final result = await writeOnlineCopy(
+      estimate: priceProject(),
+      folder: target,
+      // The catalog and the base card price the replacement plan's sheet, the
+      // same as they do for the workbook saved by hand.
+      library: avDeviceLibrary,
+      baseCosts: baseCosts,
+      tier: pricingTier,
+      includeProjectFile: includeProjectFile,
+      at: at,
+    );
+
+    if (result.written.isNotEmpty) {
+      project.onlinePublishedAt = result.at;
+      _logProjectEdit(
+        itemKey: 'project',
+        itemName: project.name,
+        field: 'Online copy',
+        summary: result.failed.isEmpty
+            ? 'published - ${result.written.length} file'
+                  '${result.written.length == 1 ? '' : 's'}'
+            : 'published - ${result.written.length} written, '
+                  '${result.failed.length} failed',
+      );
+      _projectChanged(repricing: false);
+    }
+    return result;
   }
 
   // --- building plans ------------------------------------------------------
@@ -12171,6 +12256,88 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  /// Puts equipment on a purchase order, and takes equipment off it, in one
+  /// action. See [BuildingProject.setPartsOnPo].
+  ///
+  /// THE PO IS THE PLACE THIS IS DONE FROM. A PO goes to one vendor and covers
+  /// that vendor's lines, so "what did we buy on PO-1188" is a question about
+  /// a set of parts — and answering it one part at a time, through the Bought?
+  /// box on each, is how a job ends up with three of a vendor's nineteen lines
+  /// marked bought and no way to tell the other sixteen apart from the ones
+  /// nobody has ordered.
+  ///
+  /// The number joins the job's PO list if it is not on it already, the same
+  /// as one typed onto a part or read off a packing slip.
+  ///
+  /// [partNames] gives the log the description each part read as at the time,
+  /// so the trail still makes sense after a part is renamed or drops off the
+  /// job.
+  ({int added, int removed}) setProjectPartsOnPo(
+    String number, {
+    Iterable<String> onIt = const [],
+    Iterable<String> offIt = const [],
+    DateTime? orderedOn,
+    DateTime? expectedOn,
+    Map<String, String> partNames = const {},
+  }) {
+    final trimmed = number.trim();
+    if (trimmed.isEmpty) return (added: 0, removed: 0);
+    final moved = project.setPartsOnPo(
+      trimmed,
+      onIt: onIt,
+      offIt: offIt,
+      orderedOn: orderedOn,
+      expectedOn: expectedOn,
+    );
+    if (moved.added.isEmpty && moved.removed.isEmpty) {
+      return (added: 0, removed: 0);
+    }
+    if (project.poByNumber(trimmed) == null) project.addPo(number: trimmed);
+
+    // One line per part, the same as every other edit that touches a part's
+    // order record — the history is read part-first ("this says bought, who
+    // said so"), and a single line on the PO cannot answer that.
+    for (final key in moved.added) {
+      final order = project.orderForPart(key);
+      _logProjectEdit(
+        itemKey: projectPartItemKey(key),
+        itemName: partNames[key] ?? '',
+        field: 'Order',
+        summary: 'bought on $trimmed'
+            '${order?.orderedOn == null ? '' : ', ordered '
+                '${formatIsoDate(order!.orderedOn!)}'}',
+      );
+    }
+    for (final key in moved.removed) {
+      _logProjectEdit(
+        itemKey: projectPartItemKey(key),
+        itemName: partNames[key] ?? '',
+        field: 'Order',
+        summary: 'taken off $trimmed',
+      );
+    }
+    // And one on the PO, because "when did the mounts go on this" is a
+    // question asked of the PO rather than of any one part.
+    final po = project.poByNumber(trimmed);
+    if (po != null) {
+      _logProjectEdit(
+        itemKey: projectPoItemKey(po.id),
+        itemName: _poLogName(po),
+        field: 'Purchase order',
+        summary: [
+          if (moved.added.isNotEmpty)
+            '${moved.added.length} part'
+                '${moved.added.length == 1 ? '' : 's'} put on it',
+          if (moved.removed.isNotEmpty)
+            '${moved.removed.length} part'
+                '${moved.removed.length == 1 ? '' : 's'} taken off it',
+        ].join(', '),
+      );
+    }
+    _projectChanged(repricing: false);
+    return (added: moved.added.length, removed: moved.removed.length);
+  }
+
   // --- what has arrived and where it is -------------------------------------
 
   /// What a delivery is called in the log: what turned up, and how many.
@@ -12186,6 +12353,7 @@ class AppStateProvider extends ChangeNotifier {
     String partKey = '',
     String itemName = '',
     String poNumber = '',
+    bool oneOff = false,
     double qty = 0,
     DateTime? deliveredOn,
     DeliveryState state = DeliveryState.delivered,
@@ -12198,6 +12366,7 @@ class AppStateProvider extends ChangeNotifier {
       partKey: partKey,
       itemName: itemName,
       poNumber: poNumber,
+      oneOff: oneOff,
       qty: qty,
       deliveredOn: deliveredOn,
       state: state,
@@ -12221,7 +12390,13 @@ class AppStateProvider extends ChangeNotifier {
         row.deliveredOn == null
             ? 'arrived'
             : 'arrived ${formatIsoDate(row.deliveredOn!)}',
-        if (row.poNumber.trim().isNotEmpty) 'on ${row.poNumber.trim()}',
+        if (row.poNumber.trim().isNotEmpty)
+          'on ${row.poNumber.trim()}'
+        // Said in the log, because "bought on a card, outside the process" is
+        // the fact somebody will be looking for a year later and it is on
+        // nothing else this app writes.
+        else if (row.oneOff)
+          'as a one-off purchase',
         '- ${row.state.phrase}',
       ].join(' '),
     );

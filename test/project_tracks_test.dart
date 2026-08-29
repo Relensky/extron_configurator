@@ -265,7 +265,7 @@ void main() {
       final rack = part('Equipment rack');
       final project = BuildingProject(
         name: 'Bessey Hall',
-        jobNumber: 'J-1234',
+        projectNumber: 'J-1234',
         deliveryDeadline: DateTime(2026, 9, 1),
       );
       project.setPartLeadTime(conduit.key, 30);

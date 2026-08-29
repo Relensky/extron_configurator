@@ -25,6 +25,7 @@ import 'part_sort.dart';
 import 'pinned_grid.dart' show gridMetric;
 import 'project_briefing_dialog.dart';
 import 'project_deliveries_view.dart';
+import 'online_copy_dialog.dart';
 import 'project_estimate.dart';
 import 'project_lifecycle_view.dart';
 import 'project_notes_view.dart';
@@ -758,6 +759,18 @@ class _ProjectViewState extends State<ProjectView> {
                     emphasis: _ActionEmphasis.filled,
                     onPressed: () => _exportRfqs(provider, estimate),
                   ),
+                  // THE SAME BOOK, WHERE OTHER PEOPLE CAN READ IT. Beside the
+                  // Workbook button because it writes the same document - the
+                  // difference is only where it lands, and that a link to it
+                  // keeps working. See online_copy.dart.
+                  _action(
+                    compact: compact,
+                    icon: Icons.cloud_sync_outlined,
+                    label: 'Online copy',
+                    emphasis: _ActionEmphasis.tonal,
+                    buttonKey: const ValueKey('project_online_copy'),
+                    onPressed: () => showOnlineCopyDialog(context, provider),
+                  ),
                 ],
               ),
             ],
@@ -1045,7 +1058,7 @@ class _ProjectViewState extends State<ProjectView> {
     };
   }
 
-  /// The project's name, building and job number.
+  /// The project's name, building and project number.
   ///
   /// Side by side while there is room, stacked when there is not: the name is
   /// the wide one and the other two are short codes, so a narrow window keeps
@@ -1066,10 +1079,10 @@ class _ProjectViewState extends State<ProjectView> {
       onChanged: (v) => provider.setProjectField(building: v),
     );
     final job = LiveTextField(
-      fieldId: 'project_job_${provider.currentProjectPath}',
-      initial: provider.project.jobNumber,
-      label: 'Job number',
-      onChanged: (v) => provider.setProjectField(jobNumber: v),
+      fieldId: 'project_number_${provider.currentProjectPath}',
+      initial: provider.project.projectNumber,
+      label: 'Project number',
+      onChanged: (v) => provider.setProjectField(projectNumber: v),
     );
     // WHO THE JOB IS FOR, beside what it is called. It goes out on the
     // workbook's first sheet and on every quote request, and until it was here

@@ -711,7 +711,7 @@ void main() {
       final project = BuildingProject(
         name: 'Bessey refresh',
         building: 'BSS',
-        jobNumber: 'J-1001',
+        projectNumber: 'J-1001',
         stakeholder: 'Facilities',
         currency: r'$',
       );
@@ -737,7 +737,7 @@ void main() {
       final back = await BuildingProject.load(file);
 
       expect(back.name, 'Bessey refresh');
-      expect(back.jobNumber, 'J-1001');
+      expect(back.projectNumber, 'J-1001');
       expect(back.rooms.single.label, 'BSS 101');
       expect(back.rooms.single.included, isFalse);
       expect(back.rooms.single.notes, 'phase 2');
