@@ -12,6 +12,7 @@ import 'building_project.dart' show kProjectFileSuffix;
 import 'campus_file.dart';
 import 'campus_lifecycle.dart';
 import 'manual_rooms_dialog.dart';
+import 'online_copy_dialog.dart' show publishCampusCopy;
 import 'contrast.dart';
 import 'equipment_lifecycle.dart';
 import 'lifecycle_export.dart';
@@ -536,6 +537,16 @@ class _CampusViewState extends State<_CampusView> {
     return '${named}campus_refresh_plan_${at.year}-$month-$day';
   }
 
+  /// The published copy's name, WITHOUT the date [_fileStem] carries.
+  ///
+  /// A published file keeps its name for ever, because a share link points at
+  /// a file: dating it would mean a new link every time it went out, which is
+  /// the emailed-spreadsheet problem this exists to end. The date belongs on a
+  /// saved export, where two of them are two documents to file.
+  String get _onlineStem => _name.trim().isEmpty
+      ? 'campus'
+      : CampusFile(name: _name, projects: const []).fileStem;
+
   void _picture() => showLifecycleSheetPicture(
     context,
     dialogTitle: 'The campus plan as a picture',
@@ -548,6 +559,41 @@ class _CampusViewState extends State<_CampusView> {
     // several hundred rooms.
     startExpanded: false,
   );
+
+  /// The campus, into the folder everything else publishes into.
+  ///
+  /// The same workbook the Spreadsheet item saves, written to the synced
+  /// folder under a name that never changes — so a budget meeting can be sent
+  /// one link in March and open the current plan in June. See
+  /// online_copy.dart.
+  Future<void> _publishOnline() async {
+    final campus = _campus;
+    if (campus == null) return;
+    final provider = context.read<AppStateProvider>();
+    setState(() => _exporting = true);
+    Uint8List? picture;
+    try {
+      if (!campus.isEmpty) {
+        picture = await captureOffscreenSheet(context, _sheet);
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+    if (!mounted) return;
+    await publishCampusCopy(
+      context,
+      provider,
+      workbook: buildCampusLifecycleXlsx(campus: campus, picture: picture),
+      stem: _onlineStem,
+      campusFilePath: _file,
+      name: _name,
+      // The jobs by the path each was read from - what the folder's index
+      // joins this campus to them by. Every job on the sheet, including the
+      // ones that would not read: a campus of eleven where one file has moved
+      // has to say so, here as much as on the sheet itself.
+      jobs: [for (final j in campus.jobs) (path: j.path, name: j.name)],
+    );
+  }
 
   Future<void> _spreadsheet() async {
     final campus = _campus;
@@ -697,7 +743,11 @@ class _CampusViewState extends State<_CampusView> {
                 campus != null &&
                 !campus.isEmpty,
             tooltip: 'Hand this campus over',
-            onSelected: (v) => v == 'picture' ? _picture() : _spreadsheet(),
+            onSelected: (v) => switch (v) {
+              'picture' => _picture(),
+              'online' => _publishOnline(),
+              _ => _spreadsheet(),
+            },
             itemBuilder: (_) => const [
               PopupMenuItem(
                 key: ValueKey('campus_picture'),
@@ -708,6 +758,13 @@ class _CampusViewState extends State<_CampusView> {
                 key: ValueKey('campus_spreadsheet'),
                 value: 'spreadsheet',
                 child: Text('Spreadsheet…'),
+              ),
+              // Into the synced folder, beside the jobs it lists and the rooms
+              // in them, under a name that never changes.
+              PopupMenuItem(
+                key: ValueKey('campus_online'),
+                value: 'online',
+                child: Text('Online copy'),
               ),
             ],
             child: Padding(

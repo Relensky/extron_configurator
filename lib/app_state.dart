@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
@@ -18,7 +19,12 @@ import 'config_key_mapper.dart';
 import 'flow_rules.dart';
 import 'cabling_schematic.dart';
 import 'building_project.dart';
+import 'av_flow_view.dart' show buildAvFlowModel;
+import 'export_tools.dart' show roomFileStem;
 import 'online_copy.dart';
+import 'online_index.dart';
+import 'online_roundtrip.dart';
+import 'room_workbook.dart';
 import 'cost_estimate.dart';
 import 'labor_rates.dart';
 import 'model_swap.dart' as swap;
@@ -462,6 +468,20 @@ class AppStateProvider extends ChangeNotifier {
 
   // --- Processor connection settings (App Config > Processor Connection) ---
   // Defaults are the Extron standards; editable for nonstandard processors.
+  /// The folder OneDrive or Google Drive syncs, remembered for the whole app.
+  ///
+  /// The default every publish starts from, and the one a campus and a room
+  /// use outright — a job can point somewhere else (see
+  /// [BuildingProject.onlineFolder]) because two jobs go to two sets of
+  /// people, but a campus sheet and the rooms under it are the estate, and the
+  /// estate has one folder.
+  ///
+  /// ONE FOLDER IS THE POINT. Everything published lands beside everything
+  /// else, under names that sort — `<Campus>_campus.xlsx`, `<Job>_project.xlsx`,
+  /// `BSS_103_room.xlsx`, each with its .json next to it — so the folder reads
+  /// as one set of records rather than as files from three different features.
+  String onlineFolder = '';
+
   String sftpUsername = 'admin';
   String sftpPort = '22022';
   String sftpRemoteConfigPath = '/config.json';
@@ -748,6 +768,7 @@ class AppStateProvider extends ChangeNotifier {
       'avDevicesFilePath': avDevicesFilePath,
       'flowRulesFilePath': flowRulesFilePath,
       'documentationPath': documentationPath,
+      'onlineFolder': onlineFolder,
       'sftpUsername': sftpUsername,
       'sftpPort': sftpPort,
       'sftpRemoteConfigPath': sftpRemoteConfigPath,
@@ -6633,6 +6654,7 @@ class AppStateProvider extends ChangeNotifier {
       avDevicesFilePath = str('avDevicesFilePath', '');
       flowRulesFilePath = str('flowRulesFilePath', '');
       documentationPath = str('documentationPath', '');
+      onlineFolder = str('onlineFolder', '');
       sftpUsername = str('sftpUsername', 'admin');
       sftpPort = str('sftpPort', '22022');
       sftpRemoteConfigPath = str('sftpRemoteConfigPath', '/config.json');
@@ -10729,6 +10751,26 @@ class AppStateProvider extends ChangeNotifier {
       }
     }
 
+    // THE ONLINE COPY GOES FIRST, when the job asks for it on every save.
+    //
+    // Before the file rather than after, so the "published" stamp it sets is
+    // in the file being written — publishing afterwards would leave the job
+    // dirty the instant it was saved, every time, and a save button that never
+    // clears is a save button people stop believing.
+    if (project.onlineAutoPublish && project.onlineFolder.trim().isNotEmpty) {
+      final published = await publishOnlineCopy();
+      if (published.written.isEmpty) {
+        // Logged, not thrown: a sync folder is a place another program has its
+        // hands on, and a locked file must not cost somebody their save. The
+        // stamp is left alone by publishOnlineCopy, so the box on the Project
+        // tab still says how old the copy people are reading is.
+        AppLogger.logError(
+          'The online copy could not be updated on save: '
+          '${published.failed.join('; ')}',
+        );
+      }
+    }
+
     try {
       await project.save(target);
       currentProjectPath = target;
@@ -11187,6 +11229,9 @@ class AppStateProvider extends ChangeNotifier {
     final next = folder.trim();
     if (next == project.onlineFolder) return;
     project.onlineFolder = next;
+    // Nowhere to write means nothing to write on save. A switch left reading
+    // as on while doing nothing is worse than one that is off.
+    if (next.isEmpty) project.onlineAutoPublish = false;
     _logProjectEdit(
       itemKey: 'project',
       itemName: project.name,
@@ -11194,6 +11239,25 @@ class AppStateProvider extends ChangeNotifier {
       summary: next.isEmpty
           ? 'no longer published anywhere'
           : 'published into ${path.basename(next)}',
+    );
+    _projectChanged(repricing: false);
+  }
+
+  /// Turns publishing-on-save on or off.
+  ///
+  /// Refused without a folder: there would be nowhere to write, and a switch
+  /// that reads as on while doing nothing is worse than one that is off.
+  void setProjectOnlineAutoPublish(bool on) {
+    final next = on && project.onlineFolder.trim().isNotEmpty;
+    if (next == project.onlineAutoPublish) return;
+    project.onlineAutoPublish = next;
+    _logProjectEdit(
+      itemKey: 'project',
+      itemName: project.name,
+      field: 'Online copy',
+      summary: next
+          ? 'updated on every save from now on'
+          : 'no longer updated on save',
     );
     _projectChanged(repricing: false);
   }
@@ -11226,9 +11290,21 @@ class AppStateProvider extends ChangeNotifier {
     }
     if (target != project.onlineFolder) setProjectOnlineFolder(target);
 
+    // WHAT THIS JOB IS JOINED TO, for the folder's index: the rooms it holds
+    // and the campus it is on, as the paths the documents themselves carry.
+    // Resolved to absolute here, because a project file stores them relative
+    // to itself and the index is read from somewhere else.
+    final roomPaths = [
+      for (final room in project.rooms)
+        BuildingProject.resolvePath(room.configPath, currentProjectPath),
+    ];
+
     final result = await writeOnlineCopy(
       estimate: priceProject(),
       folder: target,
+      source: currentProjectPath,
+      roomPaths: roomPaths,
+      campusPath: project.resolvedCampusFile(currentProjectPath),
       // The catalog and the base card price the replacement plan's sheet, the
       // same as they do for the workbook saved by hand.
       library: avDeviceLibrary,
@@ -11253,6 +11329,348 @@ class AppStateProvider extends ChangeNotifier {
       _projectChanged(repricing: false);
     }
     return result;
+  }
+
+  /// Reads the published workbook back and hands over what it would change.
+  ///
+  /// Nothing is written. The list this returns is what the box shows before
+  /// anybody presses Apply — see [applyOnlineImport] — because an import is
+  /// somebody else's typing arriving in your job, and a feature that wrote it
+  /// straight in is one people would be right to be frightened of.
+  ({OnlineImport read, List<OnlineChange> changes}) reviewOnlineImport(
+    Uint8List bytes,
+  ) {
+    final estimate = priceProject();
+    final read = readOnlineEdits(
+      bytes,
+      roomIdsByName: {
+        for (final entry in estimate.roomCodeNames.entries)
+          entry.value.toLowerCase(): entry.key,
+      },
+      vendorIdsByName: {
+        for (final v in project.vendors) v.name.trim().toLowerCase(): v.id,
+      },
+      against: project,
+    );
+    return (read: read, changes: onlineChanges(project, read));
+  }
+
+  /// Writes back what came off the published copy.
+  ///
+  /// EVERY CHANGE GOES THROUGH THE ORDINARY EDIT, so each one lands in the
+  /// job's history with a name and a time on it — and every line says it came
+  /// from the online copy, because "who changed this to 8" is the first
+  /// question asked of a figure that arrived from somewhere else. See
+  /// [ProjectEdit].
+  ///
+  /// NOTHING IS DELETED. A record missing from the sheet is one somebody
+  /// filtered or never scrolled to; removing things stays a decision made
+  /// here, in front of the record. Returns how many records were touched.
+  int applyOnlineImport(OnlineImport read) {
+    var touched = 0;
+
+    for (final d in read.deliveries) {
+      if (d.isNew) {
+        addProjectDelivery(
+          itemName: d.itemName,
+          poNumber: d.poNumber,
+          oneOff: d.oneOff,
+          qty: d.qty,
+          deliveredOn: d.deliveredOn,
+          state: d.state,
+          location: d.location,
+          roomId: d.roomId,
+          installedOn: d.installedOn,
+          note: d.note,
+        );
+        touched++;
+        continue;
+      }
+      final was = project.deliveryById(d.id);
+      if (was == null) continue;
+      final changes = onlineChanges(project, (
+        deliveries: [d],
+        pos: const <ParsedPo>[],
+        problems: const <String>[],
+        wrongFile: false,
+      ));
+      // Only what actually differs. A sheet comes back with every row on it,
+      // and logging all of them would bury the two somebody edited.
+      final edits = [
+        for (final c in changes)
+          if (c.what != 'note added') c.what,
+      ];
+      if (edits.isNotEmpty) {
+        updateProjectDelivery(
+          was.copyWith(
+            itemName: d.itemName,
+            poNumber: d.poNumber,
+            oneOff: d.oneOff,
+            qty: d.qty,
+            deliveredOn: d.deliveredOn,
+            clearDeliveredOn: d.deliveredOn == null,
+            state: d.state,
+            location: d.location,
+            roomId: d.state == DeliveryState.installed ? d.roomId : '',
+            installedOn: d.installedOn,
+            clearInstalledOn: d.installedOn == null,
+          ),
+          summary: 'from the online copy - ${edits.join(', ')}',
+        );
+        touched++;
+      }
+      if (d.note.isNotEmpty) {
+        addProjectDeliveryNote(d.id, d.note);
+        touched++;
+      }
+    }
+
+    for (final po in read.pos) {
+      if (po.isNew) {
+        // addProjectPo hands back the row the job already has when the number
+        // is one it knows, so a line somebody re-typed does not become a
+        // second PO — see [BuildingProject.addPo].
+        final row = addProjectPo(
+          number: po.number,
+          vendorId: po.vendorId,
+          vendor: po.vendor,
+          issuedOn: po.issuedOn,
+          expectedOn: po.expectedOn,
+          amount: po.amount,
+        );
+        if (po.note.isNotEmpty) addProjectPoNote(row.id, po.note);
+        touched++;
+        continue;
+      }
+      final was = project.poById(po.id);
+      if (was == null) continue;
+      // The NUMBER goes through its own call, because changing it has to carry
+      // every part and delivery that named the old one across with it.
+      if (normalizePoNumber(was.number) != normalizePoNumber(po.number)) {
+        renameProjectPo(po.id, po.number);
+      }
+      final current = project.poById(po.id);
+      if (current == null) continue;
+      final changes = onlineChanges(project, (
+        deliveries: const <ParsedDelivery>[],
+        pos: [po],
+        problems: const <String>[],
+        wrongFile: false,
+      ));
+      final edits = [
+        for (final c in changes)
+          if (c.what != 'note added') c.what,
+      ];
+      if (edits.isNotEmpty) {
+        updateProjectPo(
+          current.copyWith(
+            vendorId: po.vendorId,
+            vendor: po.vendor,
+            issuedOn: po.issuedOn,
+            clearIssuedOn: po.issuedOn == null,
+            expectedOn: po.expectedOn,
+            clearExpectedOn: po.expectedOn == null,
+            amount: po.amount,
+          ),
+          summary: 'from the online copy - ${edits.join(', ')}',
+        );
+        touched++;
+      }
+      if (po.note.isNotEmpty) {
+        addProjectPoNote(po.id, po.note);
+        touched++;
+      }
+    }
+
+    if (touched > 0) _projectChanged(repricing: false);
+    return touched;
+  }
+
+  /// Remembers the folder everything publishes into, for the whole app.
+  void setOnlineFolder(String folder) {
+    final next = folder.trim();
+    if (next == onlineFolder) return;
+    onlineFolder = next;
+    _persistSettings();
+    notifyListeners();
+  }
+
+  /// Where a publish should go when nothing more specific was asked for: the
+  /// job's own folder if it has one, else the app's.
+  String get effectiveOnlineFolder => project.onlineFolder.trim().isNotEmpty
+      ? project.onlineFolder.trim()
+      : onlineFolder.trim();
+
+  /// Publishes a campus sheet: the refresh plan as a workbook, and the campus
+  /// file itself beside it.
+  ///
+  /// THE SAME FOLDER AS THE JOBS UNDER IT. A campus is a list of projects, and
+  /// a published campus that landed somewhere else would be an index nobody
+  /// could follow — the whole value of one folder is that the sheet, the jobs
+  /// it names and the rooms in them are all in it.
+  Future<OnlineCopyResult> publishCampusOnlineCopy({
+    required Uint8List workbook,
+    required String stem,
+    String folder = '',
+    String campusFilePath = '',
+    /// The jobs on the sheet, by the project-file path each was read from —
+    /// what the index joins a campus to its jobs by. See online_index.dart.
+    List<({String path, String name})> jobs = const [],
+    String name = '',
+    DateTime? at,
+  }) async {
+    final target = folder.trim().isEmpty ? onlineFolder.trim() : folder.trim();
+    if (target.isEmpty) {
+      return (
+        folder: '',
+        written: const <String>[],
+        failed: const ['no folder has been picked'],
+        at: at ?? DateTime.now(),
+      );
+    }
+    if (target != onlineFolder) setOnlineFolder(target);
+
+    // The campus file is copied as it is on disk rather than re-serialised:
+    // it is somebody's document, it may have been hand-edited, and a copy is
+    // a copy.
+    String? campusText;
+    if (campusFilePath.trim().isNotEmpty) {
+      try {
+        campusText = await File(campusFilePath.trim()).readAsString();
+      } catch (e) {
+        AppLogger.logError('The campus file could not be read to publish it', e);
+      }
+    }
+
+    return writeOnlineFiles(
+      folder: target,
+      at: at,
+      files: [
+        (
+          name: onlineCampusWorkbookName(stem),
+          bytes: workbook,
+          text: null,
+        ),
+        if (campusText != null)
+          (name: onlineCampusFileName(stem), bytes: null, text: campusText),
+      ],
+      // A campus with no file behind it has no path to be joined by, so it is
+      // published without an index entry rather than with one nothing can
+      // point at.
+      index: campusFilePath.trim().isEmpty
+          ? const []
+          : [
+              (
+                kind: 'campus',
+                name: name.trim().isEmpty ? stem : name.trim(),
+                source: campusFilePath.trim(),
+                parent: '',
+                children: [for (final j in jobs) j.path],
+                files: [
+                  onlineCampusWorkbookName(stem),
+                  if (campusText != null) onlineCampusFileName(stem),
+                ],
+                note: '${jobs.length} job${jobs.length == 1 ? '' : 's'}',
+                at: at ?? DateTime.now(),
+              ),
+            ],
+    );
+  }
+
+  /// Publishes the open room: its workbook, and its config beside it.
+  ///
+  /// WITHOUT THE DIAGRAMS. A room workbook illustrated with its drawings can
+  /// only be built by walking the drawing tabs and capturing each canvas —
+  /// which takes the screen away from whoever is working, and cannot be done
+  /// at all when this is called from a save. The published room copy is the
+  /// tables: what is in the room, what it costs, what it connects to. The
+  /// illustrated book is still one Export away.
+  Future<OnlineCopyResult> publishRoomOnlineCopy({
+    String folder = '',
+    DateTime? at,
+  }) async {
+    final target = folder.trim().isEmpty ? onlineFolder.trim() : folder.trim();
+    if (target.isEmpty) {
+      return (
+        folder: '',
+        written: const <String>[],
+        failed: const ['no folder has been picked'],
+        at: at ?? DateTime.now(),
+      );
+    }
+    if (currentConfigPath.isEmpty && roomConfig.isEmpty) {
+      return (
+        folder: target,
+        written: const <String>[],
+        failed: const ['no room is open'],
+        at: at ?? DateTime.now(),
+      );
+    }
+    if (target != onlineFolder) setOnlineFolder(target);
+
+    ensureAvFlowForCurrentConfig();
+    // 'BSS_103'. The shared stem joins its parts with '_', so an empty suffix
+    // leaves one hanging off the end - the same trim [roomFolderName] makes.
+    final stem = roomFileStem(this, '').replaceAll(RegExp(r'_+$'), '');
+    final bytes = buildRoomWorkbookBytes(
+      provider: this,
+      av: buildAvFlowModel(this),
+      generated: at,
+    );
+
+    // WHICH JOB IT IS IN, when this app can tell. A room published on its own
+    // usually cannot - so the entry says nothing rather than guessing, and the
+    // job's own entry names the room, which is the same link read from the
+    // other end. See [mergeOnlineIndex], which is why saying nothing here does
+    // not erase what the job said.
+    final inProject = hasOpenProject &&
+        project.rooms.any(
+          (r) =>
+              normalizeSourcePath(
+                BuildingProject.resolvePath(r.configPath, currentProjectPath),
+              ) ==
+              normalizeSourcePath(currentConfigPath),
+        );
+
+    return writeOnlineFiles(
+      folder: target,
+      at: at,
+      files: [
+        (name: onlineRoomWorkbookName(stem), bytes: bytes, text: null),
+        // The config itself: this is the room's actual record, and the folder
+        // is only a database if what is in it can be opened again.
+        (
+          name: onlineRoomFileName(stem),
+          bytes: null,
+          text: onlineJsonText(roomConfig),
+        ),
+      ],
+      index: currentConfigPath.trim().isEmpty
+          ? const []
+          : [
+              (
+                kind: 'room',
+                name: roomCodeFromConfig(roomConfig).trim().isEmpty
+                    ? stem
+                    : roomCodeFromConfig(roomConfig).trim(),
+                source: currentConfigPath.trim(),
+                parent: inProject ? currentProjectPath : '',
+                children: const [],
+                files: [
+                  onlineRoomWorkbookName(stem),
+                  onlineRoomFileName(stem),
+                ],
+                note: (roomConfig['SYSTEM_SETUP'] is Map)
+                    ? ((roomConfig['SYSTEM_SETUP']
+                                  as Map)['gui_full_room_name'] ??
+                              '')
+                          .toString()
+                          .trim()
+                    : '',
+                at: at ?? DateTime.now(),
+              ),
+            ],
+    );
   }
 
   // --- building plans ------------------------------------------------------

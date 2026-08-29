@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import 'av_device_library.dart';
 import 'base_costs.dart';
 import 'building_project.dart';
+import 'online_index.dart';
 import 'project_estimate.dart';
 import 'project_workbook.dart';
 
@@ -57,6 +58,87 @@ typedef OnlineCopyResult = ({
   DateTime at,
 });
 
+/// One file to put in the published folder: bytes for a workbook, text for a
+/// .json.
+typedef OnlineFile = ({String name, List<int>? bytes, String? text});
+
+/// Writes [files] into [folder], overwriting what is there.
+///
+/// THE ONE PLACE ANY OF THIS TOUCHES THE DISK, so a campus, a job and a room
+/// all publish by the same rules: the same names every time, nothing deleted,
+/// nothing renamed, and a file that will not write reported rather than
+/// thrown. A sync folder is a place another program has its hands on, and
+/// "OneDrive had the file open" is an ordinary Tuesday rather than a crash.
+Future<OnlineCopyResult> writeOnlineFiles({
+  required String folder,
+  required List<OnlineFile> files,
+  /// What this publish knows about itself, for the folder's index — see
+  /// online_index.dart. Merged into what is already there rather than
+  /// replacing it, so the index describes everything ever published here.
+  List<OnlineIndexEntry> index = const [],
+  DateTime? at,
+}) async {
+  final stamp = at ?? DateTime.now();
+  final written = <String>[];
+  final failed = <String>[];
+  for (final f in files) {
+    try {
+      final file = File(path.join(folder, f.name));
+      if (f.bytes != null) {
+        await file.writeAsBytes(f.bytes!);
+      } else {
+        await file.writeAsString(f.text ?? '');
+      }
+      written.add(f.name);
+    } catch (e) {
+      failed.add('${f.name} - $e');
+    }
+  }
+
+  // THE INDEX IS NOT ONE OF THE DOCUMENTS. It is written after them, it is
+  // never counted among them - "Bessey_Hall_project.xlsx and index.xlsx and
+  // index.json written" reads as three documents when one was asked for - and
+  // it is only written when something else was, so a publish that wrote
+  // nothing does not leave an index claiming otherwise. A failure to write it
+  // is still reported: an index nobody can see going stale is worse than none.
+  if (index.isNotEmpty && written.isNotEmpty) {
+    try {
+      final merged = mergeOnlineIndex(readOnlineIndex(folder), index);
+      await File(path.join(folder, kOnlineIndexJson))
+          .writeAsString(onlineIndexJson(merged, at: stamp));
+      await File(path.join(folder, kOnlineIndexWorkbook))
+          .writeAsBytes(buildOnlineIndexWorkbook(merged, at: stamp));
+    } catch (e) {
+      failed.add('$kOnlineIndexWorkbook - $e');
+    }
+  }
+
+  return (folder: folder, written: written, failed: failed, at: stamp);
+}
+
+/// The indented JSON this app writes everywhere, because somebody will open
+/// the published copy in a text editor.
+String onlineJsonText(Object document) =>
+    const JsonEncoder.withIndent('    ').convert(document);
+
+/// A campus sheet's two published files.
+String onlineCampusWorkbookName(String stem) => '${_safe(stem)}_campus.xlsx';
+String onlineCampusFileName(String stem) => '${_safe(stem)}_campus.json';
+
+/// A room's two published files. [stem] is the room's own export stem —
+/// `BSS_103` — so the folder sorts by building and room.
+String onlineRoomWorkbookName(String stem) => '${_safe(stem)}_room.xlsx';
+String onlineRoomFileName(String stem) => '${_safe(stem)}_room_config.json';
+
+/// Anything that would not survive being a file name.
+String _safe(String raw) {
+  final clean = raw
+      .trim()
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+      .replaceAll(RegExp(r'\s+'), '_');
+  return clean.isEmpty ? 'untitled' : clean;
+}
+
 /// The workbook's file name in the published folder.
 ///
 /// The same stem the Save dialog offers, so the file in the sync folder and
@@ -103,47 +185,68 @@ Future<OnlineCopyResult> writeOnlineCopy({
   required BaseCostBook baseCosts,
   PricingTier tier = PricingTier.msrp,
   bool includeProjectFile = true,
+  /// The project file's own path — what the index joins this job to its campus
+  /// and its rooms by. See online_index.dart.
+  String source = '',
+  /// The rooms' config paths, absolute, and the campus file this job is on.
+  List<String> roomPaths = const [],
+  String campusPath = '',
   DateTime? at,
 }) async {
   final stamp = at ?? DateTime.now();
   final project = estimate.project;
-  final written = <String>[];
-  final failed = <String>[];
 
-  Future<void> write(String name, Future<void> Function(File) body) async {
-    try {
-      await body(File(path.join(folder, name)));
-      written.add(name);
-    } catch (e) {
-      failed.add('$name - $e');
-    }
-  }
-
-  await write(
-    onlineWorkbookName(project),
-    (file) => file.writeAsBytes(
-      buildProjectWorkbookBytes(
-        estimate: estimate,
-        library: library,
-        baseCosts: baseCosts,
-        tier: tier,
-        generated: stamp,
+  return writeOnlineFiles(
+    folder: folder,
+    at: stamp,
+    index: source.trim().isEmpty
+        ? const []
+        : [
+            (
+              kind: 'project',
+              name: project.name.trim().isEmpty
+                  ? onlineFileStem(project)
+                  : project.name.trim(),
+              source: source.trim(),
+              parent: campusPath.trim(),
+              children: roomPaths,
+              files: [
+                onlineWorkbookName(project),
+                if (includeProjectFile) onlineProjectFileName(project),
+              ],
+              note: [
+                '${roomPaths.length} room${roomPaths.length == 1 ? '' : 's'}',
+                if (project.projectNumber.trim().isNotEmpty)
+                  'project number ${project.projectNumber.trim()}',
+              ].join(', '),
+              at: stamp,
+            ),
+          ],
+    files: [
+      (
+        name: onlineWorkbookName(project),
+        bytes: buildProjectWorkbookBytes(
+          estimate: estimate,
+          library: library,
+          baseCosts: baseCosts,
+          tier: tier,
+          generated: stamp,
+          // The published copy is the one that comes back: it carries the two
+          // sheets somebody can type in. See online_roundtrip.dart.
+          editable: true,
+        ),
+        text: null,
       ),
-    ),
+      // The job itself, so the folder is enough to OPEN the project on another
+      // machine rather than only to read it.
+      if (includeProjectFile)
+        (
+          name: onlineProjectFileName(project),
+          bytes: null,
+          text: onlineJsonText(project.toJson()),
+        ),
+    ],
   );
-
-  if (includeProjectFile) {
-    // The job itself, so the folder is enough to OPEN the project on another
-    // machine rather than only to read it. Written with the same indent the
-    // app saves with, because somebody will look at it in a text editor.
-    const encoder = JsonEncoder.withIndent('    ');
-    await write(
-      onlineProjectFileName(project),
-      (file) => file.writeAsString(encoder.convert(project.toJson())),
-    );
-  }
-
-  return (folder: folder, written: written, failed: failed, at: stamp);
 }
 
 /// 'published 3 days ago' — how stale the copy somebody else is reading is.

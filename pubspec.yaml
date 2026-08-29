@@ -20,6 +20,10 @@ dependencies:
   provider: ^6.1.5+1
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
+  # Reading an .xlsx back in - see xlsx_reader.dart. Already in the lock
+  # file as a transitive dependency; named here because this app now parses
+  # spreadsheet XML itself rather than only writing it.
+  xml: ^7.0.1
 
 dev_dependencies:
   flutter_test:

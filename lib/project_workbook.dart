@@ -6,6 +6,7 @@ import 'building_project.dart';
 import 'control_gaps.dart';
 import 'cost_estimate.dart';
 import 'equipment_lifecycle.dart';
+import 'online_roundtrip.dart';
 import 'project_estimate.dart';
 import 'project_schedule.dart';
 import 'report_tools.dart';
@@ -415,11 +416,17 @@ List<ReportSection> masterPartsSections(
 }) {
   final currency = estimate.currency;
   XlsxMoney cash(double v) => money(v, currency);
+  // THE CODE, NOT THE NAME - 'BSS 103', not 'Behavioral and Social Science
+  // 103'. This column repeats a room once per part, so a full building name
+  // makes it the widest column on the sheet and pushes the figures off the
+  // page; the code is what is on the door, on the packing label and on every
+  // other document the job produces. See [ProjectRoomCost.codeName], which
+  // falls back to the name when a room has no code to show.
   final roomNames = {
-    for (final r in estimate.rooms) r.ref.id: r.name,
+    for (final r in estimate.rooms) r.ref.id: r.codeName,
   };
 
-  /// "Bessey 101 ×2, Bessey 103 ×4" — which rooms the units are for.
+  /// "BSS 101 ×2, BSS 103 ×4" — which rooms the units are for.
   ///
   /// This is the column that makes a merged list checkable. Eighteen switchers
   /// is a number a vendor can quote; it is not a number a project manager can
@@ -1113,7 +1120,9 @@ List<ReportSection> projectHistorySections(ProjectEstimate estimate) {
 List<ReportSection> projectSparesSections(ProjectEstimate estimate) {
   final currency = estimate.currency;
   XlsxMoney cash(double v) => money(v, currency);
-  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
+  // The code rather than the building's full name, for the reason
+  // [masterPartsSections] gives: this is a room repeated once per part.
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
 
   /// Which rooms asked for the spares — "who wanted this" is the question
   /// that follows every spare on a quote somebody is trimming.
@@ -1382,7 +1391,10 @@ List<ReportSection> projectControlGapSections(ProjectEstimate estimate) {
       rows: [
         for (final entry in estimate.controlGaps)
           [
-            entry.room.name,
+            // 'BSS 103'. This list is worked THROUGH room by room, so the
+            // column is read forty times down the page and the code is the
+            // form of it somebody can scan.
+            entry.room.codeName,
             entry.gap.device,
             entry.gap.model.isEmpty ? '(no model set)' : entry.gap.model,
             entry.gap.qty,
@@ -1440,7 +1452,9 @@ List<ReportSection> vendorPackageSections(
   final currency = estimate.currency;
   XlsxMoney cash(double v) => money(v, currency);
   final project = estimate.project;
-  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.name};
+  // The code here too: it is what will be on the label when this arrives, and
+  // what the person unpacking it is standing in front of.
+  final roomNames = {for (final r in estimate.rooms) r.ref.id: r.codeName};
 
   String rooms(MasterPartLine line) => [
     for (final id in line.roomIdsByQty())
@@ -1527,6 +1541,15 @@ Uint8List buildProjectWorkbookBytes({
   AvDeviceLibrary? library,
   BaseCostBook? baseCosts,
   PricingTier tier = PricingTier.msrp,
+  /// Add the two sheets that can be typed in and read back — see
+  /// online_roundtrip.dart.
+  ///
+  /// OFF for a workbook saved by hand, ON for the published copy. A book
+  /// somebody saves to their desktop and mails on is a document; only the
+  /// copy in the synced folder is a thing this app will read again, and two
+  /// form sheets on every export would invite edits into files nothing is
+  /// ever going to pick up.
+  bool editable = false,
 }) {
   final stamp = generated ?? DateTime.now();
   final title = _projectTitle(estimate.project);
@@ -1671,6 +1694,17 @@ Uint8List buildProjectWorkbookBytes({
       sections: vendorPackageSections(estimate, package),
       generated: stamp,
     ));
+  }
+
+  // THE FORM, at the end. It is the sheet somebody TYPES in rather than one
+  // they read, so it sits after everything that gets read — and after the
+  // vendor tabs, which are what a reader is usually looking for.
+  if (editable) {
+    sheets.add(buildEditableDeliveriesSheet(
+      estimate.project,
+      roomNames: estimate.roomCodeNames,
+    ));
+    sheets.add(buildEditablePosSheet(estimate.project));
   }
 
   // Every room that priced, including the excluded ones: an alternate that is

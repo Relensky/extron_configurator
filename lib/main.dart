@@ -30,6 +30,7 @@ import 'device_start_wizard.dart';
 import 'cabling_view.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
+import 'online_copy_dialog.dart';
 import 'nav_rail.dart';
 import 'project_room_picker.dart';
 import 'project_history_view.dart' show showHistoryDialog;
@@ -386,6 +387,66 @@ class _MainDashboardState extends State<MainDashboard> {
   /// since is in there too and goes with it. That list is the whole point of
   /// the confirmation: "undo a save" is easy to press expecting only the last
   /// thing you typed to come back.
+  /// Publishes the room, the job, or asks which when both are open.
+  ///
+  /// ASKED RATHER THAN ANSWERED, when there are two things it could mean — the
+  /// same bargain the workbook button makes. A room open inside a job is the
+  /// ordinary case, and a button that quietly picked one would publish the
+  /// wrong document to a folder other people are reading.
+  Future<void> _publishOnline(
+    BuildContext context,
+    AppStateProvider provider,
+    bool hasConfig,
+  ) async {
+    if (!provider.hasOpenProject) {
+      if (hasConfig) await publishRoomCopy(context, provider);
+      return;
+    }
+    if (!hasConfig) {
+      await showOnlineCopyDialog(context, provider);
+      return;
+    }
+
+    final scope = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        key: const ValueKey('publish_scope_dialog'),
+        title: const Text('Publish which?'),
+        children: [
+          SimpleDialogOption(
+            key: const ValueKey('publish_scope_room'),
+            onPressed: () => Navigator.of(ctx).pop('room'),
+            child: const ListTile(
+              leading: Icon(Icons.meeting_room_outlined),
+              title: Text('This room'),
+              subtitle: Text(
+                'Its workbook and its config, into the synced folder.',
+              ),
+            ),
+          ),
+          SimpleDialogOption(
+            key: const ValueKey('publish_scope_project'),
+            onPressed: () => Navigator.of(ctx).pop('project'),
+            child: const ListTile(
+              leading: Icon(Icons.domain),
+              title: Text('The whole job'),
+              subtitle: Text(
+                'The project workbook, including the sheets that can be '
+                'edited and pulled back.',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (scope == null || !context.mounted) return;
+    if (scope == 'room') {
+      await publishRoomCopy(context, provider);
+    } else {
+      await showOnlineCopyDialog(context, provider);
+    }
+  }
+
   Future<void> _undoLastSave(
       BuildContext context, AppStateProvider provider) async {
     final List<ConfigDelta> deltas = await provider.undoDeltas();
@@ -733,6 +794,24 @@ class _MainDashboardState extends State<MainDashboard> {
         },
         onPressed: hasConfig || provider.hasOpenProject
             ? () => exportWorkbook(context, provider)
+            : null,
+      ),
+      // WHERE OTHER PEOPLE CAN READ IT. The workbook button hands somebody a
+      // file; this puts the same thing in a folder that syncs, under a name
+      // that never changes, so a link sent once keeps opening the current
+      // version. A room and a job publish into the same folder, beside each
+      // other — see online_copy.dart.
+      IconButton(
+        key: const ValueKey('publish_online'),
+        icon: const Icon(Icons.cloud_sync_outlined),
+        tooltip: switch ((hasConfig, provider.hasOpenProject)) {
+          (false, false) => 'Online copy - nothing loaded yet',
+          (true, false) => 'Publish this room where other people can read it',
+          (false, true) => 'Publish this job where other people can read it',
+          (true, true) => 'Publish this room or this job online',
+        },
+        onPressed: hasConfig || provider.hasOpenProject
+            ? () => _publishOnline(context, provider, hasConfig)
             : null,
       ),
       // ...and THIS tab on its own, the three ways a document leaves this

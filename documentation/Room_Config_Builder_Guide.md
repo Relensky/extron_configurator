@@ -795,10 +795,37 @@ which makes the folder enough to *open* the job on another machine rather than
 only to read it.
 
 It rewrites the same file name every time, so a share link you send once keeps
-opening the current figures. It only goes one way: edits made in Excel Online or
-Google Sheets are not read back, and the next publish overwrites them. The box
-says when it last went out, because a copy three weeks behind is worse than none
-- whoever is reading it has no way to tell.
+opening the current figures. The box says when it last went out, because a copy
+three weeks behind is worse than none - whoever is reading it has no way to
+tell. Tick *Update it every time the project is saved* and it never gets behind.
+
+**What comes back.** Two sheets in the published workbook are a form rather than
+a report: *Deliveries (edit)* and *Purchase orders (edit)*. Anybody the folder is
+shared with can type in them - a delivery that landed, a quantity that was wrong,
+the room a pallet went into - and *Pull updates* reads them back. Leave the Row
+id alone; add a line with a blank Row id to log something new. Dates as
+`2026-04-20`. Every change is listed for you to check before a word of it is
+written, each one lands in the job's history saying it came from the online copy,
+and nothing is ever deleted by an import: a row missing from the sheet is one
+somebody filtered or never scrolled to. Every other sheet is a picture of the job
+and is overwritten on the next publish.
+
+**The campus and single rooms** publish the same way, into the same folder: the
+campus screen's *Hand over* menu has an *Online copy* item, and the cloud button
+in the toolbar publishes the open room (or asks, when a room is open inside a
+job). Everything lands beside everything else under names that sort -
+`Chico_campus.xlsx`, `Bessey_Hall_project.xlsx`, `BSS_103_room.xlsx` - each with
+its `.json` next to it. Nothing in that folder needs this app to open: it is
+spreadsheets and plain JSON, readable and editable with or without it.
+
+**The index** ties them together. Every publish also writes `index.xlsx` and
+`index.json`: one row per document, saying what it is, what it belongs to, what
+it holds, when it last went out and which files are its own - campus first, then
+the jobs on it, then the rooms in those. It accumulates, so a campus published in
+March is still on it in June with the date that says how old it is. The most
+useful table on it is the second one: what a job or a campus names that is *not*
+in the folder, so nobody hunts for a file that was never published. Delete either
+index file whenever you like; the next publish writes it again.
 
 
 # The Flow Rules builder

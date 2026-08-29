@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
@@ -246,6 +247,102 @@ void main() {
         contains('written'),
       );
       expect(p.project.onlinePublishedAt, isNotNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE OTHER TWO SCOPES
+  // -------------------------------------------------------------------------
+  //  A job is not the only thing people ask about. "What is in BSS 103" is a
+  //  room and "what does the estate need next year" is a campus, and all three
+  //  land in ONE folder under names that sort beside each other — which is
+  //  what makes it a set of records rather than three features' output.
+
+  group('publishing a room', () {
+    test('writes the room workbook and the room config, named for the room',
+        () async {
+      final file = path.join(dir.path, 'bss103_config.json');
+      File(file).writeAsStringSync(
+        '{"SYSTEM_SETUP":{"gve_bldg":"BSS","gve_room":"103"}}',
+      );
+      final p = AppStateProvider(autoLoadSettings: false)
+        ..currentConfigPath = file
+        ..roomConfig = {
+          'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
+        };
+      final f = syncFolder();
+
+      final result = await p.publishRoomOnlineCopy(folder: f);
+
+      expect(result.failed, isEmpty);
+      expect(result.written, ['BSS_103_room.xlsx', 'BSS_103_room_config.json']);
+      // Beside the job and the campus, under a name that sorts with them.
+      for (final name in result.written) {
+        expect(File(path.join(f, name)).existsSync(), isTrue);
+      }
+      // The folder is remembered for everything else that publishes.
+      expect(p.onlineFolder, f);
+    });
+
+    test('no room open is said, not guessed at', () async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      final result = await p.publishRoomOnlineCopy(folder: syncFolder());
+      expect(result.written, isEmpty);
+      expect(result.failed.single, contains('no room'));
+    });
+  });
+
+  group('publishing a campus', () {
+    test('writes the plan and the campus file beside the jobs it lists',
+        () async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      final f = syncFolder();
+      final campusFile = path.join(dir.path, 'chico_campus.json');
+      File(campusFile).writeAsStringSync(
+        '{"kind":"campus","name":"Chico","projects":[]}',
+      );
+
+      final result = await p.publishCampusOnlineCopy(
+        workbook: Uint8List.fromList([1, 2, 3]),
+        stem: 'Chico',
+        folder: f,
+        campusFilePath: campusFile,
+      );
+
+      expect(result.written, ['Chico_campus.xlsx', 'Chico_campus.json']);
+      // The campus file is COPIED, not re-serialised: it is somebody's
+      // document and may have been hand-edited.
+      expect(
+        File(path.join(f, 'Chico_campus.json')).readAsStringSync(),
+        contains('"name":"Chico"'),
+      );
+    });
+
+    test('a campus file that cannot be read still publishes the plan',
+        () async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      final f = syncFolder();
+
+      final result = await p.publishCampusOnlineCopy(
+        workbook: Uint8List.fromList([1, 2, 3]),
+        stem: 'Chico',
+        folder: f,
+        campusFilePath: path.join(dir.path, 'gone.json'),
+      );
+
+      // The half that could be written was written, which is what somebody
+      // asked for. Half a publish beats none.
+      expect(result.written, ['Chico_campus.xlsx']);
+    });
+
+    test('nowhere to publish is refused rather than guessed at', () async {
+      final p = AppStateProvider(autoLoadSettings: false);
+      final result = await p.publishCampusOnlineCopy(
+        workbook: Uint8List.fromList([1]),
+        stem: 'Chico',
+      );
+      expect(result.written, isEmpty);
+      expect(result.failed.single, contains('no folder'));
     });
   });
 

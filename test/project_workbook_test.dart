@@ -45,10 +45,19 @@ void main() {
     required String name,
     required List<AvNode> nodes,
     List<LaborLine> labor = const [],
+    /// The building code and room number the room signs and packing labels
+    /// use - 'BSS', '101'. Blank on a room whose config never had them, which
+    /// is how a name comes to stand in for a code.
+    String building = '',
+    String number = '',
   }) {
     final configPath = path.join(dir.path, '${stem}_config.json');
     File(configPath).writeAsStringSync(jsonEncode({
-      'SYSTEM_SETUP': {'gui_full_room_name': name},
+      'SYSTEM_SETUP': {
+        'gui_full_room_name': name,
+        if (building.isNotEmpty) 'gve_bldg': building,
+        if (number.isNotEmpty) 'gve_room': number,
+      },
     }));
     File(path.join(dir.path, '${stem}_config_av_flow.json'))
         .writeAsStringSync(jsonEncode({
@@ -520,6 +529,91 @@ void main() {
           .decodeBytes(buildProjectWorkbookBytes(estimate: estimate))),
       isNotEmpty,
     );
+  });
+
+  // -------------------------------------------------------------------------
+  //  THE ROOM, NAMED THE WAY THE JOB NAMES IT
+  // -------------------------------------------------------------------------
+  //  The columns that repeat a room once per part - which rooms a part is for,
+  //  which rooms asked for a spare, which room a device with no control module
+  //  is in - are read down the page rather than across it. A full building
+  //  name in them ('Behavioral and Social Science 103') makes the room the
+  //  widest column on the sheet and pushes the figures off the page, and it is
+  //  not what is on the door, the packing label or any other document the job
+  //  produces.
+
+  group('the room code, not the building name', () {
+    /// The same job, with the building code and room number set the way a
+    /// real config carries them.
+    ProjectEstimate codedJob() {
+      final a = writeRoom(
+        'ca',
+        name: 'Behavioral and Social Science 101',
+        building: 'BSS',
+        number: '101',
+        nodes: [
+          device('d1', 'Lectern TX', 'DTP2 T 211'),
+          device('d2', 'Room camera', 'RoboSHOT 12E'),
+        ],
+      );
+      final projectPath = path.join(dir.path, 'coded_project.json');
+      final project = BuildingProject(name: 'Bessey refresh', building: 'BSS');
+      project.rooms.add(ProjectRoomRef(
+        id: project.nextRoomId(),
+        configPath: BuildingProject.storePath(a, projectPath),
+      ));
+      project.vendors.add(const ProjectVendor(
+        id: 'v1',
+        name: 'Extron Direct',
+        manufacturers: ['Extron'],
+      ));
+      return computeProjectEstimate(
+        project: project,
+        projectPath: projectPath,
+        library: catalog(),
+      );
+    }
+
+    test('the which-rooms column reads BSS 101', () {
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: codedJob()));
+      final sheet = sheetNamed(archive, 'Core Components');
+
+      expect(sheet, contains('BSS 101'));
+      expect(
+        sheet,
+        isNot(contains('Behavioral and Social Science 101')),
+        reason: 'the long name is what this column was too wide for',
+      );
+    });
+
+    test('so does the control-gap sheet, which is worked through room by room',
+        () {
+      // Re-priced with no module lookup, so every drawn box reads as a device
+      // nothing will drive - the case the sheet exists for.
+      final estimate = computeProjectEstimate(
+        project: codedJob().project,
+        projectPath: path.join(dir.path, 'coded_project.json'),
+        library: catalog(),
+        deviceCountMap: const {},
+        moduleForModel: (_) => '',
+      );
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: estimate));
+
+      expect(estimate.controlGaps, isNotEmpty);
+      final sheet = sheetNamed(archive, kProjectControlSheet);
+      expect(sheet, contains('BSS 101'));
+      expect(sheet, isNot(contains('Behavioral and Social Science 101')));
+    });
+
+    test('a room with no code still says something', () {
+      // The fixture rooms have no gve_bldg at all: the name stands in, rather
+      // than the column coming out blank.
+      final archive = ZipDecoder()
+          .decodeBytes(buildProjectWorkbookBytes(estimate: job()));
+      expect(sheetNamed(archive, 'Core Components'), contains('Bessey 101'));
+    });
   });
 
   // -------------------------------------------------------------------------

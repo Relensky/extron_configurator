@@ -1858,6 +1858,17 @@ class BuildingProject {
   /// somebody points it at a folder there.
   String onlineFolder;
 
+  /// Rewrite the published copy every time the project file is saved.
+  ///
+  /// OFF unless somebody asks for it. Publishing on save is the difference
+  /// between a copy people trust and one they check the date on first — but it
+  /// writes to a folder that syncs to other people's screens, and doing that
+  /// unasked, every save, is not a decision this app gets to make for a job.
+  ///
+  /// It cannot be on without [onlineFolder], because there would be nowhere
+  /// for it to write.
+  bool onlineAutoPublish;
+
   /// When the published copy was last written, or null when it never has been.
   ///
   /// Kept so the app can say how stale the online version is. A published copy
@@ -2020,6 +2031,7 @@ class BuildingProject {
     List<ProjectRoomRef>? rooms,
     this.campusFile = '',
     this.onlineFolder = '',
+    this.onlineAutoPublish = false,
     this.onlinePublishedAt,
     List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
@@ -3321,6 +3333,7 @@ class BuildingProject {
     // there is one, so a job nobody has published does not grow keys saying
     // so - the same bargain campusFile makes above.
     if (onlineFolder.trim().isNotEmpty) 'onlineFolder': onlineFolder.trim(),
+    if (onlineAutoPublish) 'onlineAutoPublish': true,
     if (onlinePublishedAt != null)
       'onlinePublishedAt': onlinePublishedAt!.toIso8601String(),
     if (manualRooms.isNotEmpty)
@@ -3534,6 +3547,7 @@ class BuildingProject {
       rooms: rooms,
       campusFile: json['campusFile']?.toString().trim() ?? '',
       onlineFolder: json['onlineFolder']?.toString().trim() ?? '',
+      onlineAutoPublish: json['onlineAutoPublish'] == true,
       onlinePublishedAt: DateTime.tryParse(
         json['onlinePublishedAt']?.toString() ?? '',
       ),
@@ -3659,6 +3673,7 @@ class BuildingProject {
     rooms: List<ProjectRoomRef>.from(rooms),
     campusFile: campusFile,
     onlineFolder: onlineFolder,
+    onlineAutoPublish: onlineAutoPublish,
     onlinePublishedAt: onlinePublishedAt,
     manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
