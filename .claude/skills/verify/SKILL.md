@@ -29,10 +29,14 @@ description: Build, launch, and drive the Room Config Builder Windows app to ver
   `config.json` from the repo root (counts: 2 cameras, 1 projector, 1
   switcher, 1 power, wireless). Loading it triggers a "Legacy Config
   Updated" dialog (Acknowledge) and writes side artifacts **into the config's
-  folder**: `<Room>_old_config.json` backup, `config_backup_log.txt`,
-  `deployment_app_migration_log.txt` — delete these after testing, and never
-  save/export over the repo config.json. Prefer copying config.json to the
-  scratchpad and opening that copy.
+  folder**: `<Room>_old_config.json` backup, `config_backup_log.txt` — delete
+  these after testing, and never save/export over the repo config.json. Prefer
+  copying config.json to the scratchpad and opening that copy.
+- The three app logs (`deployment_app_error_log.txt`, `_info_log.txt`,
+  `_migration_log.txt`) no longer land in the working directory: they go to
+  `%APPDATA%\RoomConfigBuilder\logs`, which App Config's "Open log folder"
+  button opens. Under `flutter test` they go to a folder in the system temp
+  directory instead, so a test run no longer modifies anything tracked.
 
 ## Gotchas
 - `flutter analyze` baseline is ~60 info-level lints (exit code 1); errors

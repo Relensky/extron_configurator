@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as path;
 
+import 'app_logger.dart';
 import 'app_snack.dart';
 import 'campus_file.dart';
 import 'campus_lifecycle_view.dart'
@@ -19,6 +20,7 @@ import 'av_device_library.dart';
 import 'av_only_notice.dart';
 import 'av_flow_view.dart';
 import 'contrast.dart';
+import 'error_reporting.dart';
 import 'conversion_preview_view.dart';
 import 'cost_estimate_view.dart';
 import 'device_editor_view.dart';
@@ -50,6 +52,11 @@ import 'tab_export.dart';
 import 'workbook_export.dart';
 
 void main() {
+  // FIRST, before anything that could throw. See error_reporting.dart: without
+  // these, an unhandled error in a release build goes to a console that a
+  // double-clicked .exe does not have, and the log this app asks people to send
+  // in never hears about it.
+  installGlobalErrorHandlers();
   runApp(
     ChangeNotifierProvider(
       create: (_) => AppStateProvider(),
@@ -2714,13 +2721,31 @@ class AppSettingsView extends StatelessWidget {
                 }
               },
             ),
+            // Beside the recovery folder because they are the same question:
+            // where does this app put the things it writes for itself. A log
+            // somebody is asked to send in and cannot find is not a log.
+            OutlinedButton.icon(
+              icon: const Icon(Icons.article_outlined),
+              label: const Text('Open log folder'),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final error = await provider.openInDesktop(AppLogger.logFolder);
+                if (error != null) {
+                  showTimedSnackBar(
+                    messenger,
+                    SnackBar(content: Text(error)),
+                  );
+                }
+              },
+            ),
           ],
         ),
         const SizedBox(height: 10),
         Text(
           '${autosaveStatusLine(provider)}\n'
           'Recovery copies live in ${provider.autosaveFolder}, one folder '
-          'per file, and each is deleted as soon as its document is saved.',
+          'per file, and each is deleted as soon as its document is saved.\n'
+          'The error, info and migration logs live in ${AppLogger.logFolder}.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 20),
