@@ -109,6 +109,29 @@ enum AppTab {
       this == AppTab.project;
 }
 
+/// Which of the room's three histories a room-level undo step lives in.
+///
+/// The room is not one document. Its drawings and its estimate are slices of a
+/// sidecar recorded per EDIT; its config is a second file recorded as whole
+/// STATES on a settle; its control schematic is a third, a layout snapshot per
+/// edit. Each was built that way for its own good reasons — see the notes over
+/// [AvUndoScope], [DocumentHistory] and [AppStateProvider.undoSchematic] — and
+/// none of them is worth rewriting into the others.
+///
+/// So the room-level Undo does not replace them. It keeps a SPINE: the order
+/// the steps happened in, and which history each one is waiting in. One press
+/// pops the newest and hands it to whichever history owns it.
+enum RoomUndoSource { drawing, config, schematic }
+
+/// One entry on that spine: where the step is, and the tab it happened on.
+///
+/// The tab is carried so a press can take somebody TO the change it is about
+/// to make. A room-wide Undo that silently rolled back a floor plan while the
+/// user stood on the Cost tab would be a button that appears to do nothing —
+/// which is the whole objection to a single history, and the reason this field
+/// exists rather than being worked out afterwards from what moved.
+typedef RoomUndoStep = ({RoomUndoSource source, AppTab? tab});
+
 /// How far along a room is.
 ///
 /// A room is usually specified long before anybody writes its control config —
@@ -1656,11 +1679,14 @@ class AppStateProvider extends ChangeNotifier {
 
   /// Records the layout BEFORE [label] happens.
   void _pushSchematicUndo(String label) {
+    // Same ordering rule as the drawing push — see [_pushAvUndo].
+    _configUndo.flush();
     _schematicUndoStack.add(_schematicLayout(label));
     if (_schematicUndoStack.length > _kMaxUndoDepth) {
       _schematicUndoStack.removeAt(0);
     }
     _schematicRedoStack.clear();
+    _noteRoomStep(RoomUndoSource.schematic, AppTab.schematic);
   }
 
   /// Puts the layout back the way it was before the last edit. Returns what
@@ -1908,6 +1934,7 @@ class AppStateProvider extends ChangeNotifier {
     // A different room's edits are not this room's to undo — or to redo.
     _schematicUndoStack.clear();
     _schematicRedoStack.clear();
+    _resetRoomSpine();
     schematicPositions.clear();
     schematicLinks.clear();
     schematicHiddenEdges.clear();
@@ -2441,9 +2468,16 @@ class AppStateProvider extends ChangeNotifier {
       return;
     }
 
+    // ANY CONFIG TYPING GOES DOWN FIRST. It files on a settle rather than on
+    // the keystroke, so without this a field edited a moment ago would land on
+    // the room's spine AFTER the drawing edit that followed it, and one press
+    // of the room's Undo would take back the wrong one. See [undoRoom].
+    _configUndo.flush();
+
     _avUndoStack.add((label: label, slices: _sliceAvFlow(scopes)));
     if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
     _avUndoRun = coalesce.isEmpty ? null : (key: coalesce, at: now);
+    _noteRoomStep(RoomUndoSource.drawing, _drawingStepTab(scopes));
   }
 
   /// Puts [scope]'s tab back the way it was before its last edit. Returns what
@@ -5739,6 +5773,7 @@ class AppStateProvider extends ChangeNotifier {
     // A different room's edits are not this room's to undo — or redo.
     _avUndoStack.clear();
     _avRedoStack.clear();
+    _resetRoomSpine();
   }
 
   /// Keeps the in-memory AV diagram for the working config, ignoring the
@@ -11143,6 +11178,11 @@ class AppStateProvider extends ChangeNotifier {
     history: _configHistory,
     snapshot: _configSnapshot,
     label: _configEditLabel,
+    // THE ONLY MOMENT THIS DOCUMENT CAN BE PUT ON THE ROOM'S TIMELINE. The
+    // other two histories file as the edit happens and note their own place;
+    // this one files late, so it says where it belongs when it lands. See
+    // [undoRoom].
+    onRecorded: (_) => _noteRoomStep(RoomUndoSource.config, _configStepTab),
   );
 
   /// The file the current history is about. A change of this is a change of
@@ -11213,6 +11253,9 @@ class AppStateProvider extends ChangeNotifier {
     _configUndo.cancel();
     _configHistoryPath = currentConfigPath;
     _configHistory.begin(_configSnapshot());
+    // A change of room here is a change of room for all three histories, and
+    // a spine still pointing at the last one would offer steps nothing holds.
+    _resetRoomSpine();
   }
 
   /// Called from [notifyListeners]: files the config as it settles, and starts
@@ -11277,6 +11320,328 @@ class AppStateProvider extends ChangeNotifier {
     });
   }
 
+  // -------------------------------------------------------------------------
+  //  ONE UNDO FOR THE WHOLE ROOM
+  // -------------------------------------------------------------------------
+  //  A room used to answer "what does Undo do" six different ways. The four
+  //  drawing tabs and the estimate each had their own pair of buttons over
+  //  their own slice of the sidecar; the config had a seventh pair in the
+  //  title bar; the control schematic had an eighth on its own page. Every one
+  //  of them worked, and between them they meant that taking back the last
+  //  thing you did required first remembering which tab you had done it on —
+  //  which is exactly the thing somebody reaching for Undo has lost track of.
+  //
+  //  SO THE ROOM GETS ONE PAIR, AND THE PAIR KNOWS WHERE TO GO. The histories
+  //  underneath are untouched — they are three different mechanisms for three
+  //  good reasons, and each still names its own steps far better than a
+  //  document-wide diff could. What is new is the SPINE: the order the steps
+  //  happened in, and which history is holding each one. One press pops the
+  //  newest, hands it to its owner, and moves the view to the tab that change
+  //  is on, so the edit coming back is one somebody can see.
+  //
+  //  KEEPING THE ORDER HONEST ACROSS THREE MECHANISMS. Two of them file the
+  //  instant the edit happens and can note their place as they go. The config
+  //  does not — it files late, on a settle, so an edit made before a drawing
+  //  edit could land on the spine after it. That is why every synchronous push
+  //  flushes the config first: the late one goes down in the place it actually
+  //  happened, rather than the place it got round to being encoded.
+  //
+  //  WHY THE SPINE IS ALLOWED TO BE WRONG. Each history caps its own depth and
+  //  drops its oldest step when it overflows, and there is no way to keep three
+  //  independent caps in lockstep with one list that is worth the code. So the
+  //  spine is treated as a HINT: a step whose history can no longer act on it
+  //  is skipped rather than trusted, and the buttons ask the same question they
+  //  act on, so one cannot be lit while the other does nothing.
+
+  /// The order the room's steps happened in — see the note above.
+  final List<RoomUndoStep> _roomUndoSpine = [];
+
+  /// The same, for what Undo has taken back and Redo would put again.
+  final List<RoomUndoStep> _roomRedoSpine = [];
+
+  /// Deep enough to outlive the three histories it points into, which cap at
+  /// [kUndoDepth] each. A spine entry is two enum values, so the slack is free.
+  static const int _kRoomSpineDepth = kUndoDepth * 3;
+
+  /// Which scope each room tab is a VIEW of.
+  ///
+  /// Read when a step is filed, to answer "is the page somebody is standing on
+  /// already showing the thing they just changed" — if it is, an Undo of that
+  /// step should leave them where they are rather than march them somewhere
+  /// else that happens to own the same slice. The Lifecycle page is in here
+  /// deliberately: it files under the AV Flow scope because that is where the
+  /// boxes live, and being thrown onto the diagram after editing a survey date
+  /// would be a worse answer than staying put.
+  static const Map<AppTab, AvUndoScope> _kTabScope = {
+    AppTab.avFlow: AvUndoScope.flow,
+    AppTab.lifecycle: AvUndoScope.flow,
+    AppTab.racks: AvUndoScope.racks,
+    AppTab.floorPlan: AvUndoScope.floorPlans,
+    AppTab.cabling: AvUndoScope.cabling,
+    AppTab.cost: AvUndoScope.cost,
+  };
+
+  /// The tab that OWNS each scope — where a step goes when the page it was made
+  /// on is not one that shows it (a price set from the Project tab, a node
+  /// dropped by a wizard step).
+  static const Map<AvUndoScope, AppTab> _kScopeTab = {
+    AvUndoScope.flow: AppTab.avFlow,
+    AvUndoScope.racks: AppTab.racks,
+    AvUndoScope.floorPlans: AppTab.floorPlan,
+    AvUndoScope.cabling: AppTab.cabling,
+    AvUndoScope.cost: AppTab.cost,
+  };
+
+  /// Which scope speaks for an edit that touched several.
+  ///
+  /// A few edits genuinely span tabs — removing a location clears it off the
+  /// plans, the devices and the runs; drawing a device puts a line on the
+  /// estimate — and the view has to land on ONE of them. It lands on the one
+  /// where the change is most visible, which is the drawing rather than the
+  /// money: somebody who removed a location wants to see the plan it came off.
+  static const List<AvUndoScope> _kScopeVisibility = [
+    AvUndoScope.floorPlans,
+    AvUndoScope.flow,
+    AvUndoScope.racks,
+    AvUndoScope.cabling,
+    AvUndoScope.cost,
+  ];
+
+  /// The four tabs that edit the config file. A config step made anywhere else
+  /// — a dialog, a preset applied off the Project tab — has no page of its own
+  /// to go back to, and is left without one rather than guessing.
+  static const Set<AppTab> _kConfigTabs = {
+    AppTab.wizard,
+    AppTab.devices,
+    AppTab.system,
+    AppTab.rawJson,
+  };
+
+  /// The tab in front of the user, or null while the index is out of range —
+  /// which it can be for a frame while the rail rebuilds.
+  AppTab? get _tabNow =>
+      selectedTabIndex >= 0 && selectedTabIndex < AppTab.values.length
+          ? AppTab.values[selectedTabIndex]
+          : null;
+
+  /// Where an Undo of a drawing edit over [scopes] should leave somebody.
+  AppTab _drawingStepTab(Set<AvUndoScope> scopes) {
+    // Already looking at it: stay put.
+    final here = _tabNow;
+    final shown = here == null ? null : _kTabScope[here];
+    if (shown != null && scopes.contains(shown)) return here!;
+    for (final scope in _kScopeVisibility) {
+      if (scopes.contains(scope)) return _kScopeTab[scope]!;
+    }
+    return AppTab.avFlow;
+  }
+
+  /// Where an Undo of a config step should leave somebody, or null when the
+  /// edit was not made on one of the pages that edits the config.
+  AppTab? get _configStepTab {
+    final here = _tabNow;
+    return here != null && _kConfigTabs.contains(here) ? here : null;
+  }
+
+  /// Files a step on the spine, and ends the room's future.
+  ///
+  /// A NEW EDIT ENDS THE FUTURE for the room as a whole, not just for the
+  /// history the edit landed in. The three underlying stacks each clear their
+  /// own forward state on their own terms — the drawings per scope, the config
+  /// wholesale — and a room-level Redo offering a step from a branch the room
+  /// has since left would put back something nobody undid.
+  void _noteRoomStep(RoomUndoSource source, AppTab? tab) {
+    _roomUndoSpine.add((source: source, tab: tab));
+    if (_roomUndoSpine.length > _kRoomSpineDepth) _roomUndoSpine.removeAt(0);
+    _roomRedoSpine.clear();
+  }
+
+  /// Throws away the room's spine — a different room's edits are not this
+  /// room's to undo.
+  void _resetRoomSpine() {
+    _roomUndoSpine.clear();
+    _roomRedoSpine.clear();
+  }
+
+  /// Whether [source]'s history can actually act, in the direction asked.
+  bool _roomStepIsLive(RoomUndoSource source, {required bool redo}) =>
+      switch (source) {
+        RoomUndoSource.drawing =>
+          redo ? _avRedoStack.isNotEmpty : _avUndoStack.isNotEmpty,
+        RoomUndoSource.schematic => redo
+            ? _schematicRedoStack.isNotEmpty
+            : _schematicUndoStack.isNotEmpty,
+        RoomUndoSource.config =>
+          redo ? _configHistory.canRedo : _configHistory.canUndo,
+      };
+
+  /// The newest step either button could act on, without disturbing anything —
+  /// stale entries are looked past, not removed, because this is read from a
+  /// build.
+  RoomUndoStep? _topRoomStep(List<RoomUndoStep> spine, {required bool redo}) {
+    for (var i = spine.length - 1; i >= 0; i--) {
+      if (_roomStepIsLive(spine[i].source, redo: redo)) return spine[i];
+    }
+    return null;
+  }
+
+  /// Whether the room has anything behind it, across all three of its
+  /// histories.
+  ///
+  /// [UndoRecorder.pending] counts, as it does everywhere else: an edit typed
+  /// into a form a moment ago has not been filed yet, and a button that greyed
+  /// out for a third of a second after every keystroke would read as broken.
+  /// It has no spine entry until it is filed, which is what the flush at the
+  /// top of [undoRoom] is for.
+  bool get canUndoRoom =>
+      _configUndo.pending || _topRoomStep(_roomUndoSpine, redo: false) != null;
+
+  bool get canRedoRoom => _topRoomStep(_roomRedoSpine, redo: true) != null;
+
+  /// What the buttons say they would put back.
+  ///
+  /// '' while a config edit is still settling: the step exists — the button is
+  /// lit for it — but it has not been encoded yet, so its name is not known
+  /// and cannot be invented. The button falls back to naming the room instead.
+  String get roomUndoLabel => _configUndo.pending
+      ? ''
+      : _roomStepLabel(_topRoomStep(_roomUndoSpine, redo: false), redo: false);
+
+  String get roomRedoLabel =>
+      _roomStepLabel(_topRoomStep(_roomRedoSpine, redo: true), redo: true);
+
+  String _roomStepLabel(RoomUndoStep? step, {required bool redo}) =>
+      switch (step?.source) {
+        null => '',
+        RoomUndoSource.drawing => redo
+            ? (_avRedoStack.isEmpty ? '' : _avRedoStack.last.label)
+            : (_avUndoStack.isEmpty ? '' : _avUndoStack.last.label),
+        RoomUndoSource.schematic =>
+          redo ? schematicRedoLabel : schematicUndoLabel,
+        RoomUndoSource.config =>
+          redo ? _configHistory.redoLabel : _configHistory.undoLabel,
+      };
+
+  /// The tab a press of the room's Undo would take somebody to, or null when
+  /// it would leave them where they are.
+  ///
+  /// Read by the tooltip, so the move is announced BEFORE the press rather
+  /// than discovered after it. A button that silently changes the page under
+  /// somebody is worse than one that does not move at all.
+  AppTab? get roomUndoTab => _topRoomStep(_roomUndoSpine, redo: false)?.tab;
+
+  AppTab? get roomRedoTab => _topRoomStep(_roomRedoSpine, redo: true)?.tab;
+
+  /// How far back the room can go, counting every history — for the tooltip.
+  int get roomUndoDepth => _roomUndoSpine
+      .where((s) => _roomStepIsLive(s.source, redo: false))
+      .length;
+
+  int get roomRedoDepth =>
+      _roomRedoSpine.where((s) => _roomStepIsLive(s.source, redo: true)).length;
+
+  /// Takes back the last thing done anywhere in this room, and shows it.
+  ///
+  /// Returns what was undone, or '' when there was nothing to act on.
+  String undoRoom() {
+    // Any typing still settling in a form becomes a step first, so it goes on
+    // the spine in the place it happened and this press takes back the newest
+    // edit rather than the one before it.
+    _configUndo.flush();
+    while (_roomUndoSpine.isNotEmpty) {
+      final step = _roomUndoSpine.removeLast();
+      if (!_roomStepIsLive(step.source, redo: false)) continue;
+      final label = switch (step.source) {
+        RoomUndoSource.drawing => _undoNewestAvEdit(),
+        RoomUndoSource.schematic => undoSchematic(),
+        RoomUndoSource.config => undoRoomConfig(),
+      };
+      if (label.isEmpty) continue;
+      _roomRedoSpine.add(step);
+      if (_roomRedoSpine.length > _kRoomSpineDepth) _roomRedoSpine.removeAt(0);
+      _showRoomStep(step.tab);
+      return label;
+    }
+    return '';
+  }
+
+  /// Puts back what the last room-level Undo took away, and shows it.
+  String redoRoom() {
+    _configUndo.flush();
+    while (_roomRedoSpine.isNotEmpty) {
+      final step = _roomRedoSpine.removeLast();
+      if (!_roomStepIsLive(step.source, redo: true)) continue;
+      final label = switch (step.source) {
+        RoomUndoSource.drawing => _redoNewestAvEdit(),
+        RoomUndoSource.schematic => redoSchematic(),
+        RoomUndoSource.config => redoRoomConfig(),
+      };
+      if (label.isEmpty) continue;
+      _roomUndoSpine.add(step);
+      if (_roomUndoSpine.length > _kRoomSpineDepth) _roomUndoSpine.removeAt(0);
+      _showRoomStep(step.tab);
+      return label;
+    }
+    return '';
+  }
+
+  /// Moves the view to [tab] so the change that has just moved is on screen.
+  ///
+  /// NOT THROUGH [selectTab]. That flushes every recorder on the way past,
+  /// which is right when a PERSON leaves a page — the step ends at a boundary
+  /// they made — and wrong in the middle of an undo, where the only thing it
+  /// could file is the restore itself. Nothing is filed here, and the notify
+  /// only happens when the page actually changes: the restore has already sent
+  /// one of its own.
+  void _showRoomStep(AppTab? tab) {
+    if (tab == null) return;
+    final index = tab.index;
+    if (index == selectedTabIndex) return;
+    selectedTabIndex = index;
+    _lastRoomTabIndex = index;
+    notifyListeners();
+  }
+
+  /// Undoes the newest drawing edit, whatever tab it was made on.
+  ///
+  /// The scoped [undoAvFlow] cannot be used for this. It looks for the newest
+  /// edit in ONE scope and refuses when a later edit in another scope would be
+  /// rolled back with it — a guard that exists because five separate buttons
+  /// could each reach into the middle of one shared stack. A room-level press
+  /// always takes the newest edit there is, so there is nothing later for it to
+  /// disturb and nothing for it to be blocked by.
+  String _undoNewestAvEdit() {
+    if (_avUndoStack.isEmpty) return '';
+    // A press ends the run of typing, so the next keystroke is not folded into
+    // the step that has just been taken back.
+    _avUndoRun = null;
+    final edit = _avUndoStack.removeLast();
+    _avRedoStack.add((
+      label: edit.label,
+      slices: _sliceAvFlow(edit.slices.keys),
+    ));
+    if (_avRedoStack.length > _kMaxUndoDepth) _avRedoStack.removeAt(0);
+    _restoreAvFlowSlices(edit.slices);
+    AppLogger.logInfo('Undid: ${edit.label}');
+    notifyListeners();
+    return edit.label;
+  }
+
+  /// The same from the other side — see [_undoNewestAvEdit].
+  String _redoNewestAvEdit() {
+    if (_avRedoStack.isEmpty) return '';
+    _avUndoRun = null;
+    final edit = _avRedoStack.removeLast();
+    _avUndoStack.add((
+      label: edit.label,
+      slices: _sliceAvFlow(edit.slices.keys),
+    ));
+    if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
+    _restoreAvFlowSlices(edit.slices);
+    AppLogger.logInfo('Redid: ${edit.label}');
+    notifyListeners();
+    return edit.label;
+  }
 
   // -------------------------------------------------------------------------
   //  UNDO FOR THE THREE DOCUMENTS ABOUT THE APP ITSELF

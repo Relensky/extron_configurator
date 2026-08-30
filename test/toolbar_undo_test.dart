@@ -52,24 +52,25 @@ void main() {
   }
 
   group('where the pair belongs', () {
-    test('the tabs that own a document with no canvas get it', () {
+    test('the job and the three app documents each get their own', () {
       expect(toolbarUndoTarget(AppTab.project), ToolbarUndoTarget.project);
+      expect(toolbarUndoTarget(AppTab.deviceEditor), ToolbarUndoTarget.catalog);
+      expect(toolbarUndoTarget(AppTab.schemaEditor), ToolbarUndoTarget.schema);
+      expect(toolbarUndoTarget(AppTab.flowRules), ToolbarUndoTarget.flowRules);
+    });
+
+    test('EVERY page that edits the room answers with the room', () {
+      // The point of the arrangement. These eleven pages are eleven views of
+      // one room, and they used to answer this six different ways — a pair on
+      // each drawing, one on the estimate, one on the schematic, one up here
+      // for the config. Taking back the last thing you did meant first
+      // remembering which tab you did it on, which is the one thing somebody
+      // reaching for Undo has lost track of.
       for (final tab in [
         AppTab.wizard,
         AppTab.devices,
         AppTab.system,
         AppTab.rawJson,
-      ]) {
-        expect(toolbarUndoTarget(tab), ToolbarUndoTarget.roomConfig,
-            reason: '${tab.name} is a view of the room config');
-      }
-    });
-
-    test('a page that draws its own pair does not get a second one', () {
-      // TWO UNDO BUTTONS ON ONE SCREEN MEANING TWO THINGS is worse than one of
-      // them being missing: somebody presses the near one and the far one is
-      // what they meant.
-      for (final tab in [
         AppTab.cost,
         AppTab.lifecycle,
         AppTab.schematic,
@@ -78,8 +79,13 @@ void main() {
         AppTab.cabling,
         AppTab.racks,
       ]) {
-        expect(toolbarUndoTarget(tab), isNull, reason: tab.name);
+        expect(toolbarUndoTarget(tab), ToolbarUndoTarget.room,
+            reason: '${tab.name} is a view of the room');
       }
+    });
+
+    test('settings are not a document, and get no pair', () {
+      expect(toolbarUndoTarget(AppTab.appConfig), isNull);
     });
   });
 

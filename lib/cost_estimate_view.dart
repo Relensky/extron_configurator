@@ -29,9 +29,7 @@ import 'legible_theme.dart';
 import 'live_text_field.dart';
 import 'print_mode.dart';
 import 'report_tools.dart';
-import 'room_sidecar.dart' show AvUndoScope;
 import 'screenshot_tools.dart';
-import 'undo_bar.dart';
 import 'xlsx_writer.dart';
 
 /// ============================================================================
@@ -479,19 +477,6 @@ class _CostEstimateViewState extends State<CostEstimateView> {
                 // Every control drops out for the frame the screenshot
                 // catches, so the image is the quote and nothing else.
                 if (!_capturing) ...[
-                  // THE WAY BACK OFF A TYPED PRICE. This page had no history
-                  // at all until recently: a negotiated figure typed over a
-                  // catalog one, a fee, a labor line, a whole quote re-sorted
-                  // — all of them one-way. It is a scope like the drawing
-                  // tabs now, sixty deep and reversible both ways.
-                  ...avUndoRedoButtons(
-                    provider,
-                    AvUndoScope.cost,
-                    onDone: (message) => showTimedSnackBar(
-                      ScaffoldMessenger.of(context),
-                      SnackBar(content: Text(message)),
-                    ),
-                  ),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.engineering, size: 18),
                     label: const Text('Labor rates'),

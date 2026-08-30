@@ -7,8 +7,9 @@ import 'package:extron_configurator/av_device_library.dart';
 import 'package:extron_configurator/av_flow_model.dart';
 import 'package:extron_configurator/cost_estimate_view.dart';
 import 'package:extron_configurator/ui_schema.dart';
+import 'package:extron_configurator/undo_bar.dart';
 
-/// THE UNDO BUTTON ON THE COST TAB, PRESSED THE WAY SOMEBODY PRESSES IT.
+/// THE UNDO BUTTON OVER THE COST TAB, PRESSED THE WAY SOMEBODY PRESSES IT.
 ///
 /// The provider-level tests say the estimate can be taken back. This one says
 /// the BUTTON does it, on a price typed into the box, with the box showing the
@@ -19,6 +20,12 @@ import 'package:extron_configurator/ui_schema.dart';
 /// one press took the room back to `149` — a button that appears to do
 /// nothing. And a box that kept showing what was typed after the value behind
 /// it had gone back would be the same complaint from the other end.
+///
+/// The pair is the ROOM's now, in the title bar, rather than one this page
+/// draws for itself — a price and a moved box are both things done to this
+/// room, and which of them was last is not a question somebody should answer
+/// by remembering which tab they were on. What is asserted here is unchanged:
+/// the press has to take back the whole typed figure and the box has to agree.
 void main() {
   late UiSchema schema;
   setUpAll(() async {
@@ -42,6 +49,10 @@ void main() {
           ports: [],
         ),
       );
+    // FIXTURE, NOT AN EDIT. The room-level history covers the whole room, so a
+    // box put here to have something to price would otherwise be the first
+    // thing Undo offered to take away — and the tests below are about the
+    // price, not about the projector.
     p.addAvNode(
       const AvNode(
         id: 'PROJECTORDEVICE_1',
@@ -50,10 +61,13 @@ void main() {
         pos: Offset.zero,
         ports: [],
       ),
+      recordUndo: false,
     );
     return p;
   }
 
+  /// The page under the bar that carries its Undo, which is where the buttons
+  /// really are — see [ToolbarUndoButtons].
   Future<void> pump(WidgetTester tester, AppStateProvider p) async {
     tester.view.physicalSize = const Size(1900, 1600);
     tester.view.devicePixelRatio = 1.0;
@@ -61,7 +75,16 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<AppStateProvider>.value(
         value: p,
-        child: const MaterialApp(home: Scaffold(body: CostEstimateView())),
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                ToolbarUndoButtons(tab: AppTab.cost),
+                Expanded(child: CostEstimateView()),
+              ],
+            ),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -77,11 +100,11 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 6));
   }
 
-  /// The estimate's OWN pair, by key. The app has several undo arrows and
-  /// they mean different things — finding one by its icon would be the same
-  /// mistake this whole file is about.
-  Finder undo() => find.byKey(const ValueKey('cost_undo'));
-  Finder redo() => find.byKey(const ValueKey('cost_redo'));
+  /// The room's pair, by key. The app has several undo arrows and they mean
+  /// different things — finding one by its icon would be the same mistake this
+  /// whole file is about.
+  Finder undo() => find.byKey(const ValueKey('toolbar_undo'));
+  Finder redo() => find.byKey(const ValueKey('toolbar_redo'));
 
   testWidgets('a price typed digit by digit goes back in one press',
       (tester) async {
@@ -99,7 +122,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(p.avCost.priceOverrides['model:powerlite l630u'], 1499);
 
-    expect(undo(), findsOneWidget, reason: 'the pair is on the page');
+    expect(undo(), findsOneWidget, reason: 'the pair is over the page');
     await press(tester, undo());
 
     // ONE PRESS, THE WHOLE PRICE. Not '149'.
@@ -146,13 +169,32 @@ void main() {
     expect(p.avCost.priceOverrides['model:powerlite l630u'], 1499);
   });
 
-  testWidgets('the pair is dark on a quote nobody has touched', (tester) async {
+  testWidgets('the button says what it would take back, and where it is',
+      (tester) async {
+    final p = room();
+    await pump(tester, p);
+
+    p.setAvCostPrice('model:powerlite l630u', 1499);
+    await tester.pumpAndSettle();
+
+    // NAMED, because "Undo" alone asks somebody to remember what they last
+    // did, which is what the person reaching for it has lost track of.
+    expect(tester.widget<IconButton>(undo()).tooltip, contains('Price'));
+    // And no detour offered: the price is on the page already in front of
+    // them, so the press leaves them where they are.
+    expect(
+      tester.widget<IconButton>(undo()).tooltip,
+      isNot(contains('This goes to')),
+    );
+  });
+
+  testWidgets('the pair is dark on a room nobody has touched', (tester) async {
     final p = room();
     await pump(tester, p);
 
     // An Undo that is lit and does nothing when pressed is the failure this
     // whole file is about.
-    expect(tester.widget<OutlinedButton>(undo()).onPressed, isNull);
-    expect(tester.widget<OutlinedButton>(redo()).onPressed, isNull);
+    expect(tester.widget<IconButton>(undo()).onPressed, isNull);
+    expect(tester.widget<IconButton>(redo()).onPressed, isNull);
   });
 }

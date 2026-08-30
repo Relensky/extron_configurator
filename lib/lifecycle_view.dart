@@ -12,9 +12,7 @@ import 'project_lifecycle_view.dart'
     show LifecyclePlanSheet, LifecycleYearGrid, lifecycleFileStemFor;
 import 'pinned_grid.dart' show gridMetric;
 import 'project_estimate.dart' show roomCodeFromConfig;
-import 'room_sidecar.dart' show AvUndoScope;
 import 'stepped_date_picker.dart';
-import 'undo_bar.dart' show avUndoRedoIconButtons;
 
 /// ============================================================================
 ///  THE ROOM'S LIFECYCLE TAB
@@ -486,25 +484,6 @@ class _RoomActions extends StatelessWidget {
       label: const Text('Picture…'),
     );
 
-    // THE WAY BACK OUT OF A SURVEY. Every edit on this page already files an
-    // undo entry — a typed install date, a life in years, a box taken off the
-    // cycle — and the entries are named after the box they moved, because a
-    // survey is eleven dates typed in a row and "Undo" alone would not say
-    // which of them was about to come back. What was missing was the pair of
-    // buttons: the history was there and nothing on the page reached it.
-    //
-    // Filed under the AV Flow scope because that is where the boxes live. It
-    // is the same history the diagram's own Undo reads, which is right: this
-    // page and that one are editing the same devices.
-    final undoRedo = avUndoRedoIconButtons(
-      context.watch<AppStateProvider>(),
-      AvUndoScope.flow,
-      onDone: (message) => showTimedSnackBar(
-        ScaffoldMessenger.of(context),
-        SnackBar(content: Text(message)),
-      ),
-    );
-
     final note = Text(
       undated == 0
           ? 'Every item has a date. Use this to move them all to a new one '
@@ -557,7 +536,7 @@ class _RoomActions extends StatelessWidget {
                 Wrap(
                   spacing: gap,
                   runSpacing: gap * 0.5,
-                  children: [date, picture, ...undoRedo, ?reveal],
+                  children: [date, picture, ?reveal],
                 ),
                 SizedBox(height: gap * 0.6),
                 note,
@@ -569,8 +548,6 @@ class _RoomActions extends StatelessWidget {
               date,
               SizedBox(width: gap),
               picture,
-              SizedBox(width: gap),
-              ...undoRedo,
               SizedBox(width: gap),
               Expanded(child: note),
               if (reveal != null) ...[SizedBox(width: gap), reveal],

@@ -198,6 +198,7 @@ class UndoRecorder {
     required this.history,
     required this.snapshot,
     required this.label,
+    this.onRecorded,
     this.settle = const Duration(milliseconds: 350),
   });
 
@@ -214,6 +215,17 @@ class UndoRecorder {
   /// that; one that does not works it out by comparing the two encodings, which
   /// is why both are handed over.
   final String Function(String before, String after) label;
+
+  /// Called with the step's name when one is actually filed, and not when a
+  /// notification turns out to have changed nothing.
+  ///
+  /// WHAT THIS IS FOR. A document recorded here is one of several a room is
+  /// made of, and a room-wide Undo has to walk all of them in the order the
+  /// edits happened. The other histories file synchronously and can note their
+  /// own place in that order; this one files LATE, on a settle, so the only
+  /// moment it can be pinned to the timeline is the moment it lands. That is
+  /// here. See [AppStateProvider.undoRoom].
+  final void Function(String label)? onRecorded;
 
   /// The shortest a step can be. Edits closer together than this are one step.
   final Duration settle;
@@ -292,7 +304,8 @@ class UndoRecorder {
     final after = _seen ?? snapshot();
     _seen = null;
     _changed = null;
-    history.record(label(before, after), after);
+    final name = label(before, after);
+    if (history.record(name, after)) onRecorded?.call(name);
   }
 
   /// Forgets what has changed without filing it — the document it was about is

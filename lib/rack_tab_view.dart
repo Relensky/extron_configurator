@@ -9,8 +9,6 @@ import 'av_rack_view.dart';
 import 'diagram_capture.dart';
 import 'export_tools.dart';
 import 'screenshot_tools.dart';
-import 'room_sidecar.dart' show AvUndoScope;
-import 'undo_bar.dart';
 
 /// ============================================================================
 ///  RACKS TAB
@@ -88,18 +86,6 @@ class _RackTabViewState extends State<RackTabView> {
                 label: const Text('Edit'),
                 selected: _editMode,
                 onSelected: (v) => setState(() => _editMode = v),
-              ),
-              // The frames and what is racked in them. An edit made on the
-              // signal flow is undone there, not here.
-              ...avUndoRedoButtons(
-                provider,
-                AvUndoScope.racks,
-                onDone: (message) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(message)));
-                },
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.save, size: 18),

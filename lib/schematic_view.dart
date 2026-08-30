@@ -1340,55 +1340,11 @@ class _SchematicViewState extends State<SchematicView> {
             label: const Text('Colors'),
             onPressed: () => _showColorsDialog(provider),
           ),
-          // Undoes the last layout edit: a moved node, a drawn or deleted
-          // line, a color, a Reset Layout.
-          Tooltip(
-            message: provider.canUndoSchematic
-                ? 'Undo on the control schematic: '
-                    '${provider.schematicUndoLabel}'
-                : 'Nothing to undo on the control schematic. This drawing '
-                    'keeps its own history, separate from the other tabs.',
-            child: OutlinedButton.icon(
-              key: const ValueKey('schematic_undo'),
-              icon: const Icon(Icons.undo, size: 18),
-              label: Text(
-                provider.canUndoSchematic
-                    ? 'Undo: ${provider.schematicUndoLabel}'
-                    : 'Undo',
-              ),
-              onPressed: provider.canUndoSchematic
-                  ? () {
-                      final undone = provider.undoSchematic();
-                      if (undone.isNotEmpty) _snack('Undid: $undone');
-                    }
-                  : null,
-            ),
-          ),
-          // AND FORWARD AGAIN. This page went one way for a long time, which
-          // is why people here were wary of pressing Undo at all: on every
-          // other page an undo can be reconsidered, and on this one it could
-          // not.
-          Tooltip(
-            message: provider.canRedoSchematic
-                ? 'Redo on the control schematic: '
-                    '${provider.schematicRedoLabel}'
-                : 'Nothing to redo on the control schematic.',
-            child: OutlinedButton.icon(
-              key: const ValueKey('schematic_redo'),
-              icon: const Icon(Icons.redo, size: 18),
-              label: Text(
-                provider.canRedoSchematic
-                    ? 'Redo: ${provider.schematicRedoLabel}'
-                    : 'Redo',
-              ),
-              onPressed: provider.canRedoSchematic
-                  ? () {
-                      final redone = provider.redoSchematic();
-                      if (redone.isNotEmpty) _snack('Redid: $redone');
-                    }
-                  : null,
-            ),
-          ),
+          // The layout's own Undo used to stand here. It is in the title bar
+          // now, with everything else in the room: a moved node and a retyped
+          // price are both things done to this room, and which of them was
+          // last is a question somebody should not have to answer by
+          // remembering which tab they were on. See [ToolbarUndoButtons].
           const SizedBox(width: 8),
           ElevatedButton.icon(
             icon: const Icon(Icons.image, size: 18),

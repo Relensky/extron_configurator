@@ -21,9 +21,7 @@ import 'diagram_grid.dart';
 import 'layout_tools.dart';
 import 'live_text_field.dart';
 import 'report_tools.dart';
-import 'room_sidecar.dart' show AvUndoScope;
 import 'run_painting.dart';
-import 'undo_bar.dart';
 import 'screenshot_tools.dart';
 import 'view_zoom.dart';
 import 'xlsx_writer.dart';
@@ -532,9 +530,6 @@ class _CablingViewState extends State<CablingView> {
           // The drawing is what the trades are handed; the schedule under it
           // is the same thing in a form somebody can price and order against.
           // Both come off this page rather than only out of Save All.
-          // This drawing's own history — and the way back out of a Delete
-          // pressed by mistake.
-          ...avUndoRedoButtons(provider, AvUndoScope.cabling, onDone: _snack),
           PopupMenuButton<String>(
             key: const ValueKey('cabling_png_menu'),
             tooltip: 'Export the drawing',

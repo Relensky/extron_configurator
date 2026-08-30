@@ -78,6 +78,18 @@ const List<NavTab> kNavTabs = [
   NavTab(AppTab.flowRules, Icons.rule_folder, 'Flow Rules'),
 ];
 
+/// What the rail calls [tab], for a message naming a page somebody is about to
+/// be taken to — the room's Undo says where it is going before it goes.
+///
+/// Read off the rail itself rather than spelled again, so a page renamed there
+/// is renamed here too. '' for the two tabs the rail does not carry.
+String navTabLabel(AppTab tab) {
+  for (final nav in kNavTabs) {
+    if (nav.tab == tab) return nav.label;
+  }
+  return '';
+}
+
 /// The tabs that are NOT in the rail, for the places that have to know the
 /// difference — the banner that draws them, and the test that keeps the two
 /// lists between them covering every tab exactly once.

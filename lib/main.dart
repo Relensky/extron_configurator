@@ -1111,9 +1111,9 @@ class _MainDashboardState extends State<MainDashboard> {
             () => saveEverything(context, provider),
         // UNDO AND REDO ON WHATEVER THIS PAGE EDITS, by the same rule the save
         // keys follow: the shortcut acts on the document the tab in front of
-        // you belongs to. A page that carries its own Undo buttons is left
-        // alone here too, so Ctrl+Z never means one thing to the keyboard and
-        // another to the button beside it — see [toolbarUndoTarget].
+        // you belongs to. Every room page now answers that with the ROOM, so
+        // Ctrl+Z on the estimate takes back the last thing done in this room
+        // wherever it was done — and, like the button, moves the view to it.
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
             _undoOnCurrentTab(context, provider, redo: false),
         // Both spellings, because both are muscle memory and neither is used
@@ -1130,10 +1130,9 @@ class _MainDashboardState extends State<MainDashboard> {
 
   /// Ctrl+Z / Ctrl+Y on the document the current tab edits.
   ///
-  /// Does nothing on a page whose own buttons own its history — the four
-  /// drawings, the schematic and the estimate each have a pair on the page,
-  /// and a keyboard shortcut that reached past them would undo the wrong
-  /// document while the buttons in front of somebody said otherwise.
+  /// Always the same document the pair in the title bar acts on, read from the
+  /// same place: a shortcut that meant something other than the button beside
+  /// it would be the worst of both.
   static void _undoOnCurrentTab(
     BuildContext context,
     AppStateProvider provider, {
@@ -1147,8 +1146,8 @@ class _MainDashboardState extends State<MainDashboard> {
     final said = switch ((target, redo)) {
       (ToolbarUndoTarget.project, false) => provider.undoProject(),
       (ToolbarUndoTarget.project, true) => provider.redoProject(),
-      (ToolbarUndoTarget.roomConfig, false) => provider.undoRoomConfig(),
-      (ToolbarUndoTarget.roomConfig, true) => provider.redoRoomConfig(),
+      (ToolbarUndoTarget.room, false) => provider.undoRoom(),
+      (ToolbarUndoTarget.room, true) => provider.redoRoom(),
       (ToolbarUndoTarget.catalog, final r) =>
         r ? provider.redoAppData(AppDataDocument.catalog)
           : provider.undoAppData(AppDataDocument.catalog),

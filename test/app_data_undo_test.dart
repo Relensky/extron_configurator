@@ -260,7 +260,7 @@ void main() {
       expect(toolbarUndoNoun(ToolbarUndoTarget.schema), 'field schema');
       expect(toolbarUndoNoun(ToolbarUndoTarget.flowRules), 'flow rules');
       expect(toolbarUndoNoun(ToolbarUndoTarget.project), 'project');
-      expect(toolbarUndoNoun(ToolbarUndoTarget.roomConfig), 'room');
+      expect(toolbarUndoNoun(ToolbarUndoTarget.room), 'room');
     });
   });
 }

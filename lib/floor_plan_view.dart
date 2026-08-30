@@ -24,9 +24,7 @@ import 'layout_tools.dart'
 import 'live_text_field.dart';
 import 'plan_annotations.dart';
 import 'report_tools.dart';
-import 'room_sidecar.dart' show AvUndoScope;
 import 'run_painting.dart';
-import 'undo_bar.dart';
 import 'room_locations.dart';
 import 'room_locations_view.dart';
 import 'screenshot_tools.dart';
@@ -1328,12 +1326,6 @@ class _FloorPlanViewState extends State<FloorPlanView> {
                         '/${provider.avLocations.length} on this sheet)',
             ),
             onPressed: () => showLocationManager(context, provider),
-          ),
-          // The sheets, the places on them and the notation drawn on them.
-          ...avUndoRedoButtons(
-            provider,
-            AvUndoScope.floorPlans,
-            onDone: (m) => _snack(m),
           ),
           // How many captions are off the sheet, and the one way back.
           Builder(

@@ -32,8 +32,6 @@ import 'diagram_grid.dart';
 import 'layout_tools.dart';
 import 'report_tools.dart';
 import 'room_locations.dart';
-import 'room_sidecar.dart' show AvUndoScope;
-import 'undo_bar.dart';
 import 'room_locations_view.dart';
 import 'room_presets.dart';
 import 'screenshot_tools.dart';
@@ -1132,9 +1130,6 @@ class _AvFlowViewState extends State<AvFlowView>
                 ? _showBackgroundSettings(provider)
                 : _importBackground(provider),
           ),
-          // This page's own history: the devices, the cables and the backdrop.
-          // What happens on the Racks or Cabling tabs is undone there.
-          ...avUndoRedoButtons(provider, AvUndoScope.flow, onDone: _snack),
           OutlinedButton.icon(
             icon: const Icon(Icons.save, size: 18),
             label: const Text('Save AV Setup'),
