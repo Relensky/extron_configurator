@@ -378,7 +378,14 @@ void main() {
       expect(p.openProjectRoom, isNull, reason: 'nothing open to start with');
 
       await tester.runAsync(() async => tester.tap(inList('Room B')));
-      for (var i = 0; i < 40 && p.currentConfigPath.isEmpty; i++) {
+      // WAIT FOR THE WHOLE ROOM, not just the path. openConfigAtPath sets
+      // currentConfigPath and then awaits the rest of the load, so a loop that
+      // stopped at the path could look at the room in the middle of opening -
+      // config in, diagram not yet - and report an empty drawing as a failure
+      // to load one.
+      for (var i = 0;
+          i < 40 && (p.currentConfigPath.isEmpty || p.avNodes.isEmpty);
+          i++) {
         await tester.pump();
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),

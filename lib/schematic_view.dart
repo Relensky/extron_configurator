@@ -1356,6 +1356,24 @@ class _SchematicViewState extends State<SchematicView> {
                   }
                 : null,
           ),
+          // AND FORWARD AGAIN. This page went one way for a long time, which
+          // is why people here were wary of pressing Undo at all: on every
+          // other page an undo can be reconsidered, and on this one it could
+          // not.
+          OutlinedButton.icon(
+            icon: const Icon(Icons.redo, size: 18),
+            label: Text(
+              provider.canRedoSchematic
+                  ? 'Redo: ${provider.schematicRedoLabel}'
+                  : 'Redo',
+            ),
+            onPressed: provider.canRedoSchematic
+                ? () {
+                    final redone = provider.redoSchematic();
+                    if (redone.isNotEmpty) _snack('Redid: $redone');
+                  }
+                : null,
+          ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
             icon: const Icon(Icons.image, size: 18),

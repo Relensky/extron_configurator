@@ -115,16 +115,21 @@ Set<String> get kRoomSidecarOwnedKeys => {
 
 /// Which tab's history an edit belongs to.
 ///
-/// One per page that offers an Undo button. The estimate is absent on purpose:
-/// nothing on the Cost tab records an undo entry, and a scope no edit is ever
-/// filed under is a button that is always grey.
-enum AvUndoScope { flow, racks, floorPlans, cabling }
+/// One per page that offers an Undo button. The estimate was absent for a long
+/// time because nothing on the Cost tab recorded an entry — and a scope no edit
+/// is ever filed under is a button that is always grey. It is here now, and
+/// every method that touches [RoomCostSettings] files against it: a price typed
+/// over a catalog figure, a fee, a line added by hand, a whole quote re-sorted.
+/// Those are among the most retyped edits in the app and were the least
+/// recoverable.
+enum AvUndoScope { flow, racks, floorPlans, cabling, cost }
 
 const Map<AvUndoScope, String> kAvUndoScopeLabels = {
   AvUndoScope.flow: 'AV Flow',
   AvUndoScope.racks: 'Racks',
   AvUndoScope.floorPlans: 'Floor Plan',
   AvUndoScope.cabling: 'Cabling',
+  AvUndoScope.cost: 'Cost',
 };
 
 /// The part of the document each scope owns.
@@ -140,6 +145,7 @@ const Map<AvUndoScope, RoomSidecarPart> kAvUndoScopePart = {
   AvUndoScope.racks: RoomSidecarPart.racks,
   AvUndoScope.floorPlans: RoomSidecarPart.floorPlans,
   AvUndoScope.cabling: RoomSidecarPart.cabling,
+  AvUndoScope.cost: RoomSidecarPart.cost,
 };
 
 /// The top-level document keys [scope]'s history covers.

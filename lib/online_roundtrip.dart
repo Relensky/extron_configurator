@@ -583,3 +583,29 @@ List<OnlineChange> onlineChanges(BuildingProject project, OnlineImport read) {
 
   return out;
 }
+
+/// ---------------------------------------------------------------------------
+///  A PUBLISH HELD BACK
+/// ---------------------------------------------------------------------------
+
+/// Somebody else's typing, found in the published workbook, that the publish
+/// about to happen would have written over.
+///
+/// Carries the read and the change list already worked out, so the box that
+/// offers them does not have to open the file a second time — and so that the
+/// decision "is this worth stopping a save for" is made on real changes rather
+/// than on a timestamp a sync client moved.
+typedef OnlineHold = ({
+  /// The workbook it was found in.
+  String file,
+
+  /// When that file was last written to.
+  DateTime modified,
+
+  /// What it says, parsed.
+  OnlineImport read,
+
+  /// What applying it would change in the job. Never empty — a hold with
+  /// nothing in it is not a hold, and the publish goes ahead.
+  List<OnlineChange> changes,
+});

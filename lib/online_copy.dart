@@ -32,12 +32,18 @@ import 'project_workbook.dart';
 ///  mean a new link every time, which is the emailed-workbook problem again
 ///  wearing a different hat.
 ///
-///  IT GOES ONE WAY ONLY. Nothing is read back. An edit made in Excel Online or
-///  Google Sheets changes that copy and nothing else, and the next publish
-///  overwrites it. That is a deliberate limit: a document that quietly took
-///  changes back from a copy several people can edit is a document that loses
-///  work without anybody being told. What goes out is a picture of the job, and
-///  the job stays here.
+///  IT GOES ONE WAY BY DEFAULT. An edit made in Excel Online or Google Sheets
+///  changes that copy and nothing else, and the next publish overwrites it.
+///  That is a deliberate limit: a document that quietly took changes back from
+///  a copy several people can edit is a document that loses work without
+///  anybody being told. What goes out is a picture of the job, and the job
+///  stays here.
+///
+///  TWO SHEETS ARE THE EXCEPTION, and they are read back only when somebody
+///  asks and only after being shown what would change — see
+///  online_roundtrip.dart. Because those two exist, a publish is no longer free
+///  to overwrite: it checks first, and stands down rather than destroying what
+///  somebody typed. See [onlineCopyMovedSince] at the foot of this file.
 /// ============================================================================
 
 /// What one publish wrote.
@@ -265,4 +271,83 @@ String onlineFreshnessText(DateTime? published, {DateTime? asOf}) {
     < 14 => 'Published $days days ago.',
     _ => 'Published $days days ago - the copy people are reading is stale.',
   };
+}
+
+/// ============================================================================
+///  WHAT SOMEBODY ELSE TYPED, THAT A PUBLISH WOULD WRITE OVER
+/// ============================================================================
+///  The note at the head of this file says the copy goes one way and the next
+///  publish overwrites it. That was true when the copy was a report. It stopped
+///  being acceptable the moment two of its sheets became a FORM — see
+///  online_roundtrip.dart — because those sheets exist precisely so that a
+///  technician on site types into them, and reading them back is a thing
+///  somebody has to remember to do.
+///
+///  So publish-on-save had a hole in it the size of the feature: a delivery
+///  logged in Excel Online this morning was gone the next time anybody pressed
+///  Ctrl+S here, with no warning to the person who typed it and none to the
+///  person who overwrote it.
+///
+///  THE FILE'S OWN TIMESTAMP IS THE GATE, not the answer. A sync client
+///  rewrites a file it has only re-downloaded, so a moved timestamp means
+///  "worth looking at" and nothing more. What makes it a conflict is reading
+///  the sheets back and finding a row that differs from the job — which costs
+///  a file read, and is why the timestamp is asked first.
+/// ============================================================================
+
+/// The published workbook, and when it was last written to.
+typedef OnlineCopyStamp = ({String file, DateTime modified});
+
+/// The workbook this job publishes into [folder], with the moment it was last
+/// written — or null when it is not there.
+///
+/// Used two ways: recorded straight after a publish, so the app knows the
+/// timestamp it is responsible for, and read again before the next one to see
+/// whether anything moved it in between.
+OnlineCopyStamp? onlineWorkbookStamp({
+  required String folder,
+  required String workbookName,
+}) {
+  if (folder.trim().isEmpty || workbookName.trim().isEmpty) return null;
+  try {
+    final file = File(path.join(folder.trim(), workbookName));
+    if (!file.existsSync()) return null;
+    return (file: file.path, modified: file.lastModifiedSync());
+  } catch (_) {
+    // A folder that cannot be read is not a folder with edits in it. Publishing
+    // will report its own failure; this check does not get to raise one.
+    return null;
+  }
+}
+
+/// How far the file's timestamp may sit ahead of the moment a publish STARTED
+/// before it counts as somebody else's writing.
+///
+/// Only used for a job published by a version that recorded no file stamp of
+/// its own. [OnlineCopyResult.at] is taken before the bytes go down, so the
+/// timestamp the filesystem ends up with is always a little later, and a
+/// workbook of any size takes a moment to write.
+const Duration kOnlinePublishGrace = Duration(minutes: 1);
+
+/// Whether the published workbook has been written to since this app published
+/// it.
+///
+/// [ourStamp] is the timestamp recorded when this app last published — the
+/// exact answer. [publishedAt] is the fallback for a job saved before that was
+/// recorded, and is deliberately generous: guessing WRONG here means either
+/// nagging about a file nobody touched, or missing edits, and of those two the
+/// nag is the one somebody can dismiss.
+bool onlineCopyMovedSince(
+  OnlineCopyStamp? now, {
+  DateTime? ourStamp,
+  DateTime? publishedAt,
+}) {
+  if (now == null) return false;
+  if (ourStamp != null) {
+    // Not `isAfter`: a sync client that restored an older copy moved the file
+    // too, and that copy may hold the very rows this is meant to protect.
+    return now.modified != ourStamp;
+  }
+  if (publishedAt == null) return false;
+  return now.modified.isAfter(publishedAt.add(kOnlinePublishGrace));
 }

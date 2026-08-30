@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -25,6 +26,7 @@ import 'lifecycle_view.dart'
         equipmentTimingColor,
         equipmentTimingFill;
 import 'pinned_grid.dart';
+import 'undo_history.dart';
 import 'save_actions.dart'
     show confirmLeavingProject, openProjectAtPath;
 
@@ -180,12 +182,77 @@ class _CampusViewState extends State<_CampusView> {
   CampusLifecycle? _campus;
   bool _reading = false;
 
+  // -------------------------------------------------------------------------
+  //  UNDO FOR THE ASSEMBLY
+  // -------------------------------------------------------------------------
+  //  A campus is a list somebody builds by hand out of four folders, and until
+  //  now the only way back from a wrong Remove was to remember which of eleven
+  //  files it had been and go and find it again. The document is small — a name
+  //  and a list of paths — so its history is the same shape as every other one
+  //  in the app and sixty deep like all of them, see [kUndoDepth].
+  //
+  //  RECORDED ON THE GESTURE, not on a timer. Adding and removing jobs are
+  //  discrete presses rather than typing, so there is no burst to settle: each
+  //  one is its own step, which is what somebody expects from a list.
+  final DocumentHistory _history = DocumentHistory();
+
+  /// The assembly, encoded — the two things a campus file holds.
+  String _snapshot() => jsonEncode({'name': _name, 'projects': _paths});
+
+  /// Runs [change] and files it as one undoable step called [label].
+  void _step(String label, void Function() change) {
+    change();
+    _history.record(label, _snapshot());
+  }
+
+  /// Puts [state] back on screen and re-reads every job on it.
+  void _restore(String state) {
+    final doc = jsonDecode(state) as Map<String, dynamic>;
+    setState(() {
+      _name = doc['name']?.toString() ?? '';
+      _paths
+        ..clear()
+        ..addAll([for (final p in (doc['projects'] as List? ?? [])) '$p']);
+      _campus = null;
+    });
+    // The sheet holds no figures of its own — every one is derived from the
+    // jobs — so a list that changed has to be read again rather than patched.
+    // See the note at the head of campus_file.dart.
+    if (_paths.isEmpty) return;
+    _reread();
+  }
+
+  void _undoCampus() {
+    final label = _history.undoLabel;
+    final state = _history.undo();
+    if (state == null) return;
+    _restore(state);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Undid: $label')),
+      );
+    }
+  }
+
+  void _redoCampus() {
+    final label = _history.redoLabel;
+    final state = _history.redo();
+    if (state == null) return;
+    _restore(state);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Redid: $label')),
+      );
+    }
+  }
+
   /// True while the sheet is being drawn off screen for a spreadsheet.
   bool _exporting = false;
 
   @override
   void initState() {
     super.initState();
+    _history.begin(_snapshot());
     if (_paths.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reread());
     }
@@ -274,9 +341,16 @@ class _CampusViewState extends State<_CampusView> {
   /// scanning a refresh request half expects it to be.
   void _add(List<String> files) {
     final before = _paths.length;
-    for (final f in files) {
-      if (!_paths.any((p) => path.equals(p, f))) _paths.add(f);
-    }
+    _step(
+      files.length == 1
+          ? 'Add ${path.basenameWithoutExtension(files.single)}'
+          : 'Add ${files.length} jobs',
+      () {
+        for (final f in files) {
+          if (!_paths.any((p) => path.equals(p, f))) _paths.add(f);
+        }
+      },
+    );
     final added = _paths.length - before;
     final skipped = files.length - added;
     if (skipped > 0 && mounted) {
@@ -412,6 +486,10 @@ class _CampusViewState extends State<_CampusView> {
         _file = campus.file;
         _campus = null;
       });
+      // A DIFFERENT DOCUMENT, so a new history. Carrying the last campus's
+      // steps across would let Undo paste an estate somebody had finished with
+      // over the one they just opened.
+      _history.begin(_snapshot());
       await _reread();
     } catch (e) {
       showTimedSnackBar(
@@ -500,7 +578,10 @@ class _CampusViewState extends State<_CampusView> {
   Future<void> _openJobPlan(String file) => _openJob(file, pane: 'lifecycle');
 
   void _remove(String file) {
-    _paths.removeWhere((p) => path.equals(p, file));
+    _step(
+      'Remove ${path.basenameWithoutExtension(file)}',
+      () => _paths.removeWhere((p) => path.equals(p, file)),
+    );
     if (_paths.isEmpty) {
       setState(() => _campus = null);
     } else {
@@ -701,6 +782,27 @@ class _CampusViewState extends State<_CampusView> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+          // BACK ONE STEP, on the list itself. A job removed by mistake used
+          // to mean remembering which of eleven files it was and going to find
+          // it again, which is the kind of small loss that stops people
+          // pressing Remove at all.
+          IconButton(
+            key: const ValueKey('campus_undo'),
+            onPressed: _reading || !_history.canUndo ? null : _undoCampus,
+            icon: const Icon(Icons.undo, size: 18),
+            tooltip: _history.canUndo
+                ? 'Undo: ${_history.undoLabel}'
+                : 'Nothing to undo',
+          ),
+          IconButton(
+            key: const ValueKey('campus_redo'),
+            onPressed: _reading || !_history.canRedo ? null : _redoCampus,
+            icon: const Icon(Icons.redo, size: 18),
+            tooltip: _history.canRedo
+                ? 'Redo: ${_history.redoLabel}'
+                : 'Nothing to redo',
           ),
           const SizedBox(width: 8),
           // THE ASSEMBLY ITSELF, KEPT. See [_saveCampus].

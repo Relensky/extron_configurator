@@ -212,9 +212,11 @@ void main() {
       expect(p.avFlowAsJson().containsKey('flowBackground'), isFalse);
     });
 
-    test('the estimate belongs to no scope and is never rolled back', () {
-      // Nothing on the Cost tab records an undo entry, so no history may
-      // touch it — a slice only ever carries the keys its scope owns.
+    test('the estimate is its own scope, and no other one reaches it', () {
+      // The Cost tab had no history at all for a long time. It has one now,
+      // and it is a scope like the others: a slice only ever carries the keys
+      // its own scope owns, so undoing a drawing cannot move a price and
+      // undoing a price cannot move the drawing.
       final p = room();
       p.addCablingBox(kind: CablingBoxKind.pullBox);
       p.setAvCostTax(percent: 8.25, label: 'State tax');
@@ -222,6 +224,15 @@ void main() {
       p.undoAvFlow(AvUndoScope.cabling);
       expect(p.avCost.taxPercent, 8.25);
       expect(p.avCost.taxLabel, 'State tax');
+
+      // And back the other way. A fresh box, so what is being asserted is
+      // that the cost undo left it alone rather than that the cabling undo
+      // above had already taken it.
+      final box = p.addCablingBox(kind: CablingBoxKind.pullBox);
+      p.undoAvFlow(AvUndoScope.cost);
+      expect(p.avCost.taxPercent, 0, reason: 'the tax went back');
+      expect(p.avCabling.extraBoxes.map((b) => b.id), contains(box.id),
+          reason: 'and the drawing did not move');
     });
 
     test('a snapshot is detached from the live document', () {

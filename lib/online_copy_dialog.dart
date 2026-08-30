@@ -24,12 +24,18 @@ import 'online_roundtrip.dart';
 ///  there is nothing here to sign into, nothing to renew, and nothing that
 ///  stops working when somebody's password changes — see online_copy.dart.
 ///
-///  IT SAYS OUT LOUD THAT IT ONLY GOES ONE WAY. The single thing a person can
+///  MOST OF IT GOES ONE WAY, AND IT SAYS SO. The single thing a person can
 ///  reasonably assume about a spreadsheet in a shared folder is that typing in
-///  it does something. Here it does not: the copy is overwritten on the next
-///  publish, and this box says so before it writes anything, because finding
-///  that out afterwards means finding it out by losing an afternoon of
-///  somebody's edits.
+///  it does something. On most of these sheets it does not: the copy is
+///  overwritten on the next publish, and this box says so before it writes
+///  anything, because finding that out afterwards means finding it out by
+///  losing an afternoon of somebody's edits.
+///
+///  THE EXCEPTION IS THE TWO SHEETS THAT COME BACK — the delivery log and the
+///  purchase orders, which are a form rather than a report (see
+///  online_roundtrip.dart). Typing in those does do something, and a publish
+///  that would write over it stands down and asks first: see
+///  [offerHeldOnlineEdits] at the foot of this file.
 /// ============================================================================
 
 // ---------------------------------------------------------------------------
@@ -626,4 +632,210 @@ class _Point extends StatelessWidget {
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+//  WHEN THE PUBLISH STOOD DOWN
+// ---------------------------------------------------------------------------
+//  Publish-on-save used to overwrite the workbook whatever was in it. Two of
+//  its sheets are a form other people fill in, so that quietly destroyed work
+//  - the technician who logged three deliveries in Excel Online at eight, and
+//  the person here who pressed Ctrl+S at nine, both found out never.
+//
+//  Now the save stands the publish down and the app asks. The order matters:
+//  their typing comes IN before ours goes OUT, because the only way to
+//  overwrite a copy without losing anything is to be holding what was in it.
+
+/// Offers back the edits a held publish found, and then publishes.
+///
+/// Called from the project save path once the file itself is written - see
+/// save_actions.dart. Does nothing when no publish was held, so the caller can
+/// call it after every save without asking first.
+Future<void> offerHeldOnlineEdits(
+  BuildContext context,
+  AppStateProvider provider,
+) async {
+  final hold = provider.onlineHold;
+  if (hold == null) return;
+
+  final choice = await showDialog<String>(
+    context: context,
+    builder: (_) => _HeldPublishDialog(hold: hold),
+  );
+  if (choice == null || !context.mounted) return;
+
+  if (choice == 'review') {
+    final applied = await showDialog<int>(
+      context: context,
+      builder: (_) => _ImportReviewDialog(
+        provider: provider,
+        read: hold.read,
+        changes: hold.changes,
+        source: hold.file,
+      ),
+    );
+    // Backed out at the review: nothing came in, so nothing goes out. The hold
+    // stands and the next save asks again, which is the right nag - the copy
+    // people are reading is stale until somebody decides about it.
+    if (applied == null || !context.mounted) return;
+
+    // SAVED AGAIN, not just published. Applying the import changed the job, so
+    // the file written a moment ago is already behind it; publishing without
+    // saving would put figures online that are in no file anywhere.
+    final error = await provider.saveProject(overwriteOnlineCopy: true);
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    showTimedSnackBar(
+      messenger,
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(
+          error.isNotEmpty
+              ? error
+              : applied == 0
+                  ? 'The online copy has been updated.'
+                  : '$applied change${applied == 1 ? '' : 's'} brought in, '
+                      'and the online copy updated.',
+        ),
+        backgroundColor: error.isNotEmpty ? snackErrorFillOn(messenger) : null,
+      ),
+    );
+    return;
+  }
+
+  // 'overwrite' - told to go over it anyway, in front of the list of what that
+  // costs. Only the copy is rewritten: the job on disk is already current.
+  final result = await provider.publishOnlineCopy();
+  if (!context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  showTimedSnackBar(
+    messenger,
+    SnackBar(
+      duration: const Duration(seconds: 5),
+      content: Text(
+        result.written.isEmpty
+            ? 'Nothing could be written: ${result.failed.join('; ')}'
+            : 'The online copy has been overwritten.',
+      ),
+      backgroundColor:
+          result.written.isEmpty ? snackErrorFillOn(messenger) : null,
+    ),
+  );
+}
+
+/// What was found in the published copy, before anything is written over it.
+///
+/// THREE ANSWERS, and the middle one is not "OK". Somebody who has just
+/// pressed Save wants the save to have happened - it has, the job is on disk -
+/// and this box is about a different document. So it says whose typing is at
+/// stake and how much of it, and the way out that loses nothing is the one
+/// offered first.
+class _HeldPublishDialog extends StatelessWidget {
+  final OnlineHold hold;
+
+  const _HeldPublishDialog({required this.hold});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final surface =
+        theme.dialogTheme.backgroundColor ?? theme.colorScheme.surface;
+    final count = hold.changes.length;
+
+    return AlertDialog(
+      key: const ValueKey('online_hold_dialog'),
+      title: const Text('Somebody has edited the online copy'),
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The job has been saved. The online copy has NOT been updated, '
+              'because ${path.basename(hold.file)} has been typed in since '
+              'this app last wrote it - updating it now would write over '
+              '$count change${count == 1 ? '' : 's'}.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            _Point(
+              icon: Icons.schedule_outlined,
+              text: 'That file was last edited ${_editedWhen(hold.modified)}.',
+            ),
+            const _Point(
+              icon: Icons.download_outlined,
+              text: 'Bringing the changes in first costs nothing: every one is '
+                  'listed and checked before it is applied.',
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: muted.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final c in hold.changes.take(4))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        '${c.name} - ${c.what}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  if (count > 4)
+                    Text(
+                      'and ${count - 4} more.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('online_hold_leave'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Leave it for now'),
+        ),
+        TextButton(
+          key: const ValueKey('online_hold_overwrite'),
+          onPressed: () => Navigator.of(context).pop('overwrite'),
+          child: const Text('Overwrite it'),
+        ),
+        FilledButton(
+          key: const ValueKey('online_hold_review'),
+          onPressed: () => Navigator.of(context).pop('review'),
+          child: const Text('Bring the changes in'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 'today', 'yesterday', 'on 2026-04-20' - how long that file has been sitting
+/// there with somebody's work in it.
+///
+/// Said the same way as the freshness line on the Project tab, because the two
+/// answer the same question from opposite ends: how old is the copy, and how
+/// new is what is in it.
+String _editedWhen(DateTime at, {DateTime? asOf}) {
+  final now = asOf ?? DateTime.now();
+  final days = DateTime(now.year, now.month, now.day)
+      .difference(DateTime(at.year, at.month, at.day))
+      .inDays;
+  return switch (days) {
+    <= 0 => 'today',
+    1 => 'yesterday',
+    < 14 => '$days days ago',
+    _ => 'on ${at.toIso8601String().split('T').first}',
+  };
 }

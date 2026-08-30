@@ -31,6 +31,7 @@ import 'cabling_view.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
+import 'undo_bar.dart' show ToolbarUndoTarget, toolbarUndoTarget;
 import 'nav_rail.dart';
 import 'project_room_picker.dart';
 import 'project_history_view.dart' show showHistoryDialog;
@@ -1083,8 +1084,51 @@ class _MainDashboardState extends State<MainDashboard> {
         const SingleActivator(LogicalKeyboardKey.keyS,
                 control: true, alt: true):
             () => saveEverything(context, provider),
+        // UNDO AND REDO ON WHATEVER THIS PAGE EDITS, by the same rule the save
+        // keys follow: the shortcut acts on the document the tab in front of
+        // you belongs to. A page that carries its own Undo buttons is left
+        // alone here too, so Ctrl+Z never means one thing to the keyboard and
+        // another to the button beside it — see [toolbarUndoTarget].
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
+            _undoOnCurrentTab(context, provider, redo: false),
+        // Both spellings, because both are muscle memory and neither is used
+        // for anything else here.
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () =>
+            _undoOnCurrentTab(context, provider, redo: true),
+        const SingleActivator(LogicalKeyboardKey.keyZ,
+            control: true, shift: true): () =>
+            _undoOnCurrentTab(context, provider, redo: true),
       },
       child: page,
+    );
+  }
+
+  /// Ctrl+Z / Ctrl+Y on the document the current tab edits.
+  ///
+  /// Does nothing on a page whose own buttons own its history — the four
+  /// drawings, the schematic and the estimate each have a pair on the page,
+  /// and a keyboard shortcut that reached past them would undo the wrong
+  /// document while the buttons in front of somebody said otherwise.
+  static void _undoOnCurrentTab(
+    BuildContext context,
+    AppStateProvider provider, {
+    required bool redo,
+  }) {
+    final index = provider.selectedTabIndex;
+    if (index < 0 || index >= AppTab.values.length) return;
+    final target = toolbarUndoTarget(AppTab.values[index]);
+    if (target == null) return;
+
+    final said = switch ((target, redo)) {
+      (ToolbarUndoTarget.project, false) => provider.undoProject(),
+      (ToolbarUndoTarget.project, true) => provider.redoProject(),
+      (ToolbarUndoTarget.roomConfig, false) => provider.undoRoomConfig(),
+      (ToolbarUndoTarget.roomConfig, true) => provider.redoRoomConfig(),
+    };
+    if (said.isEmpty || !context.mounted) return;
+    showTimedSnackBar(
+      ScaffoldMessenger.of(context),
+      SnackBar(content: Text('${redo ? 'Redid' : 'Undid'}: $said')),
     );
   }
 

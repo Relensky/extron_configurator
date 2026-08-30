@@ -1878,6 +1878,17 @@ class BuildingProject {
   /// have to go and look at.
   DateTime? onlinePublishedAt;
 
+  /// The timestamp the published workbook carried when this app last wrote it,
+  /// or null when it never has.
+  ///
+  /// NOT the same fact as [onlinePublishedAt], and the difference is the whole
+  /// point: that one is when WE published, this one is what the FILE says. The
+  /// two drift apart exactly when somebody has opened the copy in Excel Online
+  /// and typed in it — which is the case a publish must not walk into, because
+  /// two of the sheets in that workbook are a form other people fill in. See
+  /// online_copy.dart.
+  DateTime? onlineFileStamp;
+
   /// Rooms on the refresh plan that have no config file — see [ManualRoom].
   /// They are counted, aged and budgeted; they are not priced, ordered or
   /// drawn, because there is nothing in them to price.
@@ -2033,6 +2044,7 @@ class BuildingProject {
     this.onlineFolder = '',
     this.onlineAutoPublish = false,
     this.onlinePublishedAt,
+    this.onlineFileStamp,
     List<ManualRoom>? manualRooms,
     List<ProjectVendor>? vendors,
     List<ResponsibilityItem>? responsibility,
@@ -3336,6 +3348,8 @@ class BuildingProject {
     if (onlineAutoPublish) 'onlineAutoPublish': true,
     if (onlinePublishedAt != null)
       'onlinePublishedAt': onlinePublishedAt!.toIso8601String(),
+    if (onlineFileStamp != null)
+      'onlineFileStamp': onlineFileStamp!.toIso8601String(),
     if (manualRooms.isNotEmpty)
       'manualRooms': [for (final r in manualRooms) r.toJson()],
     'vendors': [for (final v in vendors) v.toJson()],
@@ -3551,6 +3565,9 @@ class BuildingProject {
       onlinePublishedAt: DateTime.tryParse(
         json['onlinePublishedAt']?.toString() ?? '',
       ),
+      onlineFileStamp: DateTime.tryParse(
+        json['onlineFileStamp']?.toString() ?? '',
+      ),
       manualRooms: manualRooms,
       vendors: vendors,
       responsibility: responsibility,
@@ -3675,6 +3692,7 @@ class BuildingProject {
     onlineFolder: onlineFolder,
     onlineAutoPublish: onlineAutoPublish,
     onlinePublishedAt: onlinePublishedAt,
+    onlineFileStamp: onlineFileStamp,
     manualRooms: List<ManualRoom>.from(manualRooms),
     vendors: List<ProjectVendor>.from(vendors),
     responsibility: List<ResponsibilityItem>.from(responsibility),

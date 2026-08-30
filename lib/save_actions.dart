@@ -12,6 +12,8 @@ import 'app_state.dart';
 import 'contrast.dart';
 import 'control_prefill.dart' show buildControlSideForPreset;
 import 'new_room_dialog.dart';
+import 'undo_bar.dart' show ToolbarUndoButtons;
+import 'online_copy_dialog.dart' show offerHeldOnlineEdits;
 import 'project_room_picker.dart' show confirmLeavingRoom;
 import 'building_project.dart';
 import 'diagram_capture.dart';
@@ -163,6 +165,11 @@ Future<bool> runSave(
 }) async {
   final messenger = ScaffoldMessenger.of(context);
 
+  // A SAVE IS A BOUNDARY. Whatever has been typed since the last step becomes
+  // its own step here, so "back to how it was when I saved" is one press
+  // rather than a guess about where the last pause fell.
+  provider.recordUndoPoint();
+
   switch (scope) {
     case SaveScope.room:
       if (provider.roomConfig.isEmpty) {
@@ -233,6 +240,12 @@ Future<bool> runSave(
       }
       if (!context.mounted) return true;
       showSavedFileSnack(context, provider, 'The project', target);
+      // A JOB THAT PUBLISHES ON SAVE MAY HAVE STOOD ITS PUBLISH DOWN, because
+      // somebody had typed into the copy in the sync folder since we last
+      // wrote it. The save itself is done and reported above; this offers
+      // their changes back and then lets the copy go out. Does nothing when
+      // there was no hold, which is nearly always.
+      await offerHeldOnlineEdits(context, provider);
       return true;
 
     case SaveScope.catalog:
@@ -1293,6 +1306,10 @@ class SaveToolbar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the same
+        // question the save button answers. Nothing at all on the pages that
+        // carry their own pair - see [toolbarUndoTarget].
+        ToolbarUndoButtons(tab: tab),
         IconButton(
           key: const ValueKey('save_context'),
           icon: Badge(

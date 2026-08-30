@@ -39,6 +39,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'secret_store.dart';
 import 'sftp_client.dart';
 import 'ui_schema.dart';
+import 'undo_history.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// The navigation rail's tabs, in rail order.
@@ -235,6 +236,24 @@ const Map<String, String> kComTypeStyleLabels = {
 const String kSchematicProcessor = 'PROCESSOR';
 const String kSchematicIdf = 'IDF';
 const String kSchematicTouchPanel = 'TOUCHPANEL';
+
+/// One remembered state of the control schematic: where every box sits, the
+/// lines drawn between them, what has been hidden, recoloured or added by
+/// hand, and the two targets the drawing is built around.
+///
+/// Named rather than written inline because it is now held in TWO stacks — one
+/// behind and one ahead — and a record type spelled out twice is a record type
+/// that drifts. See [AppStateProvider.undoSchematic].
+typedef SchematicLayout = ({
+  String label,
+  Map<String, Offset> positions,
+  List<Map<String, String>> links,
+  Set<String> hidden,
+  Map<int, Color> colors,
+  List<Map<String, String>> extras,
+  String avLan,
+  String panel,
+});
 
 class AppStateProvider extends ChangeNotifier {
   /// Whether this room has a control system yet. See [RoomMode]; persisted in
@@ -1424,6 +1443,12 @@ class AppStateProvider extends ChangeNotifier {
         index < AppTab.values.length) {
       _lastRoomTabIndex = index;
     }
+    // A CHANGE OF PAGE ENDS THE UNDO STEP. The histories otherwise close a
+    // step when the document has sat still for a moment, which is right while
+    // somebody types and arbitrary the rest of the time. Leaving a page is a
+    // boundary somebody actually made, so the step ends there — see
+    // [recordUndoPoint].
+    recordUndoPoint();
     selectedTabIndex = index;
     notifyListeners();
   }
@@ -1548,38 +1573,79 @@ class AppStateProvider extends ChangeNotifier {
   /// configs resets the layout instead of carrying stale node spots over.
   String _schematicSyncedPath = ' never';
 
-  // --- undo (control schematic) -------------------------------------------
+  // --- undo and redo (control schematic) -----------------------------------
   //  The layout is four small collections, so a snapshot is a handful of
   //  copies — no need for the JSON round-trip the AV document uses.
+  //
+  //  IT WENT ONE WAY FOR A LONG TIME. This was the only history in the app with
+  //  no Redo, which made Undo a thing people were wary of pressing: on every
+  //  other page an undo can be reconsidered, and on this one it could not, so
+  //  the button was avoided in exactly the situation it exists for. The second
+  //  stack costs a list.
 
-  final List<({String label, Map<String, Offset> positions,
-      List<Map<String, String>> links, Set<String> hidden,
-      Map<int, Color> colors, List<Map<String, String>> extras,
-      String avLan, String panel})>
-      _schematicUndoStack = [];
+  final List<SchematicLayout> _schematicUndoStack = [];
+
+  /// Layouts undone but not yet superseded, so Redo can put them back.
+  ///
+  /// Emptied by the next edit, the same way every redo in every program is:
+  /// something undone and then drawn over is gone.
+  final List<SchematicLayout> _schematicRedoStack = [];
 
   bool get canUndoSchematic => _schematicUndoStack.isNotEmpty;
+  bool get canRedoSchematic => _schematicRedoStack.isNotEmpty;
 
   String get schematicUndoLabel =>
       _schematicUndoStack.isEmpty ? '' : _schematicUndoStack.last.label;
 
+  String get schematicRedoLabel =>
+      _schematicRedoStack.isEmpty ? '' : _schematicRedoStack.last.label;
+
+  /// The layout as it stands, copied out of the live collections.
+  ///
+  /// EVERY COLLECTION IS COPIED. A snapshot holding the live maps would be
+  /// emptied by the very restore that was about to read it — the bug the AV
+  /// side had and fixed, and worth not having twice.
+  SchematicLayout _schematicLayout(String label) => (
+        label: label,
+        positions: Map<String, Offset>.from(schematicPositions),
+        links: [for (final l in schematicLinks) Map<String, String>.from(l)],
+        hidden: Set<String>.from(schematicHiddenEdges),
+        colors: Map<int, Color>.from(schematicConnColors),
+        extras: [
+          for (final n in schematicExtraNodes) Map<String, String>.from(n),
+        ],
+        avLan: schematicAvLanTarget,
+        panel: schematicPanelTarget,
+      );
+
+  /// Puts [layout] back on screen.
+  void _restoreSchematicLayout(SchematicLayout layout) {
+    schematicPositions
+      ..clear()
+      ..addAll(layout.positions);
+    schematicLinks
+      ..clear()
+      ..addAll(layout.links);
+    schematicHiddenEdges
+      ..clear()
+      ..addAll(layout.hidden);
+    schematicConnColors
+      ..clear()
+      ..addAll(layout.colors);
+    schematicExtraNodes
+      ..clear()
+      ..addAll(layout.extras);
+    schematicAvLanTarget = layout.avLan;
+    schematicPanelTarget = layout.panel;
+  }
+
   /// Records the layout BEFORE [label] happens.
   void _pushSchematicUndo(String label) {
-    _schematicUndoStack.add((
-      label: label,
-      positions: Map<String, Offset>.from(schematicPositions),
-      links: [for (final l in schematicLinks) Map<String, String>.from(l)],
-      hidden: Set<String>.from(schematicHiddenEdges),
-      colors: Map<int, Color>.from(schematicConnColors),
-      extras: [
-        for (final n in schematicExtraNodes) Map<String, String>.from(n),
-      ],
-      avLan: schematicAvLanTarget,
-      panel: schematicPanelTarget,
-    ));
+    _schematicUndoStack.add(_schematicLayout(label));
     if (_schematicUndoStack.length > _kMaxUndoDepth) {
       _schematicUndoStack.removeAt(0);
     }
+    _schematicRedoStack.clear();
   }
 
   /// Puts the layout back the way it was before the last edit. Returns what
@@ -1587,24 +1653,33 @@ class AppStateProvider extends ChangeNotifier {
   String undoSchematic() {
     if (_schematicUndoStack.isEmpty) return '';
     final entry = _schematicUndoStack.removeLast();
-    schematicPositions
-      ..clear()
-      ..addAll(entry.positions);
-    schematicLinks
-      ..clear()
-      ..addAll(entry.links);
-    schematicHiddenEdges
-      ..clear()
-      ..addAll(entry.hidden);
-    schematicConnColors
-      ..clear()
-      ..addAll(entry.colors);
-    schematicExtraNodes
-      ..clear()
-      ..addAll(entry.extras);
-    schematicAvLanTarget = entry.avLan;
-    schematicPanelTarget = entry.panel;
+    // The state being LEFT, filed under the same name: "Undo: Draw line" and
+    // "Redo: Draw line" have to describe the same edit from the two sides, or
+    // the pair of buttons reads as two histories.
+    _schematicRedoStack.add(_schematicLayout(entry.label));
+    if (_schematicRedoStack.length > _kMaxUndoDepth) {
+      _schematicRedoStack.removeAt(0);
+    }
+    _restoreSchematicLayout(entry);
     AppLogger.logInfo('Undid: ${entry.label}');
+    notifyListeners();
+    return entry.label;
+  }
+
+  /// Puts back what the last Undo on the schematic took away.
+  ///
+  /// The undo stack is pushed DIRECTLY rather than through
+  /// [_pushSchematicUndo], which would clear the forward history and make the
+  /// second press of Redo impossible.
+  String redoSchematic() {
+    if (_schematicRedoStack.isEmpty) return '';
+    final entry = _schematicRedoStack.removeLast();
+    _schematicUndoStack.add(_schematicLayout(entry.label));
+    if (_schematicUndoStack.length > _kMaxUndoDepth) {
+      _schematicUndoStack.removeAt(0);
+    }
+    _restoreSchematicLayout(entry);
+    AppLogger.logInfo('Redid: ${entry.label}');
     notifyListeners();
     return entry.label;
   }
@@ -1815,8 +1890,9 @@ class AppStateProvider extends ChangeNotifier {
   /// Schematic tab visit starts from the auto-layout.
   void _resetSchematicLayout() {
     _schematicSyncedPath = currentConfigPath;
-    // A different room's edits are not this room's to undo.
+    // A different room's edits are not this room's to undo — or to redo.
     _schematicUndoStack.clear();
+    _schematicRedoStack.clear();
     schematicPositions.clear();
     schematicLinks.clear();
     schematicHiddenEdges.clear();
@@ -2078,13 +2154,19 @@ class AppStateProvider extends ChangeNotifier {
   /// Deep enough to cover a run of edits across four tabs at once. Higher than
   /// it was because an entry is now a slice of the document rather than all of
   /// it, and because one list feeds four histories.
-  static const int _kMaxUndoDepth = 60;
+  ///
+  /// THE SAME NUMBER EVERY HISTORY IN THIS APP USES — see [kUndoDepth]. It was
+  /// once this file's own constant, back when this file held the only undo
+  /// there was; it is one number now because "how far back does Undo go" has
+  /// to have one answer wherever somebody asks it.
+  static const int _kMaxUndoDepth = kUndoDepth;
 
   /// Shorthands for the common case, which is an edit inside one tab.
   static const Set<AvUndoScope> _flowScope = {AvUndoScope.flow};
   static const Set<AvUndoScope> _racksScope = {AvUndoScope.racks};
   static const Set<AvUndoScope> _plansScope = {AvUndoScope.floorPlans};
   static const Set<AvUndoScope> _cablingScope = {AvUndoScope.cabling};
+  static const Set<AvUndoScope> _costScope = {AvUndoScope.cost};
 
   /// The current value of every key [scopes] own.
   Map<AvUndoScope, Map<String, dynamic>> _sliceAvFlow(
@@ -2460,13 +2542,17 @@ class AppStateProvider extends ChangeNotifier {
   /// back out again rather than leaving it floating, because the caller asked
   /// for a rail and silently landing somewhere else (or nowhere) is not what
   /// it asked for.
+  /// [recordUndo] false is for a batch that has already taken its own
+  /// snapshot — see [promoteAvCostHardwareToRacks], where the quote line and
+  /// the rack parts have to go back together or not at all.
   RackItem? addAvRackItem(
     RackItem item, {
     String? rackId,
     RackFace face = RackFace.front,
     int? startU,
+    bool recordUndo = true,
   }) {
-    _pushAvUndo('Add ${item.label}', _racksScope);
+    if (recordUndo) _pushAvUndo('Add ${item.label}', _racksScope);
     String id = item.id;
     if (id.isEmpty || avRackItemById(id) != null) {
       do {
@@ -2644,7 +2730,14 @@ class AppStateProvider extends ChangeNotifier {
     String renamed(String name) => renamedForModel(name, was, now);
 
     if (apply) {
-      _pushAvUndo('Rename $was', {AvUndoScope.flow, AvUndoScope.racks});
+      // COST IS IN HERE because this sweep rewrites quote lines and moves the
+      // typed prices keyed on the old model. Leaving it out would undo the
+      // devices and the rack parts while leaving the estimate talking about a
+      // model no longer in the room — a half-undone rename nobody could see.
+      _pushAvUndo(
+        'Rename $was',
+        {AvUndoScope.flow, AvUndoScope.racks, AvUndoScope.cost},
+      );
     }
 
     var nodes = 0;
@@ -4235,6 +4328,14 @@ class AppStateProvider extends ChangeNotifier {
   // --- cost estimate edits (each one notifies; the page rebuilds off state) --
 
   void setAvCostTax({double? percent, String? label, String? currency}) {
+    _pushAvUndo(
+      percent != null
+          ? 'Tax rate'
+          : label != null
+              ? 'Tax label'
+              : 'Currency',
+      _costScope,
+    );
     if (percent != null) avCost.taxPercent = math.max(0, percent);
     if (label != null) avCost.taxLabel = label;
     if (currency != null && currency.isNotEmpty) avCost.currency = currency;
@@ -4242,6 +4343,7 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   CostFee addAvCostFee({String name = 'Fee', double percent = 0}) {
+    _pushAvUndo('Add $name', _costScope);
     final fee = CostFee(id: _nextCostId('FEE_'), name: name, percent: percent);
     avCost.fees.add(fee);
     notifyListeners();
@@ -4251,11 +4353,15 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostFee(CostFee fee) {
     final index = avCost.fees.indexWhere((f) => f.id == fee.id);
     if (index < 0) return;
+    _pushAvUndo('Edit ${fee.name}', _costScope);
     avCost.fees[index] = fee;
     notifyListeners();
   }
 
   void removeAvCostFee(String feeId) {
+    final fee = avCost.fees.where((f) => f.id == feeId).firstOrNull;
+    if (fee == null) return;
+    _pushAvUndo('Remove ${fee.name}', _costScope);
     avCost.fees.removeWhere((f) => f.id == feeId);
     notifyListeners();
   }
@@ -4263,6 +4369,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Sets this room's price for one estimate line, or clears it back to the
   /// catalog price when [price] is null.
   void setAvCostPrice(String lineKey, double? price) {
+    _pushAvUndo(price == null ? 'Clear price' : 'Price', _costScope);
     if (price == null) {
       avCost.priceOverrides.remove(lineKey);
     } else {
@@ -4288,6 +4395,7 @@ class AppStateProvider extends ChangeNotifier {
       taxable: taxable,
       catalogModel: catalogModel,
     );
+    _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.items.add(item);
     notifyListeners();
     return item;
@@ -4296,13 +4404,27 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostItem(CostLineItem item) {
     final index = avCost.items.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
     avCost.items[index] = item;
     notifyListeners();
   }
 
   void removeAvCostItem(String itemId) {
+    final was = avCost.items.where((i) => i.id == itemId).firstOrNull;
+    if (was == null) return;
+    _pushAvUndo('Remove ${_costLineName(was)}', _costScope);
     avCost.items.removeWhere((i) => i.id == itemId);
     notifyListeners();
+  }
+
+  /// What one quote line is called on an Undo button — what somebody typed on
+  /// it, the catalog model it came from, or the generic word when it has
+  /// neither yet.
+  static String _costLineName(CostLineItem item) {
+    final typed = item.description.trim();
+    if (typed.isNotEmpty) return typed;
+    final model = item.catalogModel.trim();
+    return model.isEmpty ? 'line' : model;
   }
 
   // --- parts bought for the job but not on the drawing ----------------------
@@ -4329,6 +4451,7 @@ class AppStateProvider extends ChangeNotifier {
       unitPrice: unitPrice,
       catalogModel: catalogModel,
     );
+    _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraEquipment.add(item);
     notifyListeners();
     return item;
@@ -4337,11 +4460,19 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostExtraEquipment(CostLineItem item) {
     final index = avCost.extraEquipment.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
     avCost.extraEquipment[index] = item;
     notifyListeners();
   }
 
-  void removeAvCostExtraEquipment(String itemId) {
+  /// [recordUndo] false is for a caller that has already taken a snapshot
+  /// covering this — see [promoteAvCostEquipmentToDiagram], where dropping the
+  /// line and drawing the boxes is ONE thing somebody did and has to go back as
+  /// one press.
+  void removeAvCostExtraEquipment(String itemId, {bool recordUndo = true}) {
+    final was = avCost.extraEquipment.where((i) => i.id == itemId).firstOrNull;
+    if (was == null) return;
+    if (recordUndo) _pushAvUndo('Remove ${_costLineName(was)}', _costScope);
     avCost.extraEquipment.removeWhere((i) => i.id == itemId);
     avCost.priceOverrides.remove(itemId);
     notifyListeners();
@@ -4373,10 +4504,17 @@ class AppStateProvider extends ChangeNotifier {
         ? template.model
         : item.description.trim();
 
+    // ONE ENTRY FOR THE WHOLE MOVE, spanning both tabs it lands on. Dropping a
+    // quote line and drawing three boxes is one thing somebody did, and four
+    // presses of Undo to get back from it is not an undo anybody uses. The
+    // inner calls are told to keep quiet for exactly that reason.
+    _pushAvUndo('Draw $label', {AvUndoScope.cost, AvUndoScope.flow});
+
     final added = <AvNode>[];
     for (int i = 0; i < count; i++) {
       added.add(
         addAvNode(
+          recordUndo: false,
           AvNode(
             id: '',
             label: count == 1 ? label : '$label ${i + 1}',
@@ -4392,7 +4530,7 @@ class AppStateProvider extends ChangeNotifier {
       );
     }
 
-    removeAvCostExtraEquipment(item.id);
+    removeAvCostExtraEquipment(item.id, recordUndo: false);
     // Devices group by model on the estimate — the key the diagram will price
     // them under, and where the typed figure has to land to survive.
     if (typed != null && template.model.trim().isNotEmpty) {
@@ -4419,9 +4557,14 @@ class AppStateProvider extends ChangeNotifier {
         ? template.model
         : item.description.trim();
 
+    // ONE ENTRY, spanning the two tabs — see
+    // [promoteAvCostEquipmentToDiagram].
+    _pushAvUndo('Rack $label', {AvUndoScope.cost, AvUndoScope.racks});
+
     final added = <RackItem>[];
     for (int i = 0; i < count; i++) {
       final placed = addAvRackItem(
+        recordUndo: false,
         RackItem(
           id: '',
           catalogModel: template.model,
@@ -4435,7 +4578,7 @@ class AppStateProvider extends ChangeNotifier {
       if (placed != null) added.add(placed);
     }
 
-    removeAvCostExtraHardware(item.id);
+    removeAvCostExtraHardware(item.id, recordUndo: false);
     notifyListeners();
     return added;
   }
@@ -4465,6 +4608,7 @@ class AppStateProvider extends ChangeNotifier {
       unitPrice: unitPrice,
       catalogModel: catalogModel,
     );
+    _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraHardware.add(item);
     notifyListeners();
     return item;
@@ -4473,11 +4617,19 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostExtraHardware(CostLineItem item) {
     final index = avCost.extraHardware.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
     avCost.extraHardware[index] = item;
     notifyListeners();
   }
 
-  void removeAvCostExtraHardware(String itemId) {
+  /// [recordUndo] false is for a caller that has already taken a snapshot
+  /// covering this — see [promoteAvCostEquipmentToDiagram], where dropping the
+  /// line and drawing the boxes is ONE thing somebody did and has to go back as
+  /// one press.
+  void removeAvCostExtraHardware(String itemId, {bool recordUndo = true}) {
+    final was = avCost.extraHardware.where((i) => i.id == itemId).firstOrNull;
+    if (was == null) return;
+    if (recordUndo) _pushAvUndo('Remove ${_costLineName(was)}', _costScope);
     avCost.extraHardware.removeWhere((i) => i.id == itemId);
     // A room price typed against a line that no longer exists would sit in the
     // sidecar forever, and reappear if the id were ever reused.
@@ -4499,6 +4651,7 @@ class AppStateProvider extends ChangeNotifier {
       unitPrice: unitPrice,
       catalogModel: catalogModel,
     );
+    _pushAvUndo('Add ${_costLineName(item)}', _costScope);
     avCost.extraCables.add(item);
     notifyListeners();
     return item;
@@ -4507,11 +4660,15 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostExtraCable(CostLineItem item) {
     final index = avCost.extraCables.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
     avCost.extraCables[index] = item;
     notifyListeners();
   }
 
-  void removeAvCostExtraCable(String itemId) {
+  void removeAvCostExtraCable(String itemId, {bool recordUndo = true}) {
+    final was = avCost.extraCables.where((i) => i.id == itemId).firstOrNull;
+    if (was == null) return;
+    if (recordUndo) _pushAvUndo('Remove ${_costLineName(was)}', _costScope);
     avCost.extraCables.removeWhere((i) => i.id == itemId);
     avCost.priceOverrides.remove(itemId);
     notifyListeners();
@@ -4525,6 +4682,7 @@ class AppStateProvider extends ChangeNotifier {
   /// export all list the quote the way it was left.
   void setAvCostEquipmentSort(CostEquipmentSort value) {
     if (avCost.equipmentSort == value) return;
+    _pushAvUndo('Sort the equipment table', _costScope);
     avCost.equipmentSort = value;
     notifyListeners();
   }
@@ -4537,6 +4695,10 @@ class AppStateProvider extends ChangeNotifier {
   /// the entry and moves when this changes.
   void setAvCableEntry(SignalType signal, double lengthFt, String model) {
     final key = cableEntryKey(signal, lengthFt);
+    _pushAvUndo(
+      model.trim().isEmpty ? 'Clear cable choice' : 'Cable ${model.trim()}',
+      _costScope,
+    );
     if (model.trim().isEmpty) {
       avCost.cableEntries.remove(key);
     } else {
@@ -4553,6 +4715,7 @@ class AppStateProvider extends ChangeNotifier {
   /// a figure typed against the old part was for the old part, which is the
   /// same rule the device swap follows.
   void moveAvCableLine({required String from, required String to}) {
+    _pushAvUndo('Move what was typed on a cable line', _costScope);
     avCost.priceOverrides.remove(from);
     if (from == to) {
       notifyListeners();
@@ -4567,6 +4730,10 @@ class AppStateProvider extends ChangeNotifier {
 
   void setAvCostIncludeCabling(bool value) {
     if (avCost.includeCabling == value) return;
+    _pushAvUndo(
+      value ? 'Price the drawn cabling' : 'Leave the drawn cabling out',
+      _costScope,
+    );
     avCost.includeCabling = value;
     notifyListeners();
   }
@@ -4579,6 +4746,7 @@ class AppStateProvider extends ChangeNotifier {
   /// 0 clears the entry rather than storing a zero, so the sidecar only
   /// records decisions somebody actually made.
   void setAvCableSpares(String lineKey, double qty) {
+    _pushAvUndo('Spare cable runs', _costScope);
     if (qty <= 0) {
       avCost.cableSpares.remove(lineKey);
     } else {
@@ -4592,6 +4760,7 @@ class AppStateProvider extends ChangeNotifier {
   /// Units of one equipment line bought beyond the ones on the diagram — the
   /// cable spares box, for the boxes. See [RoomCostSettings.equipmentSpares].
   void setAvEquipmentSpares(String lineKey, double qty) {
+    _pushAvUndo('Spare units', _costScope);
     if (qty <= 0) {
       avCost.equipmentSpares.remove(lineKey);
     } else {
@@ -4610,10 +4779,16 @@ class AppStateProvider extends ChangeNotifier {
   /// stored rather than treated as a clear. See [RoomCostSettings.furnishedLines].
   void setAvCostFurnished(String lineKey, String? source) {
     if (source == null) {
-      if (avCost.furnishedLines.remove(lineKey) == null) return;
+      if (!avCost.furnishedLines.containsKey(lineKey)) return;
+      _pushAvUndo('This job buys it again', _costScope);
+      avCost.furnishedLines.remove(lineKey);
     } else {
       final trimmed = source.trim();
       if (avCost.furnishedLines[lineKey] == trimmed) return;
+      _pushAvUndo(
+        trimmed.isEmpty ? 'Furnished by others' : 'Furnished by $trimmed',
+        _costScope,
+      );
       avCost.furnishedLines[lineKey] = trimmed;
     }
     notifyListeners();
@@ -7953,6 +8128,7 @@ class AppStateProvider extends ChangeNotifier {
           : rateId,
       techs: techs,
     );
+    _pushAvUndo('Add labor', _costScope);
     avCost.labor.add(line);
     notifyListeners();
     return line;
@@ -7961,11 +8137,14 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostLabor(LaborLine line) {
     final index = avCost.labor.indexWhere((l) => l.id == line.id);
     if (index < 0) return;
+    _pushAvUndo('Edit labor', _costScope);
     avCost.labor[index] = line;
     notifyListeners();
   }
 
   void removeAvCostLabor(String lineId) {
+    if (!avCost.labor.any((l) => l.id == lineId)) return;
+    _pushAvUndo('Remove labor', _costScope);
     avCost.labor.removeWhere((l) => l.id == lineId);
     notifyListeners();
   }
@@ -10653,6 +10832,335 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // -------------------------------------------------------------------------
+  //  UNDO FOR THE JOB
+  // -------------------------------------------------------------------------
+  //  The room's drawings have had undo for years and the job had none, which
+  //  is backwards: a line moved on a diagram is redrawn in a second, and a
+  //  vendor split retyped across forty parts is an afternoon.
+  //
+  //  IT RECORDS THE DOCUMENT, NOT THE EDIT, for the reason set out at the head
+  //  of undo_history.dart: there are seventy methods on this class that change
+  //  the job, and the one that got forgotten would be an edit Undo silently
+  //  stepped over. The job encodes itself already — it is written to disk that
+  //  way — so recording it costs nothing new to maintain.
+  //
+  //  THE LOG IS NOT PART OF IT. project.history says who changed what and when,
+  //  and an Undo that erased the record of the edit it took back would be the
+  //  one thing in this app quietly rewriting its own audit trail. So the log is
+  //  held out of the snapshot, survives every undo, and GAINS a line saying the
+  //  undo happened.
+
+  final DocumentHistory _projectHistory = DocumentHistory();
+
+  late final UndoRecorder _projectUndo = UndoRecorder(
+    history: _projectHistory,
+    snapshot: _projectSnapshot,
+    label: _nextProjectUndoLabel,
+  );
+
+  /// How many log lines the job had when a label was last taken off it — see
+  /// [_nextProjectUndoLabel].
+  int _projectLogMark = 0;
+
+  /// The job, encoded, without its log.
+  String _projectSnapshot() {
+    final doc = project.toJson();
+    doc.remove('history');
+    return jsonEncode(doc);
+  }
+
+  /// What to call the edit about to be filed.
+  ///
+  /// Taken from the job's own log, which already names every edit for a person
+  /// — 'Qty' on 'Wall plate' — so Undo says the same thing the History pane
+  /// does about the same change. An edit that logged nothing gets the generic
+  /// name rather than the PREVIOUS edit's: a button that names the wrong change
+  /// is worse than one that names none, because somebody presses it believing
+  /// the label.
+  String _nextProjectUndoLabel(String before, String after) {
+    final count = project.history.length;
+    if (count <= _projectLogMark) return 'Edit';
+    _projectLogMark = count;
+    final last = project.history.last;
+    final field = last.field.trim();
+    final name = last.itemName.trim();
+    if (field.isEmpty) return name.isEmpty ? 'Edit' : name;
+    return name.isEmpty ? field : '$field - $name';
+  }
+
+  /// Starts the job's history over, at the job as it is now.
+  ///
+  /// Called wherever the document is REPLACED rather than edited — opened,
+  /// started, closed. Carrying a history across would let Undo paste the last
+  /// job into this one.
+  void _restartProjectHistory() {
+    _projectUndo.cancel();
+    _projectLogMark = project.history.length;
+    _projectHistory.begin(_projectSnapshot());
+  }
+
+  /// The job has been swapped for a different one: baseline the new document
+  /// and tell the screen, without the telling being filed as an edit.
+  ///
+  /// THE NOTIFY IS WRAPPED. It is the same call every mutation makes, so on its
+  /// own it would start the clock on a recording — and that recording would be
+  /// filed against the history that was just begun, turning "opened a job" into
+  /// an undoable step whose Undo pastes the job as it was read back over
+  /// whatever has happened since. Nothing to file: the baseline IS the document.
+  void _projectDocumentReplaced() {
+    _restartProjectHistory();
+    _projectUndo.applying(notifyListeners);
+  }
+
+  /// Files everything changed since the last recording as ONE undo step, now.
+  ///
+  /// The histories otherwise file a step when the document stops changing for a
+  /// third of a second, which turns a typed name into one entry rather than
+  /// eleven. That is the right default and the wrong boundary in a few places:
+  /// a dialog closing, a tab changing, a save. Called at those, an undo step
+  /// lines up with something the person did rather than with a pause in their
+  /// typing.
+  ///
+  /// Cheap when nothing has changed — the histories record nothing for a
+  /// document that still encodes the same way.
+  void recordUndoPoint() {
+    _projectUndo.flush();
+    _configUndo.flush();
+  }
+
+  /// Whether there is anything to go back to, or forward to, on the job.
+  ///
+  /// [UndoRecorder.pending] counts: an edit made a moment ago has not been
+  /// filed yet, and a Undo button that greyed out for a third of a second
+  /// after every change would read as broken.
+  bool get canUndoProject => _projectHistory.canUndo || _projectUndo.pending;
+  bool get canRedoProject => _projectHistory.canRedo;
+
+  /// What the two buttons say they would put back. '' before anything is
+  /// filed, which is also while [canUndoProject] is answering for a pending
+  /// recording rather than a real one.
+  String get projectUndoLabel => _projectHistory.undoLabel;
+  String get projectRedoLabel => _projectHistory.redoLabel;
+
+  /// How many steps each way, for the tooltip that says how far back this goes.
+  int get projectUndoDepth => _projectHistory.depthBehind;
+  int get projectRedoDepth => _projectHistory.depthAhead;
+
+  /// Puts the job back the way it was before the last edit. Returns what was
+  /// undone, or '' when there was nothing to undo.
+  String undoProject() {
+    _projectUndo.flush();
+    final label = _projectHistory.undoLabel;
+    final state = _projectHistory.undo();
+    if (state == null) return '';
+    _applyProjectSnapshot(state, 'undid $label');
+    AppLogger.logInfo('Undid on the project: $label');
+    return label;
+  }
+
+  /// Puts back what the last Undo on the job took away.
+  String redoProject() {
+    _projectUndo.flush();
+    final label = _projectHistory.redoLabel;
+    final state = _projectHistory.redo();
+    if (state == null) return '';
+    _applyProjectSnapshot(state, 'redid $label');
+    AppLogger.logInfo('Redid on the project: $label');
+    return label;
+  }
+
+  /// Rebuilds the job from [state] and says so in the log.
+  ///
+  /// THE LOG IS CARRIED ACROSS rather than restored, and then added to. The
+  /// snapshot has no log in it precisely so that this can be true: what the
+  /// history pane knows is what happened, and an undo happening is one of the
+  /// things that happened.
+  void _applyProjectSnapshot(String state, String summary) {
+    final doc = jsonDecode(state) as Map<String, dynamic>;
+    doc['history'] = [for (final h in project.history) h.toJson()];
+    _projectUndo.applying(() {
+      project = BuildingProject.fromJson(doc);
+      // Every cache that holds a piece of the old job. The rooms are re-read
+      // and the estimate recomputed rather than trusted: an undo can put back
+      // a room list, and a cached price for a room that is no longer on the
+      // job is a figure nobody could account for.
+      _projectRooms.clear();
+      _projectEstimate = null;
+      projectDirty = true;
+      _logProjectEdit(
+        itemKey: 'project',
+        itemName: project.name,
+        field: 'Undo',
+        summary: summary,
+      );
+      _projectLogMark = project.history.length;
+      notifyListeners();
+    });
+  }
+
+
+  // -------------------------------------------------------------------------
+  //  UNDO FOR THE ROOM'S CONFIG
+  // -------------------------------------------------------------------------
+  //  The four drawing tabs have had undo for years, over their own slices of
+  //  the sidecar (see [AvUndoScope]). The CONFIG — the wizard, the device
+  //  forms, system settings, the raw JSON — had none, and it is the document
+  //  somebody spends the afternoon in: a device deleted off a room, a preset
+  //  applied over typed values, a block emptied by a mis-click.
+  //
+  //  IT IS ITS OWN HISTORY, NOT A FIFTH SCOPE. The AV scopes divide the
+  //  SIDECAR between them; the config is a different file with a different
+  //  shape, edited from two dozen other files. Folding it into the scoped
+  //  machinery would mean instrumenting every one of those call sites — which
+  //  is exactly the thing that cannot be kept correct. So the config records
+  //  states, and the drawings go on recording edits, and the two never touch
+  //  the same keys.
+  //
+  //  THE ROOM IT BELONGS TO IS PART OF THE HISTORY. A history is thrown away
+  //  the moment a different file is open, because an Undo that could paste the
+  //  last room's devices into this one is not a safety net, it is a hazard.
+
+  final DocumentHistory _configHistory = DocumentHistory();
+
+  late final UndoRecorder _configUndo = UndoRecorder(
+    history: _configHistory,
+    snapshot: _configSnapshot,
+    label: _configEditLabel,
+  );
+
+  /// The file the current history is about. A change of this is a change of
+  /// document, and starts again — see [_touchConfigHistory].
+  String _configHistoryPath = '';
+
+  /// The room's config, encoded whole.
+  ///
+  /// NOT the pruned form the fingerprint uses. That one exists to answer "has
+  /// anything changed" and drops what it does not need; this one is put BACK
+  /// into the app, and a snapshot that quietly dropped a block would make Undo
+  /// a way of losing work rather than recovering it.
+  String _configSnapshot() {
+    try {
+      return jsonEncode(_roomConfig);
+    } catch (_) {
+      // A config that cannot be encoded cannot be recorded. Returning what the
+      // history already holds files nothing, which is the safe answer: no undo
+      // step is worse than a step that restores something unencodable.
+      return _configHistory.current;
+    }
+  }
+
+  /// What changed between two encodings of the config, as something to read on
+  /// a button.
+  ///
+  /// The config keeps no log of its own — there is nowhere to take a name from
+  /// — so the step is named after the BLOCK that moved: 'DISPLAY_1', 'Added
+  /// PROJECTOR_2', '3 blocks'. That is not a sentence about what somebody did,
+  /// and it is enough for the only question the button has to answer: is this
+  /// the change I am thinking of.
+  String _configEditLabel(String before, String after) {
+    Map<String, dynamic> decode(String raw) {
+      if (raw.isEmpty) return const {};
+      try {
+        final doc = jsonDecode(raw);
+        return doc is Map<String, dynamic> ? doc : const {};
+      } catch (_) {
+        return const {};
+      }
+    }
+
+    final was = decode(before);
+    final now = decode(after);
+    if (was.isEmpty) return 'Edit';
+
+    final added = [for (final k in now.keys) if (!was.containsKey(k)) k];
+    final gone = [for (final k in was.keys) if (!now.containsKey(k)) k];
+    final changed = [
+      for (final k in now.keys)
+        if (was.containsKey(k) && jsonEncode(was[k]) != jsonEncode(now[k])) k,
+    ];
+
+    if (added.length == 1 && gone.isEmpty && changed.isEmpty) {
+      return 'Added ${added.single}';
+    }
+    if (gone.length == 1 && added.isEmpty && changed.isEmpty) {
+      return 'Removed ${gone.single}';
+    }
+    final touched = [...added, ...gone, ...changed];
+    if (touched.isEmpty) return 'Edit';
+    if (touched.length == 1) return touched.single;
+    return '${touched.length} blocks';
+  }
+
+  /// Starts the config's history over, at the config as it is now.
+  void _restartConfigHistory() {
+    _configUndo.cancel();
+    _configHistoryPath = currentConfigPath;
+    _configHistory.begin(_configSnapshot());
+  }
+
+  /// Called from [notifyListeners]: files the config as it settles, and starts
+  /// again whenever the room being edited is a different one.
+  ///
+  /// THE ROOM IS CHECKED HERE RATHER THAN AT THE PLACES THAT LOAD ONE, because
+  /// there are eight of those and this is one. A loader added later gets the
+  /// same treatment without knowing this exists — which is the same bargain the
+  /// fingerprint and the estimate cache make two lines above.
+  void _touchConfigHistory() {
+    if (currentConfigPath != _configHistoryPath) {
+      _restartConfigHistory();
+      return;
+    }
+    _configUndo.touch();
+  }
+
+  /// Whether the config has anything behind it, or ahead of it.
+  bool get canUndoRoomConfig => _configHistory.canUndo || _configUndo.pending;
+  bool get canRedoRoomConfig => _configHistory.canRedo;
+
+  /// What the buttons say they would put back — the block that moved.
+  String get roomConfigUndoLabel => _configHistory.undoLabel;
+  String get roomConfigRedoLabel => _configHistory.redoLabel;
+
+  int get roomConfigUndoDepth => _configHistory.depthBehind;
+  int get roomConfigRedoDepth => _configHistory.depthAhead;
+
+  /// Puts the config back the way it was before the last edit. Returns what
+  /// was undone, or '' when there was nothing to undo.
+  String undoRoomConfig() {
+    _configUndo.flush();
+    final label = _configHistory.undoLabel;
+    final state = _configHistory.undo();
+    if (state == null) return '';
+    _applyConfigSnapshot(state);
+    AppLogger.logInfo('Undid on the room config: $label');
+    return label;
+  }
+
+  /// Puts back what the last Undo on the config took away.
+  String redoRoomConfig() {
+    _configUndo.flush();
+    final label = _configHistory.redoLabel;
+    final state = _configHistory.redo();
+    if (state == null) return '';
+    _applyConfigSnapshot(state);
+    AppLogger.logInfo('Redid on the room config: $label');
+    return label;
+  }
+
+  void _applyConfigSnapshot(String state) {
+    _configUndo.applying(() {
+      // Through the setter, so every nested map comes back writable — see
+      // [_openConfigMaps]. Restoring into the field directly would hand back a
+      // room whose next keystroke threw.
+      roomConfig = jsonDecode(state) as Map<String, dynamic>;
+      // The forms read their initial values once per element, so without this
+      // the fields on screen would go on showing what was undone.
+      _bumpConfigRevision();
+      notifyListeners();
+    });
+  }
+
   // --- the file ------------------------------------------------------------
 
   /// Starts a new project, pre-loaded with the usual vendor split so the first
@@ -10669,7 +11177,7 @@ class AppStateProvider extends ChangeNotifier {
     _projectStarted = true;
     _projectRooms.clear();
     AppLogger.logInfo('New project started.');
-    notifyListeners();
+    _projectDocumentReplaced();
   }
 
   /// Opens a project file. Returns the error to show, or '' on success.
@@ -10687,7 +11195,7 @@ class AppStateProvider extends ChangeNotifier {
       // Anything a crash left behind for THIS project, offered back the same
       // way a room's is.
       checkForProjectRecovery();
-      notifyListeners();
+      _projectDocumentReplaced();
       return '';
     } catch (e, stack) {
       AppLogger.logError('Failed to open the project $file', e, stack);
@@ -10717,7 +11225,7 @@ class AppStateProvider extends ChangeNotifier {
     _projectStarted = false;
     _projectRooms.clear();
     AppLogger.logInfo('Project "$was" closed.');
-    notifyListeners();
+    _projectDocumentReplaced();
   }
 
   /// Writes the project. Returns the error to show, or '' on success.
@@ -10726,7 +11234,14 @@ class AppStateProvider extends ChangeNotifier {
   /// because they are stored relative to wherever the file lives. Saving a
   /// project into a different folder without this would produce a file whose
   /// rooms all point at nothing.
-  Future<String> saveProject({String to = ''}) async {
+  ///
+  /// [overwriteOnlineCopy] gives up the protection described under
+  /// [findHeldOnlineEdits] — pass it only once somebody has been shown what is
+  /// in the published copy and has said to go over it anyway.
+  Future<String> saveProject({
+    String to = '',
+    bool overwriteOnlineCopy = false,
+  }) async {
     final target = to.isNotEmpty ? to : currentProjectPath;
     if (target.isEmpty) return 'The project has no file to save to yet.';
 
@@ -10758,16 +11273,32 @@ class AppStateProvider extends ChangeNotifier {
     // dirty the instant it was saved, every time, and a save button that never
     // clears is a save button people stop believing.
     if (project.onlineAutoPublish && project.onlineFolder.trim().isNotEmpty) {
-      final published = await publishOnlineCopy();
-      if (published.written.isEmpty) {
-        // Logged, not thrown: a sync folder is a place another program has its
-        // hands on, and a locked file must not cost somebody their save. The
-        // stamp is left alone by publishOnlineCopy, so the box on the Project
-        // tab still says how old the copy people are reading is.
-        AppLogger.logError(
-          'The online copy could not be updated on save: '
-          '${published.failed.join('; ')}',
+      // FIRST, IS THERE ANYBODY IN THERE. A publish that would write over
+      // somebody's typing stands down and says so, and the room's own save
+      // goes ahead regardless: the two are different documents, and holding a
+      // save hostage to a spreadsheet in a sync folder would be the wrong
+      // trade every time.
+      final held = overwriteOnlineCopy ? null : await findHeldOnlineEdits();
+      if (held != null) {
+        _onlineHold = held;
+        AppLogger.logInfo(
+          'The online copy was not updated on save: '
+          '${held.changes.length} change'
+          '${held.changes.length == 1 ? '' : 's'} typed into '
+          '${path.basename(held.file)} would have been written over.',
         );
+      } else {
+        final published = await publishOnlineCopy();
+        if (published.written.isEmpty) {
+          // Logged, not thrown: a sync folder is a place another program has
+          // its hands on, and a locked file must not cost somebody their save.
+          // The stamp is left alone by publishOnlineCopy, so the box on the
+          // Project tab still says how old the copy people are reading is.
+          AppLogger.logError(
+            'The online copy could not be updated on save: '
+            '${published.failed.join('; ')}',
+          );
+        }
       }
     }
 
@@ -11262,6 +11793,89 @@ class AppStateProvider extends ChangeNotifier {
     _projectChanged(repricing: false);
   }
 
+  // -------------------------------------------------------------------------
+  //  NOT WRITING OVER SOMEBODY ELSE'S TYPING
+  // -------------------------------------------------------------------------
+  //  Publish-on-save overwrote the workbook unconditionally, and two of that
+  //  workbook's sheets are a form other people fill in (online_roundtrip.dart).
+  //  So a delivery logged in Excel Online on site was lost the next time
+  //  anybody here pressed Ctrl+S, silently, to both of them.
+  //
+  //  THE HOLD IS TAKEN IN THE MODEL, not in the dialog. The prompt that offers
+  //  the edits back is a nicety and lives in the UI; the refusal to overwrite
+  //  has to be here, because it must hold for every caller of [saveProject] —
+  //  including the ones written after this, by somebody who never read this
+  //  comment.
+
+  /// The edits a publish stood down over, or null when the last one went
+  /// through.
+  ///
+  /// Read by the save path in save_actions.dart, which offers them back and
+  /// then publishes. Cleared by a publish that actually wrote.
+  OnlineHold? _onlineHold;
+  OnlineHold? get onlineHold => _onlineHold;
+
+  /// Forgets a held publish — the caller has dealt with it, one way or the
+  /// other.
+  void clearOnlineHold() {
+    if (_onlineHold == null) return;
+    _onlineHold = null;
+    notifyListeners();
+  }
+
+  /// Reads the published workbook and hands back what a publish would destroy,
+  /// or null when there is nothing to protect.
+  ///
+  /// TWO GATES, CHEAP ONE FIRST. The file's timestamp says whether anything
+  /// touched it since we wrote it — but a sync client rewrites a file it has
+  /// only re-downloaded, so a moved timestamp is a reason to look rather than
+  /// an answer. What makes it a hold is parsing the sheets and finding a row
+  /// that differs from the job. That costs a file read, which is why it only
+  /// happens when the timestamp moved.
+  ///
+  /// Nothing is written and nothing is thrown: a workbook that cannot be read
+  /// is not evidence of edits, and refusing to save because a file was locked
+  /// would be a worse bug than the one this fixes.
+  Future<OnlineHold?> findHeldOnlineEdits({String? folder}) async {
+    final target = (folder ?? project.onlineFolder).trim();
+    if (target.isEmpty) return null;
+
+    final stamp = onlineWorkbookStamp(
+      folder: target,
+      workbookName: onlineWorkbookName(project),
+    );
+    if (!onlineCopyMovedSince(
+      stamp,
+      ourStamp: project.onlineFileStamp,
+      publishedAt: project.onlinePublishedAt,
+    )) {
+      return null;
+    }
+
+    try {
+      final bytes = await File(stamp!.file).readAsBytes();
+      final review = reviewOnlineImport(bytes);
+      // A workbook with no editable sheets in it is not this job's published
+      // copy — somebody dropped a different file in the folder under the same
+      // name. Not our edits to rescue, and not our publish to stop.
+      if (review.read.wrongFile) return null;
+      if (review.changes.isEmpty) return null;
+      return (
+        file: stamp.file,
+        modified: stamp.modified,
+        read: review.read,
+        changes: review.changes,
+      );
+    } catch (e, stack) {
+      AppLogger.logError(
+        'The published copy at ${stamp?.file} could not be checked for edits',
+        e,
+        stack,
+      );
+      return null;
+    }
+  }
+
   /// Writes the published copy and records that it went.
   ///
   /// Returns what was written and what was not — see [OnlineCopyResult]. A
@@ -11316,6 +11930,16 @@ class AppStateProvider extends ChangeNotifier {
 
     if (result.written.isNotEmpty) {
       project.onlinePublishedAt = result.at;
+      // THE TIMESTAMP WE ARE RESPONSIBLE FOR, read back off the file we just
+      // wrote rather than assumed from [result.at] — which is taken before the
+      // bytes go down, and so is never what the filesystem ends up recording.
+      // The next publish compares against this to find out whether anybody
+      // else has been in the workbook since. See online_copy.dart.
+      project.onlineFileStamp = onlineWorkbookStamp(
+        folder: target,
+        workbookName: onlineWorkbookName(project),
+      )?.modified;
+      _onlineHold = null;
       _logProjectEdit(
         itemKey: 'project',
         itemName: project.name,
@@ -13338,6 +13962,11 @@ class AppStateProvider extends ChangeNotifier {
     // is the one place every mutation passes through. See
     // [_cachedRoomFingerprint].
     _forgetRoomFingerprint();
+    // AND THE UNDO HISTORIES, for the third time and the same reason. These
+    // only start a clock — the document is encoded once the typing stops, not
+    // once per keystroke. See undo_history.dart.
+    _projectUndo.touch();
+    _touchConfigHistory();
     super.notifyListeners();
   }
 
