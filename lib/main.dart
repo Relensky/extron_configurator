@@ -454,8 +454,15 @@ class _MainDashboardState extends State<MainDashboard> {
     if (!context.mounted) return;
 
     if (deltas.isEmpty) {
+      // SAYS WHICH QUESTION IT ANSWERED. "Nothing to undo" sent people
+      // looking for a broken Undo button; the room genuinely does match its
+      // backup, and the edits they wanted back are on the real history.
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nothing to undo - the config already matches the backup.'),
+        content: Text(
+          'This room already matches the saved backup, so there is nothing to '
+          'revert to. To step back through your edits, use Undo (Ctrl+Z) or '
+          'the Undo button on the page you are editing.',
+        ),
       ));
       return;
     }
@@ -465,11 +472,15 @@ class _MainDashboardState extends State<MainDashboard> {
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        // NAMED FOR WHAT IT DOES, like the button that opens it. A box titled
+        // "Undo Last Save" over a list of everything about to be discarded is
+        // the wrong promise: Undo steps back one edit, and this replaces the
+        // room with a file.
         title: Row(children: [
-          const Icon(Icons.undo, color: Colors.orange),
+          const Icon(Icons.settings_backup_restore, color: Colors.orange),
           const SizedBox(width: 10),
           Expanded(
-              child: Text('Undo Last Save',
+              child: Text('Revert to the saved backup',
                   style: Theme.of(ctx).textTheme.titleLarge)),
         ]),
         content: SizedBox(
@@ -510,7 +521,7 @@ class _MainDashboardState extends State<MainDashboard> {
             child: const Text('Cancel'),
           ),
           ElevatedButton.icon(
-            icon: const Icon(Icons.undo, size: 18),
+            icon: const Icon(Icons.settings_backup_restore, size: 18),
             label: const Text('Restore Backup'),
             onPressed: () => Navigator.of(ctx).pop(true),
           ),
@@ -753,15 +764,29 @@ class _MainDashboardState extends State<MainDashboard> {
           );
         },
       ),
-      // UNDO THE LAST SAVE: put back the '<name>_previous.json' copy the
-      // save took of the file beforehand. Enabled only while that backup
+      // REVERT TO THE SAVED BACKUP: put back the '<name>_previous.json' copy
+      // the save took of the file beforehand. Enabled only while that backup
       // belongs to the file currently loaded — see canUndoLastSave.
+      //
+      // NOT AN UNDO ARROW, AND NOT CALLED UNDO. It used to be both, and that
+      // was wrong in a way nobody could see until the app grew a real one:
+      // this reads a FILE off disk and replaces the room with it, which is a
+      // different act from stepping one edit backwards. Somebody who had just
+      // typed a price reached for the undo arrow in the title bar, got this,
+      // and was told "the config already matches the backup" — a true sentence
+      // about a question they had not asked. The step-backwards buttons are
+      // Ctrl+Z, the pair beside Save, and the pair on each page that draws;
+      // this one is a way back to the last file, and now looks like one.
       IconButton(
-        icon: const Icon(Icons.undo),
+        key: const ValueKey('revert_to_backup'),
+        icon: const Icon(Icons.settings_backup_restore),
         tooltip: provider.canUndoLastSave
-            ? 'Undo Last Save - restore the config from '
+            ? 'Revert to the saved backup - replace this room with '
                 '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
-            : 'Undo Last Save - nothing has been saved over a local file yet',
+                ', the copy taken before the last save. This is not Undo: it '
+                'discards everything since that save.'
+            : 'Revert to the saved backup - nothing has been saved over a '
+                'local file yet',
         onPressed: provider.canUndoLastSave
             ? () => _undoLastSave(context, provider)
             : null,
@@ -1124,6 +1149,15 @@ class _MainDashboardState extends State<MainDashboard> {
       (ToolbarUndoTarget.project, true) => provider.redoProject(),
       (ToolbarUndoTarget.roomConfig, false) => provider.undoRoomConfig(),
       (ToolbarUndoTarget.roomConfig, true) => provider.redoRoomConfig(),
+      (ToolbarUndoTarget.catalog, final r) =>
+        r ? provider.redoAppData(AppDataDocument.catalog)
+          : provider.undoAppData(AppDataDocument.catalog),
+      (ToolbarUndoTarget.schema, final r) =>
+        r ? provider.redoAppData(AppDataDocument.schema)
+          : provider.undoAppData(AppDataDocument.schema),
+      (ToolbarUndoTarget.flowRules, final r) =>
+        r ? provider.redoAppData(AppDataDocument.flowRules)
+          : provider.undoAppData(AppDataDocument.flowRules),
     };
     if (said.isEmpty || !context.mounted) return;
     showTimedSnackBar(

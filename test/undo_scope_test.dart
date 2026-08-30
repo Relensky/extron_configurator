@@ -254,15 +254,52 @@ void main() {
       );
     });
 
-    test('a renamed box goes back to its old name', () {
+    test('a run of typing into one box goes back in one press', () {
+      // A NAME IS ONE THING SOMEBODY DID, not one per letter. The box calls
+      // its provider on every keystroke, so this used to file an entry per
+      // character: undoing a rename meant pressing the button eleven times,
+      // and the first press took the label back to 'Second nam' — which reads
+      // as a button that does not work. Consecutive keystrokes into the same
+      // field now keep the FIRST snapshot.
+      final p = room();
+      final box = p.addCablingBox(kind: CablingBoxKind.pullBox);
+      for (final typed in ['S', 'Se', 'Second', 'Second name']) {
+        p.setCablingBoxLabel(box.id, typed);
+      }
+
+      p.undoAvFlow(AvUndoScope.cabling);
+      expect(p.avCabling.labels.containsKey(box.id), isFalse,
+          reason: 'the whole name went, not its last letter');
+
+      // And the box itself is still its own step behind that.
+      p.undoAvFlow(AvUndoScope.cabling);
+      expect(p.avCabling.extraBoxes, isEmpty);
+    });
+
+    test('two boxes are two steps, however fast they are typed', () {
+      // The run is keyed on the FIELD. Coalescing on the kind of edit would
+      // make two boxes renamed one after another impossible to separate.
+      final p = room();
+      final a = p.addCablingBox(kind: CablingBoxKind.pullBox);
+      final b = p.addCablingBox(kind: CablingBoxKind.pathway);
+      p.setCablingBoxLabel(a.id, 'Ceiling junction');
+      p.setCablingBoxLabel(b.id, 'Wall pathway');
+
+      p.undoAvFlow(AvUndoScope.cabling);
+      expect(p.avCabling.labels.containsKey(b.id), isFalse);
+      expect(p.avCabling.labels[a.id], 'Ceiling junction',
+          reason: 'the box before it is its own step');
+    });
+
+    test('a press ends the run, so the next keystroke is a new step', () {
+      // Without this the keystroke after an Undo is folded into the step that
+      // was just undone, and the second press appears to do nothing.
       final p = room();
       final box = p.addCablingBox(kind: CablingBoxKind.pullBox);
       p.setCablingBoxLabel(box.id, 'First name');
-      p.setCablingBoxLabel(box.id, 'Second name');
-
       p.undoAvFlow(AvUndoScope.cabling);
-      expect(p.avCabling.labels[box.id], 'First name');
 
+      p.setCablingBoxLabel(box.id, 'Second name');
       p.undoAvFlow(AvUndoScope.cabling);
       expect(p.avCabling.labels.containsKey(box.id), isFalse);
     });

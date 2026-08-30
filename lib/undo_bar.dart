@@ -42,15 +42,31 @@ List<Widget> avUndoRedoButtons(
     required VoidCallback onPressed,
   }) {
     final button = OutlinedButton.icon(
+      // Keyed by scope and verb, so a test can press the pair belonging to one
+      // page rather than whichever undo arrow it happened to find first — the
+      // app has several, and they mean different things.
+      key: ValueKey('${scope.name}_${verb.toLowerCase()}'),
       icon: Icon(icon, size: 18),
       label: Text(enabled ? '$verb: $label' : verb),
       onPressed: enabled ? onPressed : null,
     );
-    if (blockedBy.isEmpty) return button;
+    if (blockedBy.isNotEmpty) {
+      return Tooltip(
+        message:
+            '$verb is waiting on a later edit on the $blockedBy tab, which '
+            'this one would undo with it. Deal with that tab first.',
+        child: button,
+      );
+    }
+    // A GREYED BUTTON HAS TO SAY WHY. Enabled, the label already carries the
+    // whole message — "Undo: Rack DMP 64" — and a tooltip repeating it would
+    // be noise. Greyed, the label collapses to the bare verb, and a control
+    // that has gone dead without saying so just looks broken.
+    if (enabled) return button;
     return Tooltip(
-      message:
-          '$verb is waiting on a later edit on the $blockedBy tab, which this '
-          'one would undo with it. Deal with that tab first.',
+      message: 'Nothing to ${verb.toLowerCase()} on '
+          '${avUndoScopeLabel(scope)}. This page keeps its own history, '
+          'separate from the other tabs.',
       child: button,
     );
   }
@@ -106,12 +122,16 @@ List<Widget> avUndoRedoIconButtons(
         key: ValueKey('${scope.name}_${verb.toLowerCase()}_icon'),
         icon: Icon(icon, size: 18),
         onPressed: enabled ? onPressed : null,
+        // THE ONLY THING THIS BUTTON SAYS. With no label beside it the
+        // tooltip carries the whole message: which history, and what is about
+        // to move in it.
         tooltip: blockedBy.isNotEmpty
             ? '$verb is waiting on a later edit on the $blockedBy tab, which '
                 'this one would undo with it. Deal with that tab first.'
             : enabled
-                ? '$verb: $label'
-                : 'Nothing to ${verb.toLowerCase()}',
+                ? '$verb on ${avUndoScopeLabel(scope)}: $label'
+                : 'Nothing to ${verb.toLowerCase()} on '
+                    '${avUndoScopeLabel(scope)}',
       );
 
   return [
@@ -173,14 +193,42 @@ ToolbarUndoTarget? toolbarUndoTarget(AppTab tab) => switch (tab) {
       AppTab.system ||
       AppTab.rawJson =>
         ToolbarUndoTarget.roomConfig,
-      // Everything else either draws its own pair (the four drawing tabs, the
-      // schematic, the estimate) or edits a document with no history yet (the
-      // catalog, the schema, the rule book, app settings).
+      // The three documents about the app rather than about a room: one file
+      // each, one tab each, and no canvas to hang a pair of buttons off.
+      AppTab.deviceEditor => ToolbarUndoTarget.catalog,
+      AppTab.schemaEditor => ToolbarUndoTarget.schema,
+      AppTab.flowRules => ToolbarUndoTarget.flowRules,
+      // Everything left draws its own pair — the four drawing tabs, the
+      // schematic, the estimate and the replacement plan — or is App Config,
+      // which is settings rather than a document.
       _ => null,
     };
 
 /// The document the title bar's Undo would act on.
-enum ToolbarUndoTarget { project, roomConfig }
+enum ToolbarUndoTarget { project, roomConfig, catalog, schema, flowRules }
+
+/// The [AppDataDocument] behind a target, or null for the two that are not one.
+AppDataDocument? _appDataFor(ToolbarUndoTarget target) => switch (target) {
+      ToolbarUndoTarget.catalog => AppDataDocument.catalog,
+      ToolbarUndoTarget.schema => AppDataDocument.schema,
+      ToolbarUndoTarget.flowRules => AppDataDocument.flowRules,
+      _ => null,
+    };
+
+/// What the tooltip calls the document it would step back.
+///
+/// SAID OUT LOUD, always. The title bar sits over every tab and the button in
+/// it acts on whichever document the page belongs to, so "Undo" alone leaves
+/// somebody guessing which of five things is about to move — and this app has
+/// had exactly that confusion once already, between this pair and the button
+/// that reverts a file backup beside it.
+String toolbarUndoNoun(ToolbarUndoTarget target) => switch (target) {
+      ToolbarUndoTarget.project => 'project',
+      ToolbarUndoTarget.roomConfig => 'room',
+      ToolbarUndoTarget.catalog => 'catalog',
+      ToolbarUndoTarget.schema => 'field schema',
+      ToolbarUndoTarget.flowRules => 'flow rules',
+    };
 
 /// Undo and Redo for whichever document the page on screen is editing.
 ///
@@ -197,19 +245,28 @@ class ToolbarUndoButtons extends StatelessWidget {
     if (target == null) return const SizedBox.shrink();
     final provider = context.watch<AppStateProvider>();
 
-    final noun = target == ToolbarUndoTarget.project ? 'project' : 'room';
-    final canUndo = target == ToolbarUndoTarget.project
-        ? provider.canUndoProject
-        : provider.canUndoRoomConfig;
-    final canRedo = target == ToolbarUndoTarget.project
-        ? provider.canRedoProject
-        : provider.canRedoRoomConfig;
-    final undoLabel = target == ToolbarUndoTarget.project
-        ? provider.projectUndoLabel
-        : provider.roomConfigUndoLabel;
-    final redoLabel = target == ToolbarUndoTarget.project
-        ? provider.projectRedoLabel
-        : provider.roomConfigRedoLabel;
+    final noun = toolbarUndoNoun(target);
+    final appData = _appDataFor(target);
+    final canUndo = switch (target) {
+      ToolbarUndoTarget.project => provider.canUndoProject,
+      ToolbarUndoTarget.roomConfig => provider.canUndoRoomConfig,
+      _ => provider.canUndoAppData(appData!),
+    };
+    final canRedo = switch (target) {
+      ToolbarUndoTarget.project => provider.canRedoProject,
+      ToolbarUndoTarget.roomConfig => provider.canRedoRoomConfig,
+      _ => provider.canRedoAppData(appData!),
+    };
+    final undoLabel = switch (target) {
+      ToolbarUndoTarget.project => provider.projectUndoLabel,
+      ToolbarUndoTarget.roomConfig => provider.roomConfigUndoLabel,
+      _ => provider.appDataUndoLabel(appData!),
+    };
+    final redoLabel = switch (target) {
+      ToolbarUndoTarget.project => provider.projectRedoLabel,
+      ToolbarUndoTarget.roomConfig => provider.roomConfigRedoLabel,
+      _ => provider.appDataRedoLabel(appData!),
+    };
 
     void report(String message) {
       if (message.isEmpty) return;
@@ -225,14 +282,18 @@ class ToolbarUndoButtons extends StatelessWidget {
         IconButton(
           key: const ValueKey('toolbar_undo'),
           icon: const Icon(Icons.undo),
-          // THE STEP IS NAMED. "Undo" alone asks somebody to remember what
-          // they last did, which is precisely what the person reaching for it
-          // has just lost track of.
+          // THE STEP AND THE DOCUMENT, both. "Undo" alone asks somebody to
+          // remember what they last did, which is precisely what the person
+          // reaching for it has lost track of — and this button sits in a
+          // title bar over five different documents, so which one is about to
+          // move is the other half of the question. Getting that wrong is not
+          // hypothetical here: an arrow in this bar that reverted a file
+          // backup was pressed for years by people meaning this.
           tooltip: canUndo
               ? undoLabel.isEmpty
-                  ? 'Undo the last change to this $noun (Ctrl+Z)'
-                  : 'Undo: $undoLabel (Ctrl+Z)'
-              : 'Nothing to undo on this $noun',
+                  ? 'Undo the last change to the $noun (Ctrl+Z)'
+                  : 'Undo on the $noun: $undoLabel (Ctrl+Z)'
+              : 'Nothing to undo on the $noun',
           onPressed: canUndo
               ? () => report(
                     switch (target) {
@@ -240,6 +301,7 @@ class ToolbarUndoButtons extends StatelessWidget {
                         _said('Undid', provider.undoProject()),
                       ToolbarUndoTarget.roomConfig =>
                         _said('Undid', provider.undoRoomConfig()),
+                      _ => _said('Undid', provider.undoAppData(appData!)),
                     },
                   )
               : null,
@@ -249,9 +311,9 @@ class ToolbarUndoButtons extends StatelessWidget {
           icon: const Icon(Icons.redo),
           tooltip: canRedo
               ? redoLabel.isEmpty
-                  ? 'Redo the last undone change (Ctrl+Y)'
-                  : 'Redo: $redoLabel (Ctrl+Y)'
-              : 'Nothing to redo on this $noun',
+                  ? 'Redo the last undone change to the $noun (Ctrl+Y)'
+                  : 'Redo on the $noun: $redoLabel (Ctrl+Y)'
+              : 'Nothing to redo on the $noun',
           onPressed: canRedo
               ? () => report(
                     switch (target) {
@@ -259,6 +321,7 @@ class ToolbarUndoButtons extends StatelessWidget {
                         _said('Redid', provider.redoProject()),
                       ToolbarUndoTarget.roomConfig =>
                         _said('Redid', provider.redoRoomConfig()),
+                      _ => _said('Redid', provider.redoAppData(appData!)),
                     },
                   )
               : null,

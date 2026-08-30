@@ -185,11 +185,62 @@ void main() {
     });
   });
 
+  group('a run of typing is one thing to take back', () {
+    test('a price typed digit by digit goes back in one press', () {
+      // THE BUG SOMEBODY REPORTED. A price box calls its provider on every
+      // keystroke, so `1499` arrived as four edits. The first press of Undo
+      // took the room back to `149` — a button that looks broken, because
+      // nobody thinks of a number they typed as four things they did.
+      final p = room();
+      for (final typed in [1, 14, 149, 1499]) {
+        p.setAvCostPrice('model:dmp 64', typed.toDouble());
+      }
+
+      expect(p.undoAvFlow(AvUndoScope.cost), isNotEmpty);
+
+      expect(p.avCost.priceOverrides['model:dmp 64'], isNull,
+          reason: 'the whole typed price went, not its last digit');
+      expect(p.canUndoAvFlow(AvUndoScope.cost), isFalse,
+          reason: 'and it was one step, not four');
+    });
+
+    test('two boxes are two steps, however fast they are typed', () {
+      // Coalescing keys on the FIELD. Merging on the kind of edit would make
+      // two prices typed one after another impossible to take back separately.
+      final p = room();
+      p.setAvCostPrice('model:dmp 64', 1499);
+      p.setAvCostPrice('model:dtp t usw 233', 899);
+
+      p.undoAvFlow(AvUndoScope.cost);
+      expect(p.avCost.priceOverrides['model:dtp t usw 233'], isNull);
+      expect(p.avCost.priceOverrides['model:dmp 64'], 1499,
+          reason: 'the box before it is its own step');
+
+      p.undoAvFlow(AvUndoScope.cost);
+      expect(p.avCost.priceOverrides['model:dmp 64'], isNull);
+    });
+
+    test('a press ends the run, so the next keystroke is a new step', () {
+      // Without this the keystroke after an Undo is folded into the step that
+      // was just undone, and the second press appears to do nothing.
+      final p = room();
+      p.setAvCostPrice('model:dmp 64', 1499);
+      p.undoAvFlow(AvUndoScope.cost);
+
+      p.setAvCostPrice('model:dmp 64', 250);
+      expect(p.canUndoAvFlow(AvUndoScope.cost), isTrue);
+      p.undoAvFlow(AvUndoScope.cost);
+      expect(p.avCost.priceOverrides['model:dmp 64'], isNull);
+    });
+  });
+
   group('the depth is the app\'s one number', () {
     test('sixty on the cost tab, like everywhere else', () {
       final p = room();
+      // Distinct fields, so each is its own step rather than one run of
+      // typing — which is what the depth is a count of.
       for (var i = 0; i < 75; i++) {
-        p.setAvCostPrice('model:dmp 64', 100 + i.toDouble());
+        p.setAvCostPrice('model:device $i', 100 + i.toDouble());
       }
       var back = 0;
       while (p.canUndoAvFlow(AvUndoScope.cost)) {

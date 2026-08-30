@@ -196,6 +196,49 @@ void main() {
       expect(r.history.depthBehind, 1, reason: 'still just the one edit');
     });
 
+    test('a notification that changed nothing does not light the button', () {
+      // THE FAILURE PEOPLE REPORT AS "the button does not work": an Undo lit
+      // for a tab switch or a selection, which notifies like everything else,
+      // and then does nothing when pressed. Being lit has to mean there is
+      // something behind it.
+      final r = rig();
+      r.recorder.touch();
+
+      expect(r.recorder.pending, isFalse, reason: 'the document did not move');
+
+      r.doc[0] = 'b';
+      r.recorder.touch();
+      expect(r.recorder.pending, isTrue, reason: 'and now it did');
+    });
+
+    test('the check is not paid for twice', () {
+      // Asking whether there is anything to undo encodes the document; the
+      // filing that follows reuses that encoding rather than making a second
+      // one. Counted, because this runs on every rebuild of a toolbar.
+      var encodes = 0;
+      final doc = <String>['a'];
+      final history = DocumentHistory();
+      final recorder = UndoRecorder(
+        history: history,
+        snapshot: () {
+          encodes++;
+          return doc.single;
+        },
+        label: (before, after) => 'edit',
+      );
+      history.begin(doc.single);
+
+      doc[0] = 'b';
+      recorder.touch();
+      expect(recorder.pending, isTrue);
+      expect(recorder.pending, isTrue, reason: 'asked twice, one answer');
+      final afterAsking = encodes;
+
+      recorder.flush();
+      expect(encodes, afterAsking, reason: 'the filing reused the encoding');
+      expect(history.depthBehind, 1);
+    });
+
     test('cancel forgets what was pending without filing it', () {
       final r = rig();
       r.doc[0] = 'b';

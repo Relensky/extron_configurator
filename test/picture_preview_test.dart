@@ -823,6 +823,99 @@ void main() {
     expect(dropped.height, lessThan(held.height));
   });
 
+  // ---------------------------------------------------------------------------
+  //  BACK AND FORWARD ON THE MARKS
+  // ---------------------------------------------------------------------------
+  //  This editor kept the only undo in the app that went one way, which is what
+  //  makes people stop pressing it: a stroke taken back by mistake meant
+  //  drawing it again by hand, on a picture somebody is annotating for a
+  //  report.
+  //
+  //  The pair lives at the END of the scrolling tool group rather than beside
+  //  Save and Close. The note at the head of that bar says why: the pinned
+  //  group has no slack, and a button added to it squeezes the tool viewport
+  //  until the tools themselves scroll out of reach.
+
+  testWidgets('a mark taken back can be put back', (tester) async {
+    await openEditor(tester);
+
+    final undo = find.byKey(const ValueKey('annotation_undo'));
+    final redo = find.byKey(const ValueKey('annotation_redo'));
+
+    // Nothing drawn: neither is offered, and both say why.
+    expect(tester.widget<IconButton>(undo).onPressed, isNull);
+    expect(tester.widget<IconButton>(redo).onPressed, isNull);
+    expect(tester.widget<IconButton>(undo).tooltip, contains('Nothing to undo'));
+
+    await drawArrow(tester);
+    expect(tester.widget<IconButton>(undo).onPressed, isNotNull);
+    expect(tester.widget<IconButton>(undo).tooltip, contains('last mark'));
+
+    await tester.tap(undo);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(tester.widget<IconButton>(undo).onPressed, isNull,
+        reason: 'the arrow went');
+    expect(tester.widget<IconButton>(redo).onPressed, isNotNull,
+        reason: 'and can be put back');
+
+    await tester.tap(redo);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(tester.widget<IconButton>(undo).onPressed, isNotNull,
+        reason: 'the arrow is back');
+    expect(tester.widget<IconButton>(redo).onPressed, isNull);
+  });
+
+  testWidgets('drawing over an undone mark ends the way forward',
+      (tester) async {
+    await openEditor(tester);
+    await drawArrow(tester);
+
+    await tester.tap(find.byKey(const ValueKey('annotation_undo')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('annotation_redo')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await drawArrow(tester);
+
+    // WHAT EVERY REDO IN EVERY PROGRAM DOES, and what people expect even when
+    // they could not say so: something undone and then drawn over is gone.
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('annotation_redo')))
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('the ways out keep their places', (tester) async {
+    // THE REGRESSION THIS FILE ALREADY CAUGHT ONCE. Adding a button to the
+    // pinned group pushed the tools out of their viewport and left taps
+    // landing on nothing. Save, Copy and Close have to stay reachable, and so
+    // do the tools.
+    await openEditor(tester);
+
+    for (final key in ['annotation_copy', 'annotation_undo']) {
+      expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+    }
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is IconButton && w.tooltip == 'Close without saving',
+      ),
+      findsOneWidget,
+    );
+    // And a tool still takes a tap, which is what broke last time.
+    await pickTool(tester, 'Select - move, recolour or retype a mark');
+  });
+
   testWidgets('the mark in hand is deleted without touching the others', (
     tester,
   ) async {

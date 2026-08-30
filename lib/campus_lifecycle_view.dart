@@ -793,16 +793,16 @@ class _CampusViewState extends State<_CampusView> {
             onPressed: _reading || !_history.canUndo ? null : _undoCampus,
             icon: const Icon(Icons.undo, size: 18),
             tooltip: _history.canUndo
-                ? 'Undo: ${_history.undoLabel}'
-                : 'Nothing to undo',
+                ? 'Undo on this campus: ${_history.undoLabel}'
+                : 'Nothing to undo on this campus',
           ),
           IconButton(
             key: const ValueKey('campus_redo'),
             onPressed: _reading || !_history.canRedo ? null : _redoCampus,
             icon: const Icon(Icons.redo, size: 18),
             tooltip: _history.canRedo
-                ? 'Redo: ${_history.redoLabel}'
-                : 'Nothing to redo',
+                ? 'Redo on this campus: ${_history.redoLabel}'
+                : 'Nothing to redo on this campus',
           ),
           const SizedBox(width: 8),
           // THE ASSEMBLY ITSELF, KEPT. See [_saveCampus].

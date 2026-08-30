@@ -676,6 +676,68 @@ class AvDeviceLibrary {
       );
   }
 
+  // -------------------------------------------------------------------------
+  //  THE WHOLE CATALOG, AS ONE VALUE
+  // -------------------------------------------------------------------------
+  //  What Undo on the Device Editor records and puts back. NOT the same
+  //  document [save] writes: that one holds only the entries that belong to
+  //  the user, because a built-in the app ships is not something to write into
+  //  somebody's file. A history has the opposite requirement — it has to be
+  //  able to restore EXACTLY what was on screen, built-ins included, or an
+  //  undo would quietly promote a shipped entry into a user one, or lose an
+  //  override and leave the built-in showing in its place.
+
+  /// Every entry and every family default, as a value that can be put back.
+  Map<String, dynamic> toDoc() => {
+        'entries': [
+          for (final t in _byModel.values)
+            {
+              // Which side of the line an entry is on is not in its own JSON —
+              // the file format has no need of it, since everything in the
+              // file is the user's by definition. Here it has to be carried.
+              if (t.custom) 'custom': true,
+              ...t.toJson(),
+            },
+        ],
+        'familyDefaults': {
+          for (final e in _familyDefaults.entries)
+            e.key: e.value.toJson()..remove('model'),
+        },
+      };
+
+  /// Replaces every entry with what [doc] holds.
+  ///
+  /// Wholesale rather than a merge: this is a restore, and a restore that
+  /// layered onto what is already there could not remove an entry somebody
+  /// had added — which is half of what Undo is for.
+  void applyDoc(Map<String, dynamic> doc) {
+    _byModel.clear();
+    _familyDefaults.clear();
+    for (final d in (doc['entries'] as List? ?? [])) {
+      if (d is! Map) continue;
+      final json = Map<String, dynamic>.from(d);
+      final t = AvDeviceTemplate.fromJson(json, custom: json['custom'] == true);
+      if (t.model.isEmpty) continue;
+      _byModel[_norm(t.model)] = t;
+    }
+    final families = doc['familyDefaults'];
+    if (families is Map) {
+      families.forEach((prefix, value) {
+        if (value is! Map) return;
+        final t = AvDeviceTemplate.fromJson({
+          'model': prefix.toString(),
+          ...Map<String, dynamic>.from(value),
+        });
+        if (t.ports.isNotEmpty) _familyDefaults[prefix.toString()] = t;
+      });
+    }
+    _invalidate();
+    // THE BASELINE IS LEFT ALONE. It records what the FILE held when this copy
+    // last read or wrote it, which an undo in memory does not change - and
+    // moving it would make the next save think another editor's entries were
+    // this one's to overwrite. See [_reconcileWithDisk].
+  }
+
   int get modelCount => _byModel.length;
 
   /// Entries that belong to the user — loaded from av_devices.json or edited

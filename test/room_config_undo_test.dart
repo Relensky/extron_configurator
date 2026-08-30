@@ -138,6 +138,31 @@ void main() {
     });
   });
 
+  group('the button says what it can do', () {
+    test('a rebuild that changed nothing leaves Undo dark', () {
+      // Switching tab, picking a row, opening a menu — all of them notify,
+      // and none of them is an edit. An Undo lit by one of those does nothing
+      // when pressed, which is what "the undo button is not working" means.
+      final p = room();
+      p.notifyListeners();
+      p.notifyListeners();
+
+      expect(p.canUndoRoomConfig, isFalse);
+      expect(p.undoRoomConfig(), '');
+    });
+
+    test('and lights the moment there is a real edit, before it is filed', () {
+      final p = room();
+      edit(p, () => p.roomConfig['DISPLAY_1']['model'] = 'Sony FW-65');
+
+      // Not filed yet — the step is still open — but there IS something
+      // behind the button, so it has to be pressable.
+      expect(p.canUndoRoomConfig, isTrue);
+      expect(p.undoRoomConfig(), isNotEmpty);
+      expect(p.roomConfig['DISPLAY_1']['model'], 'NEC C651Q');
+    });
+  });
+
   group('the step is named after what moved', () {
     test('one block changed is named for that block', () {
       final p = room();

@@ -494,7 +494,6 @@
       "category": "Cable",
       "rackUnits": 0,
       "powerInput": "none",
-      "price": 10.0,
       "cableSignal": "hdmi",
       "notes": "Priced per run; the quantity comes off the AV flow diagram.",
       "ports": []

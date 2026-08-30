@@ -66,6 +66,14 @@ class DocumentHistory {
   /// of Undo emptied the job.
   bool _started = false;
 
+  /// Whether a baseline has been taken — see [begin].
+  ///
+  /// Read by [UndoRecorder.pending], which must not report work waiting on a
+  /// history that has nothing to compare against: before a baseline, every
+  /// document differs from the empty string it starts at, and an Undo button
+  /// would sit lit over a room nobody has opened.
+  bool get started => _started;
+
   /// The document as the history currently believes it to be.
   ///
   /// Handed to the label callback so a document with no edit log of its own can
@@ -213,27 +221,51 @@ class UndoRecorder {
   /// When the last step was filed — what [settle] is measured from.
   DateTime? _filedAt;
 
-  /// Something has changed since then.
+  /// Something has notified since then.
   bool _dirty = false;
+
+  /// The document as of the last notification, once something has asked. Held
+  /// so that answering "is there anything to undo" and then filing it do not
+  /// encode the document twice.
+  String? _seen;
+
+  /// Whether [_seen] differs from what is filed — null until asked.
+  bool? _changed;
 
   /// True while a restore is being applied, so the notification the restore
   /// itself causes is not filed as a new edit — which would make Undo
   /// unrepeatable, each press recording the state the last one put back.
   bool restoring = false;
 
-  /// There is something to file.
+  /// There is a real, unfiled change waiting.
   ///
-  /// What lets an Undo button light up the instant somebody edits rather than
-  /// at the next filing. It can be true over a change that turns out to be no
-  /// change — a tab switch notifies too — and then Undo has nothing to do,
-  /// which is a duller failure than a button that visibly lags every edit.
-  bool get pending => _dirty;
+  /// WHAT LETS AN UNDO BUTTON BE HONEST. It has to light the instant somebody
+  /// edits rather than at the next filing, or the button lags every change —
+  /// but it must not light for a notification that changed nothing, because a
+  /// tab switch and a selection notify too, and an Undo that is lit and does
+  /// nothing when pressed is the exact failure people report as "the button
+  /// does not work".
+  ///
+  /// SO IT CHECKS, AND REMEMBERS THE CHECK. The encoding is kept and reused by
+  /// the filing that follows, so asking costs one encode per notification
+  /// rather than two — and nothing at all while the document sits still.
+  bool get pending {
+    if (!_dirty || restoring || !history.started) return false;
+    final known = _changed;
+    if (known != null) return known;
+    final now = snapshot();
+    _seen = now;
+    return _changed = now != history.current;
+  }
 
   /// Called from the app's change notification. Cheap: a bool and a clock
   /// reading, and an encoding only when the window has passed.
   void touch() {
     if (restoring) return;
     _dirty = true;
+    // The document has moved on, so whatever was worked out about it has not.
+    _seen = null;
+    _changed = null;
     final since = _filedAt;
     if (since == null) {
       // Nothing filed yet in this document's life. Start the window here
@@ -255,7 +287,11 @@ class UndoRecorder {
     _filedAt = DateTime.now();
     _dirty = false;
     final before = history.current;
-    final after = snapshot();
+    // Reuse the encoding [pending] already paid for, when it is still the
+    // current one — nothing can have changed since without notifying.
+    final after = _seen ?? snapshot();
+    _seen = null;
+    _changed = null;
     history.record(label(before, after), after);
   }
 
@@ -263,6 +299,8 @@ class UndoRecorder {
   /// being replaced.
   void cancel() {
     _dirty = false;
+    _seen = null;
+    _changed = null;
     _filedAt = null;
   }
 

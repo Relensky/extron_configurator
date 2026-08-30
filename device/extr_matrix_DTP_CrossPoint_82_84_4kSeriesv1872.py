@@ -16,6 +16,8 @@ DEVICE_INFO = {
         "DTP CrossPoint 82 4K IPCP Q MA 70",
         "DTP CrossPoint 82 4K IPCP Q SA",
         "DTP CrossPoint 84 4K",
+        "DTP CrossPoint 84 4K IPCP MA 70",
+        "DTP CrossPoint 84 4K IPCP SA",
         "DTP CrossPoint 84 4K IPCP Q MA 70",
         "DTP CrossPoint 84 4K IPCP Q SA",
     ],

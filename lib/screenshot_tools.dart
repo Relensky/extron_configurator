@@ -294,6 +294,26 @@ class AnnotationEditor extends StatefulWidget {
 class _AnnotationEditorState extends State<AnnotationEditor> {
   ui.Image? _image;
   final List<_Annotation> _annotations = [];
+
+  /// Marks taken off by Undo, so Redo can put them back.
+  ///
+  /// EMPTIED BY THE NEXT MARK, like every redo in this app: something undone
+  /// and then drawn over is gone. This editor was the last place left where an
+  /// undo could not be reconsidered, which is what makes people stop pressing
+  /// it — and on a screenshot somebody is annotating for a report, a stroke
+  /// taken back by mistake means drawing it again by hand.
+  final List<_Annotation> _undoneAnnotations = [];
+
+  /// Takes the last mark off and keeps it.
+  void _undoAnnotation() => setState(() {
+        final gone = _annotations.removeLast();
+        if (identical(gone, _selected)) _selected = null;
+        _undoneAnnotations.add(gone);
+      });
+
+  /// Puts back the mark the last Undo took.
+  void _redoAnnotation() =>
+      setState(() => _annotations.add(_undoneAnnotations.removeLast()));
   _Annotation? _active; // The annotation being drawn right now.
 
   /// The mark the pointer has hold of, or null.
@@ -442,6 +462,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
   void _onPanEnd() {
     if (_active == null) return;
     setState(() {
+      _undoneAnnotations.clear();
       _annotations.add(_active!);
       _active = null;
     });
@@ -490,6 +511,7 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
         points: [imagePos],
         text: text.trim(),
       );
+      _undoneAnnotations.clear();
       _annotations.add(added);
       // Left selected, so the label just placed is the one the next colour or
       // size change lands on - and so it is obvious it can still be moved.
@@ -823,20 +845,56 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                           }),
                         ),
                       ),
+                      // STARTING OVER LIVES WITH THE TOOLS. It is the one
+                      // control here nobody reaches for in a hurry - and
+                      // something had to leave the pinned group to make room
+                      // for Redo beside Undo, which people DO reach for in a
+                      // hurry. See the note at the head of this bar for why
+                      // that group cannot simply grow.
+                      const SizedBox(width: 12),
+                      IconButton(
+                        key: const ValueKey('annotation_clear'),
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        tooltip: 'Clear all annotations',
+                        onPressed: _annotations.isEmpty
+                            ? null
+                            : () => setState(() {
+                                  _annotations.clear();
+                                  _undoneAnnotations.clear();
+                                  _selected = null;
+                                }),
+                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(width: 8),
+              // BACK AND FORWARD, PINNED. Undo has always been reachable
+              // without scrolling and has to stay that way: it is what
+              // somebody grabs the instant a stroke goes wrong, and a control
+              // you have to go looking for at that moment is one you stop
+              // trusting. Redo earns its place beside it for the same reason
+              // the rest of the app has one — an undo that cannot be
+              // reconsidered is an undo people are wary of pressing.
+              //
+              // Room was made by moving Clear all in with the tools rather
+              // than by widening this group, which has none to spare.
               IconButton(
+                key: const ValueKey('annotation_undo'),
                 icon: const Icon(Icons.undo, size: 20),
-                tooltip: 'Undo last annotation',
-                onPressed: _annotations.isEmpty
-                    ? null
-                    : () => setState(() {
-                        final gone = _annotations.removeLast();
-                        if (identical(gone, _selected)) _selected = null;
-                      }),
+                tooltip: _annotations.isEmpty
+                    ? 'Nothing to undo - no marks on this picture yet'
+                    : 'Undo the last mark drawn on this picture',
+                onPressed: _annotations.isEmpty ? null : _undoAnnotation,
+              ),
+              IconButton(
+                key: const ValueKey('annotation_redo'),
+                icon: const Icon(Icons.redo, size: 20),
+                tooltip: _undoneAnnotations.isEmpty
+                    ? 'Nothing to redo - nothing has been undone'
+                    : 'Redo the mark that was undone',
+                onPressed:
+                    _undoneAnnotations.isEmpty ? null : _redoAnnotation,
               ),
               // RETYPING, SAID OUT LOUD. Double-clicking the label does the
               // same thing and is quicker, but a gesture is not an
@@ -861,16 +919,6 @@ class _AnnotationEditorState extends State<AnnotationEditor> {
                 icon: const Icon(Icons.backspace_outlined, size: 18),
                 tooltip: 'Delete the selected mark',
                 onPressed: _selected == null ? null : _deleteSelected,
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 20),
-                tooltip: 'Clear all annotations',
-                onPressed: _annotations.isEmpty
-                    ? null
-                    : () => setState(() {
-                        _annotations.clear();
-                        _selected = null;
-                      }),
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(

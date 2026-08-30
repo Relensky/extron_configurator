@@ -12,7 +12,6 @@ import 'package:extron_configurator/base_costs.dart';
 import 'package:extron_configurator/cost_estimate.dart';
 import 'package:extron_configurator/cost_estimate_view.dart';
 import 'package:extron_configurator/equipment_lifecycle.dart';
-import 'package:extron_configurator/report_tools.dart';
 
 /// FURNISHED FROM SOMEWHERE ELSE.
 ///

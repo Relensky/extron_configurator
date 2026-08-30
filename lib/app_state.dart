@@ -255,6 +255,21 @@ typedef SchematicLayout = ({
   String panel,
 });
 
+/// The three documents that are about the APP rather than about a room or a
+/// job: the equipment catalog, the field schema and the flow rule book.
+///
+/// Grouped because they behave the same way in every respect that matters
+/// here — each is one file in the Root Folder, each is edited on its own tab,
+/// each is written only by its own Save, and each now keeps its own history.
+enum AppDataDocument { catalog, schema, flowRules }
+
+/// What each is called where a person reads it.
+const Map<AppDataDocument, String> kAppDataDocumentNames = {
+  AppDataDocument.catalog: 'catalog',
+  AppDataDocument.schema: 'field schema',
+  AppDataDocument.flowRules: 'flow rules',
+};
+
 class AppStateProvider extends ChangeNotifier {
   /// Whether this room has a control system yet. See [RoomMode]; persisted in
   /// the AV sidecar, because for an AV-only room that is the only document
@@ -2360,7 +2375,36 @@ class AppStateProvider extends ChangeNotifier {
     );
   }
 
-  void _pushAvUndo(String label, Set<AvUndoScope> scopes) {
+  /// What the last entry was coalescing, and when it last absorbed a
+  /// keystroke — see [_pushAvUndo].
+  ({String key, DateTime at})? _avUndoRun;
+
+  /// How long a run of typing goes on being ONE undo step.
+  ///
+  /// Shorter than the log's [kEditCoalesceWindow], which is two minutes,
+  /// because the two are answering different questions. The log asks "is this
+  /// the same edit somebody is still making", and two minutes later it is. Undo
+  /// asks "is this the same thing they would expect one press to take back",
+  /// and after a couple of seconds of not typing it is a new thing.
+  static const Duration _kUndoCoalesceWindow = Duration(seconds: 2);
+
+  /// Records the state before an edit, under a name for the button.
+  ///
+  /// [coalesce] names a RUN OF TYPING that should go back in one press. A price
+  /// box calls its provider on every keystroke, so `1499` arrived as four edits
+  /// and four presses of Undo — the first of which took the room back to `149`,
+  /// which reads as a button that does not work. Passing the same key for
+  /// consecutive keystrokes keeps the FIRST snapshot, so one press puts back
+  /// the value as it was before the typing started.
+  ///
+  /// The key has to name the FIELD, not the kind of edit: two prices typed one
+  /// after another are two things to take back, and coalescing on 'price' alone
+  /// would merge them.
+  void _pushAvUndo(
+    String label,
+    Set<AvUndoScope> scopes, {
+    String coalesce = '',
+  }) {
     // The room's log rides on the undo stack: anything undoable is an edit,
     // and it already carries a sentence saying what it did. See the note above
     // [logRoomEdit] on why these two hooks are the whole story.
@@ -2378,10 +2422,28 @@ class AppStateProvider extends ChangeNotifier {
       summary: label,
       coalesce: true,
     );
+
+    // AN EDIT ALWAYS ENDS THE FUTURE, coalesced or not: what was undone and
+    // then typed over is gone. Done before the early return below, because a
+    // keystroke absorbed into an existing step is still a keystroke.
+    _avRedoStack.removeWhere((e) => e.slices.keys.any(scopes.contains));
+
+    final now = DateTime.now();
+    final run = _avUndoRun;
+    if (coalesce.isNotEmpty &&
+        run != null &&
+        run.key == coalesce &&
+        _avUndoStack.isNotEmpty &&
+        now.difference(run.at).abs() < _kUndoCoalesceWindow) {
+      // The entry already on the stack holds the state before this run of
+      // typing began, which is exactly what one press should put back.
+      _avUndoRun = (key: coalesce, at: now);
+      return;
+    }
+
     _avUndoStack.add((label: label, slices: _sliceAvFlow(scopes)));
     if (_avUndoStack.length > _kMaxUndoDepth) _avUndoStack.removeAt(0);
-    // Only the branches this edit actually invalidates.
-    _avRedoStack.removeWhere((e) => e.slices.keys.any(scopes.contains));
+    _avUndoRun = coalesce.isEmpty ? null : (key: coalesce, at: now);
   }
 
   /// Puts [scope]'s tab back the way it was before its last edit. Returns what
@@ -2390,6 +2452,10 @@ class AppStateProvider extends ChangeNotifier {
     final found = _topAvEdit(_avUndoStack, scope);
     final edit = found.edit;
     if (edit == null) return '';
+    // A press ends the run of typing. Without this the next keystroke would be
+    // folded into the step that has just been undone, and the second press of
+    // Undo would appear to do nothing.
+    _avUndoRun = null;
     _avUndoStack.removeAt(found.at);
     // The state being left, filed under the same name and the same scopes:
     // "Undo: Move box" and "Redo: Move box" have to describe the same edit
@@ -2414,6 +2480,7 @@ class AppStateProvider extends ChangeNotifier {
     final found = _topAvEdit(_avRedoStack, scope);
     final edit = found.edit;
     if (edit == null) return '';
+    _avUndoRun = null;
     _avRedoStack.removeAt(found.at);
     _avUndoStack.add((
       label: edit.label,
@@ -3448,13 +3515,13 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void setCablingBoxLabel(String id, String label) {
-    _pushAvUndo('Rename box', _cablingScope);
+    _pushAvUndo('Rename box', _cablingScope, coalesce: 'cabling:label:$id');
     avCabling.labels[id] = label;
     notifyListeners();
   }
 
   void setCablingBoxBody(String id, String body) {
-    _pushAvUndo('Edit notes', _cablingScope);
+    _pushAvUndo('Edit notes', _cablingScope, coalesce: 'cabling:body:$id');
     avCabling.bodies[id] = body;
     notifyListeners();
   }
@@ -3462,7 +3529,8 @@ class AppStateProvider extends ChangeNotifier {
   /// Types a count over the one the room worked out. Passing null puts the
   /// derived figure back, which is the only way out of an override.
   void setCablingBundleCount(String id, double? count) {
-    _pushAvUndo('Set cable count', _cablingScope);
+    _pushAvUndo('Set cable count', _cablingScope,
+        coalesce: count == null ? '' : 'cabling:count:$id');
     if (count == null) {
       avCabling.counts.remove(id);
     } else {
@@ -3472,7 +3540,8 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void setCablingBundleType(String id, String? type) {
-    _pushAvUndo('Set cable type', _cablingScope);
+    _pushAvUndo('Set cable type', _cablingScope,
+        coalesce: 'cabling:type:$id');
     if (type == null || type.trim().isEmpty) {
       avCabling.cableTypes.remove(id);
     } else {
@@ -3608,7 +3677,10 @@ class AppStateProvider extends ChangeNotifier {
     String? fromLabel,
     String? toLabel,
   }) {
-    _pushAvUndo('Label the end of a run', _cablingScope);
+    // One key for both ends: they are two boxes on one row, and somebody
+    // tabbing from one to the other is still labelling the same run.
+    _pushAvUndo('Label the end of a run', _cablingScope,
+        coalesce: 'cabling:ends:$id');
     void set(Map<String, String> into, String? value) {
       if (value == null) return;
       if (value.trim().isEmpty) {
@@ -4335,6 +4407,13 @@ class AppStateProvider extends ChangeNotifier {
               ? 'Tax label'
               : 'Currency',
       _costScope,
+      // Typed, so a run of keystrokes is one step. Keyed per field: the rate
+      // and the label are two boxes and two things to take back.
+      coalesce: percent != null
+          ? 'cost:tax:percent'
+          : label != null
+              ? 'cost:tax:label'
+              : '',
     );
     if (percent != null) avCost.taxPercent = math.max(0, percent);
     if (label != null) avCost.taxLabel = label;
@@ -4353,7 +4432,8 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostFee(CostFee fee) {
     final index = avCost.fees.indexWhere((f) => f.id == fee.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${fee.name}', _costScope);
+    _pushAvUndo('Edit ${fee.name}', _costScope,
+        coalesce: 'cost:fee:${fee.id}');
     avCost.fees[index] = fee;
     notifyListeners();
   }
@@ -4369,7 +4449,12 @@ class AppStateProvider extends ChangeNotifier {
   /// Sets this room's price for one estimate line, or clears it back to the
   /// catalog price when [price] is null.
   void setAvCostPrice(String lineKey, double? price) {
-    _pushAvUndo(price == null ? 'Clear price' : 'Price', _costScope);
+    // Per line: two prices typed one after another are two steps.
+    _pushAvUndo(
+      price == null ? 'Clear price' : 'Price',
+      _costScope,
+      coalesce: price == null ? '' : 'cost:price:$lineKey',
+    );
     if (price == null) {
       avCost.priceOverrides.remove(lineKey);
     } else {
@@ -4404,7 +4489,8 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostItem(CostLineItem item) {
     final index = avCost.items.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
+        coalesce: 'cost:item:${item.id}');
     avCost.items[index] = item;
     notifyListeners();
   }
@@ -4460,7 +4546,8 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostExtraEquipment(CostLineItem item) {
     final index = avCost.extraEquipment.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
+        coalesce: 'cost:extraEquipment:${item.id}');
     avCost.extraEquipment[index] = item;
     notifyListeners();
   }
@@ -4617,7 +4704,8 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostExtraHardware(CostLineItem item) {
     final index = avCost.extraHardware.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
+        coalesce: 'cost:extraHardware:${item.id}');
     avCost.extraHardware[index] = item;
     notifyListeners();
   }
@@ -4660,7 +4748,8 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostExtraCable(CostLineItem item) {
     final index = avCost.extraCables.indexWhere((i) => i.id == item.id);
     if (index < 0) return;
-    _pushAvUndo('Edit ${_costLineName(item)}', _costScope);
+    _pushAvUndo('Edit ${_costLineName(item)}', _costScope,
+        coalesce: 'cost:extraCables:${item.id}');
     avCost.extraCables[index] = item;
     notifyListeners();
   }
@@ -4746,7 +4835,8 @@ class AppStateProvider extends ChangeNotifier {
   /// 0 clears the entry rather than storing a zero, so the sidecar only
   /// records decisions somebody actually made.
   void setAvCableSpares(String lineKey, double qty) {
-    _pushAvUndo('Spare cable runs', _costScope);
+    _pushAvUndo('Spare cable runs', _costScope,
+        coalesce: 'cost:cableSpares:$lineKey');
     if (qty <= 0) {
       avCost.cableSpares.remove(lineKey);
     } else {
@@ -4760,7 +4850,8 @@ class AppStateProvider extends ChangeNotifier {
   /// Units of one equipment line bought beyond the ones on the diagram — the
   /// cable spares box, for the boxes. See [RoomCostSettings.equipmentSpares].
   void setAvEquipmentSpares(String lineKey, double qty) {
-    _pushAvUndo('Spare units', _costScope);
+    _pushAvUndo('Spare units', _costScope,
+        coalesce: 'cost:equipmentSpares:$lineKey');
     if (qty <= 0) {
       avCost.equipmentSpares.remove(lineKey);
     } else {
@@ -5267,7 +5358,8 @@ class AppStateProvider extends ChangeNotifier {
   void setAvCableLength(String cableId, double feet) {
     final index = avCables.indexWhere((c) => c.id == cableId);
     if (index < 0) return;
-    _pushAvUndo('Set cable length', _flowScope);
+    _pushAvUndo('Set cable length', _flowScope,
+        coalesce: 'flow:length:$cableId');
     avCables[index] = avCables[index].copyWith(lengthFt: feet < 0 ? 0 : feet);
     notifyListeners();
   }
@@ -6776,6 +6868,14 @@ class AppStateProvider extends ChangeNotifier {
     // test ever depends on a keystore being present.
     _secrets = secretStore ??
         (autoLoadSettings ? OsSecretStore() : InMemorySecretStore());
+    // THE THREE APP DOCUMENTS START WITH A BASELINE. They exist from the
+    // moment this object does — the built-ins are a real catalog, a real
+    // schema and a real rule book — so unlike a room or a job there is no
+    // "opened" moment to take one at. Without this the FIRST edit to any of
+    // them would be swallowed as the baseline instead of being undoable.
+    for (final doc in AppDataDocument.values) {
+      appDataReplaced(doc);
+    }
     if (autoLoadSettings) _loadSavedSettings();
   }
 
@@ -7854,6 +7954,10 @@ class AppStateProvider extends ChangeNotifier {
     // else '' so UiSchema.load runs its own working-dir/executable search.
     uiSchema = await UiSchema.load(
         explicitPath: _resolveOptionalFile(uiSchemaPath, 'ui_schema.json'));
+    // READ OFF DISK IS A DIFFERENT DOCUMENT, not an edit to this one, so
+    // its history starts here. Before the notify, so nothing can be told
+    // about the new document while the old one's steps are still behind it.
+    appDataReplaced(AppDataDocument.schema);
     notifyListeners();
   }
 
@@ -7906,6 +8010,10 @@ class AppStateProvider extends ChangeNotifier {
     avDeviceLibrary = await AvDeviceLibrary.load(
         explicitPath:
             _resolveOptionalFile(avDevicesFilePath, 'av_devices.json'));
+    // READ OFF DISK IS A DIFFERENT DOCUMENT, not an edit to this one, so
+    // its history starts here. Before the notify, so nothing can be told
+    // about the new document while the old one's steps are still behind it.
+    appDataReplaced(AppDataDocument.catalog);
     notifyListeners();
   }
 
@@ -8036,6 +8144,10 @@ class AppStateProvider extends ChangeNotifier {
     flowRules = await FlowRules.load(
         explicitPath:
             _resolveOptionalFile(flowRulesFilePath, 'av_flow_rules.json'));
+    // READ OFF DISK IS A DIFFERENT DOCUMENT, not an edit to this one, so
+    // its history starts here. Before the notify, so nothing can be told
+    // about the new document while the old one's steps are still behind it.
+    appDataReplaced(AppDataDocument.flowRules);
     notifyListeners();
   }
 
@@ -8137,7 +8249,8 @@ class AppStateProvider extends ChangeNotifier {
   void updateAvCostLabor(LaborLine line) {
     final index = avCost.labor.indexWhere((l) => l.id == line.id);
     if (index < 0) return;
-    _pushAvUndo('Edit labor', _costScope);
+    _pushAvUndo('Edit labor', _costScope,
+        coalesce: 'cost:labor:${line.id}');
     avCost.labor[index] = line;
     notifyListeners();
   }
@@ -10927,6 +11040,9 @@ class AppStateProvider extends ChangeNotifier {
   void recordUndoPoint() {
     _projectUndo.flush();
     _configUndo.flush();
+    for (final doc in AppDataDocument.values) {
+      _appDataRecorder(doc).flush();
+    }
   }
 
   /// Whether there is anything to go back to, or forward to, on the job.
@@ -11157,6 +11273,272 @@ class AppStateProvider extends ChangeNotifier {
       // The forms read their initial values once per element, so without this
       // the fields on screen would go on showing what was undone.
       _bumpConfigRevision();
+      notifyListeners();
+    });
+  }
+
+
+  // -------------------------------------------------------------------------
+  //  UNDO FOR THE THREE DOCUMENTS ABOUT THE APP ITSELF
+  // -------------------------------------------------------------------------
+  //  The catalog, the field schema and the flow rule book are not a room and
+  //  not a job: they are the documents that decide how every room behaves.
+  //  That makes a mistake in them WIDER than a mistake in a room — a connector
+  //  deleted off a catalog entry changes every drawing that model appears on,
+  //  and a rule retyped changes how rooms draw themselves from now on — and
+  //  until now they were the three editors in the app with no way back.
+  //
+  //  THEY RECORD STATES, like the job and the room's config and for the same
+  //  reason: the editors write straight into these objects from a dozen places
+  //  each, and instrumenting every one of them means the one that gets
+  //  forgotten is an edit Undo silently steps over.
+  //
+  //  WHAT AN UNDO HERE DOES NOT DO IS TOUCH THE FILE. All three are written
+  //  only by their own Save, so stepping back through edits is a change of
+  //  mind in memory — which is also why undoing past a save is allowed rather
+  //  than blocked. What is on disk stays where the last Save put it until
+  //  somebody presses Save again.
+
+  final DocumentHistory _catalogHistory = DocumentHistory();
+  final DocumentHistory _schemaHistory = DocumentHistory();
+  final DocumentHistory _flowRulesHistory = DocumentHistory();
+
+  late final UndoRecorder _catalogUndo = UndoRecorder(
+    history: _catalogHistory,
+    snapshot: () => _encodeDoc(avDeviceLibrary.toDoc(), _catalogHistory),
+    label: (before, after) => _docEditLabel(before, after, 'entries'),
+  );
+
+  late final UndoRecorder _schemaUndo = UndoRecorder(
+    history: _schemaHistory,
+    snapshot: () => _encodeDoc(_schemaSnapshotDoc(), _schemaHistory),
+    label: (before, after) => _docEditLabel(before, after, 'fields'),
+  );
+
+  /// The key a schema snapshot carries when there is no document to carry.
+  ///
+  /// [UiSchema.rawDoc] is empty on a schema that came from the BUILT-INS —
+  /// they are constructed in code, not read from a file — and
+  /// [UiSchema.fromDoc] refuses a document with no "fields" in it. So a
+  /// snapshot of the built-in schema cannot be its raw document; it has to be
+  /// a note saying which schema it was, or the first Undo after editing a
+  /// built-in schema throws on the way back.
+  static const String _kBuiltInSchema = '__builtInSchema';
+
+  Map<String, dynamic> _schemaSnapshotDoc() {
+    final doc = uiSchema.rawDoc;
+    return doc['fields'] is Map ? doc : const {_kBuiltInSchema: true};
+  }
+
+  late final UndoRecorder _flowRulesUndo = UndoRecorder(
+    history: _flowRulesHistory,
+    snapshot: () => _encodeDoc(flowRules.toJson(), _flowRulesHistory),
+    label: (before, after) => _docEditLabel(before, after, 'rules'),
+  );
+
+  /// A document, encoded, or what the history already holds when it will not
+  /// encode.
+  ///
+  /// A document that cannot be encoded cannot be recorded, and filing nothing
+  /// is the safe answer: no undo step is better than a step that restores
+  /// something the app cannot rebuild.
+  static String _encodeDoc(Object doc, DocumentHistory history) {
+    try {
+      return jsonEncode(doc);
+    } catch (_) {
+      return history.current;
+    }
+  }
+
+  /// What changed between two encodings of an app document.
+  ///
+  /// These keep no log of their own, so the step is named by comparing — the
+  /// same bargain the room's config makes. [listKey] names the list that holds
+  /// the document's items, so a catalog entry can be named by its model rather
+  /// than reported as "something under entries changed".
+  static String _docEditLabel(String before, String after, String listKey) {
+    Map<String, dynamic> decode(String raw) {
+      if (raw.isEmpty) return const {};
+      try {
+        final doc = jsonDecode(raw);
+        return doc is Map<String, dynamic> ? doc : const {};
+      } catch (_) {
+        return const {};
+      }
+    }
+
+    final was = decode(before);
+    final now = decode(after);
+    if (was.isEmpty) return 'Edit';
+
+    // THE ITEM LIST FIRST, because that is what somebody edited. A catalog is
+    // a list of models and a rule book is a list of rules; naming the step
+    // after the one that moved is the difference between "Undo: DMP 64" and
+    // "Undo".
+    final wasList = _docItemsByName(was[listKey]);
+    final nowList = _docItemsByName(now[listKey]);
+    if (wasList != null && nowList != null) {
+      final added = [for (final k in nowList.keys) if (!wasList.containsKey(k)) k];
+      final gone = [for (final k in wasList.keys) if (!nowList.containsKey(k)) k];
+      final changed = [
+        for (final e in nowList.entries)
+          if (wasList.containsKey(e.key) && wasList[e.key] != e.value) e.key,
+      ];
+      if (added.length == 1 && gone.isEmpty && changed.isEmpty) {
+        return 'Add ${added.single}';
+      }
+      if (gone.length == 1 && added.isEmpty && changed.isEmpty) {
+        return 'Remove ${gone.single}';
+      }
+      // A RENAME reads as one gone and one arrived. Said as a rename rather
+      // than as "2 changes", because that is what somebody did.
+      if (added.length == 1 && gone.length == 1 && changed.isEmpty) {
+        return 'Rename ${gone.single}';
+      }
+      final touched = [...added, ...gone, ...changed];
+      if (touched.length == 1) return touched.single;
+      if (touched.length > 1) return '${touched.length} entries';
+    }
+
+    // Nothing in the list moved, so it was one of the document's own settings.
+    final keys = [
+      for (final k in now.keys)
+        if (k != listKey && jsonEncode(was[k]) != jsonEncode(now[k])) k,
+    ];
+    if (keys.length == 1) return keys.single;
+    return keys.isEmpty ? 'Edit' : '${keys.length} changes';
+  }
+
+  /// One document's items keyed by the name a person calls them, or null when
+  /// the value is not a shape this can read.
+  ///
+  /// Handles both shapes these documents use: a LIST of objects each carrying
+  /// a name ('model'), and an OBJECT keyed by name. The rule book and the
+  /// schema are the second; the catalog is the first.
+  static Map<String, String>? _docItemsByName(Object? value) {
+    if (value is List) {
+      final out = <String, String>{};
+      for (final item in value) {
+        if (item is! Map) continue;
+        final name = (item['model'] ?? item['name'] ?? item['id'] ?? '')
+            .toString()
+            .trim();
+        if (name.isEmpty) continue;
+        out[name] = jsonEncode(item);
+      }
+      return out;
+    }
+    if (value is Map) {
+      return {
+        for (final e in value.entries) e.key.toString(): jsonEncode(e.value),
+      };
+    }
+    return null;
+  }
+
+  UndoRecorder _appDataRecorder(AppDataDocument doc) => switch (doc) {
+        AppDataDocument.catalog => _catalogUndo,
+        AppDataDocument.schema => _schemaUndo,
+        AppDataDocument.flowRules => _flowRulesUndo,
+      };
+
+  DocumentHistory _appDataHistory(AppDataDocument doc) => switch (doc) {
+        AppDataDocument.catalog => _catalogHistory,
+        AppDataDocument.schema => _schemaHistory,
+        AppDataDocument.flowRules => _flowRulesHistory,
+      };
+
+  /// Called from [notifyListeners] for all three.
+  void _touchAppDataHistories() {
+    _catalogUndo.touch();
+    _schemaUndo.touch();
+    _flowRulesUndo.touch();
+  }
+
+  /// Starts [doc]'s history again at the document as it stands.
+  ///
+  /// Called after the document is REPLACED rather than edited — read off disk,
+  /// or assigned wholesale. Carrying the old document's steps across would let
+  /// Undo paste the catalog somebody had finished with over the one they just
+  /// opened.
+  ///
+  /// Public because replacing one of these is not only something this class
+  /// does: the three fields are assignable, and anything that swaps one has to
+  /// be able to say so.
+  void appDataReplaced(AppDataDocument doc) {
+    final recorder = _appDataRecorder(doc);
+    recorder.cancel();
+    _appDataHistory(doc).begin(recorder.snapshot());
+  }
+
+  bool canUndoAppData(AppDataDocument doc) =>
+      _appDataHistory(doc).canUndo || _appDataRecorder(doc).pending;
+
+  bool canRedoAppData(AppDataDocument doc) => _appDataHistory(doc).canRedo;
+
+  String appDataUndoLabel(AppDataDocument doc) => _appDataHistory(doc).undoLabel;
+  String appDataRedoLabel(AppDataDocument doc) => _appDataHistory(doc).redoLabel;
+
+  int appDataUndoDepth(AppDataDocument doc) => _appDataHistory(doc).depthBehind;
+
+  /// Steps [doc] back one edit. Returns what was undone, or '' when there was
+  /// nothing to undo.
+  String undoAppData(AppDataDocument doc) {
+    final recorder = _appDataRecorder(doc);
+    final history = _appDataHistory(doc);
+    recorder.flush();
+    final label = history.undoLabel;
+    final state = history.undo();
+    if (state == null) return '';
+    _applyAppDataSnapshot(doc, state, recorder);
+    AppLogger.logInfo('Undid on the ${kAppDataDocumentNames[doc]}: $label');
+    return label;
+  }
+
+  /// Puts back what the last Undo on [doc] took away.
+  String redoAppData(AppDataDocument doc) {
+    final recorder = _appDataRecorder(doc);
+    final history = _appDataHistory(doc);
+    recorder.flush();
+    final label = history.redoLabel;
+    final state = history.redo();
+    if (state == null) return '';
+    _applyAppDataSnapshot(doc, state, recorder);
+    AppLogger.logInfo('Redid on the ${kAppDataDocumentNames[doc]}: $label');
+    return label;
+  }
+
+  void _applyAppDataSnapshot(
+    AppDataDocument doc,
+    String state,
+    UndoRecorder recorder,
+  ) {
+    final decoded = jsonDecode(state);
+    if (decoded is! Map<String, dynamic>) return;
+    recorder.applying(() {
+      switch (doc) {
+        case AppDataDocument.catalog:
+          avDeviceLibrary.applyDoc(decoded);
+        case AppDataDocument.schema:
+          // Through fromDoc so every derived table the schema builds off its
+          // raw document is rebuilt with it. Assigning rawDoc alone would
+          // leave the forms reading the old field list.
+          //
+          // WHERE IT CAME FROM IS NOT PART OF IT. The source is where the
+          // document IS rather than what it says, and an undo that blanked it
+          // would leave Save with nowhere to write.
+          final source = uiSchema.source;
+          uiSchema = (decoded[_kBuiltInSchema] == true
+              ? UiSchema.builtIn()
+              : UiSchema.fromDoc(decoded))
+            ..source = source;
+        case AppDataDocument.flowRules:
+          flowRules = FlowRules.fromJson(decoded);
+          // A rule edit only reaches a room that is already drawn once the
+          // routing pass is allowed to run again — the same clearing
+          // [applyFlowRules] does, and for the same reason.
+          avRoutedFingerprint = '';
+      }
       notifyListeners();
     });
   }
@@ -13967,6 +14349,7 @@ class AppStateProvider extends ChangeNotifier {
     // once per keystroke. See undo_history.dart.
     _projectUndo.touch();
     _touchConfigHistory();
+    _touchAppDataHistories();
     super.notifyListeners();
   }
 

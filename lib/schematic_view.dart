@@ -1342,37 +1342,52 @@ class _SchematicViewState extends State<SchematicView> {
           ),
           // Undoes the last layout edit: a moved node, a drawn or deleted
           // line, a color, a Reset Layout.
-          OutlinedButton.icon(
-            icon: const Icon(Icons.undo, size: 18),
-            label: Text(
-              provider.canUndoSchematic
-                  ? 'Undo: ${provider.schematicUndoLabel}'
-                  : 'Undo',
+          Tooltip(
+            message: provider.canUndoSchematic
+                ? 'Undo on the control schematic: '
+                    '${provider.schematicUndoLabel}'
+                : 'Nothing to undo on the control schematic. This drawing '
+                    'keeps its own history, separate from the other tabs.',
+            child: OutlinedButton.icon(
+              key: const ValueKey('schematic_undo'),
+              icon: const Icon(Icons.undo, size: 18),
+              label: Text(
+                provider.canUndoSchematic
+                    ? 'Undo: ${provider.schematicUndoLabel}'
+                    : 'Undo',
+              ),
+              onPressed: provider.canUndoSchematic
+                  ? () {
+                      final undone = provider.undoSchematic();
+                      if (undone.isNotEmpty) _snack('Undid: $undone');
+                    }
+                  : null,
             ),
-            onPressed: provider.canUndoSchematic
-                ? () {
-                    final undone = provider.undoSchematic();
-                    if (undone.isNotEmpty) _snack('Undid: $undone');
-                  }
-                : null,
           ),
           // AND FORWARD AGAIN. This page went one way for a long time, which
           // is why people here were wary of pressing Undo at all: on every
           // other page an undo can be reconsidered, and on this one it could
           // not.
-          OutlinedButton.icon(
-            icon: const Icon(Icons.redo, size: 18),
-            label: Text(
-              provider.canRedoSchematic
-                  ? 'Redo: ${provider.schematicRedoLabel}'
-                  : 'Redo',
+          Tooltip(
+            message: provider.canRedoSchematic
+                ? 'Redo on the control schematic: '
+                    '${provider.schematicRedoLabel}'
+                : 'Nothing to redo on the control schematic.',
+            child: OutlinedButton.icon(
+              key: const ValueKey('schematic_redo'),
+              icon: const Icon(Icons.redo, size: 18),
+              label: Text(
+                provider.canRedoSchematic
+                    ? 'Redo: ${provider.schematicRedoLabel}'
+                    : 'Redo',
+              ),
+              onPressed: provider.canRedoSchematic
+                  ? () {
+                      final redone = provider.redoSchematic();
+                      if (redone.isNotEmpty) _snack('Redid: $redone');
+                    }
+                  : null,
             ),
-            onPressed: provider.canRedoSchematic
-                ? () {
-                    final redone = provider.redoSchematic();
-                    if (redone.isNotEmpty) _snack('Redid: $redone');
-                  }
-                : null,
           ),
           const SizedBox(width: 8),
           ElevatedButton.icon(

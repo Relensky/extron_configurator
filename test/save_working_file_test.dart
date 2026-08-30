@@ -88,10 +88,14 @@ void main() {
     matching: find.widgetWithIcon(IconButton, Icons.save),
   );
 
-  final undoButton = find.descendant(
-    of: find.byType(TopLevelBar),
-    matching: find.widgetWithIcon(IconButton, Icons.undo),
-  );
+  /// The button that puts the '<name>_previous.json' backup back.
+  ///
+  /// FOUND BY KEY, NOT BY ICON. It used to be an undo arrow called "Undo Last
+  /// Save", and it stopped being one when the app grew a real Undo: an arrow
+  /// in the title bar that replaces the room with a file is not the same act
+  /// as stepping one edit backwards, and there are now several undo arrows on
+  /// screen. A finder that goes by the icon would pick whichever it met first.
+  final revertButton = find.byKey(const ValueKey('revert_to_backup'));
 
   Map<String, dynamic> baseConfig() => {
         'SYSTEM_SETUP': {'gve_bldg': 'BSS', 'gve_room': '103'},
@@ -155,11 +159,11 @@ void main() {
         isTrue,
         reason: 'the backup is the file as it was BEFORE this save');
 
-    // ...which is what turns the Undo button on.
-    expect(tester.widget<IconButton>(undoButton).onPressed, isNotNull);
+    // ...which is what turns the Revert button on.
+    expect(tester.widget<IconButton>(revertButton).onPressed, isNotNull);
   });
 
-  testWidgets('undo is disabled until something has been saved',
+  testWidgets('reverting is disabled until something has been saved',
       (WidgetTester tester) async {
     File(configPath).writeAsStringSync(jsonEncode(baseConfig()));
     final provider = AppStateProvider(autoLoadSettings: false)
@@ -168,7 +172,7 @@ void main() {
 
     await pumpApp(tester, provider);
 
-    expect(tester.widget<IconButton>(undoButton).onPressed, isNull,
+    expect(tester.widget<IconButton>(revertButton).onPressed, isNull,
         reason: 'a session that has saved nothing has nothing to put back');
   });
 
