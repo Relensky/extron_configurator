@@ -382,14 +382,16 @@ class _HelpBookState extends State<HelpBook> {
 /// rather than of whichever tab is open - and a help button that moves with the
 /// tab is one somebody hunts for.
 class HelpButton extends StatelessWidget {
-  final Color? color;
-
-  const HelpButton({super.key, this.color});
+  const HelpButton({super.key});
 
   @override
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('open_help'),
-    icon: Icon(Icons.help_outline, color: color),
+    // No colour of its own: it takes the ink of the bar it is on, like every
+    // other button up there. It used to be painted the accent beside the gear,
+    // which made the two of them the loudest things in a row they are not the
+    // most important part of.
+    icon: const Icon(Icons.help_outline),
     tooltip: 'Help - every feature, searchable (F1)',
     onPressed: () => showHelpBook(context),
   );

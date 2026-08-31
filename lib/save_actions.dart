@@ -12,7 +12,6 @@ import 'app_state.dart';
 import 'contrast.dart';
 import 'control_prefill.dart' show buildControlSideForPreset;
 import 'new_room_dialog.dart';
-import 'undo_bar.dart' show ToolbarUndoButtons;
 import 'online_copy_dialog.dart' show offerHeldOnlineEdits;
 import 'project_room_picker.dart' show confirmLeavingRoom;
 import 'building_project.dart';
@@ -1306,10 +1305,6 @@ class SaveToolbar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the same
-        // question the save button answers. Nothing at all on the pages that
-        // carry their own pair - see [toolbarUndoTarget].
-        ToolbarUndoButtons(tab: tab),
         IconButton(
           key: const ValueKey('save_context'),
           icon: Badge(

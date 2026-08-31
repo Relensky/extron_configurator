@@ -6,7 +6,7 @@ import 'app_state.dart';
 import 'nav_rail.dart' show navTabLabel;
 
 // ---------------------------------------------------------------------------
-//  THE PAIR IN THE TITLE BAR
+//  THE PAIR ON THE DOCUMENT ROW
 // ---------------------------------------------------------------------------
 //  ONE UNDO PER DOCUMENT, NOT ONE PER PAGE. The room used to answer "what does
 //  Undo do" six different ways: a pair on each of the four drawing tabs, a
@@ -16,7 +16,8 @@ import 'nav_rail.dart' show navTabLabel;
 //  first remembering which tab you had done it on — which is the one thing
 //  somebody reaching for Undo has already lost track of.
 //
-//  So the room has ONE pair now, here, and it steps back through everything in
+//  So the room has ONE pair now, here on the banner with the rest of what acts
+//  on the open document, and it steps back through everything in
 //  the room in the order it happened: a price typed over a catalog figure, a
 //  box moved on the diagram, a device renamed on the wizard, a line drawn on
 //  the schematic. See [AppStateProvider.undoRoom] for how three different
@@ -33,8 +34,8 @@ import 'nav_rail.dart' show navTabLabel;
 //  one the page in front of you belongs to — the same question Save already
 //  answers, so the two controls beside each other never mean different things.
 
-/// Which document the title bar's Undo acts on for [tab], or null on a page
-/// that edits no document at all.
+/// Which document the banner's Undo acts on for [tab], or null on a page that
+/// edits no document at all.
 ToolbarUndoTarget? toolbarUndoTarget(AppTab tab) => switch (tab) {
       AppTab.project => ToolbarUndoTarget.project,
       // EVERY PAGE THAT EDITS THE ROOM, which is every room page there is: the
@@ -62,7 +63,7 @@ ToolbarUndoTarget? toolbarUndoTarget(AppTab tab) => switch (tab) {
       AppTab.appConfig => null,
     };
 
-/// The document the title bar's Undo would act on.
+/// The document the banner's Undo would act on.
 enum ToolbarUndoTarget { project, room, catalog, schema, flowRules }
 
 /// The [AppDataDocument] behind a target, or null for the two that are not one.
@@ -75,8 +76,8 @@ AppDataDocument? _appDataFor(ToolbarUndoTarget target) => switch (target) {
 
 /// What the tooltip calls the document it would step back.
 ///
-/// SAID OUT LOUD, always. The title bar sits over every tab and the button in
-/// it acts on whichever document the page belongs to, so "Undo" alone leaves
+/// SAID OUT LOUD, always. The banner sits over every tab and the button on it
+/// acts on whichever document the page belongs to, so "Undo" alone leaves
 /// somebody guessing which of five things is about to move — and this app has
 /// had exactly that confusion once already, between this pair and the button
 /// that reverts a file backup beside it.
@@ -212,11 +213,11 @@ class ToolbarUndoButtons extends StatelessWidget {
           icon: const Icon(Icons.undo),
           // THE STEP AND THE DOCUMENT, both. "Undo" alone asks somebody to
           // remember what they last did, which is precisely what the person
-          // reaching for it has lost track of — and this button sits in a
-          // title bar over five different documents, so which one is about to
+          // reaching for it has lost track of — and this button sits on a
+          // bar over five different documents, so which one is about to
           // move is the other half of the question. Getting that wrong is not
-          // hypothetical here: an arrow in this bar that reverted a file
-          // backup was pressed for years by people meaning this.
+          // hypothetical here: an arrow that reverted a file backup was
+          // pressed for years by people meaning this.
           tooltip: tip(
             verb: 'Undo',
             enabled: canUndo,

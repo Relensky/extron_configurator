@@ -31,7 +31,8 @@ import 'cabling_view.dart';
 import 'floor_plan_view.dart';
 import 'model_defaults_dialog.dart';
 import 'online_copy_dialog.dart';
-import 'undo_bar.dart' show ToolbarUndoTarget, toolbarUndoTarget;
+import 'undo_bar.dart'
+    show ToolbarUndoButtons, ToolbarUndoTarget, toolbarUndoTarget;
 import 'nav_rail.dart';
 import 'project_room_picker.dart';
 import 'project_history_view.dart' show showHistoryDialog;
@@ -750,10 +751,11 @@ class _MainDashboardState extends State<MainDashboard> {
     //
     // Built here because they need this State's methods, but they live on the
     // banner, beside the job, where the rest of "which document am I working
-    // on" lives — the conversion, the processor transfers, undo-last-save and
+    // on" lives — Undo and Redo, the conversion, the processor transfers and
     // the EXPORTS. The title bar keeps what is about the APPLICATION and what
-    // begins or writes a file: New, Open, Save, the screenshot, the theme and
-    // the gear.
+    // begins, writes or puts back a FILE: New, Open, Save, the revert to the
+    // saved backup, the history of what has been changed, the screenshot, the
+    // theme and the gear.
     //
     // The exports moved down here because they are about the DOCUMENT, not
     // the app: "give me this as a spreadsheet" is the same kind of question
@@ -762,8 +764,19 @@ class _MainDashboardState extends State<MainDashboard> {
     //
     // SAVE IS NOT AMONG THEM. It went back up to the title bar to stand with
     // New and Open — the three that every other application on the machine
-    // keeps together, and the three a hand reaches for without reading.
+    // keeps together, and the three a hand reaches for without reading — and
+    // the revert to the last saved backup went up with it, because the file it
+    // puts back is the one Save wrote.
     final documentActions = <Widget>[
+      // BACK ONE STEP ON WHATEVER THIS PAGE EDITS, driven by the same
+      // question the save button answers, and on the same row as the rest of
+      // what acts on the open document. Nothing at all on the pages that carry
+      // their own pair - see [toolbarUndoTarget].
+      ToolbarUndoButtons(
+        tab: (selectedIndex >= 0 && selectedIndex < AppTab.values.length)
+            ? AppTab.values[selectedIndex]
+            : AppTab.wizard,
+      ),
       // CONVERT: the migration a legacy file needs, on demand. The load
       // already ran the conversion in memory — this is where it gets
       // reviewed, accepted or thrown away. Grayed out when the loaded
@@ -827,43 +840,6 @@ class _MainDashboardState extends State<MainDashboard> {
             builder: (context) => const ProcessorSftpDialog(isUpload: true),
           );
         },
-      ),
-      // REVERT TO THE SAVED BACKUP: put back the '<name>_previous.json' copy
-      // the save took of the file beforehand. Enabled only while that backup
-      // belongs to the file currently loaded — see canUndoLastSave.
-      //
-      // NOT AN UNDO ARROW, AND NOT CALLED UNDO. It used to be both, and that
-      // was wrong in a way nobody could see until the app grew a real one:
-      // this reads a FILE off disk and replaces the room with it, which is a
-      // different act from stepping one edit backwards. Somebody who had just
-      // typed a price reached for the undo arrow in the title bar, got this,
-      // and was told "the config already matches the backup" — a true sentence
-      // about a question they had not asked. The step-backwards buttons are
-      // Ctrl+Z, the pair beside Save, and the pair on each page that draws;
-      // this one is a way back to the last file, and now looks like one.
-      IconButton(
-        key: const ValueKey('revert_to_backup'),
-        icon: const Icon(Icons.settings_backup_restore),
-        tooltip: provider.canUndoLastSave
-            ? 'Revert to the saved backup - replace this room with '
-                '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
-                ', the copy taken before the last save. This is not Undo: it '
-                'discards everything since that save.'
-            : 'Revert to the saved backup - nothing has been saved over a '
-                'local file yet',
-        onPressed: provider.canUndoLastSave
-            ? () => _undoLastSave(context, provider)
-            : null,
-      ),
-      // WHO CHANGED WHAT, from wherever you are standing. It used to be a
-      // pane on the Project tab, which meant looking up what you had just
-      // done on a drawing meant leaving the drawing — so half of what the log
-      // records was the half nobody ever went and read.
-      IconButton(
-        key: const ValueKey('show_history'),
-        icon: const Icon(Icons.history),
-        tooltip: 'History - what has been changed on this room and this job',
-        onPressed: () => showHistoryDialog(context),
       ),
       // THE WHOLE JOB IN ONE BOOK, from wherever you are standing. It used
       // to live on two of the twelve tabs, which made "send me the
@@ -943,15 +919,21 @@ class _MainDashboardState extends State<MainDashboard> {
           ),
         ],
       ),
+      // HELP, in the corner of this row and under the gear in the corner of
+      // the one above it - the two controls that are about the app rather than
+      // about the document, one over the other. See [HelpBook]: it opens on
+      // its search box, over whatever you were doing, and closes again without
+      // losing it.
+      const HelpButton(),
     ];
 
-    // The bar the app-level buttons are painted on, so their ink can be
-    // measured against it rather than assumed. On the Classic theme the app
-    // bar is the accent, which is a colour somebody picks out of a wheel.
+    // The bar the gear's SELECTED accent is painted on, so it can be measured
+    // against that fill rather than assumed to read on it. On the Classic
+    // theme the app bar is the accent, which is a colour somebody picks out of
+    // a wheel. Every other button on the row takes the bar's own ink, so this
+    // is the only thing that needs the check.
     final appBarFill =
         theme.appBarTheme.backgroundColor ?? theme.colorScheme.primary;
-    final appBarInk =
-        theme.appBarTheme.foregroundColor ?? theme.colorScheme.onPrimary;
 
     final page = Scaffold(
       appBar: AppBar(
@@ -1072,23 +1054,65 @@ class _MainDashboardState extends State<MainDashboard> {
           // three on every tab — so it is still where it was a moment ago
           // whatever is on screen.
           const SaveToolbar(),
+          // REVERT TO THE SAVED BACKUP: put back the '<name>_previous.json' copy
+          // the save took of the file beforehand. Enabled only while that backup
+          // belongs to the file currently loaded — see canUndoLastSave.
+          //
+          // NOT AN UNDO ARROW, AND NOT CALLED UNDO. It used to be both, and that
+          // was wrong in a way nobody could see until the app grew a real one:
+          // this reads a FILE off disk and replaces the room with it, which is a
+          // different act from stepping one edit backwards. Somebody who had just
+          // typed a price reached for the undo arrow in the title bar, got this,
+          // and was told "the config already matches the backup" — a true sentence
+          // about a question they had not asked. The step-backwards buttons are
+          // Ctrl+Z, the pair on the document row below, and the pair on each
+          // page that draws; this one is a way back to the last file, and now
+          // looks like one.
+          IconButton(
+            key: const ValueKey('revert_to_backup'),
+            icon: const Icon(Icons.settings_backup_restore),
+            tooltip: provider.canUndoLastSave
+                ? 'Revert to the saved backup - replace this room with '
+                    '${provider.saveBackupPath.split(Platform.pathSeparator).last}'
+                    ', the copy taken before the last save. This is not Undo: it '
+                    'discards everything since that save.'
+                : 'Revert to the saved backup - nothing has been saved over a '
+                    'local file yet',
+            onPressed: provider.canUndoLastSave
+                ? () => _undoLastSave(context, provider)
+                : null,
+          ),
+          // WHO CHANGED WHAT, from wherever you are standing. It used to be a
+          // pane on the Project tab, which meant looking up what you had just
+          // done on a drawing meant leaving the drawing — so half of what the log
+          // records was the half nobody ever went and read.
+          IconButton(
+            key: const ValueKey('show_history'),
+            icon: const Icon(Icons.history),
+            tooltip: 'History - what has been changed on this room and this job',
+            onPressed: () => showHistoryDialog(context),
+          ),
           // App Config, at the end of the row that is about the app itself.
           IconButton(
             key: const ValueKey('banner_app_config'),
-            // UNSELECTED IS THE ACCENT; SELECTED IS THE ORDINARY INK.
+            // ONE OF THE ROW UNTIL IT IS THE PAGE YOU ARE ON.
             //
-            // The gear stands out while App Config is CLOSED — it is the way
-            // in, and the one control on the bar worth drawing an eye to — and
-            // drops back to the same ink as its neighbours once you are on it,
-            // where it is just the tab you are already standing on.
+            // The gear used to be painted the accent while App Config was
+            // closed, which drew an eye to it over New, Open and Save — and it
+            // is not more important than any of them. So it takes the bar's
+            // own ink like its neighbours, and stands out only while you are
+            // actually standing on App Config, where the colour says which tab
+            // is open rather than advertising a way in.
             //
-            // legibleTone rather than readableOn for the accent: readableOn
-            // hands back appBarInk on any theme whose app bar IS the accent —
-            // Classic is one — which would paint the two states the same
-            // colour and leave them indistinguishable. legibleTone keeps the
-            // accent's HUE and moves its lightness until it reads on the bar,
-            // so there is always a difference to see.
-            icon: Icon(
+            // legibleTone rather than readableOn for that selected accent:
+            // readableOn hands back appBarInk on any theme whose app bar IS
+            // the accent — Classic is one — which would paint the two states
+            // the same colour and leave them indistinguishable. legibleTone
+            // keeps the accent's HUE and moves its lightness until it reads on
+            // the bar, so there is always a difference to see.
+            icon: const Icon(Icons.settings),
+            isSelected: selectedIndex == AppTab.appConfig.index,
+            selectedIcon: Icon(
               Icons.settings,
               color: legibleTone(
                 theme.colorScheme.secondary,
@@ -1096,21 +1120,8 @@ class _MainDashboardState extends State<MainDashboard> {
                 minRatio: kContrastLarge,
               ),
             ),
-            isSelected: selectedIndex == AppTab.appConfig.index,
-            selectedIcon: Icon(Icons.settings, color: appBarInk),
             tooltip: 'App Config - file locations, theme, pricing, autosave',
             onPressed: () => provider.selectTab(AppTab.appConfig.index),
-          ),
-          // HELP IS A PROPERTY OF THE APP, not of whichever tab is open, so it
-          // sits up here with the gear rather than moving about. See
-          // [HelpBook] - it opens on its search box, over whatever you were
-          // doing, and closes again without losing it.
-          HelpButton(
-            color: legibleTone(
-              theme.colorScheme.secondary,
-              appBarFill,
-              minRatio: kContrastLarge,
-            ),
           ),
           // The gear stays last. Save sits before it rather than after,
           // because the corner of this row has been the way into App Config
@@ -1741,10 +1752,10 @@ class TopLevelBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
 
-  /// The document's own buttons — convert, the two SFTP transfers, undo, the
-  /// two exports and save. Handed in rather than built here because they need
-  /// the dashboard's own methods, and they live on THIS row because they are
-  /// about the document the job is made of, not about the application.
+  /// The document's own buttons — Undo and Redo, convert, the two SFTP
+  /// transfers and the exports, with Help in the corner. Handed in rather than
+  /// built here because they need the dashboard's own methods, and they live on
+  /// THIS row because they are about the document the job is made of.
   final List<Widget> actions;
 
   const TopLevelBar({

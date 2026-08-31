@@ -185,12 +185,12 @@ void main() {
     // over to the RIGHT of the buttons, parking the corner control 600 pixels
     // from the corner.
     final banner = tester.getRect(find.byType(TopLevelBar));
-    // The LAST control on the banner — the per-tab export menu, which is the
-    // end of the document row now that Save has gone up to the title bar.
+    // The LAST control on the banner — Help, which sits in this row's corner
+    // under the gear in the corner of the title bar above it.
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('export_tab_menu')),
+        matching: find.byKey(const ValueKey('open_help')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1),
@@ -212,7 +212,7 @@ void main() {
     final lastOnBanner = tester.getRect(
       find.descendant(
         of: find.byType(TopLevelBar),
-        matching: find.byKey(const ValueKey('export_tab_menu')),
+        matching: find.byKey(const ValueKey('open_help')),
       ),
     );
     expect(lastOnBanner.right, closeTo(banner.right, 1));
