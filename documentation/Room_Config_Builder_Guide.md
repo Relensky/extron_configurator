@@ -26,8 +26,17 @@ But it does more than edit the config now. The same room description drives:
 - **rack elevations**, **floor plans** and a **cable schedule**
 - a **cost estimate**, built from a device catalog you keep yourself
 
+And a folder of rooms is a **building**: one master parts list, a quote request
+per vendor, the purchase orders they turn into, a delivery log, a calendar that
+says when each part has to be bought, a matrix of who furnishes and who installs
+each line of scope, and a refresh plan that says which year the room comes round
+again. A folder of buildings is an **estate**.
+
 Most of that draws itself. You describe the room once, on the tabs you were
-going to fill in anyway, and the drawings and the numbers follow.
+going to fill in anyway, and the drawings and the numbers follow - and nothing
+on any of them is typed twice. A model changed on the drawing changes the quote,
+the rack, the cable schedule and the twenty-year plan, because all four are
+readings of one description rather than four documents to keep in step.
 
 ## The idea worth knowing
 
@@ -42,7 +51,7 @@ next to the program, and every one of them now has an editor inside the app:
 | `av_flow_rules.json` | How a room turns into a drawing: which box a config key means, what goes between two ends that don't match, what hangs off the USB switcher | **Flow Rules** tab |
 | `av_devices.json` | The equipment catalog: connectors, rack units, power draw, price | **Catalog** tab |
 | `key_map.json` | How old files are translated to current key names on load | Text editor (reference in this guide) |
-| `labor_rates.json`, `base_costs.json` | What an hour costs, and the rate card the estimate falls back to | Dialogs on the **Cost** tab |
+| `labor_rates.json`, `base_costs.json` | What an hour costs, and the rate card the estimate and the refresh plan fall back to | Dialogs on the **Cost** tab, and the campus report's **Current models** tab |
 
 If the app does something you don't want - puts the wrong receiver in a run,
 calls a field by a name your team doesn't use, misses a key you just added to
@@ -59,8 +68,9 @@ They run down the left-hand rail in roughly the order you use them.
 
 | Tab | What it's for |
 |---|---|
-| **Project** | A whole building: several rooms quoted together, one master parts list, split into a quote request per vendor. |
+| **Project** | A whole building: rooms quoted together, one master parts list, the vendors, the orders, the deliveries, the calendar and the refresh plan. |
 | **Cost** | The estimate for the room you're on: equipment, cable, labor, tax and fees. |
+| **Lifecycle** | What this room already has, how old it is, and the year each position falls due. |
 | **Wizard** | The room's identity - building, room number, name - and how many of each device it has. |
 | **Devices** | One sub-tab per device: model, IP, connection type, module, and whatever else the schema says that family has. |
 | **System** | Everything else in `SYSTEM_SETUP`: switcher inputs and outputs, panel behaviour, outlet names. |
@@ -73,10 +83,18 @@ They run down the left-hand rail in roughly the order you use them.
 | **Catalog** | The device catalog every drawing and every price is built from. |
 | **Schema** | What the Devices and System tabs look like - labels, types, descriptions, device families. |
 | **Flow Rules** | How the AV Flow decides what to draw. |
-| **App Config** | Where the files live, the theme, the SFTP settings and the active deployment target. |
+| **App Config** | Where the files live, the theme, the pricing tier, the SFTP settings and the active deployment target. |
 
 Project and Cost are at the top because that's the order the work goes in: open
 the job, see what the building costs, then go into the rooms that make it up.
+**Lifecycle** sits with them because it is the same question at the other end of
+the room's life - what it costs to put in, and what year it has to be put in
+again.
+
+Two things live above the rail rather than on it. **Help** is on the question
+mark beside the gear, on every screen; **Campus** appears on the job banner once
+a project is open, and puts several buildings on one sheet. Campus over project
+over room, three levels, each with its own way back out.
 
 The **Catalog**, **Schema** and **Flow Rules** tabs work with no room open at
 all - they're about the app, not about one room. So does **Project**, for a
@@ -129,6 +147,13 @@ App Config also holds the things that are yours rather than the department's:
 the theme (Classic or the Auris HUD look), text size, SFTP username and port,
 and the **Active Deployment Target** - the room the next upload or download
 talks to.
+
+It also holds the **pricing tier**, which is not quite a preference: every price
+in this app is published at two of them - MSRP (list) and the education /
+institutional price - and the one picked here is the one every estimate, every
+replacement figure and every report is quoted at. A catalog entry or a base cost
+card with only one of the two filled in falls back to the other rather than
+reading as free, and says that it fell back.
 
 That target now clears itself whenever you open or create a different config.
 It's the quietest mistake this app could make - BSS 103's config uploaded to SSC
@@ -522,6 +547,21 @@ budget rather than a quote.
 A figure entered against a type with no length ("Cable: HDMI") covers every
 length that hasn't got one of its own.
 
+### What the card was priced on
+
+A base-cost figure is what a whole refresh plan is built out of, and until
+recently it was a number with nothing beside it saying which product, at what
+spec, in which year. A card can now record the **model it was benchmarked on**
+and the day it was set.
+
+It doesn't change the price - the figures are still the figures. It says where
+they came from, so a card set on a 2022 projector in 2026 can be *seen* to be
+four years stale rather than having to be remembered to be, and so a finance
+office asked to approve eleven of something can be told what they are eleven of.
+
+Both are written for you by the campus report's **Current models** tab, which is
+where a category's figure is normally decided. See *The campus*.
+
 ### Swapping a unit
 
 The wrong box usually gets noticed here - the total is what people look at - so
@@ -568,16 +608,40 @@ Cancel means nothing happened - you're asked before the first write. A run the
 new model has no connector for is removed rather than left pointing at nothing,
 and the message says how many, so you can draw them again on **Signal Flow**.
 
-## Project
+# The job
 
-The Cost tab prices one room. The Project tab prices a **building**.
+The Cost tab prices one room. The Project tab prices a **building** - and then
+follows it all the way out: who quotes it, what was ordered, what turned up,
+when the rest has to be bought, and whose job each piece of scope is.
 
-A project is a list of rooms plus the vendors you buy from. It doesn't copy the
-rooms or take them over - they stay ordinary config files you open and edit
-exactly as before, and the same room can sit on two projects. Press **Refresh**
-after fixing a price in a room and the building total catches up.
+A project is a list of rooms plus everything that happens around them. It
+doesn't copy the rooms or take them over - they stay ordinary config files you
+open and edit exactly as before, and the same room can sit on two projects.
+Press **Refresh** after fixing a price in a room and the building total catches
+up.
 
-### Getting rooms onto it
+## The panes
+
+Across the top of the tab, in roughly the order the work happens:
+
+| Pane | What it answers |
+|---|---|
+| **Rooms** | Which configs are on the job, and what each comes to. |
+| **Equipment** | Every part once, quantities merged, tagged to the vendor that will quote it. |
+| **Plans** | The building's own drawings - floor plans, RCPs, riser diagrams - the job is quoted against. |
+| **Timeline** | When each part has to be *bought*, worked back from the day the building has to be finished. |
+| **Deliveries** | The purchase orders, what is on them, and what has landed. |
+| **Lifecycle** | What the building already has, how old it is, and the year each position falls due. |
+| **Responsibility** | Who furnishes and who installs each line of scope, room by room. |
+| **Vendors** | The companies you buy from, the rules that tag parts to them, and where each quote has got to. |
+| **To do** | Open questions on the job. |
+| **Notes** | Signed, dated notes - who said what, and when. |
+
+Whichever pane is open, the figure in the header is what the building costs.
+That is deliberate: it is the number somebody came to the tab for, and it should
+not move when they change what they are looking at.
+
+## Getting rooms onto it
 
 **New** starts a project; **Add rooms…** picks config files (several at once);
 **Add the open room** adds whatever you're working on. The tick beside a room
@@ -589,11 +653,16 @@ If a room's file has moved or been renamed, its row says so and the other rooms
 still price. The total is short, and the tab and the workbook both say by how
 many rooms.
 
-### The master parts list
+**Rooms nobody has drawn** can be typed in as line items, from **Add a line
+item…** on this pane: a name, a date it was last done, a life, and a figure. Most of an estate has never been through this
+app, and a refresh plan covering only the rooms that have is a plan for a
+fraction of the building - short in the one direction nobody checks.
 
-This is the reason the tab exists. Nine rooms with two transmitters each is
-eighteen transmitters - **one line**, not nine - and a vendor asked to quote one
-line quotes better than one asked to quote nine rooms.
+## The master parts list
+
+The **Equipment** pane is the reason this tab exists. Nine rooms with two
+transmitters each is eighteen transmitters - **one line**, not nine - and a
+vendor asked to quote one line quotes better than one asked to quote nine rooms.
 
 Parts merge on part number where there is one, then on model, then on maker and
 description. Each line still says which rooms its units are for, so you can
@@ -604,7 +673,16 @@ negotiated price typed on it - the line shows the **range** rather than picking
 one, and the extended total is what the rooms actually pay added up, not the
 quantity times either price.
 
-### Vendors
+The chips across the top narrow it: to one vendor, to the parts nothing has
+claimed, to the ones with no price, to the devices nothing can drive, to spares.
+Treat those counts as the job's own to-do list - a building isn't ready to go
+out for quotes while anything is sitting in them.
+
+Rows can be **selected in bulk** to set a lead time or a vendor across many at
+once, which is what turns "put six weeks on everything from that maker" into one
+action.
+
+## Vendors
 
 Who sells you a part is a fact about the job, not about the part, so the tags
 live on the project.
@@ -614,16 +692,246 @@ or both. A new project already has the usual split - everything Extron on the
 direct account, and cameras, screens, mounts and USB from a reseller - so most
 of the list tags itself the moment you add a room.
 
-Manufacturer rules win over category rules. That's what stops an Extron display
-going to the reseller who does screens. If you want a specific part to go
-somewhere else, pick the vendor on that line: it's pinned, it beats the rules,
-and it stays pinned even if the room is re-drawn. Pick the vendor the rules
-already chose and the pin is simply removed.
+A part is tagged by the **first** vendor whose rules claim it, and manufacturer
+rules are checked before category rules. That's what stops an Extron display
+going to the reseller who does screens. **Order matters**: drag a vendor up its
+list by the handle to give it priority, and the number on the row says where it
+sits. If two vendors claim the same rule the tab says so out loud, and names
+which one wins.
 
-Anything nothing claims goes to **Untagged** - treat that as a to-do list. A
-building isn't ready to go out for quotes while parts are sitting in it.
+If you want a specific part to go somewhere else, pick the vendor on that line:
+it's pinned, it beats the rules, and it stays pinned even if the room is
+re-drawn. Pick the vendor the rules already chose and the pin is simply removed.
 
-### Swapping a product everywhere at once
+Anything nothing claims goes to **Untagged**.
+
+### Ticking, not typing
+
+Both rule boxes offer **Pick from the job**: a tick-list of every manufacturer,
+or every category, the job actually has parts in, with a count beside each -
+"Display (18)" against "Screen (2)".
+
+That matters because a rule is matched **exactly**. "Cameras" against a catalog
+that says "Camera", or "Extron Electronics" against one that says "Extron", is a
+rule that claims nothing - and there is nothing on the screen to say so. Ticking
+cannot go wrong that way, and the count is what makes the list readable as a
+decision rather than a lookup.
+
+The typed box beside it still takes anything, because a rule for a maker or a
+category the job has no parts in *yet* is a real thing to want: a vendor is
+often set up before the rooms are drawn. Anything already written that the job
+has nothing for is carried at the bottom of the tick-list, ticked, under a
+heading that says what it is.
+
+Category rules also match the head of a finer one, on a word boundary: a
+"Camera" rule claims "Camera - PTZ" and does not claim "Cameraman kit".
+
+### The count chip
+
+"19 lines · $18,400" on a vendor card is not just a label. Press it and the
+**Equipment** pane opens already narrowed to exactly those nineteen parts - with
+their prices, their lead times and their rooms on them.
+
+### Where the quote has got to
+
+This app builds the RFQ per vendor and hands you the spreadsheet. Everything
+after that - it went out on the 4th, two came back, one turned into a PO, the
+third has never replied - used to live in somebody's inbox, and on a six-vendor
+job "which of these are we still waiting on" is the most-asked question on the
+screen.
+
+Four states, read off three dates:
+
+| State | What it means |
+|---|---|
+| **Not sent** | Nothing has gone out. No chip on the card - a row of grey "not sent" chips down a fresh list is noise about nothing. |
+| **RFQ sent** | The request went out on a day you record. Waiting. |
+| **Quoted** | A price came back. |
+| **Ordered** | It went on a purchase order. The chip shows the PO number. |
+
+The chip is on the row that is **always** there, so a collapsed list of six
+vendors answers "who are we waiting on" without opening any of them.
+
+### Recording a quote
+
+**Quote came back…** takes three things: when, for how much, and the vendor's
+own quote number. Those are the three needed to compare six quotes against each
+other and against the job's own figure without opening any of them.
+
+The card then shows the quote **against the estimate** - "Quoted $18,400 -
+$1,200 OVER the job's $17,200". That gap is the whole reason a quote gets read.
+
+Recording a quote **changes no price on the job**. The estimate stays what the
+parts say; this is what the vendor wants for them.
+
+The quote PDF is attached **in the same dialog**, at the one moment somebody has
+it in front of them - they are reading the figure off it as they type it.
+Attaching it anywhere else is a second trip back to a file already closed, which
+is a trip that doesn't get made. Nothing is copied: the project stores where the
+file **is**, so moving the file moves what this opens. Any file type, not only a
+PDF - a scan, a screenshot of the vendor's portal, their acknowledgement as an
+`.msg`. What the app can draw it draws in-app; the rest it hands to the machine.
+
+Taking the quote off the row takes the figure and the document link with it. The
+file on disk is never touched.
+
+### Marking it ordered
+
+**Ordered…** is one action that makes three things true: it raises the purchase
+order, points it at this vendor, and puts **every part this vendor is quoting**
+onto it.
+
+That last one is the link back from a PO number to the equipment it bought.
+Before it existed the first two got done and the third did not, which leaves a PO
+nobody can trace to any equipment and nineteen parts reading on the timeline as
+things nobody has bought.
+
+The parts default to the **whole package**, because that is what a purchase order
+to one vendor almost always is; the count is on screen. Ordering only part of it?
+Do this, then untick the rest on the PO's own list on the Deliveries pane.
+
+The signed order is attached here too, at the one moment somebody has the PDF.
+
+Once ordered, the card offers **Equipment on PO-1188 (19)** - which opens the
+Equipment list narrowed to those nineteen, because that is what the sentence is
+asking for.
+
+**Not ordered after all** stops the vendor row claiming it and leaves the
+paperwork exactly as it was. The PO records what *happened*; a mis-set flag on a
+vendor row is not a reason to unpick a job.
+
+## Purchase orders and deliveries
+
+The **Deliveries** pane is a row per purchase order: what is on it, how much of
+that has landed, and the order document itself.
+
+Each PO can carry the signed order - a PDF, a scan, an `.msg`. The same bargain
+the plans and the cutsheets make: the project stores where the file is, opens
+what it can draw in the app, and hands the rest to whatever this machine uses.
+Taking the link off leaves the file alone.
+
+Deliveries are logged against a PO, or as **one-offs** for something that went
+on a card and never had one. A delivery says where it went: a dock, an address,
+or general storage. Gear **held** rather than installed is tracked as held, so
+"we have it, it's just not in the room yet" is a state the job can be in.
+
+**Every PO number the job mentions anywhere is one click away.** The rows, the
+vendors, the part orders and earlier deliveries are all swept, each in the
+spelling it was first seen in. A number typed onto a part before anybody raised
+the PO, or marked on a vendor whose row was later renumbered, is still on the
+dropdown rather than something to read off another screen and mistype. The **Add
+a purchase order** box goes further and offers the numbers the job knows but has
+**no row for** - until a row exists there is nothing to attach the order to and
+nothing to tick equipment onto.
+
+## Plans
+
+The building's own drawings - the architectural floor plan, the reflected
+ceiling plan, the riser diagram, the electrical sheet somebody was sent as a
+PDF. Not the room's floor plan, which is a picture you drag locations onto; this
+is the set the job is quoted **against**.
+
+PDFs and images open in the app. Anything else opens in whatever this machine
+uses for it.
+
+## The delivery timeline
+
+One date drives it - the day the building has to be finished - and one figure
+per part: how long that part takes to arrive. Everything on the pane is the
+subtraction between them, so moving the deadline moves every order date with it.
+
+**The exception is the point.** A job does not need everything on the same day:
+screens, mounts, floor boxes and conduit go in while the walls are still open,
+weeks before the rack is delivered. Those parts carry their **own** need-by
+date, and the schedule prefers it over the project's - which is why the order-by
+column can show a part being bought two months before a job whose deadline is in
+June.
+
+Read it as a **list of days**, not a list of parts. An order date is a trip to
+the purchasing office, and eleven parts sharing one is one trip; grouping them is
+what turns a hundred-row table into the half-dozen dates somebody actually has to
+put in a calendar.
+
+**Phases** are what a job is really broken into. Each carries its own delivery
+date and the parts on it are scheduled against that, so the reading this exists
+for - whether the infrastructure order going in months before the tech order
+actually lines up with when the walls close - is on one screen.
+
+**Quote requests** are on the pane too, above the orders: every vendor whose RFQ
+has gone anywhere, the one that needs chasing at the top. Sent before quoted
+before ordered, and inside each, oldest first - an RFQ sent three weeks ago and
+never answered is the thing to chase, and a quote that came back a month ago and
+hasn't turned into an order is the thing going stale. Each row says how long it
+has been sitting ("out 3 weeks with no answer"), what the package is worth, and
+offers the quote document.
+
+**What has already gone** is a block of its own under that: the purchase orders,
+newest first, each with what it bought and how much of that is marked arrived.
+
+### The rail
+
+Above the lists, the whole job is drawn on **one line**: today, the first order,
+every order date as a dot, each phase's on-site day, each vendor's quote request
+in that vendor's own colour, and the delivery deadline.
+
+Nothing on it is a new fact - every date is one of the cards below - which is
+exactly the point. A list has no distance in it: two dates a fortnight apart and
+two a year apart are one row apart either way. The rail is the same schedule seen
+from far enough away to have a shape.
+
+**It zooms.** Fitted, it shows the whole job; on a three-year refresh that is
+about four days per pixel, which makes every date in a fortnight one dot. From
+there it goes in as far as thirty-two times, at which point three years of rail
+is about six weeks in the frame, and it scrolls sideways under a bar.
+
+The readout between the arrows says how much of the job is in front of you -
+"3.0 yr", "9 mo", "6 wk" - rather than a percentage, because a stretch of time is
+the number somebody wants off a calendar. Zooming holds the middle of the frame
+rather than jumping back to the start, and the fit button brings the whole job
+back from wherever you had got to.
+
+### Into somebody else's calendar
+
+The timeline is read by whoever is building the job; the purchase order is
+raised by somebody who lives in Outlook and will never open this app. A date
+that isn't in their calendar is a date that gets missed, so the schedule exports
+as an **ICS**: one all-day event per order date, with an alarm a week before.
+
+## The responsibility matrix
+
+Who furnishes and who installs each line of scope, room by room. The document
+that settles "we thought *you* were pulling that conduit".
+
+Rooms run down the frozen left column; scope items run across the top, each with
+**Furnished by** and **Installed by** under its name and, where there is one, a
+**cutsheet** on a row of its own that opens in the app. Under those sits the
+strip that carries the word ROOM, directly over the rooms it names - above it the
+sheet is an agreement about who does what, below it the same columns are
+quantities per room, and the heavy rules top and bottom are there so nobody reads
+a count as a commitment.
+
+Each party carries its **own colour**, the same one wherever its name appears, so
+one contractor's share of the sheet is visible without reading a cell. A line
+nobody has been named on reads **NOBODY** in the error colour - a blank is the
+exact thing this sheet exists to catch, and the tinted chips around it would
+otherwise make an empty cell look like one more quiet agreement.
+
+Hovering anything on a line lights the **whole line** right across the sheet,
+frozen column included. A room name on the left edge and a number twenty-eight
+columns to the right of it are two hand-widths apart on a laptop, and the eye
+tracks a moving highlight in a way it cannot track a fixed stripe.
+
+The scope headings size themselves to the names they actually carry, so a line
+called "Conduit, back boxes and pull strings for every floor-mounted
+connectivity point" is read rather than ellipsised. The sheet zooms and fits like
+the year grid, and columns are re-ordered by dragging the grip in the heading -
+the order is content on this document, because it is grouped the way the work is
+sequenced.
+
+It goes out two ways: a **spreadsheet** for the people who work from it, and a
+**picture** for the people who only have to see it.
+
+## Swapping a product everywhere at once
 
 The projector everyone specified is discontinued, and nine rooms have one. Press
 the swap arrow on that line and pick the replacement: every one of those boxes,
@@ -652,7 +960,13 @@ Two things worth knowing before you press it:
 If a room's file has moved or can't be read, it's named in the preview and left
 on the old product rather than silently skipped.
 
-### Devices that nothing can drive
+> If the reason for the swap is that the product was **discontinued**, consider
+> naming its successor on the catalog entry as well - see *Retiring a product*.
+> The swap changes what the rooms hold; the successor changes what every room
+> still holding the old one is *budgeted* at, which is a different question and
+> the one the refresh plan asks.
+
+## Devices that nothing can drive
 
 The same check the AV and Cost reports do for one room runs across the building.
 If no Python module claims a device's model, it says so - and swapping onto a
@@ -675,7 +989,7 @@ You'll see it in three places:
 Cable and rack hardware are never flagged - they were never going to have a
 driver. Neither is anything you've marked as never controlled on the Catalog tab.
 
-#### "Never needs one"
+### "Never needs one"
 
 Two different things land on that list. One is a driver nobody has written yet,
 which somebody will get to. The other is a thing that simply has no control
@@ -710,7 +1024,17 @@ Changed your mind? Untick **Never in the room config** on the Catalog tab. (The
 Project tab's button only goes one way, because once a product is marked it
 stops appearing on that list - there'd be no row left to press.)
 
-### Working through the rooms
+## To do, notes and history
+
+**To do** holds the open questions on the job. **Notes** are signed and dated
+for you, so who said what and when survives the person who said it moving on.
+
+Every edit to the job is logged under the thing it was about. "This says bought
+- who said so, and when" is a question about the **part**, and a single line on
+the vendor cannot answer it, so orders, quotes, prices and dates are all recorded
+against both.
+
+## Working through the rooms
 
 Once the project has rooms, there's a **room picker in the title bar** - on
 every tab, not just this one. Pick a room, or use the arrows to step through
@@ -737,10 +1061,11 @@ room's own file - no dialog, no picking a folder.
 Switch rooms with unsaved work and you'll be asked whether to save first, because
 switching reads the next room off disk and anything not saved would go.
 
-### Getting it out
+## Getting it out
 
 **Workbook** writes one spreadsheet with everything: what the building costs,
-each room's share, the master parts list, a tab per vendor and a tab per room.
+each room's share, the master parts list, a tab per vendor, the quote requests,
+the orders, the schedule and the plan, and a tab per room.
 
 **Quote requests** writes one spreadsheet **per vendor** into a folder you pick.
 That's the file you email. It has that vendor's parts, the rooms they're for,
@@ -749,10 +1074,134 @@ their price and lead time - and nothing else. No labor, no tax, no project
 total, no other vendor's parts. Send the whole workbook instead and you've sent
 a supplier your margins and a competitor's pricing.
 
-## Catalog
+# The refresh plan
+
+Everything else in this app answers "what is going **in**". This answers the
+question that comes next: what is already there, how old it is, and which year
+it has to be replaced.
+
+The **Lifecycle** tab does it for one room; the Project tab's **Lifecycle** pane
+does it for a building; the campus report does it for an estate. All three are
+the same arithmetic over the same data, so a year on one can never disagree with
+a year on another.
+
+## How the years are worked out
+
+Every position on the drawing carries the day it went in. The install year is
+**year one**.
+
+The bands are the RYG sheet's bands: on an eight-year cycle, green for years one
+to five and amber for six to eight, then red. Amber is **graded** rather than
+flat, because three years of it are not one state - the screen paints a six-step
+ramp and a printed sheet carries the same six codes, so a mono copy has not lost
+the half of it that says which of the three amber years a room is in.
+
+The life a position is held to comes from three places, most specific first:
+
+1. **the position itself** - somebody saying "this one, sooner"
+2. **the catalog entry** for its model - what the product does in general
+3. **the blanket cycle** for anything nobody has recorded one for
+
+Each row says which of the three it used, so a plan can be argued with rather
+than only believed.
+
+A position with no install date reads **UNKNOWN** and says so - a room whose
+dates nobody has collected is a room nobody can plan, and costing it at nothing
+would hide that. Jack fields and patch panels are never on the cycle at all;
+mounts, poles and frames can be taken off it by hand, and stay tracked, listed
+under a heading that says why they are not on the plan.
+
+## What a replacement costs
+
+The catalog's price for the model, and failing that the **base cost card's**
+figure for its category. A figure off the card is marked as a *typical* price
+rather than quietly mixed in with the ones that are the box's own - a typical
+price presented as a quote is how a budget goes wrong quietly.
+
+**A retired model is priced at what replaces it.** The drawing says what is in
+the room; this figure is what it costs to take that out and put something in,
+and for a discontinued product those are two different numbers - often a third
+apart, always in the same direction. When the catalog entry names a successor,
+that successor's price is what the plan uses, and the row says whose price it is.
+
+The chain is followed all the way: a 2012 model replaced by a 2016 one replaced
+by a 2024 one prices at the **2024** one, because that is what the purchase
+order would say. A retired entry that names nothing keeps its own price, because
+that is still the best figure anybody has, and a name the catalog no longer has
+stops the chain rather than breaking it.
+
+## The year grid
+
+A room per row, a year per column, and what falls due in each. This is the sheet
+a capital budget is written off.
+
+A room is rarely one date - the projector went in in 2016 and the displays in
+2019 - so a room appears in **every** year it owes something in rather than only
+in the first. The sheet zooms and fits, because it is read both for a figure and
+for its shape.
+
+# The campus
+
+Several buildings on one sheet. Add the project files, or point it at a folder,
+and every figure is read off the jobs themselves in one pass over disk - so
+nothing on the sheet can be older than anything else on it.
+
+A building's figure on the calendar is a **way into** that building's own plan.
+The campus total row is not, because it is not any one building.
+
+The assembly is a document in its own right: it can be named, saved, reopened,
+and undone sixty steps deep like everything else in the app. It goes out as a
+picture, a spreadsheet or an online copy.
+
+## Current models
+
+A whole refresh plan is built out of **one number per kind of thing** - what a
+projector costs, what a switcher costs, what an interface costs - and those
+numbers had no provenance at all. Somebody typed them onto the base cost card
+once, and an estate was budgeted off them for as long as nobody re-typed them.
+
+Two ways that goes wrong, both quietly. The number **goes stale**: it was right
+in 2022, nobody re-typed it, and the 2026 plan is short by four years of price
+rises across every room. And the number **cannot be argued with**: a finance
+office asked to approve eleven projectors wants to know what they are eleven
+*of*, and "about $4,200" is not a specification.
+
+The **Current models** tab beside the plan is where that number gets decided, in
+front of the evidence. For every kind of thing the estate actually holds it
+says:
+
+- how many positions there are
+- which models they are, commonest first, and how many of those the catalog has
+  already **retired**
+- what the plan presently budgets them at - added off the plan's own rows, so
+  this figure and the year grid can never disagree
+- what it is currently **benchmarked on**, and how long ago that was set
+
+Then pick this year's model out of the catalog. The comparison lands **before**
+anything is committed: the unit price, forty-one of them, and the gap against
+what the plan assumes. That gap is the reading - a budget short by it is a budget
+that fails at purchase order time.
+
+**Make this the recommended cost** writes the figure, the model and the date onto
+the base cost card. That is the same card the room cost page, the project report
+and the campus report all already price from, so the decision reaches every one
+of them without any of them knowing this tab exists - and a card set on a 2022
+projector in 2026 can then be *seen* to be four years stale rather than having to
+be remembered to be.
+
+Both published tiers are written, off the catalog entry's own two figures. A card
+with one price on it has every estimate at the other tier reading high or low
+depending on which way the job went.
+
+Categories the estate holds nothing in are not listed. The base card ships with
+every family the app knows and most estates use a third of them; a tab listing
+the other two thirds buries the answer in blanks.
+
+# The catalog
 
 The catalog is the department's price list and connector reference: per model,
-what sockets it has, how many rack units, what it draws, what it costs.
+what sockets it has, how many rack units, what it draws, what it costs, and how
+long it lasts.
 
 **Searching** ignores spaces, dashes and case on both sides, so "dtpcross108"
 finds "DTP CrossPoint 108". Type more than one word and every word has to land
@@ -770,7 +1219,59 @@ authoritative: one has priced the switchers, the other has drawn their
 connectors. Point it at their file and every difference comes up with its own
 checkbox.
 
+## What an entry carries
+
+Beyond the obvious - model, maker, part number, category, both published prices,
+connectors, rack units - three fields are worth knowing about because other parts
+of the app read them and nothing else will fill them in:
+
+- **Clearance above / below.** Rails this model wants kept *empty* - the amp
+  that vents upwards, the drawer whose lid opens. The rack shades them and still
+  lets you drop something there.
+- **Life (years).** How long the product lasts before it wants replacing. The
+  refresh plan prefers this over its blanket cycle, so a catalog with lives on it
+  produces a plan nobody has to hand-correct.
+- **Never in the room config.** Nothing can drive one of these, anywhere. See
+  *"Never needs one"*.
+
+## Retiring a product
+
+**Retired / discontinued** keeps the entry out of the pickers that specify new
+work, and keeps everything it knows - ports, price, rack height - for the rooms
+that already have one. Deleting it instead would silently strip the connectors
+and the price from every room that used it.
+
+On its own that answers "do not specify this any more" and leaves "what does it
+cost to replace the forty already on the estate" answered with a discontinued
+product's list price. It is a real figure, for a real catalog entry, that nobody
+can buy anything at - and nothing on any screen said so.
+
+So a retired entry can name what **replaces** it. Tick Retired and a **Replaced
+by…** picker appears; everything that asks what it costs to replace a position
+holding one then asks the successor instead. The room's cost page, the project
+report and the campus report all price a replacement through the same ladder, so
+naming it once fixes all three.
+
+The successor is **picked from the catalog** rather than typed, for the same
+reason every model reference in this app is: a name the catalog doesn't have is a
+chain that stops silently at the price it was trying to get away from. The line
+under the picker says what a room holding one is now budgeted at, and says so
+when the chain runs on - "budgeted at PowerLite L775U - the L730U is retired too,
+and the chain runs on to it".
+
+Clearing it puts those rooms back on the retired entry's own price.
+
 # Getting work out of the app
+
+Most panes export what they show, and nearly always in **two shapes for two
+audiences**: a *spreadsheet* for the people who work from it - a contractor
+prices a total, and a price gets typed into a spreadsheet - and a *picture* for
+the people who only have to see it, which goes in a submittal or an email to a
+dean.
+
+Pictures are produced from a **preview you look at first** rather than captured
+off the working pane. What is on a pane is an editor, with buttons on every row,
+and photographing an editor produces a picture with delete buttons in it.
 
 **Save All** writes the whole room into one folder: every drawing as a PNG,
 every report, the workbook, and the config itself. It walks the drawing tabs to
@@ -827,6 +1328,38 @@ useful table on it is the second one: what a job or a campus names that is *not*
 in the folder, so nobody hunts for a file that was never published. Delete either
 index file whenever you like; the next publish writes it again.
 
+
+# Help, in the app
+
+This guide is a file somebody has to find, open in another window and search
+separately - which on a laptop with a drawing open is a thing that does not get
+done. So the same material is **in the app**, on the question mark beside the
+gear in the title bar, or on **F1** from anywhere.
+
+It opens on its search box, because nobody opens help to browse a contents page:
+they open it because a control did something they did not expect, and the words
+they have are the words off that control.
+
+The search runs over **everything** - the title of each feature, the part of the
+app it belongs to, where to find it, its prose, and the words somebody would
+actually type when they don't know what it's called. "RFQ" reaches the quote
+requests, "RYG" reaches the refresh plan, "MSRP" reaches the pricing tier, "BOM"
+reaches the master parts list, "who installs it" reaches the responsibility
+matrix.
+
+Every word you type has to appear somewhere, so a phrase narrows fast rather
+than widening. A hit in the name of a feature outranks a hit buried in its
+prose, and a whole word beats a fragment of one - typing "rack" finds *Rack
+elevations* rather than *Phases and tracks*.
+
+Each page opens with **where the thing is**, as a path through the app rather
+than a position on a screen, then what it does and why it works that way. The
+text is selectable, because half of what help gets used for is pasting a
+sentence into an email to whoever asked. The keyword chips at the foot of a page
+are a press each, which is how somebody gets from one feature to its neighbours
+without knowing what they are called.
+
+It opens over whatever you were doing and closes again without losing it.
 
 # The Flow Rules builder
 
@@ -1513,6 +2046,15 @@ block.
 | A box on the drawing that costs nothing | Its model isn't in the catalog. The Cost tab counts these for you. |
 | A drawing that no longer matches the room | **Recreate from config**, on either the AV Flow or the Schematic tab. |
 | The wrong room in the SFTP dialog | The active deployment target clears when you open a different config - pick the room again. |
+| A vendor rule that claims nothing | It's matched exactly. Use **Pick from the job** rather than typing - "Extron Electronics" is not "Extron". |
+| A part on no vendor's list | Nothing claimed it. The **Untagged** chip on Equipment is the to-do list; add a rule, or pin the vendor on the line. |
+| A quote request that isn't on the timeline | Only vendors with a date recorded are - press **RFQ sent** on the vendor card. |
+| A PO number missing from a dropdown | It's swept from the rows, the vendors, the parts and the deliveries. A number nobody has typed anywhere yet won't be there. |
+| A refresh figure that looks like an old price | The model is retired and names no successor. **Catalog → Retired → Replaced by…**. |
+| A whole category budgeted at nothing | No base cost card for it. **Campus → Current models** prices it off a model you pick. |
+| A base cost that's years out of date | The card says when it was set. Re-price it on **Campus → Current models**. |
+| The date rail is a row of overlapping dots | It's fitted to the whole job. Zoom in - the readout says how much is in the frame. |
+| A responsibility line reading NOBODY | Nobody has been named for it. That's the blank the sheet exists to catch, not a bug. |
 
 # Which file does what
 
@@ -1521,12 +2063,12 @@ block.
 | `config.json` (template) | New Config | Never | New Config can't run |
 | `ui_schema.json` | Startup, Reload Schema | Schema tab | Built-in field definitions |
 | `key_map.json` | Every load | Text editor | Nothing is translated |
-| `av_devices.json` | Startup, Reload Catalog | Catalog tab | Built-in models, no prices |
+| `av_devices.json` | Startup, Reload Catalog | Catalog tab | Built-in models, no prices, no lives, no successors |
 | `av_flow_rules.json` | Startup, Reload Rules | Flow Rules tab | Built-in drawing rules |
 | `processors.json` | Startup | Text editor | No room list in the SFTP dialogs |
 | `buildings.json` | Startup | Text editor | No building names or codes |
 | `labor_rates.json` | Startup | Cost tab | Built-in roles, no rates |
-| `base_costs.json` | Startup | Cost tab | Every category unpriced |
+| `base_costs.json` | Startup | Cost tab, campus **Current models** | Every category unpriced |
 | `app_config.json` | Startup | App Config tab | First-run setup runs |
 
 # Keeping this guide honest
